@@ -181,3 +181,14 @@ func (s *MemoryStore) GetGoModuleAsset(_ context.Context, repositoryID, modulePa
 	}
 	return asset, nil
 }
+
+func (s *MemoryStore) GoModuleObjectHasReference(_ context.Context, objectKey string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, asset := range s.goAssets {
+		if asset.ObjectKey == objectKey {
+			return true, nil
+		}
+	}
+	return false, nil
+}

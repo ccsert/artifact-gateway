@@ -201,6 +201,12 @@ func (s *PostgresStore) GetGoModuleAsset(ctx context.Context, repositoryID, modu
 	return asset, err
 }
 
+func (s *PostgresStore) GoModuleObjectHasReference(ctx context.Context, objectKey string) (bool, error) {
+	var referenced bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM native_go_assets WHERE object_key=$1)`, objectKey).Scan(&referenced)
+	return referenced, err
+}
+
 const goModuleVersionColumns = `repository_id::text,module_path,version,published_at,publisher,cached_at,created_at`
 const goModuleAssetColumns = `repository_id::text,module_path,version,kind,digest,object_key,size,source_url,cached_at,created_at`
 

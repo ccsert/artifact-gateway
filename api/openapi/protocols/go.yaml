@@ -73,14 +73,24 @@ go_repository_modulePath:
         description: Identical publication replayed
       '201':
         description: Module version published
+      '400':
+        description: Request body could not be read
       '401':
         "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Authenticated principal lacks Repository write permission
       '409':
         "$ref": "../components/responses.yaml#/Problem"
       '413':
         "$ref": "../components/responses.yaml#/Problem"
       '422':
         "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        description: Publication persistence failed
+      '503':
+        description: Publication coordination is unavailable
+      '507':
+        description: Repository capacity quota exceeded
   x-gateway-catchAll: modulePath
   x-gateway-visibility: all_three_representations_committed_together
   x-gateway-publication: gateway_specific_single_zip_put

@@ -18,6 +18,20 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
+type failNthGoPutStore struct {
+	*MemoryOCIObjectStore
+	failAt int
+	puts   int
+}
+
+func (s *failNthGoPutStore) PutVerifiedReader(ctx context.Context, key string, reader io.Reader, size int64, digest string) error {
+	s.puts++
+	if s.puts == s.failAt {
+		return errors.New("injected Go object write failure")
+	}
+	return s.MemoryOCIObjectStore.PutVerifiedReader(ctx, key, reader, size, digest)
+}
+
 func TestNativeGoProxyCachesModuleAndServesOffline(t *testing.T) {
 	const (
 		modulePath    = "example.com/Acme/widget"
@@ -128,6 +142,13 @@ func TestNativeGoHostedPublishesCanonicalZipAndServesModule(t *testing.T) {
 		return response
 	}
 
+	if response := request(http.MethodPut, "/@v/"+version+".zip", archive); response.Code != http.StatusForbidden {
+		t.Fatalf("publish without write grant=%d body=%s", response.Code, response.Body.String())
+	}
+	grantGoPublisher(t, store, repo.ID)
+	if response := request(http.MethodPut, "/@v/"+version+".zip", nil); response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("empty publish=%d body=%s", response.Code, response.Body.String())
+	}
 	if response := request(http.MethodPut, "/@v/"+version+".zip", archive); response.Code != http.StatusCreated {
 		t.Fatalf("publish=%d body=%s", response.Code, response.Body.String())
 	}
@@ -159,6 +180,71 @@ func TestNativeGoHostedPublishesCanonicalZipAndServesModule(t *testing.T) {
 	}
 	if len(jobs) != 1 || jobs[0].Kind != repository.LifecycleJobScan {
 		t.Fatalf("publication scan jobs=%#v", jobs)
+	}
+}
+
+func TestNativeGoHostedRejectsQuotaBeforeWritingObjects(t *testing.T) {
+	const (
+		modulePath = "example.com/team/quota"
+		version    = "v1.0.0"
+	)
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "go-hosted-quota", Name: "go-hosted-quota", Format: repository.FormatGo, Type: repository.RepositoryTypeHosted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grantGoPublisher(t, store, repo.ID)
+	if _, err = store.ReplaceRepositoryCapacityQuota(context.Background(), repo.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	objects := NewMemoryOCIObjectStore()
+	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	archive := goModuleFixtureZip(t, modulePath, version, map[string]string{
+		"go.mod": "module " + modulePath + "\n", "quota.go": "package quota\n",
+	})
+	request := httptest.NewRequest(http.MethodPut, "/go/"+repo.Name+"/"+modulePath+"/@v/"+version+".zip", bytes.NewReader(archive))
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusInsufficientStorage {
+		t.Fatalf("quota publish=%d body=%s", response.Code, response.Body.String())
+	}
+	keys, err := objects.List(context.Background(), "native/go/")
+	if err != nil || len(keys) != 0 {
+		t.Fatalf("quota failure left objects=%v err=%v", keys, err)
+	}
+}
+
+func TestNativeGoHostedCleansObjectsAfterPartialWriteFailure(t *testing.T) {
+	const (
+		modulePath = "example.com/team/failing-store"
+		version    = "v1.0.0"
+	)
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "go-hosted-failing-store", Name: "go-hosted-failing-store", Format: repository.FormatGo, Type: repository.RepositoryTypeHosted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grantGoPublisher(t, store, repo.ID)
+	objects := &failNthGoPutStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore(), failAt: 2}
+	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	archive := goModuleFixtureZip(t, modulePath, version, map[string]string{
+		"go.mod": "module " + modulePath + "\n", "failure.go": "package failure\n",
+	})
+	request := httptest.NewRequest(http.MethodPut, "/go/"+repo.Name+"/"+modulePath+"/@v/"+version+".zip", bytes.NewReader(archive))
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("failed publish=%d body=%s", response.Code, response.Body.String())
+	}
+	keys, err := objects.List(context.Background(), "native/go/")
+	if err != nil || len(keys) != 0 {
+		t.Fatalf("partial failure left objects=%v err=%v", keys, err)
 	}
 }
 
@@ -297,6 +383,52 @@ func TestValidateGoModRejectsMalformedContent(t *testing.T) {
 	}
 }
 
+func TestGoHostedRejectsZipWithCorruptNonModFile(t *testing.T) {
+	const (
+		modulePath = "example.com/team/corrupt"
+		version    = "v1.0.0"
+	)
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	for name, body := range map[string]string{
+		"go.mod":     "module " + modulePath + "\n",
+		"corrupt.go": "package corrupt\n",
+	} {
+		header := &zip.FileHeader{Name: modulePath + "@" + version + "/" + name, Method: zip.Store}
+		entry, err := writer.CreateHeader(header)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = io.WriteString(entry, body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	corrupt := append([]byte(nil), buffer.Bytes()...)
+	archive, err := zip.NewReader(bytes.NewReader(corrupt), int64(len(corrupt)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range archive.File {
+		if !strings.HasSuffix(file.Name, "/corrupt.go") {
+			continue
+		}
+		offset, offsetErr := file.DataOffset()
+		if offsetErr != nil {
+			t.Fatal(offsetErr)
+		}
+		corrupt[offset] ^= 0xff
+	}
+	if _, err = validateGoAsset(modulePath, version, "zip", corrupt); err != nil {
+		t.Fatalf("metadata-only ZIP validation should reach content validation: %v", err)
+	}
+	if _, err = goModFromModuleZip(modulePath, version, corrupt); err == nil {
+		t.Fatal("corrupt non-go.mod file was accepted")
+	}
+}
+
 func TestNativeGoGroupMergesVersionsAndResolvesMemberAssets(t *testing.T) {
 	const (
 		modulePath    = "example.com/team/toolkit"
@@ -394,6 +526,7 @@ func TestNativeGoGroupPrefersHostedModuleOverProxyConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	grantGoPublisher(t, store, hosted.ID)
 	proxy, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
 		ID: "go-group-proxy", Name: "go-group-proxy", Format: repository.FormatGo, Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL,
 	})
@@ -603,6 +736,7 @@ func TestNativeGoRealClientDownloadsHostedPublication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	grantGoPublisher(t, store, repo.ID)
 	server := httptest.NewServer(NewGatewayHandler(
 		Dependencies{NativeGoObjectStore: NewMemoryOCIObjectStore()}, store,
 		TestAdapter{}, testAuthenticator(),
@@ -671,4 +805,13 @@ func goModuleFixtureZip(t *testing.T, modulePath, version string, files map[stri
 		t.Fatal(err)
 	}
 	return buffer.Bytes()
+}
+
+func grantGoPublisher(t testing.TB, store repository.RepositoryGrantStore, repositoryID string) {
+	t.Helper()
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repositoryID, []repository.RepositoryGrant{{
+		Principal: "build-agent", Scopes: []string{"repositories:write"},
+	}}, "1"); err != nil {
+		t.Fatal(err)
+	}
 }

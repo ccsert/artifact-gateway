@@ -3,6 +3,7 @@ package app
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
@@ -32,7 +34,7 @@ const (
 )
 
 type nativeGoHandler struct {
-	store              repository.NativeGoStore
+	store              nativeGoPublicationStore
 	repos              repository.HostedRepositoryStore
 	objects            OCIObjectStore
 	auth               Authenticator
@@ -41,6 +43,11 @@ type nativeGoHandler struct {
 	metrics            *Metrics
 	proxy              GoClient
 	publicationScanner *publicationScanScheduler
+}
+
+type nativeGoPublicationStore interface {
+	repository.NativeGoStore
+	repository.RepositoryCapacityStore
 }
 
 type goRoute struct {
@@ -56,9 +63,7 @@ func newNativeGoHandler(store GatewayStore, objects OCIObjectStore, auth Authent
 	}
 	return nativeGoHandler{
 		store: store, repos: store, objects: objects, auth: auth, audit: store, proxy: UpstreamClient{},
-		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth, LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
-			return AuthorizationDecision{Allowed: true, Source: "legacy_protocol", Reason: "authenticated"}
-		}},
+		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth},
 	}
 }
 
@@ -341,16 +346,25 @@ func (h nativeGoHandler) loadAsset(r *http.Request, repo repository.HostedReposi
 }
 
 func (h nativeGoHandler) publish(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, route goRoute, publisher string) {
-	data, err := io.ReadAll(io.LimitReader(http.MaxBytesReader(w, r.Body, goZipLimit+1), goZipLimit+1))
-	if err != nil || len(data) == 0 || int64(len(data)) > goZipLimit {
+	spool, err := spoolUpload(r.Body, goZipLimit)
+	if errors.Is(err, errUploadTooLarge) {
 		h.writePublishError(w, http.StatusRequestEntityTooLarge, "Go module ZIP is too large")
 		return
 	}
-	if _, err = validateGoAsset(route.module, route.version, "zip", data); err != nil {
+	if err != nil {
+		h.writePublishError(w, http.StatusBadRequest, "read Go module ZIP failed")
+		return
+	}
+	defer func() { _ = spool.Close() }()
+	if spool.Size() == 0 {
+		h.writePublishError(w, http.StatusUnprocessableEntity, "Go module ZIP is empty")
+		return
+	}
+	if _, err = modzip.CheckZip(module.Version{Path: route.module, Version: route.version}, spool.file.Name()); err != nil {
 		h.writePublishError(w, http.StatusUnprocessableEntity, "Go module ZIP is invalid")
 		return
 	}
-	mod, err := goModFromModuleZip(route.module, route.version, data)
+	mod, err := goModFromModuleZipFile(route.module, route.version, spool.file.Name())
 	if err != nil {
 		h.writePublishError(w, http.StatusUnprocessableEntity, err.Error())
 		return
@@ -367,7 +381,7 @@ func (h nativeGoHandler) publish(w http.ResponseWriter, r *http.Request, repo re
 	assets := []repository.GoModuleAsset{
 		newHostedGoAsset(repo.ID, route.module, route.version, "info", info),
 		newHostedGoAsset(repo.ID, route.module, route.version, "mod", mod),
-		newHostedGoAsset(repo.ID, route.module, route.version, "zip", data),
+		newHostedGoAssetFromDigest(repo.ID, route.module, route.version, "zip", spool.Digest(), spool.Size()),
 	}
 	publication := repository.GoModulePublication{
 		Version: repository.GoModuleVersion{
@@ -377,9 +391,20 @@ func (h nativeGoHandler) publish(w http.ResponseWriter, r *http.Request, repo re
 		Assets: assets,
 	}
 	coordinate := route.module + "@" + route.version
-	publicationCtx, releasePublication, err := repository.LockArtifactDistributionCoordinates(r.Context(), h.store, []repository.ArtifactDistributionCoordinate{{
-		RepositoryID: repo.ID, Format: repository.FormatGo, Coordinate: coordinate,
-	}})
+	objectKeys := make([]string, 0, len(assets))
+	for _, asset := range assets {
+		objectKeys = append(objectKeys, asset.ObjectKey)
+	}
+	objectCtx, releaseObjects, err := repository.LockObjectKeys(r.Context(), objectKeys, h.store, repository.FormatGo, h.store.LockGoObject)
+	if err != nil {
+		h.writePublishError(w, http.StatusServiceUnavailable, "Go module object coordination is unavailable")
+		return
+	}
+	defer releaseObjects()
+	publicationCtx, releasePublication, err := repository.LockArtifactDistributionCoordinates(objectCtx, h.store, []repository.ArtifactDistributionCoordinate{
+		{RepositoryID: repo.ID, Format: repository.FormatGo, Coordinate: coordinate},
+		{RepositoryID: repo.ID, Format: repository.FormatGo, Coordinate: "__hosted_capacity__"},
+	})
 	if err != nil {
 		h.writePublishError(w, http.StatusServiceUnavailable, "Go module publication coordination is unavailable")
 		return
@@ -397,29 +422,73 @@ func (h nativeGoHandler) publish(w http.ResponseWriter, r *http.Request, repo re
 		h.writePublishError(w, http.StatusServiceUnavailable, "check Go module version failed")
 		return
 	}
-	objectKeys := make([]string, 0, len(assets))
-	for _, asset := range assets {
-		objectKeys = append(objectKeys, asset.ObjectKey)
-	}
-	objectCtx, release, err := repository.LockObjectKeys(publicationCtx, objectKeys, h.store, repository.FormatGo, h.store.LockGoObject)
-	if err != nil {
-		h.writePublishError(w, http.StatusServiceUnavailable, "Go module object coordination is unavailable")
+	if err = h.ensureGoPublicationCapacity(publicationCtx, repo.ID, assets); err != nil {
+		h.writeGoPublicationStoreError(w, err)
 		return
 	}
-	defer release()
-	bodies := map[string][]byte{"info": info, "mod": mod, "zip": data}
+	bodies := map[string][]byte{"info": info, "mod": mod}
+	createdKeys := make([]string, 0, len(assets))
 	for _, asset := range assets {
-		if err = h.objects.PutVerifiedReader(objectCtx, asset.ObjectKey, bytes.NewReader(bodies[asset.Kind]), asset.Size, asset.Digest); err != nil {
+		stored, statErr := h.objects.Stat(publicationCtx, asset.ObjectKey)
+		if statErr == nil && stored.Size == asset.Size && stored.Digest == asset.Digest {
+			continue
+		}
+		if statErr != nil && !errors.Is(statErr, objectstore.ErrNotFound) {
+			h.cleanupGoPublicationObjects(publicationCtx, createdKeys)
+			h.writePublishError(w, http.StatusInternalServerError, "inspect Go module assets failed")
+			return
+		}
+		if errors.Is(statErr, objectstore.ErrNotFound) {
+			createdKeys = append(createdKeys, asset.ObjectKey)
+		}
+		var reader io.Reader = bytes.NewReader(bodies[asset.Kind])
+		if asset.Kind == "zip" {
+			if err = spool.Rewind(); err != nil {
+				h.cleanupGoPublicationObjects(publicationCtx, createdKeys)
+				h.writePublishError(w, http.StatusInternalServerError, "read Go module ZIP failed")
+				return
+			}
+			reader = spool.Reader()
+		}
+		if err = h.objects.PutVerifiedReader(publicationCtx, asset.ObjectKey, reader, asset.Size, asset.Digest); err != nil {
+			h.cleanupGoPublicationObjects(publicationCtx, createdKeys)
 			h.writePublishError(w, http.StatusInternalServerError, "persist Go module assets failed")
 			return
 		}
 	}
-	version, replayed, err := h.store.PublishGoModule(objectCtx, publication)
+	version, replayed, err := h.store.PublishGoModule(publicationCtx, publication)
 	if err != nil {
+		h.cleanupGoPublicationObjects(publicationCtx, createdKeys)
 		h.writeGoPublicationStoreError(w, err)
 		return
 	}
 	h.writeGoPublicationSuccess(w, r, repo, route, publisher, version, assets[2], replayed)
+}
+
+func (h nativeGoHandler) ensureGoPublicationCapacity(ctx context.Context, repositoryID string, assets []repository.GoModuleAsset) error {
+	capacity, err := h.store.GetRepositoryCapacity(ctx, repositoryID)
+	if err != nil {
+		return err
+	}
+	var incoming int64
+	for _, asset := range assets {
+		incoming += asset.Size
+	}
+	if capacity.QuotaBytes > 0 && (capacity.UsedBytes >= capacity.QuotaBytes || incoming > capacity.QuotaBytes-capacity.UsedBytes) {
+		return repository.ErrQuotaExceeded
+	}
+	return nil
+}
+
+func (h nativeGoHandler) cleanupGoPublicationObjects(ctx context.Context, objectKeys []string) {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	for index := len(objectKeys) - 1; index >= 0; index-- {
+		referenced, err := h.store.GoModuleObjectHasReference(cleanupCtx, objectKeys[index])
+		if err == nil && !referenced {
+			_ = h.objects.Delete(cleanupCtx, objectKeys[index])
+		}
+	}
 }
 
 func (h nativeGoHandler) writeGoPublicationStoreError(w http.ResponseWriter, err error) {
@@ -453,39 +522,63 @@ func (h nativeGoHandler) writeGoPublicationSuccess(w http.ResponseWriter, r *htt
 
 func newHostedGoAsset(repositoryID, modulePath, version, kind string, body []byte) repository.GoModuleAsset {
 	sum := sha256.Sum256(body)
-	digestHex := hex.EncodeToString(sum[:])
+	return newHostedGoAssetFromDigest(repositoryID, modulePath, version, kind, "sha256:"+hex.EncodeToString(sum[:]), int64(len(body)))
+}
+
+func newHostedGoAssetFromDigest(repositoryID, modulePath, version, kind, digest string, size int64) repository.GoModuleAsset {
+	digestHex := strings.TrimPrefix(digest, "sha256:")
 	return repository.GoModuleAsset{
 		RepositoryID: repositoryID, Module: modulePath, Version: version, Kind: kind,
-		Digest: "sha256:" + digestHex, ObjectKey: "native/go/sha256/" + digestHex,
-		Size: int64(len(body)),
+		Digest: digest, ObjectKey: "native/go/sha256/" + digestHex, Size: size,
 	}
 }
 
 func goModFromModuleZip(modulePath, version string, data []byte) ([]byte, error) {
 	archive, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		return nil, errors.New("Go module ZIP is invalid")
+		return nil, errors.New("go module ZIP is invalid")
 	}
+	return goModFromModuleZipFiles(modulePath, version, archive.File)
+}
+
+func goModFromModuleZipFile(modulePath, version, path string) ([]byte, error) {
+	archive, err := zip.OpenReader(path)
+	if err != nil {
+		return nil, errors.New("go module ZIP is invalid")
+	}
+	defer func() { _ = archive.Close() }()
+	return goModFromModuleZipFiles(modulePath, version, archive.File)
+}
+
+func goModFromModuleZipFiles(modulePath, version string, files []*zip.File) ([]byte, error) {
 	name := modulePath + "@" + version + "/go.mod"
-	for _, file := range archive.File {
-		if file.Name != name {
-			continue
-		}
+	var mod []byte
+	for _, file := range files {
 		reader, openErr := file.Open()
 		if openErr != nil {
-			return nil, errors.New("Go module ZIP go.mod is unreadable")
+			return nil, errors.New("go module ZIP contains an unreadable file")
 		}
-		body, readErr := io.ReadAll(io.LimitReader(reader, goModLimit+1))
+		var readErr error
+		if file.Name == name {
+			mod, readErr = io.ReadAll(io.LimitReader(reader, goModLimit+1))
+		} else {
+			_, readErr = io.Copy(io.Discard, reader)
+		}
 		closeErr := reader.Close()
-		if readErr != nil || closeErr != nil || len(body) == 0 || int64(len(body)) > goModLimit {
-			return nil, errors.New("Go module ZIP go.mod is invalid")
+		if readErr != nil || closeErr != nil {
+			return nil, errors.New("go module ZIP contains an unreadable file")
 		}
-		if _, validateErr := validateGoAsset(modulePath, version, "mod", body); validateErr != nil {
-			return nil, errors.New("Go module ZIP go.mod does not match the requested module")
+		if file.Name == name && (len(mod) == 0 || int64(len(mod)) > goModLimit) {
+			return nil, errors.New("go module ZIP go.mod is invalid")
 		}
-		return body, nil
 	}
-	return nil, errors.New("Go module ZIP must contain a top-level go.mod")
+	if mod == nil {
+		return nil, errors.New("go module ZIP must contain a top-level go.mod")
+	}
+	if _, validateErr := validateGoAsset(modulePath, version, "mod", mod); validateErr != nil {
+		return nil, errors.New("go module ZIP go.mod does not match the requested module")
+	}
+	return mod, nil
 }
 
 func (h nativeGoHandler) writePublishError(w http.ResponseWriter, status int, message string) {

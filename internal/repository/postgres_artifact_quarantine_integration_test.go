@@ -456,6 +456,28 @@ func TestPostgresRawAndNPMOperationLocksReuseArtifactSession(t *testing.T) {
 		releaseObject()
 	})
 
+	t.Run("go objects then publication coordinates", func(t *testing.T) {
+		objectCtx, releaseObjects, lockErr := LockObjectKeys(ctx, []string{
+			"native/go/sha256/" + strings.Repeat("a", 64),
+			"native/go/sha256/" + strings.Repeat("b", 64),
+			"native/go/sha256/" + strings.Repeat("c", 64),
+		}, store, FormatGo, store.LockGoObject)
+		if lockErr != nil {
+			t.Fatal(lockErr)
+		}
+		coordinateCtx, releaseCoordinates, lockErr := LockArtifactDistributionCoordinates(objectCtx, store, []ArtifactDistributionCoordinate{
+			{RepositoryID: uuid.NewString(), Format: FormatGo, Coordinate: "example.com/team/widget@v1.0.0"},
+			{RepositoryID: uuid.NewString(), Format: FormatGo, Coordinate: "__hosted_capacity__"},
+		})
+		if lockErr != nil {
+			releaseObjects()
+			t.Fatal(lockErr)
+		}
+		assertSingleArtifactLockSession(t, coordinateCtx, store)
+		releaseCoordinates()
+		releaseObjects()
+	})
+
 	t.Run("npm proxy object then admission", func(t *testing.T) {
 		proxyCtx, releaseProxy, lockErr := LockNPMProxyWithContext(ctx, store, "promotion:target:widget:1.0.0")
 		if lockErr != nil {

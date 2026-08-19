@@ -15,7 +15,7 @@ var (
 	ErrLastActiveAdmin               = errors.New("last active administrator cannot be removed")
 	ErrQuotaExceeded                 = errors.New("repository capacity quota exceeded")
 	ErrUpstreamChanged               = errors.New("upstream immutable artifact metadata changed")
-	ErrInvalidGoModulePublication    = errors.New("Go module publication is invalid")
+	ErrInvalidGoModulePublication    = errors.New("go module publication is invalid")
 	ErrInvalidRuntimeNode            = errors.New("runtime node identity is invalid")
 	ErrTemplateNameExists            = errors.New("authorization template name already exists")
 	ErrAuthorizationRoleNameExists   = errors.New("authorization role name already exists")
@@ -385,6 +385,7 @@ type NativeGoStore interface {
 	GetGoModuleVersion(context.Context, string, string, string) (GoModuleVersion, error)
 	CacheGoModuleAsset(context.Context, GoModuleAsset) (GoModuleAsset, error)
 	GetGoModuleAsset(context.Context, string, string, string, string) (GoModuleAsset, error)
+	GoModuleObjectHasReference(context.Context, string) (bool, error)
 	LockGoObject(context.Context, string) (func(), error)
 }
 

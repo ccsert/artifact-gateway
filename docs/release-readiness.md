@@ -2,7 +2,7 @@
 
 This document is the release gate for Artifact Gateway's OCI, Maven, Raw,
 Conan, npm, and PyPI Hosted/Proxy lifecycle and distribution paths plus the Go
-Module Proxy/Group read path.
+Module atomic Hosted publication and Hosted/Proxy/Group read paths.
 The gate also carries the unadvertised APT Hosted signing preview through a
 real Debian client and exact signed-snapshot recovery rehearsal; passing it does
 not promote APT Hosted into the V1 compatibility claim.
@@ -70,9 +70,10 @@ storage credentials, or unredacted upstream URLs in that record.
 	  PyPI uses real twine and pip clients to publish Hosted content, install
 	  Proxy content through a Group, stop the upstream, and reinstall from the
 	  verified local cache.
-	  Go uses a real `go mod download` against the Gateway `GOPROXY`, stops its
-	  upstream, clears the module cache, and downloads the same `.info`, `.mod`,
-	  and `.zip` assets from Gateway storage.
+      Go first publishes a canonical module ZIP to Hosted and completes a real
+      `go mod download`, then separately downloads through Proxy, stops its
+      upstream, clears the module cache, and downloads the same `.info`, `.mod`,
+      and `.zip` assets from Gateway storage.
       The unadvertised APT Hosted preview builds a real `.deb`, publishes and
       installs a signed snapshot, captures all signed/index/package digests,
       backs up PostgreSQL and RustFS, publishes a later snapshot, restores the
