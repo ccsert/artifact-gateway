@@ -54,8 +54,8 @@ func TestFormatProfilesAPIRequiresAdministratorAndReturnsCapabilities(t *testing
 			continue
 		}
 		if item.Format == adminopenapi.Format("go") {
-			if !item.GroupSupported || len(item.RepositoryTypes) != 2 || len(item.HostedOperations) != 3 || len(item.ProxyOperations) != 2 {
-				t.Errorf("Go must expose Hosted publish/read/browse plus Proxy and Group: %#v", item)
+			if !item.GroupSupported || len(item.RepositoryTypes) != 2 || len(item.HostedOperations) != 5 || len(item.ProxyOperations) != 2 {
+				t.Errorf("Go must expose Hosted read/publish/browse/delete/restore plus Proxy and Group: %#v", item)
 			}
 			continue
 		}

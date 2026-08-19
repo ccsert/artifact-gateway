@@ -103,7 +103,7 @@ func (s *MemoryStore) artifactIdentitiesLocked(repositoryID string, format Forma
 			return nil, fmt.Errorf("format %q does not support distribution identities", format)
 		}
 		for _, version := range s.goVersions {
-			if version.RepositoryID != repositoryID {
+			if version.RepositoryID != repositoryID || s.goModuleVersionTombstonedLocked(repositoryID, version.Module, version.Version) {
 				continue
 			}
 			for _, kind := range []string{"zip", "mod", "info"} {

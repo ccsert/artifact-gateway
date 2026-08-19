@@ -50,6 +50,7 @@ type nativeGoPublicationStore interface {
 	repository.NativeGoStore
 	repository.RepositoryCapacityStore
 	repository.LifecycleJobStore
+	repository.ArtifactTombstoneStore
 }
 
 type goRoute struct {
@@ -207,6 +208,26 @@ func validGoModuleSearchPrefix(value string) bool {
 		}
 	}
 	return true
+}
+
+func validGoModuleVersionCoordinate(value string) bool {
+	_, _, ok := parseGoModuleVersionCoordinate(value)
+	return ok
+}
+
+func parseGoModuleVersionCoordinate(value string) (modulePath, version string, ok bool) {
+	if len(value) > 1537 {
+		return "", "", false
+	}
+	separator := strings.LastIndexByte(value, '@')
+	if separator <= 0 || separator == len(value)-1 {
+		return "", "", false
+	}
+	modulePath, version = value[:separator], value[separator+1:]
+	if module.Check(modulePath, version) != nil {
+		return "", "", false
+	}
+	return modulePath, version, true
 }
 
 func goProxyTarget(endpoint, modulePath, suffix string) (string, error) {
@@ -412,6 +433,13 @@ func (h nativeGoHandler) publish(w http.ResponseWriter, r *http.Request, repo re
 		return
 	}
 	defer releasePublication()
+	if _, tombstoneErr := h.store.GetArtifactTombstone(publicationCtx, repo.ID, repository.FormatGo, coordinate); tombstoneErr == nil {
+		h.writePublishError(w, http.StatusConflict, "Go module version is tombstoned; restore it through the management API")
+		return
+	} else if !errors.Is(tombstoneErr, repository.ErrNotFound) {
+		h.writePublishError(w, http.StatusServiceUnavailable, "check Go module tombstone failed")
+		return
+	}
 	if _, lookupErr := h.store.GetGoModuleVersion(publicationCtx, repo.ID, route.module, route.version); lookupErr == nil {
 		version, replayed, publishErr := h.store.PublishGoModule(publicationCtx, publication)
 		if publishErr != nil {
@@ -518,6 +546,10 @@ func (h nativeGoHandler) writeGoPublicationStoreError(w http.ResponseWriter, err
 	}
 	if errors.Is(err, repository.ErrNameExists) {
 		h.writePublishError(w, http.StatusConflict, "Go module version already exists with different content")
+		return
+	}
+	if errors.Is(err, repository.ErrArtifactTombstoned) {
+		h.writePublishError(w, http.StatusConflict, "Go module version is tombstoned; restore it through the management API")
 		return
 	}
 	h.writePublishError(w, http.StatusInternalServerError, "publish Go module failed")

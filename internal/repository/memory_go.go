@@ -14,6 +14,15 @@ func goAssetKey(repositoryID, modulePath, version, kind string) string {
 	return goVersionKey(repositoryID, modulePath, version) + "\x00" + kind
 }
 
+func goModuleCoordinate(modulePath, version string) string {
+	return modulePath + "@" + version
+}
+
+func (s *MemoryStore) goModuleVersionTombstonedLocked(repositoryID, modulePath, version string) bool {
+	_, ok := s.artifactTombstones[repositoryID+"\x00"+string(FormatGo)+"\x00"+goModuleCoordinate(modulePath, version)]
+	return ok
+}
+
 func (s *MemoryStore) LockGoObject(_ context.Context, objectKey string) (func(), error) {
 	return s.lockMemoryObject(s.goObjectLocks, objectKey)
 }
@@ -82,6 +91,9 @@ func (s *MemoryStore) PublishGoModule(_ context.Context, incoming GoModulePublic
 	defer s.mu.Unlock()
 	version := publication.Version
 	versionKey := goVersionKey(version.RepositoryID, version.Module, version.Version)
+	if s.goModuleVersionTombstonedLocked(version.RepositoryID, version.Module, version.Version) {
+		return GoModuleVersion{}, false, ErrArtifactTombstoned
+	}
 	if existing, ok := s.goVersions[versionKey]; ok {
 		assets := make([]GoModuleAsset, 0, 3)
 		for _, kind := range []string{"info", "mod", "zip"} {
@@ -118,7 +130,7 @@ func (s *MemoryStore) ListGoModuleVersions(_ context.Context, repositoryID, modu
 	defer s.mu.RUnlock()
 	versions := make([]GoModuleVersion, 0)
 	for _, version := range s.goVersions {
-		if version.RepositoryID == repositoryID && version.Module == modulePath {
+		if version.RepositoryID == repositoryID && version.Module == modulePath && !s.goModuleVersionTombstonedLocked(repositoryID, modulePath, version.Version) {
 			versions = append(versions, version)
 		}
 	}
@@ -133,9 +145,47 @@ func (s *MemoryStore) GetGoModuleVersion(_ context.Context, repositoryID, module
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	item, ok := s.goVersions[goVersionKey(repositoryID, modulePath, version)]
-	if !ok {
+	if !ok || s.goModuleVersionTombstonedLocked(repositoryID, modulePath, version) {
 		return GoModuleVersion{}, ErrNotFound
 	}
+	return item, nil
+}
+
+func (s *MemoryStore) TombstoneGoModuleVersion(_ context.Context, repositoryID, modulePath, version string) (GoModuleVersion, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item, ok := s.goVersions[goVersionKey(repositoryID, modulePath, version)]
+	if !ok || s.goModuleVersionTombstonedLocked(repositoryID, modulePath, version) {
+		return GoModuleVersion{}, ErrNotFound
+	}
+	digest := ""
+	for _, kind := range []string{"zip", "mod", "info"} {
+		if asset, found := s.goAssets[goAssetKey(repositoryID, modulePath, version, kind)]; found {
+			digest = asset.Digest
+			break
+		}
+	}
+	now := time.Now().UTC()
+	coordinate := goModuleCoordinate(modulePath, version)
+	s.artifactTombstones[repositoryID+"\x00"+string(FormatGo)+"\x00"+coordinate] = ArtifactTombstone{
+		RepositoryID: repositoryID, Format: FormatGo, Coordinate: coordinate, Digest: digest, TombstonedAt: now,
+	}
+	return item, nil
+}
+
+func (s *MemoryStore) RestoreGoModuleVersion(_ context.Context, repositoryID, modulePath, version string) (GoModuleVersion, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item, ok := s.goVersions[goVersionKey(repositoryID, modulePath, version)]
+	coordinate := goModuleCoordinate(modulePath, version)
+	tombstoneKey := repositoryID + "\x00" + string(FormatGo) + "\x00" + coordinate
+	if !ok {
+		return GoModuleVersion{}, ErrDisabled
+	}
+	if _, ok = s.artifactTombstones[tombstoneKey]; !ok {
+		return GoModuleVersion{}, ErrNotFound
+	}
+	delete(s.artifactTombstones, tombstoneKey)
 	return item, nil
 }
 
@@ -176,7 +226,7 @@ func (s *MemoryStore) GetGoModuleAsset(_ context.Context, repositoryID, modulePa
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	asset, ok := s.goAssets[goAssetKey(repositoryID, modulePath, version, kind)]
-	if !ok {
+	if !ok || s.goModuleVersionTombstonedLocked(repositoryID, modulePath, version) {
 		return GoModuleAsset{}, ErrNotFound
 	}
 	return asset, nil

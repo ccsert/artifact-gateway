@@ -146,7 +146,7 @@ func (s *MemoryStore) artifactSearchItemsLocked(repositoryID string, format Form
 		}
 	case FormatGo:
 		for _, version := range s.goVersions {
-			if version.RepositoryID != repositoryID {
+			if version.RepositoryID != repositoryID || s.goModuleVersionTombstonedLocked(repositoryID, version.Module, version.Version) {
 				continue
 			}
 			createdAt := version.CreatedAt

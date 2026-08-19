@@ -12,7 +12,9 @@ a dated version heading without rewriting their meaning.
   canonical module and `go.mod` validation, atomically derived `.info`/`.mod`
   representations, content-addressed PostgreSQL/RustFS persistence, idempotent
   replay, immutable-coordinate conflict rejection, publication scanning,
-  Hosted-first mixed Groups, and a real `go mod download` acceptance gate.
+  management tombstone/restore with protocol, Group, search, and scan-identity
+  visibility enforcement, Hosted-first mixed Groups, and a real
+  `go mod download` acceptance gate.
 
 - Added stable Service Accounts for Jenkins, CI robots, scanners, and
   third-party applications, with one-time expiring credentials, overlapping

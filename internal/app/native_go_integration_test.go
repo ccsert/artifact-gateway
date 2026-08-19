@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
@@ -297,7 +298,6 @@ func TestPostgresRustFSGoHostedPublicationIsAtomicAcrossGatewayInstances(t *test
 	if err != nil || capacity.ObjectCount != 3 || capacity.UsedBytes <= int64(len(archive)) {
 		t.Fatalf("Go Hosted capacity=%#v err=%v", capacity, err)
 	}
-
 	orphanKey := "native/go/sha256/" + strings.Repeat("d", 64)
 	if err = objectsA.Put(ctx, orphanKey, []byte("orphan")); err != nil {
 		t.Fatal(err)
@@ -328,5 +328,213 @@ func TestPostgresRustFSGoHostedPublicationIsAtomicAcrossGatewayInstances(t *test
 	}
 	if _, err = objectsA.Stat(ctx, zipAsset.ObjectKey); err != nil {
 		t.Fatalf("referenced Hosted ZIP was reclaimed: %v", err)
+	}
+}
+
+func TestPostgresRustFSGoHostedLifecycleIsSerializedAcrossGatewayInstances(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	endpoint := os.Getenv("TEST_RUSTFS_ENDPOINT")
+	accessKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_RUSTFS_SECRET_KEY")
+	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	storeA, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeA.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
+	bucket := "native-go-lifecycle-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
+	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objectsA.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := storeA.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: uuid.NewString(), Name: "go-lifecycle-" + strings.ReplaceAll(uuid.NewString(), "-", ""),
+		Format: repository.FormatGo, Type: repository.RepositoryTypeHosted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grantGoPublisher(t, storeA, repo.ID)
+	serverA := httptest.NewServer(NewGatewayHandler(Dependencies{NativeGoObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	defer serverA.Close()
+	serverB := httptest.NewServer(NewGatewayHandler(Dependencies{NativeGoObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	defer serverB.Close()
+
+	const (
+		modulePath    = "example.com/Acme/lifecycle-postgres"
+		escapedModule = "example.com/!acme/lifecycle-postgres"
+		version       = "v1.6.0"
+	)
+	archive := goModuleFixtureZip(t, modulePath, version, map[string]string{
+		"go.mod": "module " + modulePath + "\n\ngo 1.26\n", "lifecycle.go": "package lifecyclepostgres\n",
+	})
+	path := "/go/" + repo.Name + "/" + escapedModule + "/@v/" + version + ".zip"
+	put := func(server *httptest.Server) (int, string) {
+		t.Helper()
+		request, requestErr := http.NewRequest(http.MethodPut, server.URL+path, bytes.NewReader(archive))
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		authorize(request, "resolver-secret")
+		response, requestErr := server.Client().Do(request)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		body, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		return response.StatusCode, string(body)
+	}
+	get := func(server *httptest.Server) (int, []byte) {
+		t.Helper()
+		request, requestErr := http.NewRequest(http.MethodGet, server.URL+path, nil)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		authorize(request, "resolver-secret")
+		response, requestErr := server.Client().Do(request)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		body, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		return response.StatusCode, body
+	}
+	if status, body := put(serverA); status != http.StatusCreated {
+		t.Fatalf("publish=%d body=%s", status, body)
+	}
+	publishedVersion, err := storeA.GetGoModuleVersion(ctx, repo.ID, modulePath, version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publication := repository.GoModulePublication{Version: publishedVersion, Assets: make([]repository.GoModuleAsset, 0, 3)}
+	for _, kind := range []string{"info", "mod", "zip"} {
+		asset, assetErr := storeA.GetGoModuleAsset(ctx, repo.ID, modulePath, version, kind)
+		if assetErr != nil {
+			t.Fatal(assetErr)
+		}
+		publication.Assets = append(publication.Assets, asset)
+	}
+	capacity, err := storeB.GetRepositoryCapacity(ctx, repo.ID)
+	if err != nil || capacity.ObjectCount != 3 {
+		t.Fatalf("published capacity=%#v err=%v", capacity, err)
+	}
+
+	runConcurrently := func(operations ...func() error) []error {
+		start := make(chan struct{})
+		results := make(chan error, len(operations))
+		var ready sync.WaitGroup
+		ready.Add(len(operations))
+		for _, operation := range operations {
+			go func(operation func() error) {
+				ready.Done()
+				<-start
+				results <- operation()
+			}(operation)
+		}
+		ready.Wait()
+		close(start)
+		errors := make([]error, 0, len(operations))
+		for range operations {
+			errors = append(errors, <-results)
+		}
+		return errors
+	}
+	assertOneSuccess := func(operation string, results []error) {
+		t.Helper()
+		var successes, notFound int
+		for _, result := range results {
+			switch {
+			case result == nil:
+				successes++
+			case errors.Is(result, repository.ErrNotFound):
+				notFound++
+			default:
+				t.Fatalf("concurrent %s error=%v", operation, result)
+			}
+		}
+		if successes != 1 || notFound != 1 {
+			t.Fatalf("concurrent %s results=%v", operation, results)
+		}
+	}
+	assertOneSuccess("tombstone", runConcurrently(
+		func() error {
+			_, operationErr := storeA.TombstoneGoModuleVersion(ctx, repo.ID, modulePath, version)
+			return operationErr
+		},
+		func() error {
+			_, operationErr := storeB.TombstoneGoModuleVersion(ctx, repo.ID, modulePath, version)
+			return operationErr
+		},
+	))
+	if status, body := get(serverB); status != http.StatusNotFound {
+		t.Fatalf("deleted cross-instance zip=%d body=%q", status, body)
+	}
+	projection, err := storeB.SearchArtifactProjection(ctx, repo.ID, repository.FormatGo, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: modulePath}, 10, repository.ArtifactSearchPosition{})
+	if err != nil || len(projection) != 0 {
+		t.Fatalf("deleted projection=%#v err=%v", projection, err)
+	}
+	identities, err := storeB.ListArtifactIdentities(ctx, repo.ID, repository.FormatGo, repository.ArtifactIdentityScan, "", 10)
+	if err != nil || len(identities) != 0 {
+		t.Fatalf("deleted identities=%#v err=%v", identities, err)
+	}
+	deletedCapacity, err := storeB.GetRepositoryCapacity(ctx, repo.ID)
+	if err != nil || deletedCapacity != capacity {
+		t.Fatalf("deleted physical capacity=%#v want=%#v err=%v", deletedCapacity, capacity, err)
+	}
+	if status, body := put(serverB); status != http.StatusConflict || !strings.Contains(body, "restore") {
+		t.Fatalf("republish tombstoned version=%d body=%s", status, body)
+	}
+	if _, _, err = storeB.PublishGoModule(ctx, publication); !errors.Is(err, repository.ErrArtifactTombstoned) {
+		t.Fatalf("PostgreSQL republish tombstoned version error=%v", err)
+	}
+
+	assertOneSuccess("restore", runConcurrently(
+		func() error {
+			_, operationErr := storeA.RestoreGoModuleVersion(ctx, repo.ID, modulePath, version)
+			return operationErr
+		},
+		func() error {
+			_, operationErr := storeB.RestoreGoModuleVersion(ctx, repo.ID, modulePath, version)
+			return operationErr
+		},
+	))
+	if status, body := get(serverA); status != http.StatusOK || !bytes.Equal(body, archive) {
+		t.Fatalf("restored cross-instance zip=%d bytes=%d", status, len(body))
+	}
+	projection, err = storeA.SearchArtifactProjection(ctx, repo.ID, repository.FormatGo, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: modulePath}, 10, repository.ArtifactSearchPosition{})
+	if err != nil || len(projection) != 1 || projection[0].Version != version {
+		t.Fatalf("restored projection=%#v err=%v", projection, err)
+	}
+	identities, err = storeA.ListArtifactIdentities(ctx, repo.ID, repository.FormatGo, repository.ArtifactIdentityScan, "", 10)
+	if err != nil || len(identities) != 1 || identities[0].Coordinate != modulePath+"@"+version {
+		t.Fatalf("restored identities=%#v err=%v", identities, err)
+	}
+	restoredCapacity, err := storeA.GetRepositoryCapacity(ctx, repo.ID)
+	if err != nil || restoredCapacity != capacity {
+		t.Fatalf("restored physical capacity=%#v want=%#v err=%v", restoredCapacity, capacity, err)
+	}
+	if _, err = storeA.GetArtifactTombstone(ctx, repo.ID, repository.FormatGo, modulePath+"@"+version); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("restored tombstone remained: %v", err)
 	}
 }

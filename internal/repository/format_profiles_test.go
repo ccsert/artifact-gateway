@@ -35,7 +35,7 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			if len(profile.RepositoryTypes) != 2 || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeHosted) || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeProxy) || !profile.GroupSupported {
 				t.Errorf("Go must expose Hosted, Proxy, and Group: %#v", profile)
 			}
-			for _, operation := range []RepositoryOperation{RepositoryOperationRead, RepositoryOperationPublish, RepositoryOperationBrowse} {
+			for _, operation := range []RepositoryOperation{RepositoryOperationRead, RepositoryOperationPublish, RepositoryOperationBrowse, RepositoryOperationDelete, RepositoryOperationRestore} {
 				if !FormatSupportsOperation(profile.Format, RepositoryTypeHosted, operation) {
 					t.Errorf("Go Hosted missing operation %q", operation)
 				}
@@ -43,6 +43,11 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			for _, operation := range []RepositoryOperation{RepositoryOperationRead, RepositoryOperationBrowse} {
 				if !FormatSupportsOperation(profile.Format, RepositoryTypeProxy, operation) {
 					t.Errorf("Go Proxy missing operation %q", operation)
+				}
+			}
+			for _, operation := range []RepositoryOperation{RepositoryOperationPublish, RepositoryOperationDelete, RepositoryOperationRestore} {
+				if FormatSupportsOperation(profile.Format, RepositoryTypeProxy, operation) {
+					t.Errorf("Go Proxy advertises unsupported operation %q", operation)
 				}
 			}
 			continue

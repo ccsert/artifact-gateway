@@ -100,7 +100,8 @@ func postgresArtifactIdentityQuery(format Format, purpose ArtifactIdentityPurpos
 				WHERE a.repository_id=v.repository_id AND a.module_path=v.module_path AND a.version=v.version AND a.object_key<>'' AND a.digest ~ '^sha256:[a-f0-9]{64}$'
 				ORDER BY CASE a.kind WHEN 'zip' THEN 0 WHEN 'mod' THEN 1 ELSE 2 END LIMIT 1
 			) a ON true
-			WHERE v.repository_id::text=$1`, nil
+			WHERE v.repository_id::text=$1
+			  AND NOT EXISTS (SELECT 1 FROM artifact_tombstones t WHERE t.repository_id=v.repository_id AND t.format='go' AND t.coordinate=v.module_path || '@' || v.version)`, nil
 	case FormatConan:
 		recipes := `SELECT ` + protocolidentity.PostgreSQLConanRecipe("reference", "revision") + ` AS coordinate,digest,NULL::bigint AS size,created_at AS published_at
 			FROM native_conan_recipe_revisions r

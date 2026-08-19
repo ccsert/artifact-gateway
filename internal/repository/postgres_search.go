@@ -69,6 +69,11 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 			       row_number() OVER (PARTITION BY coordinate,digest ORDER BY created_at DESC NULLS LAST) AS digest_rank
 			FROM artifact_search_projection
 			WHERE repository_id::text=$1 AND format=$2
+			  AND ($2<>'go' OR NOT EXISTS (
+			    SELECT 1 FROM artifact_tombstones t
+			    WHERE t.repository_id=artifact_search_projection.repository_id AND t.format='go'
+			      AND t.coordinate=artifact_search_projection.coordinate || '@' || COALESCE(artifact_search_projection.version,'')
+			  ))
 			  AND (($3='coordinate' AND ($4='' OR coordinate LIKE $4 || '%' ESCAPE '\'))
 			       OR ($3='digest' AND digest=$4))
 		)

@@ -59,8 +59,16 @@ func (s *PostgresStore) PublishGoModule(ctx context.Context, incoming GoModulePu
 	version := publication.Version
 	var existing GoModuleVersion
 	err = scanGoModuleVersion(tx.QueryRowContext(ctx, `SELECT `+goModuleVersionColumns+` FROM native_go_versions
-		WHERE repository_id::text=$1 AND module_path=$2 AND version=$3`, version.RepositoryID, version.Module, version.Version), &existing)
+		WHERE repository_id::text=$1 AND module_path=$2 AND version=$3 FOR UPDATE`, version.RepositoryID, version.Module, version.Version), &existing)
 	if err == nil {
+		var tombstoned bool
+		if queryErr := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM artifact_tombstones
+			WHERE repository_id::text=$1 AND format='go' AND coordinate=$2)`, version.RepositoryID, goModuleCoordinate(version.Module, version.Version)).Scan(&tombstoned); queryErr != nil {
+			return GoModuleVersion{}, false, queryErr
+		}
+		if tombstoned {
+			return GoModuleVersion{}, false, ErrArtifactTombstoned
+		}
 		rows, queryErr := tx.QueryContext(ctx, `SELECT `+goModuleAssetColumns+` FROM native_go_assets
 			WHERE repository_id::text=$1 AND module_path=$2 AND version=$3 ORDER BY kind`, version.RepositoryID, version.Module, version.Version)
 		if queryErr != nil {
@@ -123,8 +131,10 @@ func (s *PostgresStore) PublishGoModule(ctx context.Context, incoming GoModulePu
 }
 
 func (s *PostgresStore) ListGoModuleVersions(ctx context.Context, repositoryID, modulePath string) ([]GoModuleVersion, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+goModuleVersionColumns+` FROM native_go_versions
-		WHERE repository_id::text=$1 AND module_path=$2 ORDER BY version`, repositoryID, modulePath)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+prefixedGoModuleVersionColumns("v")+` FROM native_go_versions v
+		WHERE v.repository_id::text=$1 AND v.module_path=$2
+		  AND NOT EXISTS (SELECT 1 FROM artifact_tombstones t WHERE t.repository_id=v.repository_id AND t.format='go' AND t.coordinate=v.module_path || '@' || v.version)
+		ORDER BY v.version`, repositoryID, modulePath)
 	if err != nil {
 		return nil, err
 	}
@@ -148,12 +158,82 @@ func (s *PostgresStore) ListGoModuleVersions(ctx context.Context, repositoryID, 
 
 func (s *PostgresStore) GetGoModuleVersion(ctx context.Context, repositoryID, modulePath, version string) (GoModuleVersion, error) {
 	var item GoModuleVersion
-	err := scanGoModuleVersion(s.db.QueryRowContext(ctx, `SELECT `+goModuleVersionColumns+` FROM native_go_versions
-		WHERE repository_id::text=$1 AND module_path=$2 AND version=$3`, repositoryID, modulePath, version), &item)
+	err := scanGoModuleVersion(s.db.QueryRowContext(ctx, `SELECT `+prefixedGoModuleVersionColumns("v")+` FROM native_go_versions v
+		WHERE v.repository_id::text=$1 AND v.module_path=$2 AND v.version=$3
+		  AND NOT EXISTS (SELECT 1 FROM artifact_tombstones t WHERE t.repository_id=v.repository_id AND t.format='go' AND t.coordinate=v.module_path || '@' || v.version)`, repositoryID, modulePath, version), &item)
 	if errors.Is(err, sql.ErrNoRows) {
 		return GoModuleVersion{}, ErrNotFound
 	}
 	return item, err
+}
+
+func (s *PostgresStore) TombstoneGoModuleVersion(ctx context.Context, repositoryID, modulePath, version string) (GoModuleVersion, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return GoModuleVersion{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var item GoModuleVersion
+	err = scanGoModuleVersion(tx.QueryRowContext(ctx, `SELECT `+prefixedGoModuleVersionColumns("v")+` FROM native_go_versions v
+		WHERE v.repository_id::text=$1 AND v.module_path=$2 AND v.version=$3
+		  AND NOT EXISTS (SELECT 1 FROM artifact_tombstones t WHERE t.repository_id=v.repository_id AND t.format='go' AND t.coordinate=v.module_path || '@' || v.version)
+		FOR UPDATE OF v`, repositoryID, modulePath, version), &item)
+	if errors.Is(err, sql.ErrNoRows) {
+		return GoModuleVersion{}, ErrNotFound
+	}
+	if err != nil {
+		return GoModuleVersion{}, err
+	}
+	var digest string
+	err = tx.QueryRowContext(ctx, `SELECT digest FROM native_go_assets
+		WHERE repository_id::text=$1 AND module_path=$2 AND version=$3
+		ORDER BY CASE kind WHEN 'zip' THEN 0 WHEN 'mod' THEN 1 ELSE 2 END LIMIT 1`, repositoryID, modulePath, version).Scan(&digest)
+	if errors.Is(err, sql.ErrNoRows) {
+		digest = ""
+	} else if err != nil {
+		return GoModuleVersion{}, err
+	}
+	result, err := tx.ExecContext(ctx, `INSERT INTO artifact_tombstones (repository_id,format,coordinate,digest)
+		VALUES ($1,'go',$2,$3) ON CONFLICT (repository_id,format,coordinate) DO NOTHING`, repositoryID, goModuleCoordinate(modulePath, version), digest)
+	if err != nil {
+		return GoModuleVersion{}, err
+	}
+	if affected, rowsErr := result.RowsAffected(); rowsErr != nil {
+		return GoModuleVersion{}, rowsErr
+	} else if affected != 1 {
+		return GoModuleVersion{}, ErrNotFound
+	}
+	if err = tx.Commit(); err != nil {
+		return GoModuleVersion{}, err
+	}
+	return item, nil
+}
+
+func (s *PostgresStore) RestoreGoModuleVersion(ctx context.Context, repositoryID, modulePath, version string) (GoModuleVersion, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return GoModuleVersion{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var item GoModuleVersion
+	err = scanGoModuleVersion(tx.QueryRowContext(ctx, `SELECT `+prefixedGoModuleVersionColumns("v")+` FROM native_go_versions v
+		JOIN artifact_tombstones t ON t.repository_id=v.repository_id AND t.format='go' AND t.coordinate=v.module_path || '@' || v.version
+		WHERE v.repository_id::text=$1 AND v.module_path=$2 AND v.version=$3
+		FOR UPDATE OF v,t`, repositoryID, modulePath, version), &item)
+	if errors.Is(err, sql.ErrNoRows) {
+		return GoModuleVersion{}, ErrNotFound
+	}
+	if err != nil {
+		return GoModuleVersion{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM artifact_tombstones
+		WHERE repository_id::text=$1 AND format='go' AND coordinate=$2`, repositoryID, goModuleCoordinate(modulePath, version)); err != nil {
+		return GoModuleVersion{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return GoModuleVersion{}, err
+	}
+	return item, nil
 }
 
 func (s *PostgresStore) CacheGoModuleAsset(ctx context.Context, asset GoModuleAsset) (GoModuleAsset, error) {
@@ -182,8 +262,9 @@ func (s *PostgresStore) CacheGoModuleAsset(ctx context.Context, asset GoModuleAs
 
 func (s *PostgresStore) GetGoModuleAsset(ctx context.Context, repositoryID, modulePath, version, kind string) (GoModuleAsset, error) {
 	var asset GoModuleAsset
-	err := scanGoModuleAsset(s.db.QueryRowContext(ctx, `SELECT `+goModuleAssetColumns+` FROM native_go_assets
-		WHERE repository_id::text=$1 AND module_path=$2 AND version=$3 AND kind=$4`, repositoryID, modulePath, version, kind), &asset)
+	err := scanGoModuleAsset(s.db.QueryRowContext(ctx, `SELECT `+prefixedGoModuleAssetColumns("a")+` FROM native_go_assets a
+		WHERE a.repository_id::text=$1 AND a.module_path=$2 AND a.version=$3 AND a.kind=$4
+		  AND NOT EXISTS (SELECT 1 FROM artifact_tombstones t WHERE t.repository_id=a.repository_id AND t.format='go' AND t.coordinate=a.module_path || '@' || a.version)`, repositoryID, modulePath, version, kind), &asset)
 	if errors.Is(err, sql.ErrNoRows) {
 		return GoModuleAsset{}, ErrNotFound
 	}
@@ -198,6 +279,14 @@ func (s *PostgresStore) GoModuleObjectHasReference(ctx context.Context, objectKe
 
 const goModuleVersionColumns = `repository_id::text,module_path,version,published_at,publisher,cached_at,created_at`
 const goModuleAssetColumns = `repository_id::text,module_path,version,kind,digest,object_key,size,source_url,cached_at,created_at`
+
+func prefixedGoModuleVersionColumns(prefix string) string {
+	return prefix + `.repository_id::text,` + prefix + `.module_path,` + prefix + `.version,` + prefix + `.published_at,` + prefix + `.publisher,` + prefix + `.cached_at,` + prefix + `.created_at`
+}
+
+func prefixedGoModuleAssetColumns(prefix string) string {
+	return prefix + `.repository_id::text,` + prefix + `.module_path,` + prefix + `.version,` + prefix + `.kind,` + prefix + `.digest,` + prefix + `.object_key,` + prefix + `.size,` + prefix + `.source_url,` + prefix + `.cached_at,` + prefix + `.created_at`
+}
 
 func scanGoModuleVersion(row interface{ Scan(...any) error }, version *GoModuleVersion) error {
 	var publishedAt sql.NullTime

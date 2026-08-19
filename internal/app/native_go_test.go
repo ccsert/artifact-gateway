@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 type failNthGoPutStore struct {
@@ -200,6 +202,128 @@ func TestNativeGoHostedPublishesCanonicalZipAndServesModule(t *testing.T) {
 	}
 	if scanJobs != 1 || reclaimJobs != 3 {
 		t.Fatalf("publication jobs=%#v", jobs)
+	}
+}
+
+func TestNativeGoHostedTombstonesAndRestoresModuleVersion(t *testing.T) {
+	const (
+		modulePath    = "example.com/Acme/lifecycle"
+		escapedModule = "example.com/!acme/lifecycle"
+		version       = "v1.2.3"
+	)
+	ctx := context.Background()
+	mod := []byte("module " + modulePath + "\n\ngo 1.26\n")
+	archive := goModuleFixtureZip(t, modulePath, version, map[string]string{
+		"go.mod":       string(mod),
+		"lifecycle.go": "package lifecycle\n",
+	})
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: uuid.NewString(), Name: "go-lifecycle", Format: repository.FormatGo,
+		Type: repository.RepositoryTypeHosted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	group, _, err := store.CreateHostedGroupIdempotently(ctx, repository.HostedGroup{
+		ID: uuid.NewString(), Name: "go-lifecycle-group", Format: repository.FormatGo,
+		Members: []repository.GroupMember{{RepositoryID: repo.ID, Position: 0}},
+	}, "admin", "go-lifecycle-group", "go-lifecycle-group")
+	if err != nil {
+		t.Fatal(err)
+	}
+	enablePublicationScan(t, store, repo.ID)
+	grantGoPublisher(t, store, repo.ID)
+	handler := NewGatewayHandler(
+		publicationScanDependencies(Dependencies{NativeGoObjectStore: NewMemoryOCIObjectStore()}, repository.FormatGo),
+		store, TestAdapter{}, testAuthenticator(),
+	)
+	base := "/go/" + repo.Name + "/" + escapedModule
+	protocolRequest := func(method, suffix string, body []byte) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(method, base+suffix, bytes.NewReader(body))
+		authorize(req, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	groupRequest := func(suffix string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/go/"+group.Name+"/"+escapedModule+suffix, nil)
+		authorize(req, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	managementRequest := func(path, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+path, strings.NewReader(body))
+		authorize(req, "admin-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+
+	if response := protocolRequest(http.MethodPut, "/@v/"+version+".zip", archive); response.Code != http.StatusCreated {
+		t.Fatalf("publish=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := managementRequest("/tombstones", `{"coordinate":"`+modulePath+`@`+version+`"}`); response.Code != http.StatusNoContent {
+		t.Fatalf("tombstone=%d body=%s", response.Code, response.Body.String())
+	}
+	if _, err = store.GetArtifactTombstone(ctx, repo.ID, repository.FormatGo, modulePath+"@"+version); err != nil {
+		t.Fatalf("get tombstone: %v", err)
+	}
+	for _, suffix := range []string{"/@v/list", "/@latest", "/@v/" + version + ".info", "/@v/" + version + ".mod", "/@v/" + version + ".zip"} {
+		if response := protocolRequest(http.MethodGet, suffix, nil); response.Code != http.StatusNotFound {
+			t.Fatalf("deleted %s=%d body=%s", suffix, response.Code, response.Body.String())
+		}
+	}
+	if response := groupRequest("/@v/" + version + ".zip"); response.Code != http.StatusNotFound {
+		t.Fatalf("deleted group zip=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := protocolRequest(http.MethodPut, "/@v/"+version+".zip", archive); response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "restore") {
+		t.Fatalf("republish tombstoned version=%d body=%s", response.Code, response.Body.String())
+	}
+	search := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/artifact-search?q="+url.QueryEscape(modulePath), nil)
+	authorize(search, "admin-secret")
+	searchResponse := httptest.NewRecorder()
+	handler.ServeHTTP(searchResponse, search)
+	if searchResponse.Code != http.StatusOK || strings.Contains(searchResponse.Body.String(), modulePath) {
+		t.Fatalf("deleted search=%d body=%s", searchResponse.Code, searchResponse.Body.String())
+	}
+	if response := managementRequest("/restore", `{"coordinate":"`+modulePath+`@`+version+`"}`); response.Code != http.StatusNoContent {
+		t.Fatalf("restore=%d body=%s", response.Code, response.Body.String())
+	}
+	if _, err = store.GetArtifactTombstone(ctx, repo.ID, repository.FormatGo, modulePath+"@"+version); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("restored tombstone remained: %v", err)
+	}
+	if response := protocolRequest(http.MethodGet, "/@v/list", nil); response.Code != http.StatusOK || response.Body.String() != version+"\n" {
+		t.Fatalf("restored list=%d body=%q", response.Code, response.Body.String())
+	}
+	if response := protocolRequest(http.MethodGet, "/@v/"+version+".zip", nil); response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), archive) {
+		t.Fatalf("restored zip=%d bytes=%d", response.Code, response.Body.Len())
+	}
+	if response := groupRequest("/@v/" + version + ".zip"); response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), archive) {
+		t.Fatalf("restored group zip=%d bytes=%d", response.Code, response.Body.Len())
+	}
+}
+
+func TestGoModuleVersionCoordinateValidation(t *testing.T) {
+	for _, coordinate := range []string{
+		"example.com/team/widget@v1.2.3",
+		"example.com/Acme/widget@v0.0.0-20260819090000-abcdefabcdef",
+	} {
+		if !validGoModuleVersionCoordinate(coordinate) {
+			t.Errorf("valid coordinate rejected: %q", coordinate)
+		}
+	}
+	for _, coordinate := range []string{
+		"", "example.com/team/widget", "@v1.2.3", "example.com/team/widget@", "example.com/team/widget@1.2.3",
+		"example.com/team/../widget@v1.2.3", "example.com/team/widget@v1.2.3\nignored",
+	} {
+		if validGoModuleVersionCoordinate(coordinate) {
+			t.Errorf("invalid coordinate accepted: %q", coordinate)
+		}
 	}
 }
 

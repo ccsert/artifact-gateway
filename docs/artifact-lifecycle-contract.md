@@ -8,13 +8,18 @@ Every Artifact follows one of three lifecycle states:
 | --- | --- | --- |
 | `staged` | Not resolvable | `visible`, collector reclaim |
 | `visible` | Resolvable through its native protocol | `tombstoned` |
-| `tombstoned` | Not resolvable | collector reclaim only |
+| `tombstoned` | Not resolvable | `visible` through management restore before collection, collector reclaim |
 
 Publication is the only `staged -> visible` transition. It verifies bytes and
 writes the format coordinate/reference in one metadata transaction. A mutable
 protocol reference may be repointed only to a different immutable visible
 Artifact. Tombstoning removes a visible coordinate/reference and records its
-former identity; it never synchronously removes its byte object.
+former identity; it never synchronously removes its byte object. Management
+restore is the only `tombstoned -> visible` transition and succeeds only while
+every required byte object remains recoverable. A collector makes that
+transition unavailable once it reclaims an unreferenced object. Formats that
+expose tombstone/restore before their delayed reclaim slice, including Go
+Module, continue charging tombstoned bytes to physical Repository capacity.
 
 Quarantine is not a fourth lifecycle state. It is a Repository-local,
 versioned governance record over the immutable repository/format/coordinate/
