@@ -6,6 +6,7 @@ import {
   InboxOutlined,
   KeyOutlined,
   LoginOutlined,
+  MenuOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   RobotOutlined,
@@ -15,7 +16,7 @@ import {
   TeamOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { Button, Input, Menu, Space, Tooltip } from "antd";
+import { Button, Drawer, Input, Menu, Space, Tooltip } from "antd";
 import type { MenuProps } from "antd";
 import {
   Link,
@@ -119,8 +120,27 @@ const navItems = [
   },
 ] as const;
 
-const SIDER_EXPANDED = 224;
-const SIDER_COLLAPSED = 68;
+function BrandLockup({ collapsed = false }: { collapsed?: boolean }) {
+  return (
+    <div
+      className={`ag-brand-lockup flex items-center ${collapsed ? "justify-center px-0" : "gap-2.5 px-5"}`}
+    >
+      <div className="ag-brand-mark flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white">
+        AG
+      </div>
+      {!collapsed && (
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-zinc-100">
+            Artifact Gateway
+          </div>
+          <div className="text-[10px] uppercase tracking-widest text-zinc-600">
+            Console
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function GlobalSearchBox() {
   const { t } = usePreferences();
@@ -140,7 +160,7 @@ function GlobalSearchBox() {
   return (
     <Input.Search
       allowClear
-      className="w-full max-w-md"
+      className="ag-global-search w-full max-w-md"
       placeholder={t("header.search")}
       value={value}
       onChange={(event) => setValue(event.target.value)}
@@ -161,12 +181,15 @@ function TokenDialog() {
         color={token ? "green" : "orange"}
         variant="filled"
         icon={<KeyOutlined />}
+        aria-label={token ? t("auth.tokenConfigured") : t("auth.setToken")}
         onClick={() => {
           setDraft(token);
           dialog.show();
         }}
       >
-        {token ? t("auth.tokenConfigured") : t("auth.setToken")}
+        <span className="ag-token-label">
+          {token ? t("auth.tokenConfigured") : t("auth.setToken")}
+        </span>
       </Button>
       <Modal
         open={dialog.open}
@@ -221,6 +244,7 @@ export function AppLayout() {
   const { authenticated, identity, identityLoading, clearToken } = useAuth();
   const { colorMode, t } = usePreferences();
   const location = useLocation();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return window.localStorage.getItem("ag:sider-collapsed") === "1";
@@ -240,6 +264,10 @@ export function AppLayout() {
       return next;
     });
   };
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
 
   if (identityLoading) {
     return (
@@ -282,67 +310,53 @@ export function AppLayout() {
       ? location.pathname === item.to
       : location.pathname.startsWith(item.to),
   );
-  const menuItems: MenuProps["items"] = (
-    [
-      { key: "runtime", label: "nav.runtime" },
-      { key: "governance", label: "nav.governance" },
-      { key: "management", label: "nav.management" },
-    ] as const
-  ).flatMap((group) => {
-    const children = visibleNavItems
-      .filter((item) => item.group === group.key)
-      .map((item) => ({
-        key: item.to,
-        icon: item.icon,
-        label: <Link to={item.to}>{t(item.label)}</Link>,
-      }));
-    return children.length > 0
-      ? [
-          {
-            key: `group-${group.key}`,
-            type: "group" as const,
-            label: collapsed ? "" : t(group.label),
-            children,
-          },
-        ]
-      : [];
-  });
+  const createMenuItems = (hideGroupLabels: boolean): MenuProps["items"] =>
+    (
+      [
+        { key: "runtime", label: "nav.runtime" },
+        { key: "governance", label: "nav.governance" },
+        { key: "management", label: "nav.management" },
+      ] as const
+    ).flatMap((group) => {
+      const children = visibleNavItems
+        .filter((item) => item.group === group.key)
+        .map((item) => ({
+          key: item.to,
+          icon: item.icon,
+          label: <Link to={item.to}>{t(item.label)}</Link>,
+        }));
+      return children.length > 0
+        ? [
+            {
+              key: `group-${group.key}`,
+              type: "group" as const,
+              label: hideGroupLabels ? "" : t(group.label),
+              children,
+            },
+          ]
+        : [];
+    });
 
-  const siderWidth = collapsed ? SIDER_COLLAPSED : SIDER_EXPANDED;
+  const desktopMenuItems = createMenuItems(collapsed);
+  const mobileMenuItems = createMenuItems(false);
 
   return (
-    <div className="flex min-h-screen">
+    <div
+      className="ag-shell flex min-h-screen"
+      data-sider-collapsed={collapsed ? "true" : "false"}
+    >
       <aside
-        className="ag-sider fixed inset-y-0 left-0 z-30 flex flex-col"
-        style={{
-          width: siderWidth,
-          transition: "width 220ms cubic-bezier(0.16, 1, 0.3, 1)",
-        }}
+        className="ag-sider ag-sider-desktop fixed inset-y-0 left-0 z-30 flex flex-col"
+        data-collapsed={collapsed ? "true" : "false"}
       >
-        <div
-          className={`flex items-center py-5 ${collapsed ? "justify-center px-0" : "gap-2.5 px-5"}`}
-        >
-          <div className="ag-brand-mark flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white">
-            AG
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-zinc-100">
-                Artifact Gateway
-              </div>
-              <div className="text-[10px] uppercase tracking-widest text-zinc-600">
-                Console
-              </div>
-            </div>
-          )}
-        </div>
+        <BrandLockup collapsed={collapsed} />
         <Menu
           className={`ag-nav flex-1 border-0 bg-transparent ${collapsed ? "px-2" : "px-3"}`}
           mode="inline"
           theme={colorMode}
           inlineCollapsed={collapsed}
           selectedKeys={selectedItem ? [selectedItem.to] : []}
-          items={menuItems}
+          items={desktopMenuItems}
         />
         <div
           className={`ag-sider-footer flex border-t border-zinc-800/60 py-2 ${
@@ -372,24 +386,55 @@ export function AppLayout() {
           </Tooltip>
         </div>
       </aside>
-      <div
-        className="flex min-h-screen min-w-0 flex-1 flex-col"
-        style={{
-          marginLeft: siderWidth,
-          transition: "margin-left 220ms cubic-bezier(0.16, 1, 0.3, 1)",
+      <Drawer
+        rootClassName="ag-mobile-nav-drawer"
+        classNames={{
+          body: "ag-mobile-nav-body",
+          header: "ag-mobile-nav-header",
         }}
+        title={<BrandLockup />}
+        placement="left"
+        size="min(88vw, 320px)"
+        closable={{ "aria-label": t("nav.close") }}
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
       >
-        <header className="ag-topbar sticky top-0 z-20 flex h-14 items-center gap-3 px-6">
+        <Menu
+          className="ag-nav ag-mobile-nav-menu flex-1 border-0 bg-transparent px-3"
+          mode="inline"
+          theme={colorMode}
+          selectedKeys={selectedItem ? [selectedItem.to] : []}
+          items={mobileMenuItems}
+          onClick={() => setMobileNavOpen(false)}
+        />
+        <div className="ag-mobile-nav-footer text-xs text-zinc-600">
+          Native Hosted API v2
+        </div>
+      </Drawer>
+      <div className="ag-shell-main flex min-h-screen min-w-0 flex-1 flex-col">
+        <header className="ag-topbar sticky top-0 z-20 flex min-h-14 items-center gap-3 px-6">
+          <Button
+            className="ag-mobile-nav-trigger"
+            type="text"
+            shape="circle"
+            aria-label={t("nav.open")}
+            icon={<MenuOutlined />}
+            onClick={() => setMobileNavOpen(true)}
+          />
           <GlobalSearchBox />
-          <Space className="ml-auto">
+          <Space className="ag-topbar-actions ml-auto" size={4}>
             <PreferenceControls compact />
             <TokenDialog />
-            <Button icon={<LoginOutlined />} onClick={clearToken}>
-              {t("auth.logout")}
+            <Button
+              icon={<LoginOutlined />}
+              aria-label={t("auth.logout")}
+              onClick={clearToken}
+            >
+              <span className="ag-topbar-action-label">{t("auth.logout")}</span>
             </Button>
           </Space>
         </header>
-        <main className="mx-auto w-full max-w-[1440px] flex-1 px-6 py-6">
+        <main className="ag-main mx-auto w-full max-w-[1440px] flex-1 px-6 py-6">
           <div key={location.pathname} className="ag-page-enter">
             <Outlet />
           </div>

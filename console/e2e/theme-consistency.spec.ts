@@ -404,9 +404,61 @@ test("dashboard excludes archived repositories from operational status", async (
   await expect(page.getByText("active-repository")).toBeVisible();
   await expect(page.getByText("archived-repository")).not.toBeVisible();
   await expect(
+    page.getByRole("heading", { name: "可信制品路径" }),
+  ).toBeVisible();
+  await expect(page.locator(".ag-lifecycle-stage-title")).toHaveText([
+    "来源",
+    "扫描",
+    "隔离闸门",
+    "晋级与复制",
+    "分发",
+  ]);
+  await expect(page.getByText("仅风险命中时", { exact: true })).toBeVisible();
+  await expect(
     page
       .getByRole("group", { name: "页面摘要" })
       .locator(":scope > div")
       .first(),
   ).toContainText("1");
+
+  await page.setViewportSize({ width: 720, height: 900 });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.body.scrollWidth - document.body.clientWidth,
+      ),
+    )
+    .toBeLessThanOrEqual(0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const openNavigation = page.getByRole("button", { name: "打开导航" });
+  await expect(openNavigation).toBeVisible();
+  const triggerBox = await openNavigation.boundingBox();
+  expect(triggerBox?.width).toBeGreaterThanOrEqual(44);
+  expect(triggerBox?.height).toBeGreaterThanOrEqual(44);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.body.scrollWidth - document.body.clientWidth,
+      ),
+    )
+    .toBeLessThanOrEqual(0);
+  const firstMetricBox = await page
+    .getByRole("group", { name: "页面摘要" })
+    .locator(":scope > div")
+    .first()
+    .boundingBox();
+  expect(firstMetricBox?.width).toBeGreaterThan(300);
+
+  await openNavigation.click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole("link", { name: /仓库/ })).toBeVisible();
+  const closeNavigationBox = await drawer
+    .getByRole("button", { name: "关闭导航" })
+    .boundingBox();
+  expect(closeNavigationBox?.width).toBeGreaterThanOrEqual(44);
+  expect(closeNavigationBox?.height).toBeGreaterThanOrEqual(44);
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
 });

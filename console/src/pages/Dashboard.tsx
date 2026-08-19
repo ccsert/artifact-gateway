@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { DatabaseOutlined } from "@ant-design/icons";
+import {
+  CloudDownloadOutlined,
+  DatabaseOutlined,
+  FileSearchOutlined,
+  InboxOutlined,
+  RocketOutlined,
+  SafetyCertificateOutlined,
+} from "@ant-design/icons";
 import { Button, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link, useNavigate } from "react-router-dom";
@@ -128,10 +135,68 @@ export function DashboardPage() {
     );
   if (!repos || !groups || !audits) return <Loading />;
 
-  const formatCount = (f: string) => repos.filter((r) => r.format === f).length;
   const active = repos.filter((r) => r.state === "active").length;
   const inactive = repos.length - active;
   const healthTone = inactive > 0 ? "text-amber-300" : "text-emerald-300";
+  const lifecycleStages = [
+    {
+      key: "source",
+      icon: <InboxOutlined />,
+      title: text("来源", "Source"),
+      eyebrow: text("仓库入口", "Repository entry"),
+      description: text(
+        "托管、代理与分组仓库定义可信来源。",
+        "Hosted, proxy, and group repositories define trusted sources.",
+      ),
+      meta: text(`${active} 个活跃仓库`, `${active} active repositories`),
+      to: "/repositories",
+    },
+    {
+      key: "scan",
+      icon: <FileSearchOutlined />,
+      title: text("扫描", "Scan"),
+      eyebrow: text("摘要与风险", "Digest and risk"),
+      description: text(
+        "按坐标和摘要定位制品，在仓库详情中执行扫描与重检。",
+        "Resolve artifacts by coordinate and digest, then scan or rescan from repository details.",
+      ),
+      to: "/search",
+    },
+    {
+      key: "quarantine",
+      icon: <SafetyCertificateOutlined />,
+      title: text("隔离闸门", "Quarantine gate"),
+      eyebrow: text("仅风险命中时", "Only when risk matches"),
+      description: text(
+        "风险制品进入条件隔离；未命中的可信制品继续流转。",
+        "Risky artifacts enter conditional quarantine; trusted artifacts continue.",
+      ),
+      to: "/repositories",
+      conditional: true,
+    },
+    {
+      key: "promote",
+      icon: <RocketOutlined />,
+      title: text("晋级与复制", "Promote and replicate"),
+      eyebrow: text("生命周期任务", "Lifecycle jobs"),
+      description: text(
+        "通过可审计任务把可信版本推进到目标仓库。",
+        "Move trusted versions to target repositories through auditable jobs.",
+      ),
+      to: "/operations",
+    },
+    {
+      key: "distribute",
+      icon: <CloudDownloadOutlined />,
+      title: text("分发", "Distribute"),
+      eyebrow: text("原生协议", "Native protocols"),
+      description: text(
+        "通过原生客户端和公开目录提供受控读取。",
+        "Provide governed reads through native clients and the public catalog.",
+      ),
+      to: "/browse",
+    },
+  ];
   const repositoryColumns: ColumnsType<Repository> = [
     {
       title: text("名称", "Name"),
@@ -233,7 +298,7 @@ export function DashboardPage() {
           </Button>
         }
       />
-      <div className="mb-4 flex items-center justify-between gap-6 border-y border-zinc-800/80 py-3">
+      <div className="ag-health-strip mb-4 flex items-center justify-between gap-6 border-y border-zinc-800/80 py-3">
         <div className="flex items-center gap-3">
           <span
             className={`flex h-7 w-7 items-center justify-center rounded-full ${inactive > 0 ? "bg-amber-400/10" : "bg-emerald-400/10"} ${healthTone}`}
@@ -257,7 +322,7 @@ export function DashboardPage() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-5 text-xs text-zinc-500">
+        <div className="ag-health-meta flex items-center gap-5 text-xs text-zinc-500">
           <span>
             <span className="mr-1.5 text-zinc-300">API</span>v2
           </span>
@@ -269,6 +334,64 @@ export function DashboardPage() {
           </span>
         </div>
       </div>
+      <section
+        className="ag-lifecycle"
+        aria-labelledby="artifact-lifecycle-title"
+      >
+        <div className="ag-lifecycle-heading">
+          <div>
+            <h2
+              id="artifact-lifecycle-title"
+              className="text-base font-semibold tracking-tight text-zinc-100"
+            >
+              {text("可信制品路径", "Trusted artifact path")}
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">
+              {text(
+                "从来源接入到受控分发，按运营任务组织治理入口。",
+                "Govern artifacts from source intake to controlled distribution through operational entry points.",
+              )}
+            </p>
+          </div>
+          <span className="ag-lifecycle-legend text-xs text-zinc-500">
+            <span aria-hidden="true" />
+            {text("条件闸门", "Conditional gate")}
+          </span>
+        </div>
+        <ol className="ag-lifecycle-stages">
+          {lifecycleStages.map((stage, index) => (
+            <li
+              key={stage.key}
+              className={`ag-lifecycle-stage${stage.conditional ? " ag-lifecycle-stage-conditional" : ""}`}
+            >
+              <Link to={stage.to} className="ag-lifecycle-stage-link">
+                <span className="ag-lifecycle-stage-index" aria-hidden="true">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="ag-lifecycle-stage-icon" aria-hidden="true">
+                  {stage.icon}
+                </span>
+                <span className="min-w-0">
+                  <span className="ag-lifecycle-stage-eyebrow">
+                    {stage.eyebrow}
+                  </span>
+                  <span className="ag-lifecycle-stage-title">
+                    {stage.title}
+                  </span>
+                  <span className="ag-lifecycle-stage-description">
+                    {stage.description}
+                  </span>
+                  {stage.meta && (
+                    <span className="ag-lifecycle-stage-meta">
+                      {stage.meta}
+                    </span>
+                  )}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ol>
+      </section>
       <MetricStrip
         items={[
           {
@@ -285,13 +408,6 @@ export function DashboardPage() {
             ),
           },
           {
-            label: text("格式分布", "Format distribution"),
-            value: FORMAT_ORDER.map(
-              (format) => `${format} ${formatCount(format)}`,
-            ).join(" · "),
-            hint: "OCI · Maven · npm · PyPI · Go · Conan · Raw",
-          },
-          {
             label: text("存储占用", "Storage used"),
             value: totalBytes !== null ? formatBytes(totalBytes) : "—",
             hint:
@@ -301,11 +417,6 @@ export function DashboardPage() {
                     `${formatNumber(totalObjects, locale)} objects`,
                   )
                 : text("容量未启用", "Capacity unavailable"),
-          },
-          {
-            label: text("最近审计", "Recent audits"),
-            value: audits.length,
-            hint: text("最新记录条数", "Latest records"),
           },
         ]}
       />
@@ -351,7 +462,7 @@ export function DashboardPage() {
             title={text("近期趋势", "Recent trend")}
             extra={
               history.length > 0 ? (
-                <span className="text-[11px] text-zinc-600">
+                <span className="text-xs text-zinc-600">
                   {text("自", "Since")}{" "}
                   {formatDate(new Date(history[0].t).toISOString(), locale)}
                 </span>
@@ -383,7 +494,7 @@ export function DashboardPage() {
               />
             </div>
           </div>
-          <p className="border-t border-zinc-800/60 px-5 py-3 text-[11px] text-zinc-600">
+          <p className="border-t border-zinc-800/60 px-5 py-3 text-xs leading-5 text-zinc-600">
             {text(
               "基于浏览器本地的访问采样，仅反映本机记录的近期变化；完整时序需后端 metrics 端点。",
               "Browser-local samples only reflect recent changes recorded on this device. Full time series require a backend metrics endpoint.",
@@ -421,12 +532,20 @@ export function DashboardPage() {
           <CardHeader
             title={text("最近审计事件", "Recent audit events")}
             extra={
-              <Link
-                to="/audits"
-                className="text-xs text-cyan-400 hover:text-cyan-300"
-              >
-                {text("查看全部 →", "View all →")}
-              </Link>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-zinc-500">
+                  {text(
+                    `${audits.length} 条最新记录`,
+                    `${audits.length} latest`,
+                  )}
+                </span>
+                <Link
+                  to="/audits"
+                  className="text-cyan-400 hover:text-cyan-300"
+                >
+                  {text("查看全部 →", "View all →")}
+                </Link>
+              </div>
             }
           />
           <Table<AuditRecord>

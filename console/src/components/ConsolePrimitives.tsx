@@ -19,27 +19,25 @@ const metricTone: Record<NonNullable<MetricItem["tone"]>, string> = {
 
 export function MetricStrip({ items }: { items: MetricItem[] }) {
   const { text } = usePreferences();
+  const columnCount = Math.min(Math.max(items.length, 1), 5);
   return (
     <div
-      className="ag-metric-strip"
-      style={{
-        gridTemplateColumns: `repeat(${Math.min(Math.max(items.length, 1), 5)}, minmax(0, 1fr))`,
-      }}
+      className={`ag-metric-strip ag-metric-strip-cols-${columnCount}`}
       role="group"
       aria-label={text("页面摘要", "Page summary")}
     >
       {items.map((item) => (
         <div key={item.label} className="min-w-0 px-5 py-3.5">
-          <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+          <div className="text-xs font-medium tracking-wide text-zinc-500">
             {item.label}
           </div>
           <div
-            className={`mt-1 truncate text-xl font-semibold tracking-tight ${metricTone[item.tone ?? "default"]}`}
+            className={`ag-metric-value mt-1 break-words text-xl font-semibold tracking-tight ${metricTone[item.tone ?? "default"]}`}
           >
             {item.value}
           </div>
           {item.hint && (
-            <div className="mt-0.5 truncate text-xs text-zinc-600">
+            <div className="mt-0.5 text-xs leading-5 text-zinc-600">
               {item.hint}
             </div>
           )}
@@ -60,7 +58,7 @@ export function FilterField({
 }) {
   return (
     <label className={`block min-w-0 ${className}`}>
-      <span className="mb-1.5 block text-[11px] font-medium text-zinc-500">
+      <span className="mb-1.5 block text-xs font-medium text-zinc-500">
         {label}
       </span>
       {children}
@@ -135,6 +133,8 @@ export function CopyableValue({
 
 export function TechnicalLabel({ children }: { children: ReactNode }) {
   return (
-    <span className="font-mono text-[11px] text-zinc-500">{children}</span>
+    <span className="font-mono text-xs leading-5 text-zinc-500">
+      {children}
+    </span>
   );
 }

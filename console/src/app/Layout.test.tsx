@@ -1,4 +1,10 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -119,5 +125,23 @@ describe("AppLayout", () => {
 
     await user.click(screen.getByRole("button", { name: /退出/ }));
     expect(auth.clearToken).toHaveBeenCalledOnce();
+  });
+
+  it("opens an accessible mobile navigation drawer and closes it with Escape", async () => {
+    const user = userEvent.setup();
+    renderLayout("/repositories");
+
+    await user.click(screen.getByRole("button", { name: "打开导航" }));
+
+    const drawer = await screen.findByRole("dialog");
+    expect(
+      within(drawer).getByRole("link", { name: /仓库/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(drawer).getByRole("button", { name: "关闭导航" }),
+    ).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(drawer).not.toBeVisible());
   });
 });
