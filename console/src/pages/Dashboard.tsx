@@ -7,7 +7,7 @@ import {
   RocketOutlined,
   SafetyCertificateOutlined,
 } from "@ant-design/icons";
-import { Button, Table } from "antd";
+import { Button, Grid, Steps, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -53,6 +53,7 @@ const FORMAT_ORDER = [
 export function DashboardPage() {
   const { locale, text } = usePreferences();
   const navigate = useNavigate();
+  const screens = Grid.useBreakpoint();
   const [repos, setRepos] = useState<Repository[] | null>(null);
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [audits, setAudits] = useState<AuditRecord[] | null>(null);
@@ -197,6 +198,38 @@ export function DashboardPage() {
       to: "/browse",
     },
   ];
+  const wideLifecycle = screens.lg === true;
+  const lifecycleItems = lifecycleStages.map((stage, index) => ({
+    key: stage.key,
+    className: stage.conditional ? "ag-lifecycle-step-conditional" : undefined,
+    status: "wait" as const,
+    icon: (
+      <span className="ag-lifecycle-stage-icon" aria-hidden="true">
+        {stage.icon}
+      </span>
+    ),
+    title: (
+      <span className="ag-lifecycle-step-heading">
+        <span className="ag-lifecycle-stage-eyebrow">
+          <span className="ag-lifecycle-stage-index" aria-hidden="true">
+            {String(index + 1).padStart(2, "0")}
+          </span>
+          {stage.eyebrow}
+        </span>
+        <span className="ag-lifecycle-stage-title">{stage.title}</span>
+      </span>
+    ),
+    content: (
+      <span className="ag-lifecycle-step-copy">
+        <span className="ag-lifecycle-stage-description">
+          {stage.description}
+        </span>
+        {stage.meta && (
+          <span className="ag-lifecycle-stage-meta">{stage.meta}</span>
+        )}
+      </span>
+    ),
+  }));
   const repositoryColumns: ColumnsType<Repository> = [
     {
       title: text("名称", "Name"),
@@ -358,39 +391,27 @@ export function DashboardPage() {
             {text("条件闸门", "Conditional gate")}
           </span>
         </div>
-        <ol className="ag-lifecycle-stages">
-          {lifecycleStages.map((stage, index) => (
-            <li
-              key={stage.key}
-              className={`ag-lifecycle-stage${stage.conditional ? " ag-lifecycle-stage-conditional" : ""}`}
-            >
-              <Link to={stage.to} className="ag-lifecycle-stage-link">
-                <span className="ag-lifecycle-stage-index" aria-hidden="true">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <span className="ag-lifecycle-stage-icon" aria-hidden="true">
-                  {stage.icon}
-                </span>
-                <span className="min-w-0">
-                  <span className="ag-lifecycle-stage-eyebrow">
-                    {stage.eyebrow}
-                  </span>
-                  <span className="ag-lifecycle-stage-title">
-                    {stage.title}
-                  </span>
-                  <span className="ag-lifecycle-stage-description">
-                    {stage.description}
-                  </span>
-                  {stage.meta && (
-                    <span className="ag-lifecycle-stage-meta">
-                      {stage.meta}
-                    </span>
-                  )}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ol>
+        <Steps
+          className="ag-lifecycle-steps"
+          type={wideLifecycle ? "navigation" : "default"}
+          orientation={wideLifecycle ? "horizontal" : "vertical"}
+          variant="outlined"
+          responsive={false}
+          current={-1}
+          items={lifecycleItems}
+          onChange={(index) => navigate(lifecycleStages[index].to)}
+          classNames={{
+            item: "ag-lifecycle-step",
+            itemWrapper: "ag-lifecycle-step-wrapper",
+            itemIcon: "ag-lifecycle-step-icon",
+            itemSection: "ag-lifecycle-step-section",
+            itemHeader: "ag-lifecycle-step-header",
+            itemTitle: "ag-lifecycle-step-title-slot",
+            itemContent: "ag-lifecycle-step-content",
+            itemRail: "ag-lifecycle-step-rail",
+          }}
+          style={{ alignItems: "stretch" }}
+        />
       </section>
       <MetricStrip
         items={[

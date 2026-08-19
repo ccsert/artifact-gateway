@@ -414,24 +414,23 @@ test("dashboard excludes archived repositories from operational status", async (
     "晋级与复制",
     "分发",
   ]);
-  await expect(page.getByText("仅风险命中时", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /仅风险命中时/ }),
+  ).toBeVisible();
+  const lifecycleSteps = page.locator(".ag-lifecycle-steps");
+  await expect(lifecycleSteps).toHaveClass(/ant-steps-navigation/);
+  await expect(lifecycleSteps.getByRole("button")).toHaveCount(5);
   const lifecycleArrowAlignments = await page
-    .locator(".ag-lifecycle-stage:not(:last-child)")
+    .locator(".ag-lifecycle-step:not(:last-child)")
     .evaluateAll((stages) =>
       stages.map((stage) => {
         const stageBox = stage.getBoundingClientRect();
-        const iconBox = stage
-          .querySelector(".ag-lifecycle-stage-icon")!
-          .getBoundingClientRect();
         const arrowStyle = getComputedStyle(stage, "::after");
-        const arrowCenter =
-          stageBox.top +
-          Number.parseFloat(arrowStyle.top) +
-          Number.parseFloat(arrowStyle.height) / 2;
-        const iconCenter = iconBox.top + iconBox.height / 2;
+        const arrowCenter = stageBox.top + Number.parseFloat(arrowStyle.top);
+        const stageCenter = stageBox.top + stageBox.height / 2;
         return {
           display: arrowStyle.display,
-          verticalDelta: Math.abs(arrowCenter - iconCenter),
+          verticalDelta: Math.abs(arrowCenter - stageCenter),
         };
       }),
     );
@@ -440,6 +439,13 @@ test("dashboard excludes archived repositories from operational status", async (
     expect(alignment.display).not.toBe("none");
     expect(alignment.verticalDelta).toBeLessThanOrEqual(1);
   }
+  await expect
+    .poll(() =>
+      page
+        .locator(".ag-lifecycle-step-conditional")
+        .evaluate((stage) => getComputedStyle(stage, "::after").borderTopStyle),
+    )
+    .toBe("dashed");
   if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
     await page.screenshot({
       path: testInfo.outputPath("dashboard-lifecycle-desktop.png"),
@@ -454,6 +460,8 @@ test("dashboard excludes archived repositories from operational status", async (
   ).toContainText("1");
 
   await page.setViewportSize({ width: 720, height: 900 });
+  await expect(lifecycleSteps).toHaveClass(/ant-steps-vertical/);
+  await expect(lifecycleSteps).not.toHaveClass(/ant-steps-navigation/);
   await expect
     .poll(() =>
       page.evaluate(
@@ -499,4 +507,9 @@ test("dashboard excludes archived repositories from operational status", async (
   expect(closeNavigationBox?.height).toBeGreaterThanOrEqual(44);
   await page.keyboard.press("Escape");
   await expect(drawer).toBeHidden();
+
+  const scanStep = lifecycleSteps.getByRole("button").nth(1);
+  await scanStep.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/search$/);
 });
