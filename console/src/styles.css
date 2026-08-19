@@ -544,6 +544,49 @@ button:not(:disabled):active,
   min-height: 36px;
 }
 
+.ag-repository-navigation {
+  border-bottom: 1px solid var(--ag-border-subtle);
+}
+
+.ag-repository-section-tabs > .ant-tabs-nav,
+.ag-repository-task-tabs > .ant-tabs-nav {
+  margin: 0;
+}
+
+.ag-repository-section-tabs > .ant-tabs-nav::before,
+.ag-repository-task-tabs > .ant-tabs-nav::before {
+  border-bottom: 0;
+}
+
+.ag-repository-section-tabs > .ant-tabs-content-holder,
+.ag-repository-task-tabs > .ant-tabs-content-holder {
+  display: none;
+}
+
+.ag-repository-section-tabs .ant-tabs-tab {
+  min-height: 36px;
+  padding: 7px 10px;
+  font-weight: 600;
+}
+
+.ag-repository-task-tabs {
+  border-top: 1px solid var(--ag-border-subtle);
+}
+
+.ag-repository-task-tabs .ant-tabs-tab {
+  min-height: 32px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.ag-repository-task-tabs .ant-tabs-ink-bar {
+  height: 1px !important;
+}
+
+.ag-repository-group-label-compact {
+  display: none;
+}
+
 /* ========== 指标条 ========== */
 
 .ag-metric-strip {
@@ -1311,6 +1354,30 @@ button:not(:disabled):active,
     padding-block: 20px;
     padding-inline: max(16px, env(safe-area-inset-left))
       max(16px, env(safe-area-inset-right));
+  }
+
+  .ag-repository-summary-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ag-repository-summary-endpoint {
+    width: 100%;
+  }
+
+  .ag-repository-group-label-wide {
+    display: none;
+  }
+
+  .ag-repository-group-label-compact {
+    display: inline;
+  }
+
+  .ag-repository-section-tabs .ant-tabs-tab,
+  .ag-repository-task-tabs .ant-tabs-tab {
+    min-height: 44px;
+    padding-inline: 8px;
   }
 
   .ag-metric-strip-cols-2,

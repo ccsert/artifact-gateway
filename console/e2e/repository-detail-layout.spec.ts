@@ -354,6 +354,12 @@ test("npm detail keeps version selection and package content aligned when intell
 test("repository detail keeps operational content above the fold", async ({
   page,
 }, testInfo) => {
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockRepositoryDetail(page);
 
@@ -362,9 +368,8 @@ test("repository detail keeps operational content above the fold", async ({
   const summary = page.getByRole("group", { name: "仓库摘要" });
   await expect(summary).toBeVisible();
   await expect(summary).toContainText("1.0 MiB · 20 个对象");
-  expect(
-    (await summary.boundingBox())?.height ?? Number.POSITIVE_INFINITY,
-  ).toBeLessThan(110);
+  const summaryBox = await summary.boundingBox();
+  expect(summaryBox?.height ?? Number.POSITIVE_INFINITY).toBeLessThan(110);
 
   await page.getByRole("button", { name: "查看概念说明" }).click();
   await expect(page.getByText("概念说明", { exact: true })).toBeVisible();
@@ -373,11 +378,31 @@ test("repository detail keeps operational content above the fold", async ({
   ).toBeVisible();
   await page.keyboard.press("Escape");
 
+  const navigation = page.getByRole("navigation", { name: "仓库任务" });
+  const sectionTabs = navigation
+    .locator(".ag-repository-section-tabs")
+    .getByRole("tab");
+  const taskTabs = page.locator(".ag-repository-task-tabs").getByRole("tab");
+  await expect(sectionTabs).toHaveCount(4);
   await expect(page.getByRole("tab", { name: "设置" })).toBeVisible();
   await expect(page.getByRole("button", { name: "设置" })).toHaveCount(0);
 
   const table = page.locator(".ag-console-table");
   await expect(table).toBeVisible();
+  const surface = page.locator(".ag-card").filter({ has: table });
+  await expect(surface).toHaveCount(1);
+  const navigationBox = await navigation.boundingBox();
+  const surfaceBox = await surface.boundingBox();
+  const summaryToNavigationGap =
+    (navigationBox?.y ?? 0) -
+    ((summaryBox?.y ?? 0) + (summaryBox?.height ?? 0));
+  const navigationToSurfaceGap =
+    (surfaceBox?.y ?? 0) -
+    ((navigationBox?.y ?? 0) + (navigationBox?.height ?? 0));
+  expect(summaryToNavigationGap).toBeGreaterThanOrEqual(15);
+  expect(summaryToNavigationGap).toBeLessThanOrEqual(17);
+  expect(navigationToSurfaceGap).toBeGreaterThanOrEqual(15);
+  expect(navigationToSurfaceGap).toBeLessThanOrEqual(17);
   expect(
     (await table.boundingBox())?.y ?? Number.POSITIVE_INFINITY,
   ).toBeLessThan(400);
@@ -385,6 +410,44 @@ test("repository detail keeps operational content above the fold", async ({
   if (process.env.CAPTURE_REPOSITORY_DETAIL) {
     await page.screenshot({
       path: testInfo.outputPath("repository-detail.png"),
+      fullPage: true,
+    });
+  }
+
+  await page.getByRole("tab", { name: "策略与安全" }).click();
+  await expect(taskTabs).toHaveCount(4);
+  await expect(
+    page.getByRole("tab", { name: "访问授权", selected: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\?tab=grants$/);
+
+  await page.goto(`/repositories/${repositoryId}`);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(sectionTabs).toHaveCount(4);
+  await expect(
+    page.getByRole("tab", {
+      name: "制品与发布",
+      exact: true,
+      selected: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".ag-repository-group-label-compact").filter({
+      hasText: "制品",
+    }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.body.scrollWidth - document.body.clientWidth,
+    ),
+  ).toBe(0);
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+
+  if (process.env.CAPTURE_REPOSITORY_DETAIL) {
+    await page.screenshot({
+      path: testInfo.outputPath("repository-detail-mobile.png"),
       fullPage: true,
     });
   }

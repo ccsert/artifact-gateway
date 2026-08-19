@@ -103,6 +103,8 @@ type Tab =
   | "tombstones"
   | "settings";
 
+type TabGroup = "content" | "governance" | "operations" | "settings";
+
 function RepositoryTabSurface({
   standalone,
   children,
@@ -113,13 +115,15 @@ function RepositoryTabSurface({
   return standalone ? children : <Card bodyClassName="p-4">{children}</Card>;
 }
 
-const TABS: {
+type RepositoryTabDefinition = {
   key: Tab;
   label: string;
   labelEn: string;
   formats?: string[];
   hostedOnly?: boolean;
-}[] = [
+};
+
+const TABS: RepositoryTabDefinition[] = [
   { key: "artifacts", label: "制品", labelEn: "Artifacts" },
   {
     key: "publish",
@@ -169,8 +173,65 @@ const TABS: {
   { key: "settings", label: "设置", labelEn: "Settings" },
 ];
 
+const TAB_GROUPS: {
+  key: TabGroup;
+  label: string;
+  labelEn: string;
+  compactLabel: string;
+  compactLabelEn: string;
+  tabs: Tab[];
+}[] = [
+  {
+    key: "content",
+    label: "制品与发布",
+    labelEn: "Artifacts & publish",
+    compactLabel: "制品",
+    compactLabelEn: "Artifacts",
+    tabs: ["artifacts", "publish"],
+  },
+  {
+    key: "governance",
+    label: "策略与安全",
+    labelEn: "Policy & security",
+    compactLabel: "策略",
+    compactLabelEn: "Policy",
+    tabs: ["grants", "retention", "scanning", "security"],
+  },
+  {
+    key: "operations",
+    label: "运行与分发",
+    labelEn: "Operations & distribution",
+    compactLabel: "运行",
+    compactLabelEn: "Operations",
+    tabs: ["capacity", "distribute", "jobs", "tombstones"],
+  },
+  {
+    key: "settings",
+    label: "设置",
+    labelEn: "Settings",
+    compactLabel: "设置",
+    compactLabelEn: "Settings",
+    tabs: ["settings"],
+  },
+];
+
 function repositoryTabFromQuery(value: string | null): Tab {
   return TABS.find((tab) => tab.key === value)?.key ?? "artifacts";
+}
+
+function repositoryGroupForTab(tab: Tab): TabGroup {
+  return TAB_GROUPS.find((group) => group.tabs.includes(tab))?.key ?? "content";
+}
+
+function repositoryTabAvailable(
+  item: RepositoryTabDefinition,
+  repo: Repository,
+) {
+  return (
+    (!item.formats || item.formats.includes(repo.format)) &&
+    (!item.hostedOnly || repo.type === "hosted") &&
+    !(item.key === "publish" && repo.type === "proxy")
+  );
 }
 
 function RepositoryConceptHelp({ repo }: { repo: Repository }) {
@@ -292,20 +353,20 @@ function RepositorySummary({
 
   return (
     <div
-      className="mb-3 border-b border-zinc-800/70 pb-3"
+      className="border-b border-zinc-800/70 pb-3"
       role="group"
       aria-label={text("仓库摘要", "Repository summary")}
     >
-      <div className="flex min-w-0 items-start justify-between gap-6">
+      <div className="ag-repository-summary-heading flex min-w-0 items-start justify-between gap-6">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <h1 className="truncate text-xl font-semibold text-zinc-50">
               {repo.name}
             </h1>
             <FormatBadge format={repo.format} />
             <StateBadge state={repo.state} />
           </div>
-          <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500">
             <span>{repo.type ?? "hosted"}</span>
             <span aria-hidden="true">·</span>
             <span>
@@ -319,13 +380,13 @@ function RepositorySummary({
             <span>v{repo.version}</span>
           </div>
         </div>
-        <div className="flex min-w-0 shrink-0 items-center gap-2 pt-0.5">
+        <div className="ag-repository-summary-endpoint flex min-w-0 shrink-0 items-center gap-2 pt-0.5">
           <RepositoryConceptHelp repo={repo} />
           <span className="text-xs text-zinc-500">
             {text("协议入口", "Protocol endpoint")}
           </span>
           <code
-            className="max-w-[32rem] truncate font-mono text-xs text-zinc-300"
+            className="min-w-0 max-w-[32rem] flex-1 truncate font-mono text-xs text-zinc-300"
             title={protocolPath}
           >
             {protocolPath}
@@ -914,18 +975,14 @@ export function RepositoryDetailPage() {
   useEffect(() => {
     if (!repo) return;
     const available = TABS.some(
-      (item) =>
-        item.key === tab &&
-        (!item.formats || item.formats.includes(repo.format)) &&
-        (!item.hostedOnly || repo.type === "hosted") &&
-        !(item.key === "publish" && repo.type === "proxy"),
+      (item) => item.key === tab && repositoryTabAvailable(item, repo),
     );
     if (!available) selectTab("artifacts");
   }, [repo, selectTab, tab]);
 
   if (error !== null) {
     return (
-      <div>
+      <div className="ag-page-stack">
         <PageHeader title={text("仓库详情", "Repository details")} />
         <ErrorBanner error={error} onRetry={load} />
       </div>
@@ -933,32 +990,89 @@ export function RepositoryDetailPage() {
   }
   if (!repo) return <Loading />;
 
+  const availableTabs = TABS.filter((item) =>
+    repositoryTabAvailable(item, repo),
+  );
+  const availableGroups = TAB_GROUPS.map((group) => ({
+    ...group,
+    availableTabs: group.tabs
+      .map((key) => availableTabs.find((item) => item.key === key))
+      .filter((item): item is RepositoryTabDefinition => item !== undefined),
+  })).filter((group) => group.availableTabs.length > 0);
+  const activeGroup = repositoryGroupForTab(tab);
+  const activeGroupTabs =
+    availableGroups.find((group) => group.key === activeGroup)?.availableTabs ??
+    [];
+
   return (
-    <div>
-      <div className="mb-1 text-xs text-zinc-500">
-        <Link to="/repositories" className="hover:text-cyan-300">
-          {text("仓库", "Repositories")}
-        </Link>
-        <span className="mx-1.5">/</span>
-        <span className="text-zinc-400">{repo.name}</span>
+    <div className="ag-page-stack">
+      <div>
+        <div className="mb-1 text-xs text-zinc-500">
+          <Link to="/repositories" className="hover:text-cyan-300">
+            {text("仓库", "Repositories")}
+          </Link>
+          <span className="mx-1.5">/</span>
+          <span className="text-zinc-400">{repo.name}</span>
+        </div>
+        <RepositorySummary
+          repo={repo}
+          capacity={capacity}
+          onOpenCapacity={() => selectTab("capacity")}
+        />
       </div>
-      <RepositorySummary
-        repo={repo}
-        capacity={capacity}
-        onOpenCapacity={() => selectTab("capacity")}
-      />
-      <Tabs
-        className="mb-3"
-        size="small"
-        activeKey={tab}
-        onChange={(key) => selectTab(key as Tab)}
-        items={TABS.filter(
-          (t) =>
-            (!t.formats || t.formats.includes(repo.format)) &&
-            (!t.hostedOnly || repo.type === "hosted") &&
-            !(t.key === "publish" && repo.type === "proxy"),
-        ).map((t) => ({ key: t.key, label: text(t.label, t.labelEn) }))}
-      />
+      <nav
+        className="ag-repository-navigation"
+        aria-label={text("仓库任务", "Repository tasks")}
+      >
+        <Tabs
+          className="ag-repository-section-tabs"
+          size="small"
+          animated={false}
+          activeKey={activeGroup}
+          onChange={(key) => {
+            const nextGroup = availableGroups.find(
+              (group) => group.key === key,
+            );
+            const nextTab = nextGroup?.availableTabs[0];
+            if (nextTab) selectTab(nextTab.key);
+          }}
+          items={availableGroups.map((group) => ({
+            key: group.key,
+            label: (
+              <>
+                <span
+                  className="ag-repository-group-label-wide"
+                  aria-hidden="true"
+                >
+                  {text(group.label, group.labelEn)}
+                </span>
+                <span
+                  className="ag-repository-group-label-compact"
+                  aria-hidden="true"
+                >
+                  {text(group.compactLabel, group.compactLabelEn)}
+                </span>
+                <span className="sr-only">
+                  {text(group.label, group.labelEn)}
+                </span>
+              </>
+            ),
+          }))}
+        />
+        {activeGroupTabs.length > 1 && (
+          <Tabs
+            className="ag-repository-task-tabs"
+            size="small"
+            animated={false}
+            activeKey={tab}
+            onChange={(key) => selectTab(key as Tab)}
+            items={activeGroupTabs.map((item) => ({
+              key: item.key,
+              label: text(item.label, item.labelEn),
+            }))}
+          />
+        )}
+      </nav>
       <RepositoryTabSurface
         standalone={tab === "scanning" || tab === "security"}
       >
