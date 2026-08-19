@@ -47,9 +47,15 @@ func TestFormatProfilesAPIRequiresAdministratorAndReturnsCapabilities(t *testing
 		if !item.AnonymousRead {
 			t.Errorf("incomplete profile: %#v", item)
 		}
-		if item.Format == adminopenapi.Format("go") || item.Format == adminopenapi.Format("apt") {
+		if item.Format == adminopenapi.Format("apt") {
 			if !item.GroupSupported || len(item.RepositoryTypes) != 1 || item.RepositoryTypes[0] != adminopenapi.FormatProfileRepositoryTypesProxy || len(item.HostedOperations) != 0 || len(item.ProxyOperations) != 2 {
-				t.Errorf("go must expose only executable Proxy and Group capabilities: %#v", item)
+				t.Errorf("APT must expose only executable Proxy and Group capabilities: %#v", item)
+			}
+			continue
+		}
+		if item.Format == adminopenapi.Format("go") {
+			if !item.GroupSupported || len(item.RepositoryTypes) != 2 || len(item.HostedOperations) != 3 || len(item.ProxyOperations) != 2 {
+				t.Errorf("Go must expose Hosted publish/read/browse plus Proxy and Group: %#v", item)
 			}
 			continue
 		}

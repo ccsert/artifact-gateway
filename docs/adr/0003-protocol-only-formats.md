@@ -23,3 +23,9 @@ types when all of the following are true:
 
 This exception preserves truthful capability discovery. It does not relax the
 quality requirements for the repository types that the format does declare.
+
+Go followed this exception until the Gateway-specific Hosted publication
+contract in `0004-go-hosted-publication.md` was accepted and implemented. The
+general exception remains applicable to other read-only ecosystems; Go Hosted
+must continue to describe its `PUT` as a Gateway extension rather than an
+official Go operation.

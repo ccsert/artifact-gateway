@@ -73,6 +73,46 @@ func (s *MemoryStore) PutGoModuleVersion(_ context.Context, incoming GoModuleVer
 	return incoming, nil
 }
 
+func (s *MemoryStore) PublishGoModule(_ context.Context, incoming GoModulePublication) (GoModuleVersion, bool, error) {
+	publication, err := normalizeGoModulePublication(incoming, time.Now().UTC())
+	if err != nil {
+		return GoModuleVersion{}, false, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	version := publication.Version
+	versionKey := goVersionKey(version.RepositoryID, version.Module, version.Version)
+	if existing, ok := s.goVersions[versionKey]; ok {
+		assets := make([]GoModuleAsset, 0, 3)
+		for _, kind := range []string{"info", "mod", "zip"} {
+			if asset, found := s.goAssets[goAssetKey(version.RepositoryID, version.Module, version.Version, kind)]; found {
+				assets = append(assets, asset)
+			}
+		}
+		if goModulePublicationMatches(assets, publication.Assets) {
+			return existing, true, nil
+		}
+		return GoModuleVersion{}, false, ErrNameExists
+	}
+	var used, incomingSize int64
+	for _, asset := range s.goAssets {
+		if asset.RepositoryID == version.RepositoryID {
+			used += asset.Size
+		}
+	}
+	for _, asset := range publication.Assets {
+		incomingSize += asset.Size
+	}
+	if quota := s.capacityQuotas[version.RepositoryID]; quota > 0 && used+incomingSize > quota {
+		return GoModuleVersion{}, false, ErrQuotaExceeded
+	}
+	s.goVersions[versionKey] = version
+	for _, asset := range publication.Assets {
+		s.goAssets[goAssetKey(asset.RepositoryID, asset.Module, asset.Version, asset.Kind)] = asset
+	}
+	return version, false, nil
+}
+
 func (s *MemoryStore) ListGoModuleVersions(_ context.Context, repositoryID, modulePath string) ([]GoModuleVersion, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

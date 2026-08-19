@@ -57,6 +57,82 @@ func (s *PostgresStore) PutGoModuleVersion(ctx context.Context, version GoModule
 	return version, err
 }
 
+func (s *PostgresStore) PublishGoModule(ctx context.Context, incoming GoModulePublication) (GoModuleVersion, bool, error) {
+	publication, err := normalizeGoModulePublication(incoming, time.Now().UTC())
+	if err != nil {
+		return GoModuleVersion{}, false, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return GoModuleVersion{}, false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	version := publication.Version
+	var existing GoModuleVersion
+	err = scanGoModuleVersion(tx.QueryRowContext(ctx, `SELECT `+goModuleVersionColumns+` FROM native_go_versions
+		WHERE repository_id::text=$1 AND module_path=$2 AND version=$3`, version.RepositoryID, version.Module, version.Version), &existing)
+	if err == nil {
+		rows, queryErr := tx.QueryContext(ctx, `SELECT `+goModuleAssetColumns+` FROM native_go_assets
+			WHERE repository_id::text=$1 AND module_path=$2 AND version=$3 ORDER BY kind`, version.RepositoryID, version.Module, version.Version)
+		if queryErr != nil {
+			return GoModuleVersion{}, false, queryErr
+		}
+		assets := make([]GoModuleAsset, 0, 3)
+		for rows.Next() {
+			var asset GoModuleAsset
+			if queryErr = scanGoModuleAsset(rows, &asset); queryErr != nil {
+				_ = rows.Close()
+				return GoModuleVersion{}, false, queryErr
+			}
+			assets = append(assets, asset)
+		}
+		queryErr = errors.Join(rows.Err(), rows.Close())
+		if queryErr != nil {
+			return GoModuleVersion{}, false, queryErr
+		}
+		if !goModulePublicationMatches(assets, publication.Assets) {
+			return GoModuleVersion{}, false, ErrNameExists
+		}
+		if err = tx.Commit(); err != nil {
+			return GoModuleVersion{}, false, err
+		}
+		return existing, true, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return GoModuleVersion{}, false, err
+	}
+	err = scanGoModuleVersion(tx.QueryRowContext(ctx, `INSERT INTO native_go_versions
+		(repository_id,module_path,version,published_at,publisher,cached_at,created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7)
+		RETURNING `+goModuleVersionColumns,
+		version.RepositoryID, version.Module, version.Version, version.PublishedAt, version.Publisher, version.CachedAt, version.CreatedAt), &version)
+	if isUnique(err) {
+		return GoModuleVersion{}, false, ErrNameExists
+	}
+	if err != nil {
+		return GoModuleVersion{}, false, err
+	}
+	for _, asset := range publication.Assets {
+		_, err = tx.ExecContext(ctx, `INSERT INTO native_go_assets
+			(repository_id,module_path,version,kind,digest,object_key,size,source_url,cached_at,created_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+			asset.RepositoryID, asset.Module, asset.Version, asset.Kind, asset.Digest, asset.ObjectKey, asset.Size, asset.SourceURL, asset.CachedAt, asset.CreatedAt)
+		if IsQuotaExceeded(err) {
+			return GoModuleVersion{}, false, ErrQuotaExceeded
+		}
+		if isUnique(err) {
+			return GoModuleVersion{}, false, ErrNameExists
+		}
+		if err != nil {
+			return GoModuleVersion{}, false, err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return GoModuleVersion{}, false, err
+	}
+	return version, false, nil
+}
+
 func (s *PostgresStore) ListGoModuleVersions(ctx context.Context, repositoryID, modulePath string) ([]GoModuleVersion, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+goModuleVersionColumns+` FROM native_go_versions
 		WHERE repository_id::text=$1 AND module_path=$2 ORDER BY version`, repositoryID, modulePath)

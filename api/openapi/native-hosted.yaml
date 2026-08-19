@@ -127,6 +127,8 @@ paths:
     "$ref": "./protocols/maven.yaml#/repository_maven_repository_assetPath"
   "/repository/maven/{repository}/coordinates/{coordinate}:commit":
     "$ref": "./protocols/maven.yaml#/repository_maven_repository_coordinates_coordinate_commit"
+  "/go/{repository}/{modulePath}":
+    "$ref": "./protocols/go.yaml#/go_repository_modulePath"
 components:
   schemas:
     Format:

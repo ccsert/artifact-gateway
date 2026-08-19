@@ -1,7 +1,7 @@
 # Artifact Gateway
 
-Artifact Gateway serves native OCI, Raw, Maven, Conan 2, npm, and PyPI Hosted
-repositories plus Go Module and APT Proxy repositories, using PostgreSQL for lifecycle
+Artifact Gateway serves native OCI, Raw, Maven, Conan 2, npm, PyPI, and Go Module
+Hosted repositories plus their Proxy/Group read paths and APT Proxy repositories, using PostgreSQL for lifecycle
 metadata and S3-compatible object storage for verified bytes. The bundled local
 stack uses RustFS. Legacy Groups
 remain available for allowlisted external Proxy reads, while V2 Groups resolve
@@ -15,9 +15,11 @@ managed members.
 Artifact Gateway is intended to be a complete repository manager for the six
 Hosted-capable formats: native client reads and publication, Hosted/Proxy/Group
 resolution, browsing and search, authorization, audit, retention, recovery,
-promotion, and replication. Go and APT are admitted under the protocol-only
-format rule: they declare Proxy and Group protocol capabilities until a
-standard or trusted installable publication workflow exists. APT additionally
+promotion, and replication. Go additionally provides a Gateway-specific atomic
+Hosted publication contract while its delete/restore and distribution lifecycle
+remain deferred. APT is admitted under the protocol-only format rule and
+declares Proxy and Group protocol capabilities until a trusted installable
+publication workflow exists. APT additionally
 has a management-only Hosted preview for verified staging and atomic signed
 snapshot publication; its bundled signer is an H2 fixture, not production key custody. It is
 not a transparent rewrite proxy, a generic object browser, or a vulnerability
@@ -196,7 +198,7 @@ docker compose ps gateway
 
 Administrators create repositories through `POST /api/v2/repositories` with an
 idempotency key and a `format` of `oci`, `raw`, `maven`, `conan`, `npm`,
-`pypi`, `go`, or `apt`. Go repositories may only use the Proxy type. APT may use
+`pypi`, `go`, or `apt`. Go supports Hosted and Proxy repositories. APT may use
 Proxy for installable reads or an explicit Hosted preview for management-owned
 signed snapshots; its advertised protocol profile remains Proxy/Group. OCI
 repositories are rooted at `/v2/<repository>/<image>/...`; Raw repositories use
@@ -221,6 +223,7 @@ files with Hosted-first conflict resolution, and keep cached Proxy files
 installable while the upstream is unavailable.
 Go Groups merge member version lists and resolve `.info`, `.mod`, and `.zip`
 assets by member priority while preserving offline reads from verified cache.
+Hosted members take precedence over Proxy members for the same module version.
 APT Groups resolve signed metadata and packages from Proxy members in configured
 order and keep cached bytes available when an upstream is unavailable.
 
@@ -251,6 +254,18 @@ hosts it may use.
 Each Go Proxy repository likewise requires an endpoint and `allowedHosts`; it
 supports `@v/list`, `@latest`, `.info`, `.mod`, and `.zip` with immutable
 SHA-256 cache validation.
+Go Hosted publishes one canonical module ZIP and atomically derives the
+standard `.info` and `.mod` representations:
+
+```sh
+curl -u "publisher:${GATEWAY_TOKEN}" \
+  --upload-file module.zip \
+  "${GATEWAY_URL}/go/go-internal/example.com/team/widget/@v/v1.2.3.zip"
+```
+
+The ZIP root must be `example.com/team/widget@v1.2.3/` and its top-level
+`go.mod` must declare the same module path. Identical retries are idempotent;
+different content at the same version returns `409`.
 Each APT Proxy repository requires an endpoint and `allowedHosts`; see
 [`docs/apt-proxy.md`](docs/apt-proxy.md) for source configuration and route
 security rules. Hosted publication follows the staged

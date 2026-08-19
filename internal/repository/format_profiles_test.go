@@ -16,15 +16,34 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 		if !profile.AnonymousRead {
 			t.Errorf("format %q group=%t anonymous=%t", profile.Format, profile.GroupSupported, profile.AnonymousRead)
 		}
-		if profile.Format == FormatGo || profile.Format == FormatAPT {
+		if profile.Format == FormatAPT {
 			if profile.PublicationScanning || FormatSupportsPublicationScanning(profile.Format, RepositoryTypeProxy) {
 				t.Errorf("protocol-only format advertises publication scanning: %#v", profile)
 			}
 			if len(profile.RepositoryTypes) != 1 || profile.RepositoryTypes[0] != RepositoryTypeProxy || !profile.GroupSupported {
-				t.Errorf("go must expose only Proxy and Group: %#v", profile)
+				t.Errorf("APT must expose only Proxy and Group: %#v", profile)
 			}
 			if len(profile.HostedOperations) != 0 || !FormatSupportsOperation(profile.Format, RepositoryTypeProxy, RepositoryOperationRead) || !FormatSupportsOperation(profile.Format, RepositoryTypeProxy, RepositoryOperationBrowse) {
-				t.Errorf("go advertises unsupported capabilities: %#v", profile)
+				t.Errorf("APT advertises unsupported capabilities: %#v", profile)
+			}
+			continue
+		}
+		if profile.Format == FormatGo {
+			if !profile.PublicationScanning || !FormatSupportsPublicationScanning(profile.Format, RepositoryTypeHosted) {
+				t.Errorf("Go Hosted publication scanning is missing: %#v", profile)
+			}
+			if len(profile.RepositoryTypes) != 2 || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeHosted) || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeProxy) || !profile.GroupSupported {
+				t.Errorf("Go must expose Hosted, Proxy, and Group: %#v", profile)
+			}
+			for _, operation := range []RepositoryOperation{RepositoryOperationRead, RepositoryOperationPublish, RepositoryOperationBrowse} {
+				if !FormatSupportsOperation(profile.Format, RepositoryTypeHosted, operation) {
+					t.Errorf("Go Hosted missing operation %q", operation)
+				}
+			}
+			for _, operation := range []RepositoryOperation{RepositoryOperationRead, RepositoryOperationBrowse} {
+				if !FormatSupportsOperation(profile.Format, RepositoryTypeProxy, operation) {
+					t.Errorf("Go Proxy missing operation %q", operation)
+				}
 			}
 			continue
 		}
@@ -110,8 +129,7 @@ func TestUnknownFormatHasNoCapabilities(t *testing.T) {
 func TestAPTHostedProvisioningDoesNotAdvertiseProtocolCapabilities(t *testing.T) {
 	profile, ok := FormatProfileFor(FormatAPT)
 	if !ok || FormatSupportsRepositoryType(FormatAPT, RepositoryTypeHosted) ||
-		!FormatSupportsRepositoryProvisioning(FormatAPT, RepositoryTypeHosted) ||
-		FormatSupportsRepositoryProvisioning(FormatGo, RepositoryTypeHosted) {
+		!FormatSupportsRepositoryProvisioning(FormatAPT, RepositoryTypeHosted) {
 		t.Fatalf("APT profile=%#v found=%t", profile, ok)
 	}
 	if len(profile.RepositoryTypes) != 1 || profile.RepositoryTypes[0] != RepositoryTypeProxy || len(profile.HostedOperations) != 0 {
@@ -119,7 +137,7 @@ func TestAPTHostedProvisioningDoesNotAdvertiseProtocolCapabilities(t *testing.T)
 	}
 }
 
-func TestWorkerFormatsExcludeProtocolOnlyFormats(t *testing.T) {
+func TestWorkerFormatsReflectExecutableBackgroundWork(t *testing.T) {
 	found := map[Format]bool{}
 	for _, format := range WorkerFormats() {
 		found[format] = true
@@ -130,6 +148,6 @@ func TestWorkerFormatsExcludeProtocolOnlyFormats(t *testing.T) {
 		}
 	}
 	if found[FormatGo] {
-		t.Fatal("Go Proxy has no lifecycle worker capability")
+		t.Fatal("Go Hosted has no lifecycle worker capability yet")
 	}
 }

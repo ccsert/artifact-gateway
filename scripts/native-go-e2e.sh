@@ -6,5 +6,5 @@ cd "$root"
 
 ARTIFACT_GATEWAY_GO_CLI_E2E=1 \
 go test ./internal/app \
-  -run '^TestNativeGoRealClientDownloadsThroughProxyAndOfflineCache$' \
+	  -run '^TestNativeGoRealClientDownloads(ThroughProxyAndOfflineCache|HostedPublication)$' \
   -count=1 -v

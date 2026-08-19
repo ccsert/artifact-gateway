@@ -179,3 +179,120 @@ func TestPostgresRustFSGoProxyCacheIsVisibleAcrossGatewayInstances(t *testing.T)
 		}
 	}
 }
+
+func TestPostgresRustFSGoHostedPublicationIsAtomicAcrossGatewayInstances(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	endpoint := os.Getenv("TEST_RUSTFS_ENDPOINT")
+	accessKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_RUSTFS_SECRET_KEY")
+	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	storeA, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeA.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
+	bucket := "native-go-hosted-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
+	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objectsA.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := storeA.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: uuid.NewString(), Name: "go-hosted-" + strings.ReplaceAll(uuid.NewString(), "-", ""),
+		Format: repository.FormatGo, Type: repository.RepositoryTypeHosted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverA := httptest.NewServer(NewGatewayHandler(Dependencies{NativeGoObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	defer serverA.Close()
+	serverB := httptest.NewServer(NewGatewayHandler(Dependencies{NativeGoObjectStore: objectsB}, storeB, TestAdapter{}, testAuthenticator()))
+	defer serverB.Close()
+
+	const (
+		modulePath    = "example.com/Acme/hosted-postgres"
+		escapedModule = "example.com/!acme/hosted-postgres"
+		version       = "v1.5.0"
+	)
+	mod := []byte("module " + modulePath + "\n\ngo 1.26\n")
+	archive := goModuleFixtureZip(t, modulePath, version, map[string]string{
+		"go.mod": string(mod), "hosted.go": "package hostedpostgres\n",
+	})
+	path := "/go/" + repo.Name + "/" + escapedModule + "/@v/" + version + ".zip"
+	put := func(server *httptest.Server, body []byte) (int, string) {
+		t.Helper()
+		request, requestErr := http.NewRequest(http.MethodPut, server.URL+path, bytes.NewReader(body))
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		authorize(request, "resolver-secret")
+		response, requestErr := server.Client().Do(request)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		responseBody, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		return response.StatusCode, string(responseBody)
+	}
+	if status, body := put(serverA, archive); status != http.StatusCreated {
+		t.Fatalf("instance A publish=%d body=%s", status, body)
+	}
+	if status, body := put(serverB, archive); status != http.StatusOK || !strings.Contains(body, `"replayed":true`) {
+		t.Fatalf("instance B replay=%d body=%s", status, body)
+	}
+	changed := goModuleFixtureZip(t, modulePath, version, map[string]string{
+		"go.mod": string(mod), "hosted.go": "package hostedpostgres\n\nconst Changed = true\n",
+	})
+	if status, body := put(serverB, changed); status != http.StatusConflict {
+		t.Fatalf("instance B conflict=%d body=%s", status, body)
+	}
+	basePath := "/go/" + repo.Name + "/" + escapedModule
+	get := func(suffix string) (int, []byte) {
+		t.Helper()
+		request, requestErr := http.NewRequest(http.MethodGet, serverB.URL+basePath+suffix, nil)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		authorize(request, "resolver-secret")
+		response, requestErr := serverB.Client().Do(request)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		body, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		return response.StatusCode, body
+	}
+	if status, body := get("/@v/list"); status != http.StatusOK || string(body) != version+"\n" {
+		t.Fatalf("instance B list=%d body=%q", status, body)
+	}
+	if status, body := get("/@v/" + version + ".mod"); status != http.StatusOK || !bytes.Equal(body, mod) {
+		t.Fatalf("instance B mod=%d body=%q", status, body)
+	}
+	if status, body := get("/@v/" + version + ".zip"); status != http.StatusOK || !bytes.Equal(body, archive) {
+		t.Fatalf("instance B zip=%d bytes=%d", status, len(body))
+	}
+	capacity, err := storeB.GetRepositoryCapacity(ctx, repo.ID)
+	if err != nil || capacity.ObjectCount != 3 || capacity.UsedBytes <= int64(len(archive)) {
+		t.Fatalf("Go Hosted capacity=%#v err=%v", capacity, err)
+	}
+}

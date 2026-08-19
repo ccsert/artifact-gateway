@@ -1,8 +1,9 @@
 # Artifact Gateway Architecture
 
 Artifact Gateway is a repository manager for OCI, Raw, Maven, Conan 2, npm,
-PyPI, Go modules, and APT. Hosted lifecycle is available for the first six
-formats; Go remains Proxy/Group-only. APT advertises only Proxy/Group protocol
+PyPI, Go modules, and APT. Full Hosted lifecycle is available for the first six
+formats; Go has atomic Hosted publication plus Proxy/Group reads, while its
+delete/restore and distribution lifecycle remains deferred. APT advertises only Proxy/Group protocol
 capabilities, while an explicitly provisioned Hosted preview repository may
 stage packages and publish an atomically visible signed suite through the
 management API. H2 includes a loopback reference signer and real Debian client

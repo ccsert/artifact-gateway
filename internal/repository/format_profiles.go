@@ -79,10 +79,16 @@ var supportedFormatProfiles = []FormatProfile{
 		},
 	},
 	{
-		Format:          FormatGo,
-		RepositoryTypes: []RepositoryType{RepositoryTypeProxy},
-		GroupSupported:  true,
-		AnonymousRead:   true,
+		Format:              FormatGo,
+		RepositoryTypes:     []RepositoryType{RepositoryTypeHosted, RepositoryTypeProxy},
+		GroupSupported:      true,
+		AnonymousRead:       true,
+		PublicationScanning: true,
+		HostedOperations: []RepositoryOperation{
+			RepositoryOperationRead,
+			RepositoryOperationPublish,
+			RepositoryOperationBrowse,
+		},
 		ProxyOperations: []RepositoryOperation{
 			RepositoryOperationRead,
 			RepositoryOperationBrowse,
@@ -146,7 +152,8 @@ func SupportedFormats() []Format {
 
 // WorkerFormats returns formats with executable background work. APT is
 // included for its management-only staged-upload reclaim even while its public
-// profile remains Proxy/Group-only. Other protocol-only formats must not be
+// profile remains Proxy/Group-only. Formats without declared background
+// operations, including the initial Go Hosted slice, must not be
 // scheduled until they own executable worker behavior.
 func WorkerFormats() []Format {
 	formats := make([]Format, 0, len(supportedFormatProfiles))

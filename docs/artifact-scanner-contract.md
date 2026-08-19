@@ -139,8 +139,8 @@ Proxy caches and formats without a native publish hook never expose a
 non-functional automatic-scan control.
 
 Set `autoScanOnPublish: true` through the repository security policy to enqueue
-the same durable scan automatically after a new Maven, OCI, Raw, npm, PyPI, or
-Conan Hosted publication becomes visible. The setting only affects future
+the same durable scan automatically after a new Maven, OCI, Raw, npm, PyPI, Go,
+or Conan Hosted publication becomes visible. The setting only affects future
 publications. Scheduling is best effort and does not roll back a successful
 publication when the lifecycle queue or policy store is unavailable. Each
 repository, format, coordinate, and digest identity receives a stable
@@ -161,8 +161,9 @@ the selected manifest or index and its referenced config/layers. npm, Raw, and
 PyPI resolve immutable files; Go resolves cached info/mod/zip assets; Conan
 resolves recipe or package revision assets.
 
-All native Hosted layouts are supported. npm, PyPI, and Go Proxy repositories
-use the same native metadata and can scan artifacts whose byte objects are
+All native Hosted layouts are supported, including the canonical ZIP produced
+by Go Hosted publication. npm, PyPI, and Go Proxy repositories use the same
+native metadata and can scan artifacts whose byte objects are
 already cached. Maven, OCI, Raw, and Conan Proxy repositories still use their
 legacy cache indexes and are rejected at enqueue time until dedicated resolver
 adapters are available. Scans never fetch mutable upstream content.

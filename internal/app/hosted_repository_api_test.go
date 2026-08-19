@@ -120,7 +120,7 @@ func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	authorize(goRequest, "admin-secret")
 	goResponse := httptest.NewRecorder()
 	handler.ServeHTTP(goResponse, goRequest)
-	if goResponse.Code != http.StatusOK || !strings.Contains(goResponse.Body.String(), `"artifactScanning":true`) || !strings.Contains(goResponse.Body.String(), `"publicationScanning":false`) {
+	if goResponse.Code != http.StatusOK || !strings.Contains(goResponse.Body.String(), `"artifactScanning":true`) || !strings.Contains(goResponse.Body.String(), `"publicationScanning":true`) || !strings.Contains(goResponse.Body.String(), `"publish"`) {
 		t.Fatalf("Go capabilities=%d %s", goResponse.Code, goResponse.Body.String())
 	}
 	npmProxyRequest := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+npmProxy.ID+"/capabilities", nil)
@@ -194,6 +194,10 @@ func TestHostedRepositoryManagementCreatesProxyRepository(t *testing.T) {
 	npmProxy := create(`{"name":"npm-proxy","format":"npm","type":"proxy","endpoint":"https://registry.npmjs.org","allowedHosts":["registry.npmjs.org"]}`, "create-npm-proxy")
 	if npmProxy.Code != http.StatusCreated {
 		t.Fatalf("create npm proxy=%d body=%s", npmProxy.Code, npmProxy.Body.String())
+	}
+	goHosted := create(`{"name":"go-hosted","format":"go"}`, "create-go-hosted")
+	if goHosted.Code != http.StatusCreated || !strings.Contains(goHosted.Body.String(), `"type":"hosted"`) {
+		t.Fatalf("create Go Hosted=%d body=%s", goHosted.Code, goHosted.Body.String())
 	}
 }
 

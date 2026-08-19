@@ -368,9 +368,9 @@ type PyPIObject struct {
 	DeletedAt    time.Time
 }
 
-// GoModuleVersion is one immutable module version known by a Go Proxy
-// repository. Asset bytes are stored independently so list and @latest
-// metadata remain useful before a client downloads the complete module.
+// GoModuleVersion is one immutable module version known by a Go Repository.
+// Proxy metadata may exist before every representation is cached; Hosted
+// publication commits all required representations atomically.
 type GoModuleVersion struct {
 	RepositoryID string
 	Module       string
@@ -394,6 +394,13 @@ type GoModuleAsset struct {
 	SourceURL    string
 	CachedAt     time.Time
 	CreatedAt    time.Time
+}
+
+// GoModulePublication is the atomic Hosted visibility boundary for one module
+// version. Assets must contain exactly one info, mod, and zip representation.
+type GoModulePublication struct {
+	Version GoModuleVersion
+	Assets  []GoModuleAsset
 }
 
 // APTAsset is an immutable byte representation cached from a Debian

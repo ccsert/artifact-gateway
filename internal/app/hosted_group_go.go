@@ -71,7 +71,7 @@ func (h v2GroupGoHandler) versions(r *http.Request, resolver v2GroupResolver, me
 	stale := false
 	for _, member := range members {
 		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
-		if err != nil || repo.Type != repository.RepositoryTypeProxy {
+		if err != nil {
 			continue
 		}
 		versions, disposition, err := h.native.resolveList(r, repo, modulePath)
@@ -126,7 +126,7 @@ func (h v2GroupGoHandler) serveAsset(w http.ResponseWriter, r *http.Request, res
 	var lastErr error
 	for _, member := range members {
 		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
-		if err != nil || repo.Type != repository.RepositoryTypeProxy {
+		if err != nil {
 			continue
 		}
 		asset, _, err := h.native.loadAsset(r, repo, route)

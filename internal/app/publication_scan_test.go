@@ -348,7 +348,7 @@ func TestPublicationScanSchedulerSkipsRepositoriesWithoutEnabledCapability(t *te
 		{name: "policy disabled", scannerAvailable: true, formats: []repository.Format{repository.FormatRaw}},
 		{name: "scanner unavailable", autoScan: true, formats: []repository.Format{repository.FormatRaw}},
 		{name: "format disabled", autoScan: true, scannerAvailable: true, formats: []repository.Format{repository.FormatMaven}},
-		{name: "publication hook unavailable", autoScan: true, scannerAvailable: true, repositoryFormat: repository.FormatGo, formats: []repository.Format{repository.FormatGo}},
+		{name: "publication hook unavailable", autoScan: true, scannerAvailable: true, repositoryFormat: repository.FormatAPT, formats: []repository.Format{repository.FormatAPT}},
 		{name: "proxy repository", autoScan: true, scannerAvailable: true, repositoryFormat: repository.FormatNPM, repositoryType: repository.RepositoryTypeProxy, formats: []repository.Format{repository.FormatNPM}},
 	}
 	for _, tt := range tests {

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"archive/zip"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
@@ -31,14 +32,15 @@ const (
 )
 
 type nativeGoHandler struct {
-	store      repository.NativeGoStore
-	repos      repository.HostedRepositoryStore
-	objects    OCIObjectStore
-	auth       Authenticator
-	authorizer RepositoryAuthorizer
-	audit      repository.Store
-	metrics    *Metrics
-	proxy      GoClient
+	store              repository.NativeGoStore
+	repos              repository.HostedRepositoryStore
+	objects            OCIObjectStore
+	auth               Authenticator
+	authorizer         RepositoryAuthorizer
+	audit              repository.Store
+	metrics            *Metrics
+	proxy              GoClient
+	publicationScanner *publicationScanScheduler
 }
 
 type goRoute struct {
@@ -72,6 +74,11 @@ func (h nativeGoHandler) withMetrics(metrics *Metrics) nativeGoHandler {
 	return h
 }
 
+func (h nativeGoHandler) withPublicationScanner(scanner publicationScanScheduler) nativeGoHandler {
+	h.publicationScanner = &scanner
+	return h
+}
+
 func (h nativeGoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route, ok := parseGoProxyPath(r.URL.EscapedPath())
 	if !ok {
@@ -79,7 +86,8 @@ func (h nativeGoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	repo, err := h.repos.GetHostedRepositoryByName(r.Context(), route.repository)
-	if errors.Is(err, repository.ErrNotFound) || repo.Format != repository.FormatGo || repo.Type != repository.RepositoryTypeProxy || repo.State != repository.RepositoryActive {
+	if errors.Is(err, repository.ErrNotFound) || repo.Format != repository.FormatGo || repo.State != repository.RepositoryActive ||
+		(repo.Type != repository.RepositoryTypeHosted && repo.Type != repository.RepositoryTypeProxy) {
 		http.NotFound(w, r)
 		return
 	}
@@ -87,13 +95,18 @@ func (h nativeGoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "repository unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+	publishing := r.Method == http.MethodPut && route.kind == "zip" && repo.Type == repository.RepositoryTypeHosted
+	if !publishing && r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	operation := RepositoryRead
+	if publishing {
+		operation = RepositoryWrite
+	}
 	principal, authenticated := h.protocolPrincipal(r)
 	if !authenticated {
-		if anonymousHostedRepositoryReadAllowed(r.Context(), h.store, repo, r.Method) {
+		if operation == RepositoryRead && anonymousHostedRepositoryReadAllowed(r.Context(), h.store, repo, r.Method) {
 			principal = anonymousPrincipal()
 		} else {
 			h.challenge(w, http.StatusUnauthorized, "authentication required")
@@ -101,11 +114,15 @@ func (h nativeGoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !isAnonymous(principal) {
-		decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryRead, route.module)
+		decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, operation, route.module)
 		if !decision.Allowed {
 			h.challenge(w, http.StatusForbidden, "repository permission required")
 			return
 		}
+	}
+	if publishing {
+		h.publish(w, r, repo, route, principal.Actor)
+		return
 	}
 	switch route.kind {
 	case "list":
@@ -218,6 +235,10 @@ func (h nativeGoHandler) serveList(w http.ResponseWriter, r *http.Request, repo 
 }
 
 func (h nativeGoHandler) resolveList(r *http.Request, repo repository.HostedRepository, modulePath string) ([]repository.GoModuleVersion, string, error) {
+	if repo.Type == repository.RepositoryTypeHosted {
+		versions, err := h.store.ListGoModuleVersions(r.Context(), repo.ID, modulePath)
+		return versions, "bypass", err
+	}
 	cached, cacheErr := h.store.ListGoModuleVersions(r.Context(), repo.ID, modulePath)
 	disposition := "miss"
 	if cacheErr == nil && len(cached) > 0 {
@@ -308,12 +329,167 @@ func (h nativeGoHandler) serveAsset(w http.ResponseWriter, r *http.Request, repo
 
 func (h nativeGoHandler) loadAsset(r *http.Request, repo repository.HostedRepository, route goRoute) (repository.GoModuleAsset, string, error) {
 	asset, err := h.store.GetGoModuleAsset(r.Context(), repo.ID, route.module, route.version, route.kind)
+	if repo.Type == repository.RepositoryTypeHosted {
+		return asset, "bypass", err
+	}
 	disposition := "hit"
 	if errors.Is(err, repository.ErrNotFound) {
 		disposition = "miss"
 		asset, err = h.cacheAsset(r, repo, route)
 	}
 	return asset, disposition, err
+}
+
+func (h nativeGoHandler) publish(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, route goRoute, publisher string) {
+	data, err := io.ReadAll(io.LimitReader(http.MaxBytesReader(w, r.Body, goZipLimit+1), goZipLimit+1))
+	if err != nil || len(data) == 0 || int64(len(data)) > goZipLimit {
+		h.writePublishError(w, http.StatusRequestEntityTooLarge, "Go module ZIP is too large")
+		return
+	}
+	if _, err = validateGoAsset(route.module, route.version, "zip", data); err != nil {
+		h.writePublishError(w, http.StatusUnprocessableEntity, "Go module ZIP is invalid")
+		return
+	}
+	mod, err := goModFromModuleZip(route.module, route.version, data)
+	if err != nil {
+		h.writePublishError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	publishedAt := time.Now().UTC().Truncate(time.Second)
+	info, err := json.Marshal(struct {
+		Version string    `json:"Version"`
+		Time    time.Time `json:"Time"`
+	}{Version: route.version, Time: publishedAt})
+	if err != nil {
+		h.writePublishError(w, http.StatusInternalServerError, "build Go module metadata failed")
+		return
+	}
+	assets := []repository.GoModuleAsset{
+		newHostedGoAsset(repo.ID, route.module, route.version, "info", info),
+		newHostedGoAsset(repo.ID, route.module, route.version, "mod", mod),
+		newHostedGoAsset(repo.ID, route.module, route.version, "zip", data),
+	}
+	publication := repository.GoModulePublication{
+		Version: repository.GoModuleVersion{
+			RepositoryID: repo.ID, Module: route.module, Version: route.version,
+			PublishedAt: publishedAt, Publisher: publisher,
+		},
+		Assets: assets,
+	}
+	coordinate := route.module + "@" + route.version
+	publicationCtx, releasePublication, err := repository.LockArtifactDistributionCoordinates(r.Context(), h.store, []repository.ArtifactDistributionCoordinate{{
+		RepositoryID: repo.ID, Format: repository.FormatGo, Coordinate: coordinate,
+	}})
+	if err != nil {
+		h.writePublishError(w, http.StatusServiceUnavailable, "Go module publication coordination is unavailable")
+		return
+	}
+	defer releasePublication()
+	if _, lookupErr := h.store.GetGoModuleVersion(publicationCtx, repo.ID, route.module, route.version); lookupErr == nil {
+		version, replayed, publishErr := h.store.PublishGoModule(publicationCtx, publication)
+		if publishErr != nil {
+			h.writeGoPublicationStoreError(w, publishErr)
+			return
+		}
+		h.writeGoPublicationSuccess(w, r, repo, route, publisher, version, assets[2], replayed)
+		return
+	} else if !errors.Is(lookupErr, repository.ErrNotFound) {
+		h.writePublishError(w, http.StatusServiceUnavailable, "check Go module version failed")
+		return
+	}
+	objectKeys := make([]string, 0, len(assets))
+	for _, asset := range assets {
+		objectKeys = append(objectKeys, asset.ObjectKey)
+	}
+	objectCtx, release, err := repository.LockObjectKeys(publicationCtx, objectKeys, h.store, repository.FormatGo, h.store.LockGoObject)
+	if err != nil {
+		h.writePublishError(w, http.StatusServiceUnavailable, "Go module object coordination is unavailable")
+		return
+	}
+	defer release()
+	bodies := map[string][]byte{"info": info, "mod": mod, "zip": data}
+	for _, asset := range assets {
+		if err = h.objects.PutVerifiedReader(objectCtx, asset.ObjectKey, bytes.NewReader(bodies[asset.Kind]), asset.Size, asset.Digest); err != nil {
+			h.writePublishError(w, http.StatusInternalServerError, "persist Go module assets failed")
+			return
+		}
+	}
+	version, replayed, err := h.store.PublishGoModule(objectCtx, publication)
+	if err != nil {
+		h.writeGoPublicationStoreError(w, err)
+		return
+	}
+	h.writeGoPublicationSuccess(w, r, repo, route, publisher, version, assets[2], replayed)
+}
+
+func (h nativeGoHandler) writeGoPublicationStoreError(w http.ResponseWriter, err error) {
+	if repository.IsQuotaExceeded(err) {
+		h.writePublishError(w, http.StatusInsufficientStorage, "repository capacity quota exceeded")
+		return
+	}
+	if errors.Is(err, repository.ErrNameExists) {
+		h.writePublishError(w, http.StatusConflict, "Go module version already exists with different content")
+		return
+	}
+	h.writePublishError(w, http.StatusInternalServerError, "publish Go module failed")
+}
+
+func (h nativeGoHandler) writeGoPublicationSuccess(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, route goRoute, publisher string, version repository.GoModuleVersion, zipAsset repository.GoModuleAsset, replayed bool) {
+	if !replayed && h.publicationScanner != nil {
+		_ = h.publicationScanner.Schedule(r.Context(), repo, route.module+"@"+route.version, zipAsset.Digest, publisher)
+	}
+	status := http.StatusCreated
+	if replayed {
+		status = http.StatusOK
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Location", r.URL.Path)
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"module": route.module, "version": version.Version, "digest": zipAsset.Digest, "replayed": replayed,
+	})
+	h.recordAudit(r, repo, route.module+"@"+route.version, "zip", publisher, repository.AuditResolved, status, zipAsset.Size, "bypass")
+}
+
+func newHostedGoAsset(repositoryID, modulePath, version, kind string, body []byte) repository.GoModuleAsset {
+	sum := sha256.Sum256(body)
+	digestHex := hex.EncodeToString(sum[:])
+	return repository.GoModuleAsset{
+		RepositoryID: repositoryID, Module: modulePath, Version: version, Kind: kind,
+		Digest: "sha256:" + digestHex, ObjectKey: "native/go/sha256/" + digestHex,
+		Size: int64(len(body)),
+	}
+}
+
+func goModFromModuleZip(modulePath, version string, data []byte) ([]byte, error) {
+	archive, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, errors.New("Go module ZIP is invalid")
+	}
+	name := modulePath + "@" + version + "/go.mod"
+	for _, file := range archive.File {
+		if file.Name != name {
+			continue
+		}
+		reader, openErr := file.Open()
+		if openErr != nil {
+			return nil, errors.New("Go module ZIP go.mod is unreadable")
+		}
+		body, readErr := io.ReadAll(io.LimitReader(reader, goModLimit+1))
+		closeErr := reader.Close()
+		if readErr != nil || closeErr != nil || len(body) == 0 || int64(len(body)) > goModLimit {
+			return nil, errors.New("Go module ZIP go.mod is invalid")
+		}
+		if _, validateErr := validateGoAsset(modulePath, version, "mod", body); validateErr != nil {
+			return nil, errors.New("Go module ZIP go.mod does not match the requested module")
+		}
+		return body, nil
+	}
+	return nil, errors.New("Go module ZIP must contain a top-level go.mod")
+}
+
+func (h nativeGoHandler) writePublishError(w http.ResponseWriter, status int, message string) {
+	http.Error(w, message, status)
 }
 
 func (h nativeGoHandler) writeAsset(w http.ResponseWriter, r *http.Request, asset repository.GoModuleAsset, kind string) (int64, int, error) {
@@ -476,9 +652,10 @@ func (h nativeGoHandler) recordAudit(r *http.Request, repo repository.HostedRepo
 	if actor == "" {
 		actor = anonymousActor
 	}
+	memberType := string(repo.Type)
 	audit := repository.AuditRecord{
 		GroupName: repo.Name, Repository: repo.Name, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC(),
-		Format: string(repository.FormatGo), Resource: resource, Representation: representation, MemberType: "proxy",
+		Format: string(repository.FormatGo), Resource: resource, Representation: representation, MemberType: memberType,
 		UpstreamHost: upstreamHostname(repo.Endpoint), Operation: strings.ToLower(r.Method), Status: status,
 		CacheDisposition: disposition, Bytes: size,
 	}

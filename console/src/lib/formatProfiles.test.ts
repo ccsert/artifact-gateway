@@ -42,10 +42,10 @@ const profiles: FormatProfile[] = [
   },
   {
     format: "go",
-    repositoryTypes: ["proxy"],
+    repositoryTypes: ["hosted", "proxy"],
     groupSupported: true,
     anonymousRead: true,
-    hostedOperations: [],
+    hostedOperations: ["read", "publish", "browse"],
     proxyOperations: ["read", "browse"],
   },
 ];
@@ -76,6 +76,7 @@ describe("format profiles", () => {
       "oci",
       "raw",
       "npm",
+      "go",
     ]);
     expect(repositoryFormats(profiles, "proxy")).toEqual(["oci", "npm", "go"]);
     expect(repositoryTypes(profiles)).toEqual(["hosted", "proxy"]);

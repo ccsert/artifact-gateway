@@ -3093,6 +3093,123 @@
       },
       "x-gateway-visibility-transition": "single_postgres_transaction",
       "x-gateway-client-authority": "asset_names_only"
+    },
+    "/go/{repository}/{modulePath}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryName"
+        },
+        {
+          "name": "modulePath",
+          "in": "path",
+          "required": true,
+          "allowReserved": true,
+          "description": "Catch-all beginning with the case-escaped module path and ending in /@v/list, /@latest, or /@v/<escaped-version>.(info|mod|zip).\n",
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "get": {
+        "operationId": "readGoModuleRepresentation",
+        "description": "Reads a standard GOPROXY list, latest, info, mod, or zip representation.",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Immutable GOPROXY representation"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headGoModuleRepresentation",
+        "description": "Returns the same headers as GET without the representation body.",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Immutable GOPROXY representation headers"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          }
+        }
+      },
+      "put": {
+        "operationId": "publishGoHostedModule",
+        "description": "Gateway-specific Go Hosted publication. The catch-all must identify an escaped semantic version with a .zip suffix. The body is validated as a canonical Go module ZIP containing a matching top-level go.mod. The Gateway derives .mod and .info and publishes all representations in one metadata transaction. Identical retries preserve the first publication time; changed bytes at the same module version are rejected.\n",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/zip": {
+              "schema": {
+                "type": "string",
+                "contentEncoding": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Identical publication replayed"
+          },
+          "201": {
+            "description": "Module version published"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "x-gateway-catchAll": "modulePath",
+      "x-gateway-visibility": "all_three_representations_committed_together",
+      "x-gateway-publication": "gateway_specific_single_zip_put"
     }
   },
   "components": {

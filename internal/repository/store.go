@@ -15,6 +15,7 @@ var (
 	ErrLastActiveAdmin               = errors.New("last active administrator cannot be removed")
 	ErrQuotaExceeded                 = errors.New("repository capacity quota exceeded")
 	ErrUpstreamChanged               = errors.New("upstream immutable artifact metadata changed")
+	ErrInvalidGoModulePublication    = errors.New("Go module publication is invalid")
 	ErrInvalidRuntimeNode            = errors.New("runtime node identity is invalid")
 	ErrTemplateNameExists            = errors.New("authorization template name already exists")
 	ErrAuthorizationRoleNameExists   = errors.New("authorization role name already exists")
@@ -379,6 +380,7 @@ type NativePyPIStore interface {
 type NativeGoStore interface {
 	SyncGoProxyVersions(context.Context, string, string, []GoModuleVersion) error
 	PutGoModuleVersion(context.Context, GoModuleVersion) (GoModuleVersion, error)
+	PublishGoModule(context.Context, GoModulePublication) (GoModuleVersion, bool, error)
 	ListGoModuleVersions(context.Context, string, string) ([]GoModuleVersion, error)
 	GetGoModuleVersion(context.Context, string, string, string) (GoModuleVersion, error)
 	CacheGoModuleAsset(context.Context, GoModuleAsset) (GoModuleAsset, error)
