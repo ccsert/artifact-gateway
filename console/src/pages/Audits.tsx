@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Collapse, Input, Select, Space, Table } from "antd";
+import { Button, Collapse, DatePicker, Select, Space, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import dayjs from "dayjs";
+import type { Dayjs } from "dayjs";
 import {
   ClearOutlined,
   DownloadOutlined,
@@ -138,8 +140,10 @@ export function AuditsPage() {
   const [operation, setOperation] = useState("");
   const [actor, setActor] = useState("");
   const [limit, setLimit] = useState(100);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null]>([
+    null,
+    null,
+  ]);
   const [repoOptions, setRepoOptions] = useState<string[]>([]);
   const [groupOptions, setGroupOptions] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -175,8 +179,8 @@ export function AuditsPage() {
           format: format || undefined,
           operation: operation || undefined,
           actor: actor || undefined,
-          from: from ? new Date(from).toISOString() : undefined,
-          to: to ? new Date(to).toISOString() : undefined,
+          from: dateRange[0]?.toISOString(),
+          to: dateRange[1]?.toISOString(),
           pageSize: limit,
           pageToken: token || undefined,
         },
@@ -188,7 +192,7 @@ export function AuditsPage() {
       setRecords(data?.items ?? []);
       setNextPageToken(data?.nextPageToken ?? null);
     },
-    [repository, group, outcome, format, operation, actor, limit, from, to],
+    [repository, group, outcome, format, operation, actor, limit, dateRange],
   );
 
   useEffect(() => {
@@ -247,8 +251,8 @@ export function AuditsPage() {
     format ||
     operation ||
     actor ||
-    from ||
-    to,
+    dateRange[0] ||
+    dateRange[1],
   );
   const clearFilters = () => {
     setRepository("");
@@ -257,8 +261,7 @@ export function AuditsPage() {
     setFormat("");
     setOperation("");
     setActor("");
-    setFrom("");
-    setTo("");
+    setDateRange([null, null]);
   };
   const columns: ColumnsType<AuditTableRow> = [
     {
@@ -489,18 +492,34 @@ export function AuditsPage() {
               onChange={(value) => setLimit(Number(value))}
             />
           </FilterField>
-          <FilterField label={text("起始时间", "From")}>
-            <Input
-              type="datetime-local"
-              value={from}
-              onChange={(event) => setFrom(event.target.value)}
-            />
-          </FilterField>
-          <FilterField label={text("结束时间", "To")}>
-            <Input
-              type="datetime-local"
-              value={to}
-              onChange={(event) => setTo(event.target.value)}
+          <FilterField label={text("时间范围", "Date range")}>
+            <DatePicker.RangePicker
+              className="w-full min-w-[310px]"
+              allowEmpty={[true, true]}
+              format="YYYY-MM-DD HH:mm"
+              showTime={{ format: "HH:mm" }}
+              value={dateRange}
+              placeholder={[
+                text("起始时间", "Start time"),
+                text("结束时间", "End time"),
+              ]}
+              presets={[
+                {
+                  label: text("最近 1 小时", "Last hour"),
+                  value: () => [dayjs().subtract(1, "hour"), dayjs()],
+                },
+                {
+                  label: text("最近 24 小时", "Last 24 hours"),
+                  value: () => [dayjs().subtract(24, "hour"), dayjs()],
+                },
+                {
+                  label: text("最近 7 天", "Last 7 days"),
+                  value: () => [dayjs().subtract(7, "day"), dayjs()],
+                },
+              ]}
+              onChange={(dates) =>
+                setDateRange(dates ? [dates[0], dates[1]] : [null, null])
+              }
             />
           </FilterField>
         </FilterBar>

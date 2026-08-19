@@ -13,6 +13,15 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    resolve: {
+      dedupe: ["react", "react-dom"],
+    },
+    optimizeDeps: {
+      // The charts are viewport-lazy, so Vite cannot reliably discover this
+      // dependency during its initial crawl. Pre-bundle it with the same React
+      // graph instead of triggering a second dependency generation on scroll.
+      include: ["@ant-design/plots"],
+    },
     build: {
       chunkSizeWarningLimit: 600,
       rollupOptions: {

@@ -20,8 +20,6 @@ import type { Repository, Group, AuditRecord } from "../client";
 import { PageHeader, Card, CardHeader } from "../components/Layout";
 import { Loading, ErrorBanner, isNotFound } from "../components/Feedback";
 import { FormatBadge, StateBadge } from "../components/Badge";
-import { Donut } from "../components/Donut";
-import { Sparkline } from "../components/Sparkline";
 import { formatBytes, formatDate, formatNumber } from "../lib/format";
 import {
   loadDashboardHistory,
@@ -29,26 +27,11 @@ import {
   type DashboardSample,
 } from "../lib/history";
 import { MetricStrip } from "../components/ConsolePrimitives";
+import {
+  DashboardTrendCharts,
+  StorageByFormatChart,
+} from "../components/DashboardCharts";
 import { usePreferences } from "../lib/preferences";
-
-const FORMAT_COLORS: Record<string, string> = {
-  oci: "#22d3ee",
-  maven: "#fbbf24",
-  conan: "#a78bfa",
-  raw: "#38bdf8",
-  npm: "#f43f5e",
-  pypi: "#34d399",
-  go: "#60a5fa",
-};
-const FORMAT_ORDER = [
-  "oci",
-  "maven",
-  "npm",
-  "pypi",
-  "go",
-  "conan",
-  "raw",
-] as const;
 
 export function DashboardPage() {
   const { locale, text } = usePreferences();
@@ -129,7 +112,7 @@ export function DashboardPage() {
 
   if (error)
     return (
-      <div>
+      <div className="ag-page-stack">
         <PageHeader title={text("总览", "Overview")} />
         <ErrorBanner error={error} onRetry={load} />
       </div>
@@ -314,7 +297,7 @@ export function DashboardPage() {
   ];
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("总览", "Overview")}
         description={text(
@@ -331,7 +314,7 @@ export function DashboardPage() {
           </Button>
         }
       />
-      <div className="ag-health-strip mb-4 flex items-center justify-between gap-6 border-y border-zinc-800/80 py-3">
+      <div className="ag-health-strip flex items-center justify-between gap-6 border-y border-zinc-800/80 py-3">
         <div className="flex items-center gap-3">
           <span
             className={`flex h-7 w-7 items-center justify-center rounded-full ${inactive > 0 ? "bg-amber-400/10" : "bg-emerald-400/10"} ${healthTone}`}
@@ -442,8 +425,8 @@ export function DashboardPage() {
         ]}
       />
 
-      <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-5">
-        <Card className="xl:col-span-2">
+      <div className="ag-page-primary grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-5 xl:items-stretch">
+        <Card className="xl:col-span-2 xl:h-full">
           <CardHeader
             title={text("存储占用（按格式）", "Storage by format")}
             extra={
@@ -456,29 +439,14 @@ export function DashboardPage() {
             }
           />
           <div className="px-5 py-6">
-            {bytesByFormat && totalBytes ? (
-              <Donut
-                segments={FORMAT_ORDER.map((f) => ({
-                  label: f,
-                  value: bytesByFormat[f] ?? 0,
-                  color: FORMAT_COLORS[f] ?? "#71717a",
-                }))}
-                format={(n) => formatBytes(n)}
-                centerLabel={formatBytes(totalBytes)}
-                centerSub={text("合计", "Total")}
-              />
-            ) : (
-              <div className="py-8 text-center text-sm text-zinc-600">
-                {text(
-                  "容量统计未启用或暂无数据",
-                  "Capacity metrics are unavailable or empty",
-                )}
-              </div>
-            )}
+            <StorageByFormatChart
+              bytesByFormat={bytesByFormat}
+              totalBytes={totalBytes}
+            />
           </div>
         </Card>
 
-        <Card className="xl:col-span-3">
+        <Card className="xl:col-span-3 xl:h-full">
           <CardHeader
             title={text("近期趋势", "Recent trend")}
             extra={
@@ -490,31 +458,7 @@ export function DashboardPage() {
               ) : undefined
             }
           />
-          <div className="grid grid-cols-1 gap-6 px-5 py-6 sm:grid-cols-2">
-            <div>
-              <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                {text("仓库数", "Repositories")}
-              </div>
-              <Sparkline
-                data={history.map((s) => s.repos)}
-                color="#22d3ee"
-                format={(n) => `${n}`}
-              />
-            </div>
-            <div>
-              <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                {text("存储占用", "Storage used")}
-              </div>
-              <Sparkline
-                data={history
-                  .map((s) => s.bytes)
-                  .filter((b): b is number => b !== null)}
-                color="#fbbf24"
-                format={(n) => formatBytes(n)}
-                label={text("容量未启用", "Capacity unavailable")}
-              />
-            </div>
-          </div>
+          <DashboardTrendCharts history={history} />
           <p className="border-t border-zinc-800/60 px-5 py-3 text-xs leading-5 text-zinc-600">
             {text(
               "基于浏览器本地的访问采样，仅反映本机记录的近期变化；完整时序需后端 metrics 端点。",
@@ -524,7 +468,7 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader
             title={text("仓库", "Repositories")}
