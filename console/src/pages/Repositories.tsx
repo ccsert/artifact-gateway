@@ -663,16 +663,7 @@ export function RepositoriesPage() {
               size="middle"
               dataSource={visible}
               columns={columns}
-              pagination={{
-                defaultPageSize: 20,
-                pageSizeOptions: [10, 20, 50],
-                showSizeChanger: true,
-                showTotal: (total, range) =>
-                  text(
-                    `${range[0]}-${range[1]} / 共 ${total} 个仓库`,
-                    `${range[0]}-${range[1]} of ${total} repositories`,
-                  ),
-              }}
+              pagination={false}
               scroll={{ x: 1100 }}
             />
           )}

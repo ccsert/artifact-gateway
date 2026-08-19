@@ -61,6 +61,9 @@ type OperationRow = {
   details?: LifecycleJob["details"];
 };
 
+type Localize = (chinese: string, english: string) => string;
+type JobAction = "run" | "retry" | "cancel";
+
 const KIND_LABELS: Record<string, [string, string]> = {
   retention: ["制品保留", "Artifact retention"],
   promotion: ["制品晋级", "Artifact promotion"],
@@ -70,8 +73,264 @@ const KIND_LABELS: Record<string, [string, string]> = {
   "audit-retention": ["审计保留", "Audit retention"],
 };
 
+function useCompactOperationLayout() {
+  const [compact, setCompact] = useState(
+    () => window.matchMedia("(max-width: 720px)").matches,
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 720px)");
+    const update = () => setCompact(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  return compact;
+}
+
+function OperationIdentity({
+  row,
+  kindLabel,
+  text,
+}: {
+  row: OperationRow;
+  kindLabel: (kind: string) => string;
+  text: Localize;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-zinc-200">
+        <SyncOutlined className="shrink-0 text-zinc-500" />
+        <span className="truncate" title={kindLabel(row.kind)}>
+          {kindLabel(row.kind)}
+        </span>
+      </div>
+      <div
+        className="mt-1 truncate text-xs text-zinc-400"
+        title={row.repository ?? text("全局", "Global")}
+      >
+        {row.repository ?? text("全局", "Global")}
+      </div>
+      <div
+        className="mt-1 truncate font-mono text-[11px] text-zinc-600"
+        title={row.id}
+      >
+        {row.id}
+      </div>
+    </div>
+  );
+}
+
+function OperationStatus({ row, text }: { row: OperationRow; text: Localize }) {
+  const hasProgress = row.progressTotal !== undefined && row.progressTotal > 0;
+  return (
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-center gap-2">
+        <StateBadge state={row.state} />
+        <span className="text-[11px] text-zinc-500">
+          {row.attempts === undefined
+            ? text("未报告尝试次数", "Attempts not reported")
+            : text(
+                `${row.attempts} / ${row.maxAttempts} 次尝试`,
+                `${row.attempts} / ${row.maxAttempts} attempts`,
+              )}
+        </span>
+      </div>
+      {hasProgress ? (
+        <Progress
+          className="mt-2"
+          percent={Math.round(
+            ((row.progressCurrent ?? 0) / (row.progressTotal ?? 1)) * 100,
+          )}
+          size="small"
+          status={
+            row.state === "failed"
+              ? "exception"
+              : row.state === "completed"
+                ? "success"
+                : "normal"
+          }
+          format={() => `${row.progressCurrent ?? 0}/${row.progressTotal}`}
+        />
+      ) : row.progressMessage ? (
+        <div className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-500">
+          {row.progressMessage}
+        </div>
+      ) : null}
+      {hasProgress && row.progressMessage && (
+        <div className="mt-1 line-clamp-2 text-[11px] leading-4 text-zinc-500">
+          {row.progressMessage}
+        </div>
+      )}
+      {row.lastError && (
+        <div className="mt-2 line-clamp-2 break-words text-xs leading-5 text-rose-300">
+          {row.lastError}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OperationTimeline({
+  row,
+  locale,
+  text,
+}: {
+  row: OperationRow;
+  locale: string;
+  text: Localize;
+}) {
+  const primaryLabel = row.nextAttemptAt
+    ? text("下次执行", "Next run")
+    : row.completedAt
+      ? text("完成", "Completed")
+      : text("创建", "Created");
+  const primaryTime = row.nextAttemptAt ?? row.completedAt ?? row.createdAt;
+  return (
+    <div className="space-y-1 text-xs text-zinc-500">
+      <div>
+        <span className="text-zinc-600">{primaryLabel}</span>
+        <span className="ml-2 whitespace-nowrap">
+          {formatDate(primaryTime, locale)}
+        </span>
+      </div>
+      {row.startedAt && (
+        <div>
+          <span className="text-zinc-600">{text("开始", "Started")}</span>
+          <span className="ml-2 whitespace-nowrap">
+            {formatDate(row.startedAt, locale)}
+          </span>
+        </div>
+      )}
+      {primaryTime !== row.createdAt && (
+        <div>
+          <span className="text-zinc-600">{text("创建", "Created")}</span>
+          <span className="ml-2 whitespace-nowrap">
+            {formatDate(row.createdAt, locale)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OperationActions({
+  row,
+  acting,
+  text,
+  onAction,
+}: {
+  row: OperationRow;
+  acting: boolean;
+  text: Localize;
+  onAction: (row: OperationRow, action: JobAction) => void;
+}) {
+  if (!row.repositoryId)
+    return <span className="text-xs text-zinc-600">—</span>;
+  return (
+    <Space size="small">
+      {(row.state === "pending" || row.state === "retrying") && (
+        <Tooltip
+          title={text("立即加入执行队列", "Queue for immediate execution")}
+        >
+          <Button
+            aria-label={text(
+              "立即加入执行队列",
+              "Queue for immediate execution",
+            )}
+            size="small"
+            icon={<PlayCircleOutlined />}
+            loading={acting}
+            onClick={() => onAction(row, "run")}
+          />
+        </Tooltip>
+      )}
+      {(row.state === "failed" || row.state === "cancelled") && (
+        <Tooltip title={text("重新执行任务", "Retry job")}>
+          <Button
+            aria-label={text("重新执行任务", "Retry job")}
+            size="small"
+            icon={<RedoOutlined />}
+            loading={acting}
+            onClick={() => onAction(row, "retry")}
+          />
+        </Tooltip>
+      )}
+      {(row.state === "pending" || row.state === "retrying") && (
+        <Popconfirm
+          title={text("取消此任务？", "Cancel this job?")}
+          description={text(
+            "取消后仍可从任务中心重新执行。",
+            "You can retry it later from Operations.",
+          )}
+          okText={text("取消任务", "Cancel job")}
+          cancelText={text("返回", "Back")}
+          onConfirm={() => onAction(row, "cancel")}
+        >
+          <Tooltip title={text("取消任务", "Cancel job")}>
+            <Button
+              aria-label={text("取消任务", "Cancel job")}
+              danger
+              size="small"
+              icon={<CloseOutlined />}
+              loading={acting}
+            />
+          </Tooltip>
+        </Popconfirm>
+      )}
+    </Space>
+  );
+}
+
+function OperationMobileCard({
+  row,
+  locale,
+  kindLabel,
+  acting,
+  text,
+  onAction,
+}: {
+  row: OperationRow;
+  locale: string;
+  kindLabel: (kind: string) => string;
+  acting: boolean;
+  text: Localize;
+  onAction: (row: OperationRow, action: JobAction) => void;
+}) {
+  return (
+    <article className="ag-operation-mobile-card">
+      <OperationIdentity row={row} kindLabel={kindLabel} text={text} />
+      <div className="mt-4 border-t border-zinc-800/60 pt-4">
+        <OperationStatus row={row} text={text} />
+      </div>
+      <div className="mt-4 border-t border-zinc-800/60 pt-4">
+        <OperationTimeline row={row} locale={locale} text={text} />
+      </div>
+      {row.details && (
+        <details className="mt-4 border-t border-zinc-800/60 pt-3">
+          <summary className="cursor-pointer text-xs font-medium text-cyan-300">
+            {text("查看任务详情", "View job details")}
+          </summary>
+          <div className="mt-3">
+            <LifecycleJobDetails details={row.details} />
+          </div>
+        </details>
+      )}
+      <div className="mt-4 flex justify-end border-t border-zinc-800/60 pt-3">
+        <OperationActions
+          row={row}
+          acting={acting}
+          text={text}
+          onAction={onAction}
+        />
+      </div>
+    </article>
+  );
+}
+
 export function OperationsPage() {
   const { locale, text } = usePreferences();
+  const compactLayout = useCompactOperationLayout();
   const kindLabel = (kind: string) => {
     const labels = KIND_LABELS[kind];
     return labels ? text(labels[0], labels[1]) : kind;
@@ -87,6 +346,7 @@ export function OperationsPage() {
   const [repositoryFilter, setRepositoryFilter] = useState("all");
   const [actingJob, setActingJob] = useState<string | null>(null);
   const [expandedJobKey, setExpandedJobKey] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("schedules");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -157,10 +417,6 @@ export function OperationsPage() {
     }
   }, [text]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   const hasActiveJobs = useMemo(
     () =>
       rows?.some((row) =>
@@ -170,16 +426,14 @@ export function OperationsPage() {
   );
 
   useEffect(() => {
+    if (activeTab !== "jobs") return;
     const timer = window.setInterval(() => {
       if (hasActiveJobs) void load();
     }, 15_000);
     return () => window.clearInterval(timer);
-  }, [hasActiveJobs, load]);
+  }, [activeTab, hasActiveJobs, load]);
 
-  const controlJob = async (
-    row: OperationRow,
-    action: "run" | "retry" | "cancel",
-  ) => {
+  const controlJob = async (row: OperationRow, action: JobAction) => {
     if (!row.repositoryId) return;
     setActingJob(row.id);
     setError(null);
@@ -226,127 +480,26 @@ export function OperationsPage() {
 
   const columns: ColumnsType<OperationRow> = [
     {
-      title: text("类型", "Type"),
-      key: "kind",
-      width: 140,
+      title: text("任务", "Job"),
+      key: "identity",
+      fixed: "left",
+      width: 300,
       render: (_, row) => (
-        <div className="flex items-center gap-2 text-sm text-zinc-200">
-          <SyncOutlined className="text-zinc-500" />
-          {kindLabel(row.kind)}
-        </div>
+        <OperationIdentity row={row} kindLabel={kindLabel} text={text} />
       ),
     },
     {
-      title: text("仓库", "Repository"),
-      dataIndex: "repository",
-      key: "repository",
-      width: 150,
-      render: (value: string | undefined) => (
-        <span className="text-xs text-zinc-400">
-          {value ?? text("全局", "Global")}
-        </span>
-      ),
+      title: text("状态与进度", "Status and progress"),
+      key: "status",
+      width: 300,
+      render: (_, row) => <OperationStatus row={row} text={text} />,
     },
     {
-      title: text("状态", "Status"),
-      dataIndex: "state",
-      key: "state",
-      width: 120,
-      render: (value: string) => <StateBadge state={value} />,
-    },
-    {
-      title: text("进度", "Progress"),
-      key: "progress",
-      width: 220,
-      render: (_, row) =>
-        row.progressTotal !== undefined && row.progressTotal > 0 ? (
-          <div>
-            <Progress
-              percent={Math.round(
-                ((row.progressCurrent ?? 0) / row.progressTotal) * 100,
-              )}
-              size="small"
-              status={
-                row.state === "failed"
-                  ? "exception"
-                  : row.state === "completed"
-                    ? "success"
-                    : "normal"
-              }
-              format={() => `${row.progressCurrent ?? 0}/${row.progressTotal}`}
-            />
-            {row.progressMessage && (
-              <div
-                className="mt-1 max-w-40 truncate text-[11px] text-zinc-500"
-                title={row.progressMessage}
-              >
-                {row.progressMessage}
-              </div>
-            )}
-          </div>
-        ) : (
-          <span className="text-xs text-zinc-600">
-            {row.progressMessage ?? text("未报告", "Not reported")}
-          </span>
-        ),
-    },
-    {
-      title: text("尝试", "Attempts"),
-      key: "attempts",
-      width: 100,
+      title: text("时间线", "Timeline"),
+      key: "timeline",
+      width: 260,
       render: (_, row) => (
-        <span className="whitespace-nowrap text-xs text-zinc-400">
-          {row.attempts === undefined
-            ? "—"
-            : `${row.attempts} / ${row.maxAttempts}`}
-        </span>
-      ),
-    },
-    {
-      title: text("创建时间", "Created"),
-      dataIndex: "createdAt",
-      key: "createdAt",
-      width: 170,
-      render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
-          {formatDate(value, locale)}
-        </span>
-      ),
-    },
-    {
-      title: text("下次执行 / 完成时间", "Next run / completed"),
-      key: "schedule",
-      width: 200,
-      render: (_, row) => (
-        <div className="whitespace-nowrap text-xs text-zinc-500">
-          <div>
-            {row.nextAttemptAt
-              ? formatDate(row.nextAttemptAt, locale)
-              : formatDate(row.completedAt, locale)}
-          </div>
-          {row.startedAt && (
-            <div className="mt-1 text-[11px] text-zinc-600">
-              {text("开始", "Started")} {formatDate(row.startedAt, locale)}
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: text("任务 ID / 失败原因", "Job ID / failure reason"),
-      key: "details",
-      width: 280,
-      render: (_, row) => (
-        <div className="font-mono text-[11px] text-zinc-500">
-          <div className="truncate" title={row.id}>
-            {row.id}
-          </div>
-          {row.lastError && (
-            <div className="mt-1 truncate text-rose-300" title={row.lastError}>
-              {row.lastError}
-            </div>
-          )}
-        </div>
+        <OperationTimeline row={row} locale={locale} text={text} />
       ),
     },
     {
@@ -354,65 +507,14 @@ export function OperationsPage() {
       key: "actions",
       fixed: "right",
       width: 120,
-      render: (_, row) =>
-        row.repositoryId ? (
-          <Space size="small">
-            {(row.state === "pending" || row.state === "retrying") && (
-              <Tooltip
-                title={text(
-                  "立即加入执行队列",
-                  "Queue for immediate execution",
-                )}
-              >
-                <Button
-                  aria-label={text(
-                    "立即加入执行队列",
-                    "Queue for immediate execution",
-                  )}
-                  size="small"
-                  icon={<PlayCircleOutlined />}
-                  loading={actingJob === row.id}
-                  onClick={() => void controlJob(row, "run")}
-                />
-              </Tooltip>
-            )}
-            {(row.state === "failed" || row.state === "cancelled") && (
-              <Tooltip title={text("重新执行任务", "Retry job")}>
-                <Button
-                  aria-label={text("重新执行任务", "Retry job")}
-                  size="small"
-                  icon={<RedoOutlined />}
-                  loading={actingJob === row.id}
-                  onClick={() => void controlJob(row, "retry")}
-                />
-              </Tooltip>
-            )}
-            {(row.state === "pending" || row.state === "retrying") && (
-              <Popconfirm
-                title={text("取消此任务？", "Cancel this job?")}
-                description={text(
-                  "取消后仍可从任务中心重新执行。",
-                  "You can retry it later from Operations.",
-                )}
-                okText={text("取消任务", "Cancel job")}
-                cancelText={text("返回", "Back")}
-                onConfirm={() => controlJob(row, "cancel")}
-              >
-                <Tooltip title={text("取消任务", "Cancel job")}>
-                  <Button
-                    aria-label={text("取消任务", "Cancel job")}
-                    danger
-                    size="small"
-                    icon={<CloseOutlined />}
-                    loading={actingJob === row.id}
-                  />
-                </Tooltip>
-              </Popconfirm>
-            )}
-          </Space>
-        ) : (
-          <span className="text-xs text-zinc-600">—</span>
-        ),
+      render: (_, row) => (
+        <OperationActions
+          row={row}
+          acting={actingJob === row.id}
+          text={text}
+          onAction={(target, action) => void controlJob(target, action)}
+        />
+      ),
     },
   ];
 
@@ -426,7 +528,11 @@ export function OperationsPage() {
         )}
       />
       <Tabs
-        defaultActiveKey="schedules"
+        activeKey={activeTab}
+        onChange={(key) => {
+          setActiveTab(key);
+          if (key === "jobs" && rows === null && !loading) void load();
+        }}
         items={[
           {
             key: "schedules",
@@ -443,42 +549,67 @@ export function OperationsPage() {
             label: text("执行记录", "Job history"),
             children: (
               <div className="ag-page-stack">
-                <MetricStrip
-                  items={[
-                    {
-                      label: text("任务总数", "Jobs"),
-                      value: rows?.length ?? "—",
-                      hint: text("当前保留窗口", "Current retention window"),
-                    },
-                    {
-                      label: text("运行中", "Running"),
-                      value: running,
-                      hint: text("正在处理", "In progress"),
-                      tone: running ? "success" : "default",
-                    },
-                    {
-                      label: text("待处理", "Pending"),
-                      value: pending,
-                      hint: text("等待 worker", "Waiting for a worker"),
-                      tone: pending ? "warning" : "default",
-                    },
-                    {
-                      label: text("失败", "Failed"),
-                      value: failed,
-                      hint: failed
-                        ? text("需要检查失败原因", "Review failure details")
-                        : text("当前没有失败任务", "No failed jobs"),
-                      tone: failed ? "danger" : "success",
-                    },
-                  ]}
-                />
-                <RuntimeNodesPanel />
-                <FilterBar
-                  actions={
-                    <Space>
-                      {(stateFilter !== "all" ||
-                        kindFilter !== "all" ||
-                        repositoryFilter !== "all") && (
+                <div className="ag-operation-summary">
+                  <MetricStrip
+                    items={[
+                      {
+                        label: text("任务总数", "Jobs"),
+                        value: rows?.length ?? "—",
+                        hint: text("当前保留窗口", "Current retention window"),
+                      },
+                      {
+                        label: text("运行中", "Running"),
+                        value: rows ? running : "—",
+                        hint: text("正在处理", "In progress"),
+                        tone: running ? "success" : "default",
+                      },
+                      {
+                        label: text("待处理", "Pending"),
+                        value: rows ? pending : "—",
+                        hint: text("等待 worker", "Waiting for a worker"),
+                        tone: pending ? "warning" : "default",
+                      },
+                      {
+                        label: text("失败", "Failed"),
+                        value: rows ? failed : "—",
+                        hint: failed
+                          ? text("需要检查失败原因", "Review failure details")
+                          : text("当前没有失败任务", "No failed jobs"),
+                        tone: failed ? "danger" : "success",
+                      },
+                    ]}
+                  />
+                </div>
+                <Card>
+                  <div className="ag-operation-records-header">
+                    <div className="min-w-0">
+                      <h2 className="text-sm font-semibold tracking-tight text-zinc-100">
+                        {text("执行记录", "Job history")}
+                      </h2>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {rows
+                          ? text(
+                              `显示 ${visibleRows.length} / ${rows.length} 条任务`,
+                              `Showing ${visibleRows.length} of ${rows.length} jobs`,
+                            )
+                          : text("正在读取任务记录", "Loading job records")}
+                      </p>
+                    </div>
+                    <Button
+                      icon={<ReloadOutlined />}
+                      onClick={() => void load()}
+                      loading={loading}
+                    >
+                      {text("刷新", "Refresh")}
+                    </Button>
+                  </div>
+                  <FilterBar
+                    embedded
+                    className="ag-operation-filters"
+                    actions={
+                      stateFilter !== "all" ||
+                      kindFilter !== "all" ||
+                      repositoryFilter !== "all" ? (
                         <Button
                           type="text"
                           icon={<ClearOutlined />}
@@ -490,98 +621,112 @@ export function OperationsPage() {
                         >
                           {text("清除筛选", "Clear filters")}
                         </Button>
-                      )}
-                      <Button
-                        icon={<ReloadOutlined />}
-                        onClick={() => void load()}
-                        loading={loading}
-                      >
-                        {text("刷新", "Refresh")}
-                      </Button>
-                    </Space>
-                  }
-                >
-                  <FilterField
-                    label={text("状态", "Status")}
-                    className="min-w-[160px]"
+                      ) : undefined
+                    }
                   >
-                    <Select
-                      className="w-full"
-                      value={stateFilter}
-                      onChange={setStateFilter}
-                      options={[
-                        {
-                          value: "all",
-                          label: text("全部状态", "All statuses"),
-                        },
-                        { value: "pending", label: "pending" },
-                        { value: "running", label: "running" },
-                        { value: "retrying", label: "retrying" },
-                        { value: "completed", label: "completed" },
-                        { value: "failed", label: "failed" },
-                        { value: "cancelled", label: "cancelled" },
-                      ]}
-                    />
-                  </FilterField>
-                  <FilterField
-                    label={text("任务类型", "Job type")}
-                    className="min-w-[180px]"
-                  >
-                    <Select
-                      className="w-full"
-                      value={kindFilter}
-                      onChange={setKindFilter}
-                      options={[
-                        { value: "all", label: text("全部类型", "All types") },
-                        ...kindOptions.map((kind) => ({
-                          value: kind,
-                          label: kindLabel(kind),
-                        })),
-                      ]}
-                    />
-                  </FilterField>
-                  <FilterField
-                    label={text("仓库", "Repository")}
-                    className="min-w-[220px]"
-                  >
-                    <Select
-                      className="w-full"
-                      value={repositoryFilter}
-                      onChange={setRepositoryFilter}
-                      showSearch={{ optionFilterProp: "label" }}
-                      options={[
-                        {
-                          value: "all",
-                          label: text("全部仓库", "All repositories"),
-                        },
-                        ...repositories.map((repo) => ({
-                          value: repo.id,
-                          label: repo.name,
-                        })),
-                      ]}
-                    />
-                  </FilterField>
-                </FilterBar>
-                {error ? (
-                  <ErrorBanner error={error} onRetry={load} />
-                ) : !rows ? (
-                  <Loading
-                    label={text("加载任务状态…", "Loading job status…")}
-                  />
-                ) : visibleRows.length === 0 ? (
-                  <Card>
-                    <EmptyState
-                      title={text("没有匹配的任务", "No matching jobs")}
-                      hint={text(
-                        "调整筛选条件，或等待任务产生后再刷新。",
-                        "Adjust the filters or refresh after new jobs are created.",
-                      )}
-                    />
-                  </Card>
-                ) : (
-                  <Card>
+                    <FilterField
+                      label={text("状态", "Status")}
+                      className="ag-operation-filter-field min-w-[150px]"
+                    >
+                      <Select
+                        className="w-full"
+                        value={stateFilter}
+                        onChange={setStateFilter}
+                        options={[
+                          {
+                            value: "all",
+                            label: text("全部状态", "All statuses"),
+                          },
+                          { value: "pending", label: "pending" },
+                          { value: "running", label: "running" },
+                          { value: "retrying", label: "retrying" },
+                          { value: "completed", label: "completed" },
+                          { value: "failed", label: "failed" },
+                          { value: "cancelled", label: "cancelled" },
+                        ]}
+                      />
+                    </FilterField>
+                    <FilterField
+                      label={text("任务类型", "Job type")}
+                      className="ag-operation-filter-field min-w-[180px]"
+                    >
+                      <Select
+                        className="w-full"
+                        value={kindFilter}
+                        onChange={setKindFilter}
+                        options={[
+                          {
+                            value: "all",
+                            label: text("全部类型", "All types"),
+                          },
+                          ...kindOptions.map((kind) => ({
+                            value: kind,
+                            label: kindLabel(kind),
+                          })),
+                        ]}
+                      />
+                    </FilterField>
+                    <FilterField
+                      label={text("仓库", "Repository")}
+                      className="ag-operation-filter-field min-w-[220px]"
+                    >
+                      <Select
+                        className="w-full"
+                        value={repositoryFilter}
+                        onChange={setRepositoryFilter}
+                        showSearch={{ optionFilterProp: "label" }}
+                        options={[
+                          {
+                            value: "all",
+                            label: text("全部仓库", "All repositories"),
+                          },
+                          ...repositories.map((repo) => ({
+                            value: repo.id,
+                            label: repo.name,
+                          })),
+                        ]}
+                      />
+                    </FilterField>
+                  </FilterBar>
+                  {error ? (
+                    <div className="p-4">
+                      <ErrorBanner error={error} onRetry={load} />
+                    </div>
+                  ) : !rows ? (
+                    <div className="px-5 py-8">
+                      <Loading
+                        label={text("加载任务状态…", "Loading job status…")}
+                      />
+                    </div>
+                  ) : visibleRows.length === 0 ? (
+                    <div className="px-5 py-8">
+                      <EmptyState
+                        title={text("没有匹配的任务", "No matching jobs")}
+                        hint={text(
+                          "调整筛选条件，或等待任务产生后再刷新。",
+                          "Adjust the filters or refresh after new jobs are created.",
+                        )}
+                      />
+                    </div>
+                  ) : compactLayout ? (
+                    <div className="ag-operation-mobile-list">
+                      {visibleRows.map((row) => (
+                        <OperationMobileCard
+                          key={`${row.kind}-${row.id}`}
+                          row={row}
+                          locale={locale}
+                          kindLabel={kindLabel}
+                          acting={actingJob === row.id}
+                          text={text}
+                          onAction={(target, action) =>
+                            void controlJob(target, action)
+                          }
+                        />
+                      ))}
+                    </div>
+                  ) : (
                     <Table<OperationRow>
-                      className="ag-console-table"
+                      className="ag-console-table ag-operation-desktop-table"
                       rowKey={(row) => `${row.kind}-${row.id}`}
                       size="middle"
                       dataSource={visibleRows}
@@ -600,7 +745,7 @@ export function OperationsPage() {
                               <LifecycleJobDetails details={row.details} />
                             )}
                             {row.lastError && (
-                              <div className="rounded-md border border-rose-900/50 bg-rose-950/20 px-4 py-2 text-xs text-rose-300">
+                              <div className="break-words rounded-md border border-rose-900/50 bg-rose-950/20 px-4 py-2 text-xs leading-5 text-rose-300">
                                 {row.lastError}
                               </div>
                             )}
@@ -609,17 +754,22 @@ export function OperationsPage() {
                       }}
                       pagination={false}
                       virtual
-                      scroll={{ x: 1520, y: 520 }}
+                      scroll={{ x: 980, y: 520 }}
                     />
-                  </Card>
-                )}
+                  )}
+                </Card>
               </div>
             ),
           },
           {
             key: "diagnostics",
             label: text("系统诊断", "System diagnostics"),
-            children: <SystemDiagnosticsPanel />,
+            children: (
+              <div className="ag-page-stack">
+                <SystemDiagnosticsPanel />
+                <RuntimeNodesPanel />
+              </div>
+            ),
           },
         ]}
       />

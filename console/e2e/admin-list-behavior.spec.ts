@@ -109,3 +109,56 @@ test("API key list defaults to active keys", async ({ page }) => {
     page.getByText("revoked-key", { exact: true }),
   ).not.toBeVisible();
 });
+
+test("repository list exposes one cursor pagination control", async ({
+  page,
+}) => {
+  await authenticateAsAdmin(page);
+  await page.route("**/api/v2/formats", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            format: "oci",
+            repositoryTypes: ["hosted", "proxy"],
+            groupSupported: true,
+            anonymousRead: true,
+            hostedOperations: ["read", "publish", "browse"],
+            proxyOperations: ["read", "browse"],
+          },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/v2/repository-capacities", (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.route("**/api/v2/repositories**", (route) => {
+    const pageToken = new URL(route.request().url()).searchParams.get(
+      "pageToken",
+    );
+    const start = pageToken ? 101 : 1;
+    return route.fulfill({
+      json: {
+        items: Array.from({ length: pageToken ? 1 : 25 }, (_, index) => ({
+          id: `repo-${start + index}`,
+          name: `repository-${String(start + index).padStart(3, "0")}`,
+          format: "oci",
+          type: "hosted",
+          state: "active",
+          version: "1",
+        })),
+        nextPageToken: pageToken ? undefined : "repositories-page-2",
+      },
+    });
+  });
+
+  await page.goto("/repositories");
+  await expect(page.getByText("repository-025", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "加载更多" })).toBeVisible();
+  await expect(page.locator(".ant-pagination")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "加载更多" }).click();
+  await expect(page.getByText("repository-101", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "加载更多" })).toHaveCount(0);
+});

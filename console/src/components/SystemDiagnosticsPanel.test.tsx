@@ -85,7 +85,33 @@ describe("SystemDiagnosticsPanel", () => {
     expect(screen.getByText(/漏洞库新鲜/)).toBeInTheDocument();
     expect(screen.getByText("健康")).toBeInTheDocument();
     expect(screen.getByText("promotion")).toBeInTheDocument();
-    expect(screen.getAllByText("maven")).toHaveLength(2);
+    expect(screen.getByText("maven")).toBeInTheDocument();
+  });
+
+  it("surfaces node issues in the diagnostic action list", async () => {
+    mockGetDiagnostics.mockResolvedValue({
+      data: {
+        ...diagnostics,
+        nodes: {
+          ...diagnostics.nodes,
+          issues: [
+            {
+              code: "worker-capacity-missing",
+              message: "没有节点能够执行 OCI 扫描任务",
+            },
+          ],
+        },
+      },
+    } as never);
+    renderPanel();
+
+    expect(
+      await screen.findByRole("heading", { name: "诊断快照" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("worker-capacity-missing")).toBeInTheDocument();
+    expect(
+      screen.getByText("没有节点能够执行 OCI 扫描任务"),
+    ).toBeInTheDocument();
   });
 
   it("copies only the sanitized server response", async () => {
@@ -158,8 +184,8 @@ describe("SystemDiagnosticsPanel", () => {
     renderPanel();
 
     expect(await screen.findByText("系统运行状态需要关注")).toBeInTheDocument();
-    expect(screen.getByText(/漏洞库已过期/)).toBeInTheDocument();
-    expect(screen.getByText("需关注")).toBeInTheDocument();
+    expect(screen.getAllByText(/漏洞库已过期/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("需关注").length).toBeGreaterThan(0);
   });
 
   it("remains compatible with diagnostics from an older rolling-upgrade node", async () => {

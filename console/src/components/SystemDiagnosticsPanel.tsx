@@ -155,6 +155,7 @@ export function SystemDiagnosticsPanel() {
       dataIndex: "format",
       key: "format",
       width: 110,
+      responsive: ["sm"],
       render: (format: string) => <FormatBadge format={format} />,
     },
     {
@@ -168,13 +169,15 @@ export function SystemDiagnosticsPanel() {
       title: text("数量", "Count"),
       dataIndex: "count",
       key: "count",
-      width: 100,
+      width: 80,
+      align: "right",
     },
     {
       title: text("最早入队", "Oldest queued"),
       dataIndex: "oldestCreatedAt",
       key: "oldestCreatedAt",
       width: 190,
+      responsive: ["lg"],
       render: (value?: string) => (
         <span className="whitespace-nowrap text-xs text-zinc-500">
           {value ? formatDate(value, locale) : "—"}
@@ -197,15 +200,83 @@ export function SystemDiagnosticsPanel() {
   const scannerDetail = scanner
     ? scannerOperationalDetail(scanner, text, locale)
     : "";
+  const unavailableDependencies = diagnostics.dependencies.filter(
+    (dependency) => dependency.status !== "reachable",
+  );
+  const failedQueueEntries = diagnostics.queues.filter(
+    (queue) => queue.state === "failed",
+  );
+  const nodeIssues = diagnostics.nodes.issues ?? [];
+  const nodeStatusNeedsAttention = diagnostics.nodes.status !== "healthy";
+  const needsAttention =
+    unavailableDependencies.length > 0 ||
+    failedQueueEntries.length > 0 ||
+    scannerNeedsAttention ||
+    nodeStatusNeedsAttention;
+  const attentionCount =
+    unavailableDependencies.length +
+    failedQueueEntries.length +
+    nodeIssues.length +
+    (scannerNeedsAttention ? 1 : 0) +
+    (nodeStatusNeedsAttention && nodeIssues.length === 0 ? 1 : 0);
 
   return (
-    <div>
+    <div className="ag-page-stack ag-system-diagnostics">
+      <Card className="ag-diagnostics-snapshot">
+        <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold tracking-tight text-zinc-100">
+              {text("诊断快照", "Diagnostic snapshot")}
+            </h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              {text("生成于", "Generated")}{" "}
+              {formatDate(diagnostics.generatedAt, locale)}
+            </p>
+          </div>
+          <Space size="small" wrap>
+            <Tooltip
+              title={text(
+                "复制脱敏诊断 JSON",
+                "Copy sanitized diagnostics JSON",
+              )}
+            >
+              <Button
+                aria-label={text(
+                  "复制脱敏诊断 JSON",
+                  "Copy sanitized diagnostics JSON",
+                )}
+                icon={<CopyOutlined />}
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(
+                      JSON.stringify(diagnostics, null, 2),
+                    );
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 1500);
+                  } catch {
+                    // Clipboard access can be unavailable in an insecure local context.
+                  }
+                }}
+              >
+                {copied ? text("已复制", "Copied") : text("复制", "Copy")}
+              </Button>
+            </Tooltip>
+            <Button
+              aria-label={text("刷新诊断", "Refresh diagnostics")}
+              icon={<ReloadOutlined />}
+              loading={loading}
+              onClick={() => void load()}
+            >
+              {text("刷新", "Refresh")}
+            </Button>
+          </Space>
+        </div>
+      </Card>
       {(unavailable > 0 ||
         diagnostics.nodes.status !== "healthy" ||
         failedQueues > 0 ||
         scannerNeedsAttention) && (
         <Alert
-          className="mb-4"
           type={
             unavailable > 0 ||
             diagnostics.nodes.status === "critical" ||
@@ -217,8 +288,8 @@ export function SystemDiagnosticsPanel() {
           showIcon
           title={text("系统运行状态需要关注", "System health needs attention")}
           description={text(
-            "检查不可用依赖、扫描器可信度、节点能力和失败队列后再执行维护操作。",
-            "Review unavailable dependencies, scanner trustworthiness, node capabilities, and failed queues before maintenance.",
+            "先处理下列依赖、扫描器、节点能力或失败队列问题，再执行维护操作。",
+            "Resolve the dependency, scanner, node capability, or failed queue issues below before maintenance.",
           )}
         />
       )}
@@ -263,58 +334,107 @@ export function SystemDiagnosticsPanel() {
         ]}
       />
 
-      <div className="mt-4 grid grid-cols-2 gap-4">
+      {needsAttention && (
         <Card>
           <CardHeader
-            title={text("构建与运行身份", "Build and runtime identity")}
+            title={text("需要处理", "Needs attention")}
             extra={
-              <Space size="small">
-                <Tooltip
-                  title={text(
-                    "复制脱敏诊断 JSON",
-                    "Copy sanitized diagnostics JSON",
-                  )}
-                >
-                  <Button
-                    aria-label={text(
-                      "复制脱敏诊断 JSON",
-                      "Copy sanitized diagnostics JSON",
-                    )}
-                    type="text"
-                    size="small"
-                    icon={<CopyOutlined />}
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(
-                          JSON.stringify(diagnostics, null, 2),
-                        );
-                        setCopied(true);
-                        window.setTimeout(() => setCopied(false), 1500);
-                      } catch {
-                        // Clipboard access can be unavailable in an insecure local context.
-                      }
-                    }}
-                  >
-                    {copied ? text("已复制", "Copied") : text("复制", "Copy")}
-                  </Button>
-                </Tooltip>
-                <Tooltip title={text("刷新诊断", "Refresh diagnostics")}>
-                  <Button
-                    aria-label={text("刷新诊断", "Refresh diagnostics")}
-                    type="text"
-                    size="small"
-                    icon={<ReloadOutlined />}
-                    loading={loading}
-                    onClick={() => void load()}
-                  />
-                </Tooltip>
-              </Space>
+              <span className="text-xs text-zinc-500">
+                {text(`${attentionCount} 项`, `${attentionCount} items`)}
+              </span>
             }
+          />
+          <div className="divide-y divide-zinc-800/60">
+            {unavailableDependencies.map((dependency) => (
+              <div key={dependency.name} className="ag-diagnostic-issue-row">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-zinc-200">
+                    {text("依赖不可用", "Dependency unavailable")} ·{" "}
+                    {dependency.name}
+                  </div>
+                  <div className="mt-1 break-words text-xs leading-5 text-zinc-500">
+                    {dependency.detail}
+                  </div>
+                </div>
+                <StateBadge state={dependency.status} />
+              </div>
+            ))}
+            {scannerNeedsAttention && scanner && scannerStatusLabel && (
+              <div className="ag-diagnostic-issue-row">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-zinc-200">
+                    {text("扫描器可信度", "Scanner trust")} · {scanner.name}
+                  </div>
+                  <div className="mt-1 break-words text-xs leading-5 text-zinc-500">
+                    {scannerDetail}
+                  </div>
+                </div>
+                <span
+                  className={`shrink-0 text-xs ${scannerStatusTone[scanner.status]}`}
+                >
+                  {text(scannerStatusLabel[0], scannerStatusLabel[1])}
+                </span>
+              </div>
+            )}
+            {nodeIssues.map((issue) => (
+              <div key={issue.code} className="ag-diagnostic-issue-row">
+                <div className="min-w-0">
+                  <div className="font-mono text-xs text-amber-300">
+                    {issue.code}
+                  </div>
+                  <div className="mt-1 break-words text-xs leading-5 text-zinc-400">
+                    {issue.message}
+                  </div>
+                </div>
+                <StateBadge state={diagnostics.nodes.status} />
+              </div>
+            ))}
+            {nodeStatusNeedsAttention && nodeIssues.length === 0 && (
+              <div className="ag-diagnostic-issue-row">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-zinc-200">
+                    {text("运行节点状态异常", "Runtime node health degraded")}
+                  </div>
+                  <div className="mt-1 text-xs leading-5 text-zinc-500">
+                    {text(
+                      `${diagnostics.nodes.stale} 个陈旧，${diagnostics.nodes.offline} 个离线`,
+                      `${diagnostics.nodes.stale} stale and ${diagnostics.nodes.offline} offline`,
+                    )}
+                  </div>
+                </div>
+                <StateBadge state={diagnostics.nodes.status} />
+              </div>
+            )}
+            {failedQueueEntries.map((queue) => (
+              <div
+                key={`${queue.kind}-${queue.format}-${queue.state}`}
+                className="ag-diagnostic-issue-row"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-zinc-200">
+                    {text("失败队列", "Failed queue")} · {queue.kind}
+                  </div>
+                  <div className="mt-1 text-xs leading-5 text-zinc-500">
+                    {queue.format} ·{" "}
+                    {text(`${queue.count} 个任务`, `${queue.count} jobs`)}
+                  </div>
+                </div>
+                <StateBadge state={queue.state} />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <div className="ag-diagnostics-detail-grid">
+        <Card className="ag-diagnostics-identity-card">
+          <CardHeader
+            title={text("构建与运行身份", "Build and runtime identity")}
           />
           <Descriptions
             className="px-5 py-4"
             size="small"
-            column={2}
+            column={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 1, xxl: 2 }}
             items={[
               {
                 key: "version",
@@ -362,16 +482,13 @@ export function SystemDiagnosticsPanel() {
                   ? text("有未提交修改", "Modified")
                   : text("干净", "Clean"),
               },
-              {
-                key: "generated",
-                label: text("生成时间", "Generated"),
-                children: formatDate(diagnostics.generatedAt, locale),
-              },
             ]}
           />
         </Card>
-        <Card>
-          <CardHeader title={text("依赖状态", "Dependency status")} />
+        <Card className="ag-diagnostics-dependencies-card">
+          <CardHeader
+            title={text("依赖与扫描器", "Dependencies and scanner")}
+          />
           <div className="divide-y divide-zinc-800/60">
             {diagnostics.dependencies.map(
               (dependency: DiagnosticDependency) => {
@@ -380,27 +497,27 @@ export function SystemDiagnosticsPanel() {
                 return (
                   <div
                     key={dependency.name}
-                    className="flex items-center justify-between px-5 py-3"
+                    className="ag-diagnostic-status-row"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-sm text-zinc-200">
                         {labels ? text(labels[0], labels[1]) : dependency.name}
                       </div>
-                      <div className="text-xs text-zinc-500">
+                      <div className="mt-1 break-words text-xs leading-5 text-zinc-500">
                         {dependency.detail}
                       </div>
                     </div>
                     <span
-                      className={
+                      className={`shrink-0 text-xs ${
                         reachable ? "text-emerald-400" : "text-amber-400"
-                      }
+                      }`}
                     >
                       {reachable ? (
                         <CheckCircleOutlined />
                       ) : (
                         <WarningOutlined />
                       )}
-                      <span className="ml-2 text-xs">
+                      <span className="ml-2">
                         {reachable
                           ? text("可用", "Reachable")
                           : dependency.status === "not_configured"
@@ -412,25 +529,30 @@ export function SystemDiagnosticsPanel() {
                 );
               },
             )}
+            {diagnostics.dependencies.length === 0 && (
+              <div className="px-5 py-5 text-sm text-zinc-500">
+                {text("没有依赖检查结果", "No dependency checks reported")}
+              </div>
+            )}
             {scanner && scannerStatusLabel && (
-              <div className="flex items-center justify-between gap-4 px-5 py-3">
+              <div className="ag-diagnostic-status-row">
                 <div className="min-w-0">
-                  <div className="flex min-w-0 items-baseline gap-2 text-sm text-zinc-200">
-                    <span className="truncate">
+                  <div className="flex min-w-0 flex-wrap items-baseline gap-2 text-sm text-zinc-200">
+                    <span>
                       {text("制品扫描器", "Artifact scanner")} · {scanner.name}
                     </span>
                     {scanner.version && (
-                      <span className="shrink-0 font-mono text-[11px] text-zinc-500">
+                      <span className="font-mono text-[11px] text-zinc-500">
                         {scanner.version}
                       </span>
                     )}
                   </div>
-                  <div className="mt-0.5 truncate text-xs text-zinc-500">
+                  <div className="mt-1 break-words text-xs leading-5 text-zinc-500">
                     {scannerDetail}
                   </div>
                   {scanner.formats.length > 0 && (
                     <Tooltip title={scanner.formats.join(" · ")}>
-                      <div className="mt-0.5 truncate font-mono text-[11px] text-zinc-600">
+                      <div className="mt-1 break-words font-mono text-[11px] leading-5 text-zinc-600">
                         {text("覆盖格式", "Formats")}:{" "}
                         {scanner.formats.join(" · ")}
                       </div>
@@ -438,14 +560,14 @@ export function SystemDiagnosticsPanel() {
                   )}
                 </div>
                 <span
-                  className={`shrink-0 ${scannerStatusTone[scanner.status]}`}
+                  className={`shrink-0 text-xs ${scannerStatusTone[scanner.status]}`}
                 >
                   {scanner.status === "healthy" ? (
                     <CheckCircleOutlined />
                   ) : (
                     <WarningOutlined />
                   )}
-                  <span className="ml-2 text-xs">
+                  <span className="ml-2">
                     {text(scannerStatusLabel[0], scannerStatusLabel[1])}
                   </span>
                 </span>
@@ -455,7 +577,7 @@ export function SystemDiagnosticsPanel() {
         </Card>
       </div>
 
-      <Card className="mt-4">
+      <Card>
         <CardHeader title={text("后台队列", "Background queues")} />
         <Table<DiagnosticQueueStat>
           className="ag-console-table"
@@ -467,7 +589,9 @@ export function SystemDiagnosticsPanel() {
             emptyText: text("当前没有活跃队列", "No active queue entries"),
           }}
           pagination={false}
-          scroll={{ x: 670, y: 320 }}
+          scroll={
+            diagnostics.queues.length > 8 ? { x: 500, y: 320 } : { x: 500 }
+          }
         />
       </Card>
     </div>
