@@ -351,7 +351,7 @@ test("npm detail keeps version selection and package content aligned when intell
   expect(Math.abs((detailBox?.y ?? 0) - (versionBox?.y ?? 0))).toBeLessThan(2);
 });
 
-test("repository detail exposes every available task in one flat desktop row", async ({
+test("repository detail keeps the whole content region stable when security becomes scrollable", async ({
   page,
 }, testInfo) => {
   const pageErrors: string[] = [];
@@ -360,7 +360,7 @@ test("repository detail exposes every available task in one flat desktop row", a
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: 1920, height: 900 });
   await mockRepositoryDetail(page, { format: "npm" });
 
   await page.goto(`/repositories/${repositoryId}`);
@@ -392,49 +392,59 @@ test("repository detail exposes every available task in one flat desktop row", a
     const summary = document.querySelector<HTMLElement>(
       '[aria-label="仓库摘要"]',
     );
+    const navigation = document.querySelector<HTMLElement>(
+      ".ag-repository-navigation",
+    );
     return {
       clientWidth: document.documentElement.clientWidth,
       scrollHeight: document.documentElement.scrollHeight,
+      scrollbarGutter: getComputedStyle(document.documentElement)
+        .scrollbarGutter,
       mainLeft: main?.getBoundingClientRect().left,
       summaryLeft: summary?.getBoundingClientRect().left,
+      navigationLeft: navigation?.getBoundingClientRect().left,
     };
   });
-  const artifactContentLeft = await page
-    .locator(".ag-repository-workspace")
-    .evaluate((surface) => {
-      const box = surface.getBoundingClientRect();
-      return (
-        box.left + Number.parseFloat(getComputedStyle(surface).paddingLeft)
-      );
+  if (process.env.CAPTURE_REPOSITORY_DETAIL) {
+    await page.screenshot({
+      path: testInfo.outputPath("repository-content-artifacts.png"),
+      fullPage: false,
     });
+  }
   await navigation.getByRole("tab", { name: "安全准入", exact: true }).click();
-  const securityHeading = page.getByRole("heading", {
-    name: "安全准入与隔离读取",
-    exact: true,
-  });
-  await expect(securityHeading).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: "安全准入与隔离读取",
+      exact: true,
+    }),
+  ).toBeVisible();
   const afterSecurity = await page.evaluate(() => {
     const main = document.querySelector<HTMLElement>(".ag-main");
     const summary = document.querySelector<HTMLElement>(
       '[aria-label="仓库摘要"]',
     );
+    const navigation = document.querySelector<HTMLElement>(
+      ".ag-repository-navigation",
+    );
     return {
       clientWidth: document.documentElement.clientWidth,
       scrollHeight: document.documentElement.scrollHeight,
+      scrollbarGutter: getComputedStyle(document.documentElement)
+        .scrollbarGutter,
       mainLeft: main?.getBoundingClientRect().left,
       summaryLeft: summary?.getBoundingClientRect().left,
+      navigationLeft: navigation?.getBoundingClientRect().left,
     };
   });
-  const securityHeadingLeft = (await securityHeading.boundingBox())?.x;
   expect(afterSecurity.scrollHeight).toBeGreaterThan(
     beforeSecurity.scrollHeight,
   );
+  expect(beforeSecurity.scrollbarGutter).toBe("stable");
+  expect(afterSecurity.scrollbarGutter).toBe("stable");
   expect(afterSecurity.clientWidth).toBe(beforeSecurity.clientWidth);
   expect(afterSecurity.mainLeft).toBe(beforeSecurity.mainLeft);
   expect(afterSecurity.summaryLeft).toBe(beforeSecurity.summaryLeft);
-  expect(
-    Math.abs((securityHeadingLeft ?? 0) - artifactContentLeft),
-  ).toBeLessThan(2);
+  expect(afterSecurity.navigationLeft).toBe(beforeSecurity.navigationLeft);
 
   const tabBoxes = await taskTabs.evaluateAll((tabs) =>
     tabs.map((tab) => {
@@ -455,8 +465,8 @@ test("repository detail exposes every available task in one flat desktop row", a
 
   if (process.env.CAPTURE_REPOSITORY_DETAIL) {
     await page.screenshot({
-      path: testInfo.outputPath("repository-security-alignment.png"),
-      fullPage: true,
+      path: testInfo.outputPath("repository-content-security.png"),
+      fullPage: false,
     });
   }
 });

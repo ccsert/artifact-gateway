@@ -1,3 +1,7 @@
+html {
+  scrollbar-gutter: stable;
+}
+
 .ag-shell {
   --ag-sider-current-width: 224px;
   --ag-sider-motion: 220ms var(--ease-out-expo);

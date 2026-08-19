@@ -110,11 +110,7 @@ function RepositoryTabSurface({
   standalone: boolean;
   children: ReactNode;
 }) {
-  return standalone ? (
-    <div className="ag-repository-workspace px-4">{children}</div>
-  ) : (
-    <Card bodyClassName="ag-repository-workspace p-4">{children}</Card>
-  );
+  return standalone ? children : <Card bodyClassName="p-4">{children}</Card>;
 }
 
 type RepositoryTabDefinition = {
