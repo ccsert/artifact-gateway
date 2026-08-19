@@ -118,7 +118,11 @@ describe("RepositoryDetailPage scanning deep link", () => {
     expect(
       screen.queryByRole("tab", { name: "策略与安全" }),
     ).not.toBeInTheDocument();
-    expect(await screen.findByText("扫描工作区已加载")).toBeInTheDocument();
+    const scanningWorkspace = await screen.findByText("扫描工作区已加载");
+    expect(scanningWorkspace).toBeInTheDocument();
+    expect(scanningWorkspace.closest(".ag-repository-workspace")).toHaveClass(
+      "px-4",
+    );
     await waitFor(() => expect(scanningTab.render).toHaveBeenCalled());
     expect(scanningTab.render.mock.calls.at(-1)?.[0]).toMatchObject({
       repo: repository,

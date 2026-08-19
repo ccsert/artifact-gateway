@@ -387,6 +387,55 @@ test("repository detail exposes every available task in one flat desktop row", a
   }
   await expect(navigation.locator(".ant-tabs-nav-more")).toBeHidden();
 
+  const beforeSecurity = await page.evaluate(() => {
+    const main = document.querySelector<HTMLElement>(".ag-main");
+    const summary = document.querySelector<HTMLElement>(
+      '[aria-label="仓库摘要"]',
+    );
+    return {
+      clientWidth: document.documentElement.clientWidth,
+      scrollHeight: document.documentElement.scrollHeight,
+      mainLeft: main?.getBoundingClientRect().left,
+      summaryLeft: summary?.getBoundingClientRect().left,
+    };
+  });
+  const artifactContentLeft = await page
+    .locator(".ag-repository-workspace")
+    .evaluate((surface) => {
+      const box = surface.getBoundingClientRect();
+      return (
+        box.left + Number.parseFloat(getComputedStyle(surface).paddingLeft)
+      );
+    });
+  await navigation.getByRole("tab", { name: "安全准入", exact: true }).click();
+  const securityHeading = page.getByRole("heading", {
+    name: "安全准入与隔离读取",
+    exact: true,
+  });
+  await expect(securityHeading).toBeVisible();
+  const afterSecurity = await page.evaluate(() => {
+    const main = document.querySelector<HTMLElement>(".ag-main");
+    const summary = document.querySelector<HTMLElement>(
+      '[aria-label="仓库摘要"]',
+    );
+    return {
+      clientWidth: document.documentElement.clientWidth,
+      scrollHeight: document.documentElement.scrollHeight,
+      mainLeft: main?.getBoundingClientRect().left,
+      summaryLeft: summary?.getBoundingClientRect().left,
+    };
+  });
+  const securityHeadingLeft = (await securityHeading.boundingBox())?.x;
+  expect(afterSecurity.scrollHeight).toBeGreaterThan(
+    beforeSecurity.scrollHeight,
+  );
+  expect(afterSecurity.clientWidth).toBe(beforeSecurity.clientWidth);
+  expect(afterSecurity.mainLeft).toBe(beforeSecurity.mainLeft);
+  expect(afterSecurity.summaryLeft).toBe(beforeSecurity.summaryLeft);
+  expect(
+    Math.abs((securityHeadingLeft ?? 0) - artifactContentLeft),
+  ).toBeLessThan(2);
+
   const tabBoxes = await taskTabs.evaluateAll((tabs) =>
     tabs.map((tab) => {
       const box = tab.getBoundingClientRect();
@@ -406,7 +455,7 @@ test("repository detail exposes every available task in one flat desktop row", a
 
   if (process.env.CAPTURE_REPOSITORY_DETAIL) {
     await page.screenshot({
-      path: testInfo.outputPath("repository-task-navigation.png"),
+      path: testInfo.outputPath("repository-security-alignment.png"),
       fullPage: true,
     });
   }
@@ -794,7 +843,7 @@ test("promotion selects a source artifact and a compatible Hosted target", async
 
 test("security guardrails use independent desktop columns", async ({
   page,
-}) => {
+}, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockRepositoryDetail(page);
 
@@ -837,9 +886,28 @@ test("security guardrails use independent desktop columns", async ({
   expect(narrowAdmissionBox?.y ?? 0).toBeGreaterThan(
     (narrowReadBox?.y ?? 0) + (narrowReadBox?.height ?? 0),
   );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const [mobileReadBox, mobileAdmissionBox] = await Promise.all([
+    readCard.boundingBox(),
+    admissionCard.boundingBox(),
+  ]);
+  expect(
+    Math.abs((mobileReadBox?.x ?? 0) - (mobileAdmissionBox?.x ?? 0)),
+  ).toBeLessThan(2);
+  expect(mobileAdmissionBox?.y ?? 0).toBeGreaterThan(
+    (mobileReadBox?.y ?? 0) + (mobileReadBox?.height ?? 0),
+  );
   expect(
     await page.evaluate(
       () => document.body.scrollWidth - document.body.clientWidth,
     ),
   ).toBe(0);
+
+  if (process.env.CAPTURE_REPOSITORY_DETAIL) {
+    await page.screenshot({
+      path: testInfo.outputPath("repository-security-mobile.png"),
+      fullPage: true,
+    });
+  }
 });
