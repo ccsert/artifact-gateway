@@ -223,14 +223,14 @@ export function LoginPage() {
             </div>
             <div>
               <div className="text-sm font-semibold text-white">Console</div>
-              <div className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-cyan-200">
+              <div className="mt-0.5 font-mono text-xs uppercase tracking-wider text-cyan-200">
                 Native Hosted API v2
               </div>
             </div>
           </div>
 
           <div className="ag-login-brand-copy">
-            <div className="font-mono text-[11px] uppercase tracking-wider text-cyan-300">
+            <div className="font-mono text-xs uppercase tracking-wider text-cyan-300">
               {t("auth.loginTitle")}
             </div>
             <h1 className="mt-4 text-4xl font-semibold text-white">
@@ -247,7 +247,7 @@ export function LoginPage() {
               <div className="text-xs font-medium text-zinc-200">
                 {t("auth.protectedAccess")}
               </div>
-              <div className="mt-1 font-mono text-[10px] text-zinc-500">
+              <div className="mt-1 font-mono text-xs text-zinc-500">
                 OIDC · Local session · Bearer token
               </div>
             </div>
@@ -256,7 +256,7 @@ export function LoginPage() {
 
         <section className="ag-login-panel" aria-labelledby="login-heading">
           <header>
-            <div className="font-mono text-[11px] uppercase tracking-wider text-cyan-400">
+            <div className="font-mono text-xs uppercase tracking-wider text-cyan-400">
               {t("auth.loginTitle")}
             </div>
             <h2

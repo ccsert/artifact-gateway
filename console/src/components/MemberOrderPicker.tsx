@@ -50,7 +50,7 @@ export function MemberOrderPicker({
     <div className="grid grid-cols-2 gap-3">
       {/* 候选 */}
       <div>
-        <div className="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
+        <div className="mb-1.5 text-xs uppercase tracking-wider text-zinc-500">
           {text(
             `可添加（${available.length}）`,
             `Available (${available.length})`,
@@ -82,7 +82,7 @@ export function MemberOrderPicker({
       </div>
       {/* 已选（有序） */}
       <div>
-        <div className="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
+        <div className="mb-1.5 text-xs uppercase tracking-wider text-zinc-500">
           {text(
             `成员顺序（${memberIds.length}，自上而下解析）`,
             `Member order (${memberIds.length}, top to bottom)`,
@@ -99,7 +99,7 @@ export function MemberOrderPicker({
               key={id}
               className="flex items-center gap-1 rounded-md bg-cyan-500/5 px-2 py-1.5"
             >
-              <span className="w-5 shrink-0 text-center font-mono text-[10px] text-cyan-400">
+              <span className="w-5 shrink-0 text-center font-mono text-xs text-cyan-400">
                 {i + 1}
               </span>
               <TypeDot type={repoOf(id)?.type} />

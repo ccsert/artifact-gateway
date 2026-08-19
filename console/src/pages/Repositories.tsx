@@ -431,7 +431,7 @@ export function RepositoriesPage() {
               {formatBytes(capacity.usedBytes)}
             </div>
             {capacity.quotaBytes > 0 && (
-              <div className="mt-1 text-[10px] text-zinc-600">
+              <div className="mt-1 text-xs text-zinc-600">
                 / {formatBytes(capacity.quotaBytes)}
               </div>
             )}

@@ -308,9 +308,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
             {principalChoices.find((choice) => choice.value === value)?.label ??
               value}
           </div>
-          <div className="mt-0.5 font-mono text-[10px] text-zinc-600">
-            {value}
-          </div>
+          <div className="mt-0.5 font-mono text-xs text-zinc-600">{value}</div>
         </div>
       ),
     },
@@ -398,7 +396,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
             />
           )}
           <div>
-            <div className="grid grid-cols-[minmax(300px,1.35fr)_170px_minmax(360px,1.5fr)_170px_40px] items-center gap-3 px-2 pb-2 text-[11px] font-medium text-zinc-500">
+            <div className="grid grid-cols-[minmax(300px,1.35fr)_170px_minmax(360px,1.5fr)_170px_40px] items-center gap-3 px-2 pb-2 text-xs font-medium text-zinc-500">
               <span>{text("主体", "Principal")}</span>
               <span>{text("权限级别", "Permission")}</span>
               <span>{text("资源范围", "Resource scope")}</span>
@@ -522,7 +520,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
                           }
                         />
                       )}
-                      <div className="mt-1 min-h-4 text-[10px] leading-4 text-zinc-600">
+                      <div className="mt-1 min-h-4 text-xs leading-4 text-zinc-600">
                         {kind === "custom"
                           ? text(
                               "必须与认证完成后产生的 actor 完全一致",

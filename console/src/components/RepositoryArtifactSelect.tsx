@@ -164,7 +164,7 @@ export function RepositoryArtifactSelect({
                 <div className="truncate font-mono text-xs text-zinc-200">
                   {artifact.coordinate}
                 </div>
-                <div className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-zinc-500">
+                <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-zinc-500">
                   <span className="font-mono">
                     {shortDigest(artifact.digest)}
                   </span>

@@ -8,6 +8,7 @@ import { goUsage } from "../lib/usage";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
+import { useClipboardAction } from "./ConsolePrimitives";
 import { Loading } from "./Feedback";
 import {
   MetadataItem,
@@ -67,7 +68,7 @@ export function GoModuleDetail({
   const [infoLoading, setInfoLoading] = useState(false);
   const [versionDigest, setVersionDigest] = useState<string | undefined>();
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState("");
+  const { copiedValue, copy } = useClipboardAction(1400);
   const base = useMemo(
     () => goModuleBase(repoName, modulePath),
     [modulePath, repoName],
@@ -196,15 +197,6 @@ export function GoModuleDetail({
       }))
     : [];
 
-  const copy = async (value: string) => {
-    await navigator.clipboard.writeText(value);
-    setCopied(value);
-    window.setTimeout(
-      () => setCopied((current) => (current === value ? "" : current)),
-      1400,
-    );
-  };
-
   if (loading) return <Loading />;
   if (error && versions.length === 0)
     return <Alert type="error" showIcon title={error} />;
@@ -232,7 +224,7 @@ export function GoModuleDetail({
       {error && <Alert type="warning" showIcon title={error} />}
       <div className="grid gap-4 lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
         <div>
-          <div className="mb-1 text-[11px] font-medium text-zinc-500">
+          <div className="mb-1 text-xs font-medium text-zinc-500">
             {text("选择模块版本", "Select module version")}
           </div>
           <SearchableVersionSelect
@@ -275,7 +267,7 @@ export function GoModuleDetail({
       </div>
 
       <div>
-        <div className="mb-2 text-[11px] font-medium text-zinc-500">
+        <div className="mb-2 text-xs font-medium text-zinc-500">
           {text(
             "协议资产（首次访问时缓存）",
             "Protocol assets (cached on first access)",
@@ -317,7 +309,7 @@ export function GoModuleDetail({
           <UsageSnippetBlock
             key={snippet.label}
             snippet={snippet}
-            copied={copied === snippet.code}
+            copied={copiedValue === snippet.code}
             onCopy={() => void copy(snippet.code)}
           />
         ))}

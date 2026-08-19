@@ -235,7 +235,7 @@ export function ArtifactQuarantinePanel({
               {coordinate}
             </div>
             <div
-              className="mt-1 truncate font-mono text-[11px] text-zinc-600"
+              className="mt-1 truncate font-mono text-xs text-zinc-600"
               title={digest}
             >
               {digest}

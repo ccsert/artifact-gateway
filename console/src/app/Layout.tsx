@@ -133,7 +133,7 @@ function BrandLockup({ collapsed = false }: { collapsed?: boolean }) {
           <div className="truncate text-sm font-semibold text-zinc-100">
             Artifact Gateway
           </div>
-          <div className="text-[10px] uppercase tracking-widest text-zinc-600">
+          <div className="text-xs uppercase tracking-widest text-zinc-600">
             Console
           </div>
         </div>
@@ -366,7 +366,7 @@ export function AppLayout() {
           }`}
         >
           {!collapsed && (
-            <span className="text-[10px] leading-4 text-zinc-600">
+            <span className="text-xs leading-4 text-zinc-600">
               Native Hosted API v2
             </span>
           )}

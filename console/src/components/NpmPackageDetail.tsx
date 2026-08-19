@@ -13,6 +13,7 @@ import { npmUsage } from "../lib/usage";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
+import { useClipboardAction } from "./ConsolePrimitives";
 
 interface NpmVersionManifest {
   name: string;
@@ -67,7 +68,7 @@ export function NpmPackageDetail({
   const [selectedVersion, setSelectedVersion] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState("");
+  const { copiedValue, copy } = useClipboardAction(1400);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,7 +173,7 @@ export function NpmPackageDetail({
         digest={artifactMetadata?.digest}
       />
       <div>
-        <label className="mb-1.5 block text-[11px] font-medium text-zinc-500">
+        <label className="mb-1.5 block text-xs font-medium text-zinc-500">
           {text("选择版本", "Select version")} ({versions.length})
         </label>
         <SearchableVersionSelect
@@ -202,7 +203,7 @@ export function NpmPackageDetail({
             {packageName}@{selectedVersion}
           </span>
           {packument["dist-tags"].latest === selectedVersion ? (
-            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-300">
+            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs text-emerald-300">
               latest
             </span>
           ) : null}
@@ -285,19 +286,8 @@ export function NpmPackageDetail({
             <UsageSnippetBlock
               key={snippet.label}
               snippet={snippet}
-              copied={copied === snippet.code}
-              onCopy={() => {
-                void navigator.clipboard.writeText(snippet.code).then(() => {
-                  setCopied(snippet.code);
-                  window.setTimeout(
-                    () =>
-                      setCopied((current) =>
-                        current === snippet.code ? "" : current,
-                      ),
-                    1400,
-                  );
-                });
-              }}
+              copied={copiedValue === snippet.code}
+              onCopy={() => void copy(snippet.code)}
             />
           ))}
         </div>

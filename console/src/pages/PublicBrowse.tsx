@@ -50,6 +50,7 @@ import { NpmPackageDetail } from "../components/NpmPackageDetail";
 import { PyPIProjectDetail } from "../components/PyPIProjectDetail";
 import { GoModuleDetail } from "../components/GoModuleDetail";
 import { APTAssetDetail } from "../components/APTAssetDetail";
+import { useClipboardAction } from "../components/ConsolePrimitives";
 
 type PublicRepositoryFormat =
   "oci" | "maven" | "conan" | "raw" | "npm" | "pypi" | "go" | "apt";
@@ -512,7 +513,7 @@ function MavenGroupTable({
     return (
       <div className="grid gap-5 px-2 py-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
         <div>
-          <label className="mb-1.5 block text-[11px] font-medium text-zinc-500">
+          <label className="mb-1.5 block text-xs font-medium text-zinc-500">
             {text("选择版本", "Select version")}{" "}
             <span className="font-normal text-zinc-600">
               ({row.group.versions.length})
@@ -529,7 +530,7 @@ function MavenGroupTable({
             onChange={(value) => onSelectVersion(row.group, value)}
             placeholder={text("搜索并选择 Maven 版本", "Search Maven versions")}
           />
-          <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+          <p className="mt-2 text-xs leading-5 text-zinc-600">
             {text(
               "在选择器中输入版本号或 SNAPSHOT 构建号即可定位，不会铺开全部版本。",
               "Search by version or SNAPSHOT build number without expanding the full list.",
@@ -542,7 +543,7 @@ function MavenGroupTable({
               {row.selectedVersion.coordinate}
             </span>
             {row.selectedVersion.buildNumber ? (
-              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
+              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-300">
                 SNAPSHOT #{row.selectedVersion.buildNumber}
               </span>
             ) : null}
@@ -564,7 +565,7 @@ function MavenGroupTable({
                 : text("复制链接", "Copy link")}
             </Button>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-zinc-600">
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-zinc-600">
             <span>{formatDate(row.selectedVersion.createdAt, locale)}</span>
             <span
               className="max-w-[min(70vw,560px)] truncate font-mono text-zinc-500"
@@ -885,15 +886,13 @@ function ConanGroupTable({
     <div className="grid gap-5 px-2 py-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
       <div>
         <div className="flex items-center justify-between gap-3">
-          <label className="text-[11px] font-medium text-zinc-500">
+          <label className="text-xs font-medium text-zinc-500">
             {text("选择包版本", "Select package version")}{" "}
             <span className="font-normal text-zinc-600">
               ({row.group.versions.length})
             </span>
           </label>
-          <span className="text-[11px] text-zinc-600">
-            {row.referenceVersion}
-          </span>
+          <span className="text-xs text-zinc-600">{row.referenceVersion}</span>
         </div>
         <SearchableVersionSelect
           className="mt-1.5"
@@ -913,7 +912,7 @@ function ConanGroupTable({
             "Search Conan package versions",
           )}
         />
-        <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+        <p className="mt-2 text-xs leading-5 text-zinc-600">
           {text(
             "同一 name@user/channel 下收拢不同版本；选定版本后再查看 recipe revision。",
             "Versions are grouped under the same name@user/channel; select one to inspect its recipe revision.",
@@ -922,10 +921,10 @@ function ConanGroupTable({
       </div>
       <div className="min-w-0">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-[11px] font-medium text-zinc-500">
+          <span className="text-xs font-medium text-zinc-500">
             Recipe revision
           </span>
-          <span className="text-[11px] text-zinc-600">
+          <span className="text-xs text-zinc-600">
             {row.visibleRevisions.length}/{row.revisions.length}
           </span>
         </div>
@@ -952,7 +951,7 @@ function ConanGroupTable({
           </Button>
         </div>
         {row.page?.error && (
-          <div className="mt-2 text-[11px] text-rose-300">{row.page.error}</div>
+          <div className="mt-2 text-xs text-rose-300">{row.page.error}</div>
         )}
         <SearchableVersionSelect
           className="mt-3"
@@ -1004,7 +1003,7 @@ function ConanGroupTable({
               <span className="font-mono text-xs text-zinc-100">
                 {row.selectedReference}
               </span>
-              <span className="rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] text-violet-300">
+              <span className="rounded bg-violet-500/10 px-1.5 py-0.5 text-xs text-violet-300">
                 {row.selectedRevisionItem.revision}
               </span>
               <Button
@@ -1121,7 +1120,7 @@ export function PublicBrowsePage() {
   const [catalogFormat, setCatalogFormat] = useState<
     PublicRepositoryFormat | "all"
   >("all");
-  const [copiedCoordinate, setCopiedCoordinate] = useState<string | null>(null);
+  const { copiedValue: copiedCoordinate, copy } = useClipboardAction(1400);
   const [expandedCoordinate, setExpandedCoordinate] = useState<string | null>(
     null,
   );
@@ -1477,37 +1476,9 @@ export function PublicBrowsePage() {
       ? conanArtifactGroups(items ?? [])
       : null;
 
-  const copyCoordinate = async (coordinate: string) => {
-    try {
-      await navigator.clipboard.writeText(coordinate);
-      setCopiedCoordinate(coordinate);
-      window.setTimeout(
-        () =>
-          setCopiedCoordinate((current) =>
-            current === coordinate ? null : current,
-          ),
-        1400,
-      );
-    } catch {
-      setCopiedCoordinate(null);
-    }
-  };
+  const copyCoordinate = (coordinate: string) => copy(coordinate);
 
-  const copyUsage = async (snippet: UsageSnippet) => {
-    try {
-      await navigator.clipboard.writeText(snippet.code);
-      setCopiedCoordinate(snippet.code);
-      window.setTimeout(
-        () =>
-          setCopiedCoordinate((current) =>
-            current === snippet.code ? null : current,
-          ),
-        1400,
-      );
-    } catch {
-      setCopiedCoordinate(null);
-    }
-  };
+  const copyUsage = (snippet: UsageSnippet) => copy(snippet.code);
 
   const artifactHref = (
     coordinate: string,
@@ -1547,21 +1518,8 @@ export function PublicBrowsePage() {
     setParams(next, { replace: true, preventScrollReset: true });
   };
 
-  const copyPageLink = async (href: string) => {
-    try {
-      await navigator.clipboard.writeText(
-        new URL(href, window.location.origin).toString(),
-      );
-      setCopiedCoordinate(href);
-      window.setTimeout(
-        () =>
-          setCopiedCoordinate((current) => (current === href ? null : current)),
-        1400,
-      );
-    } catch {
-      setCopiedCoordinate(null);
-    }
-  };
+  const copyPageLink = (href: string) =>
+    copy(new URL(href, window.location.origin).toString(), href);
 
   const usageLabel =
     selectedRepository?.format === "oci"
@@ -2007,15 +1965,15 @@ export function PublicBrowsePage() {
       <div className="grid gap-5 px-2 py-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
         <div>
           <div className="flex items-center justify-between gap-3">
-            <span className="block text-[11px] font-medium text-zinc-500">
+            <span className="block text-xs font-medium text-zinc-500">
               {text("选择镜像版本", "Select image version")}
             </span>
-            <span className="text-[11px] text-zinc-600">
+            <span className="text-xs text-zinc-600">
               {text("已加载", "Loaded")} {row.protocolVersions.length}
             </span>
           </div>
           {row.protocolVersionsError && (
-            <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-rose-300">
+            <div className="mt-2 flex items-center justify-between gap-2 text-xs text-rose-300">
               <span>{row.protocolVersionsError}</span>
               <Button
                 type="link"
@@ -2068,7 +2026,7 @@ export function PublicBrowsePage() {
                   )}
             </Button>
           )}
-          <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+          <p className="mt-2 text-xs leading-5 text-zinc-600">
             {text(
               `每次最多读取 ${VERSION_PAGE_SIZE} 个版本；选择后可查看详情与使用方式。`,
               `Up to ${VERSION_PAGE_SIZE} versions are loaded at a time; select one to view details and usage.`,
@@ -2082,7 +2040,7 @@ export function PublicBrowsePage() {
                 <span className="font-mono text-xs text-zinc-100">
                   {row.item.coordinate}
                 </span>
-                <span className="rounded bg-cyan-500/10 px-1.5 py-0.5 text-[10px] text-cyan-300">
+                <span className="rounded bg-cyan-500/10 px-1.5 py-0.5 text-xs text-cyan-300">
                   {row.selectedProtocolVersionItem.label}
                 </span>
                 <Button
@@ -2156,7 +2114,7 @@ export function PublicBrowsePage() {
                 />
               </div>
               {row.ociDetail?.error && (
-                <div className="mt-2 flex items-center gap-2 text-[11px] text-rose-300">
+                <div className="mt-2 flex items-center gap-2 text-xs text-rose-300">
                   <span>{row.ociDetail.error}</span>
                   <Button
                     type="link"
@@ -2224,23 +2182,22 @@ export function PublicBrowsePage() {
         </div>
         {!repositoryId ? (
           <Card
-            className="relative overflow-hidden border-cyan-300/15 bg-[linear-gradient(135deg,rgba(8,47,73,0.48),rgba(9,9,11,0.94)_56%,rgba(24,24,27,0.96))]"
-            bodyClassName="relative p-6 sm:p-8 lg:p-10"
+            className="overflow-hidden border-zinc-800/90 bg-zinc-950/35"
+            bodyClassName="p-6 sm:p-8 lg:p-10"
           >
-            <div className="pointer-events-none absolute -right-24 -top-32 size-80 rounded-full bg-cyan-400/10 blur-3xl" />
-            <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
+            <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
               <div className="max-w-3xl">
                 <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-medium text-emerald-200">
                   <SafetyCertificateOutlined />
                   {text("公开只读", "Public read-only")}
                 </div>
-                <h1 className="mt-5 text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
+                <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-50">
                   {text(
                     "查找并使用可信的公开制品",
                     "Discover and consume trusted public artifacts",
                   )}
                 </h1>
-                <p className="mt-4 max-w-2xl text-sm leading-6 text-zinc-400 sm:text-base">
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
                   {text(
                     "从团队明确公开的仓库中检索镜像、依赖和软件包。读取无需登录，发布、授权和仓库管理始终需要身份认证。",
                     "Search images, dependencies, and packages from repositories explicitly published by your team. Reading needs no sign-in; publishing, grants, and repository administration always require authentication.",
@@ -2250,7 +2207,7 @@ export function PublicBrowsePage() {
                   allowClear
                   size="large"
                   prefix={<SearchOutlined className="text-zinc-500" />}
-                  className="mt-7 max-w-2xl"
+                  className="mt-6 max-w-2xl"
                   placeholder={text(
                     "搜索仓库名称或格式",
                     "Search repository name or format",
@@ -2403,10 +2360,7 @@ export function PublicBrowsePage() {
                 <div>
                   <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                      <div className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-300/80">
-                        {text("公开目录", "Public catalog")}
-                      </div>
-                      <h2 className="mt-1 text-lg font-semibold text-zinc-100">
+                      <h2 className="text-lg font-semibold text-zinc-100">
                         {text("选择制品来源", "Choose an artifact source")}
                       </h2>
                       <p className="mt-1 text-sm text-zinc-500">
@@ -2474,12 +2428,12 @@ export function PublicBrowsePage() {
                           className="group block text-left"
                         >
                           <Card
-                            className="ag-public-repository-card h-full border-zinc-800/90 bg-zinc-950/35 group-hover:-translate-y-0.5 group-hover:border-cyan-400/35 group-hover:bg-zinc-900/80 group-hover:shadow-xl group-hover:shadow-black/20"
+                            className="ag-public-repository-card h-full border-zinc-800/90 bg-zinc-950/35 group-hover:border-cyan-400/35 group-hover:bg-zinc-900/80"
                             bodyClassName="flex h-full min-h-52 flex-col p-5"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div
-                                className={`flex h-11 min-w-11 items-center justify-center rounded-xl border px-2 text-[11px] font-semibold tracking-wide ${PUBLIC_FORMAT_STYLE[repository.format].surface}`}
+                                className={`flex h-11 min-w-11 items-center justify-center rounded-xl border px-2 text-xs font-semibold tracking-wide ${PUBLIC_FORMAT_STYLE[repository.format].surface}`}
                               >
                                 {PUBLIC_FORMAT_STYLE[repository.format].icon}
                               </div>
@@ -2570,7 +2524,7 @@ export function PublicBrowsePage() {
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] text-zinc-600">
+                  <div className="text-xs text-zinc-600">
                     {text("匿名只读", "Anonymous read-only")}
                   </div>
                 </div>
@@ -2698,7 +2652,7 @@ export function PublicBrowsePage() {
                       compact
                     />
                   ))}
-                  <div className="border-t border-zinc-800/80 pt-3 text-[11px] leading-5 text-zinc-600">
+                  <div className="border-t border-zinc-800/80 pt-3 text-xs leading-5 text-zinc-600">
                     {text(
                       "匿名浏览无需 Token；推送、私有仓库和管理操作仍需登录。",
                       "Anonymous browsing needs no token. Publishing, private repositories, and management still require sign-in.",

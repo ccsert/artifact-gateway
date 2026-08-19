@@ -1,6 +1,12 @@
 import { CheckOutlined, CopyOutlined } from "@ant-design/icons";
 import { App, Button, Tooltip } from "antd";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { usePreferences } from "../lib/preferences";
 
 export interface MetricItem {
@@ -91,6 +97,55 @@ export function FilterBar({
   );
 }
 
+export function useClipboardAction(resetAfterMs = 1500) {
+  const { text } = usePreferences();
+  const { message } = App.useApp();
+  const [copiedValue, setCopiedValue] = useState<string | null>(null);
+  const resetTimer = useRef<number | undefined>(undefined);
+
+  useEffect(
+    () => () => {
+      if (resetTimer.current !== undefined) {
+        window.clearTimeout(resetTimer.current);
+      }
+    },
+    [],
+  );
+
+  const copy = useCallback(
+    async (value: string, stateKey = value) => {
+      try {
+        if (!navigator.clipboard?.writeText) {
+          throw new Error("Clipboard API unavailable");
+        }
+        await navigator.clipboard.writeText(value);
+        setCopiedValue(stateKey);
+        void message.success?.(text("已复制到剪贴板", "Copied to clipboard"));
+        if (resetTimer.current !== undefined) {
+          window.clearTimeout(resetTimer.current);
+        }
+        resetTimer.current = window.setTimeout(() => {
+          setCopiedValue((current) => (current === stateKey ? null : current));
+          resetTimer.current = undefined;
+        }, resetAfterMs);
+        return true;
+      } catch {
+        setCopiedValue(null);
+        void message.error?.(
+          text(
+            "复制失败，请手动选择并复制该值。",
+            "Copy failed. Select and copy the value manually.",
+          ),
+        );
+        return false;
+      }
+    },
+    [message, resetAfterMs, text],
+  );
+
+  return { copiedValue, copy };
+}
+
 export function CopyableValue({
   value,
   label,
@@ -101,19 +156,9 @@ export function CopyableValue({
   className?: string;
 }) {
   const { text } = usePreferences();
-  const { message } = App.useApp();
-  const [copied, setCopied] = useState(false);
-  const resetTimer = useRef<number | undefined>(undefined);
+  const { copiedValue, copy } = useClipboardAction();
+  const copied = copiedValue === value;
   const copyLabel = copied ? text("已复制", "Copied") : text("复制", "Copy");
-
-  useEffect(
-    () => () => {
-      if (resetTimer.current !== undefined) {
-        window.clearTimeout(resetTimer.current);
-      }
-    },
-    [],
-  );
 
   return (
     <span className={`inline-flex min-w-0 items-center gap-1 ${className}`}>
@@ -129,24 +174,7 @@ export function CopyableValue({
           icon={copied ? <CheckOutlined /> : <CopyOutlined />}
           onClick={async (event) => {
             event.stopPropagation();
-            try {
-              await navigator.clipboard.writeText(value);
-              setCopied(true);
-              if (resetTimer.current !== undefined) {
-                window.clearTimeout(resetTimer.current);
-              }
-              resetTimer.current = window.setTimeout(() => {
-                setCopied(false);
-                resetTimer.current = undefined;
-              }, 1500);
-            } catch {
-              void message.error(
-                text(
-                  "复制失败，请手动复制该值。",
-                  "Copy failed. Copy the value manually.",
-                ),
-              );
-            }
+            await copy(value);
           }}
         />
       </Tooltip>

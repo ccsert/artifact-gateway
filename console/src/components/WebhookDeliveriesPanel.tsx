@@ -205,7 +205,7 @@ export function WebhookDeliveriesPanel() {
           <div className="truncate text-sm font-medium text-zinc-100">
             {subscription.name}
           </div>
-          <div className="mt-1 text-[11px] text-zinc-600">
+          <div className="mt-1 text-xs text-zinc-600">
             v{subscription.version}
           </div>
         </div>

@@ -418,7 +418,7 @@ export function SearchPage() {
                     <div className="truncate font-mono text-xs text-zinc-200">
                       {mavenVersionLabel(versionHit)}
                     </div>
-                    <div className="mt-0.5 text-[11px] text-zinc-500">
+                    <div className="mt-0.5 text-xs text-zinc-500">
                       {formatDate(versionHit.createdAt, locale)} ·{" "}
                       {formatBytes(versionHit.size)} ·{" "}
                       {versionHit.publisher ??
@@ -491,7 +491,7 @@ export function SearchPage() {
           />
           {hit.digest && (
             <div className="mb-4 rounded-md border border-zinc-800/80 bg-zinc-950/40 px-3 py-2.5">
-              <div className="mb-1 text-[11px] font-medium text-zinc-500">
+              <div className="mb-1 text-xs font-medium text-zinc-500">
                 SHA-256 Digest
               </div>
               <CopyableValue
@@ -556,7 +556,7 @@ export function SearchPage() {
         />
         {row.digest && (
           <div className="mb-4 rounded-md border border-zinc-800/80 bg-zinc-950/40 px-3 py-2.5">
-            <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-zinc-500">
+            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-zinc-500">
               <span>SHA-256 Digest</span>
               <Badge tone={row.matchKind === "digest" ? "cyan" : "zinc"}>
                 {row.matchKind === "digest"

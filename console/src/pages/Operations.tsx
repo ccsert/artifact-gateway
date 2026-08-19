@@ -117,7 +117,7 @@ function OperationIdentity({
         {row.repository ?? text("全局", "Global")}
       </div>
       <div
-        className="mt-1 truncate font-mono text-[11px] text-zinc-600"
+        className="mt-1 truncate font-mono text-xs text-zinc-600"
         title={row.id}
       >
         {row.id}
@@ -132,7 +132,7 @@ function OperationStatus({ row, text }: { row: OperationRow; text: Localize }) {
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
         <StateBadge state={row.state} />
-        <span className="text-[11px] text-zinc-500">
+        <span className="text-xs text-zinc-500">
           {row.attempts === undefined
             ? text("未报告尝试次数", "Attempts not reported")
             : text(
@@ -163,7 +163,7 @@ function OperationStatus({ row, text }: { row: OperationRow; text: Localize }) {
         </div>
       ) : null}
       {hasProgress && row.progressMessage && (
-        <div className="mt-1 line-clamp-2 text-[11px] leading-4 text-zinc-500">
+        <div className="mt-1 line-clamp-2 text-xs leading-4 text-zinc-500">
           {row.progressMessage}
         </div>
       )}

@@ -1,23 +1,16 @@
-import { useState } from "react";
 import { Button } from "antd";
+import { useClipboardAction } from "../../components/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 
 export function CopyButton({ text }: { text: string }) {
   const { text: localize } = usePreferences();
-  const [copied, setCopied] = useState(false);
+  const { copiedValue, copy } = useClipboardAction();
+  const copied = copiedValue === text;
   return (
     <Button
       type="text"
       size="small"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        } catch {
-          /* Clipboard access is unavailable outside a secure browser context. */
-        }
-      }}
+      onClick={() => void copy(text)}
       className="shrink-0"
     >
       {copied ? localize("已复制", "Copied") : localize("复制", "Copy")}
@@ -35,7 +28,7 @@ export function RepositorySnippetBlock({
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
       <div className="mb-1 flex items-center justify-between gap-3">
-        <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+        <span className="text-xs uppercase tracking-wider text-zinc-500">
           {label}
         </span>
         <CopyButton text={code} />

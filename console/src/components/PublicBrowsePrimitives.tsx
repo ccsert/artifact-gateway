@@ -58,7 +58,7 @@ export function UsageSnippetBlock({
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium text-zinc-400">
+        <span className="text-xs font-medium text-zinc-400">
           {snippet.label}
         </span>
         <Tooltip
@@ -78,7 +78,7 @@ export function UsageSnippetBlock({
         </Tooltip>
       </div>
       <pre
-        className={`max-w-full overflow-x-auto whitespace-pre font-mono text-[11px] leading-5 text-cyan-100 ${compact ? "max-h-24" : ""}`}
+        className={`max-w-full overflow-x-auto whitespace-pre font-mono text-xs leading-5 text-cyan-100 ${compact ? "max-h-24" : ""}`}
       >
         {snippet.code}
       </pre>
@@ -97,9 +97,9 @@ export function MetadataItem({
 }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px] font-medium text-zinc-600">{label}</div>
+      <div className="text-xs font-medium text-zinc-600">{label}</div>
       <div
-        className={`mt-1 truncate text-zinc-300 ${mono ? "font-mono text-[11px]" : "text-xs"}`}
+        className={`mt-1 truncate text-zinc-300 ${mono ? "font-mono text-xs" : "text-xs"}`}
         title={value}
       >
         {value}

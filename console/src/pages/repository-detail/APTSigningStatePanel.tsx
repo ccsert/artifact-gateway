@@ -19,7 +19,7 @@ export function APTSigningStatePanel({
   return (
     <div className="space-y-4">
       <div className="border-b border-zinc-800/80 pb-4">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-500">
+        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-500">
           {text("APT 发布信任", "APT publication trust")}
         </div>
         <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-zinc-100">
@@ -175,7 +175,7 @@ function SigningEvidence({
 }) {
   return (
     <div className="min-w-0 rounded-lg border border-zinc-800/80 bg-[var(--ag-table-header)] px-4 py-3">
-      <div className="text-[11px] font-medium text-zinc-600">{label}</div>
+      <div className="text-xs font-medium text-zinc-600">{label}</div>
       <div
         className={`mt-1 break-all text-xs text-zinc-300 ${mono ? "font-mono" : "font-medium"}`}
       >

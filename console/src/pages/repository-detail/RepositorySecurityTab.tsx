@@ -271,7 +271,7 @@ export function RepositorySecurityTab({
   return (
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(320px,0.78fr)_minmax(0,1.55fr)]">
       <div className="border-b border-zinc-800/80 pb-4 xl:col-span-2">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-500">
+        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-500">
           {text("仓库安全防线", "Repository guardrails")}
         </div>
         <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-zinc-100">

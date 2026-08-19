@@ -14,6 +14,7 @@ import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { useAuth } from "../lib/auth";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { pypiUsage } from "../lib/usage";
+import { useClipboardAction } from "./ConsolePrimitives";
 
 interface PyPIFile {
   filename: string;
@@ -71,7 +72,7 @@ export function PyPIProjectDetail({
   const [selectedVersion, setSelectedVersion] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState("");
+  const { copiedValue, copy } = useClipboardAction(1400);
 
   useEffect(() => {
     let cancelled = false;
@@ -249,7 +250,7 @@ export function PyPIProjectDetail({
         digest={selectedDigest}
       />
       <div>
-        <label className="mb-1.5 block text-[11px] font-medium text-zinc-500">
+        <label className="mb-1.5 block text-xs font-medium text-zinc-500">
           {text("选择版本", "Select version")} ({versions.length})
         </label>
         <SearchableVersionSelect
@@ -320,19 +321,8 @@ export function PyPIProjectDetail({
             <UsageSnippetBlock
               key={snippet.label}
               snippet={snippet}
-              copied={copied === snippet.code}
-              onCopy={() => {
-                void navigator.clipboard.writeText(snippet.code).then(() => {
-                  setCopied(snippet.code);
-                  window.setTimeout(
-                    () =>
-                      setCopied((current) =>
-                        current === snippet.code ? "" : current,
-                      ),
-                    1400,
-                  );
-                });
-              }}
+              copied={copiedValue === snippet.code}
+              onCopy={() => void copy(snippet.code)}
             />
           ))}
         </div>

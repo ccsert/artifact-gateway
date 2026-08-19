@@ -622,21 +622,21 @@ export function GroupsPage() {
             <CopyableValue
               value={npmRegistryURL(name)}
               label={`/npm/${name}/`}
-              className="mt-1 max-w-full text-[11px] text-zinc-500"
+              className="mt-1 max-w-full text-xs text-zinc-500"
             />
           )}
           {group.format === "pypi" && (
             <CopyableValue
               value={pypiIndexURL(name)}
               label={`/pypi/${name}/simple/`}
-              className="mt-1 max-w-full text-[11px] text-zinc-500"
+              className="mt-1 max-w-full text-xs text-zinc-500"
             />
           )}
           {group.format === "go" && (
             <CopyableValue
               value={goProxyURL(name)}
               label={`/go/${name}`}
-              className="mt-1 max-w-full text-[11px] text-zinc-500"
+              className="mt-1 max-w-full text-xs text-zinc-500"
             />
           )}
         </div>
@@ -673,7 +673,7 @@ export function GroupsPage() {
               return (
                 <span
                   key={member.repositoryId}
-                  className="rounded-md bg-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-300"
+                  className="rounded-md bg-zinc-800 px-2 py-0.5 font-mono text-xs text-zinc-300"
                   title={member.repositoryId}
                 >
                   {member.position + 1}. {repoName(member.repositoryId)} ·{" "}

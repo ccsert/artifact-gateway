@@ -90,7 +90,7 @@ describe("CopyableValue", () => {
     await user.click(screen.getByRole("button", { name: "复制" }));
 
     expect(
-      await screen.findByText("复制失败，请手动复制该值。"),
+      await screen.findByText("复制失败，请手动选择并复制该值。"),
     ).toBeInTheDocument();
   });
 });

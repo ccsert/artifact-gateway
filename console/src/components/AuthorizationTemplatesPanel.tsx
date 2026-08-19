@@ -230,7 +230,7 @@ export function AuthorizationTemplatesPanel({
         <div className="text-xs font-medium">
           {text(preset.name, preset.nameEn)}
         </div>
-        <div className="text-[11px] text-zinc-500">
+        <div className="text-xs text-zinc-500">
           {text(preset.description, preset.descriptionEn)}
         </div>
       </div>
@@ -607,7 +607,7 @@ export function AuthorizationTemplatesPanel({
                     {role ? (
                       <div className="flex flex-wrap gap-1">
                         {role.scopes.map((scope) => (
-                          <Tag key={scope} className="m-0 text-[10px]">
+                          <Tag key={scope} className="m-0 text-xs">
                             {scope.replace("repositories:", "")}
                           </Tag>
                         ))}

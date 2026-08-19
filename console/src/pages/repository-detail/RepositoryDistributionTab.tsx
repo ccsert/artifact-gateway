@@ -490,7 +490,7 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
             <p className="truncate font-mono text-xs text-zinc-200">
               {selectedArtifact.coordinate}
             </p>
-            <p className="mt-0.5 break-all font-mono text-[11px] text-zinc-500">
+            <p className="mt-0.5 break-all font-mono text-xs text-zinc-500">
               {selectedArtifact.digest}
             </p>
           </div>

@@ -282,7 +282,7 @@ export function ScheduledTasksPanel() {
           <div className="text-xs text-zinc-400">
             {repository?.name ?? text("全局审计日志", "Global audit log")}
             {repository && (
-              <div className="mt-1 font-mono text-[11px] text-zinc-600">
+              <div className="mt-1 font-mono text-xs text-zinc-600">
                 {repository.format}
               </div>
             )}
@@ -324,7 +324,7 @@ export function ScheduledTasksPanel() {
             <span className="text-zinc-600">—</span>
           )}
           {task.lastRunAt && (
-            <div className="mt-1 whitespace-nowrap text-[11px] text-zinc-600">
+            <div className="mt-1 whitespace-nowrap text-xs text-zinc-600">
               {formatDate(task.lastRunAt, locale)}
             </div>
           )}
@@ -673,7 +673,7 @@ function TaskRunHistory({
       key: "target",
       width: 300,
       render: (_, run) => (
-        <div className="min-w-0 font-mono text-[11px] text-zinc-500">
+        <div className="min-w-0 font-mono text-xs text-zinc-500">
           <div>{run.targetKind ?? "—"}</div>
           {run.targetId && (
             <div className="mt-1 truncate" title={run.targetId}>

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { CheckOutlined, CopyOutlined } from "@ant-design/icons";
 import { Button, Collapse, Select, Tooltip } from "antd";
 import { usageFor } from "../lib/usage";
@@ -9,10 +8,12 @@ import { usePreferences } from "../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
+import { useClipboardAction } from "./ConsolePrimitives";
 
 function CopyButton({ text }: { text: string }) {
   const { text: localizedText } = usePreferences();
-  const [copied, setCopied] = useState(false);
+  const { copiedValue, copy } = useClipboardAction();
+  const copied = copiedValue === text;
   const label = copied
     ? localizedText("已复制", "Copied")
     : localizedText("复制", "Copy");
@@ -23,15 +24,7 @@ function CopyButton({ text }: { text: string }) {
         size="small"
         aria-label={label}
         icon={copied ? <CheckOutlined /> : <CopyOutlined />}
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(text);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          } catch {
-            /* ignore */
-          }
-        }}
+        onClick={() => void copy(text)}
       />
     </Tooltip>
   );
@@ -41,7 +34,7 @@ function Snippet({ snippet }: { snippet: UsageSnippet }) {
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+        <span className="text-xs uppercase tracking-wider text-zinc-500">
           {snippet.label}
         </span>
         <CopyButton text={snippet.code} />
@@ -119,7 +112,7 @@ export function ArtifactDetailView({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {meta.publisher && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+            <div className="text-xs uppercase tracking-wider text-zinc-500">
               {text("发布者", "Publisher")}
             </div>
             <div
@@ -132,7 +125,7 @@ export function ArtifactDetailView({
         )}
         {meta.size !== undefined && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+            <div className="text-xs uppercase tracking-wider text-zinc-500">
               {text("大小", "Size")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-zinc-100">
@@ -142,7 +135,7 @@ export function ArtifactDetailView({
         )}
         {meta.createdAt && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+            <div className="text-xs uppercase tracking-wider text-zinc-500">
               {timestampLabel ?? text("发布时间", "Published")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-zinc-100">
@@ -152,7 +145,7 @@ export function ArtifactDetailView({
         )}
         {meta.contentType && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+            <div className="text-xs uppercase tracking-wider text-zinc-500">
               {text("内容类型", "Content type")}
             </div>
             <div
@@ -165,7 +158,7 @@ export function ArtifactDetailView({
         )}
         {meta.state && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+            <div className="text-xs uppercase tracking-wider text-zinc-500">
               {text("状态", "State")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-zinc-100">
@@ -176,7 +169,7 @@ export function ArtifactDetailView({
       </div>
       {meta.digest && (
         <div className="rounded-lg border border-zinc-800 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+          <div className="text-xs uppercase tracking-wider text-zinc-500">
             {text("摘要 (digest)", "Digest")}
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-2">
@@ -296,7 +289,7 @@ export function VersionList({
                 {item?.label ?? option.label}
               </span>
               {item?.hint && (
-                <span className="truncate text-[11px] text-zinc-500">
+                <span className="truncate text-xs text-zinc-500">
                   {item.hint}
                 </span>
               )}

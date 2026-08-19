@@ -154,7 +154,7 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
       render: (values: AuthorizationScope[]) => (
         <Space size={[4, 4]} wrap>
           {values.map((scope) => (
-            <Tag key={scope} className="font-mono text-[11px]">
+            <Tag key={scope} className="font-mono text-xs">
               {scope.replace("repositories:", "")}
             </Tag>
           ))}

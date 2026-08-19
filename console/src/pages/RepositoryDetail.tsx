@@ -387,7 +387,7 @@ function EffectiveAccessPanel({
               <div className="mt-4">
                 <AccessDecisionSummary access={effectiveAccess} />
               </div>
-              <div className="mt-3 text-[10px] text-zinc-600">
+              <div className="mt-3 text-xs text-zinc-600">
                 {text(
                   "判定顺序：管理员身份 → 全局角色 → 仓库授权 → 旧版静态策略。",
                   "Decision order: administrator identity → global role → repository grant → legacy static policy.",
@@ -820,7 +820,7 @@ function RepositorySettingsTab({
           </Space>
         )}
         {capabilities && (
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-zinc-800/70 pt-4 text-[11px] text-zinc-500">
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-zinc-800/70 pt-4 text-xs text-zinc-500">
             <span className="mr-1">
               {text("支持的操作", "Supported operations")}
             </span>

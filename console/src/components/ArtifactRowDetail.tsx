@@ -493,7 +493,7 @@ export function ConanArtifactDetail({
                         <div className="font-mono text-xs text-zinc-200">
                           {item.packageId}#{item.revision}
                         </div>
-                        <div className="mt-0.5 text-[11px] text-zinc-500">
+                        <div className="mt-0.5 text-xs text-zinc-500">
                           {item.digest.slice(0, 18)} ·{" "}
                           {formatDate(item.createdAt, locale)}
                         </div>

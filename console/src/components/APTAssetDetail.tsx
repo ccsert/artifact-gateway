@@ -38,7 +38,7 @@ export function APTAssetDetail({
       extra={
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+            <div className="text-xs uppercase tracking-wider text-zinc-500">
               {text("APT 资产类型", "APT asset type")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-zinc-100">
@@ -47,7 +47,7 @@ export function APTAssetDetail({
           </div>
           {meta.cachedAt && (
             <div className="rounded-lg border border-zinc-800 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              <div className="text-xs uppercase tracking-wider text-zinc-500">
                 {text("最近缓存", "Last cached")}
               </div>
               <div className="mt-0.5 text-xs font-semibold text-zinc-100">
@@ -57,7 +57,7 @@ export function APTAssetDetail({
           )}
           {meta.sourceUrl && (
             <div className="min-w-0 rounded-lg border border-zinc-800 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              <div className="text-xs uppercase tracking-wider text-zinc-500">
                 {text("上游地址", "Upstream URL")}
               </div>
               <a

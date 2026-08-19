@@ -260,7 +260,7 @@ export function ResourcePrefixEditor({
         <>
           {fields}
           <div
-            className="truncate font-mono text-[10px] text-zinc-500"
+            className="truncate font-mono text-xs text-zinc-500"
             title={value}
           >
             {text("实际前缀", "Canonical prefix")}: {value}

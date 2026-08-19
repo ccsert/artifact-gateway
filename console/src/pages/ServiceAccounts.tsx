@@ -483,7 +483,7 @@ export function ServiceAccountsPage() {
       ) : (
         <div className="ag-page-primary ag-service-account-workspace grid items-start gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
           <Card bodyClassName="p-2">
-            <div className="px-2 pb-2 pt-1 text-[11px] font-medium uppercase tracking-wider text-zinc-600">
+            <div className="px-2 pb-2 pt-1 text-xs font-medium uppercase tracking-wider text-zinc-600">
               {text("机器主体", "Machine principals")}
             </div>
             <div className="space-y-1">
@@ -581,7 +581,7 @@ export function ServiceAccountsPage() {
                   </Space>
                 </div>
                 <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2.5">
-                  <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-600">
+                  <div className="text-xs font-medium uppercase tracking-wider text-zinc-600">
                     {text("稳定授权主体", "Stable grant principal")}
                   </div>
                   <CopyableValue

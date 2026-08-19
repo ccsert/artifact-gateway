@@ -20,7 +20,7 @@ export function Sparkline({
   if (data.length < 2) {
     return (
       <div
-        className="flex h-8 items-center text-[10px] text-zinc-600"
+        className="flex h-8 items-center text-xs text-zinc-600"
         style={{ width }}
       >
         {label ?? "暂无历史数据"}
@@ -59,7 +59,7 @@ export function Sparkline({
         />
       </svg>
       {format && (
-        <span className="text-[11px] text-zinc-500">{format(latest)}</span>
+        <span className="text-xs text-zinc-500">{format(latest)}</span>
       )}
     </div>
   );

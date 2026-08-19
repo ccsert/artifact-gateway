@@ -216,13 +216,11 @@ export function RepositoryScanningTab({
             >
               {job.details?.coordinate ?? text("未知制品", "Unknown artifact")}
             </div>
-            <div className="font-mono text-[11px] text-zinc-600">
+            <div className="font-mono text-xs text-zinc-600">
               {job.details ? shortDigest(job.details.digest) : job.id}
             </div>
             {job.details && (
-              <div className="font-mono text-[11px] text-zinc-700">
-                {job.id}
-              </div>
+              <div className="font-mono text-xs text-zinc-600">{job.id}</div>
             )}
           </div>
         ),
@@ -440,7 +438,7 @@ export function RepositoryScanningTab({
                 }}
               />
               <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                <span className="text-[11px] leading-5 text-zinc-500">
+                <span className="text-xs leading-5 text-zinc-500">
                   {text(
                     "选择后会自动锁定规范坐标与完整摘要；最多显示 50 条，可输入关键词检索历史版本和 Conan 修订。仅在无法检索时使用高级手动输入。",
                     "Selection locks the canonical coordinate and full digest. Up to 50 matches are shown; search historical versions and Conan revisions by keyword. Use advanced manual input only as a recovery path.",
@@ -465,7 +463,7 @@ export function RepositoryScanningTab({
                   <p className="truncate font-mono text-xs text-zinc-200">
                     {selectedArtifact.coordinate}
                   </p>
-                  <p className="mt-0.5 break-all font-mono text-[11px] text-zinc-500">
+                  <p className="mt-0.5 break-all font-mono text-xs text-zinc-500">
                     {selectedArtifact.digest}
                   </p>
                 </div>

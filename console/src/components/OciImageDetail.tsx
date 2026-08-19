@@ -14,6 +14,7 @@ import { usePreferences } from "../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
+import { useClipboardAction } from "./ConsolePrimitives";
 
 interface OciDescriptor {
   mediaType: string;
@@ -168,7 +169,7 @@ export function OciImageDetail({
   const [manifestLoading, setManifestLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [deleting, setDeleting] = useState(false);
-  const [copiedUsage, setCopiedUsage] = useState<string | null>(null);
+  const { copiedValue, copy } = useClipboardAction(1400);
 
   const name = `${repository}/${image}`;
   const versions = ociVersionOptions(manifests ?? []);
@@ -303,22 +304,6 @@ export function OciImageDetail({
     }
   };
 
-  const copyUsage = async (snippet: UsageSnippet) => {
-    try {
-      await navigator.clipboard.writeText(snippet.code);
-      setCopiedUsage(snippet.code);
-      window.setTimeout(
-        () =>
-          setCopiedUsage((current) =>
-            current === snippet.code ? null : current,
-          ),
-        1400,
-      );
-    } catch {
-      setCopiedUsage(null);
-    }
-  };
-
   return (
     <div className="space-y-4">
       {error !== null && (
@@ -439,7 +424,7 @@ export function OciImageDetail({
             <div className="text-xs font-medium text-zinc-300">
               {text("使用方式", "Usage")}
             </div>
-            <div className="mt-1 text-[11px] text-zinc-500">
+            <div className="mt-1 text-xs text-zinc-500">
               {text(
                 "使用当前选中的标签或 Digest 访问镜像。",
                 "Use the selected tag or digest to pull this image.",
@@ -452,8 +437,8 @@ export function OciImageDetail({
                 <UsageSnippetBlock
                   key={snippet.label}
                   snippet={snippet}
-                  copied={copiedUsage === snippet.code}
-                  onCopy={() => void copyUsage(snippet)}
+                  copied={copiedValue === snippet.code}
+                  onCopy={() => void copy(snippet.code)}
                 />
               ),
             )}
@@ -468,7 +453,7 @@ export function OciImageDetail({
           {/* 概要 */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-lg border border-zinc-800 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              <div className="text-xs uppercase tracking-wider text-zinc-500">
                 {text("镜像大小", "Image size")}
               </div>
               <div className="mt-0.5 text-sm font-semibold text-zinc-100">
@@ -477,16 +462,16 @@ export function OciImageDetail({
                   : text("无层数据", "No layer data")}
               </div>
               {!hasImageDescriptors && (
-                <div className="mt-1 text-[10px] leading-4 text-zinc-600">
+                <div className="mt-1 text-xs leading-4 text-zinc-600">
                   {text("仅包含 Manifest 元数据", "Manifest metadata only")}
                 </div>
               )}
-              <div className="mt-1 text-[10px] leading-4 text-zinc-600">
+              <div className="mt-1 text-xs leading-4 text-zinc-600">
                 Manifest JSON {formatBytes(selectedVersion?.size)}
               </div>
             </div>
             <div className="rounded-lg border border-zinc-800 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              <div className="text-xs uppercase tracking-wider text-zinc-500">
                 {text("层数", "Layers")}
               </div>
               <div className="mt-0.5 text-sm font-semibold text-zinc-100">
@@ -494,7 +479,7 @@ export function OciImageDetail({
               </div>
             </div>
             <div className="rounded-lg border border-zinc-800 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              <div className="text-xs uppercase tracking-wider text-zinc-500">
                 {text("架构 / 系统", "Architecture / OS")}
               </div>
               <div className="mt-0.5 text-sm font-semibold text-zinc-100">
@@ -502,7 +487,7 @@ export function OciImageDetail({
               </div>
             </div>
             <div className="rounded-lg border border-zinc-800 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              <div className="text-xs uppercase tracking-wider text-zinc-500">
                 {text("创建时间", "Created")}
               </div>
               <div className="mt-0.5 text-sm font-semibold text-zinc-100">
@@ -514,7 +499,7 @@ export function OciImageDetail({
           {/* 启动配置 */}
           {config?.config && (
             <div className="rounded-lg border border-zinc-800 px-3 py-2.5 text-xs">
-              <div className="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
+              <div className="mb-1.5 text-xs uppercase tracking-wider text-zinc-500">
                 {text("启动配置", "Runtime configuration")}
               </div>
               <div className="space-y-1 font-mono">
@@ -548,7 +533,7 @@ export function OciImageDetail({
 
           {/* 层列表 */}
           <div>
-            <div className="mb-1.5 flex items-center gap-2 text-[10px] uppercase tracking-wider text-zinc-500">
+            <div className="mb-1.5 flex items-center gap-2 text-xs uppercase tracking-wider text-zinc-500">
               {text("文件层", "Layers")} ({manifest.layers?.length ?? 0})
               {manifest.mediaType && (
                 <Badge tone="zinc">{manifest.mediaType.split(".").pop()}</Badge>

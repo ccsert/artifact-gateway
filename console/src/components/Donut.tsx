@@ -71,7 +71,7 @@ export function Donut({
               </span>
             )}
             {centerSub && (
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+              <span className="text-xs uppercase tracking-wider text-zinc-500">
                 {centerSub}
               </span>
             )}

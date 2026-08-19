@@ -18,7 +18,7 @@ export function PolicyCard({
     <Card className="min-w-0">
       <div className="flex flex-wrap items-start justify-between gap-5 border-b border-zinc-800/70 px-6 py-5">
         <div className="min-w-0 max-w-3xl">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600">
             {eyebrow}
           </div>
           <h3 className="mt-1.5 text-base font-semibold text-zinc-100">
@@ -38,7 +38,7 @@ export function PolicyCard({
 export function ScopeFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 bg-[var(--ag-table-header)] px-4 py-3">
-      <div className="text-[11px] font-medium text-zinc-600">{label}</div>
+      <div className="text-xs font-medium text-zinc-600">{label}</div>
       <div
         className="mt-1 truncate text-xs font-medium text-zinc-300"
         title={value}

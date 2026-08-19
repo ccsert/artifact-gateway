@@ -24,7 +24,7 @@ function runtimeNodeColumns(
         <div className="min-w-0">
           <div className="font-mono text-xs text-zinc-200">{value}</div>
           <div
-            className="truncate text-[11px] text-zinc-600"
+            className="truncate text-xs text-zinc-600"
             title={node.sessionId}
           >
             {text("会话", "Session")} {node.sessionId.slice(0, 12)}…
@@ -64,7 +64,7 @@ function runtimeNodeColumns(
             </span>
           )}
           {node.workerKinds.length > 0 && (
-            <span className="ml-1 text-[11px] text-zinc-500">
+            <span className="ml-1 text-xs text-zinc-500">
               {node.workerKinds.join(" · ")}
             </span>
           )}
@@ -202,7 +202,7 @@ export function RuntimeNodesPanel({
             <div className="space-y-1">
               {(health.issues ?? []).map((issue) => (
                 <div key={issue.code}>
-                  <span className="font-mono text-[11px] text-zinc-500">
+                  <span className="font-mono text-xs text-zinc-500">
                     {issue.code}
                   </span>
                   <span className="ml-2">{issue.message}</span>

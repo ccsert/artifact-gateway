@@ -18,7 +18,7 @@ import type {
 import { formatDate } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
 import { FormatBadge, StateBadge } from "./Badge";
-import { MetricStrip } from "./ConsolePrimitives";
+import { MetricStrip, useClipboardAction } from "./ConsolePrimitives";
 import { ErrorBanner, Loading } from "./Feedback";
 import { Card, CardHeader } from "./Layout";
 
@@ -118,7 +118,8 @@ export function SystemDiagnosticsPanel() {
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copiedValue, copy } = useClipboardAction();
+  const copied = copiedValue === "diagnostics";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -264,17 +265,9 @@ export function SystemDiagnosticsPanel() {
                   "Copy sanitized diagnostics JSON",
                 )}
                 icon={<CopyOutlined />}
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(
-                      JSON.stringify(diagnostics, null, 2),
-                    );
-                    setCopied(true);
-                    window.setTimeout(() => setCopied(false), 1500);
-                  } catch {
-                    // Clipboard access can be unavailable in an insecure local context.
-                  }
-                }}
+                onClick={() =>
+                  void copy(JSON.stringify(diagnostics, null, 2), "diagnostics")
+                }
               >
                 {copied ? text("已复制", "Copied") : text("复制", "Copy")}
               </Button>
@@ -558,7 +551,7 @@ export function SystemDiagnosticsPanel() {
                       {text("制品扫描器", "Artifact scanner")} · {scanner.name}
                     </span>
                     {scanner.version && (
-                      <span className="font-mono text-[11px] text-zinc-500">
+                      <span className="font-mono text-xs text-zinc-500">
                         {scanner.version}
                       </span>
                     )}
@@ -568,7 +561,7 @@ export function SystemDiagnosticsPanel() {
                   </div>
                   {scanner.formats.length > 0 && (
                     <Tooltip title={scanner.formats.join(" · ")}>
-                      <div className="mt-1 break-words font-mono text-[11px] leading-5 text-zinc-600">
+                      <div className="mt-1 break-words font-mono text-xs leading-5 text-zinc-600">
                         {text("覆盖格式", "Formats")}:{" "}
                         {scanner.formats.join(" · ")}
                       </div>

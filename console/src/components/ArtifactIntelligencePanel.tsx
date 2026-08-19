@@ -104,7 +104,7 @@ export function ArtifactIntelligencePanel({
     >
       <div className="grid gap-4 lg:grid-cols-4">
         <div>
-          <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
             {text("签名", "Signatures")}
           </div>
           <div className="text-sm text-zinc-200">
@@ -127,7 +127,7 @@ export function ArtifactIntelligencePanel({
           ))}
         </div>
         <div>
-          <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
             SBOM
           </div>
           <div className="text-sm text-zinc-200">
@@ -149,7 +149,7 @@ export function ArtifactIntelligencePanel({
           ))}
         </div>
         <div>
-          <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
             {text("构建来源", "Provenance")}
           </div>
           {metadata.provenance ? (
@@ -175,7 +175,7 @@ export function ArtifactIntelligencePanel({
           )}
         </div>
         <div>
-          <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
             {text("漏洞摘要", "Vulnerabilities")}
           </div>
           {vulnerability ? (

@@ -217,9 +217,7 @@ function Principal({ value }: { value: string }) {
         <div className="text-xs font-medium text-zinc-200">
           {text("用户", "User")} · {value.slice("user:".length)}
         </div>
-        <div className="mt-0.5 font-mono text-[10px] text-zinc-600">
-          {value}
-        </div>
+        <div className="mt-0.5 font-mono text-xs text-zinc-600">{value}</div>
       </div>
     );
   }
@@ -239,9 +237,7 @@ function Principal({ value }: { value: string }) {
         <div className="text-xs font-medium text-zinc-200">
           {text("OIDC / 自定义", "OIDC / custom")}
         </div>
-        <div className="mt-0.5 font-mono text-[10px] text-zinc-500">
-          {value}
-        </div>
+        <div className="mt-0.5 font-mono text-xs text-zinc-500">{value}</div>
       </div>
     );
   }
@@ -668,7 +664,7 @@ export function AccessControlPage() {
           <span>
             <Badge tone={scope.tone}>{scope.label}</Badge>
             {scope.key === "admin" && (
-              <span className="ml-2 text-[10px] text-rose-300">
+              <span className="ml-2 text-xs text-rose-300">
                 {text("高权限", "Elevated")}
               </span>
             )}
@@ -1032,7 +1028,7 @@ export function AccessControlPage() {
                             onPressEnter={() => void runEvaluation()}
                           />
                         </FilterField>
-                        <div className="col-span-3 flex items-end pb-2 text-[11px] text-zinc-600">
+                        <div className="col-span-3 flex items-end pb-2 text-xs text-zinc-600">
                           {text(
                             "该值必须与认证完成后产生的 actor 完全一致；OIDC 角色需按实际映射结果选择。",
                             "This must exactly match the authenticated actor; choose the global role produced by the OIDC mapping.",
@@ -1103,7 +1099,7 @@ export function AccessControlPage() {
                                   {index + 1}.{" "}
                                   {english ? step.titleEn : step.title}
                                 </div>
-                                <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+                                <p className="mt-1 text-xs leading-5 text-zinc-500">
                                   {english ? step.textEn : step.text}
                                 </p>
                               </div>
@@ -1163,7 +1159,7 @@ export function AccessControlPage() {
                       </div>
                       <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
                         <div className="text-right">
-                          <div className="text-[11px] uppercase tracking-wider text-zinc-600">
+                          <div className="text-xs uppercase tracking-wider text-zinc-600">
                             {text("公开范围", "Public surface")}
                           </div>
                           <div className="mt-0.5 text-sm font-medium text-zinc-200">
@@ -1265,7 +1261,7 @@ export function AccessControlPage() {
                           <span className="flex size-7 items-center justify-center rounded-lg bg-zinc-800 text-zinc-400">
                             {layer.icon}
                           </span>
-                          <span className="text-[11px] font-semibold text-zinc-600">
+                          <span className="text-xs font-semibold text-zinc-600">
                             0{index + 1}
                           </span>
                           {layer.title}

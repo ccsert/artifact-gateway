@@ -368,7 +368,7 @@ function ProxyMavenUsage({
     <div className="mb-5 space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
       <div className="grid gap-3 lg:grid-cols-4">
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+          <div className="text-xs uppercase tracking-wider text-zinc-500">
             {text("上游", "Upstream")}
           </div>
           <div
@@ -379,7 +379,7 @@ function ProxyMavenUsage({
           </div>
         </div>
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+          <div className="text-xs uppercase tracking-wider text-zinc-500">
             {text("健康", "Health")}
           </div>
           <div
@@ -393,7 +393,7 @@ function ProxyMavenUsage({
           </div>
         </div>
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+          <div className="text-xs uppercase tracking-wider text-zinc-500">
             Circuit
           </div>
           <div
@@ -403,7 +403,7 @@ function ProxyMavenUsage({
           </div>
         </div>
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+          <div className="text-xs uppercase tracking-wider text-zinc-500">
             {text("缓存", "Cache")}
           </div>
           <div className="mt-1 text-xs font-semibold text-zinc-100">
@@ -541,7 +541,7 @@ function ProxyMavenUsage({
             {text("清理负缓存", "Clear negative cache")}
           </Button>
         </div>
-        <div className="mt-1 text-[11px] text-zinc-600">
+        <div className="mt-1 text-xs text-zinc-600">
           {text(
             "版本、组件和全部会按对应 Maven 缓存前缀失效；只删除缓存索引，字节对象由 Orphan Collector 延迟回收。",
             "Version, component, and repository invalidations use their Maven cache prefixes. Only cache indexes are removed; byte objects are reclaimed later by the orphan collector.",
@@ -630,7 +630,7 @@ function ProxyMavenCacheDetail({
               </code>
               {file.sidecar && <Badge tone="zinc">checksum</Badge>}
             </div>
-            <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-zinc-500">
+            <div className="mt-1 flex flex-wrap gap-3 text-xs text-zinc-500">
               <span>{formatBytes(file.size)}</span>
               {file.contentType && <span>{file.contentType}</span>}
               {file.digest && (
@@ -640,7 +640,7 @@ function ProxyMavenCacheDetail({
           </div>
           <CopyButton text={url} />
         </div>
-        <code className="mt-1 block break-all font-mono text-[11px] leading-5 text-cyan-300">
+        <code className="mt-1 block break-all font-mono text-xs leading-5 text-cyan-300">
           {url}
         </code>
       </div>
@@ -651,7 +651,7 @@ function ProxyMavenCacheDetail({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-lg border border-zinc-800 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+          <div className="text-xs uppercase tracking-wider text-zinc-500">
             {text("主文件大小", "Primary size")}
           </div>
           <div className="mt-0.5 text-xs font-semibold text-zinc-100">
@@ -659,7 +659,7 @@ function ProxyMavenCacheDetail({
           </div>
         </div>
         <div className="rounded-lg border border-zinc-800 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+          <div className="text-xs uppercase tracking-wider text-zinc-500">
             {text("文件数", "Files")}
           </div>
           <div className="mt-0.5 text-xs font-semibold text-zinc-100">
@@ -668,7 +668,7 @@ function ProxyMavenCacheDetail({
         </div>
         {meta.publisher && (
           <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+            <div className="text-xs uppercase tracking-wider text-zinc-500">
               {text("成员", "Member")}
             </div>
             <div
@@ -713,7 +713,7 @@ function ProxyMavenCacheDetail({
       )}
 
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/60">
-        <div className="border-b border-zinc-800 px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-500">
+        <div className="border-b border-zinc-800 px-3 py-2 text-xs uppercase tracking-wider text-zinc-500">
           {text("文件明细", "File details")}
         </div>
         <div className="divide-y divide-zinc-800/70">
