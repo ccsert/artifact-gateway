@@ -20,6 +20,7 @@ import (
 
 	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/semver"
@@ -48,6 +49,7 @@ type nativeGoHandler struct {
 type nativeGoPublicationStore interface {
 	repository.NativeGoStore
 	repository.RepositoryCapacityStore
+	repository.LifecycleJobStore
 }
 
 type goRoute struct {
@@ -439,6 +441,11 @@ func (h nativeGoHandler) publish(w http.ResponseWriter, r *http.Request, repo re
 			return
 		}
 		if errors.Is(statErr, objectstore.ErrNotFound) {
+			if _, err = enqueueGoPublicationReclaim(publicationCtx, h.store, repo.ID, asset.ObjectKey); err != nil {
+				h.cleanupGoPublicationObjects(publicationCtx, createdKeys)
+				h.writePublishError(w, http.StatusInternalServerError, "persist Go module recovery intent failed")
+				return
+			}
 			createdKeys = append(createdKeys, asset.ObjectKey)
 		}
 		var reader io.Reader = bytes.NewReader(bodies[asset.Kind])
@@ -463,6 +470,19 @@ func (h nativeGoHandler) publish(w http.ResponseWriter, r *http.Request, repo re
 		return
 	}
 	h.writeGoPublicationSuccess(w, r, repo, route, publisher, version, assets[2], replayed)
+}
+
+func enqueueGoPublicationReclaim(ctx context.Context, store repository.LifecycleJobStore, repositoryID, objectKey string) (repository.LifecycleJob, error) {
+	payload, err := json.Marshal(goReclaimPayload{Format: repository.FormatGo, ObjectKey: objectKey})
+	if err != nil {
+		return repository.LifecycleJob{}, err
+	}
+	jobID := uuid.NewString()
+	job, _, err := store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{
+		ID: jobID, RepositoryID: repositoryID, Kind: repository.LifecycleJobReclaim,
+		IdempotencyKey: "go-publication-object:" + jobID, Payload: payload,
+	})
+	return job, err
 }
 
 func (h nativeGoHandler) ensureGoPublicationCapacity(ctx context.Context, repositoryID string, assets []repository.GoModuleAsset) error {

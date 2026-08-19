@@ -24,6 +24,17 @@ type failNthGoPutStore struct {
 	puts   int
 }
 
+type failingGoReclaimEnqueueStore struct {
+	*repository.MemoryStore
+}
+
+func (s *failingGoReclaimEnqueueStore) EnqueueLifecycleJob(ctx context.Context, job repository.LifecycleJob) (repository.LifecycleJob, bool, error) {
+	if job.Kind == repository.LifecycleJobReclaim {
+		return repository.LifecycleJob{}, false, errors.New("injected Go reclaim enqueue failure")
+	}
+	return s.MemoryStore.EnqueueLifecycleJob(ctx, job)
+}
+
 func (s *failNthGoPutStore) PutVerifiedReader(ctx context.Context, key string, reader io.Reader, size int64, digest string) error {
 	s.puts++
 	if s.puts == s.failAt {
@@ -178,8 +189,48 @@ func TestNativeGoHostedPublishesCanonicalZipAndServesModule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(jobs) != 1 || jobs[0].Kind != repository.LifecycleJobScan {
-		t.Fatalf("publication scan jobs=%#v", jobs)
+	var scanJobs, reclaimJobs int
+	for _, job := range jobs {
+		switch job.Kind {
+		case repository.LifecycleJobScan:
+			scanJobs++
+		case repository.LifecycleJobReclaim:
+			reclaimJobs++
+		}
+	}
+	if scanJobs != 1 || reclaimJobs != 3 {
+		t.Fatalf("publication jobs=%#v", jobs)
+	}
+}
+
+func TestNativeGoHostedDoesNotWriteBeforeDurableReclaimIntent(t *testing.T) {
+	const (
+		modulePath = "example.com/team/durable-intent"
+		version    = "v1.0.0"
+	)
+	store := &failingGoReclaimEnqueueStore{MemoryStore: repository.NewMemoryStore()}
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "go-hosted-durable-intent", Name: "go-hosted-durable-intent", Format: repository.FormatGo, Type: repository.RepositoryTypeHosted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grantGoPublisher(t, store.MemoryStore, repo.ID)
+	objects := NewMemoryOCIObjectStore()
+	handler := NewGatewayHandler(Dependencies{NativeGoObjectStore: objects}, store, TestAdapter{}, testAuthenticator())
+	archive := goModuleFixtureZip(t, modulePath, version, map[string]string{
+		"go.mod": "module " + modulePath + "\n", "durable.go": "package durable\n",
+	})
+	request := httptest.NewRequest(http.MethodPut, "/go/"+repo.Name+"/"+modulePath+"/@v/"+version+".zip", bytes.NewReader(archive))
+	authorize(request, "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("enqueue failure publish=%d body=%s", response.Code, response.Body.String())
+	}
+	keys, err := objects.List(context.Background(), "native/go/")
+	if err != nil || len(keys) != 0 {
+		t.Fatalf("enqueue failure wrote objects=%v err=%v", keys, err)
 	}
 }
 

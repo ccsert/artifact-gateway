@@ -8,19 +8,8 @@ import (
 )
 
 func (s *PostgresStore) LockGoObject(ctx context.Context, objectKey string) (func(), error) {
-	conn, err := s.db.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	lockKey := "native-go-object:" + objectKey
-	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, lockKey); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	return func() {
-		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, lockKey)
-		_ = conn.Close()
-	}, nil
+	_, release, err := s.LockArtifactObjectKeys(ctx, FormatGo, []string{objectKey})
+	return release, err
 }
 
 func (s *PostgresStore) SyncGoProxyVersions(ctx context.Context, repositoryID, modulePath string, versions []GoModuleVersion) error {

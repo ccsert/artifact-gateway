@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -295,5 +296,37 @@ func TestPostgresRustFSGoHostedPublicationIsAtomicAcrossGatewayInstances(t *test
 	capacity, err := storeB.GetRepositoryCapacity(ctx, repo.ID)
 	if err != nil || capacity.ObjectCount != 3 || capacity.UsedBytes <= int64(len(archive)) {
 		t.Fatalf("Go Hosted capacity=%#v err=%v", capacity, err)
+	}
+
+	orphanKey := "native/go/sha256/" + strings.Repeat("d", 64)
+	if err = objectsA.Put(ctx, orphanKey, []byte("orphan")); err != nil {
+		t.Fatal(err)
+	}
+	orphanJob, err := enqueueGoPublicationReclaim(ctx, storeA, repo.ID, orphanKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	maintenance := NativeGoMaintenance{Store: storeB, Objects: objectsB}
+	// The publication created three older intents. Processing one job per pass
+	// demonstrates that the cross-instance worker retains every referenced
+	// publication object before it reaches and deletes the orphan.
+	for range 4 {
+		if err = maintenance.RunReclaimJobs(ctx, 10); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = objectsB.Stat(ctx, orphanKey); !errors.Is(err, objectstore.ErrNotFound) {
+		t.Fatalf("cross-instance orphan object still exists: %v", err)
+	}
+	orphanJob, err = storeA.GetLifecycleJob(ctx, repo.ID, orphanJob.ID)
+	if err != nil || orphanJob.State != repository.LifecycleJobCompleted {
+		t.Fatalf("cross-instance reclaim job=%#v err=%v", orphanJob, err)
+	}
+	zipAsset, err := storeA.GetGoModuleAsset(ctx, repo.ID, modulePath, version, "zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = objectsA.Stat(ctx, zipAsset.ObjectKey); err != nil {
+		t.Fatalf("referenced Hosted ZIP was reclaimed: %v", err)
 	}
 }

@@ -150,15 +150,13 @@ func SupportedFormats() []Format {
 	return formats
 }
 
-// WorkerFormats returns formats with executable background work. APT is
-// included for its management-only staged-upload reclaim even while its public
-// profile remains Proxy/Group-only. Formats without declared background
-// operations, including the initial Go Hosted slice, must not be
-// scheduled until they own executable worker behavior.
+// WorkerFormats returns formats with executable background work. APT and Go
+// are included for internal recovery/reclaim workers even though those
+// operations are not advertised as user-facing lifecycle capabilities.
 func WorkerFormats() []Format {
 	formats := make([]Format, 0, len(supportedFormatProfiles))
 	for _, profile := range supportedFormatProfiles {
-		if profile.Format == FormatAPT || hasBackgroundOperation(profile.HostedOperations) || hasBackgroundOperation(profile.ProxyOperations) {
+		if profile.Format == FormatAPT || profile.Format == FormatGo || hasBackgroundOperation(profile.HostedOperations) || hasBackgroundOperation(profile.ProxyOperations) {
 			formats = append(formats, profile.Format)
 		}
 	}

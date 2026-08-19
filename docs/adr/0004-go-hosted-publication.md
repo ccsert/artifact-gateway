@@ -26,6 +26,13 @@ without changing the first publication time. Reusing the coordinate with
 different ZIP or `go.mod` bytes returns `409`. A failed or conflicting request
 never exposes a partial version.
 
+Before writing any previously missing object, the Gateway persists an internal
+reclaim intent. The reclaim worker serializes on the same object lock, retains
+objects referenced by a committed publication, and retries deletion of
+unreferenced objects after database or object-store failures. This is crash
+recovery for the publication transaction boundary, not the user-facing
+delete/restore/reclaim lifecycle capability described below.
+
 The extension requires authenticated Repository write permission and is
 available only for Go Hosted Repositories. Go Proxy Repositories remain
 read-only and keep verified read-through caching. Groups combine Hosted and

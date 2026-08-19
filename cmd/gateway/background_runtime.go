@@ -83,7 +83,18 @@ func (r backgroundRuntime) startWorkers(ctx context.Context, cfg config.Config, 
 	r.startConanWorkers(ctx, cfg)
 	r.startNPMWorkers(ctx, cfg)
 	r.startPyPIWorkers(ctx, cfg)
+	r.startGoWorkers(ctx, cfg)
 	r.startAPTWorkers(ctx, cfg)
+}
+
+func (r backgroundRuntime) startGoWorkers(ctx context.Context, cfg config.Config) {
+	if goReclaimWorkerEnabled(cfg) {
+		app.NativeGoMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
+	}
+}
+
+func goReclaimWorkerEnabled(cfg config.Config) bool {
+	return cfg.WorkerEnabled("go", "reclaim")
 }
 
 func (r backgroundRuntime) startAPTWorkers(ctx context.Context, cfg config.Config) {

@@ -142,12 +142,13 @@ func TestWorkerFormatsReflectExecutableBackgroundWork(t *testing.T) {
 	for _, format := range WorkerFormats() {
 		found[format] = true
 	}
-	for _, format := range []Format{FormatNPM, FormatPyPI, FormatAPT} {
+	for _, format := range []Format{FormatNPM, FormatPyPI, FormatGo, FormatAPT} {
 		if !found[format] {
 			t.Fatalf("%s lifecycle workers are missing", format)
 		}
 	}
-	if found[FormatGo] {
-		t.Fatal("Go Hosted has no lifecycle worker capability yet")
+	profile, ok := FormatProfileFor(FormatGo)
+	if !ok || hasBackgroundOperation(profile.HostedOperations) {
+		t.Fatalf("Go recovery worker leaked into user-facing lifecycle capabilities: %#v", profile)
 	}
 }
