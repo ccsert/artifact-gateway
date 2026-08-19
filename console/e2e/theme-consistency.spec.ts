@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { authenticateAsAdmin } from "./support/auth";
 
 async function mockFormatProfiles(page: Page) {
@@ -34,6 +34,43 @@ function measureLifecycleInsets(root: HTMLElement) {
   };
 }
 
+async function measurePanelArtwork(panel: Locator) {
+  return panel.evaluate(async (element) => {
+    const style = getComputedStyle(element, "::before");
+    const source = style.backgroundImage.match(/url\(["']?(.*?)["']?\)/)?.[1];
+    if (!source) throw new Error("Login artwork URL is missing");
+
+    const image = new Image();
+    image.src = source;
+    await image.decode();
+
+    const panelBox = element.getBoundingClientRect();
+    const sourceRatio = image.naturalWidth / image.naturalHeight;
+    const panelRatio = panelBox.width / panelBox.height;
+    const widthConstrained = panelRatio >= sourceRatio;
+    const effectiveDensity = widthConstrained
+      ? image.naturalWidth / panelBox.width
+      : image.naturalHeight / panelBox.height;
+    const renderedWidth = image.naturalWidth / effectiveDensity;
+    const renderedHeight = image.naturalHeight / effectiveDensity;
+    const cropFraction = widthConstrained
+      ? 1 - panelBox.height / renderedHeight
+      : 1 - panelBox.width / renderedWidth;
+
+    return {
+      source,
+      sourceWidth: image.naturalWidth,
+      sourceHeight: image.naturalHeight,
+      panelWidth: panelBox.width,
+      panelHeight: panelBox.height,
+      effectiveDensity,
+      cropFraction,
+      backgroundSize: style.backgroundSize,
+      pointerEvents: style.pointerEvents,
+    };
+  });
+}
+
 test("theme and language preferences persist on the sign-in surface", async ({
   page,
 }) => {
@@ -45,7 +82,17 @@ test("theme and language preferences persist on the sign-in surface", async ({
   );
 
   await page.goto("/login");
-  await page.getByRole("button", { name: "切换到亮色模式" }).click();
+  await expect
+    .poll(() =>
+      page
+        .locator(".ag-login-brand-panel")
+        .evaluate(
+          (panel) => getComputedStyle(panel, "::before").backgroundImage,
+        ),
+    )
+    .toContain("artifact-control-plane.webp");
+  await page.getByRole("button", { name: /选择主题.*Gateway Dark/ }).click();
+  await page.getByRole("menuitem", { name: /Gateway Light/ }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect
     .poll(() =>
@@ -80,11 +127,20 @@ test("theme and language preferences persist on the sign-in surface", async ({
       };
     });
   expect(loginSurfaces).toEqual({
-    brandBackground: "rgb(17, 24, 29)",
-    brandDescription: "rgb(161, 161, 170)",
+    brandBackground: "rgb(238, 243, 245)",
+    brandDescription: "rgb(82, 82, 91)",
     formBackground: "rgb(255, 255, 255)",
     heading: "rgb(24, 24, 27)",
   });
+  await expect
+    .poll(() =>
+      page
+        .locator(".ag-login-brand-panel")
+        .evaluate(
+          (panel) => getComputedStyle(panel, "::before").backgroundImage,
+        ),
+    )
+    .toContain("artifact-control-plane-light.webp");
 
   await page.getByRole("button", { name: "语言" }).click();
   await page.getByRole("menuitem", { name: "English" }).click();
@@ -102,8 +158,179 @@ test("theme and language preferences persist on the sign-in surface", async ({
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(page.locator("html")).toHaveAttribute("lang", "en-US");
   await expect(
-    page.getByRole("button", { name: "Switch to dark mode" }),
+    page.getByRole("button", { name: /Choose theme.*Gateway Light/ }),
   ).toBeVisible();
+});
+
+test("generated sign-in artwork stays theme-aware and size-appropriate", async ({
+  browser,
+  page,
+}, testInfo) => {
+  await page.route("**/auth/session", (route) =>
+    route.fulfill({ json: { authenticated: false } }),
+  );
+  await page.route("**/auth/oidc/config", (route) =>
+    route.fulfill({ json: { enabled: false } }),
+  );
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const artworkResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes("artifact-control-plane.webp") && response.ok(),
+  );
+  await page.goto("/login");
+  await artworkResponse;
+
+  const brandPanel = page.locator(".ag-login-brand-panel");
+  await expect(brandPanel).toBeVisible();
+  const brandLayout = await brandPanel.evaluate((panel) => {
+    const panelBox = panel.getBoundingClientRect();
+    const copyBox = panel
+      .querySelector<HTMLElement>(".ag-login-brand-copy")
+      ?.getBoundingClientRect();
+    const noteBox = panel
+      .querySelector<HTMLElement>(".ag-login-security-note")
+      ?.getBoundingClientRect();
+    return {
+      copyInside:
+        Boolean(copyBox) &&
+        copyBox!.left >= panelBox.left &&
+        copyBox!.right <= panelBox.right &&
+        copyBox!.top >= panelBox.top,
+      noteInside:
+        Boolean(noteBox) &&
+        noteBox!.left >= panelBox.left &&
+        noteBox!.right <= panelBox.right &&
+        noteBox!.bottom <= panelBox.bottom,
+      surfacesOverlap: Boolean(
+        copyBox && noteBox && copyBox.bottom > noteBox.top,
+      ),
+    };
+  });
+  expect(brandLayout).toMatchObject({
+    copyInside: true,
+    noteInside: true,
+    surfacesOverlap: false,
+  });
+  const desktopDarkArtwork = await measurePanelArtwork(brandPanel);
+  expect(desktopDarkArtwork).toMatchObject({
+    sourceWidth: 1024,
+    sourceHeight: 1536,
+    backgroundSize: "cover",
+    pointerEvents: "none",
+  });
+  expect(desktopDarkArtwork.source).toContain("artifact-control-plane.webp");
+  expect(desktopDarkArtwork.effectiveDensity).toBeGreaterThanOrEqual(2);
+  expect(desktopDarkArtwork.cropFraction).toBeLessThanOrEqual(0.08);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.body.scrollWidth - document.body.clientWidth,
+      ),
+    )
+    .toBeLessThanOrEqual(0);
+
+  if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+    await page.screenshot({
+      path: testInfo.outputPath("login-artwork-desktop.png"),
+      fullPage: true,
+    });
+  }
+
+  await page.setViewportSize({ width: 920, height: 900 });
+  await expect(brandPanel).toBeVisible();
+  const narrowDesktopArtwork = await measurePanelArtwork(brandPanel);
+  expect(narrowDesktopArtwork.effectiveDensity).toBeGreaterThanOrEqual(2);
+  expect(narrowDesktopArtwork.cropFraction).toBeLessThanOrEqual(0.14);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.body.scrollWidth - document.body.clientWidth,
+      ),
+    )
+    .toBeLessThanOrEqual(0);
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const lightArtworkResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes("artifact-control-plane-light.webp") &&
+      response.ok(),
+  );
+  await page.getByRole("button", { name: /选择主题.*Gateway Dark/ }).click();
+  await page.getByRole("menuitem", { name: /Gateway Light/ }).click();
+  await lightArtworkResponse;
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect
+    .poll(() =>
+      page
+        .locator(".ag-login-form .ant-input-affix-wrapper")
+        .first()
+        .evaluate((element) => getComputedStyle(element).backgroundColor),
+    )
+    .toBe("rgb(255, 255, 255)");
+  await expect
+    .poll(() =>
+      page
+        .locator(".ag-login-modes")
+        .evaluate((element) => getComputedStyle(element).backgroundColor),
+    )
+    .toBe("rgb(238, 240, 243)");
+  const desktopLightArtwork = await measurePanelArtwork(brandPanel);
+  expect(desktopLightArtwork.source).toContain(
+    "artifact-control-plane-light.webp",
+  );
+  expect(desktopLightArtwork.sourceWidth).toBe(desktopDarkArtwork.sourceWidth);
+  expect(desktopLightArtwork.sourceHeight).toBe(
+    desktopDarkArtwork.sourceHeight,
+  );
+  expect(desktopLightArtwork.effectiveDensity).toBeGreaterThanOrEqual(2);
+  expect(desktopLightArtwork.cropFraction).toBeLessThanOrEqual(0.08);
+
+  if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+    await page.mouse.move(12, 12);
+    await expect(page.getByRole("tooltip")).toBeHidden();
+    await page.screenshot({
+      path: testInfo.outputPath("login-artwork-light.png"),
+      fullPage: true,
+    });
+  }
+
+  const mobileContext = await browser.newContext({
+    viewport: { width: 900, height: 900 },
+  });
+  const mobilePage = await mobileContext.newPage();
+  const mobileArtworkRequests: string[] = [];
+  mobilePage.on("request", (request) => {
+    if (request.url().includes("artifact-control-plane"))
+      mobileArtworkRequests.push(request.url());
+  });
+  await mobilePage.route("**/auth/session", (route) =>
+    route.fulfill({ json: { authenticated: false } }),
+  );
+  await mobilePage.route("**/auth/oidc/config", (route) =>
+    route.fulfill({ json: { enabled: false } }),
+  );
+  await mobilePage.goto("/login");
+  await mobilePage.waitForLoadState("networkidle");
+  await expect(mobilePage.locator(".ag-login-brand-panel")).toBeHidden();
+  await expect(mobilePage.locator(".ag-login-panel")).toBeVisible();
+  expect(mobileArtworkRequests).toEqual([]);
+  await expect
+    .poll(() =>
+      mobilePage.evaluate(
+        () => document.body.scrollWidth - document.body.clientWidth,
+      ),
+    )
+    .toBeLessThanOrEqual(0);
+
+  await mobilePage.setViewportSize({ width: 390, height: 844 });
+  if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+    await mobilePage.screenshot({
+      path: testInfo.outputPath("login-artwork-mobile.png"),
+      fullPage: true,
+    });
+  }
+  await mobileContext.close();
 });
 
 test("OIDC, password, and token sign-in modes share a stable layout", async ({

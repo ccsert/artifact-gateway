@@ -12,6 +12,7 @@ import {
   RobotOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
+  SettingOutlined,
   SyncOutlined,
   TeamOutlined,
   UserOutlined,
@@ -32,6 +33,7 @@ import { Field } from "../components/Layout";
 import { Loading } from "../components/Feedback";
 import { PreferenceControls } from "../components/PreferenceControls";
 import { usePreferences } from "../lib/preferences";
+import { SiteBrandMark, SiteName } from "../components/SiteBrand";
 
 const navItems = [
   {
@@ -98,6 +100,13 @@ const navItems = [
     admin: true,
   },
   {
+    to: "/site-settings",
+    label: "nav.siteSettings",
+    icon: <SettingOutlined />,
+    group: "management",
+    admin: true,
+  },
+  {
     to: "/keys",
     label: "nav.apiKeys",
     icon: <KeyOutlined />,
@@ -126,12 +135,10 @@ function BrandLockup({ collapsed = false }: { collapsed?: boolean }) {
       className="ag-brand-lockup flex items-center"
       data-collapsed={collapsed ? "true" : "false"}
     >
-      <div className="ag-brand-mark flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white">
-        AG
-      </div>
+      <SiteBrandMark className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white" />
       <div className="ag-brand-copy min-w-0">
         <div className="truncate text-sm font-semibold text-zinc-100">
-          Artifact Gateway
+          <SiteName />
         </div>
         <div className="text-xs uppercase tracking-widest text-zinc-600">
           Console
@@ -293,6 +300,7 @@ export function AppLayout() {
     "/audits",
     "/audit-retention",
     "/identity-providers",
+    "/site-settings",
     "/keys",
     "/service-accounts",
     "/users",

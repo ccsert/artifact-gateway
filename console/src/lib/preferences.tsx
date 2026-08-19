@@ -3,15 +3,33 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
+import type { ConsoleTheme } from "../client";
+import { applyConsoleTheme, defaultConsoleThemes } from "./consoleTheme";
+import { useSiteSettings } from "./siteSettings";
 
 export type ColorMode = "dark" | "light";
 export type AppLocale = "zh-CN" | "en-US";
 
-const THEME_KEY = "ag.console.theme";
+interface ThemeViewTransition {
+  finished: Promise<void>;
+  skipTransition: () => void;
+}
+
+type ThemeTransitionDocument = Document & {
+  startViewTransition?: (
+    update: () => void | Promise<void>,
+  ) => ThemeViewTransition;
+};
+
+const THEME_MODE_KEY = "ag.console.theme";
+const THEME_ID_KEY = "ag.console.theme.id";
 const LOCALE_KEY = "ag.console.locale";
 
 const zhCN = {
@@ -20,6 +38,8 @@ const zhCN = {
   "common.loading": "正在加载…",
   "common.theme.light": "切换到亮色模式",
   "common.theme.dark": "切换到暗色模式",
+  "common.theme.select": "选择主题",
+  "common.theme.current": "当前主题：{name}",
   "common.language": "语言",
   "common.language.zh": "中文",
   "common.language.en": "English",
@@ -38,6 +58,7 @@ const zhCN = {
   "nav.serviceAccounts": "服务账号",
   "nav.users": "用户",
   "nav.authentication": "身份认证",
+  "nav.siteSettings": "站点设置",
   "nav.expand": "展开导航",
   "nav.collapse": "收起导航",
   "nav.open": "打开导航",
@@ -100,6 +121,8 @@ const enUS: Record<MessageKey, string> = {
   "common.loading": "Loading…",
   "common.theme.light": "Switch to light mode",
   "common.theme.dark": "Switch to dark mode",
+  "common.theme.select": "Choose theme",
+  "common.theme.current": "Current theme: {name}",
   "common.language": "Language",
   "common.language.zh": "中文",
   "common.language.en": "English",
@@ -118,6 +141,7 @@ const enUS: Record<MessageKey, string> = {
   "nav.serviceAccounts": "Service Accounts",
   "nav.users": "Users",
   "nav.authentication": "Authentication",
+  "nav.siteSettings": "Site Settings",
   "nav.expand": "Expand navigation",
   "nav.collapse": "Collapse navigation",
   "nav.open": "Open navigation",
@@ -179,8 +203,12 @@ const enUS: Record<MessageKey, string> = {
 };
 
 interface PreferencesContextValue {
+  themeId: string;
+  activeTheme: ConsoleTheme;
+  availableThemes: ConsoleTheme[];
   colorMode: ColorMode;
   locale: AppLocale;
+  setThemeId: (id: string) => void;
   setColorMode: (mode: ColorMode) => void;
   setLocale: (locale: AppLocale) => void;
   toggleColorMode: () => void;
@@ -190,11 +218,26 @@ interface PreferencesContextValue {
 
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
 
-function storedColorMode(): ColorMode {
+function storedThemeId(themes: ConsoleTheme[], defaultThemeId: string): string {
   try {
-    return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
+    const storedID = localStorage.getItem(THEME_ID_KEY);
+    if (storedID && themes.some((theme) => theme.id === storedID)) {
+      return storedID;
+    }
+    const legacyMode = localStorage.getItem(THEME_MODE_KEY);
+    if (legacyMode === "dark" || legacyMode === "light") {
+      const legacyTheme =
+        themes.find((theme) => theme.id === `gateway-${legacyMode}`) ??
+        themes.find((theme) => theme.mode === legacyMode);
+      if (legacyTheme) return legacyTheme.id;
+    }
+    return (
+      themes.find((theme) => theme.id === defaultThemeId)?.id ??
+      themes[0]?.id ??
+      defaultConsoleThemes[0].id
+    );
   } catch {
-    return "dark";
+    return defaultThemeId;
   }
 }
 
@@ -207,20 +250,42 @@ function storedLocale(): AppLocale {
 }
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
-  const [colorMode, setColorModeState] = useState<ColorMode>(storedColorMode);
+  const { settings } = useSiteSettings();
+  const availableThemes = useMemo(() => {
+    const enabled = new Set(settings.enabledThemeIds);
+    const themes = settings.availableThemes.filter((theme) =>
+      enabled.has(theme.id),
+    );
+    return themes.length > 0 ? themes : defaultConsoleThemes;
+  }, [settings.availableThemes, settings.enabledThemeIds]);
+  const [themeId, setThemeIdState] = useState(() =>
+    storedThemeId(availableThemes, settings.defaultThemeId),
+  );
   const [locale, setLocaleState] = useState<AppLocale>(storedLocale);
+  const activeThemeTransition = useRef<ThemeViewTransition | null>(null);
+  // Keep a just-disabled theme mounted for one render so the effect below can
+  // animate to the configured default instead of swapping the whole UI first.
+  const activeTheme =
+    settings.availableThemes.find((theme) => theme.id === themeId) ??
+    availableThemes.find((theme) => theme.id === settings.defaultThemeId) ??
+    availableThemes[0] ??
+    defaultConsoleThemes[0];
+  const colorMode: ColorMode = activeTheme.mode;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
+    root.dataset.themeId = activeTheme.id;
     root.dataset.theme = colorMode;
     root.classList.toggle("dark", colorMode === "dark");
     root.style.colorScheme = colorMode;
+    applyConsoleTheme(activeTheme, root);
     try {
-      localStorage.setItem(THEME_KEY, colorMode);
+      localStorage.setItem(THEME_ID_KEY, activeTheme.id);
+      localStorage.setItem(THEME_MODE_KEY, colorMode);
     } catch {
       // Preferences still work for this session when storage is unavailable.
     }
-  }, [colorMode]);
+  }, [activeTheme, colorMode]);
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -231,19 +296,81 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     }
   }, [locale]);
 
+  const setThemeId = useCallback(
+    (nextThemeID: string) => {
+      if (
+        nextThemeID === themeId ||
+        !availableThemes.some((theme) => theme.id === nextThemeID)
+      )
+        return;
+      const root = document.documentElement;
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      const transitionDocument = document as ThemeTransitionDocument;
+      const commit = () => flushSync(() => setThemeIdState(nextThemeID));
+
+      activeThemeTransition.current?.skipTransition();
+      if (reduceMotion || !transitionDocument.startViewTransition) {
+        if (!reduceMotion) root.dataset.themeTransition = "fallback";
+        commit();
+        window.setTimeout(() => {
+          delete root.dataset.themeTransition;
+        }, 220);
+        return;
+      }
+
+      root.dataset.themeTransition = "view";
+      const transition = transitionDocument.startViewTransition(async () => {
+        commit();
+        // Let Ant Design v6 publish its CSS-variable theme before the browser
+        // captures the new snapshot. A task boundary works while rendering is
+        // paused; requestAnimationFrame would deadlock the View Transition.
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      });
+      activeThemeTransition.current = transition;
+      void transition.finished.finally(() => {
+        if (activeThemeTransition.current === transition) {
+          activeThemeTransition.current = null;
+          delete root.dataset.themeTransition;
+        }
+      });
+    },
+    [availableThemes, themeId],
+  );
+  useEffect(() => {
+    if (!availableThemes.some((theme) => theme.id === themeId)) {
+      const fallbackThemeID =
+        availableThemes.find((theme) => theme.id === settings.defaultThemeId)
+          ?.id ?? availableThemes[0].id;
+      const timeout = window.setTimeout(() => setThemeId(fallbackThemeID), 0);
+      return () => window.clearTimeout(timeout);
+    }
+    return undefined;
+  }, [availableThemes, setThemeId, settings.defaultThemeId, themeId]);
   const setColorMode = useCallback(
-    (mode: ColorMode) => setColorModeState(mode),
-    [],
+    (mode: ColorMode) => {
+      const next = availableThemes.find((theme) => theme.mode === mode);
+      if (next) setThemeId(next.id);
+    },
+    [availableThemes, setThemeId],
   );
   const setLocale = useCallback(
     (nextLocale: AppLocale) => setLocaleState(nextLocale),
     [],
   );
-  const toggleColorMode = useCallback(
-    () =>
-      setColorModeState((current) => (current === "dark" ? "light" : "dark")),
-    [],
-  );
+  const toggleColorMode = useCallback(() => {
+    const opposite = availableThemes.find((theme) => theme.mode !== colorMode);
+    if (opposite) {
+      setThemeId(opposite.id);
+      return;
+    }
+    const currentIndex = availableThemes.findIndex(
+      (theme) => theme.id === activeTheme.id,
+    );
+    const next = availableThemes[(currentIndex + 1) % availableThemes.length];
+    if (next) setThemeId(next.id);
+  }, [activeTheme.id, availableThemes, colorMode, setThemeId]);
   const t = useCallback(
     (key: MessageKey, variables?: Record<string, string | number>) => {
       let message: string = (locale === "zh-CN" ? zhCN : enUS)[key];
@@ -262,15 +389,30 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
+      themeId: activeTheme.id,
+      activeTheme,
+      availableThemes,
       colorMode,
       locale,
+      setThemeId,
       setColorMode,
       setLocale,
       toggleColorMode,
       t,
       text,
     }),
-    [colorMode, locale, setColorMode, setLocale, toggleColorMode, t, text],
+    [
+      activeTheme,
+      availableThemes,
+      colorMode,
+      locale,
+      setThemeId,
+      setColorMode,
+      setLocale,
+      toggleColorMode,
+      t,
+      text,
+    ],
   );
 
   return (

@@ -13,6 +13,7 @@ import { client } from "../client/client.gen";
 import { getCurrentIdentity } from "../client";
 import { Field } from "../components/Layout";
 import { PreferenceControls } from "../components/PreferenceControls";
+import { SiteBrandMark, SiteName } from "../components/SiteBrand";
 import { usePreferences } from "../lib/preferences";
 import {
   localPasswordFitsBcrypt,
@@ -218,9 +219,7 @@ export function LoginPage() {
       <main className="ag-login-frame">
         <aside className="ag-login-brand-panel">
           <div className="ag-login-brand-lockup">
-            <div className="ag-brand-mark flex h-11 w-11 items-center justify-center rounded-lg text-base font-bold text-white">
-              AG
-            </div>
+            <SiteBrandMark className="flex h-11 w-11 items-center justify-center rounded-lg text-base font-bold text-white" />
             <div>
               <div className="text-sm font-semibold text-white">Console</div>
               <div className="mt-0.5 font-mono text-xs uppercase tracking-wider text-cyan-200">
@@ -234,7 +233,7 @@ export function LoginPage() {
               {t("auth.loginTitle")}
             </div>
             <h1 className="mt-4 text-4xl font-semibold text-white">
-              Artifact Gateway
+              <SiteName />
             </h1>
             <p className="mt-3 max-w-xs text-sm leading-6 text-zinc-400">
               {t("auth.controlPlane")}

@@ -6,6 +6,19 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
+    <script>
+      try {
+        const themeId = localStorage.getItem("ag.console.theme.id");
+        const theme =
+          localStorage.getItem("ag.console.theme") === "light"
+            ? "light"
+            : "dark";
+        if (themeId) document.documentElement.dataset.themeId = themeId;
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.classList.toggle("dark", theme === "dark");
+        document.documentElement.style.colorScheme = theme;
+      } catch {}
+    </script>
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2212%22 fill=%22%23090a0c%22/><path d=%22M14 20h36v8H14zm0 16h36v8H14z%22 fill=%22%2322d3ee%22/></svg>"

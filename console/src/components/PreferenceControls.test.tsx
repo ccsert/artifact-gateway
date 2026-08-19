@@ -10,6 +10,59 @@ afterEach(() => {
 });
 
 describe("PreferenceControls", () => {
+  it("commits the complete theme through one view transition", async () => {
+    const user = userEvent.setup();
+    let transitionCalls = 0;
+    const original = (document as Document & { startViewTransition?: unknown })
+      .startViewTransition;
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: (update: () => void) => {
+        transitionCalls += 1;
+        update();
+        return {
+          finished: Promise.resolve(),
+          skipTransition: () => undefined,
+        };
+      },
+    });
+
+    try {
+      render(
+        <PreferencesProvider>
+          <PreferenceControls />
+        </PreferencesProvider>,
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: /选择主题.*Gateway Dark/ }),
+      );
+      await user.click(
+        await screen.findByRole("menuitem", { name: /Aerok Light/ }),
+      );
+
+      expect(transitionCalls).toBe(1);
+      expect(document.documentElement).toHaveAttribute("data-theme", "light");
+      expect(document.documentElement).toHaveAttribute(
+        "data-theme-id",
+        "aerok-light",
+      );
+      expect(document.documentElement).not.toHaveAttribute(
+        "data-theme-transition",
+      );
+      expect(localStorage.getItem("ag.console.theme")).toBe("light");
+      expect(localStorage.getItem("ag.console.theme.id")).toBe("aerok-light");
+      expect(
+        screen.getByRole("button", { name: /选择主题.*Aerok Light/ }),
+      ).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(document, "startViewTransition", {
+        configurable: true,
+        value: original,
+      });
+    }
+  });
+
   it("opens the language menu without showing a tooltip", async () => {
     const user = userEvent.setup();
     render(

@@ -91,6 +91,12 @@ export const router = createBrowserRouter([
         }),
       },
       {
+        path: "/site-settings",
+        lazy: async () => ({
+          Component: (await import("../pages/SiteSettings")).SiteSettingsPage,
+        }),
+      },
+      {
         path: "/keys",
         lazy: async () => ({
           Component: (await import("../pages/ApiKeys")).ApiKeysPage,

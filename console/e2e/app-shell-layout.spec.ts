@@ -140,7 +140,8 @@ test("desktop navigation collapses within one aligned and stable rail", async ({
   expect(restored.itemCount).toBe(expanded.itemCount);
   expect(Math.abs(restored.selectedTop - expanded.selectedTop)).toBeLessThan(1);
 
-  await page.getByRole("button", { name: "切换到亮色模式" }).click();
+  await page.getByRole("button", { name: /选择主题.*Gateway Dark/ }).click();
+  await page.getByRole("menuitem", { name: /Gateway Light/ }).click();
   await page.getByRole("button", { name: "收起导航" }).click();
   await expect
     .poll(async () => (await shellGeometry(page)).siderWidth)
