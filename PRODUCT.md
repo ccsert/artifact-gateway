@@ -35,7 +35,7 @@ Artifact Gateway 以 `Repository + format + canonical coordinate + SHA-256 diges
 
 ## Capabilities and Constraints
 
-- OCI、Raw、Maven、Conan 2、npm 与 PyPI 具备完整 Hosted 生命周期；Go Module 具备单 ZIP 原子 Hosted 发布、逻辑删除/恢复、保留策略、延迟物理回收以及 Proxy/Group 读取，晋级与复制尚未开放。
+- OCI、Raw、Maven、Conan 2、npm 与 PyPI 具备完整 Hosted 生命周期；Go Module 具备单 ZIP 原子 Hosted 发布、逻辑删除/恢复、保留策略、延迟物理回收、不可变晋级、断点复制以及 Proxy/Group 读取。Go 的隔离读阻断、认证上游 Proxy 与 checksum database 镜像仍未开放。
 - APT 具备 Proxy/Group 读取，并有管理用途的 Hosted 签名快照预览；该预览不属于稳定兼容性承诺，内置签名器也不是生产密钥托管方案。
 - Repository 拥有格式、策略、授权和 Hosted 字节或一个受 allowlist 约束的上游；Group 是有序解析视图，不拥有制品字节。
 - Artifact 生命周期只有 `staged`、`visible`、`tombstoned`。Quarantine 是附着于不可变身份的 Repository 本地版本化治理决定，不是第四种生命周期状态，也不是删除。

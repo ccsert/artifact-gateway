@@ -12,12 +12,13 @@ managed members.
 > public release. Do not infer production support commitments from the current
 > package version.
 
-Artifact Gateway is intended to be a complete repository manager for the six
+Artifact Gateway is intended to be a complete repository manager for the seven
 Hosted-capable formats: native client reads and publication, Hosted/Proxy/Group
 resolution, browsing and search, authorization, audit, retention, recovery,
 promotion, and replication. Go additionally provides a Gateway-specific atomic
-Hosted publication contract while its delete/restore and distribution lifecycle
-remain deferred. APT is admitted under the protocol-only format rule and
+Hosted publication contract whose delete/restore, retention, reclaim, promotion,
+and replication operate on the complete `.info`/`.mod`/`.zip` version snapshot.
+APT is admitted under the protocol-only format rule and
 declares Proxy and Group protocol capabilities until a trusted installable
 publication workflow exists. APT additionally
 has a management-only Hosted preview for verified staging and atomic signed
@@ -266,6 +267,12 @@ curl -u "publisher:${GATEWAY_TOKEN}" \
 The ZIP root must be `example.com/team/widget@v1.2.3/` and its top-level
 `go.mod` must declare the same module path. Identical retries are idempotent;
 different content at the same version returns `409`.
+Management promotion reuses the verified immutable three-object snapshot in a
+second Hosted Repository, while checkpointed replication verifies and copies all
+three representations before atomically publishing the target version. Both use
+the canonical `module@version` coordinate and ZIP digest as the distribution
+identity, reject Proxy targets, and recheck quarantine across every representation
+before final publication.
 Each APT Proxy repository requires an endpoint and `allowedHosts`; see
 [`docs/apt-proxy.md`](docs/apt-proxy.md) for source configuration and route
 security rules. Hosted publication follows the staged

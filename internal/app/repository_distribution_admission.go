@@ -12,6 +12,20 @@ import (
 // a PyPI version is an aggregate of all its visible distribution files.
 func (h generatedRepositoryAPIAdapter) artifactDistributionDigests(ctx context.Context, source repository.HostedRepository, coordinate, digest string) ([]string, error) {
 	digests := []string{digest}
+	if source.Format == repository.FormatGo {
+		modulePath, version, valid := parseGoModuleVersionCoordinate(coordinate)
+		if !valid {
+			return digests, nil
+		}
+		publication, err := loadGoDistributionPublication(ctx, h.sessions.store, source.ID, modulePath, version, digest)
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, repository.ErrNotFound
+		}
+		if err != nil {
+			return nil, err
+		}
+		return goPublicationDigests(publication), nil
+	}
 	if source.Format != repository.FormatPyPI {
 		return digests, nil
 	}

@@ -43,6 +43,16 @@ rules, and writes the same `module@version` tombstone as an explicit management
 delete. Protocol reads, Group aggregation, search, and scan identity queries
 hide the complete version immediately.
 
+Promotion and replication preserve that same complete publication unit. A
+management request names canonical `module@version` plus the ZIP digest;
+admission resolves and checks all three immutable digests. Promotion reuses the
+verified source object keys in another Hosted Repository. Replication persists
+one checkpoint per representation, copies each to a target-specific key, and
+publishes target metadata only after all three bytes and the final source
+snapshot are verified. Both workers coordinate source and target distribution
+identities, reject Proxy targets, and recheck quarantine immediately before
+atomic target publication.
+
 The scheduler admits tombstoned Go references to durable reclaim jobs only
 after the default 24-hour recovery window. Each job coordinates on the content
 object key, verifies the current tombstone generation, and persists a
@@ -65,8 +75,8 @@ Migration `000032_artifact_lifecycle.sql` adds two additive records:
 - `lifecycle_jobs` is a durable, idempotent work boundary for retention,
   promotion, replication, and physical reclamation. It supports semantic JSON
   idempotency, atomic pending-to-running claims, and terminal completion or
-  failure. This slice does not yet start a worker; existing format collectors
-  remain authoritative until a job consumer is introduced.
+  failure. Scheduler and worker roles claim these jobs through PostgreSQL
+  leases; format and job-kind filters allow bounded independent worker pools.
 
 ## OCI Slice
 

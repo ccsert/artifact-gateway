@@ -99,19 +99,24 @@ func (s *MemoryStore) artifactIdentitiesLocked(repositoryID string, format Forma
 			}
 		}
 	case FormatGo:
-		if purpose != ArtifactIdentityScan {
-			return nil, fmt.Errorf("format %q does not support distribution identities", format)
-		}
 		for _, version := range s.goVersions {
 			if version.RepositoryID != repositoryID || s.goModuleVersionTombstonedLocked(repositoryID, version.Module, version.Version) {
 				continue
 			}
-			for _, kind := range []string{"zip", "mod", "info"} {
+			var zip GoModuleAsset
+			complete := true
+			for _, kind := range []string{"info", "mod", "zip"} {
 				asset, ok := s.goAssets[goAssetKey(repositoryID, version.Module, version.Version, kind)]
-				if ok && asset.ObjectKey != "" {
-					appendIdentity(protocolidentity.GoVersion(version.Module, version.Version), asset.Digest, sizeOf(asset.Size), version.CreatedAt)
+				if !ok || asset.ObjectKey == "" || !asset.CollectingAt.IsZero() || !asset.CollectedAt.IsZero() {
+					complete = false
 					break
 				}
+				if kind == "zip" {
+					zip = asset
+				}
+			}
+			if complete {
+				appendIdentity(protocolidentity.GoVersion(version.Module, version.Version), zip.Digest, sizeOf(zip.Size), version.CreatedAt)
 			}
 		}
 	case FormatConan:

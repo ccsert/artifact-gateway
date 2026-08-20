@@ -53,6 +53,8 @@ goal. It intentionally excludes frontend work.
 - [x] Checkpointed replication worker with persisted checkpoints, retry, resume,
   and SHA-256 integrity checks.
 - [x] Promotion/replication authorization and audit events.
+- [x] Go immutable three-representation promotion and checkpointed replication,
+  including quarantine rechecks and PostgreSQL/RustFS cross-instance evidence.
 
 ## Operations
 
@@ -74,24 +76,27 @@ goal. It intentionally excludes frontend work.
 
 ## Current Next Slice
 
-1. Finish APT H3 without widening the public format profile: the rotation
+1. Close the remaining Go compatibility gaps without weakening the current
+   Hosted guarantees: default-disabled quarantine-read enforcement, authenticated
+   upstream Proxy credentials, and checksum database mirroring remain.
+2. Finish APT H3 without widening the public format profile: the rotation
    overlap, external HTTPS/client drill, backup/restore verification, metrics,
    and operator-visible state are complete; managed KMS/HSM key custody and
    recovery, snapshot export tooling, and deployment alerts remain.
-2. Continue Cargo C0 after the APT H3 production-signing gate. Bounded publish
+3. Continue Cargo C0 after the APT H3 production-signing gate. Bounded publish
    framing, `.crate`/manifest identity, sparse-index translation, fuzz seams,
    and official `cargo package`/`cargo publish` contract tests are complete.
    Add non-public persisted collision reservation and Memory/PostgreSQL
    identity conformance before C1 or the format enum. Cargo is the next
    candidate ecosystem; see
    [Cargo repository research](cargo-repository-research.md).
-3. Add the optional scanner workload to the Kubernetes overlay only when its
+4. Add the optional scanner workload to the Kubernetes overlay only when its
    network policy, persistent SBOM storage, resource limits, and real scan
    smoke test are part of the same slice. Keep the local APT reference signer
    confined to its loopback sidecar and dedicated key volume until H3 replaces
    it with production key custody.
-4. Keep NuGet deferred. Preserve and test the existing bounded parser, but do
+5. Keep NuGet deferred. Preserve and test the existing bounded parser, but do
    not begin publication persistence until Cargo C0-C1 or customer demand
    changes the priority.
-5. Run the release gates and retain their output in the release record before
+6. Run the release gates and retain their output in the release record before
    any public capability expansion.

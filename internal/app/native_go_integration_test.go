@@ -58,6 +58,52 @@ type failOnceGoCollectedPostgresStore struct {
 	fail bool
 }
 
+type blockingGoPromotionAdmissionStore struct {
+	*repository.PostgresStore
+	once    sync.Once
+	entered chan struct{}
+	release chan struct{}
+}
+
+type blockingGoPromotionPublishStore struct {
+	*repository.PostgresStore
+	once    sync.Once
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (s *blockingGoPromotionAdmissionStore) GetArtifactQuarantine(ctx context.Context, repositoryID string, format repository.Format, coordinate, digest string) (repository.ArtifactQuarantine, error) {
+	var waitErr error
+	s.once.Do(func() {
+		close(s.entered)
+		select {
+		case <-s.release:
+		case <-ctx.Done():
+			waitErr = ctx.Err()
+		}
+	})
+	if waitErr != nil {
+		return repository.ArtifactQuarantine{}, waitErr
+	}
+	return s.PostgresStore.GetArtifactQuarantine(ctx, repositoryID, format, coordinate, digest)
+}
+
+func (s *blockingGoPromotionPublishStore) PublishGoModule(ctx context.Context, publication repository.GoModulePublication) (repository.GoModuleVersion, bool, error) {
+	var waitErr error
+	s.once.Do(func() {
+		close(s.entered)
+		select {
+		case <-s.release:
+		case <-ctx.Done():
+			waitErr = ctx.Err()
+		}
+	})
+	if waitErr != nil {
+		return repository.GoModuleVersion{}, false, waitErr
+	}
+	return s.PostgresStore.PublishGoModule(ctx, publication)
+}
+
 func (s *failOnceGoCollectedPostgresStore) MarkGoModuleObjectCollected(ctx context.Context, key string) error {
 	if s.fail {
 		s.fail = false
@@ -398,6 +444,362 @@ func TestPostgresRustFSGoHostedPublicationIsAtomicAcrossGatewayInstances(t *test
 	}
 	if _, err = objectsA.Stat(ctx, zipAsset.ObjectKey); err != nil {
 		t.Fatalf("referenced Hosted ZIP was reclaimed: %v", err)
+	}
+}
+
+func TestPostgresRustFSGoPromotionAndReplicationPublishCompleteSnapshotsAcrossGatewayInstances(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	endpoint := os.Getenv("TEST_RUSTFS_ENDPOINT")
+	accessKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY")
+	secretKey := os.Getenv("TEST_RUSTFS_SECRET_KEY")
+	if databaseURL == "" || endpoint == "" || accessKey == "" || secretKey == "" {
+		t.Skip("PostgreSQL and S3 integration environment is required")
+	}
+	ctx := context.Background()
+	storeA, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeA.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
+	bucket := "native-go-distribution-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:16]
+	objectsA, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = objectsA.EnsureBucket(ctx); err != nil {
+		t.Fatal(err)
+	}
+	objectsB, err := NewRustFSOCIObjectStore(endpoint, accessKey, secretKey, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	create := func(name string) repository.HostedRepository {
+		t.Helper()
+		item, createErr := storeA.CreateHostedRepository(ctx, repository.HostedRepository{
+			ID: uuid.NewString(), Name: name + "-" + strings.ReplaceAll(uuid.NewString(), "-", ""),
+			Format: repository.FormatGo, Type: repository.RepositoryTypeHosted,
+		})
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		return item
+	}
+	source := create("go-distribution-source")
+	promotedTarget := create("go-distribution-promoted")
+	replicatedTarget := create("go-distribution-replicated")
+	const (
+		modulePath    = "example.com/Acme/distributed-postgres"
+		escapedModule = "example.com/!acme/distributed-postgres"
+		version       = "v1.2.0"
+	)
+	mod := []byte("module " + modulePath + "\n\ngo 1.26\n")
+	bodies := map[string][]byte{
+		"info": []byte(`{"Version":"v1.2.0","Time":"2026-08-19T00:00:00Z"}`),
+		"mod":  mod,
+		"zip": goModuleFixtureZip(t, modulePath, version, map[string]string{
+			"go.mod": string(mod), "distributed.go": "package distributedpostgres\n",
+		}),
+	}
+	assets := make([]repository.GoModuleAsset, 0, 3)
+	for _, kind := range []string{"info", "mod", "zip"} {
+		asset := goIntegrationAsset(source.ID, modulePath, version, kind, bodies[kind])
+		if err = objectsA.PutVerifiedReader(ctx, asset.ObjectKey, bytes.NewReader(bodies[kind]), asset.Size, asset.Digest); err != nil {
+			t.Fatal(err)
+		}
+		assets = append(assets, asset)
+	}
+	if _, _, err = storeA.PublishGoModule(ctx, repository.GoModulePublication{
+		Version: repository.GoModuleVersion{
+			RepositoryID: source.ID, Module: modulePath, Version: version,
+			PublishedAt: time.Now().UTC(), Publisher: "distribution-integration",
+		},
+		Assets: assets,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	coordinate, zipDigest := modulePath+"@"+version, assets[2].Digest
+
+	promotion := NativeGoPromotion{Store: storeA, Intelligence: storeA}
+	promotionJob, replayed, err := promotion.Enqueue(ctx, promotedTarget.ID, "go-integration-promotion", GoPromotionPayload{
+		SourceRepositoryID: source.ID, Module: modulePath, Version: version, Digest: zipDigest,
+	})
+	if err != nil || replayed {
+		t.Fatalf("enqueue PostgreSQL Go promotion replayed=%t job=%#v err=%v", replayed, promotionJob, err)
+	}
+	if err = (NativeGoPromotion{Store: storeB, Intelligence: storeB}).RunJobs(ctx, 1); err != nil {
+		t.Fatalf("cross-instance Go promotion: %v", err)
+	}
+	if replay, wasReplay, replayErr := promotion.Enqueue(ctx, promotedTarget.ID, "go-integration-promotion", GoPromotionPayload{
+		SourceRepositoryID: source.ID, Module: modulePath, Version: version, Digest: zipDigest,
+	}); replayErr != nil || !wasReplay || replay.ID != promotionJob.ID || replay.State != repository.LifecycleJobCompleted {
+		t.Fatalf("PostgreSQL Go promotion replayed=%t job=%#v err=%v", wasReplay, replay, replayErr)
+	}
+
+	checkpoints := make([]repository.ReplicationCheckpoint, 0, 3)
+	for _, asset := range assets {
+		checkpoints = append(checkpoints, repository.ReplicationCheckpoint{
+			SourceObjectKey: asset.ObjectKey,
+			ObjectKey:       goReplicationTargetObjectKey(replicatedTarget.ID, asset.Digest, asset.Kind),
+			Digest:          asset.Digest,
+			Size:            asset.Size,
+		})
+	}
+	plan := repository.ReplicationPlan{
+		ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: replicatedTarget.ID,
+		Format: repository.FormatGo, Coordinate: coordinate, Digest: zipDigest, IdempotencyKey: "go-integration-replication",
+	}
+	persistedPlan, replayed, err := storeA.CreateReplicationPlan(ctx, plan, checkpoints)
+	if err != nil || replayed {
+		t.Fatalf("create PostgreSQL Go replication plan replayed=%t plan=%#v err=%v", replayed, persistedPlan, err)
+	}
+	if err = (GoReplication{Store: storeB, Source: objectsB, Destination: objectsB, ChunkBytes: 7}).RunJobs(ctx, 1); err != nil {
+		t.Fatalf("cross-instance Go replication: %v", err)
+	}
+	if replay, wasReplay, replayErr := storeA.CreateReplicationPlan(ctx, repository.ReplicationPlan{
+		ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: replicatedTarget.ID,
+		Format: repository.FormatGo, Coordinate: coordinate, Digest: zipDigest, IdempotencyKey: "go-integration-replication",
+	}, checkpoints); replayErr != nil || !wasReplay || replay.ID != persistedPlan.ID || replay.State != "completed" {
+		t.Fatalf("PostgreSQL Go replication replayed=%t plan=%#v err=%v", wasReplay, replay, replayErr)
+	}
+
+	wantCapacity := repository.RepositoryCapacity{}
+	for _, asset := range assets {
+		wantCapacity.UsedBytes += asset.Size
+		wantCapacity.ObjectCount++
+		promoted, loadErr := storeB.GetGoModuleAsset(ctx, promotedTarget.ID, modulePath, version, asset.Kind)
+		if loadErr != nil || promoted.Digest != asset.Digest || promoted.ObjectKey != asset.ObjectKey {
+			t.Fatalf("cross-instance promoted %s=%#v err=%v", asset.Kind, promoted, loadErr)
+		}
+		replicated, loadErr := storeA.GetGoModuleAsset(ctx, replicatedTarget.ID, modulePath, version, asset.Kind)
+		if loadErr != nil || replicated.Digest != asset.Digest || replicated.ObjectKey == asset.ObjectKey {
+			t.Fatalf("cross-instance replicated %s=%#v err=%v", asset.Kind, replicated, loadErr)
+		}
+		body, readErr := objectsA.Get(ctx, replicated.ObjectKey)
+		if readErr != nil || !bytes.Equal(body, bodies[asset.Kind]) {
+			t.Fatalf("cross-instance replicated %s bytes=%d err=%v", asset.Kind, len(body), readErr)
+		}
+	}
+	for _, target := range []repository.HostedRepository{promotedTarget, replicatedTarget} {
+		capacity, capacityErr := storeB.GetRepositoryCapacity(ctx, target.ID)
+		if capacityErr != nil || capacity.UsedBytes != wantCapacity.UsedBytes || capacity.ObjectCount != wantCapacity.ObjectCount {
+			t.Fatalf("target %s capacity=%#v want=%#v err=%v", target.Name, capacity, wantCapacity, capacityErr)
+		}
+		projection, searchErr := storeA.SearchArtifactProjection(ctx, target.ID, repository.FormatGo, repository.ArtifactSearchQuery{
+			Mode: repository.ArtifactSearchByCoordinate, Value: modulePath,
+		}, 10, repository.ArtifactSearchPosition{})
+		if searchErr != nil || len(projection) != 1 || projection[0].Version != version || projection[0].Digest != zipDigest {
+			t.Fatalf("target %s projection=%#v err=%v", target.Name, projection, searchErr)
+		}
+		identities, identityErr := storeB.ListArtifactIdentities(ctx, target.ID, repository.FormatGo, repository.ArtifactIdentityDistribution, modulePath, 10)
+		if identityErr != nil || len(identities) != 1 || identities[0].Coordinate != coordinate || identities[0].Digest != zipDigest {
+			t.Fatalf("target %s distribution identities=%#v err=%v", target.Name, identities, identityErr)
+		}
+	}
+
+	server := httptest.NewServer(NewGatewayHandler(Dependencies{NativeGoObjectStore: objectsA}, storeA, TestAdapter{}, testAuthenticator()))
+	defer server.Close()
+	basePath := "/go/" + replicatedTarget.Name + "/" + escapedModule + "/@v/" + version
+	for suffix, expected := range map[string][]byte{".info": bodies["info"], ".mod": bodies["mod"], ".zip": bodies["zip"]} {
+		request, requestErr := http.NewRequest(http.MethodGet, server.URL+basePath+suffix, nil)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		authorize(request, "resolver-secret")
+		response, requestErr := server.Client().Do(request)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		body, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if readErr != nil || response.StatusCode != http.StatusOK || !bytes.Equal(body, expected) {
+			t.Fatalf("replicated protocol %s=%d bytes=%d err=%v", suffix, response.StatusCode, len(body), readErr)
+		}
+	}
+}
+
+func TestPostgresGoPromotionPublicationIsFencedAfterLeaseExpiry(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	storeA, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeA.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
+	create := func(name string) repository.HostedRepository {
+		t.Helper()
+		item, createErr := storeA.CreateHostedRepository(ctx, repository.HostedRepository{
+			ID: uuid.NewString(), Name: name + "-" + uuid.NewString()[:8], Format: repository.FormatGo, Type: repository.RepositoryTypeHosted,
+		})
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		return item
+	}
+	source, target := create("go-promotion-fence-source"), create("go-promotion-fence-target")
+	const modulePath, version = "example.com/team/promotion-fence", "v1.0.0"
+	bodies := map[string][]byte{
+		"info": []byte(`{"Version":"v1.0.0","Time":"2026-08-20T00:00:00Z"}`),
+		"mod":  []byte("module " + modulePath + "\n\ngo 1.26\n"),
+		"zip":  []byte("lease-fenced-go-promotion"),
+	}
+	assets := make([]repository.GoModuleAsset, 0, 3)
+	for _, kind := range []string{"info", "mod", "zip"} {
+		assets = append(assets, goIntegrationAsset(source.ID, modulePath, version, kind, bodies[kind]))
+	}
+	if _, _, err = storeA.PublishGoModule(ctx, repository.GoModulePublication{
+		Version: repository.GoModuleVersion{RepositoryID: source.ID, Module: modulePath, Version: version, PublishedAt: time.Now().UTC(), Publisher: "lease-fence-test"},
+		Assets:  assets,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	promotion := NativeGoPromotion{Store: storeA}
+	job, replayed, err := promotion.Enqueue(ctx, target.ID, "go-promotion-lease-fence", GoPromotionPayload{
+		SourceRepositoryID: source.ID, Module: modulePath, Version: version, Digest: assets[2].Digest,
+	})
+	if err != nil || replayed {
+		t.Fatalf("enqueue promotion replayed=%t job=%#v err=%v", replayed, job, err)
+	}
+	blockingStore := &blockingGoPromotionAdmissionStore{PostgresStore: storeA, entered: make(chan struct{}), release: make(chan struct{})}
+	workerDone := make(chan error, 1)
+	go func() {
+		workerDone <- (NativeGoPromotion{Store: blockingStore}).RunJobs(ctx, 1)
+	}()
+	select {
+	case <-blockingStore.entered:
+	case <-ctx.Done():
+		t.Fatal("promotion worker did not reach final admission barrier")
+	}
+	running, err := storeB.GetLifecycleJob(ctx, target.ID, job.ID)
+	if err != nil || running.State != repository.LifecycleJobRunning || running.LeaseToken == "" {
+		t.Fatalf("running promotion job=%#v err=%v", running, err)
+	}
+	if recovered, recoverErr := storeB.RecoverExpiredLifecycleJobs(ctx, time.Now().UTC().Add(11*time.Minute)); recoverErr != nil || recovered != 1 {
+		t.Fatalf("recover expired promotion jobs=%d err=%v", recovered, recoverErr)
+	}
+	close(blockingStore.release)
+	select {
+	case runErr := <-workerDone:
+		if !errors.Is(runErr, repository.ErrNotFound) {
+			t.Fatalf("stale promotion worker err=%v", runErr)
+		}
+	case <-ctx.Done():
+		t.Fatal("stale promotion worker did not finish")
+	}
+	if _, err = storeB.GetGoModuleVersion(ctx, target.ID, modulePath, version); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expired promotion worker published target version: %v", err)
+	}
+	recovered, err := storeB.GetLifecycleJob(ctx, target.ID, job.ID)
+	if err != nil || recovered.State != repository.LifecycleJobRetrying || recovered.LeaseToken != "" || recovered.LastError != "worker lease expired before completion" {
+		t.Fatalf("recovered promotion job=%#v err=%v", recovered, err)
+	}
+}
+
+func TestPostgresGoPromotionHeartbeatsAndFencesPublicationThroughCompletion(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	storeA, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeA.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
+	create := func(name string) repository.HostedRepository {
+		t.Helper()
+		item, createErr := storeA.CreateHostedRepository(ctx, repository.HostedRepository{
+			ID: uuid.NewString(), Name: name + "-" + uuid.NewString(), Format: repository.FormatGo, Type: repository.RepositoryTypeHosted,
+		})
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		return item
+	}
+	source, target := create("go-promo-heartbeat-src"), create("go-promo-heartbeat-dst")
+	const modulePath, version = "example.com/team/promotion-heartbeat", "v1.0.0"
+	bodies := map[string][]byte{
+		"info": []byte(`{"Version":"v1.0.0","Time":"2026-08-20T00:00:00Z"}`),
+		"mod":  []byte("module " + modulePath + "\n\ngo 1.26\n"),
+		"zip":  []byte("heartbeat-fenced-go-promotion"),
+	}
+	assets := make([]repository.GoModuleAsset, 0, 3)
+	for _, kind := range []string{"info", "mod", "zip"} {
+		assets = append(assets, goIntegrationAsset(source.ID, modulePath, version, kind, bodies[kind]))
+	}
+	if _, _, err = storeA.PublishGoModule(ctx, repository.GoModulePublication{
+		Version: repository.GoModuleVersion{RepositoryID: source.ID, Module: modulePath, Version: version, PublishedAt: time.Now().UTC(), Publisher: "lease-heartbeat-test"},
+		Assets:  assets,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	promotion := NativeGoPromotion{Store: storeA}
+	job, replayed, err := promotion.Enqueue(ctx, target.ID, "go-promotion-heartbeat-fence", GoPromotionPayload{
+		SourceRepositoryID: source.ID, Module: modulePath, Version: version, Digest: assets[2].Digest,
+	})
+	if err != nil || replayed {
+		t.Fatalf("enqueue promotion replayed=%t job=%#v err=%v", replayed, job, err)
+	}
+	blockingStore := &blockingGoPromotionPublishStore{PostgresStore: storeA, entered: make(chan struct{}), release: make(chan struct{})}
+	workerDone := make(chan error, 1)
+	go func() {
+		workerDone <- (NativeGoPromotion{Store: blockingStore, LeaseHeartbeatInterval: 20 * time.Millisecond}).RunJobs(ctx, 1)
+	}()
+	select {
+	case <-blockingStore.entered:
+	case <-ctx.Done():
+		t.Fatal("promotion worker did not reach fenced publication")
+	}
+	running, err := storeB.GetLifecycleJob(ctx, target.ID, job.ID)
+	if err != nil || running.State != repository.LifecycleJobRunning || running.LeaseToken == "" {
+		t.Fatalf("running promotion job=%#v err=%v", running, err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	renewed, err := storeB.GetLifecycleJob(ctx, target.ID, job.ID)
+	if err != nil || !renewed.LeaseExpiresAt.After(running.LeaseExpiresAt) {
+		t.Fatalf("promotion heartbeat did not extend lease before=%#v after=%#v err=%v", running, renewed, err)
+	}
+	if recovered, recoverErr := storeB.RecoverExpiredLifecycleJobs(ctx, time.Now().UTC().Add(11*time.Minute)); recoverErr != nil || recovered != 0 {
+		t.Fatalf("fenced promotion recovery=%d err=%v", recovered, recoverErr)
+	}
+	stillRunning, err := storeB.GetLifecycleJob(ctx, target.ID, job.ID)
+	if err != nil || stillRunning.State != repository.LifecycleJobRunning || stillRunning.LeaseToken != running.LeaseToken {
+		t.Fatalf("fenced promotion changed ownership=%#v err=%v", stillRunning, err)
+	}
+	close(blockingStore.release)
+	select {
+	case runErr := <-workerDone:
+		if runErr != nil {
+			t.Fatal(runErr)
+		}
+	case <-ctx.Done():
+		t.Fatal("promotion worker did not complete fenced publication")
+	}
+	completed, err := storeB.GetLifecycleJob(ctx, target.ID, job.ID)
+	if err != nil || completed.State != repository.LifecycleJobCompleted {
+		t.Fatalf("completed promotion job=%#v err=%v", completed, err)
+	}
+	if _, err = storeB.GetGoModuleVersion(ctx, target.ID, modulePath, version); err != nil {
+		t.Fatalf("fenced promotion target is unavailable: %v", err)
 	}
 }
 

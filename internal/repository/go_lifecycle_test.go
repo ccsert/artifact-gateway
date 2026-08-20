@@ -82,6 +82,17 @@ func TestMemoryGoModuleVersionTombstoneAndRestoreControlVisibility(t *testing.T)
 	if _, err = store.GetGoModuleAsset(ctx, repositoryID, modulePath, version, "zip"); err != nil {
 		t.Fatalf("restored asset: %v", err)
 	}
+	identities, err = store.ListArtifactIdentities(ctx, repositoryID, FormatGo, ArtifactIdentityDistribution, "", 10)
+	if err != nil || len(identities) != 1 || identities[0].Digest != zipDigest {
+		t.Fatalf("restored distribution identities=%#v err=%v", identities, err)
+	}
+	store.mu.Lock()
+	delete(store.goAssets, goAssetKey(repositoryID, modulePath, version, "mod"))
+	store.mu.Unlock()
+	identities, err = store.ListArtifactIdentities(ctx, repositoryID, FormatGo, ArtifactIdentityDistribution, "", 10)
+	if err != nil || len(identities) != 0 {
+		t.Fatalf("incomplete Go distribution identities=%#v err=%v", identities, err)
+	}
 	search, err = store.SearchArtifactProjection(ctx, repositoryID, FormatGo, ArtifactSearchQuery{Mode: ArtifactSearchByCoordinate, Value: modulePath}, 10, ArtifactSearchPosition{})
 	if err != nil || len(search) != 1 || search[0].Version != version || search[0].Digest != zipDigest {
 		t.Fatalf("restored search=%#v err=%v", search, err)

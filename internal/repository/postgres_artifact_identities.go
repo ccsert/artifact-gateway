@@ -90,17 +90,15 @@ func postgresArtifactIdentityQuery(format Format, purpose ArtifactIdentityPurpos
 		return `SELECT ` + protocolidentity.PostgreSQLPyPIVersion("project", "version") + ` AS coordinate,digest,size,created_at AS published_at
 			FROM native_pypi_files WHERE repository_id::text=$1 AND state='visible' AND object_key<>'' AND digest ~ '^sha256:[a-f0-9]{64}$'`, nil
 	case FormatGo:
-		if purpose != ArtifactIdentityScan {
-			return "", fmt.Errorf("format %q does not support distribution identities", format)
-		}
 		return `SELECT ` + protocolidentity.PostgreSQLGoVersion("v.module_path", "v.version") + ` AS coordinate,a.digest,a.size,v.created_at AS published_at
 			FROM native_go_versions v
-			JOIN LATERAL (
-				SELECT digest,size FROM native_go_assets a
-				WHERE a.repository_id=v.repository_id AND a.module_path=v.module_path AND a.version=v.version AND a.object_key<>'' AND a.digest ~ '^sha256:[a-f0-9]{64}$'
-				ORDER BY CASE a.kind WHEN 'zip' THEN 0 WHEN 'mod' THEN 1 ELSE 2 END LIMIT 1
-			) a ON true
+			JOIN native_go_assets a ON a.repository_id=v.repository_id AND a.module_path=v.module_path AND a.version=v.version AND a.kind='zip'
 			WHERE v.repository_id::text=$1
+			  AND a.object_key<>'' AND a.collecting_at IS NULL AND a.collected_at IS NULL AND a.digest ~ '^sha256:[a-f0-9]{64}$'
+			  AND (SELECT count(*) FROM native_go_assets closure
+			       WHERE closure.repository_id=v.repository_id AND closure.module_path=v.module_path AND closure.version=v.version
+			         AND closure.kind IN ('info','mod','zip') AND closure.object_key<>''
+			         AND closure.collecting_at IS NULL AND closure.collected_at IS NULL) = 3
 			  AND NOT EXISTS (SELECT 1 FROM artifact_tombstones t WHERE t.repository_id=v.repository_id AND t.format='go' AND t.coordinate=v.module_path || '@' || v.version)`, nil
 	case FormatConan:
 		recipes := `SELECT ` + protocolidentity.PostgreSQLConanRecipe("reference", "revision") + ` AS coordinate,digest,NULL::bigint AS size,created_at AS published_at

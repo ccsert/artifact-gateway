@@ -92,6 +92,12 @@ func (r backgroundRuntime) startGoWorkers(ctx context.Context, cfg config.Config
 	if goReclaimWorkerEnabled(cfg) {
 		app.NativeGoMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
 	}
+	if cfg.WorkerEnabled("go", "promotion") {
+		app.NativeGoPromotion{Store: r.store, Intelligence: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
+	}
+	if cfg.WorkerEnabled("go", "replication") {
+		app.GoReplication{Store: r.store, Source: r.objects, Destination: r.objects, Metrics: r.metrics}.Start(ctx, time.Minute)
+	}
 }
 
 func goReclaimWorkerEnabled(cfg config.Config) bool {

@@ -219,6 +219,7 @@ type quarantineBeforeReplicationPublishStore struct {
 	OCIObjectStore
 	Repository *repository.MemoryStore
 	Plan       repository.ReplicationPlan
+	Digest     string
 	Reason     string
 	Triggered  bool
 	Err        error
@@ -232,9 +233,13 @@ func (s *quarantineBeforeReplicationPublishStore) SetVerifiedDigest(ctx context.
 		return nil
 	}
 	s.Triggered = true
+	quarantineDigest := s.Digest
+	if quarantineDigest == "" {
+		quarantineDigest = s.Plan.Digest
+	}
 	_, s.Err = s.Repository.ReplaceArtifactQuarantine(ctx, repository.ArtifactQuarantine{
 		RepositoryID: s.Plan.SourceRepositoryID, Format: s.Plan.Format,
-		Coordinate: s.Plan.Coordinate, Digest: s.Plan.Digest,
+		Coordinate: s.Plan.Coordinate, Digest: quarantineDigest,
 		State: repository.ArtifactQuarantineStateQuarantined, Reason: s.Reason, UpdatedBy: "security-admin",
 	}, "0")
 	return nil

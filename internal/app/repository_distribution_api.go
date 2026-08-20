@@ -21,19 +21,19 @@ import (
 
 func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.CreateRepositoryPromotionParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, source repository.HostedRepository) {
-		if source.Format != repository.FormatMaven && source.Format != repository.FormatOCI && source.Format != repository.FormatRaw && source.Format != repository.FormatConan && source.Format != repository.FormatNPM && source.Format != repository.FormatPyPI {
+		if !repository.FormatSupportsOperation(source.Format, source.Type, repository.RepositoryOperationPromote) {
 			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "promotion is not supported for this repository format")
 			return
 		}
 		var request adminopenapi.PromotionRequest
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatOCI && (request.Coordinate == "" || strings.Contains(request.Coordinate, "@"))) || (source.Format == repository.FormatRaw && strings.Trim(request.Coordinate, "/") == "") || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatOCI && (request.Coordinate == "" || strings.Contains(request.Coordinate, "@"))) || (source.Format == repository.FormatRaw && strings.Trim(request.Coordinate, "/") == "") || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "targetRepositoryId, immutable artifact coordinate, and digest are required")
 			return
 		}
 		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal) {
 			target, err := h.sessions.store.GetHostedRepository(r.Context(), request.TargetRepositoryId.String())
-			if err != nil || target.ID == source.ID || target.Format != source.Format || target.State != repository.RepositoryActive {
-				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active repository with the same format")
+			if err != nil || target.ID == source.ID || target.Format != source.Format || target.Type != repository.RepositoryTypeHosted || target.State != repository.RepositoryActive {
+				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active Hosted repository with the same format")
 				return
 			}
 			if h.rejectQuarantinedDistribution(w, r, principal, source, target, request.Coordinate, request.Digest, "promote") {
@@ -77,6 +77,9 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.Response
 			case repository.FormatPyPI:
 				project, version, _ := parsePyPIVersionCoordinate(request.Coordinate)
 				job, _, err = (NativePyPIPromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), PyPIPromotionPayload{SourceRepositoryID: source.ID, Project: project, Version: version, Digest: request.Digest})
+			case repository.FormatGo:
+				modulePath, version, _ := parseGoModuleVersionCoordinate(request.Coordinate)
+				job, _, err = (NativeGoPromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), GoPromotionPayload{SourceRepositoryID: source.ID, Module: modulePath, Version: version, Digest: request.Digest})
 			}
 			if errors.Is(err, repository.ErrIdempotencyConflict) {
 				writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing promotion job")
@@ -97,14 +100,14 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 		var request adminopenapi.ReplicationRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || !repository.FormatSupportsOperation(source.Format, source.Type, repository.RepositoryOperationReplicate) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) {
+		if err := decoder.Decode(&request); err != nil || !repository.FormatSupportsOperation(source.Format, source.Type, repository.RepositoryOperationReplicate) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "replication requires a visible format-specific coordinate and sha256 digest")
 			return
 		}
 		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal) {
 			target, err := h.store.GetHostedRepository(r.Context(), request.TargetRepositoryId.String())
-			if err != nil || target.ID == source.ID || target.Format != source.Format || target.State != repository.RepositoryActive {
-				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active repository with the same format")
+			if err != nil || target.ID == source.ID || target.Format != source.Format || target.Type != repository.RepositoryTypeHosted || target.State != repository.RepositoryActive {
+				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active Hosted repository with the same format")
 				return
 			}
 			if h.rejectQuarantinedDistribution(w, r, principal, source, target, request.Coordinate, request.Digest, "replicate") {
@@ -194,6 +197,26 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 					writeHostedProblem(w, http.StatusNotFound, "not_found", "source PyPI version is unavailable")
 					return
 				}
+			} else if format == repository.FormatGo {
+				modulePath, version, _ := parseGoModuleVersionCoordinate(request.Coordinate)
+				publication, lookupErr := loadGoDistributionPublication(r.Context(), h.sessions.store, source.ID, modulePath, version, request.Digest)
+				if errors.Is(lookupErr, repository.ErrNotFound) {
+					writeHostedProblem(w, http.StatusNotFound, "not_found", "source Go module version is unavailable")
+					return
+				}
+				if lookupErr != nil {
+					writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lookup source Go module version failed")
+					return
+				}
+				checkpoints = make([]repository.ReplicationCheckpoint, 0, len(publication.Assets))
+				for _, asset := range publication.Assets {
+					checkpoints = append(checkpoints, repository.ReplicationCheckpoint{
+						SourceObjectKey: asset.ObjectKey,
+						ObjectKey:       goReplicationTargetObjectKey(target.ID, asset.Digest, asset.Kind),
+						Digest:          asset.Digest,
+						Size:            asset.Size,
+					})
+				}
 			} else {
 				reference, revision, _ := strings.Cut(request.Coordinate, "#")
 				recipe, lookupErr := h.conan.GetConanRecipeRevision(r.Context(), source.ID, reference, revision)
@@ -228,6 +251,10 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 
 func (h generatedRepositoryAPIAdapter) rejectQuarantinedDistribution(w http.ResponseWriter, r *http.Request, principal Principal, source, target repository.HostedRepository, coordinate, digest, operation string) bool {
 	digests, err := h.artifactDistributionDigests(r.Context(), source, coordinate, digest)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "source artifact is unavailable")
+		return true
+	}
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "evaluate distribution artifact identities failed")
 		return true

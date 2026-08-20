@@ -15,6 +15,9 @@ a dated version heading without rewriting their meaning.
   management tombstone/restore with protocol, Group, search, and scan-identity
   visibility enforcement, repository retention planning, a 24-hour recovery
   window followed by reference-safe object reclamation and capacity release,
+  immutable promotion of the complete three-representation version snapshot,
+  checkpointed replication to target-specific verified objects with final
+  snapshot and quarantine revalidation,
   Hosted-first mixed Groups, and a real
   `go mod download` acceptance gate.
 

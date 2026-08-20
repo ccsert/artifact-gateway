@@ -54,7 +54,7 @@ func TestFormatProfilesAPIRequiresAdministratorAndReturnsCapabilities(t *testing
 			continue
 		}
 		if item.Format == adminopenapi.Format("go") {
-			if !item.GroupSupported || len(item.RepositoryTypes) != 2 || len(item.HostedOperations) != 7 || len(item.ProxyOperations) != 2 {
+			if !item.GroupSupported || len(item.RepositoryTypes) != 2 || len(item.HostedOperations) != 9 || len(item.ProxyOperations) != 2 {
 				t.Errorf("Go must expose Hosted lifecycle plus Proxy and Group: %#v", item)
 			}
 			continue

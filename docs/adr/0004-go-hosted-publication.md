@@ -41,7 +41,10 @@ Proxy members with Hosted-first conflict resolution and the standard
 
 This decision satisfies the separate-contract requirement in
 `0003-protocol-only-formats.md`; it does not present `PUT` as a Go ecosystem
-standard. The first admitted Go Hosted profile declares only `read`, `publish`,
-and `browse`. Delete/restore, retention, reclaim, promotion, replication,
-quarantine-read enforcement, and checksum-database mirroring remain separate
-capabilities and must not be advertised until executable.
+standard. The admitted Go Hosted profile now declares the independently gated
+`read`, `publish`, `browse`, `delete`, `restore`, `retain`, `reclaim`, `promote`,
+and `replicate` operations. Promotion and replication preserve the complete
+`.info`/`.mod`/`.zip` snapshot and publish only to Hosted targets. Quarantine-read
+enforcement, authenticated upstream Proxy credentials, and checksum-database
+mirroring remain separate capabilities and must not be advertised until
+executable.

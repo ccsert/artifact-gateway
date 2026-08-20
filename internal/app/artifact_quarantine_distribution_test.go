@@ -47,6 +47,16 @@ func (s *blockingOpenRangeStore) OpenRange(ctx context.Context, key string, offs
 	}
 }
 
+func (s *blockingOpenRangeStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	s.once.Do(func() { close(s.opened) })
+	select {
+	case <-ctx.Done():
+		return nil, 0, ctx.Err()
+	case <-s.release:
+		return s.OCIObjectStore.Open(ctx, key)
+	}
+}
+
 func newRawQuarantineDistributionFixture(t *testing.T) rawQuarantineDistributionFixture {
 	t.Helper()
 	ctx := context.Background()

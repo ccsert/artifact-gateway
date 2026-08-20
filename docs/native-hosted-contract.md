@@ -104,6 +104,15 @@ its Repository capacity after the window, while the byte object remains until
 its last visible reference disappears. Failed deletion remains retryable. No
 API exposes direct object keys.
 
+Go promotion and replication use the complete immutable `.info`/`.mod`/`.zip`
+version as their publication unit. The management identity is canonical
+`module@version` plus the ZIP digest, but admission and final worker publication
+check all three representation digests. Promotion shares the verified source
+object keys with an active Hosted target. Replication persists and verifies one
+checkpoint per representation under target-specific object keys before a single
+metadata transaction exposes the target version. A Proxy Repository cannot be a
+distribution target.
+
 ## Authorization, errors, pagination, and compatibility
 
 Management endpoints require a bearer access token. Global repository listing,
