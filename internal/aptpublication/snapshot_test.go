@@ -116,6 +116,7 @@ func TestPublisherBuildsDeterministicSignedSnapshot(t *testing.T) {
 	}
 	if publicationAudit == nil {
 		t.Fatalf("snapshot publication audit missing: %#v", audits)
+		return
 	}
 	if publicationAudit.AuthorizationReason != "signed_snapshot_visible" ||
 		publicationAudit.Evidence["signerIdentity"] != "apt-release@example.test" ||

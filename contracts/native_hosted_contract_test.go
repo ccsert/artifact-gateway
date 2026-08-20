@@ -242,6 +242,7 @@ func TestGlobalArtifactSearchContract(t *testing.T) {
 	matchKind := metadata.Properties["matchKind"].Value
 	if matchKind == nil {
 		t.Fatal("matchKind schema is unresolved")
+		return
 	}
 	if len(matchKind.Enum) != 2 || matchKind.Enum[0] != "coordinate" || matchKind.Enum[1] != "digest" {
 		t.Fatalf("matchKind enum=%v", matchKind.Enum)
