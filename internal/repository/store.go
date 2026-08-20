@@ -195,6 +195,7 @@ type LifecycleJobStore interface {
 	CancelLifecycleJob(context.Context, string, string) (LifecycleJob, error)
 	UpdateLifecycleJobProgress(context.Context, string, string, int, int, string) error
 	RenewLifecycleJobLease(context.Context, string, string) error
+	LockLifecycleJobLease(context.Context, string, string) (func(), error)
 	CompleteLifecycleJob(context.Context, string, string) error
 	FailLifecycleJob(context.Context, string, string, string) error
 }
@@ -218,6 +219,13 @@ type ArtifactDistributionLockIdentity struct {
 // instead of one primary-pool connection per digest.
 type ArtifactDistributionIdentityLockStore interface {
 	LockArtifactDistributionIdentities(context.Context, []ArtifactDistributionLockIdentity) (func(), error)
+}
+
+// ArtifactDistributionIdentityContextLockStore preserves a store-specific lock
+// session in the returned context so nested advisory locks reuse one
+// connection instead of exhausting the dedicated lock pool.
+type ArtifactDistributionIdentityContextLockStore interface {
+	LockArtifactDistributionIdentitiesContext(context.Context, []ArtifactDistributionLockIdentity) (context.Context, func(), error)
 }
 
 // ArtifactObjectKeysLockStore acquires all format object locks on one backend
@@ -260,6 +268,8 @@ type ReplicationStore interface {
 	GetReplicationPlan(context.Context, string, string) (ReplicationPlan, error)
 	ListReplicationCheckpoints(context.Context, string) ([]ReplicationCheckpoint, error)
 	UpdateReplicationCheckpointWithLease(context.Context, ReplicationCheckpoint, string) error
+	RenewReplicationPlanLease(context.Context, string, string) error
+	LockReplicationPlanLease(context.Context, string, string) (func(), error)
 	CompleteReplicationPlanWithLease(context.Context, string, string) error
 	FailReplicationPlanWithLease(context.Context, string, string, string) error
 	ParkReplicationPlanWithLease(context.Context, string, string, string) error

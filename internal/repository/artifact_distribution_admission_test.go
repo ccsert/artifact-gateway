@@ -51,26 +51,27 @@ func TestLockArtifactDistributionAdmissionForDigestsOrdersAndDeduplicatesLocks(t
 	}
 }
 
-func TestPyPIDistributionAdmissionUsesOneCoordinateLock(t *testing.T) {
-	ctx := context.Background()
-	store := &recordingDistributionAdmissionStore{}
+func TestAggregateDistributionAdmissionUsesOneCoordinateLock(t *testing.T) {
 	digestA := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	digestB := "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-
-	release, err := LockArtifactDistributionAdmissionForDigests(ctx, store, "source", FormatPyPI, "widget@1.0.0", []string{digestB, digestA})
-	if err != nil {
-		t.Fatal(err)
-	}
-	release()
-
 	want := []string{
 		"lock:" + artifactDistributionUnitDigest,
 		"check:" + digestA,
 		"check:" + digestB,
 		"unlock:" + artifactDistributionUnitDigest,
 	}
-	if !reflect.DeepEqual(store.events, want) {
-		t.Fatalf("admission events=%v want=%v", store.events, want)
+	for _, format := range []Format{FormatPyPI, FormatGo} {
+		t.Run(string(format), func(t *testing.T) {
+			store := &recordingDistributionAdmissionStore{}
+			release, err := LockArtifactDistributionAdmissionForDigests(context.Background(), store, "source", format, "widget@1.0.0", []string{digestB, digestA})
+			if err != nil {
+				t.Fatal(err)
+			}
+			release()
+			if !reflect.DeepEqual(store.events, want) {
+				t.Fatalf("admission events=%v want=%v", store.events, want)
+			}
+		})
 	}
 }
 

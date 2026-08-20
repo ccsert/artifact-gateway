@@ -38,8 +38,8 @@ func ArtifactDistributionAllowed(ctx context.Context, store any, repositoryID st
 }
 
 // ArtifactDistributionAllowedForDigests evaluates every immutable file in one
-// publication unit. This is required by formats such as PyPI where one version
-// can contain several independently addressed files.
+// publication unit. This is required by aggregate formats such as PyPI and Go
+// where one version can contain several independently addressed files.
 func ArtifactDistributionAllowedForDigests(ctx context.Context, store any, repositoryID string, format Format, coordinate string, digests []string) (bool, error) {
 	quarantines, ok := store.(ArtifactQuarantineStore)
 	if !ok || quarantines == nil {
@@ -70,9 +70,9 @@ func LockArtifactDistributionAdmission(ctx context.Context, store any, repositor
 }
 
 // LockArtifactDistributionAdmissionForDigests serializes a complete
-// multi-file publication unit with quarantine transitions. Locks are acquired
-// in digest order and released in reverse order so concurrent workers cannot
-// deadlock while publishing the same set in a different enumeration order.
+// multi-file publication unit with quarantine transitions. Aggregate formats
+// use their coordinate lock; other formats acquire digest locks in sorted order
+// so concurrent workers cannot deadlock on a different enumeration.
 func LockArtifactDistributionAdmissionForDigests(ctx context.Context, store any, repositoryID string, format Format, coordinate string, digests []string) (func(), error) {
 	digests = sortedUniqueDigests(digests)
 	releaseAll, err := LockArtifactDistributionUnit(ctx, store, repositoryID, format, coordinate, digests)
@@ -92,20 +92,31 @@ func LockArtifactDistributionAdmissionForDigests(ctx context.Context, store any,
 }
 
 // LockArtifactDistributionUnit serializes a final publication or governance
-// transition without evaluating current quarantine state. PyPI uses one
-// coordinate-level lock because every file of project@version is one
-// distribution unit; other formats retain exact digest locks.
+// transition without evaluating current quarantine state. PyPI and Go use one
+// coordinate-level lock because every file or representation of a version is
+// one distribution unit; other formats retain exact digest locks.
 func LockArtifactDistributionUnit(ctx context.Context, store any, repositoryID string, format Format, coordinate string, digests []string) (func(), error) {
+	_, release, err := LockArtifactDistributionUnitContext(ctx, store, repositoryID, format, coordinate, digests)
+	return release, err
+}
+
+// LockArtifactDistributionUnitContext is the context-preserving form used by
+// workers that acquire another advisory lock while the distribution unit is
+// still held. PostgreSQL carries its lock session in the returned context.
+func LockArtifactDistributionUnitContext(ctx context.Context, store any, repositoryID string, format Format, coordinate string, digests []string) (context.Context, func(), error) {
 	identities := make([]ArtifactDistributionLockIdentity, 0, len(digests)+1)
-	if format == FormatPyPI {
+	if format == FormatPyPI || format == FormatGo {
 		identities = append(identities, ArtifactDistributionLockIdentity{RepositoryID: repositoryID, Format: format, Coordinate: coordinate, Digest: artifactDistributionUnitDigest})
 	} else {
 		for _, digest := range sortedUniqueDigests(digests) {
 			identities = append(identities, ArtifactDistributionLockIdentity{RepositoryID: repositoryID, Format: format, Coordinate: coordinate, Digest: digest})
 		}
 	}
-	_, release, err := lockArtifactDistributionIdentities(ctx, store, identities)
-	return release, err
+	lockedCtx, acquired, release, err := lockArtifactDistributionIdentitiesContext(ctx, store, identities)
+	if err != nil {
+		return ctx, nil, err
+	}
+	return contextWithArtifactDistributionLease(lockedCtx, acquired, release)
 }
 
 // LockArtifactQuarantineTransition uses the same publication-unit lock as the
@@ -126,10 +137,14 @@ func LockArtifactDistributionCoordinates(ctx context.Context, store any, coordin
 			identities = append(identities, ArtifactDistributionLockIdentity{RepositoryID: coordinate.RepositoryID, Format: coordinate.Format, Coordinate: coordinate.Coordinate, Digest: artifactDistributionUnitDigest})
 		}
 	}
-	acquired, release, err := lockArtifactDistributionIdentities(ctx, store, identities)
+	lockedCtx, acquired, release, err := lockArtifactDistributionIdentitiesContext(ctx, store, identities)
 	if err != nil {
 		return ctx, nil, err
 	}
+	return contextWithArtifactDistributionLease(lockedCtx, acquired, release)
+}
+
+func contextWithArtifactDistributionLease(ctx context.Context, acquired []ArtifactDistributionLockIdentity, release func()) (context.Context, func(), error) {
 	lease := &artifactDistributionLockLease{keys: make(map[string]struct{}, len(acquired))}
 	for _, identity := range acquired {
 		lease.keys[artifactDistributionIdentityKey(identity)] = struct{}{}
@@ -156,7 +171,7 @@ func lockArtifactDistributionCoordinates(ctx context.Context, store any, reposit
 	return release, err
 }
 
-func lockArtifactDistributionIdentities(ctx context.Context, store any, identities []ArtifactDistributionLockIdentity) ([]ArtifactDistributionLockIdentity, func(), error) {
+func lockArtifactDistributionIdentitiesContext(ctx context.Context, store any, identities []ArtifactDistributionLockIdentity) (context.Context, []ArtifactDistributionLockIdentity, func(), error) {
 	sort.Slice(identities, func(left, right int) bool {
 		return artifactDistributionIdentityKey(identities[left]) < artifactDistributionIdentityKey(identities[right])
 	})
@@ -175,13 +190,21 @@ func lockArtifactDistributionIdentities(ctx context.Context, store any, identiti
 		unique = append(unique, identity)
 	}
 	identities = unique
+	if locker, ok := store.(ArtifactDistributionIdentityContextLockStore); ok {
+		lockedCtx, release, err := locker.LockArtifactDistributionIdentitiesContext(ctx, identities)
+		if err != nil {
+			return ctx, nil, nil, err
+		}
+		var once sync.Once
+		return lockedCtx, identities, func() { once.Do(release) }, nil
+	}
 	if locker, ok := store.(ArtifactDistributionIdentityLockStore); ok {
 		release, err := locker.LockArtifactDistributionIdentities(ctx, identities)
 		if err != nil {
-			return nil, nil, err
+			return ctx, nil, nil, err
 		}
 		var once sync.Once
-		return identities, func() { once.Do(release) }, nil
+		return ctx, identities, func() { once.Do(release) }, nil
 	}
 	releases := make([]func(), 0, len(identities))
 	releaseAll := func() {
@@ -194,13 +217,13 @@ func lockArtifactDistributionIdentities(ctx context.Context, store any, identiti
 			release, err := locker.LockArtifactScanIdentity(ctx, identity.RepositoryID, identity.Format, identity.Coordinate, identity.Digest)
 			if err != nil {
 				releaseAll()
-				return nil, nil, err
+				return ctx, nil, nil, err
 			}
 			releases = append(releases, release)
 		}
 	}
 	var once sync.Once
-	return identities, func() { once.Do(releaseAll) }, nil
+	return ctx, identities, func() { once.Do(releaseAll) }, nil
 }
 
 func artifactDistributionIdentityKey(identity ArtifactDistributionLockIdentity) string {

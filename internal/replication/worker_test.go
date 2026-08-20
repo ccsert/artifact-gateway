@@ -1,11 +1,14 @@
 package replication
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"io"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -28,6 +31,36 @@ type blockingParkReplicationStore struct {
 type replicationMetrics struct {
 	events   []string
 	inFlight []int64
+}
+
+type heartbeatReplicationStore struct {
+	*repository.MemoryStore
+	renewals atomic.Int32
+	expireAt int32
+}
+
+type cancelAwareHeartbeatStore struct {
+	*repository.MemoryStore
+	renewals atomic.Int32
+	entered  chan struct{}
+}
+
+func (s *heartbeatReplicationStore) RenewReplicationPlanLease(ctx context.Context, id, leaseToken string) error {
+	call := s.renewals.Add(1)
+	if s.expireAt > 0 && call == s.expireAt {
+		_, _ = s.RecoverExpiredReplicationPlans(ctx, time.Now().UTC().Add(11*time.Minute))
+		return repository.ErrNotFound
+	}
+	return s.MemoryStore.RenewReplicationPlanLease(ctx, id, leaseToken)
+}
+
+func (s *cancelAwareHeartbeatStore) RenewReplicationPlanLease(ctx context.Context, id, leaseToken string) error {
+	if s.renewals.Add(1) == 1 {
+		return s.MemoryStore.RenewReplicationPlanLease(ctx, id, leaseToken)
+	}
+	close(s.entered)
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 func (m *replicationMetrics) RecordBackgroundOperation(kind string, format repository.Format, outcome string) {
@@ -58,7 +91,15 @@ func (s *failingDestination) Put(ctx context.Context, key string, value []byte) 
 	return s.Store.Put(ctx, key, value)
 }
 
-func TestWorkerResumesFromCheckpointAndVerifiesSHA256(t *testing.T) {
+func (s *failingDestination) PutReader(ctx context.Context, key string, value io.Reader, size int64) error {
+	s.puts++
+	if s.failOnPut == s.puts {
+		return errors.New("injected object-store failure")
+	}
+	return s.Store.PutReader(ctx, key, value, size)
+}
+
+func TestWorkerRetriesStreamingCheckpointAndVerifiesSHA256(t *testing.T) {
 	ctx := context.Background()
 	source := objectstore.NewMemoryStore()
 	destination := &failingDestination{Store: objectstore.NewMemoryStore()}
@@ -78,14 +119,13 @@ func TestWorkerResumesFromCheckpointAndVerifiesSHA256(t *testing.T) {
 		locked = append(locked, key)
 		return func() { released = append(released, key) }, nil
 	}
-	// The second chunk fails after the first offset has been durably saved.
-	destination.failOnPut = 2
+	destination.failOnPut = 1
 	worker := Worker{Store: store, Source: source, Destination: destination, ChunkBytes: 3, LockObject: lockObject}
 	if err := worker.Run(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
 	checks, err := store.ListReplicationCheckpoints(ctx, plan.ID)
-	if err != nil || len(checks) != 1 || checks[0].State != "failed" || checks[0].ByteOffset != 3 || checks[0].Attempts != 1 {
+	if err != nil || len(checks) != 1 || checks[0].State != "failed" || checks[0].ByteOffset != 0 || checks[0].Attempts != 1 {
 		t.Fatalf("failed checkpoint=%#v err=%v", checks, err)
 	}
 	if err = worker.Run(ctx, 1); err != nil {
@@ -101,6 +141,109 @@ func TestWorkerResumesFromCheckpointAndVerifiesSHA256(t *testing.T) {
 	}
 	if len(locked) != 4 || len(released) != 4 || locked[0] != "objects/source-widget" || locked[1] != "objects/widget" {
 		t.Fatalf("object coordination locked=%v released=%v", locked, released)
+	}
+}
+
+type failCheckpointUpdateOnceStore struct {
+	*repository.MemoryStore
+	fail bool
+}
+
+func (s *failCheckpointUpdateOnceStore) UpdateReplicationCheckpointWithLease(ctx context.Context, checkpoint repository.ReplicationCheckpoint, leaseToken string) error {
+	if s.fail {
+		s.fail = false
+		return errors.New("injected checkpoint persistence failure")
+	}
+	return s.MemoryStore.UpdateReplicationCheckpointWithLease(ctx, checkpoint, leaseToken)
+}
+
+func TestWorkerRecoversWhenObjectCommitPrecedesCheckpointUpdate(t *testing.T) {
+	ctx := context.Background()
+	source := objectstore.NewMemoryStore()
+	destination := objectstore.NewMemoryStore()
+	body := []byte("object committed before checkpoint update")
+	digest := sha256Digest(body)
+	if err := source.Put(ctx, "source/crash-window", body); err != nil {
+		t.Fatal(err)
+	}
+	base := repository.NewMemoryStore()
+	store := &failCheckpointUpdateOnceStore{MemoryStore: base, fail: true}
+	plan := repository.ReplicationPlan{
+		ID: "object-before-checkpoint", SourceRepositoryID: "source", TargetRepositoryID: "target",
+		Format: repository.FormatRaw, Coordinate: "releases/crash-window.bin", Digest: digest,
+		IdempotencyKey: "object-before-checkpoint",
+	}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{
+		SourceObjectKey: "source/crash-window", ObjectKey: "target/crash-window", Digest: digest, Size: int64(len(body)),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	worker := Worker{Store: store, Source: source, Destination: destination}
+	if err := worker.Run(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	if committed, err := destination.Get(ctx, "target/crash-window"); err != nil || string(committed) != string(body) {
+		t.Fatalf("committed destination=%q err=%v", committed, err)
+	}
+	checks, err := store.ListReplicationCheckpoints(ctx, plan.ID)
+	if err != nil || len(checks) != 1 || checks[0].State != "failed" || checks[0].ByteOffset != 0 {
+		t.Fatalf("checkpoint after persistence failure=%#v err=%v", checks, err)
+	}
+	if err = worker.Run(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	checks, err = store.ListReplicationCheckpoints(ctx, plan.ID)
+	if err != nil || checks[0].State != "verified" || checks[0].ByteOffset != int64(len(body)) {
+		t.Fatalf("recovered checkpoint=%#v err=%v", checks, err)
+	}
+}
+
+type streamingDestinationProbe struct {
+	objectstore.Store
+	getCalls       int
+	putCalls       int
+	putReaderCalls int
+}
+
+func (s *streamingDestinationProbe) Get(ctx context.Context, key string) ([]byte, error) {
+	s.getCalls++
+	return s.Store.Get(ctx, key)
+}
+
+func (s *streamingDestinationProbe) Put(ctx context.Context, key string, value []byte) error {
+	s.putCalls++
+	return s.Store.Put(ctx, key, value)
+}
+
+func (s *streamingDestinationProbe) PutReader(ctx context.Context, key string, value io.Reader, size int64) error {
+	s.putReaderCalls++
+	return s.Store.PutReader(ctx, key, value, size)
+}
+
+func TestWorkerStreamsLargeObjectWithoutPrefixRewrites(t *testing.T) {
+	ctx := context.Background()
+	source := objectstore.NewMemoryStore()
+	destination := &streamingDestinationProbe{Store: objectstore.NewMemoryStore()}
+	body := bytes.Repeat([]byte("0123456789abcdef"), (17<<20)/16)
+	digest := sha256Digest(body)
+	if err := source.Put(ctx, "source/large", body); err != nil {
+		t.Fatal(err)
+	}
+	store := repository.NewMemoryStore()
+	plan := repository.ReplicationPlan{
+		ID: "large-stream", SourceRepositoryID: "source", TargetRepositoryID: "target", Format: repository.FormatGo,
+		Coordinate: "example.com/team/large@v1.0.0", Digest: digest, IdempotencyKey: "large-stream",
+	}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{
+		SourceObjectKey: "source/large", ObjectKey: "target/large", Digest: digest, Size: int64(len(body)),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := (Worker{Store: store, Source: source, Destination: destination, ChunkBytes: 1 << 20}).Run(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	if destination.putReaderCalls != 1 || destination.getCalls != 0 || destination.putCalls != 0 {
+		t.Fatalf("destination operations putReader=%d get=%d put=%d", destination.putReaderCalls, destination.getCalls, destination.putCalls)
 	}
 }
 
@@ -155,6 +298,156 @@ func TestWorkerPublishesVerifiedCheckpointAndRecordsMetrics(t *testing.T) {
 	}
 	if len(metrics.inFlight) != 2 || metrics.inFlight[0] != 1 || metrics.inFlight[1] != -1 {
 		t.Fatalf("in-flight metrics=%v", metrics.inFlight)
+	}
+}
+
+func TestWorkerHeartbeatCancelsObjectLockWaitAfterLeaseLoss(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	base := repository.NewMemoryStore()
+	store := &heartbeatReplicationStore{MemoryStore: base, expireAt: 2}
+	body := []byte("heartbeat fenced object lock")
+	digest := sha256Digest(body)
+	plan := repository.ReplicationPlan{
+		ID: "heartbeat-lock", SourceRepositoryID: "source", TargetRepositoryID: "target",
+		Format: repository.FormatRaw, Coordinate: "releases/heartbeat.bin", Digest: digest, IdempotencyKey: "heartbeat-lock",
+	}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{
+		SourceObjectKey: "source/heartbeat", ObjectKey: "target/heartbeat", Digest: digest, Size: int64(len(body)),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	worker := Worker{
+		Store: store, Source: objectstore.NewMemoryStore(), Destination: objectstore.NewMemoryStore(),
+		LeaseHeartbeatInterval: 5 * time.Millisecond,
+		LockObject: func(lockCtx context.Context, _ string) (func(), error) {
+			<-lockCtx.Done()
+			return nil, lockCtx.Err()
+		},
+	}
+	if err := worker.Run(ctx, 1); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("worker after heartbeat lease loss err=%v", err)
+	}
+	if store.renewals.Load() < 2 {
+		t.Fatalf("lease renewals=%d", store.renewals.Load())
+	}
+	persisted, err := store.GetReplicationPlan(ctx, plan.TargetRepositoryID, plan.ID)
+	if err != nil || persisted.State != "failed" || persisted.LastError != "replication worker lease expired" {
+		t.Fatalf("recovered plan=%#v err=%v", persisted, err)
+	}
+}
+
+func TestWorkerHeartbeatTreatsCancellationDuringRenewalAsCleanStop(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	store := &cancelAwareHeartbeatStore{MemoryStore: repository.NewMemoryStore(), entered: make(chan struct{})}
+	plan := repository.ReplicationPlan{
+		ID: "heartbeat-cancel-renewal", SourceRepositoryID: "source", TargetRepositoryID: "target",
+		Format: repository.FormatRaw, Coordinate: "releases/cancel.bin", Digest: "sha256:" + strings.Repeat("c", 64), IdempotencyKey: "heartbeat-cancel-renewal",
+	}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{
+		ObjectKey: "target/cancel", Digest: plan.Digest, Size: 1,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := store.ClaimReplicationPlans(ctx, 1)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claimed=%#v err=%v", claimed, err)
+	}
+	_, heartbeat, err := (Worker{Store: store, LeaseHeartbeatInterval: time.Millisecond}).startLeaseHeartbeat(ctx, plan.ID, claimed[0].LeaseToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-store.entered:
+	case <-ctx.Done():
+		t.Fatal("heartbeat did not enter renewal")
+	}
+	if err = heartbeat.stop(); err != nil {
+		t.Fatalf("heartbeat stop after cancellation=%v", err)
+	}
+}
+
+func TestWorkerLeaseFenceCoversPublishThroughCompletion(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	store := &heartbeatReplicationStore{MemoryStore: repository.NewMemoryStore()}
+	source := objectstore.NewMemoryStore()
+	destination := objectstore.NewMemoryStore()
+	body := []byte("lease fenced metadata publication")
+	digest := sha256Digest(body)
+	if err := source.Put(ctx, "source/fenced", body); err != nil {
+		t.Fatal(err)
+	}
+	plan := repository.ReplicationPlan{
+		ID: "publish-fence", SourceRepositoryID: "source", TargetRepositoryID: "target",
+		Format: repository.FormatRaw, Coordinate: "releases/fenced.bin", Digest: digest, IdempotencyKey: "publish-fence",
+	}
+	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{
+		SourceObjectKey: "source/fenced", ObjectKey: "target/fenced", Digest: digest, Size: int64(len(body)),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	publishEntered := make(chan struct{})
+	releasePublish := make(chan struct{})
+	workerDone := make(chan error, 1)
+	go func() {
+		workerDone <- (Worker{
+			Store: store, Source: source, Destination: destination, Format: repository.FormatRaw,
+			LeaseHeartbeatInterval: 5 * time.Millisecond,
+			Publish: func(publishCtx context.Context, _ repository.ReplicationPlan, _ []repository.ReplicationCheckpoint) error {
+				close(publishEntered)
+				select {
+				case <-releasePublish:
+					return nil
+				case <-publishCtx.Done():
+					return publishCtx.Err()
+				}
+			},
+		}).Run(ctx, 1)
+	}()
+	select {
+	case <-publishEntered:
+	case <-ctx.Done():
+		t.Fatal("worker did not enter metadata publication")
+	}
+	type recoveryResult struct {
+		count int
+		err   error
+	}
+	recoveryDone := make(chan recoveryResult, 1)
+	go func() {
+		count, err := store.RecoverExpiredReplicationPlans(ctx, time.Now().UTC().Add(11*time.Minute))
+		recoveryDone <- recoveryResult{count: count, err: err}
+	}()
+	select {
+	case result := <-recoveryDone:
+		t.Fatalf("lease recovery crossed publication fence: %#v", result)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(releasePublish)
+	select {
+	case err := <-workerDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-ctx.Done():
+		t.Fatal("worker did not complete publication")
+	}
+	select {
+	case result := <-recoveryDone:
+		if result.err != nil || result.count != 0 {
+			t.Fatalf("recovery after completed publication=%#v", result)
+		}
+	case <-ctx.Done():
+		t.Fatal("lease recovery remained blocked after completion")
+	}
+	if store.renewals.Load() < 2 {
+		t.Fatalf("publication heartbeat renewals=%d", store.renewals.Load())
+	}
+	persisted, err := store.GetReplicationPlan(ctx, plan.TargetRepositoryID, plan.ID)
+	if err != nil || persisted.State != "completed" {
+		t.Fatalf("completed plan=%#v err=%v", persisted, err)
 	}
 }
 

@@ -154,12 +154,17 @@ func prefixedLifecycleJobColumns(prefix string) string {
 }
 
 func (s *PostgresStore) RecoverExpiredLifecycleJobs(ctx context.Context, before time.Time) (int, error) {
-	result, err := s.db.ExecContext(ctx, `UPDATE lifecycle_jobs SET
+	result, err := s.db.ExecContext(ctx, `WITH candidates AS (
+		SELECT id FROM lifecycle_jobs
+		WHERE state='running' AND lease_expires_at IS NOT NULL AND lease_expires_at<=$1
+		AND pg_try_advisory_xact_lock(hashtextextended('lifecycle-job-lease:' || id::text, 0))
+		FOR UPDATE SKIP LOCKED
+	) UPDATE lifecycle_jobs jobs SET
         state=CASE WHEN attempts>=max_attempts THEN 'failed' ELSE 'retrying' END,
         completed_at=CASE WHEN attempts>=max_attempts THEN $1 ELSE NULL END,
         next_attempt_at=CASE WHEN attempts>=max_attempts THEN NULL ELSE $1+LEAST(interval '30 minutes',interval '30 seconds'*power(2,LEAST(GREATEST(attempts-1,0),6))) END,
         lease_expires_at=NULL,lease_token='',last_error='worker lease expired before completion'
-        WHERE state='running' AND lease_expires_at IS NOT NULL AND lease_expires_at<=$1`, before.UTC())
+		FROM candidates WHERE jobs.id=candidates.id`, before.UTC())
 	if err != nil {
 		return 0, err
 	}
@@ -241,7 +246,7 @@ func (s *PostgresStore) UpdateLifecycleJobProgress(ctx context.Context, id, leas
 func (s *PostgresStore) RenewLifecycleJobLease(ctx context.Context, id, leaseToken string) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE lifecycle_jobs SET
 		lease_expires_at=GREATEST(lease_expires_at+interval '1 microsecond',clock_timestamp()+interval '10 minutes')
-		WHERE id::text=$1 AND lease_token=$2 AND state='running'`, id, leaseToken)
+		WHERE id::text=$1 AND lease_token=$2 AND state='running' AND lease_expires_at>clock_timestamp()`, id, leaseToken)
 	if err != nil {
 		return err
 	}
@@ -251,8 +256,25 @@ func (s *PostgresStore) RenewLifecycleJobLease(ctx context.Context, id, leaseTok
 	return nil
 }
 
+func (s *PostgresStore) LockLifecycleJobLease(ctx context.Context, id, leaseToken string) (func(), error) {
+	_, release, err := s.lockPostgresAdvisoryKeys(ctx, []string{"lifecycle-job-lease:" + id})
+	if err != nil {
+		return nil, err
+	}
+	var valid bool
+	if err = s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM lifecycle_jobs WHERE id::text=$1 AND state='running' AND lease_token=$2 AND lease_expires_at>clock_timestamp())`, id, leaseToken).Scan(&valid); err != nil {
+		release()
+		return nil, err
+	}
+	if !valid {
+		release()
+		return nil, ErrNotFound
+	}
+	return release, nil
+}
+
 func (s *PostgresStore) CompleteLifecycleJob(ctx context.Context, id, leaseToken string) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE lifecycle_jobs SET state='completed',completed_at=now(),lease_expires_at=NULL,lease_token='',next_attempt_at=NULL,last_error='',progress_current=CASE WHEN progress_total>0 THEN progress_total ELSE progress_current END WHERE id::text=$1 AND lease_token=$2 AND state='running'`, id, leaseToken)
+	result, err := s.db.ExecContext(ctx, `UPDATE lifecycle_jobs SET state='completed',completed_at=now(),lease_expires_at=NULL,lease_token='',next_attempt_at=NULL,last_error='',progress_current=CASE WHEN progress_total>0 THEN progress_total ELSE progress_current END WHERE id::text=$1 AND lease_token=$2 AND state='running' AND lease_expires_at>clock_timestamp()`, id, leaseToken)
 	if err != nil {
 		return err
 	}

@@ -74,6 +74,65 @@ func TestPostgresReplicationPlanPersistsArtifactIdentity(t *testing.T) {
 	}
 }
 
+func TestPostgresReplicationLeaseFenceReusesSingleDistributionLockSession(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.lockDB.SetMaxOpenConns(1)
+	store.lockDB.SetMaxIdleConns(1)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	suffix := uuid.NewString()[:8]
+	source, err := store.CreateHostedRepository(ctx, HostedRepository{ID: uuid.NewString(), Name: "repl-fence-src-" + suffix, Format: FormatRaw})
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	target, err := store.CreateHostedRepository(ctx, HostedRepository{ID: uuid.NewString(), Name: "repl-fence-dst-" + suffix, Format: FormatRaw})
+	if err != nil {
+		_, _ = store.db.ExecContext(ctx, `DELETE FROM hosted_repositories WHERE id=$1`, source.ID)
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	plan := ReplicationPlan{
+		ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID,
+		Format: FormatRaw, Coordinate: "releases/fenced.bin", Digest: "sha256:" + strings.Repeat("f", 64), IdempotencyKey: "lease-fence-" + suffix,
+	}
+	t.Cleanup(func() {
+		_, _ = store.db.ExecContext(context.Background(), `DELETE FROM replication_plans WHERE id=$1`, plan.ID)
+		_, _ = store.db.ExecContext(context.Background(), `DELETE FROM hosted_repositories WHERE id IN ($1,$2)`, source.ID, target.ID)
+		_ = store.Close()
+	})
+	if _, replayed, createErr := store.CreateReplicationPlan(ctx, plan, []ReplicationCheckpoint{{
+		ObjectKey: "native/raw/fenced", Digest: plan.Digest, Size: 12,
+	}}); createErr != nil || replayed {
+		t.Fatalf("create replayed=%t err=%v", replayed, createErr)
+	}
+	const leaseToken = "single-lock-session"
+	if _, err = store.db.ExecContext(ctx, `UPDATE replication_plans SET state='running',lease_token=$2,lease_expires_at=clock_timestamp()+interval '10 minutes' WHERE id=$1`, plan.ID, leaseToken); err != nil {
+		t.Fatal(err)
+	}
+	admissionCtx, releaseAdmission, err := LockArtifactDistributionUnitContext(ctx, store, source.ID, plan.Format, plan.Coordinate, []string{plan.Digest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	releaseLease, err := store.LockReplicationPlanLease(admissionCtx, plan.ID, leaseToken)
+	if err != nil {
+		releaseAdmission()
+		t.Fatalf("nested lease fence with one lock connection: %v", err)
+	}
+	if inUse := store.lockDB.Stats().InUse; inUse != 1 {
+		t.Fatalf("nested distribution and lease locks used %d sessions, want 1", inUse)
+	}
+	releaseLease()
+	releaseAdmission()
+}
+
 func TestPostgresReplicationQuarantineParksWithoutConsumingAttemptAndReplayRequeues(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {

@@ -89,6 +89,8 @@ func (s *MemoryStore) ClaimReplicationPlansByFormat(_ context.Context, format Fo
 	return s.claimReplicationPlans(limit, format)
 }
 func (s *MemoryStore) claimReplicationPlans(limit int, format Format) ([]ReplicationPlan, error) {
+	s.replicationLeaseFence.Lock()
+	defer s.replicationLeaseFence.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
@@ -128,6 +130,8 @@ func (s *MemoryStore) sortReplicationPlanIDs(ids []string) {
 }
 
 func (s *MemoryStore) RecoverExpiredReplicationPlans(_ context.Context, before time.Time) (int, error) {
+	s.replicationLeaseFence.Lock()
+	defer s.replicationLeaseFence.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.recoverExpiredReplicationPlansLocked(before), nil
@@ -213,6 +217,30 @@ func (s *MemoryStore) UpdateReplicationCheckpointWithLease(_ context.Context, c 
 	p.LeaseExpiresAt = c.UpdatedAt.Add(replicationLeaseDuration)
 	s.replicationPlans[c.PlanID] = p
 	return nil
+}
+func (s *MemoryStore) RenewReplicationPlanLease(_ context.Context, id, leaseToken string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.replicationPlans[id]
+	now := time.Now().UTC()
+	if !ok || p.State != "running" || p.LeaseToken == "" || p.LeaseToken != leaseToken || (!p.LeaseExpiresAt.IsZero() && !now.Before(p.LeaseExpiresAt)) {
+		return ErrNotFound
+	}
+	p.LeaseExpiresAt = now.Add(replicationLeaseDuration)
+	s.replicationPlans[id] = p
+	return nil
+}
+func (s *MemoryStore) LockReplicationPlanLease(_ context.Context, id, leaseToken string) (func(), error) {
+	s.replicationLeaseFence.RLock()
+	s.mu.RLock()
+	p, ok := s.replicationPlans[id]
+	valid := ok && p.State == "running" && p.LeaseToken != "" && p.LeaseToken == leaseToken && (p.LeaseExpiresAt.IsZero() || time.Now().UTC().Before(p.LeaseExpiresAt))
+	s.mu.RUnlock()
+	if !valid {
+		s.replicationLeaseFence.RUnlock()
+		return nil, ErrNotFound
+	}
+	return s.replicationLeaseFence.RUnlock, nil
 }
 func (s *MemoryStore) CompleteReplicationPlanWithLease(_ context.Context, id, leaseToken string) error {
 	return s.finishReplication(id, "completed", "", leaseToken)

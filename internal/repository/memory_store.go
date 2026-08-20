@@ -84,6 +84,8 @@ type MemoryStore struct {
 	replicationPlans       map[string]ReplicationPlan
 	replicationKeys        map[string]string
 	replicationChecks      map[string]map[string]ReplicationCheckpoint
+	replicationLeaseFence  sync.RWMutex
+	lifecycleLeaseFence    sync.RWMutex
 	apiKeys                map[string]APIKey
 	serviceAccounts        map[string]ServiceAccount
 	users                  map[string]User

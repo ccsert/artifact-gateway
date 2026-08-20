@@ -182,6 +182,34 @@ func (s *PostgresStore) UpdateReplicationCheckpointWithLease(ctx context.Context
 	return nil
 }
 
+func (s *PostgresStore) RenewReplicationPlanLease(ctx context.Context, id, leaseToken string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE replication_plans SET lease_expires_at=clock_timestamp()+interval '10 minutes' WHERE id::text=$1 AND state='running' AND lease_token=$2 AND lease_expires_at>clock_timestamp()`, id, leaseToken)
+	if err != nil {
+		return err
+	}
+	if count, _ := result.RowsAffected(); count != 1 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *PostgresStore) LockReplicationPlanLease(ctx context.Context, id, leaseToken string) (func(), error) {
+	_, release, err := s.lockPostgresAdvisoryKeys(ctx, []string{"replication-plan-lease:" + id})
+	if err != nil {
+		return nil, err
+	}
+	var valid bool
+	if err = s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM replication_plans WHERE id::text=$1 AND state='running' AND lease_token=$2 AND lease_expires_at>clock_timestamp())`, id, leaseToken).Scan(&valid); err != nil {
+		release()
+		return nil, err
+	}
+	if !valid {
+		release()
+		return nil, ErrNotFound
+	}
+	return release, nil
+}
+
 func (s *PostgresStore) CompleteReplicationPlanWithLease(ctx context.Context, id, leaseToken string) error {
 	return s.finishReplicationPlan(ctx, id, "completed", "", leaseToken)
 }
@@ -223,7 +251,13 @@ func (s *PostgresStore) finishReplicationPlan(ctx context.Context, id, state, me
 }
 
 func (s *PostgresStore) RecoverExpiredReplicationPlans(ctx context.Context, before time.Time) (int, error) {
-	result, err := s.db.ExecContext(ctx, `UPDATE replication_plans SET state='failed',last_error='replication worker lease expired',lease_expires_at=NULL,lease_token=NULL,next_attempt_at=CASE WHEN attempts < max_attempts THEN $1 ELSE NULL END WHERE state='running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= $1`, before)
+	result, err := s.db.ExecContext(ctx, `WITH candidates AS (
+		SELECT id FROM replication_plans
+		WHERE state='running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= $1
+		AND pg_try_advisory_xact_lock(hashtextextended('replication-plan-lease:' || id::text, 0))
+		FOR UPDATE SKIP LOCKED
+	) UPDATE replication_plans p SET state='failed',last_error='replication worker lease expired',lease_expires_at=NULL,lease_token=NULL,next_attempt_at=CASE WHEN attempts < max_attempts THEN $1 ELSE NULL END
+	FROM candidates WHERE p.id=candidates.id`, before)
 	if err != nil {
 		return 0, err
 	}

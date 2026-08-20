@@ -3,6 +3,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +21,47 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+type failOnceReplicationCheckpointPostgresStore struct {
+	*repository.PostgresStore
+	fail bool
+}
+
+type blockingReplicationObjectPostgresStore struct {
+	*repository.PostgresStore
+	once    sync.Once
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (s *blockingReplicationObjectPostgresStore) LockArtifactObjectKeys(ctx context.Context, format repository.Format, objectKeys []string) (context.Context, func(), error) {
+	lockedCtx, release, err := s.PostgresStore.LockArtifactObjectKeys(ctx, format, objectKeys)
+	if err != nil {
+		return ctx, nil, err
+	}
+	var waitErr error
+	s.once.Do(func() {
+		close(s.entered)
+		select {
+		case <-s.release:
+		case <-ctx.Done():
+			waitErr = ctx.Err()
+		}
+	})
+	if waitErr != nil {
+		release()
+		return ctx, nil, waitErr
+	}
+	return lockedCtx, release, nil
+}
+
+func (s *failOnceReplicationCheckpointPostgresStore) UpdateReplicationCheckpointWithLease(ctx context.Context, checkpoint repository.ReplicationCheckpoint, leaseToken string) error {
+	if s.fail && checkpoint.State == "verified" {
+		s.fail = false
+		return errors.New("database unavailable after object commit")
+	}
+	return s.PostgresStore.UpdateReplicationCheckpointWithLease(ctx, checkpoint, leaseToken)
+}
 
 func TestPostgresReplicationPlansPersistCheckpointsAndRetry(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
@@ -106,7 +149,7 @@ func TestPostgresReplicationPlansPersistCheckpointsAndRetry(t *testing.T) {
 	}
 }
 
-func TestPostgresRustFSReplicationCopiesAndVerifiesCheckpoint(t *testing.T) {
+func TestPostgresRustFSReplicationStreamsLargeObjectAndRecoversCheckpointFailure(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	endpoint := os.Getenv("TEST_RUSTFS_ENDPOINT")
 	accessKey := os.Getenv("TEST_RUSTFS_ACCESS_KEY")
@@ -120,6 +163,11 @@ func TestPostgresRustFSReplicationCopiesAndVerifiesCheckpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
 	sourceRepo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-rustfs-source-" + uuid.NewString(), Format: repository.FormatRaw})
 	if err != nil {
 		t.Fatal(err)
@@ -143,32 +191,250 @@ func TestPostgresRustFSReplicationCopiesAndVerifiesCheckpoint(t *testing.T) {
 	if err = targetObjects.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	body := []byte("cross-bucket replication through PostgreSQL checkpoints")
+	body := bytes.Repeat([]byte("0123456789abcdef"), (17<<20)/16)
 	sum := sha256.Sum256(body)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
 	key := "native/raw/sha256/" + hex.EncodeToString(sum[:])
-	if err = sourceObjects.PutVerifiedReader(ctx, key, strings.NewReader(string(body)), int64(len(body)), digest); err != nil {
+	if err = sourceObjects.PutVerifiedReader(ctx, key, bytes.NewReader(body), int64(len(body)), digest); err != nil {
 		t.Fatal(err)
 	}
 	plan := repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: sourceRepo.ID, TargetRepositoryID: targetRepo.ID, Format: repository.FormatRaw, Coordinate: "releases/cross-bucket.bin", Digest: digest, IdempotencyKey: "rustfs-" + uuid.NewString()}
 	if _, _, err = store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{ObjectKey: key, Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}
-	if err = (replication.Worker{Store: store, Source: sourceObjects, Destination: targetObjects, ChunkBytes: 7}).Run(ctx, 1); err != nil {
+	failingStore := &failOnceReplicationCheckpointPostgresStore{PostgresStore: store, fail: true}
+	if err = (replication.Worker{Store: failingStore, Source: sourceObjects, Destination: targetObjects, ChunkBytes: 1 << 20}).Run(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
 	checks, err := store.ListReplicationCheckpoints(ctx, plan.ID)
-	if err != nil || len(checks) != 1 || checks[0].State != "verified" || checks[0].ByteOffset != int64(len(body)) || checks[0].VerifiedAt.IsZero() {
-		t.Fatalf("checkpoints=%#v err=%v", checks, err)
-	}
-	copied, err := targetObjects.Get(ctx, key)
-	if err != nil || string(copied) != string(body) {
-		t.Fatalf("target object=%q err=%v", copied, err)
+	if err != nil || len(checks) != 1 || checks[0].State != "failed" || checks[0].ByteOffset != 0 || checks[0].LastError != "database unavailable after object commit" {
+		t.Fatalf("checkpoint after object/DB failure=%#v err=%v", checks, err)
 	}
 	info, err := targetObjects.Stat(ctx, key)
 	if err != nil || info.Digest != digest || info.Size != int64(len(body)) {
+		t.Fatalf("committed target info=%#v err=%v", info, err)
+	}
+	if err = (replication.Worker{Store: storeB, Source: sourceObjects, Destination: targetObjects, ChunkBytes: 1 << 20}).Run(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	checks, err = storeB.ListReplicationCheckpoints(ctx, plan.ID)
+	if err != nil || len(checks) != 1 || checks[0].State != "verified" || checks[0].ByteOffset != int64(len(body)) || checks[0].VerifiedAt.IsZero() {
+		t.Fatalf("recovered checkpoints=%#v err=%v", checks, err)
+	}
+	info, err = targetObjects.Stat(ctx, key)
+	if err != nil || info.Digest != digest || info.Size != int64(len(body)) {
 		t.Fatalf("target info=%#v err=%v", info, err)
 	}
+}
+
+func TestPostgresReplicationPublicationIsFencedAfterLeaseExpiry(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	storeA, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeA.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
+	sourceRepo, err := storeA.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-fence-source-" + uuid.NewString(), Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetRepo, err := storeA.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "replication-fence-target-" + uuid.NewString(), Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("lease-fenced replication publication")
+	digest := sha256DigestForIntegration(body)
+	objects := NewMemoryOCIObjectStore()
+	if err = objects.Put(ctx, "source/fenced", body); err != nil {
+		t.Fatal(err)
+	}
+	plan := repository.ReplicationPlan{
+		ID: uuid.NewString(), SourceRepositoryID: sourceRepo.ID, TargetRepositoryID: targetRepo.ID,
+		Format: repository.FormatRaw, Coordinate: "releases/fenced.bin", Digest: digest, IdempotencyKey: "fence-" + uuid.NewString(),
+	}
+	if _, _, err = storeA.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{
+		SourceObjectKey: "source/fenced", ObjectKey: "target/fenced", Digest: digest, Size: int64(len(body)),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	published := false
+	workerDone := make(chan error, 1)
+	go func() {
+		workerDone <- (replication.Worker{
+			Store: storeA, Source: objects, Destination: objects, Format: repository.FormatRaw,
+			AdmissionSnapshot: func(context.Context, repository.ReplicationPlan, []repository.ReplicationCheckpoint) ([]string, bool, error) {
+				close(entered)
+				select {
+				case <-release:
+					return []string{digest}, true, nil
+				case <-ctx.Done():
+					return nil, false, ctx.Err()
+				}
+			},
+			Publish: func(context.Context, repository.ReplicationPlan, []repository.ReplicationCheckpoint) error {
+				published = true
+				return nil
+			},
+		}).Run(ctx, 1)
+	}()
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("replication worker did not reach final admission barrier")
+	}
+	if recovered, recoverErr := storeB.RecoverExpiredReplicationPlans(ctx, time.Now().UTC().Add(11*time.Minute)); recoverErr != nil || recovered != 1 {
+		t.Fatalf("recover expired replication plans=%d err=%v", recovered, recoverErr)
+	}
+	close(release)
+	select {
+	case runErr := <-workerDone:
+		if !errors.Is(runErr, repository.ErrNotFound) {
+			t.Fatalf("stale replication worker err=%v", runErr)
+		}
+	case <-ctx.Done():
+		t.Fatal("stale replication worker did not finish")
+	}
+	if published {
+		t.Fatal("expired replication worker published target metadata")
+	}
+	persisted, err := storeB.GetReplicationPlan(ctx, targetRepo.ID, plan.ID)
+	if err != nil || persisted.State != "failed" || persisted.LastError != "replication worker lease expired" {
+		t.Fatalf("expired replication plan=%#v err=%v", persisted, err)
+	}
+}
+
+func TestPostgresReplicationHeartbeatsAcrossObjectLockAndFencesPublication(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	storeA, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeA.Close()
+	storeB, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storeB.Close()
+	sourceRepo, err := storeA.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "repl-heartbeat-src-" + uuid.NewString()[:8], Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetRepo, err := storeA.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "repl-heartbeat-dst-" + uuid.NewString()[:8], Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("heartbeat and publication fence")
+	digest := sha256DigestForIntegration(body)
+	objects := NewMemoryOCIObjectStore()
+	if err = objects.Put(ctx, "source/heartbeat", body); err != nil {
+		t.Fatal(err)
+	}
+	plan := repository.ReplicationPlan{
+		ID: uuid.NewString(), SourceRepositoryID: sourceRepo.ID, TargetRepositoryID: targetRepo.ID,
+		Format: repository.FormatRaw, Coordinate: "releases/heartbeat.bin", Digest: digest, IdempotencyKey: "heartbeat-" + uuid.NewString(),
+	}
+	if _, _, err = storeA.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{
+		SourceObjectKey: "source/heartbeat", ObjectKey: "target/heartbeat", Digest: digest, Size: int64(len(body)),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	blockingStore := &blockingReplicationObjectPostgresStore{PostgresStore: storeA, entered: make(chan struct{}), release: make(chan struct{})}
+	publishEntered := make(chan struct{})
+	publishRelease := make(chan struct{})
+	workerDone := make(chan error, 1)
+	go func() {
+		workerDone <- (replication.Worker{
+			Store: blockingStore, Source: objects, Destination: objects, Format: repository.FormatRaw,
+			LockObject: blockingStore.LockRawObject, LeaseHeartbeatInterval: 20 * time.Millisecond,
+			Publish: func(publishCtx context.Context, _ repository.ReplicationPlan, _ []repository.ReplicationCheckpoint) error {
+				close(publishEntered)
+				select {
+				case <-publishRelease:
+					return nil
+				case <-publishCtx.Done():
+					return publishCtx.Err()
+				}
+			},
+		}).Run(ctx, 1)
+	}()
+	select {
+	case <-blockingStore.entered:
+	case <-ctx.Done():
+		t.Fatal("worker did not acquire the object lock")
+	}
+	before, err := storeB.GetReplicationPlan(ctx, targetRepo.ID, plan.ID)
+	if err != nil || before.State != "running" {
+		t.Fatalf("running plan before heartbeat=%#v err=%v", before, err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	after, err := storeB.GetReplicationPlan(ctx, targetRepo.ID, plan.ID)
+	if err != nil || !after.LeaseExpiresAt.After(before.LeaseExpiresAt) {
+		t.Fatalf("heartbeat did not extend lease before=%#v after=%#v err=%v", before, after, err)
+	}
+	close(blockingStore.release)
+	select {
+	case <-publishEntered:
+	case <-ctx.Done():
+		t.Fatal("worker did not reach fenced publication")
+	}
+	recoveryDone := make(chan struct {
+		count int
+		err   error
+	}, 1)
+	go func() {
+		count, recoverErr := storeB.RecoverExpiredReplicationPlans(ctx, time.Now().UTC().Add(11*time.Minute))
+		recoveryDone <- struct {
+			count int
+			err   error
+		}{count: count, err: recoverErr}
+	}()
+	select {
+	case result := <-recoveryDone:
+		if result.err != nil || result.count != 0 {
+			t.Fatalf("publication fence recovery=%#v", result)
+		}
+	case <-ctx.Done():
+		t.Fatal("lease recovery blocked instead of skipping the fenced plan")
+	}
+	stillRunning, err := storeB.GetReplicationPlan(ctx, targetRepo.ID, plan.ID)
+	if err != nil || stillRunning.State != "running" || stillRunning.LeaseToken == "" {
+		t.Fatalf("fenced plan changed ownership=%#v err=%v", stillRunning, err)
+	}
+	close(publishRelease)
+	select {
+	case runErr := <-workerDone:
+		if runErr != nil {
+			t.Fatal(runErr)
+		}
+	case <-ctx.Done():
+		t.Fatal("heartbeat worker did not finish")
+	}
+	completed, err := storeB.GetReplicationPlan(ctx, targetRepo.ID, plan.ID)
+	if err != nil || completed.State != "completed" {
+		t.Fatalf("completed fenced plan=%#v err=%v", completed, err)
+	}
+}
+
+func sha256DigestForIntegration(body []byte) string {
+	sum := sha256.Sum256(body)
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func TestPostgresRawReplicationManagementAPI(t *testing.T) {

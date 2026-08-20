@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 
@@ -245,18 +246,66 @@ func (s *RustFSStore) OpenRange(ctx context.Context, key string, offset, length 
 }
 
 func (s *RustFSStore) PutReader(ctx context.Context, key string, value io.Reader, size int64) error {
-	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(s.bucket), Key: aws.String(key), Body: value, ContentLength: aws.Int64(size), ContentType: aws.String("application/octet-stream"),
+	body, cleanup, err := seekableObjectReader(value, size)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(s.bucket), Key: aws.String(key), Body: body, ContentLength: aws.Int64(size), ContentType: aws.String("application/octet-stream"),
 	})
 	return err
 }
 
 func (s *RustFSStore) PutVerifiedReader(ctx context.Context, key string, value io.Reader, size int64, digest string) error {
-	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(s.bucket), Key: aws.String(key), Body: value, ContentLength: aws.Int64(size), ContentType: aws.String("application/octet-stream"),
+	body, cleanup, err := seekableObjectReader(value, size)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(s.bucket), Key: aws.String(key), Body: body, ContentLength: aws.Int64(size), ContentType: aws.String("application/octet-stream"),
 		Metadata: map[string]string{"artifact-gateway-sha256": digest},
 	})
 	return err
+}
+
+func seekableObjectReader(value io.Reader, size int64) (io.ReadSeeker, func(), error) {
+	if size < 0 {
+		return nil, func() {}, errors.New("object size is invalid")
+	}
+	if seeker, ok := value.(io.ReadSeeker); ok {
+		return seeker, func() {}, nil
+	}
+	spool, err := os.CreateTemp("", "artifact-gateway-object-*")
+	if err != nil {
+		return nil, func() {}, err
+	}
+	spoolPath := spool.Name()
+	// Unix keeps the open descriptor usable after unlink and guarantees the
+	// spool is reclaimed if the worker crashes. Platforms that cannot unlink an
+	// open file fall back to removing the named file during normal cleanup.
+	unlinked := os.Remove(spoolPath) == nil
+	cleanup := func() {
+		_ = spool.Close()
+		if !unlinked {
+			_ = os.Remove(spoolPath)
+		}
+	}
+	written, copyErr := io.Copy(spool, io.LimitReader(value, size+1))
+	if copyErr != nil {
+		cleanup()
+		return nil, func() {}, copyErr
+	}
+	if written != size {
+		cleanup()
+		return nil, func() {}, fmt.Errorf("object reader size mismatch: got %d want %d", written, size)
+	}
+	if _, err = spool.Seek(0, io.SeekStart); err != nil {
+		cleanup()
+		return nil, func() {}, err
+	}
+	return spool, cleanup, nil
 }
 
 func (s *RustFSStore) SetVerifiedDigest(ctx context.Context, key, digest string) error {

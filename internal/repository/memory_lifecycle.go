@@ -133,6 +133,8 @@ func (s *MemoryStore) ClaimLifecycleJobsByKindAndFormat(_ context.Context, kind 
 }
 
 func (s *MemoryStore) claimLifecycleJobs(kind LifecycleJobKind, format Format, limit int) ([]LifecycleJob, error) {
+	s.lifecycleLeaseFence.Lock()
+	defer s.lifecycleLeaseFence.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
@@ -173,6 +175,8 @@ func (s *MemoryStore) claimLifecycleJobs(kind LifecycleJobKind, format Format, l
 }
 
 func (s *MemoryStore) RecoverExpiredLifecycleJobs(_ context.Context, before time.Time) (int, error) {
+	s.lifecycleLeaseFence.Lock()
+	defer s.lifecycleLeaseFence.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.recoverExpiredLifecycleJobsLocked(before.UTC()), nil
@@ -300,15 +304,30 @@ func (s *MemoryStore) UpdateLifecycleJobProgress(_ context.Context, id, leaseTok
 func (s *MemoryStore) RenewLifecycleJobLease(_ context.Context, id, leaseToken string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := time.Now().UTC()
 	for key, job := range s.lifecycleJobs {
-		if job.ID != id || job.State != LifecycleJobRunning || job.LeaseToken != leaseToken {
+		if job.ID != id || job.State != LifecycleJobRunning || job.LeaseToken != leaseToken || (!job.LeaseExpiresAt.IsZero() && !now.Before(job.LeaseExpiresAt)) {
 			continue
 		}
-		job.LeaseExpiresAt = renewedLifecycleLeaseExpiry(job.LeaseExpiresAt, time.Now().UTC())
+		job.LeaseExpiresAt = renewedLifecycleLeaseExpiry(job.LeaseExpiresAt, now)
 		s.lifecycleJobs[key] = job
 		return nil
 	}
 	return ErrNotFound
+}
+
+func (s *MemoryStore) LockLifecycleJobLease(_ context.Context, id, leaseToken string) (func(), error) {
+	s.lifecycleLeaseFence.RLock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	now := time.Now().UTC()
+	for _, job := range s.lifecycleJobs {
+		if job.ID == id && job.State == LifecycleJobRunning && job.LeaseToken == leaseToken && (job.LeaseExpiresAt.IsZero() || now.Before(job.LeaseExpiresAt)) {
+			return s.lifecycleLeaseFence.RUnlock, nil
+		}
+	}
+	s.lifecycleLeaseFence.RUnlock()
+	return nil, ErrNotFound
 }
 
 func renewedLifecycleLeaseExpiry(current, now time.Time) time.Time {
@@ -360,7 +379,7 @@ func (s *MemoryStore) finishLifecycleJob(id, leaseToken string, state LifecycleJ
 		if job.ID != id {
 			continue
 		}
-		if job.State != LifecycleJobRunning || job.LeaseToken != leaseToken {
+		if job.State != LifecycleJobRunning || job.LeaseToken != leaseToken || (!job.LeaseExpiresAt.IsZero() && !time.Now().UTC().Before(job.LeaseExpiresAt)) {
 			return ErrNotFound
 		}
 		job.State, job.CompletedAt, job.LastError, job.LeaseExpiresAt, job.LeaseToken = state, time.Now().UTC(), message, time.Time{}, ""

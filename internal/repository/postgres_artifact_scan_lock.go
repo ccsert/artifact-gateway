@@ -9,6 +9,11 @@ func (s *PostgresStore) LockArtifactScanIdentity(ctx context.Context, repository
 }
 
 func (s *PostgresStore) LockArtifactDistributionIdentities(ctx context.Context, identities []ArtifactDistributionLockIdentity) (func(), error) {
+	_, release, err := s.LockArtifactDistributionIdentitiesContext(ctx, identities)
+	return release, err
+}
+
+func (s *PostgresStore) LockArtifactDistributionIdentitiesContext(ctx context.Context, identities []ArtifactDistributionLockIdentity) (context.Context, func(), error) {
 	keys := make([]string, 0, len(identities))
 	seen := make(map[string]struct{}, len(identities))
 	for _, identity := range identities {
@@ -19,6 +24,5 @@ func (s *PostgresStore) LockArtifactDistributionIdentities(ctx context.Context, 
 		seen[key] = struct{}{}
 		keys = append(keys, key)
 	}
-	_, release, err := s.lockPostgresAdvisoryKeys(ctx, keys)
-	return release, err
+	return s.lockPostgresAdvisoryKeys(ctx, keys)
 }
