@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { defaultConsoleThemes } from "../src/lib/consoleTheme";
 import { authenticateAsAdmin } from "./support/auth";
 
 interface RGB {
@@ -53,52 +54,33 @@ async function openInjectedRuntimeError(page: Page, theme: "dark" | "light") {
     localStorage.setItem("ag.console.theme", colorMode);
   }, theme);
   await authenticateAsAdmin(page);
-  await page.route("**/api/v2/repositories**", (route) =>
+  await page.route("**/api/v2/site-settings", (route) =>
     route.fulfill({
       json: {
-        items: [
-          {
-            id: "repo-oci",
-            name: "runtime-images",
-            format: "oci",
-            type: "hosted",
-            state: "active",
-            version: "1",
-          },
+        version: "1",
+        siteName: "Artifact Gateway",
+        logoUrl: "",
+        brandMark: "AG",
+        enabledThemeIds: [
+          "gateway-dark",
+          "gateway-light",
+          "aerok-dark",
+          "aerok-light",
         ],
+        defaultThemeId: "gateway-dark",
+        availableThemes: defaultConsoleThemes,
+        updatedAt: "2026-08-20T00:00:00Z",
       },
     }),
   );
-  await page.route("**/api/v2/groups**", (route) =>
-    route.fulfill({ json: { items: [] } }),
-  );
-  await page.route("**/api/v2/audits**", (route) =>
-    route.fulfill({ json: [] }),
-  );
-  await page.route("**/api/v2/repository-capacities**", (route) =>
+  await page.route("**/src/pages/Dashboard.tsx*", (route) =>
     route.fulfill({
-      json: [
-        {
-          repositoryId: "repo-oci",
-          format: "oci",
-          usedBytes: 4 * 1024 * 1024,
-          objectCount: 16,
-          quotaBytes: 0,
-        },
-      ],
+      body: `export function DashboardPage() { throw new TypeError("Injected route failure"); }`,
+      contentType: "application/javascript",
     }),
-  );
-  await page.route(
-    "**/src/components/dashboard-charts/DashboardPiePlot.tsx*",
-    (route) =>
-      route.fulfill({
-        body: `throw new TypeError("Injected route failure");\nexport default null;`,
-        contentType: "application/javascript",
-      }),
   );
 
   await page.goto("/");
-  await page.getByTestId("storage-by-format-chart").scrollIntoViewIfNeeded();
   await expect(
     page.getByRole("heading", { name: "页面加载失败" }),
   ).toBeVisible();

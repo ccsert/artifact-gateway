@@ -251,8 +251,12 @@ test("job history keeps the record path compact on mobile", async ({
   await expect(page.getByRole("heading", { name: "运行节点" })).toHaveCount(0);
   await expect
     .poll(() =>
-      page.evaluate(
-        () => document.documentElement.scrollWidth - window.innerWidth,
+      page.evaluate(() =>
+        Math.max(
+          0,
+          document.documentElement.scrollWidth -
+            document.documentElement.clientWidth,
+        ),
       ),
     )
     .toBe(0);
