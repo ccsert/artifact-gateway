@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -138,6 +139,16 @@ func (s *rawPublicationGateStore) Put(ctx context.Context, key string, value []b
 		}
 	}
 	return s.OCIObjectStore.Put(ctx, key, value)
+}
+
+func (s *rawPublicationGateStore) PutVerifiedReader(ctx context.Context, key string, value io.Reader, size int64, digest string) error {
+	if err := s.OCIObjectStore.PutVerifiedReader(ctx, key, value, size, digest); err != nil {
+		return err
+	}
+	if strings.HasPrefix(key, "raw/objects/") {
+		s.once.Do(func() { close(s.objectStored) })
+	}
+	return nil
 }
 
 func (c *integrationOCIUpstream) ServeHTTP(w http.ResponseWriter, request *http.Request) {
@@ -697,7 +708,16 @@ func TestRawCachePublicationAndCollectionAcrossGatewayInstances(t *testing.T) {
 		t.Fatalf("collect Raw cache: %v", err)
 	}
 	loaded, err := cacheB.Load(context.Background(), indexKey)
-	if err != nil || string(loaded.Body) != string(content.Body) {
-		t.Fatalf("final Raw cache content = %q, err = %v", loaded.Body, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, _, err := loaded.Open(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, readErr := io.ReadAll(reader)
+	closeErr := reader.Close()
+	if readErr != nil || closeErr != nil || string(body) != string(content.Body) {
+		t.Fatalf("final Raw cache content = %q, readErr = %v, closeErr = %v", body, readErr, closeErr)
 	}
 }

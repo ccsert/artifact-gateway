@@ -55,14 +55,14 @@ func (w ArtifactScanWorker) execute(ctx context.Context, job repository.Lifecycl
 	}
 	artifact, err := w.Resolver.ResolveArtifactScan(ctx, job.RepositoryID, payload)
 	if err != nil {
-		return fmt.Errorf("resolve artifact scan assets failed: %v", err)
+		return fmt.Errorf("resolve artifact scan assets failed: %w", err)
 	}
 	report, err := w.Scanner.Scan(ctx, artifact)
 	if err != nil {
-		return fmt.Errorf("artifact scanner failed: %v", err)
+		return fmt.Errorf("artifact scanner failed: %w", err)
 	}
 	if err := w.mergeReport(ctx, artifact, report); err != nil {
-		return fmt.Errorf("merge artifact scan report failed: %v", err)
+		return fmt.Errorf("merge artifact scan report failed: %w", err)
 	}
 	return nil
 }

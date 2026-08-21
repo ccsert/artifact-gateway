@@ -56,6 +56,7 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	t.Setenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS", "repo.example, mirror.example ")
 	t.Setenv("GATEWAY_RAW_PROXY_ALLOWED_HOSTS", "raw.example, mirror.example ")
 	t.Setenv("GATEWAY_RAW_CACHE_MAX_OBJECT_BYTES", "12345")
+	t.Setenv("GATEWAY_RAW_CACHE_MAX_CONCURRENT_SPOOLS", "3")
 	t.Setenv("GATEWAY_NPM_METADATA_CACHE_TTL", "2m")
 	t.Setenv("GATEWAY_NPM_NEGATIVE_CACHE_TTL", "45s")
 	t.Setenv("GATEWAY_NPM_PROXY_BREAKER_TTL", "12s")
@@ -74,6 +75,9 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	if cfg.RawCacheMaxObjectBytes != 12345 {
 		t.Fatalf("RawCacheMaxObjectBytes = %d", cfg.RawCacheMaxObjectBytes)
 	}
+	if cfg.RawCacheMaxConcurrentSpools != 3 {
+		t.Fatalf("RawCacheMaxConcurrentSpools = %d", cfg.RawCacheMaxConcurrentSpools)
+	}
 	if cfg.NPMMetadataCacheTTL != 2*time.Minute || cfg.NPMNegativeCacheTTL != 45*time.Second || cfg.NPMProxyBreakerTTL != 12*time.Second {
 		t.Fatalf("npm proxy TTLs = metadata %s negative %s breaker %s", cfg.NPMMetadataCacheTTL, cfg.NPMNegativeCacheTTL, cfg.NPMProxyBreakerTTL)
 	}
@@ -88,6 +92,16 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	}
 	if cfg.RuntimeNodeRetention != 7*24*time.Hour || cfg.RuntimeNodePruneInterval != time.Hour {
 		t.Fatalf("runtime node cleanup defaults = retention %s interval %s", cfg.RuntimeNodeRetention, cfg.RuntimeNodePruneInterval)
+	}
+}
+
+func TestLoadRejectsInvalidRawSpoolLimit(t *testing.T) {
+	for _, value := range []string{"0", "-1", "many"} {
+		setCompleteConfiguration(t)
+		t.Setenv("GATEWAY_RAW_CACHE_MAX_CONCURRENT_SPOOLS", value)
+		if _, err := Load(); err == nil {
+			t.Fatalf("Load() accepted GATEWAY_RAW_CACHE_MAX_CONCURRENT_SPOOLS=%q", value)
+		}
 	}
 }
 

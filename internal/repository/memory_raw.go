@@ -74,6 +74,54 @@ func (s *MemoryStore) CompleteRawUpload(_ context.Context, id string, asset RawA
 	return asset, nil
 }
 
+func (s *MemoryStore) ExpireRawUploads(_ context.Context, before time.Time, limit int) ([]RawUpload, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	uploads := make([]RawUpload, 0)
+	for id, upload := range s.rawUploads {
+		if len(uploads) >= limit || upload.State != "open" || !upload.ExpiresAt.Before(before) {
+			continue
+		}
+		upload.State = "cancelled"
+		s.rawUploads[id] = upload
+		uploads = append(uploads, upload)
+	}
+	return uploads, nil
+}
+
+func (s *MemoryStore) ListUncollectedRawUploads(_ context.Context, limit int) ([]RawUpload, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	uploads := make([]RawUpload, 0)
+	for _, upload := range s.rawUploads {
+		if len(uploads) >= limit {
+			break
+		}
+		if (upload.State == "completed" || upload.State == "cancelled") && upload.CollectedAt.IsZero() {
+			uploads = append(uploads, upload)
+		}
+	}
+	return uploads, nil
+}
+
+func (s *MemoryStore) MarkRawUploadCollected(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	upload, ok := s.rawUploads[id]
+	if !ok || (upload.State != "completed" && upload.State != "cancelled") || !upload.CollectedAt.IsZero() {
+		return ErrNotFound
+	}
+	upload.CollectedAt = time.Now().UTC()
+	s.rawUploads[id] = upload
+	return nil
+}
+
 func (s *MemoryStore) LockRawObject(_ context.Context, digest string) (func(), error) {
 	s.mu.Lock()
 	lock := s.rawObjectLocks[digest]

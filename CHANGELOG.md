@@ -230,6 +230,16 @@ a dated version heading without rewriting their meaning.
   pagination plus a focused account drawer for profile and security actions.
 - Isolated artifact publication locks in a bounded, observable PostgreSQL pool
   and made multi-file object and coordinate locks share one backend session.
+- Hardened the Raw large-object byte plane with bounded-buffer temporary
+  staging, streaming cache publication and reads, true upstream `HEAD`,
+  renewable per-request locks, and configurable per-Gateway staging admission
+  with `503`, `Retry-After`, and a bounded rejection metric. Raw and OCI
+  resumable uploads now persist immutable offset chunks and assemble them once
+  at completion instead of rewriting every prior byte for each PATCH; durable
+  Raw reclaim now removes residual chunks from completed, cancelled, or expired
+  sessions while preserving their PostgreSQL trace. The performance report now
+  includes warm 64 MiB Hosted reads and a controlled HTTPS Raw Proxy cold miss
+  with verified single-flight and offline cache replay.
 
 ### Fixed
 

@@ -90,7 +90,7 @@ func CopyArtifactIntelligenceOrEnqueue(ctx context.Context, intelligence Artifac
 		return err
 	}
 	if _, _, enqueueErr := EnqueueArtifactIntelligenceCopyJob(ctx, jobs, targetRepositoryID, sourceRepositoryID, format, coordinate, digest); enqueueErr != nil {
-		return fmt.Errorf("%w: %v", ErrArtifactIntelligenceDeferred, enqueueErr)
+		return fmt.Errorf("%w: %w", ErrArtifactIntelligenceDeferred, enqueueErr)
 	}
 	if errors.Is(err, ErrArtifactIntelligenceConflict) {
 		return nil

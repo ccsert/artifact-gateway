@@ -22,7 +22,7 @@ Console modules safely while the feature surface continues to grow.
 | Maintainability | Needs focused work | Several route, model, and native-protocol files are large enough to slow review and increase change coupling. |
 | Documentation | Core entry points bilingual, uneven depth | README, quick start, architecture, contributing, protocol compatibility, recovery, and the index have Chinese entry points; most deep contracts and research records remain English-only. |
 | Operability | Good preparation baseline | Health, metrics, diagnostics, recovery, Kubernetes, and distributed-role guidance exist; production evidence is still preparation work. |
-| Performance | Reproducible local baseline | Binary/image size, quiet memory, and authenticated PostgreSQL/RustFS reads are measured; controlled production-like load and soak remain open. |
+| Performance | Reproducible local baseline | Binary/image size, quiet memory, authenticated PostgreSQL/RustFS reads, warm 64 MiB reads, and a controlled HTTPS Proxy cold miss are measured; controlled production-like load and soak remain open. |
 | Public-project readiness | Deliberately deferred | Licensing, formal distribution, a public security-reporting channel, and public support commitments are outside the current scope. |
 
 ## What is already high quality
@@ -66,6 +66,37 @@ The quality program has started, but it is not complete:
 No equivalent extraction has yet reduced `internal/repository/model.go` or the
 large native Maven/npm/OCI application modules. They remain planned work, not
 completed quality improvements.
+
+The Raw byte-path review produced concrete backend improvements in this slice:
+
+- Proxy misses now hash into a temporary file with a fixed 128 KiB buffer;
+  cache publication and reads use `PutVerifiedReader`, `Stat`, `Open`, and
+  `OpenRange` instead of an artifact-sized `[]byte`.
+- Positive HEAD misses remain HEAD requests and do not download or cache the
+  upstream body.
+- Anonymous member filtering no longer aliases the MemoryStore slice; request
+  locks release per member and renew while slow upstream work is active.
+- Raw and OCI resumable PATCH writes persist immutable offset chunks. Earlier
+  bytes are not downloaded and rewritten for every chunk; completion performs
+  one ordered digest pass and remains compatible with old cumulative sessions.
+  Completed, cancelled, and expired Raw sessions retain a PostgreSQL trace
+  while durable reclaim removes any remaining prefix and chunk objects.
+- Each Gateway admits at most four concurrent Raw Proxy staging files by
+  default. The positive configurable limit is enforced before upstream access;
+  saturation returns `503` with `Retry-After: 1` and increments
+  `artifact_gateway_raw_spool_rejections_total`.
+- A controlled HTTPS Docker workload transferred one cold 64 MiB Proxy path to
+  eight concurrent clients with one upstream body GET, then verified byte-exact
+  cache replay after the upstream stopped.
+- Startup signer/scanner failures include their cause and production `%v`
+  error wrappers were replaced with error-chain-preserving `%w` wrappers.
+
+The constant-heap proxy path deliberately trades heap pressure for temporary
+disk. In-process admission now bounds simultaneous staging, but deployments
+still need a dedicated temporary volume, free-space monitoring, and hard
+ephemeral-storage requests/limits. Chunk completion is O(n), but a future S3
+multipart-compose adapter could remove the whole-upload completion spool
+without changing the HTTP chunk contract.
 
 ## Main quality gaps
 
@@ -126,12 +157,16 @@ traffic, and sustained soak before it can become a release threshold.
    changing persistence or behavior; keep public repository interfaces stable.
 4. **Deepen native protocol modules.** Separate HTTP parsing/response shaping
    from Hosted/Proxy/Group application services one format at a time.
-5. **Raise focused coverage with each extraction.** Increase floors only after
+5. **Harden the large-object byte plane.** Add deployment-level temporary
+   volume and ephemeral-storage limits, then test many unique concurrent misses
+   through admission under those limits. Evaluate multipart compose behind the
+   object-store port without requiring client chunk sizes.
+6. **Raise focused coverage with each extraction.** Increase floors only after
    meaningful boundary tests exist; never lower a floor to pass CI.
-6. **Promote performance evidence deliberately.** Repeat the baseline on a
+7. **Promote performance evidence deliberately.** Repeat the baseline on a
    controlled Linux/amd64 runner, then add hard limits, mixed traffic, and soak
    thresholds without converting one laptop snapshot into a universal claim.
-7. **Maintain a preparation matrix.** Record exact commit, clean worktree,
+8. **Maintain a preparation matrix.** Record exact commit, clean worktree,
    immutable image, CI run, integration evidence, recovery evidence, target
    environment, and named approval when formal distribution work begins.
 

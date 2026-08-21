@@ -187,7 +187,7 @@ func TestRuntimeRunJobsFailsWhenInitialLeaseProgressCannotBeRecorded(t *testing.
 		t.Fatal("handler ran after initial lease progress failed")
 		return nil
 	})
-	if err == nil || failedMessage != "artifact scan lease renewal failed: lease lost" {
+	if !errors.Is(err, progressFailure) || failedMessage != "artifact scan lease renewal failed: lease lost" {
 		t.Fatalf("RunJobs() error=%v failedMessage=%q", err, failedMessage)
 	}
 }
@@ -251,7 +251,7 @@ func TestRuntimeLeaseHeartbeatFailureCancelsHandler(t *testing.T) {
 		<-ctx.Done()
 		return nil
 	})
-	if err == nil || failedMessage != "artifact scan lease renewal failed: renew unavailable" {
+	if !errors.Is(err, leaseFailure) || failedMessage != "artifact scan lease renewal failed: renew unavailable" {
 		t.Fatalf("RunJobs() error=%v failedMessage=%q", err, failedMessage)
 	}
 }
@@ -270,7 +270,7 @@ func TestRuntimeLeaseHeartbeatFailureOverridesHandlerCancellation(t *testing.T) 
 		<-ctx.Done()
 		return errors.New("handler cancelled")
 	})
-	if err == nil || err.Error() != "artifact scan lease renewal failed: renew unavailable" {
+	if !errors.Is(err, leaseFailure) || err.Error() != "artifact scan lease renewal failed: renew unavailable" {
 		t.Fatalf("RunJobs() error=%v", err)
 	}
 }

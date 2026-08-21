@@ -7,8 +7,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -20,11 +23,15 @@ import (
 
 var ErrCacheMiss = errors.New("raw cache miss")
 var ErrNegativeCache = errors.New("raw negative cache hit")
+var ErrObjectTooLarge = errors.New("raw object exceeds size limit")
+var ErrSpoolCapacity = errors.New("raw spool capacity is full")
 
 const defaultCacheTTL = 15 * time.Minute
 const defaultNegativeCacheTTL = time.Minute
 const defaultMaxObjectBytes = int64(1 << 30)
 const distributedLockLease = 35 * time.Second
+const streamCopyBufferSize = 128 << 10
+const defaultMaxConcurrentSpools = 4
 
 type cacheIndex struct {
 	Object      string    `json:"object"`
@@ -66,6 +73,98 @@ type CachedContent struct {
 	Digest, ContentType, Member, Endpoint, Repository string
 	Path                                              string
 	CacheQuotaBytes                                   int64
+	Object                                            string
+	Size                                              int64
+	tempPath                                          string
+	store                                             objectstore.Store
+}
+
+// StageContent copies an upstream object into a bounded-buffer temporary file
+// while computing its digest. The caller owns Cleanup after the content has
+// either been published or served.
+func StageContent(reader io.Reader, maxBytes int64) (CachedContent, error) {
+	if maxBytes < 0 {
+		return CachedContent{}, ErrObjectTooLarge
+	}
+	file, err := os.CreateTemp("", "artifact-gateway-raw-*")
+	if err != nil {
+		return CachedContent{}, err
+	}
+	fail := func(err error) (CachedContent, error) {
+		name := file.Name()
+		_ = file.Close()
+		_ = os.Remove(name)
+		return CachedContent{}, err
+	}
+	limit := maxBytes
+	if maxBytes < int64(^uint64(0)>>1) {
+		limit++
+	}
+	hash := sha256.New()
+	written, err := io.CopyBuffer(io.MultiWriter(file, hash), io.LimitReader(reader, limit), make([]byte, streamCopyBufferSize))
+	if err != nil {
+		return fail(err)
+	}
+	if written > maxBytes {
+		return fail(ErrObjectTooLarge)
+	}
+	if err := file.Close(); err != nil {
+		return fail(err)
+	}
+	return CachedContent{Digest: hex.EncodeToString(hash.Sum(nil)), Size: written, tempPath: file.Name()}, nil
+}
+
+func (c CachedContent) Open(ctx context.Context) (io.ReadCloser, int64, error) {
+	if c.tempPath != "" {
+		file, err := os.Open(c.tempPath)
+		if err != nil {
+			return nil, 0, err
+		}
+		return file, c.Size, nil
+	}
+	if c.Object != "" {
+		if c.store == nil {
+			return nil, 0, errors.New("raw cached object has no object store")
+		}
+		return c.store.Open(ctx, c.Object)
+	}
+	return io.NopCloser(bytes.NewReader(c.Body)), int64(len(c.Body)), nil
+}
+
+func (c CachedContent) OpenRange(ctx context.Context, offset, length int64) (io.ReadCloser, int64, error) {
+	if offset < 0 || length < 0 || offset > c.Size || length > c.Size-offset {
+		return nil, 0, errors.New("raw content range is out of bounds")
+	}
+	if c.tempPath != "" {
+		file, err := os.Open(c.tempPath)
+		if err != nil {
+			return nil, 0, err
+		}
+		if _, err := file.Seek(offset, io.SeekStart); err != nil {
+			_ = file.Close()
+			return nil, 0, err
+		}
+		return struct {
+			io.Reader
+			io.Closer
+		}{Reader: io.LimitReader(file, length), Closer: file}, c.Size, nil
+	}
+	if c.Object != "" {
+		if c.store == nil {
+			return nil, 0, errors.New("raw cached object has no object store")
+		}
+		return c.store.OpenRange(ctx, c.Object, offset, length)
+	}
+	if offset > int64(len(c.Body)) || length > int64(len(c.Body))-offset {
+		return nil, 0, errors.New("raw content range is out of bounds")
+	}
+	return io.NopCloser(bytes.NewReader(c.Body[offset : offset+length])), int64(len(c.Body)), nil
+}
+
+func (c CachedContent) Cleanup() {
+	if c.tempPath != "" {
+		_ = os.Remove(c.tempPath)
+	}
 }
 
 // Cache owns Raw cache publication ordering, negative entries, index
@@ -78,8 +177,10 @@ type Cache struct {
 	quota            *cache.Quota
 	mu               sync.Mutex
 	coordinator      cache.Coordinator
+	lockLease        time.Duration
 	lockRenewEvery   time.Duration
 	publicationMu    sync.Mutex
+	spoolSlots       chan struct{}
 }
 
 func NewCache(store objectstore.Store, ttl, negativeTTL time.Duration, hosts []string) *Cache {
@@ -89,7 +190,7 @@ func NewCache(store objectstore.Store, ttl, negativeTTL time.Duration, hosts []s
 			allowed[host] = struct{}{}
 		}
 	}
-	return &Cache{store: store, ttl: ttl, negativeTTL: negativeTTL, maxObjectBytes: defaultMaxObjectBytes, allowed: allowed, lockRenewEvery: distributedLockLease / 3}
+	return &Cache{store: store, ttl: ttl, negativeTTL: negativeTTL, maxObjectBytes: defaultMaxObjectBytes, allowed: allowed, lockLease: distributedLockLease, lockRenewEvery: distributedLockLease / 3, spoolSlots: make(chan struct{}, defaultMaxConcurrentSpools)}
 }
 
 func NewDefaultCache(store objectstore.Store, hosts []string) *Cache {
@@ -104,6 +205,43 @@ func (c *Cache) WithCoordinator(coordinator cache.Coordinator) *Cache {
 func (c *Cache) WithMaxObjectBytes(limit int64) *Cache {
 	if limit > 0 {
 		c.maxObjectBytes = limit
+	}
+	return c
+}
+
+// WithMaxConcurrentSpools bounds the number of cache-miss temporary files
+// owned by this Gateway process. Configure it before serving requests.
+func (c *Cache) WithMaxConcurrentSpools(limit int) *Cache {
+	if limit > 0 {
+		c.spoolSlots = make(chan struct{}, limit)
+	}
+	return c
+}
+
+// AcquireSpool reserves one complete cache-miss staging lifecycle. Admission
+// is deliberately fail-fast so a saturated Gateway does not start another
+// potentially large upstream transfer.
+func (c *Cache) AcquireSpool() (func(), error) {
+	if c == nil || c.spoolSlots == nil {
+		return func() {}, nil
+	}
+	select {
+	case c.spoolSlots <- struct{}{}:
+		var once sync.Once
+		return func() {
+			once.Do(func() { <-c.spoolSlots })
+		}, nil
+	default:
+		return nil, ErrSpoolCapacity
+	}
+}
+
+func (c *Cache) WithLockTiming(lease, renewEvery time.Duration) *Cache {
+	if lease > 0 {
+		c.lockLease = lease
+	}
+	if renewEvery > 0 {
+		c.lockRenewEvery = renewEvery
 	}
 	return c
 }
@@ -137,37 +275,79 @@ func (c *Cache) Load(ctx context.Context, key string) (CachedContent, error) {
 	if index.Negative {
 		return CachedContent{Member: index.Member, Endpoint: index.Endpoint}, ErrNegativeCache
 	}
-	body, err := c.store.Get(ctx, index.Object)
+	info, err := c.store.Stat(ctx, index.Object)
 	if err != nil {
 		c.removeIndex(ctx, key, encoded)
 		return CachedContent{}, ErrCacheMiss
 	}
-	sum := sha256.Sum256(body)
-	if hex.EncodeToString(sum[:]) != index.Digest {
+	wantDigest := "sha256:" + index.Digest
+	if info.Digest == "" {
+		if err := c.verifyAndMigrateObject(ctx, index); err != nil {
+			c.removeIndex(ctx, key, encoded)
+			return CachedContent{}, ErrCacheMiss
+		}
+		info.Digest = wantDigest
+	}
+	if info.Size != index.Size || info.Digest != wantDigest {
 		c.removeIndex(ctx, key, encoded)
 		return CachedContent{}, ErrCacheMiss
 	}
-	return CachedContent{Body: body, Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Endpoint: index.Endpoint, Repository: index.Repository}, nil
+	return CachedContent{Digest: index.Digest, ContentType: index.ContentType, Member: index.Member, Endpoint: index.Endpoint, Repository: index.Repository, Path: index.Path, Object: index.Object, Size: index.Size, store: c.store}, nil
 }
 
 func (c *Cache) Store(ctx context.Context, key string, content CachedContent) error {
 	return c.withPublicationLock(ctx, func(workCtx context.Context) error {
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		return c.quota.AdmitWithLimit(workCtx, content.Repository, key, int64(len(content.Body)), content.CacheQuotaBytes, func() error {
+		if content.tempPath == "" {
+			content.Size = int64(len(content.Body))
 			sum := sha256.Sum256(content.Body)
-			digest := hex.EncodeToString(sum[:])
+			content.Digest = hex.EncodeToString(sum[:])
+		}
+		content.Digest = strings.TrimPrefix(content.Digest, "sha256:")
+		if len(content.Digest) != sha256.Size*2 || content.Size < 0 {
+			return errors.New("raw cached content is not verified")
+		}
+		return c.quota.AdmitWithLimit(workCtx, content.Repository, key, content.Size, content.CacheQuotaBytes, func() error {
+			digest := content.Digest
 			object := "raw/objects/" + digest
-			if err := c.store.Put(workCtx, object, content.Body); err != nil {
+			reader, size, err := content.Open(workCtx)
+			if err != nil {
 				return err
 			}
-			encoded, err := json.Marshal(cacheIndex{Object: object, Digest: digest, ContentType: content.ContentType, Member: content.Member, Endpoint: content.Endpoint, Repository: content.Repository, Path: content.Path, Size: int64(len(content.Body)), ExpiresAt: time.Now().UTC().Add(c.ttl)})
+			if size != content.Size {
+				_ = reader.Close()
+				return fmt.Errorf("raw cached content size mismatch: got %d want %d", size, content.Size)
+			}
+			putErr := c.store.PutVerifiedReader(workCtx, object, reader, content.Size, "sha256:"+digest)
+			closeErr := reader.Close()
+			if putErr != nil || closeErr != nil {
+				return errors.Join(putErr, closeErr)
+			}
+			encoded, err := json.Marshal(cacheIndex{Object: object, Digest: digest, ContentType: content.ContentType, Member: content.Member, Endpoint: content.Endpoint, Repository: content.Repository, Path: content.Path, Size: content.Size, ExpiresAt: time.Now().UTC().Add(c.ttl)})
 			if err != nil {
 				return err
 			}
 			return c.store.Put(workCtx, key, encoded)
 		})
 	})
+}
+
+func (c *Cache) verifyAndMigrateObject(ctx context.Context, index cacheIndex) error {
+	body, size, err := c.store.Open(ctx, index.Object)
+	if err != nil {
+		return err
+	}
+	hash := sha256.New()
+	_, copyErr := io.CopyBuffer(hash, body, make([]byte, streamCopyBufferSize))
+	closeErr := body.Close()
+	if copyErr != nil || closeErr != nil {
+		return errors.Join(copyErr, closeErr)
+	}
+	if size != index.Size || hex.EncodeToString(hash.Sum(nil)) != index.Digest {
+		return errors.New("raw legacy cached object does not match index")
+	}
+	return c.store.SetVerifiedDigest(ctx, index.Object, "sha256:"+index.Digest)
 }
 
 func (c *Cache) StoreNegative(ctx context.Context, key string, member repository.Member) error {
@@ -221,26 +401,63 @@ func (c *Cache) CollectGarbage(ctx context.Context) error {
 	})
 }
 
-func (c *Cache) AcquireRequestLock(ctx context.Context, key string) (func(), error) {
+func (c *Cache) AcquireRequestLock(ctx context.Context, key string) (context.Context, func() error, error) {
 	if c.coordinator == nil {
-		return func() {}, nil
+		return ctx, func() error { return nil }, nil
 	}
+	lockKey := "cache-request:" + key
 	for {
-		owner, acquired, err := c.coordinator.Acquire(ctx, "cache-request:"+key, distributedLockLease)
+		owner, acquired, err := c.coordinator.Acquire(ctx, lockKey, c.lockLease)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if acquired {
-			return func() {
-				releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-				defer cancel()
-				_ = c.coordinator.Release(releaseCtx, "cache-request:"+key, owner)
-			}, nil
+			workCtx, cancel := context.WithCancel(ctx)
+			renewalFailed := make(chan struct{})
+			stopped := make(chan struct{})
+			go c.renewRequestLock(workCtx, lockKey, owner, renewalFailed, stopped, cancel)
+			var once sync.Once
+			var releaseErr error
+			release := func() error {
+				once.Do(func() {
+					cancel()
+					<-stopped
+					select {
+					case <-renewalFailed:
+						releaseErr = errors.New("raw distributed request lock renewal failed")
+					default:
+					}
+					releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+					defer cancel()
+					releaseErr = errors.Join(releaseErr, c.coordinator.Release(releaseCtx, lockKey, owner))
+				})
+				return releaseErr
+			}
+			return workCtx, release, nil
 		}
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, nil, ctx.Err()
 		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
+func (c *Cache) renewRequestLock(ctx context.Context, key, owner string, failed chan<- struct{}, stopped chan<- struct{}, cancel context.CancelFunc) {
+	defer close(stopped)
+	ticker := time.NewTicker(c.lockRenewEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			ok, err := c.coordinator.Renew(ctx, key, owner, c.lockLease)
+			if err != nil || !ok {
+				close(failed)
+				cancel()
+				return
+			}
 		}
 	}
 }
@@ -278,7 +495,7 @@ func (c *Cache) withPublicationLock(ctx context.Context, work func(context.Conte
 		return work(ctx)
 	}
 	for {
-		owner, acquired, err := c.coordinator.Acquire(ctx, "raw-publication", distributedLockLease)
+		owner, acquired, err := c.coordinator.Acquire(ctx, "raw-publication", c.lockLease)
 		if err != nil {
 			return err
 		}
@@ -317,7 +534,7 @@ func (c *Cache) renewPublicationLock(ctx context.Context, owner string, failed c
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			ok, err := c.coordinator.Renew(ctx, "raw-publication", owner, distributedLockLease)
+			ok, err := c.coordinator.Renew(ctx, "raw-publication", owner, c.lockLease)
 			if err != nil || !ok {
 				close(failed)
 				cancel()

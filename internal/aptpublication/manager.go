@@ -165,7 +165,7 @@ func (m *Manager) uploadPackage(ctx context.Context, sessionID, objectName strin
 	}
 	metadata, err := aptprotocol.ParseDebianBinary(spool, written)
 	if err != nil {
-		return repository.APTPackageRevision{}, fmt.Errorf("%w: %v", ErrInvalidPackage, err)
+		return repository.APTPackageRevision{}, fmt.Errorf("%w: %w", ErrInvalidPackage, err)
 	}
 	if session.ExpectedIdentity != "" && session.ExpectedIdentity != metadata.CanonicalIdentity {
 		return repository.APTPackageRevision{}, ErrIdentityMismatch

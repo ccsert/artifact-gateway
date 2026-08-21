@@ -123,7 +123,7 @@ func (o *OIDCRuntime) Replace(ctx context.Context, update OIDCSettingsUpdate, ex
 	}
 	normalized, err := normalizeOIDCSettingsUpdate(update)
 	if err != nil {
-		return OIDCSettingsView{}, fmt.Errorf("%w: %v", errInvalidOIDCSettings, err)
+		return OIDCSettingsView{}, fmt.Errorf("%w: %w", errInvalidOIDCSettings, err)
 	}
 	current, err := o.current(ctx)
 	if err != nil {

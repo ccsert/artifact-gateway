@@ -54,8 +54,17 @@ func TestRawCacheLoadsLegacyIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	content, err := cache.Load(context.Background(), key)
-	if err != nil || string(content.Body) != "artifact" {
-		t.Fatalf("legacy cache load content=%q err=%v", content.Body, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, _, err := content.Open(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, readErr := io.ReadAll(reader)
+	closeErr := reader.Close()
+	if readErr != nil || closeErr != nil || string(loaded) != "artifact" {
+		t.Fatalf("legacy cache load content=%q readErr=%v closeErr=%v", loaded, readErr, closeErr)
 	}
 }
 
@@ -482,7 +491,16 @@ func TestRawCacheInvalidationKeepsObjectsReferencedByOtherIndexes(t *testing.T) 
 		t.Fatalf("bad cache load = %v", err)
 	}
 	loaded, err := cacheA.Load(context.Background(), liveKey)
-	if err != nil || string(loaded.Body) != "shared" {
-		t.Fatalf("live cache after invalidation = %q, err = %v", loaded.Body, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, _, err := loaded.Open(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, readErr := io.ReadAll(reader)
+	closeErr := reader.Close()
+	if readErr != nil || closeErr != nil || string(body) != "shared" {
+		t.Fatalf("live cache after invalidation = %q, readErr = %v, closeErr = %v", body, readErr, closeErr)
 	}
 }

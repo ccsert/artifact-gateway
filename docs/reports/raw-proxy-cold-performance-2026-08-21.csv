@@ -1,0 +1,2 @@
+workload,concurrency,requests,completed,failed,rps,p50_ms,p95_ms,p99_ms,duration_s,transfer_kib_s
+raw-proxy-cold-64m,8,8,8,0,2.40,2522,3315,3315,3.332,157372.13

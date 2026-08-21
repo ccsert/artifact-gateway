@@ -21,6 +21,7 @@ import (
 type rawFixtureClient struct {
 	mu        sync.Mutex
 	calls     []string
+	methods   []string
 	responses map[string]int
 	body      []byte
 }
@@ -29,18 +30,25 @@ func (c *rawFixtureClient) Fetch(_ context.Context, _ string, _ repository.Membe
 	return nil, errors.New("OCI fetch is not used by Raw tests")
 }
 
-func (c *rawFixtureClient) FetchRaw(_ context.Context, _ string, member repository.Member, _ string, _ http.Header) (*http.Response, error) {
+func (c *rawFixtureClient) FetchRaw(_ context.Context, method string, member repository.Member, _ string, _ http.Header) (*http.Response, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.calls = append(c.calls, member.Name)
+	c.methods = append(c.methods, method)
 	status := c.responses[member.Name]
-	return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": []string{"text/plain"}}, Body: io.NopCloser(bytes.NewReader(c.body))}, nil
+	return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": []string{"text/plain"}, "Content-Length": []string{utoa(uint64(len(c.body)))}}, Body: io.NopCloser(bytes.NewReader(c.body))}, nil
 }
 
 func (c *rawFixtureClient) Calls() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]string(nil), c.calls...)
+}
+
+func (c *rawFixtureClient) Methods() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.methods...)
 }
 
 func rawRequest(method, path string) *http.Request {
@@ -113,6 +121,12 @@ func TestRawHeadConditionalAndChecksumSidecars(t *testing.T) {
 	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}
 	h := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
 
+	warm := httptest.NewRecorder()
+	h.ServeHTTP(warm, rawRequest(http.MethodGet, "/raw/downloads/release/app.txt"))
+	if warm.Code != http.StatusOK {
+		t.Fatalf("warm cache = %d", warm.Code)
+	}
+
 	head := rawRequest(http.MethodHead, "/raw/downloads/release/app.txt")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, head)
@@ -141,6 +155,301 @@ func TestRawHeadConditionalAndChecksumSidecars(t *testing.T) {
 	h.ServeHTTP(w, rawRequest(http.MethodGet, "/raw/downloads/release/app.sha256"))
 	if w.Code != http.StatusOK {
 		t.Fatalf("valid sidecar = %d", w.Code)
+	}
+}
+
+type rawReadProbe struct {
+	remaining int
+	maxRead   int
+	reads     int
+}
+
+func (r *rawReadProbe) Read(buffer []byte) (int, error) {
+	r.reads++
+	if len(buffer) > r.maxRead {
+		r.maxRead = len(buffer)
+	}
+	if r.remaining == 0 {
+		return 0, io.EOF
+	}
+	n := len(buffer)
+	if n > r.remaining {
+		n = r.remaining
+	}
+	for index := range buffer[:n] {
+		buffer[index] = 'x'
+	}
+	r.remaining -= n
+	return n, nil
+}
+
+func (*rawReadProbe) Close() error { return nil }
+
+type rawProbeClient struct {
+	method string
+	body   *rawReadProbe
+}
+
+type rawBlockingBody struct {
+	started chan struct{}
+	unblock chan struct{}
+	sent    bool
+}
+
+func (b *rawBlockingBody) Read(buffer []byte) (int, error) {
+	if b.sent {
+		return 0, io.EOF
+	}
+	close(b.started)
+	<-b.unblock
+	b.sent = true
+	return copy(buffer, "artifact"), nil
+}
+
+func (*rawBlockingBody) Close() error { return nil }
+
+type rawSpoolAdmissionClient struct {
+	mu      sync.Mutex
+	calls   []string
+	started chan struct{}
+	unblock chan struct{}
+}
+
+func (*rawSpoolAdmissionClient) Fetch(_ context.Context, _ string, _ repository.Member, _, _, _ string, _ http.Header) (*http.Response, error) {
+	return nil, errors.New("OCI fetch is not used by Raw spool admission tests")
+}
+
+func (c *rawSpoolAdmissionClient) FetchRaw(_ context.Context, _ string, _ repository.Member, path string, _ http.Header) (*http.Response, error) {
+	c.mu.Lock()
+	c.calls = append(c.calls, path)
+	c.mu.Unlock()
+	body := io.ReadCloser(io.NopCloser(strings.NewReader("artifact")))
+	if path == "release/first.iso" {
+		body = &rawBlockingBody{started: c.started, unblock: c.unblock}
+	}
+	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/octet-stream"}}, Body: body}, nil
+}
+
+func (c *rawSpoolAdmissionClient) Calls() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.calls...)
+}
+
+type rawRequestLockCoordinator struct {
+	mu      sync.Mutex
+	next    int
+	owners  map[string]string
+	request map[string]bool
+}
+
+func (c *rawRequestLockCoordinator) Acquire(_ context.Context, key string, _ time.Duration) (string, bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.next++
+	owner := utoa(uint64(c.next))
+	if c.owners == nil {
+		c.owners = make(map[string]string)
+	}
+	c.owners[owner] = key
+	if strings.HasPrefix(key, "cache-request:") {
+		if c.request == nil {
+			c.request = make(map[string]bool)
+		}
+		c.request[owner] = true
+	}
+	return owner, true, nil
+}
+
+func (*rawRequestLockCoordinator) Renew(context.Context, string, string, time.Duration) (bool, error) {
+	return true, nil
+}
+
+func (c *rawRequestLockCoordinator) Release(_ context.Context, _ string, owner string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.owners, owner)
+	delete(c.request, owner)
+	return nil
+}
+
+func (*rawRequestLockCoordinator) CircuitOpen(context.Context, string) (bool, error) {
+	return false, nil
+}
+
+func (*rawRequestLockCoordinator) OpenCircuit(context.Context, string, time.Duration) error {
+	return nil
+}
+
+func (*rawRequestLockCoordinator) CloseCircuit(context.Context, string) error { return nil }
+
+func (c *rawRequestLockCoordinator) activeRequests() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.request)
+}
+
+type rawLockLifecycleClient struct {
+	coordinator  *rawRequestLockCoordinator
+	activeAtNext int
+}
+
+type rawLateVisibleStore struct {
+	*MemoryOCIObjectStore
+	coordinator  *rawRequestLockCoordinator
+	missIndex    bool
+	activeAtOpen int
+}
+
+func (s *rawLateVisibleStore) Get(ctx context.Context, key string) ([]byte, error) {
+	if s.missIndex && strings.HasPrefix(key, "raw/index/") {
+		s.missIndex = false
+		return nil, errors.New("cache index is not visible yet")
+	}
+	return s.MemoryOCIObjectStore.Get(ctx, key)
+}
+
+func (s *rawLateVisibleStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	s.activeAtOpen = s.coordinator.activeRequests()
+	return s.MemoryOCIObjectStore.Open(ctx, key)
+}
+
+func (c *rawLockLifecycleClient) FetchRaw(_ context.Context, _ string, member repository.Member, _ string, _ http.Header) (*http.Response, error) {
+	status := http.StatusInternalServerError
+	if member.Name == "second" {
+		c.activeAtNext = c.coordinator.activeRequests()
+		status = http.StatusOK
+	}
+	return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": []string{"text/plain"}}, Body: io.NopCloser(strings.NewReader("artifact"))}, nil
+}
+
+func (c *rawProbeClient) FetchRaw(_ context.Context, method string, _ repository.Member, _ string, _ http.Header) (*http.Response, error) {
+	c.method = method
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Content-Type":   []string{"application/octet-stream"},
+			"Content-Length": []string{utoa(uint64(c.body.remaining))},
+		},
+		Body: c.body,
+	}, nil
+}
+
+func TestRawHeadCacheMissUsesUpstreamHeadWithoutReadingBody(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
+	client := &rawProbeClient{body: &rawReadProbe{remaining: 1 << 20}}
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, rawRequest(http.MethodHead, "/raw/downloads/release/large.iso"))
+
+	if response.Code != http.StatusOK || client.method != http.MethodHead || client.body.reads != 0 {
+		t.Fatalf("status=%d upstream method=%q body reads=%d", response.Code, client.method, client.body.reads)
+	}
+}
+
+func TestRawCacheMissReadsUpstreamWithBoundedBuffer(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
+	client := &rawProbeClient{body: &rawReadProbe{remaining: 2 << 20}}
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil)}
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, rawRequest(http.MethodGet, "/raw/downloads/release/large.iso"))
+
+	if response.Code != http.StatusOK || client.body.maxRead > uploadCopyBufferSize {
+		t.Fatalf("status=%d largest upstream read=%d, want <= %d", response.Code, client.body.maxRead, uploadCopyBufferSize)
+	}
+}
+
+func TestRawRejectsNewColdMissBeforeUpstreamWhenSpoolCapacityIsFull(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
+	client := &rawSpoolAdmissionClient{started: make(chan struct{}), unblock: make(chan struct{})}
+	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil).WithMaxConcurrentSpools(1)
+	metrics := &Metrics{}
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: metrics, Cache: cache}
+	firstDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, rawRequest(http.MethodGet, "/raw/downloads/release/first.iso"))
+		firstDone <- response
+	}()
+	select {
+	case <-client.started:
+	case <-time.After(time.Second):
+		t.Fatal("first cold miss did not begin staging")
+	}
+
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, rawRequest(http.MethodGet, "/raw/downloads/release/second.iso"))
+	if second.Code != http.StatusServiceUnavailable || second.Header().Get("Retry-After") != "1" || metrics.rawSpoolRejected.Load() != 1 {
+		t.Fatalf("second cold miss status=%d retry-after=%q spool rejections=%d", second.Code, second.Header().Get("Retry-After"), metrics.rawSpoolRejected.Load())
+	}
+	if calls := client.Calls(); len(calls) != 1 || calls[0] != "release/first.iso" {
+		t.Fatalf("upstream calls while spool capacity is full=%v", calls)
+	}
+
+	close(client.unblock)
+	select {
+	case response := <-firstDone:
+		if response.Code != http.StatusOK || response.Body.String() != "artifact" {
+			t.Fatalf("first cold miss status=%d body=%q", response.Code, response.Body.String())
+		}
+	case <-time.After(time.Second):
+		t.Fatal("first cold miss did not finish")
+	}
+	third := httptest.NewRecorder()
+	handler.ServeHTTP(third, rawRequest(http.MethodGet, "/raw/downloads/release/second.iso"))
+	if third.Code != http.StatusOK || third.Body.String() != "artifact" {
+		t.Fatalf("cold miss after spool release status=%d body=%q", third.Code, third.Body.String())
+	}
+	metricsResponse := httptest.NewRecorder()
+	metrics.Handler(metricsResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metricsResponse.Body.String(), "artifact_gateway_raw_spool_rejections_total 1") {
+		t.Fatalf("Raw spool rejection metric is missing:\n%s", metricsResponse.Body.String())
+	}
+}
+
+func TestRawReleasesFailedMemberRequestLockBeforeTryingNextMember(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{
+		{Name: "first", Type: repository.MemberHosted, Endpoint: "http://first.local", Position: 0},
+		{Name: "second", Type: repository.MemberHosted, Endpoint: "http://second.local", Position: 1},
+	}})
+	coordinator := &rawRequestLockCoordinator{}
+	client := &rawLockLifecycleClient{coordinator: coordinator}
+	cache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, nil).WithCoordinator(coordinator)
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: cache}
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, rawRequest(http.MethodGet, "/raw/downloads/release/app.txt"))
+
+	if response.Code != http.StatusOK || client.activeAtNext != 1 {
+		t.Fatalf("status=%d active request locks at second member=%d, want 1", response.Code, client.activeAtNext)
+	}
+}
+
+func TestRawReleasesRequestLockBeforeServingLateCacheHit(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, _ = store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
+	coordinator := &rawRequestLockCoordinator{}
+	objects := &rawLateVisibleStore{MemoryOCIObjectStore: NewMemoryOCIObjectStore(), coordinator: coordinator}
+	cache := NewRawCache(objects, time.Hour, time.Hour, nil).WithCoordinator(coordinator)
+	key := cache.Key("downloads", "release/app.txt", "hosted", "http://legacy.local")
+	if err := cache.Store(context.Background(), key, RawContent{Body: []byte("artifact"), ContentType: "text/plain", Member: "hosted", Endpoint: "http://legacy.local", Repository: "downloads", Path: "release/app.txt"}); err != nil {
+		t.Fatal(err)
+	}
+	objects.missIndex = true
+	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusInternalServerError}}
+	handler := RawHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Metrics: &Metrics{}, Cache: cache}
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, rawRequest(http.MethodGet, "/raw/downloads/release/app.txt"))
+
+	if response.Code != http.StatusOK || response.Body.String() != "artifact" || objects.activeAtOpen != 0 || len(client.Calls()) != 0 {
+		t.Fatalf("status=%d body=%q active request locks at open=%d upstream calls=%v", response.Code, response.Body.String(), objects.activeAtOpen, client.Calls())
 	}
 }
 

@@ -172,6 +172,16 @@ percent-encoded segments. Reads support HEAD, Digest, ETag, and single byte
 ranges through the object-store streaming interface. An unauthenticated request
 returns `401` plus `WWW-Authenticate`.
 
+Raw and OCI resumable PATCH requests persist each accepted byte range as an
+immutable offset-addressed chunk. A PATCH never downloads or rewrites earlier
+chunks. Completion checks that chunks are contiguous, streams them once through
+the digest verifier, publishes the final content-addressed object, commits
+PostgreSQL visibility, and then removes the chunks. The completion reader also
+accepts the former cumulative upload object as a prefix so uploads already open
+during an upgrade can finish. Completed, cancelled, and expired Raw upload
+sessions retain their PostgreSQL trace while a durable reclaim job removes any
+remaining legacy prefix and offset chunks.
+
 **OCI.** `GET /v2/{name}/manifests/{reference}` reads a committed OCI manifest
 by immutable `sha256:` digest or mutable tag and returns `Docker-Content-Digest`.
 `GET /v2/{name}/blobs/{digest}` returns a committed blob by digest. OCI writes

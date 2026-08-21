@@ -120,7 +120,7 @@ func (m Maintenance) runReclaimJob(ctx context.Context, job repository.Lifecycle
 	}
 	if !referenced {
 		if err = m.Objects.Delete(objectCtx, payload.ObjectKey); err != nil {
-			return fmt.Errorf("delete abandoned APT publication object: %v", err)
+			return fmt.Errorf("delete abandoned APT publication object: %w", err)
 		}
 	}
 	if payload.SnapshotID != "" {

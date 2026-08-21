@@ -5,9 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 	"os"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 var errUploadTooLarge = errors.New("upload exceeds size limit")
@@ -94,40 +98,97 @@ func (s *uploadSpool) Close() error {
 	return nil
 }
 
-func spoolObjectAppend(ctx context.Context, objects OCIObjectStore, key string, existingSize int64, body io.Reader, maxChunkBytes int64) (*uploadSpool, int64, error) {
-	spool, err := newUploadSpool()
+func spoolObjectAppend(_ context.Context, _ OCIObjectStore, _ string, _ int64, body io.Reader, maxChunkBytes int64) (*uploadSpool, int64, error) {
+	spool, err := spoolUpload(body, maxChunkBytes)
 	if err != nil {
 		return nil, 0, err
 	}
-	fail := func(err error) (*uploadSpool, int64, error) {
-		_ = spool.Close()
-		return nil, 0, err
+	return spool, spool.Size(), nil
+}
+
+func uploadPartPrefix(key string) string { return key + ".parts/" }
+
+func uploadPartKey(key string, offset int64) string {
+	return uploadPartPrefix(key) + fmt.Sprintf("%020d", offset)
+}
+
+func uploadPartOffset(key, partKey string) (int64, bool) {
+	value := strings.TrimPrefix(partKey, uploadPartPrefix(key))
+	if value == partKey || len(value) != 20 {
+		return 0, false
 	}
-	if existingSize > 0 {
-		reader, size, err := objects.Open(ctx, key)
+	offset, err := strconv.ParseInt(value, 10, 64)
+	return offset, err == nil && offset >= 0
+}
+
+// spoolStoredUpload assembles immutable upload chunks once at completion.
+// Legacy cumulative upload objects are accepted as the initial prefix so
+// in-flight sessions created before this representation can still complete.
+func spoolStoredUpload(ctx context.Context, objects OCIObjectStore, key string, expectedSize int64) (*uploadSpool, error) {
+	spool, err := newUploadSpool()
+	if err != nil {
+		return nil, err
+	}
+	fail := func(err error) (*uploadSpool, error) {
+		_ = spool.Close()
+		return nil, err
+	}
+	assembled := int64(0)
+	if reader, size, openErr := objects.Open(ctx, key); openErr == nil {
+		written, copyErr := spool.Append(reader, size)
+		closeErr := reader.Close()
+		if copyErr != nil || closeErr != nil {
+			return fail(errors.Join(copyErr, closeErr))
+		}
+		if written != size {
+			return fail(errors.New("stored upload prefix size changed while spooling"))
+		}
+		assembled = size
+	} else if !errors.Is(openErr, errOCICacheMiss) {
+		return fail(openErr)
+	}
+	parts, err := objects.List(ctx, uploadPartPrefix(key))
+	if err != nil {
+		return fail(err)
+	}
+	sort.Strings(parts)
+	for _, partKey := range parts {
+		offset, ok := uploadPartOffset(key, partKey)
+		if !ok || offset != assembled {
+			return fail(errors.New("stored upload chunks are not contiguous"))
+		}
+		reader, size, err := objects.Open(ctx, partKey)
 		if err != nil {
 			return fail(err)
 		}
-		written, copyErr := spool.Append(reader, existingSize)
+		written, copyErr := spool.Append(reader, size)
 		closeErr := reader.Close()
-		if copyErr != nil {
-			return fail(copyErr)
+		if copyErr != nil || closeErr != nil {
+			return fail(errors.Join(copyErr, closeErr))
 		}
-		if closeErr != nil {
-			return fail(closeErr)
+		if written != size {
+			return fail(errors.New("stored upload chunk size changed while spooling"))
 		}
-		if size != existingSize || written != existingSize {
-			return fail(errors.New("stored upload size does not match offset"))
-		}
+		assembled += size
 	}
-	chunkSize, err := spool.Append(body, maxChunkBytes)
-	if err != nil {
-		return fail(err)
+	if assembled != expectedSize {
+		return fail(fmt.Errorf("stored upload size does not match offset: got %d want %d", assembled, expectedSize))
 	}
 	if err := spool.Rewind(); err != nil {
 		return fail(err)
 	}
-	return spool, chunkSize, nil
+	return spool, nil
+}
+
+func deleteUploadObjects(ctx context.Context, objects OCIObjectStore, key string) error {
+	parts, err := objects.List(ctx, uploadPartPrefix(key))
+	deleteErr := err
+	if err == nil {
+		for _, partKey := range parts {
+			deleteErr = errors.Join(deleteErr, objects.Delete(ctx, partKey))
+		}
+	}
+	return errors.Join(deleteErr, objects.Delete(ctx, key))
 }
 
 func spoolStoredObject(ctx context.Context, objects OCIObjectStore, key string) (*uploadSpool, error) {

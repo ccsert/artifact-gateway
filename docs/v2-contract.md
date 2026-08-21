@@ -44,6 +44,8 @@ Raw addresses use `/raw/<group>/<path>`. After validating the Group, the gateway
 
 Raw supports `GET` and `HEAD` of a file. It supports one RFC 7233 byte range and returns `206` / `416`; multipart ranges are rejected with `416`. Directory listing is not supported: a path ending in `/` returns `404`. Trusted upstream `Content-Type` is preserved; otherwise use `application/octet-stream`. Return a strong ETag when known and `Digest: sha-256=<base64>`.
 
+On a positive cache miss, `HEAD` is forwarded upstream as `HEAD`; the Gateway closes the response body without reading it and does not create a positive body cache entry. A cached `HEAD` uses only index/object metadata and does not open the object byte stream.
+
 `CONTRACT: raw-checksum`
 
 Checksum sidecars are ordinary read-only files named `<path>.sha256` or `<path>.sha512`. The Gateway validates that a sidecar body is lowercase hex plus an optional newline before serving or caching it. It does not generate, fetch, or use a sidecar to validate a Raw body: Raw has no authoritative manifest binding the two. A malformed sidecar returns `502`, audits `upstream_error`, and is not cached. When a body digest is known, a mismatching available sidecar is served unchanged because its immutable bytes are the requested artifact; the mismatch is recorded as `upstream_error` and the sidecar response is not cached. If both sidecars exist they are independent representations, with no preferred algorithm.
@@ -54,7 +56,13 @@ A Raw Proxy endpoint MUST use HTTPS and its host MUST appear in that repository'
 
 `CONTRACT: raw-cache`
 
-Raw successful file bodies are read-through cached for 15 minutes by default, subject to Group quota. `404` and `410` are negatively cached for one minute; authorization failures, malformed paths, and upstream `5xx` are not cached. Entries retain content type, ETag, digest, size, member, and endpoint. Invalidation is explicit by canonical path and cannot remove a Hosted entry because a Proxy refreshes.
+Raw successful file bodies are read-through cached for 15 minutes by default, subject to Group quota. `404` and `410` are negatively cached for one minute; authorization failures, malformed paths, and upstream `5xx` are not cached. A miss is copied through a bounded buffer into a temporary file while SHA-256 is calculated; the immutable object is published before its cache index. A hit validates object metadata and reads bytes with `Open` or `OpenRange` instead of materializing the object through `Get`. Entries retain content type, digest, size, member, and endpoint. Invalidation is explicit by canonical path and cannot remove a Hosted entry because a Proxy refreshes.
+
+Each Gateway admits at most four concurrent Raw staging files by default. The
+positive limit is configurable and is checked after distributed single-flight
+coordination but before contacting the upstream. When all slots are occupied,
+the request returns `503` with `Retry-After: 1`, does not contact the upstream,
+records `storage_error`, and increments a bounded spool-rejection counter.
 
 ## Conan 2 protocol
 
@@ -118,8 +126,9 @@ The compatibility query surface remains exact: legacy OCI code can continue to s
 | `cache.ttl` | Defaults: artifact 15m, metadata 1m, negative 1m; positive duration only. |
 | `cache.quota_bytes` | Positive byte limit per Group; never delete another Group's cache. |
 | `cache.max_object_bytes` | Positive per-response limit; exceedance is not cached. |
+| `cache.max_concurrent_spools` | Positive per-Gateway Raw staging limit; defaults to four and rejects before upstream access when full. |
 
-Metrics use bounded labels only. Protocol metrics use `format`, `operation`, `outcome`, `cache_disposition`, and member type; HTTP metrics use the fixed request `class` and status-code family; database metrics use the fixed pool names `primary`, `artifact-locks`, `coordinator`, and `notifications`, fixed connection states, and fixed closure reasons. They MUST NOT label with path, coordinate, actor, upstream URL, checksum, or repository name. Counters cover requests, authorization denials, cache hit/miss/negative hit, proxy denials, checksum mismatches, upstream failures, bytes served, quota rejections, runtime health, and PostgreSQL pool pressure.
+Metrics use bounded labels only. Protocol metrics use `format`, `operation`, `outcome`, `cache_disposition`, and member type; HTTP metrics use the fixed request `class` and status-code family; database metrics use the fixed pool names `primary`, `artifact-locks`, `coordinator`, and `notifications`, fixed connection states, and fixed closure reasons. They MUST NOT label with path, coordinate, actor, upstream URL, checksum, or repository name. Counters cover requests, authorization denials, cache hit/miss/negative hit, proxy denials, checksum mismatches, upstream failures, bytes served, quota and Raw spool rejections, runtime health, and PostgreSQL pool pressure.
 
 ## Adapter boundary and compatibility matrix
 

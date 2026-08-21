@@ -73,19 +73,20 @@ func TestUploadSpoolAppendsWithoutHoldingCombinedBody(t *testing.T) {
 	}
 }
 
-func TestSpoolObjectAppendStreamsExistingAndNewBytes(t *testing.T) {
-	objects := NewMemoryOCIObjectStore()
-	if err := objects.Put(context.Background(), "upload", []byte("first")); err != nil {
+func TestSpoolObjectAppendStagesOnlyNewChunk(t *testing.T) {
+	base := NewMemoryOCIObjectStore()
+	if err := base.Put(context.Background(), "upload", []byte("first")); err != nil {
 		t.Fatal(err)
 	}
+	objects := &observedOpenObjectStore{OCIObjectStore: base}
 	spool, chunkSize, err := spoolObjectAppend(context.Background(), objects, "upload", 5, strings.NewReader("second"), 6)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = spool.Close() }()
 	body, err := io.ReadAll(spool.Reader())
-	if err != nil || string(body) != "firstsecond" || chunkSize != 6 || spool.Size() != 11 {
-		t.Fatalf("body=%q chunk=%d size=%d err=%v", body, chunkSize, spool.Size(), err)
+	if err != nil || string(body) != "second" || chunkSize != 6 || spool.Size() != 6 || objects.opens != 0 {
+		t.Fatalf("body=%q chunk=%d size=%d opens=%d err=%v", body, chunkSize, spool.Size(), objects.opens, err)
 	}
 }
 
@@ -115,6 +116,37 @@ func TestSpoolStoredObjectReadsOnceAndReusesDigest(t *testing.T) {
 	want := sha256.Sum256([]byte("content"))
 	if objects.opens != 1 || spool.Digest() != "sha256:"+hex.EncodeToString(want[:]) || !bytes.Equal(spool.DigestBytes(), want[:]) || spool.Size() != 7 {
 		t.Fatalf("opens=%d digest=%q sum=%x size=%d", objects.opens, spool.Digest(), spool.DigestBytes(), spool.Size())
+	}
+}
+
+func TestSpoolStoredUploadAssemblesImmutableChunksOnce(t *testing.T) {
+	objects := NewMemoryOCIObjectStore()
+	key := "native/raw/uploads/one"
+	if err := objects.Put(context.Background(), uploadPartKey(key, 0), []byte("first")); err != nil {
+		t.Fatal(err)
+	}
+	if err := objects.Put(context.Background(), uploadPartKey(key, 5), []byte("second")); err != nil {
+		t.Fatal(err)
+	}
+	spool, err := spoolStoredUpload(context.Background(), objects, key, 11)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = spool.Close() }()
+	body, err := io.ReadAll(spool.Reader())
+	if err != nil || string(body) != "firstsecond" || spool.Size() != 11 {
+		t.Fatalf("body=%q size=%d err=%v", body, spool.Size(), err)
+	}
+}
+
+func TestSpoolStoredUploadRejectsChunkGap(t *testing.T) {
+	objects := NewMemoryOCIObjectStore()
+	key := "native/raw/uploads/gap"
+	if err := objects.Put(context.Background(), uploadPartKey(key, 1), []byte("content")); err != nil {
+		t.Fatal(err)
+	}
+	if spool, err := spoolStoredUpload(context.Background(), objects, key, 7); err == nil || spool != nil {
+		t.Fatalf("spool=%v err=%v", spool, err)
 	}
 }
 

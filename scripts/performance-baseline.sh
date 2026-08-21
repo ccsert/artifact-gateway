@@ -21,7 +21,7 @@ import socket
 
 sockets = []
 try:
-    for _ in range(4):
+    for _ in range(6):
         sock = socket.socket()
         sock.bind(("127.0.0.1", 0))
         sockets.append(sock)
@@ -31,8 +31,8 @@ finally:
         sock.close()
 PY
 )"
-if [[ ${#generated_ports[@]} != 4 ]]; then
-  printf '%s\n' 'Could not allocate four loopback ports for the performance stack.' >&2
+if [[ ${#generated_ports[@]} != 6 ]]; then
+  printf '%s\n' 'Could not allocate six loopback ports for the performance stack.' >&2
   exit 1
 fi
 
@@ -40,9 +40,11 @@ export GATEWAY_HTTP_PORT=${GATEWAY_PERF_GATEWAY_PORT:-${generated_ports[0]}}
 export GATEWAY_POSTGRES_PORT=${GATEWAY_PERF_POSTGRES_PORT:-${generated_ports[1]}}
 export RUSTFS_API_PORT=${GATEWAY_PERF_RUSTFS_PORT:-${generated_ports[2]}}
 export RUSTFS_CONSOLE_PORT=${GATEWAY_PERF_RUSTFS_CONSOLE_PORT:-${generated_ports[3]}}
+raw_upstream_port=${GATEWAY_PERF_RAW_UPSTREAM_PORT:-${generated_ports[4]}}
+raw_proxy_port=${GATEWAY_PERF_RAW_PROXY_PORT:-${generated_ports[5]}}
 
-ports=("$GATEWAY_HTTP_PORT" "$GATEWAY_POSTGRES_PORT" "$RUSTFS_API_PORT" "$RUSTFS_CONSOLE_PORT")
-if [[ $(printf '%s\n' "${ports[@]}" | sort -u | wc -l | tr -d ' ') != 4 ]]; then
+ports=("$GATEWAY_HTTP_PORT" "$GATEWAY_POSTGRES_PORT" "$RUSTFS_API_PORT" "$RUSTFS_CONSOLE_PORT" "$raw_upstream_port" "$raw_proxy_port")
+if [[ $(printf '%s\n' "${ports[@]}" | sort -u | wc -l | tr -d ' ') != 6 ]]; then
   printf '%s\n' 'Performance baseline ports must be distinct.' >&2
   exit 1
 fi
@@ -64,15 +66,32 @@ private_dir="$output_dir/.private"
 mkdir -p "$private_dir"
 chmod 700 "$private_dir"
 env_file="$private_dir/performance.env"
+compose_override="$private_dir/performance.compose.yml"
+upstream_dir="$private_dir/raw-upstream"
+upstream_cert="$private_dir/raw-upstream.crt"
+upstream_key="$private_dir/raw-upstream.key"
 stack_started=0
+upstream_pid=""
 
-compose=(docker compose -p "$project" --env-file "$env_file" -f compose.yml)
+compose=(docker compose -p "$project" --env-file "$env_file" -f compose.yml -f "$compose_override")
 
 cleanup() {
   local exit_code=$?
   set +e
+  if [[ $exit_code != 0 ]]; then
+    if [[ $stack_started == 1 ]]; then
+      "${compose[@]}" logs --no-color gateway >"$output_dir/gateway-failure.log" 2>&1 || true
+    fi
+    if [[ -f "$private_dir/raw-upstream.log" ]]; then
+      cp "$private_dir/raw-upstream.log" "$output_dir/raw-upstream-failure.log"
+    fi
+  fi
   if [[ $stack_started == 1 ]]; then
     "${compose[@]}" down -v --remove-orphans >/dev/null 2>&1
+  fi
+  if [[ -n "$upstream_pid" ]]; then
+    kill "$upstream_pid" >/dev/null 2>&1 || true
+    wait "$upstream_pid" 2>/dev/null || true
   fi
   case "$private_dir" in
     "$output_dir"/.private) rm -rf "$private_dir" ;;
@@ -100,7 +119,92 @@ umask 077
   printf 'RUSTFS_ACCESS_KEY=%s\n' "perfaccess$(random_hex 8)"
   printf 'RUSTFS_SECRET_KEY=%s\n' "$(random_hex 24)"
   printf 'RUSTFS_RPC_SECRET=%s\n' "$(random_hex 24)"
+  printf 'GATEWAY_RAW_PROXY_ALLOWED_HOSTS=host.docker.internal\n'
+  printf 'GATEWAY_EGRESS_PROXY=http://host.docker.internal:%s\n' "$raw_proxy_port"
+  printf 'GATEWAY_PERF_CA_FILE=%s\n' "$upstream_cert"
 } >"$env_file"
+
+mkdir -p "$upstream_dir"
+openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 1 \
+  -subj '/CN=host.docker.internal' \
+  -addext 'subjectAltName=DNS:host.docker.internal' \
+  -addext 'basicConstraints=critical,CA:TRUE' \
+  -keyout "$upstream_key" -out "$upstream_cert" >/dev/null 2>&1
+chmod 644 "$upstream_cert"
+# Compose expands this variable from the generated environment file.
+# shellcheck disable=SC2016
+printf '%s\n' \
+  'services:' \
+  '  gateway:' \
+  '    environment:' \
+  '      NO_PROXY: postgres,rustfs,127.0.0.1,localhost' \
+  '      SSL_CERT_FILE: /tmp/artifact-gateway-performance-ca.crt' \
+  '    volumes:' \
+  '      - "${GATEWAY_PERF_CA_FILE}:/tmp/artifact-gateway-performance-ca.crt:ro"' >"$compose_override"
+printf '%s\n' 'ok' >"$upstream_dir/healthz"
+python3 - "$raw_upstream_port" "$raw_proxy_port" "$upstream_dir" "$upstream_cert" "$upstream_key" >"$private_dir/raw-upstream.log" 2>&1 <<'PY' &
+import functools
+import http.server
+import select
+import socket
+import socketserver
+import ssl
+import sys
+import threading
+
+upstream_port, proxy_port, directory, certificate, key = sys.argv[1:]
+handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=directory)
+server = http.server.ThreadingHTTPServer(("0.0.0.0", int(upstream_port)), handler)
+context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+context.load_cert_chain(certificate, key)
+server.socket = context.wrap_socket(server.socket, server_side=True)
+
+class ConnectProxy(socketserver.StreamRequestHandler):
+    def handle(self):
+        request = self.rfile.readline().decode("ascii", "replace").strip().split()
+        while self.rfile.readline().strip():
+            pass
+        expected = f"host.docker.internal:{upstream_port}"
+        if len(request) < 2 or request[0] != "CONNECT" or request[1] != expected:
+            self.wfile.write(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
+            return
+        with socket.create_connection(("127.0.0.1", int(upstream_port))) as remote:
+            self.wfile.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+            peers = {self.connection: remote, remote: self.connection}
+            while True:
+                readable, _, _ = select.select(list(peers), [], [], 30)
+                if not readable:
+                    return
+                for source in readable:
+                    data = source.recv(65536)
+                    if not data:
+                        return
+                    peers[source].sendall(data)
+
+class ThreadingProxy(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+threading.Thread(target=server.serve_forever, daemon=True).start()
+with ThreadingProxy(("0.0.0.0", int(proxy_port)), ConnectProxy) as proxy:
+    proxy.serve_forever()
+PY
+upstream_pid=$!
+for ((attempt = 1; attempt <= 50; attempt++)); do
+  if curl --noproxy '*' --silent --show-error --fail --cacert "$upstream_cert" \
+    --resolve "host.docker.internal:${raw_upstream_port}:127.0.0.1" \
+    "https://host.docker.internal:${raw_upstream_port}/healthz" >/dev/null 2>&1; then
+    break
+  fi
+  if ! kill -0 "$upstream_pid" 2>/dev/null; then
+    cat "$private_dir/raw-upstream.log" >&2
+    exit 1
+  fi
+  sleep 0.1
+done
+curl --noproxy '*' --silent --show-error --fail --cacert "$upstream_cert" \
+  --resolve "host.docker.internal:${raw_upstream_port}:127.0.0.1" \
+  "https://host.docker.internal:${raw_upstream_port}/healthz" >/dev/null
 
 metadata_low_requests=${GATEWAY_PERF_METADATA_LOW_REQUESTS:-5000}
 metadata_mid_requests=${GATEWAY_PERF_METADATA_MID_REQUESTS:-30000}
@@ -108,22 +212,28 @@ metadata_high_requests=${GATEWAY_PERF_METADATA_HIGH_REQUESTS:-300000}
 raw_low_requests=${GATEWAY_PERF_RAW_LOW_REQUESTS:-2000}
 raw_mid_requests=${GATEWAY_PERF_RAW_MID_REQUESTS:-20000}
 raw_high_requests=${GATEWAY_PERF_RAW_HIGH_REQUESTS:-40000}
+raw_large_requests=${GATEWAY_PERF_RAW_LARGE_REQUESTS:-32}
+raw_proxy_cold_requests=${GATEWAY_PERF_RAW_PROXY_COLD_REQUESTS:-8}
+raw_large_mib=${GATEWAY_PERF_RAW_LARGE_MIB:-64}
 low_concurrency=${GATEWAY_PERF_LOW_CONCURRENCY:-1}
 mid_concurrency=${GATEWAY_PERF_MID_CONCURRENCY:-32}
 high_concurrency=${GATEWAY_PERF_HIGH_CONCURRENCY:-128}
+large_concurrency=${GATEWAY_PERF_LARGE_CONCURRENCY:-8}
+raw_proxy_cold_concurrency=${GATEWAY_PERF_RAW_PROXY_COLD_CONCURRENCY:-8}
 idle_samples=${GATEWAY_PERF_IDLE_SAMPLES:-10}
 sample_interval=${GATEWAY_PERF_SAMPLE_INTERVAL_SECONDS:-1}
 
 for count in \
   "$metadata_low_requests" "$metadata_mid_requests" "$metadata_high_requests" \
   "$raw_low_requests" "$raw_mid_requests" "$raw_high_requests" \
-  "$low_concurrency" "$mid_concurrency" "$high_concurrency" "$idle_samples"; do
+  "$raw_large_requests" "$raw_proxy_cold_requests" "$raw_large_mib" \
+  "$low_concurrency" "$mid_concurrency" "$high_concurrency" "$large_concurrency" "$raw_proxy_cold_concurrency" "$idle_samples"; do
   if [[ ! "$count" =~ ^[1-9][0-9]*$ ]]; then
     printf 'Performance counts must be positive integers: %s\n' "$count" >&2
     exit 1
   fi
 done
-if (( metadata_low_requests < low_concurrency || metadata_mid_requests < mid_concurrency || metadata_high_requests < high_concurrency || raw_low_requests < low_concurrency || raw_mid_requests < mid_concurrency || raw_high_requests < high_concurrency )); then
+if (( metadata_low_requests < low_concurrency || metadata_mid_requests < mid_concurrency || metadata_high_requests < high_concurrency || raw_low_requests < low_concurrency || raw_mid_requests < mid_concurrency || raw_high_requests < high_concurrency || raw_large_requests < large_concurrency || raw_proxy_cold_requests < raw_proxy_cold_concurrency )); then
   printf '%s\n' 'Each request count must be greater than or equal to its concurrency.' >&2
   exit 1
 fi
@@ -148,9 +258,12 @@ memory_to_mib() {
 expect_http() {
   local expected=$1 method=$2 url=$3 output=$4
   shift 4
-  local http_code
+  local http_code method_args=(--request "$method")
+  if [[ "$method" == HEAD ]]; then
+    method_args=(--head)
+  fi
   http_code=$(curl --noproxy '*' --silent --show-error --output "$output" --write-out '%{http_code}' \
-    --request "$method" "$@" "$url")
+    "${method_args[@]}" "$@" "$url")
   if [[ "$http_code" != "$expected" ]]; then
     printf '%s %s returned HTTP %s; expected %s.\n' "$method" "$url" "$http_code" "$expected" >&2
     sed -n '1,20p' "$output" >&2
@@ -177,14 +290,21 @@ expect_http 204 GET "$gateway_url/livez" "$private_dir/livez.out"
 expect_http 204 GET "$gateway_url/readyz" "$private_dir/readyz.out"
 
 {
+  worktree_dirty=false
+  if [[ -n $(git status --porcelain) ]]; then
+    worktree_dirty=true
+  fi
   printf 'captured_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf 'git_commit=%s\n' "$(git rev-parse HEAD)"
+  printf 'git_worktree_dirty=%s\n' "$worktree_dirty"
   printf 'host_uname=%s\n' "$(uname -a)"
   printf 'go=%s\n' "$(go version)"
   printf 'docker=%s\n' "$(docker version --format 'client={{.Client.Version}} server={{.Server.Version}}')"
   docker info --format 'docker_server_arch={{.Architecture}} docker_server_cpus={{.NCPU}} docker_server_memory_bytes={{.MemTotal}}'
   printf 'compose_project=%s\n' "$project"
   printf 'core_services=gateway,postgres,rustfs\n'
+  printf 'raw_upstream=https://host.docker.internal:%s\n' "$raw_upstream_port"
+  printf 'raw_egress_proxy=http://host.docker.internal:%s\n' "$raw_proxy_port"
 } >"$output_dir/environment.txt"
 
 printf '%s\n' 'Measuring stripped Linux binaries and the runtime image...'
@@ -250,6 +370,13 @@ expect_http 201 POST "$gateway_url/api/v2/repositories" "$repository_response" \
   -H 'Idempotency-Key: performance-baseline-raw-repository' \
   --data '{"name":"perf-raw","format":"raw","type":"hosted"}'
 jq -e '.id | strings | length > 0' "$repository_response" >/dev/null
+proxy_repository_response="$private_dir/proxy-repository.json"
+expect_http 201 POST "$gateway_url/api/v2/repositories" "$proxy_repository_response" \
+  -H "Authorization: Bearer $admin_token" \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: performance-baseline-raw-proxy-repository' \
+  --data "{\"name\":\"perf-raw-proxy\",\"format\":\"raw\",\"type\":\"proxy\",\"endpoint\":\"https://host.docker.internal:${raw_upstream_port}\",\"allowedHosts\":[\"host.docker.internal\"]}"
+jq -e '.id | strings | length > 0' "$proxy_repository_response" >/dev/null
 
 payload="$private_dir/payload-64k.bin"
 dd if=/dev/urandom of="$payload" bs=65536 count=1 status=none
@@ -262,6 +389,18 @@ metadata_url="$gateway_url/api/v2/repositories"
 expect_http 200 GET "$metadata_url" "$private_dir/metadata-warmup.json" -H "Authorization: Bearer $admin_token"
 expect_http 200 GET "$raw_url" "$private_dir/raw-warmup.bin" -H "Authorization: Bearer $admin_token"
 cmp "$payload" "$private_dir/raw-warmup.bin"
+
+mkdir -p "$upstream_dir/performance"
+large_payload="$upstream_dir/performance/payload-${raw_large_mib}m.bin"
+dd if=/dev/urandom of="$large_payload" bs=1048576 count="$raw_large_mib" status=none
+raw_large_url="$gateway_url/raw/perf-raw/performance/payload-${raw_large_mib}m.bin"
+raw_proxy_cold_url="$gateway_url/raw/perf-raw-proxy/performance/payload-${raw_large_mib}m.bin"
+expect_http 201 PUT "$raw_large_url" "$private_dir/upload-large.out" \
+  -H "Authorization: Bearer $admin_token" \
+  -H 'Content-Type: application/octet-stream' \
+  --data-binary "@$large_payload"
+expect_http 200 GET "$raw_large_url" "$private_dir/raw-large-warmup.bin" -H "Authorization: Bearer $admin_token"
+cmp "$large_payload" "$private_dir/raw-large-warmup.bin"
 
 printf 'workload,concurrency,requests,completed,failed,rps,p50_ms,p95_ms,p99_ms,duration_s,transfer_kib_s\n' >"$output_dir/benchmark-results.csv"
 
@@ -308,6 +447,7 @@ run_ab_case() {
   non_2xx=${non_2xx:-0}
   if [[ "$complete" != "$requests" || "$failed" != 0 || "$non_2xx" != 0 ]]; then
     printf '%s c=%s completed=%s failed=%s non_2xx=%s.\n' "$workload" "$concurrency" "$complete" "$failed" "$non_2xx" >&2
+    sed -n '1,160p' "$ab_output" >&2
     exit 1
   fi
   rps=$(ab_value 'Requests per second:' "$ab_output")
@@ -321,12 +461,29 @@ run_ab_case() {
     >>"$output_dir/benchmark-results.csv"
 }
 
+expect_http 200 HEAD "$raw_proxy_cold_url" "$private_dir/raw-proxy-head.out" -H "Authorization: Bearer $admin_token"
 run_ab_case metadata "$low_concurrency" "$metadata_low_requests" "$metadata_url"
 run_ab_case metadata "$mid_concurrency" "$metadata_mid_requests" "$metadata_url"
 run_ab_case metadata "$high_concurrency" "$metadata_high_requests" "$metadata_url" "$output_dir/load-stats-metadata-c${high_concurrency}.csv"
 run_ab_case raw-64k "$low_concurrency" "$raw_low_requests" "$raw_url"
 run_ab_case raw-64k "$mid_concurrency" "$raw_mid_requests" "$raw_url"
 run_ab_case raw-64k "$high_concurrency" "$raw_high_requests" "$raw_url" "$output_dir/load-stats-raw-64k-c${high_concurrency}.csv"
+run_ab_case "raw-${raw_large_mib}m" "$large_concurrency" "$raw_large_requests" "$raw_large_url" "$output_dir/load-stats-raw-${raw_large_mib}m-c${large_concurrency}.csv"
+run_ab_case "raw-proxy-cold-${raw_large_mib}m" "$raw_proxy_cold_concurrency" "$raw_proxy_cold_requests" "$raw_proxy_cold_url" "$output_dir/load-stats-raw-proxy-cold-${raw_large_mib}m-c${raw_proxy_cold_concurrency}.csv"
+
+upstream_path="/performance/payload-${raw_large_mib}m.bin"
+upstream_gets=$(rg -c "\"GET ${upstream_path} HTTP/" "$private_dir/raw-upstream.log" || true)
+if [[ "$upstream_gets" != 1 ]]; then
+  printf 'Raw Proxy cold miss triggered %s upstream GET requests; expected exactly 1.\n' "${upstream_gets:-0}" >&2
+  cat "$private_dir/raw-upstream.log" >&2
+  exit 1
+fi
+kill "$upstream_pid"
+wait "$upstream_pid" 2>/dev/null || true
+upstream_pid=""
+expect_http 200 GET "$raw_proxy_cold_url" "$private_dir/raw-proxy-cached.bin" -H "Authorization: Bearer $admin_token"
+cmp "$large_payload" "$private_dir/raw-proxy-cached.bin"
+printf 'path,method,upstream_requests,cache_replay_after_upstream_stop\n%s,GET,%s,true\n' "$upstream_path" "$upstream_gets" >"$output_dir/raw-proxy-upstream.csv"
 
 printf 'phase,service,min_memory_mib,avg_memory_mib,max_memory_mib,max_cpu_percent\n' >"$output_dir/resource-summary.csv"
 summarize_service() {
@@ -351,6 +508,8 @@ for service in gateway postgres rustfs; do
   summarize_service idle "$output_dir/idle-stats.csv" "$service"
   summarize_service "metadata-c${high_concurrency}" "$output_dir/load-stats-metadata-c${high_concurrency}.csv" "$service"
   summarize_service "raw-64k-c${high_concurrency}" "$output_dir/load-stats-raw-64k-c${high_concurrency}.csv" "$service"
+  summarize_service "raw-${raw_large_mib}m-c${large_concurrency}" "$output_dir/load-stats-raw-${raw_large_mib}m-c${large_concurrency}.csv" "$service"
+  summarize_service "raw-proxy-cold-${raw_large_mib}m-c${raw_proxy_cold_concurrency}" "$output_dir/load-stats-raw-proxy-cold-${raw_large_mib}m-c${raw_proxy_cold_concurrency}.csv" "$service"
 done
 
 expect_http 204 GET "$gateway_url/livez" "$private_dir/livez-after-load.out"

@@ -346,6 +346,9 @@ type NativeRawStore interface {
 	UpdateRawUpload(context.Context, string, int64) (RawUpload, error)
 	CancelRawUpload(context.Context, string) (RawUpload, error)
 	CompleteRawUpload(context.Context, string, RawAsset) (RawAsset, error)
+	ExpireRawUploads(context.Context, time.Time, int) ([]RawUpload, error)
+	ListUncollectedRawUploads(context.Context, int) ([]RawUpload, error)
+	MarkRawUploadCollected(context.Context, string) error
 	LockRawObject(context.Context, string) (func(), error)
 	StageRawObject(context.Context, RawObject) error
 	PutRawAsset(context.Context, RawAsset) (RawAsset, error)

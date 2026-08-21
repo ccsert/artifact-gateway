@@ -150,13 +150,24 @@ func (m NativeMaintenance) runUploadReclaimJob(ctx context.Context, job reposito
 	if upload.ObjectKey != payload.ObjectKey {
 		return m.failReclaimJob(ctx, job, "OCI upload reclaim payload does not match upload")
 	}
-	if err = m.Objects.Delete(ctx, payload.ObjectKey); err != nil {
+	if err = deleteUploadObjects(ctx, m.Objects, payload.ObjectKey); err != nil {
 		return m.failReclaimJob(ctx, job, fmt.Sprintf("delete OCI upload object: %v", err))
 	}
 	if err = m.Store.MarkOCIUploadCollected(ctx, payload.UploadID); err != nil {
 		return m.failReclaimJob(ctx, job, "mark OCI upload collected failed")
 	}
 	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
+}
+
+func deleteUploadObjects(ctx context.Context, objects objectstore.Store, key string) error {
+	parts, err := objects.List(ctx, key+".parts/")
+	deleteErr := err
+	if err == nil {
+		for _, partKey := range parts {
+			deleteErr = errors.Join(deleteErr, objects.Delete(ctx, partKey))
+		}
+	}
+	return errors.Join(deleteErr, objects.Delete(ctx, key))
 }
 
 func (m NativeMaintenance) failReclaimJob(ctx context.Context, job repository.LifecycleJob, message string) error {

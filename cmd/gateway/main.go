@@ -78,7 +78,7 @@ func main() {
 			TLSRootCertificates: cfg.APTSignerTLSRootCertificates,
 		})
 		if signerErr != nil {
-			slog.Error("initialize APT Release signer")
+			slog.Error("initialize APT Release signer", "error", signerErr)
 			os.Exit(1)
 		}
 		dependencies.APTSigner = aptSigner
@@ -90,7 +90,7 @@ func main() {
 			MaxArtifactBytes: cfg.ScannerMaxArtifactBytes,
 		})
 		if scannerErr != nil {
-			slog.Error("initialize artifact scanner")
+			slog.Error("initialize artifact scanner", "error", scannerErr)
 			os.Exit(1)
 		}
 		dependencies.ArtifactScanner = artifactScanner
@@ -166,7 +166,7 @@ func main() {
 	defer func() { _ = taskQueue.Close() }()
 	quota := app.NewCacheQuota(cacheStore, cfg.RepositoryCacheQuotas).WithCoordinator(coordinator)
 	ociCache := app.NewDefaultOCICache(cacheStore, cfg.OCIProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota).WithTTL(cfg.OCICacheTTL)
-	rawCache := app.NewDefaultRawCache(cacheStore, cfg.RawProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota).WithMaxObjectBytes(cfg.RawCacheMaxObjectBytes).WithTTL(cfg.RawCacheTTL)
+	rawCache := app.NewDefaultRawCache(cacheStore, cfg.RawProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota).WithMaxObjectBytes(cfg.RawCacheMaxObjectBytes).WithMaxConcurrentSpools(cfg.RawCacheMaxConcurrentSpools).WithTTL(cfg.RawCacheTTL)
 	conanCache := app.NewDefaultConanCache(cacheStore, nil).WithCoordinator(coordinator).WithQuota(quota).WithMaxObjectBytes(cfg.ConanCacheMaxObjectBytes).WithTTL(cfg.ConanCacheTTL)
 	maintenance := app.NewCacheMaintenanceWithRaw(cacheStore, ociCache, rawCache).WithConan(conanCache)
 	metrics := (&app.Metrics{}).
@@ -177,7 +177,7 @@ func main() {
 		WithNodeIdentity(cfg.InstanceID, nodeRoleStrings(cfg.NodeRoles))
 	runtimeContext := signalContext()
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
-	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_health_enabled", cfg.ScannerHealthEndpoint != "", "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats, "scanner_database_max_age", cfg.ScannerDatabaseMaxAge, "apt_signer_enabled", cfg.APTSignerEnabled(), "apt_signer_trusted_fingerprint_count", len(cfg.APTSignerTrustedFingerprints))
+	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_health_enabled", cfg.ScannerHealthEndpoint != "", "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats, "scanner_database_max_age", cfg.ScannerDatabaseMaxAge, "apt_signer_enabled", cfg.APTSignerEnabled(), "apt_signer_trusted_fingerprint_count", len(cfg.APTSignerTrustedFingerprints), "raw_cache_max_object_bytes", cfg.RawCacheMaxObjectBytes, "raw_cache_max_concurrent_spools", cfg.RawCacheMaxConcurrentSpools)
 	runtimeSessionID := uuid.NewString()
 	heartbeat := &app.RuntimeNodeHeartbeat{
 		Store: store,
