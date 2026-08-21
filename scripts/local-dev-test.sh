@@ -23,6 +23,53 @@ fail() {
   exit 1
 }
 
+bootstrap_environment="$workdir/bootstrap.env"
+bootstrap_state="$workdir/bootstrap-state"
+output=$(GATEWAY_ENV_FILE="$bootstrap_environment" GATEWAY_DEV_STATE_DIR="$bootstrap_state" "$subject" bootstrap-env)
+
+assert_environment_key() {
+  local file=$1 name=$2 minimum_length=$3 value
+  value=$(awk -F= -v name="$name" '$1 == name { print substr($0, index($0, "=") + 1); exit }' "$file")
+  [[ ${#value} -ge $minimum_length ]] || fail "$name was not generated with the required length"
+  [[ "$output" != *"$value"* ]] || fail "bootstrap printed generated $name"
+}
+
+assert_environment_key "$bootstrap_environment" GATEWAY_POSTGRES_PASSWORD 32
+assert_environment_key "$bootstrap_environment" GATEWAY_ADMIN_TOKEN 32
+assert_environment_key "$bootstrap_environment" GATEWAY_RESOLVER_TOKEN 32
+assert_environment_key "$bootstrap_environment" RUSTFS_ACCESS_KEY 16
+assert_environment_key "$bootstrap_environment" RUSTFS_SECRET_KEY 32
+assert_environment_key "$bootstrap_environment" RUSTFS_RPC_SECRET 32
+[[ $(stat -f '%Lp' "$bootstrap_environment" 2>/dev/null || stat -c '%a' "$bootstrap_environment") == 600 ]] || fail 'bootstrap environment is not private'
+[[ ! -d "$bootstrap_state/environment-backups" ]] || fail 'first-time bootstrap created a rollback copy without an original file'
+output=$(GATEWAY_ENV_FILE="$bootstrap_environment" GATEWAY_DEV_STATE_DIR="$bootstrap_state" "$subject" bootstrap-env)
+[[ "$output" == *'already configured'* ]] || fail 'idempotent environment bootstrap did not report the existing configuration'
+[[ ! -d "$bootstrap_state/environment-backups" ]] || fail 'idempotent environment bootstrap created a rollback copy'
+
+existing_environment="$workdir/existing.env"
+existing_state="$workdir/existing-state"
+cp "$repo_root/.env.example" "$existing_environment"
+output=$(GATEWAY_ENV_FILE="$existing_environment" GATEWAY_DEV_STATE_DIR="$existing_state" "$subject" bootstrap-env)
+existing_backup_count=$(find "$existing_state/environment-backups" -maxdepth 1 -name 'existing.env.before-bootstrap-*' | wc -l | tr -d ' ')
+[[ "$existing_backup_count" == 1 ]] || fail 'bootstrap did not preserve an existing placeholder environment'
+assert_environment_key "$existing_environment" GATEWAY_POSTGRES_PASSWORD 32
+assert_environment_key "$existing_environment" GATEWAY_ADMIN_TOKEN 32
+assert_environment_key "$existing_environment" GATEWAY_RESOLVER_TOKEN 32
+
+invalid_environment="$workdir/invalid.env"
+printf '%s\n' \
+  'GATEWAY_POSTGRES_PASSWORD=short' \
+  'GATEWAY_ADMIN_TOKEN=replace-with-admin' \
+  'GATEWAY_RESOLVER_TOKEN=replace-with-resolver' \
+  'RUSTFS_ACCESS_KEY=replace-with-access' \
+  'RUSTFS_SECRET_KEY=replace-with-secret' \
+  'RUSTFS_RPC_SECRET=replace-with-rpc' >"$invalid_environment"
+cp "$invalid_environment" "$invalid_environment.before"
+if GATEWAY_ENV_FILE="$invalid_environment" GATEWAY_DEV_STATE_DIR="$workdir/invalid-state" "$subject" bootstrap-env >/dev/null 2>&1; then
+  fail 'bootstrap accepted an unsafe existing credential'
+fi
+cmp -s "$invalid_environment.before" "$invalid_environment" || fail 'failed bootstrap changed the existing environment'
+
 output=$($subject bootstrap-rustfs-env)
 assert_migrated_key() {
   local name=$1 minimum_length=$2 value
