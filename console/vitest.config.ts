@@ -33,6 +33,18 @@ export default defineConfig({
           statements: 70,
           branches: 60,
         },
+        "src/lib/publicOci.ts": {
+          lines: 90,
+          functions: 90,
+          statements: 90,
+          branches: 75,
+        },
+        "src/lib/publicRepositoryUsage.ts": {
+          lines: 95,
+          functions: 95,
+          statements: 95,
+          branches: 90,
+        },
         "src/components/PublicBrowsePrimitives.tsx": {
           lines: 70,
           functions: 70,

@@ -20,6 +20,10 @@ contains_fixed_string() {
 for file in \
   README.md \
   README.zh-CN.md \
+  ARCHITECTURE.md \
+  ARCHITECTURE.zh-CN.md \
+  CONTRIBUTING.md \
+  CONTRIBUTING.zh-CN.md \
   docs/README.md \
   docs/README.zh-CN.md \
   docs/getting-started.md \
@@ -30,8 +34,11 @@ for file in \
   docs/postgresql-capabilities.en.md \
   docs/performance-baseline.md \
   docs/performance-baseline.zh-CN.md \
+  docs/protocol-compatibility.zh-CN.md \
   docs/project-quality-assessment.md \
   docs/project-quality-assessment.zh-CN.md \
+  docs/recovery-runbook.md \
+  docs/recovery-runbook.zh-CN.md \
   docs/assets/artifact-gateway-hero.png \
   docs/assets/artifact-gateway-system-architecture.png \
   docs/assets/artifact-gateway-deployment-topology.png; do
@@ -43,11 +50,15 @@ done
 
 for pair in \
   'README.md|README.zh-CN.md' \
+  'ARCHITECTURE.md|ARCHITECTURE.zh-CN.md' \
+  'CONTRIBUTING.md|CONTRIBUTING.zh-CN.md' \
   'docs/README.md|README.zh-CN.md' \
   'docs/getting-started.md|getting-started.zh-CN.md' \
   'docs/architecture-diagrams.md|architecture-diagrams.zh-CN.md' \
   'docs/postgresql-capabilities.en.md|postgresql-capabilities.md' \
   'docs/performance-baseline.md|performance-baseline.zh-CN.md' \
+  'docs/protocol-compatibility.md|protocol-compatibility.zh-CN.md' \
+  'docs/recovery-runbook.md|recovery-runbook.zh-CN.md' \
   'docs/project-quality-assessment.md|project-quality-assessment.zh-CN.md'; do
   source_file=${pair%%|*}
   target_name=${pair#*|}
@@ -59,11 +70,15 @@ done
 
 for pair in \
   'README.zh-CN.md|README.md' \
+  'ARCHITECTURE.zh-CN.md|ARCHITECTURE.md' \
+  'CONTRIBUTING.zh-CN.md|CONTRIBUTING.md' \
   'docs/README.zh-CN.md|README.md' \
   'docs/getting-started.zh-CN.md|getting-started.md' \
   'docs/architecture-diagrams.zh-CN.md|architecture-diagrams.md' \
   'docs/postgresql-capabilities.md|postgresql-capabilities.en.md' \
   'docs/performance-baseline.zh-CN.md|performance-baseline.md' \
+  'docs/protocol-compatibility.zh-CN.md|protocol-compatibility.md' \
+  'docs/recovery-runbook.zh-CN.md|recovery-runbook.md' \
   'docs/project-quality-assessment.zh-CN.md|project-quality-assessment.md'; do
   source_file=${pair%%|*}
   target_name=${pair#*|}
@@ -78,6 +93,12 @@ if ! contains_fixed_string 'PostgreSQL is the only coordination and database dep
   ! contains_fixed_string 'PostgreSQL 是唯一的协调与数据库依赖' README.zh-CN.md ||
   ! contains_fixed_string 'S3 兼容对象存储' README.zh-CN.md; then
   printf 'README lightweight storage boundary is missing or misleading\n' >&2
+  exit 1
+fi
+
+if ! contains_fixed_string '语言说明' docs/README.zh-CN.md ||
+  ! contains_fixed_string '仅英文' docs/README.zh-CN.md; then
+  printf 'Chinese documentation index must disclose English-only entries\n' >&2
   exit 1
 fi
 

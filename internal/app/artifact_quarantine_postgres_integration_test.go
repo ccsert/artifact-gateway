@@ -134,4 +134,9 @@ func TestPostgresRawPromotionWorkerDoesNotPublishQuarantinedSource(t *testing.T)
 	if err != nil || persisted.State != repository.LifecycleJobRetrying || persisted.LastError != repository.ArtifactQuarantinedReason {
 		t.Fatalf("promotion job=%#v err=%v", persisted, err)
 	}
+	// Integration tests share one PostgreSQL database. Do not leave this
+	// intentionally retryable job eligible for a later promotion worker.
+	if _, err = store.CancelLifecycleJob(ctx, target.ID, job.ID); err != nil {
+		t.Fatal(err)
+	}
 }

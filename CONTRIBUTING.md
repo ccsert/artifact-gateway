@@ -1,5 +1,7 @@
 # Contributing to Artifact Gateway
 
+[简体中文](CONTRIBUTING.zh-CN.md)
+
 Artifact Gateway is currently developed by its core team. This guide records
 the engineering workflow used inside the repository so changes remain
 reviewable and reproducible while the project is prepared for broader

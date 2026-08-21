@@ -79,6 +79,12 @@ a dated version heading without rewriting their meaning.
   memory, authenticated PostgreSQL metadata reads, and 64 KiB Raw reads through
   RustFS, with bilingual evidence, explicit limitations, and a one-command
   runner that removes its containers, volumes, and ephemeral credentials.
+- Began the maintainability plan by extracting recursive public OCI metadata
+  reads, tag pagination, and protocol-specific repository setup snippets from
+  the large Console browse page behind tested pure module seams. Added Chinese
+  architecture, contributing, protocol-compatibility, and recovery entry
+  points, while the Chinese
+  documentation index now identifies the remaining English-only material.
 
 - A bounded Cargo C0 parser foundation that validates official publish framing
   and complete `.crate` gzip/tar archives, derives collision-safe immutable

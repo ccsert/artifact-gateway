@@ -81,8 +81,9 @@ not a public release, formal distribution record, or support commitment.
 
 ## Documentation rules
 
-- Keep the English and Simplified Chinese README and getting-started entry
-  points reciprocal and behaviorally equivalent.
+- Keep the English and Simplified Chinese README, architecture, contributing,
+  protocol-compatibility, recovery, and getting-started entry points reciprocal
+  and behaviorally equivalent.
 - Put precise protocol support in `protocol-compatibility.md`; avoid copying
   long format contracts into the project README.
 - Mark previews, research, and roadmap work explicitly. Do not present them as
