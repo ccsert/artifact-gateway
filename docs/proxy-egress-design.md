@@ -1,5 +1,7 @@
 # Proxy Repository Egress Proxy Design
 
+[简体中文](proxy-egress-design.zh-CN.md) | [Documentation index](README.md)
+
 Status: implemented (2026-08-06). Migration `000070_egress_proxy.sql`, the
 `internal/egress` transport factory, the V2 management API (including the
 `:test` endpoint), and the Console settings form are in place. Audit

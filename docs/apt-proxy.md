@@ -1,5 +1,7 @@
 # APT Proxy and Group
 
+[简体中文](apt-proxy.zh-CN.md) · [Documentation index](README.md)
+
 Artifact Gateway exposes Debian repositories at:
 
 ```text

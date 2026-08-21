@@ -1,5 +1,7 @@
 # Legacy Group Migration
 
+[简体中文](legacy-group-migration.zh-CN.md) · [Documentation index](README.md)
+
 Legacy OCI, Maven, Raw, and Conan Groups remain protocol-specific compatibility
 surfaces. They are not rewritten in place. Migrate by creating a V2 Group over
 explicit Hosted and Proxy Repositories, then switch clients after validation.

@@ -20,7 +20,7 @@ Console modules safely while the feature surface continues to grow.
 | Protocol correctness | Strong | Compatibility limits are explicit and native-client fixtures exist for the advertised formats. |
 | Verification | Strong with coverage headroom | CI, contract, integration, E2E, recovery, and readiness gates exist; some global coverage floors remain intentionally conservative. |
 | Maintainability | Needs focused work | Several route, model, and native-protocol files are large enough to slow review and increase change coupling. |
-| Documentation | Core entry points bilingual, uneven depth | README, quick start, architecture, contributing, protocol compatibility, recovery, and the index have Chinese entry points; most deep contracts and research records remain English-only. |
+| Documentation | Complete bilingual source set | Every site document has an English canonical route and a substantive Simplified Chinese companion; a tested site map owns navigation and pair coverage. |
 | Operability | Good preparation baseline | Health, metrics, diagnostics, recovery, Kubernetes, and distributed-role guidance exist; production evidence is still preparation work. |
 | Performance | Reproducible local baseline | Binary/image size, quiet memory, authenticated PostgreSQL/RustFS reads, warm 64 MiB reads, and a controlled HTTPS Proxy cold miss are measured; controlled production-like load and soak remain open. |
 | Public-project readiness | Deliberately deferred | Licensing, formal distribution, a public security-reporting channel, and public support commitments are outside the current scope. |
@@ -125,14 +125,17 @@ code with 40% line/statement, 53% function, and 65% branch floors plus stronger
 per-module thresholds. These are useful non-regression guards, but they should
 rise as the large modules are split and public-boundary tests become cheaper.
 
-### 3. Deep documentation is not fully bilingual
+### 3. Bilingual documentation is now a maintained contract
 
-The project now has equivalent English and Chinese README, documentation index,
-getting-started, architecture, contributing, protocol-compatibility, and
-recovery paths. The Chinese index labels remaining English-only material
-instead of implying that a translated body exists. Translating every ADR and
-research note would add a large synchronization burden. Continue with identity
-and operator journeys before implementation research.
+Every site document now has an English canonical route and a substantive
+Simplified Chinese companion, including ADRs, contracts, operations, release
+evidence, and research notes. `docs/site-map.json` provides framework-neutral
+navigation, while `make docs-check` rejects missing pairs, one-way language
+links, untranslated Chinese stubs, duplicate routes, and incomplete coverage.
+
+The remaining risk is synchronization rather than initial coverage. Behavior,
+commands, compatibility limits, and preview status must change in both locales
+within the same review.
 
 ### 4. Preparation evidence is broader than one default test target
 

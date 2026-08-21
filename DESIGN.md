@@ -112,6 +112,8 @@ components:
 
 # Design System: Artifact Gateway Console
 
+[简体中文](DESIGN.zh-CN.md) | [Documentation index](docs/README.md)
+
 ## Overview
 
 **Creative North Star: "The Verified Control Plane"**

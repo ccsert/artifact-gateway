@@ -1,5 +1,7 @@
 # Release Record Template
 
+[简体中文](release-record-template.zh-CN.md) | [Documentation index](README.md)
+
 Create one copy in the approved release-tracking system for each production
 deployment. Store command output as an attached CI artifact or restricted log
 reference. Do not record bearer tokens, object-storage credentials, OIDC

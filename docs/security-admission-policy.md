@@ -1,5 +1,7 @@
 # Security admission policy
 
+[简体中文](security-admission-policy.zh-CN.md) | [Documentation index](README.md)
+
 Security admission policies protect a Hosted repository at the point where an
 immutable artifact is promoted into it. They do not change ordinary reads,
 writes to the source repository, proxy resolution, or artifact intelligence

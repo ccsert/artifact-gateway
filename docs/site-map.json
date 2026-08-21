@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "defaultLocale": "en",
+  "locales": ["en", "zh-CN"],
+  "sections": [
+    {
+      "id": "start",
+      "title": { "en": "Start here", "zh-CN": "快速开始" },
+      "items": [
+        { "id": "project-home", "title": { "en": "Project overview", "zh-CN": "项目概览" }, "en": "README.md", "zh-CN": "README.zh-CN.md" },
+        { "id": "docs-home", "title": { "en": "Documentation home", "zh-CN": "文档首页" }, "en": "docs/README.md", "zh-CN": "docs/README.zh-CN.md" },
+        { "id": "documentation-site-guide", "title": { "en": "Documentation site guide", "zh-CN": "文档站接入指南" }, "en": "docs/documentation-site-guide.md", "zh-CN": "docs/documentation-site-guide.zh-CN.md" },
+        { "id": "getting-started", "title": { "en": "Getting started", "zh-CN": "快速入门" }, "en": "docs/getting-started.md", "zh-CN": "docs/getting-started.zh-CN.md" },
+        { "id": "product", "title": { "en": "Product direction", "zh-CN": "产品方向" }, "en": "PRODUCT.md", "zh-CN": "PRODUCT.zh-CN.md" },
+        { "id": "contributing", "title": { "en": "Contributing", "zh-CN": "参与开发" }, "en": "CONTRIBUTING.md", "zh-CN": "CONTRIBUTING.zh-CN.md" },
+        { "id": "format-extension", "title": { "en": "Format extension guide", "zh-CN": "格式扩展指南" }, "en": "docs/format-extension-guide.md", "zh-CN": "docs/format-extension-guide.zh-CN.md" }
+      ]
+    },
+    {
+      "id": "architecture",
+      "title": { "en": "Architecture and design", "zh-CN": "架构与设计" },
+      "items": [
+        { "id": "architecture-overview", "title": { "en": "Architecture", "zh-CN": "整体架构" }, "en": "ARCHITECTURE.md", "zh-CN": "ARCHITECTURE.zh-CN.md" },
+        { "id": "architecture-diagrams", "title": { "en": "Architecture diagrams", "zh-CN": "架构图" }, "en": "docs/architecture-diagrams.md", "zh-CN": "docs/architecture-diagrams.zh-CN.md" },
+        { "id": "design", "title": { "en": "Design notes", "zh-CN": "设计说明" }, "en": "DESIGN.md", "zh-CN": "DESIGN.zh-CN.md" },
+        { "id": "context", "title": { "en": "Project context", "zh-CN": "项目上下文" }, "en": "CONTEXT.md", "zh-CN": "CONTEXT.zh-CN.md" },
+        { "id": "postgresql", "title": { "en": "PostgreSQL capabilities", "zh-CN": "PostgreSQL 能力" }, "en": "docs/postgresql-capabilities.md", "zh-CN": "docs/postgresql-capabilities.zh-CN.md" },
+        { "id": "native-hosted-contract", "title": { "en": "Native Hosted contract", "zh-CN": "Native Hosted 契约" }, "en": "docs/native-hosted-contract.md", "zh-CN": "docs/native-hosted-contract.zh-CN.md" },
+        { "id": "v2-contract", "title": { "en": "V2 contract", "zh-CN": "V2 契约" }, "en": "docs/v2-contract.md", "zh-CN": "docs/v2-contract.zh-CN.md" },
+        { "id": "artifact-lifecycle", "title": { "en": "Artifact lifecycle contract", "zh-CN": "制品生命周期契约" }, "en": "docs/artifact-lifecycle-contract.md", "zh-CN": "docs/artifact-lifecycle-contract.zh-CN.md" },
+        { "id": "repository-deletion", "title": { "en": "Repository deletion contract", "zh-CN": "仓库删除契约" }, "en": "docs/repository-deletion-contract.md", "zh-CN": "docs/repository-deletion-contract.zh-CN.md" },
+        { "id": "distributed-deployment", "title": { "en": "Distributed deployment", "zh-CN": "分布式部署" }, "en": "docs/distributed-deployment.md", "zh-CN": "docs/distributed-deployment.zh-CN.md" },
+        { "id": "adr-full-repository", "title": { "en": "ADR 0001: full repository", "zh-CN": "ADR 0001：完整制品库" }, "en": "docs/adr/0001-full-artifact-repository.md", "zh-CN": "docs/adr/0001-full-artifact-repository.zh-CN.md" },
+        { "id": "adr-promotion-snapshots", "title": { "en": "ADR 0002: promotion snapshots", "zh-CN": "ADR 0002：晋升快照" }, "en": "docs/adr/0002-promotion-snapshots.md", "zh-CN": "docs/adr/0002-promotion-snapshots.zh-CN.md" },
+        { "id": "adr-protocol-only", "title": { "en": "ADR 0003: protocol-only formats", "zh-CN": "ADR 0003：仅协议格式" }, "en": "docs/adr/0003-protocol-only-formats.md", "zh-CN": "docs/adr/0003-protocol-only-formats.zh-CN.md" },
+        { "id": "adr-go-hosted", "title": { "en": "ADR 0004: Go Hosted publication", "zh-CN": "ADR 0004：Go Hosted 发布" }, "en": "docs/adr/0004-go-hosted-publication.md", "zh-CN": "docs/adr/0004-go-hosted-publication.zh-CN.md" }
+      ]
+    },
+    {
+      "id": "protocols",
+      "title": { "en": "Protocols and formats", "zh-CN": "协议与仓库格式" },
+      "items": [
+        { "id": "protocol-compatibility", "title": { "en": "Protocol compatibility", "zh-CN": "协议兼容性" }, "en": "docs/protocol-compatibility.md", "zh-CN": "docs/protocol-compatibility.zh-CN.md" },
+        { "id": "maven-publication", "title": { "en": "Maven Hosted publication", "zh-CN": "Maven Hosted 发布" }, "en": "docs/maven-hosted-publication.md", "zh-CN": "docs/maven-hosted-publication.zh-CN.md" },
+        { "id": "apt-proxy", "title": { "en": "APT Proxy and Group", "zh-CN": "APT Proxy 与 Group" }, "en": "docs/apt-proxy.md", "zh-CN": "docs/apt-proxy.zh-CN.md" },
+        { "id": "apt-hosted-signing", "title": { "en": "APT Hosted signing", "zh-CN": "APT Hosted 签名" }, "en": "docs/apt-hosted-signing.md", "zh-CN": "docs/apt-hosted-signing.zh-CN.md" },
+        { "id": "apt-hosted-roadmap", "title": { "en": "APT Hosted roadmap", "zh-CN": "APT Hosted 路线图" }, "en": "docs/apt-hosted-roadmap.md", "zh-CN": "docs/apt-hosted-roadmap.zh-CN.md" },
+        { "id": "cargo-research", "title": { "en": "Cargo repository research", "zh-CN": "Cargo 仓库研究" }, "en": "docs/cargo-repository-research.md", "zh-CN": "docs/cargo-repository-research.zh-CN.md" },
+        { "id": "nuget-roadmap", "title": { "en": "NuGet roadmap", "zh-CN": "NuGet 路线图" }, "en": "docs/nuget-roadmap.md", "zh-CN": "docs/nuget-roadmap.zh-CN.md" },
+        { "id": "legacy-group-migration", "title": { "en": "Legacy Group migration", "zh-CN": "旧 Group 迁移" }, "en": "docs/legacy-group-migration.md", "zh-CN": "docs/legacy-group-migration.zh-CN.md" },
+        { "id": "gitea-backend", "title": { "en": "Gitea backend reference", "zh-CN": "Gitea 后端参考" }, "en": "docs/gitea-backend-reference.md", "zh-CN": "docs/gitea-backend-reference.zh-CN.md" }
+      ]
+    },
+    {
+      "id": "operations",
+      "title": { "en": "Operations and security", "zh-CN": "运维与安全" },
+      "items": [
+        { "id": "kubernetes", "title": { "en": "Kubernetes deployment", "zh-CN": "Kubernetes 部署" }, "en": "docs/kubernetes-deployment.md", "zh-CN": "docs/kubernetes-deployment.zh-CN.md" },
+        { "id": "recovery", "title": { "en": "Recovery runbook", "zh-CN": "恢复手册" }, "en": "docs/recovery-runbook.md", "zh-CN": "docs/recovery-runbook.zh-CN.md" },
+        { "id": "anonymous-access", "title": { "en": "Anonymous access operations", "zh-CN": "匿名访问运维" }, "en": "docs/anonymous-access-operations.md", "zh-CN": "docs/anonymous-access-operations.zh-CN.md" },
+        { "id": "user-governance", "title": { "en": "User governance", "zh-CN": "用户治理" }, "en": "docs/user-governance.md", "zh-CN": "docs/user-governance.zh-CN.md" },
+        { "id": "oidc-sso", "title": { "en": "OIDC SSO", "zh-CN": "OIDC 单点登录" }, "en": "docs/oidc-sso.md", "zh-CN": "docs/oidc-sso.zh-CN.md" },
+        { "id": "oidc-keycloak", "title": { "en": "Keycloak on Kubernetes", "zh-CN": "Kubernetes 上的 Keycloak" }, "en": "docs/oidc-keycloak-k8s.md", "zh-CN": "docs/oidc-keycloak-k8s.zh-CN.md" },
+        { "id": "repository-grants", "title": { "en": "Repository grant authorization", "zh-CN": "仓库授权" }, "en": "docs/repository-grant-authorization-plan.md", "zh-CN": "docs/repository-grant-authorization-plan.zh-CN.md" },
+        { "id": "service-accounts", "title": { "en": "Service account operations", "zh-CN": "Service Account 运维" }, "en": "docs/service-account-operations.md", "zh-CN": "docs/service-account-operations.zh-CN.md" },
+        { "id": "security-admission", "title": { "en": "Security admission policy", "zh-CN": "安全准入策略" }, "en": "docs/security-admission-policy.md", "zh-CN": "docs/security-admission-policy.zh-CN.md" },
+        { "id": "artifact-scanner", "title": { "en": "Artifact scanner contract", "zh-CN": "制品扫描器契约" }, "en": "docs/artifact-scanner-contract.md", "zh-CN": "docs/artifact-scanner-contract.zh-CN.md" },
+        { "id": "proxy-egress", "title": { "en": "Proxy egress design", "zh-CN": "Proxy 出网设计" }, "en": "docs/proxy-egress-design.md", "zh-CN": "docs/proxy-egress-design.zh-CN.md" },
+        { "id": "webhook-delivery", "title": { "en": "Webhook delivery contract", "zh-CN": "Webhook 投递契约" }, "en": "docs/webhook-delivery-contract.md", "zh-CN": "docs/webhook-delivery-contract.zh-CN.md" },
+        { "id": "security-policy", "title": { "en": "Security policy", "zh-CN": "安全策略" }, "en": "SECURITY.md", "zh-CN": "SECURITY.zh-CN.md" }
+      ]
+    },
+    {
+      "id": "quality-release",
+      "title": { "en": "Quality, performance, and release", "zh-CN": "质量、性能与发布" },
+      "items": [
+        { "id": "performance", "title": { "en": "Performance baseline", "zh-CN": "性能基线" }, "en": "docs/performance-baseline.md", "zh-CN": "docs/performance-baseline.zh-CN.md" },
+        { "id": "quality-assessment", "title": { "en": "Project quality assessment", "zh-CN": "项目质量评估" }, "en": "docs/project-quality-assessment.md", "zh-CN": "docs/project-quality-assessment.zh-CN.md" },
+        { "id": "backend-checklist", "title": { "en": "Backend completion checklist", "zh-CN": "后端完成度检查表" }, "en": "docs/backend-completion-checklist.md", "zh-CN": "docs/backend-completion-checklist.zh-CN.md" },
+        { "id": "release-readiness", "title": { "en": "Release readiness", "zh-CN": "发布准备" }, "en": "docs/release-readiness.md", "zh-CN": "docs/release-readiness.zh-CN.md" },
+        { "id": "release-record-template", "title": { "en": "Release record template", "zh-CN": "发布记录模板" }, "en": "docs/release-record-template.md", "zh-CN": "docs/release-record-template.zh-CN.md" },
+        { "id": "release-record-2026-08-11", "title": { "en": "Preparation record: 2026-08-11", "zh-CN": "准备记录：2026-08-11" }, "en": "docs/release-records/2026-08-11-d738d4ed.md", "zh-CN": "docs/release-records/2026-08-11-d738d4ed.zh-CN.md" },
+        { "id": "changelog", "title": { "en": "Changelog", "zh-CN": "变更记录" }, "en": "CHANGELOG.md", "zh-CN": "CHANGELOG.zh-CN.md" }
+      ]
+    },
+    {
+      "id": "strategy-reference",
+      "title": { "en": "Strategy and reference", "zh-CN": "研究、路线图与参考" },
+      "items": [
+        { "id": "full-repository-goal", "title": { "en": "Full repository goal", "zh-CN": "完整制品库目标" }, "en": "docs/full-artifact-repository-goal.md", "zh-CN": "docs/full-artifact-repository-goal.zh-CN.md" },
+        { "id": "full-repository-roadmap", "title": { "en": "Full repository roadmap", "zh-CN": "完整制品库路线图" }, "en": "docs/full-artifact-repository-roadmap.md", "zh-CN": "docs/full-artifact-repository-roadmap.zh-CN.md" },
+        { "id": "nexus-gap-analysis", "title": { "en": "Nexus gap analysis", "zh-CN": "Nexus 差距分析" }, "en": "docs/nexus-gap-analysis.md", "zh-CN": "docs/nexus-gap-analysis.zh-CN.md" },
+        { "id": "nexus-gap-review", "title": { "en": "Nexus gap review", "zh-CN": "Nexus 差距复核" }, "en": "docs/nexus-gap-review-2026-08.md", "zh-CN": "docs/nexus-gap-review-2026-08.zh-CN.md" },
+        { "id": "nexus-maven-research", "title": { "en": "Nexus Maven publication research", "zh-CN": "Nexus Maven 发布研究" }, "en": "docs/nexus-maven-publication-research.md", "zh-CN": "docs/nexus-maven-publication-research.zh-CN.md" },
+        { "id": "console-roadmap", "title": { "en": "Repository Console roadmap", "zh-CN": "仓库 Console 路线图" }, "en": "docs/repository-console-experience-roadmap.md", "zh-CN": "docs/repository-console-experience-roadmap.zh-CN.md" },
+        { "id": "openapi-governance", "title": { "en": "OpenAPI governance", "zh-CN": "OpenAPI 治理" }, "en": "docs/openapi-governance-plan.md", "zh-CN": "docs/openapi-governance-plan.zh-CN.md" }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Architecture diagrams
 
-[简体中文](architecture-diagrams.zh-CN.md) · [Architecture](../ARCHITECTURE.md) · [PostgreSQL capabilities](postgresql-capabilities.en.md)
+[简体中文](architecture-diagrams.zh-CN.md) · [Architecture](../ARCHITECTURE.md) · [PostgreSQL capabilities](postgresql-capabilities.md)
 
 The generated visual overviews make the main component and deployment choices
 easy to scan. The executable Mermaid diagrams below remain the precise,

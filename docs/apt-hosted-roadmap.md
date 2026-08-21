@@ -1,5 +1,7 @@
 # APT Hosted Roadmap
 
+[简体中文](apt-hosted-roadmap.zh-CN.md) | [Documentation index](README.md)
+
 ## Status and priority
 
 APT Hosted is the next planned format expansion after the Kubernetes local

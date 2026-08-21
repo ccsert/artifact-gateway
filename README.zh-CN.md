@@ -111,7 +111,7 @@ make down         # 停止 Compose 服务并保留数据卷
 默认 `standalone` 角色在一个进程中同时运行 API、Scheduler 和 Worker。规模扩大后可按
 角色拆分同一镜像，无需额外引入消息队列或服务发现。详见[整体架构](ARCHITECTURE.zh-CN.md)、
 [架构图](docs/architecture-diagrams.zh-CN.md)和
-[PostgreSQL 能力](docs/postgresql-capabilities.md)。
+[PostgreSQL 能力](docs/postgresql-capabilities.zh-CN.md)。
 
 ## 文档导航
 
@@ -122,13 +122,13 @@ make down         # 停止 Compose 服务并保留数据卷
 | 发布 Maven Hosted 坐标 | [Maven Hosted 发布流程](docs/maven-hosted-publication.zh-CN.md) |
 | 理解代码与运行边界 | [整体架构](ARCHITECTURE.zh-CN.md) |
 | 查看系统、发布与后台任务流程 | [架构图](docs/architecture-diagrams.zh-CN.md) |
-| 理解 PostgreSQL 协调能力 | [PostgreSQL 能力](docs/postgresql-capabilities.md) |
+| 理解 PostgreSQL 协调能力 | [PostgreSQL 能力](docs/postgresql-capabilities.zh-CN.md) |
 | 查看体积、内存与本地并发基线 | [性能基线](docs/performance-baseline.zh-CN.md) |
 | 查看当前工程质量 | [项目质量评估](docs/project-quality-assessment.zh-CN.md) |
-| 配置身份与权限 | [用户治理](docs/user-governance.md)（仅英文）、[OIDC SSO](docs/oidc-sso.md)（仅英文）、[Service Account](docs/service-account-operations.md)（仅英文） |
-| 部署与恢复 | [Kubernetes](docs/kubernetes-deployment.md)（仅英文）、[分布式部署](docs/distributed-deployment.md)、[恢复手册](docs/recovery-runbook.zh-CN.md) |
-| 扩展制品格式 | [格式扩展指南](docs/format-extension-guide.md)（仅英文） |
-| 修改管理 API | [OpenAPI 治理](docs/openapi-governance-plan.md)（仅英文） |
+| 配置身份与权限 | [用户治理](docs/user-governance.zh-CN.md)、[OIDC SSO](docs/oidc-sso.zh-CN.md)、[Service Account](docs/service-account-operations.zh-CN.md) |
+| 部署与恢复 | [Kubernetes](docs/kubernetes-deployment.zh-CN.md)、[分布式部署](docs/distributed-deployment.zh-CN.md)、[恢复手册](docs/recovery-runbook.zh-CN.md) |
+| 扩展制品格式 | [格式扩展指南](docs/format-extension-guide.zh-CN.md) |
+| 修改管理 API | [OpenAPI 治理](docs/openapi-governance-plan.zh-CN.md) |
 | 浏览全部维护文档 | [文档总索引](docs/README.zh-CN.md) |
 
 ## 开发工作流

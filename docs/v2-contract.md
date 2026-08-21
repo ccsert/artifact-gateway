@@ -1,5 +1,7 @@
 # ADR: V2 Anonymous Read, Raw, and Conan 2 Contract
 
+[简体中文](v2-contract.zh-CN.md) | [Documentation index](README.md)
+
 Status: historical V2 contract, retained for migration and compatibility
 context. The current protocol inventory is owned by
 [`protocol-compatibility.md`](protocol-compatibility.md), the OpenAPI overlays,

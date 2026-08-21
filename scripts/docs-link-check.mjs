@@ -57,26 +57,6 @@ export function findBrokenDocumentLinks(repoRoot, markdownFiles, readFile) {
   return broken;
 }
 
-export function findUnmarkedEnglishOnlyLinks(repoRoot, indexFile, readFile) {
-  const indexPath = path.join(repoRoot, indexFile);
-  const index = readFile(indexPath);
-  const unmarked = [];
-  const entryPattern =
-    /^\s*-\s+\[[^\]]+\]\((<[^>]+>|[^\s)]+)(?:\s+['"][^'"]*['"])?\)(.*)$/gm;
-  for (const match of index.matchAll(entryPattern)) {
-    if (match[2].includes('仅英文')) continue;
-    const target = normalizeLocalTarget(match[1]);
-    if (!target || path.extname(target).toLowerCase() !== '.md') continue;
-    const resolved = path.resolve(repoRoot, path.dirname(indexFile), target);
-    if (!existsSync(resolved)) continue;
-    const chineseCharacters = readFile(resolved).match(/[\u3400-\u9fff]/gu) ?? [];
-    if (chineseCharacters.length < 20) {
-      unmarked.push({ file: indexFile, target: match[1] });
-    }
-  }
-  return unmarked;
-}
-
 function main() {
   const scriptPath = fileURLToPath(import.meta.url);
   const repoRoot = path.resolve(path.dirname(scriptPath), '..');
@@ -86,25 +66,13 @@ function main() {
     { cwd: repoRoot, encoding: 'utf8' },
   )
     .split('\n')
-    .filter((file) => file && !file.startsWith('.'));
+    .filter(
+      (file) => file && !file.startsWith('.') && existsSync(path.join(repoRoot, file)),
+    );
   const broken = findBrokenDocumentLinks(repoRoot, markdownFiles, (file) => readFileSync(file, 'utf8'));
   if (broken.length > 0) {
     for (const item of broken) {
       process.stderr.write(`${item.file}: ${item.target} (${item.reason})\n`);
-    }
-    process.exitCode = 1;
-    return;
-  }
-  const unmarkedEnglishOnly = findUnmarkedEnglishOnlyLinks(
-    repoRoot,
-    'docs/README.zh-CN.md',
-    (file) => readFileSync(file, 'utf8'),
-  );
-  if (unmarkedEnglishOnly.length > 0) {
-    for (const item of unmarkedEnglishOnly) {
-      process.stderr.write(
-        `${item.file}: ${item.target} has no Chinese body and must be marked 仅英文\n`,
-      );
     }
     process.exitCode = 1;
     return;

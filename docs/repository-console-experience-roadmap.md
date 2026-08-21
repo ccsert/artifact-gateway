@@ -1,5 +1,7 @@
 # Repository Console Experience Roadmap
 
+[简体中文](repository-console-experience-roadmap.zh-CN.md) | [Documentation index](README.md)
+
 Status: planning checklist for closing the Repository, Group, Hosted, and Proxy
 Console experience gap. This document turns the Nexus gap analysis into
 implementation-ready work items.

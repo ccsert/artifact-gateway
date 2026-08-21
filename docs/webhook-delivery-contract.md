@@ -1,5 +1,7 @@
 # Webhook Delivery Contract
 
+[简体中文](webhook-delivery-contract.zh-CN.md) | [Documentation index](README.md)
+
 Status: normative contract for durable operational webhook delivery.
 
 ## First Slice

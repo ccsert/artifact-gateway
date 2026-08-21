@@ -35,7 +35,7 @@ not keep durable artifact state on local disk.
 
 See [Architecture diagrams](docs/architecture-diagrams.md) for the standalone,
 split-role, publication, and worker flows, and
-[PostgreSQL capabilities](docs/postgresql-capabilities.en.md) for the database
+[PostgreSQL capabilities](docs/postgresql-capabilities.md) for the database
 features behind coordination and search.
 
 ## Runtime roles

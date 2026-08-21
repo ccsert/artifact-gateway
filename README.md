@@ -121,7 +121,7 @@ The default `standalone` role runs API, scheduler, and worker responsibilities
 in one process. Larger installations can split the same image by role without
 introducing a separate queue or service-discovery dependency. See
 [Architecture](ARCHITECTURE.md), [Architecture diagrams](docs/architecture-diagrams.md),
-and [PostgreSQL capabilities](docs/postgresql-capabilities.en.md).
+and [PostgreSQL capabilities](docs/postgresql-capabilities.md).
 
 ## Documentation map
 
@@ -132,7 +132,7 @@ and [PostgreSQL capabilities](docs/postgresql-capabilities.en.md).
 | Publish Maven Hosted coordinates | [Maven Hosted publication](docs/maven-hosted-publication.md) |
 | Understand core boundaries | [Architecture](ARCHITECTURE.md) |
 | Explore system and publication flows | [Architecture diagrams](docs/architecture-diagrams.md) |
-| Understand PostgreSQL coordination | [PostgreSQL capabilities](docs/postgresql-capabilities.en.md) |
+| Understand PostgreSQL coordination | [PostgreSQL capabilities](docs/postgresql-capabilities.md) |
 | Review size, memory, and local concurrency | [Performance baseline](docs/performance-baseline.md) |
 | Review current engineering quality | [Project quality assessment](docs/project-quality-assessment.md) |
 | Operate identity and access | [User governance](docs/user-governance.md), [OIDC SSO](docs/oidc-sso.md), [Service accounts](docs/service-account-operations.md) |

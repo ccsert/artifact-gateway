@@ -1,5 +1,7 @@
 # Local User Governance
 
+[简体中文](user-governance.zh-CN.md) | [Documentation index](README.md)
+
 Artifact Gateway local users are administrator-managed accounts for Console and
 management API access. They are separate from API keys, break-glass static
 tokens, and OIDC identities.

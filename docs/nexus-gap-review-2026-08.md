@@ -1,61 +1,78 @@
-# Nexus 能力审查（2026-08）
+# Nexus Capability Review (2026-08)
 
-> 历史时点审查：本文保留 2026-08 审查当时的结论，不再作为当前能力事实来源。
-> 已完成项和剩余差距以 `docs/nexus-gap-analysis.md` 为准。
+[简体中文](nexus-gap-review-2026-08.zh-CN.md) | [Documentation index](README.md)
 
-本次审查覆盖后端协议与管理 API、生命周期/存储/授权，以及 Ant Design 6 Console 的主要用户流程。结论是：Artifact Gateway 的 Hosted 生命周期、Proxy 缓存治理、匿名读取、审计保留、晋级/复制和四种协议的基础兼容性已经形成可用 V1；要达到或超过 Nexus 的企业级体验，剩余工作主要集中在“运营规模”和“安全治理”，而不是再堆叠单个格式页面。
+> Historical point-in-time review. The conclusions below reflect the August
+> 2026 review and are no longer the authority for current capabilities. Use
+> [Nexus gap analysis](nexus-gap-analysis.md) for delivered work and remaining gaps.
 
-## 已确认的优势
+This review covered protocol backends, management APIs, lifecycle, storage,
+authorization, and the main Ant Design 6 Console journeys. Artifact Gateway
+already had a usable V1 across Hosted lifecycle, Proxy cache governance,
+anonymous reads, audit retention, promotion/replication, and the four original
+protocols. The remaining path to an enterprise experience was primarily
+operational scale and security governance, not another collection of isolated
+format pages.
 
-- OCI、Maven、Conan、Raw 都有 Hosted、Proxy 或 Group 的明确边界。
-- 发布、删除、恢复、保留、回收、晋级和复制具有幂等、审计或校验约束；复制支持 checkpoint 和 SHA-256 校验。
-- 匿名读取策略、仓库级 grants、本地用户、API key 角色和 OIDC 验证已经存在，且读写/管理路径分开。
-- Console 已使用 Ant Design 6，提供全局搜索、公开浏览、容量趋势、缓存运维、访问控制、审计导出和登录入口。
+## Confirmed strengths
 
-## 仍需补齐的能力
+- OCI, Maven, Conan, and Raw had explicit Hosted, Proxy, or Group boundaries.
+- Publication, deletion, restore, retention, collection, promotion, and
+  replication had idempotency, audit, or integrity controls; replication used
+  checkpoints and SHA-256 verification.
+- Anonymous policy, Repository Grants, local users, API-key roles, and OIDC
+  validation existed with separate read, write, and management paths.
+- The Ant Design 6 Console exposed global search, public browse, capacity
+  trends, cache operations, access control, audit export, and login.
 
-### P0：企业安全与身份
+## Gaps recorded at the review
 
-- OIDC 目前仍是单 issuer/audience 验证，缺少 IdP 角色映射、logout/back-channel、会话列表和登录审计。
-- 本地用户/API key 仍是粗粒度 reader/writer/admin；缺少仓库路径 content selector、角色模板、权限解释器和过期/最后使用时间。
-- 需要安全基线：密码重置/轮换策略、API key expiry、JWKS/issuer 配置页面、CSRF/SSRF/上传大小与解压限制的可观测告警。
+### P0: enterprise security and identity
 
-### P1：运营规模
+The review called for richer IdP role mapping and session/logout behavior;
+path-aware selectors, role templates, permission explanation, credential
+expiry and last-use evidence; and observable baselines for password rotation,
+JWKS/issuer configuration, CSRF, SSRF, upload limits, and archive expansion.
 
-- 全局搜索目前由 Console 并发调用每个仓库的搜索接口；大仓库、多租户和匿名公开目录应由后端索引统一分页、排序和权限过滤。
-- 任务中心目前能汇总已有生命周期任务，但还没有通用 scheduler、重试/暂停/取消操作、队列深度和 worker 健康指标。
-- Proxy 还缺少可配置缓存 TTL、负缓存策略、路由规则和凭据轮换；Blob store 只有单一 S3/RustFS 后端，没有 compaction/容量趋势的服务端时序。
-- 备份/恢复已有 rehearsal，但缺少 Console 里的备份策略、最近一次成功备份、恢复演练结果和下载 support bundle。
+### P1: operational scale
 
-### P2：制品供应链与体验
+Global search still fanned out from the Console and needed a permission-aware
+server index and cursor pagination. Jobs needed scheduler controls, retry,
+pause/cancel, queue depth, and worker health. Proxy needed configurable TTL,
+negative caching, routing, and credential rotation. Backup and recovery needed
+operator-visible policy, last-success, drill, and support-bundle evidence.
 
-- 制品详情还应统一展示 checksum、签名、SBOM、provenance、许可证和漏洞扫描结果，并提供下载/复制依赖坐标/OCI pull 命令。
-- OCI、Conan、Raw 的发布入口还不如 Maven 完整；建议抽象共享的分片上传/校验/提交组件。
-- Webhook 首切片已覆盖隔离/解除隔离事件；仍缺少更广事件类型、邮件通知、
-  stage/release 工作流、收藏/标签/下载热度和保存搜索。
-- 审计现在支持服务端仓库、分组、结果、格式、操作和主体筛选；下一步应支持时间范围、分页 token、保存查询和服务端 CSV 导出。
+### P2: supply chain and product experience
 
-## 本次已落地
+Artifact detail needed checksum, signature, SBOM, provenance, license, and
+vulnerability evidence plus copyable client commands. Publishing UI was thinner
+outside Maven. Webhooks needed more event types and email; audit needed time
+ranges, cursor pagination, saved queries, and server-side CSV export.
 
-1. 修复 Console lockfile，使 GitHub Actions 的 `npm ci` 可复现，并显式锁定生成客户端的 Prettier 步骤，避免 OpenAPI 生成漂移。
-2. 将审计结果、格式、操作、主体筛选下沉到 OpenAPI、Memory/Postgres 存储和管理 API；Console 不再只在最近 100 条记录上做客户端过滤。
-3. 新增 Console 全局“任务中心”，汇总跨仓库生命周期任务和审计保留任务，展示失败原因并支持状态/类型/仓库筛选。
-4. 将保留策略从 Maven 扩展到 OCI、Conan 和 Raw：分别按制品坐标、镜像名称、Conan reference 和文件路径执行格式感知的候选计算，并支持签名游标 dry-run、`If-Match` 并发保护和统一 worker 执行。
-5. Raw 删除改为可恢复墓碑；Proxy/Group 明确禁止配置 Hosted 保留策略；Console 使用 Ant Design 6 按仓库格式呈现适用规则，避免向用户暴露无效配置。
+## Work delivered during the review
 
-## 生命周期后续记录
+1. Repaired the Console lockfile for reproducible `npm ci` and pinned the
+   generated-client formatting step to prevent OpenAPI drift.
+2. Moved audit outcome, format, operation, and actor filters into OpenAPI,
+   Memory/PostgreSQL stores, and the management API.
+3. Added a global Console Jobs center for lifecycle and audit-retention work,
+   with failure detail and state/kind/repository filters.
+4. Extended retention from Maven to OCI, Conan, and Raw with format-aware
+   candidates, cursor dry-runs, `If-Match`, and one worker path.
+5. Made Raw deletion recoverable and prevented Proxy/Group from exposing
+   invalid Hosted retention controls.
 
-1. 优先补齐任务重试、指数退避、最终失败状态，以及服务重启后对卡在 `running` 状态任务的恢复。
-2. 在任务中心增加立即执行、取消、重试、进度和失败原因，并记录任务级审计事件。
-3. 处理策略版本变化时已排队任务的兼容行为，避免旧任务永久失败或无意义重试。
-4. 明确 Conan recipe revision 恢复时是否级联恢复由保留策略删除的 package revisions，并以集成测试固化语义。
-5. 为 retention dry-run 增加候选原因统计、摘要和导出，便于管理员在真正执行前核对影响范围。
+## Lifecycle follow-up recorded then
 
-## 建议下一阶段
+The next steps were durable retry/backoff and recovery of stuck running work;
+run-now/cancel/retry/progress and job audit; policy-version handling for queued
+jobs; explicit Conan recipe/package restore semantics; and richer retention
+dry-run reason summaries and export.
 
-1. 先做 API key expiry/last-used、OIDC role mapping 和权限解释接口，这三项直接降低生产运维风险。
-2. 再做后端统一搜索索引与真正的游标分页，替换 Console 的逐仓库 fan-out。
-3. 最后扩展已交付的 Webhook 事件目录，并接入邮件、SBOM/扫描结果和更广任务类型，
-   形成 Nexus Firewall/IQ/Task Scheduler 对应能力。
+## Recommended next phase at that time
 
-以上缺口按风险和投入排序；不建议为了“看起来像 Nexus”引入与现有生命周期模型冲突的硬删除或无审计的后台操作。
+The review prioritized API-key expiry/last-used, OIDC role mapping, and a
+permission explainer; then server-side global search and real cursor paging;
+then broader Webhook events, email, SBOM/scan display, and more task types.
+It explicitly rejected unsafe hard deletion or unaudited background behavior
+merely to imitate Nexus.

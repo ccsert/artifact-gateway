@@ -1,5 +1,7 @@
 # Repository Grant Runtime Authorization Plan
 
+[简体中文](repository-grant-authorization-plan.zh-CN.md) | [Documentation index](README.md)
+
 ## Purpose
 
 Repository grants are currently versioned, persistent management data. This

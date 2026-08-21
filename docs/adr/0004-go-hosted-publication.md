@@ -1,5 +1,7 @@
 # Go Hosted Uses One Canonical Module ZIP Publication
 
+[简体中文](0004-go-hosted-publication.zh-CN.md) · [Documentation index](../README.md)
+
 Status: accepted
 
 The official `GOPROXY` protocol defines immutable reads but no upload

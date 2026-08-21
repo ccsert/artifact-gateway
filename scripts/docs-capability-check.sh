@@ -31,7 +31,10 @@ for file in \
   docs/architecture-diagrams.md \
   docs/architecture-diagrams.zh-CN.md \
   docs/postgresql-capabilities.md \
-  docs/postgresql-capabilities.en.md \
+  docs/postgresql-capabilities.zh-CN.md \
+  docs/documentation-site-guide.md \
+  docs/documentation-site-guide.zh-CN.md \
+  docs/site-map.json \
   docs/performance-baseline.md \
   docs/performance-baseline.zh-CN.md \
   docs/maven-hosted-publication.md \
@@ -46,48 +49,6 @@ for file in \
   docs/assets/artifact-gateway-deployment-topology.png; do
   if [ ! -s "$file" ]; then
     printf 'missing required documentation entry %s\n' "$file" >&2
-    exit 1
-  fi
-done
-
-for pair in \
-  'README.md|README.zh-CN.md' \
-  'ARCHITECTURE.md|ARCHITECTURE.zh-CN.md' \
-  'CONTRIBUTING.md|CONTRIBUTING.zh-CN.md' \
-  'docs/README.md|README.zh-CN.md' \
-  'docs/getting-started.md|getting-started.zh-CN.md' \
-  'docs/architecture-diagrams.md|architecture-diagrams.zh-CN.md' \
-  'docs/postgresql-capabilities.en.md|postgresql-capabilities.md' \
-  'docs/performance-baseline.md|performance-baseline.zh-CN.md' \
-  'docs/maven-hosted-publication.md|maven-hosted-publication.zh-CN.md' \
-  'docs/protocol-compatibility.md|protocol-compatibility.zh-CN.md' \
-  'docs/recovery-runbook.md|recovery-runbook.zh-CN.md' \
-  'docs/project-quality-assessment.md|project-quality-assessment.zh-CN.md'; do
-  source_file=${pair%%|*}
-  target_name=${pair#*|}
-  if ! contains_fixed_string "$target_name" "$source_file"; then
-    printf 'missing reciprocal language link %s from %s\n' "$target_name" "$source_file" >&2
-    exit 1
-  fi
-done
-
-for pair in \
-  'README.zh-CN.md|README.md' \
-  'ARCHITECTURE.zh-CN.md|ARCHITECTURE.md' \
-  'CONTRIBUTING.zh-CN.md|CONTRIBUTING.md' \
-  'docs/README.zh-CN.md|README.md' \
-  'docs/getting-started.zh-CN.md|getting-started.md' \
-  'docs/architecture-diagrams.zh-CN.md|architecture-diagrams.md' \
-  'docs/postgresql-capabilities.md|postgresql-capabilities.en.md' \
-  'docs/performance-baseline.zh-CN.md|performance-baseline.md' \
-  'docs/maven-hosted-publication.zh-CN.md|maven-hosted-publication.md' \
-  'docs/protocol-compatibility.zh-CN.md|protocol-compatibility.md' \
-  'docs/recovery-runbook.zh-CN.md|recovery-runbook.md' \
-  'docs/project-quality-assessment.zh-CN.md|project-quality-assessment.md'; do
-  source_file=${pair%%|*}
-  target_name=${pair#*|}
-  if ! contains_fixed_string "$target_name" "$source_file"; then
-    printf 'missing reciprocal language link %s from %s\n' "$target_name" "$source_file" >&2
     exit 1
   fi
 done
@@ -108,9 +69,9 @@ if ! contains_fixed_string 'Nexus-compatible direct publication' README.md ||
   exit 1
 fi
 
-if ! contains_fixed_string '语言说明' docs/README.zh-CN.md ||
-  ! contains_fixed_string '仅英文' docs/README.zh-CN.md; then
-  printf 'Chinese documentation index must disclose English-only entries\n' >&2
+if ! contains_fixed_string 'site-map.json' docs/README.md ||
+  ! contains_fixed_string 'site-map.json' docs/README.zh-CN.md; then
+  printf 'documentation indexes must disclose the site navigation contract\n' >&2
   exit 1
 fi
 
@@ -135,8 +96,9 @@ for file in README.md README.zh-CN.md docs/getting-started.md docs/getting-start
   fi
 done
 
-node --test scripts/docs-link-check.test.mjs
+node --test scripts/docs-link-check.test.mjs scripts/docs-i18n-check.test.mjs
 node scripts/docs-link-check.mjs
+node scripts/docs-i18n-check.mjs
 
 for format in OCI Maven Raw Conan npm PyPI Go; do
   if ! contains_fixed_string "$format" "$compatibility_doc"; then
