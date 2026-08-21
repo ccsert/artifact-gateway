@@ -95,6 +95,7 @@ type Config struct {
 	MavenProxyAllowedHosts         []string
 	RawProxyAllowedHosts           []string
 	RawCacheMaxObjectBytes         int64
+	RawCacheMaxConcurrentSpools    int
 	ConanCacheMaxObjectBytes       int64
 	OCICacheTTL                    time.Duration
 	MavenCacheTTL                  time.Duration
@@ -163,6 +164,7 @@ func Load() (Config, error) {
 		MavenProxyAllowedHosts:         splitCSV(os.Getenv("GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS")),
 		RawProxyAllowedHosts:           splitCSV(os.Getenv("GATEWAY_RAW_PROXY_ALLOWED_HOSTS")),
 		RawCacheMaxObjectBytes:         1 << 30,
+		RawCacheMaxConcurrentSpools:    4,
 		ConanCacheMaxObjectBytes:       1 << 30,
 		OCICacheTTL:                    15 * time.Minute,
 		MavenCacheTTL:                  24 * time.Hour,
@@ -327,6 +329,11 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("GATEWAY_RAW_CACHE_MAX_OBJECT_BYTES must be a positive integer")
 		}
 		cfg.RawCacheMaxObjectBytes = bytes
+	}
+	if value, err := positiveIntEnv("GATEWAY_RAW_CACHE_MAX_CONCURRENT_SPOOLS", cfg.RawCacheMaxConcurrentSpools, false); err != nil {
+		return Config{}, err
+	} else {
+		cfg.RawCacheMaxConcurrentSpools = value
 	}
 	if raw := strings.TrimSpace(os.Getenv("GATEWAY_CONAN_CACHE_MAX_OBJECT_BYTES")); raw != "" {
 		bytes, err := strconv.ParseInt(raw, 10, 64)

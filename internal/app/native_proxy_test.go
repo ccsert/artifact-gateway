@@ -197,6 +197,72 @@ func TestNativeRawProxyRepositoryPullsThroughUpstreamAndCaches(t *testing.T) {
 	if got := client.Calls(); len(got) != 1 || got[0] != "raw-proxy" {
 		t.Fatalf("upstream calls=%v, want a single fetch through the proxy member", got)
 	}
+	headRequest := httptest.NewRequest(http.MethodHead, "/raw/raw-proxy/release/large.iso", nil)
+	authorize(headRequest, "resolver-secret")
+	head := httptest.NewRecorder()
+	handler.ServeHTTP(head, headRequest)
+	methods := client.Methods()
+	if head.Code != http.StatusOK || head.Body.Len() != 0 || len(methods) != 2 || methods[1] != http.MethodHead {
+		t.Fatalf("HEAD status=%d body=%q upstream methods=%v", head.Code, head.Body.String(), methods)
+	}
+}
+
+func TestNativeRawProxyRejectsColdMissBeforeUpstreamWhenSpoolCapacityIsFull(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "proxy-raw", Name: "raw-proxy", Format: repository.FormatRaw,
+		Type: repository.RepositoryTypeProxy, Endpoint: "https://proxy.example", AllowedHosts: []string{"proxy.example"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &rawSpoolAdmissionClient{started: make(chan struct{}), unblock: make(chan struct{})}
+	rawCache := NewRawCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, []string{"proxy.example"}).WithMaxConcurrentSpools(1)
+	metrics := &Metrics{}
+	handler := NewGatewayHandlerWithFormatCachesAndMetrics(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), nil, rawCache, NewConanCache(nil), nil, metrics, client)
+
+	firstDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		request := httptest.NewRequest(http.MethodGet, "/raw/raw-proxy/release/first.iso", nil)
+		authorize(request, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		firstDone <- response
+	}()
+	select {
+	case <-client.started:
+	case <-time.After(time.Second):
+		t.Fatal("first native cold miss did not begin staging")
+	}
+
+	secondRequest := httptest.NewRequest(http.MethodGet, "/raw/raw-proxy/release/second.iso", nil)
+	authorize(secondRequest, "resolver-secret")
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, secondRequest)
+	if second.Code != http.StatusServiceUnavailable || second.Header().Get("Retry-After") != "1" || metrics.rawSpoolRejected.Load() != 1 {
+		t.Fatalf("second native cold miss status=%d retry-after=%q spool rejections=%d", second.Code, second.Header().Get("Retry-After"), metrics.rawSpoolRejected.Load())
+	}
+	if calls := client.Calls(); len(calls) != 1 || calls[0] != "release/first.iso" {
+		t.Fatalf("native upstream calls while spool capacity is full=%v", calls)
+	}
+
+	close(client.unblock)
+	select {
+	case response := <-firstDone:
+		if response.Code != http.StatusOK || response.Body.String() != "artifact" {
+			t.Fatalf("first native cold miss status=%d body=%q", response.Code, response.Body.String())
+		}
+	case <-time.After(time.Second):
+		t.Fatal("first native cold miss did not finish")
+	}
+
+	thirdRequest := httptest.NewRequest(http.MethodGet, "/raw/raw-proxy/release/second.iso", nil)
+	authorize(thirdRequest, "resolver-secret")
+	third := httptest.NewRecorder()
+	handler.ServeHTTP(third, thirdRequest)
+	if third.Code != http.StatusOK || third.Body.String() != "artifact" {
+		t.Fatalf("native cold miss after spool release status=%d body=%q", third.Code, third.Body.String())
+	}
 }
 
 func TestNativeConanProxyRepositoryPullsThroughUpstream(t *testing.T) {

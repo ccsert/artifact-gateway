@@ -43,6 +43,29 @@ func TestServeContentAppliesSingleRange(t *testing.T) {
 	}
 }
 
+func TestServeContentRejectsOverflowingRange(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/raw/releases/artifact", nil)
+	request.Header.Set("Range", "bytes=9223372036854775808-")
+	response := httptest.NewRecorder()
+
+	result := ServeContent(response, request, "artifact", Content{Body: []byte("abcdef"), ContentType: "application/octet-stream"})
+	if response.Code != http.StatusRequestedRangeNotSatisfiable || response.Header().Get("Content-Range") != "bytes */6" || result.Status != http.StatusRequestedRangeNotSatisfiable {
+		t.Fatalf("response=%d content-range=%q result=%+v", response.Code, response.Header().Get("Content-Range"), result)
+	}
+}
+
+func TestServeContentIgnoresRangeWhenIfRangeDoesNotMatch(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/raw/releases/artifact", nil)
+	request.Header.Set("Range", "bytes=2-4")
+	request.Header.Set("If-Range", `"different"`)
+	response := httptest.NewRecorder()
+
+	result := ServeContent(response, request, "artifact", Content{Body: []byte("abcdef"), Digest: "bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1f6c5c6dcd93c4721", ContentType: "application/octet-stream"})
+	if response.Code != http.StatusOK || response.Body.String() != "abcdef" || result.Status != http.StatusOK || result.Bytes != 6 {
+		t.Fatalf("response=%d body=%q result=%+v", response.Code, response.Body.String(), result)
+	}
+}
+
 func TestMemberProxyAllowedRejectsUnconfiguredOrPrivateTargets(t *testing.T) {
 	if !MemberProxyAllowed(repository.Member{Endpoint: "https://proxy.example", AllowedHosts: []string{"proxy.example"}}) {
 		t.Fatal("configured public proxy was rejected")

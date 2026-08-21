@@ -19,7 +19,7 @@ Artifact Gateway 已经具备扎实的协议与持久化基础、明确契约、
 | 可维护性 | 需要集中优化 | 若干路由、模型和原生协议文件体量过大，评审成本和变更耦合正在上升。 |
 | 文档 | 核心入口双语，深层覆盖不均 | README、快速入门、整体架构、参与开发、协议兼容性、恢复和索引已有中文入口；多数深层契约与研究资料仍只有英文。 |
 | 可运维性 | 准备基线良好 | 健康检查、指标、诊断、恢复、Kubernetes 和分布式角色文档已具备；生产证据仍在准备。 |
-| 性能 | 本地基线可复现 | 已测量二进制/镜像体积、静默内存与经鉴权的 PostgreSQL/RustFS 读取；受控类生产负载和 soak 尚未完成。 |
+| 性能 | 本地基线可复现 | 已测量二进制/镜像体积、静默内存、经鉴权的 PostgreSQL/RustFS 读取和一组 64 MiB 工程负载；受控类生产负载和 soak 尚未完成。 |
 | 公开项目准备 | 明确延后 | 许可证、正式分发、公开安全报告渠道和公开支持承诺不在当前范围。 |
 
 ## 当前高质量部分
@@ -52,6 +52,29 @@ Artifact Gateway 已经具备扎实的协议与持久化基础、明确契约、
 
 `internal/repository/model.go` 以及大型 Maven/npm/OCI 应用模块还没有获得同等规模的
 实际拆分，仍属于计划工作，不能写成已经完成的质量提升。
+
+本轮 Raw 字节路径评审已经产生了可验证的后端改进：
+
+- Proxy miss 现在用固定 128 KiB 缓冲写入临时文件并计算哈希；缓存发布与读取使用
+  `PutVerifiedReader`、`Stat`、`Open` 和 `OpenRange`，不再使用制品等大的 `[]byte`。
+- 正向 HEAD miss 仍是上游 HEAD，不再下载或缓存上游 body。
+- 匿名成员过滤不再别名修改 MemoryStore slice；request lock 按 member 及时释放，并在
+  慢上游任务期间续租。
+- Raw 与 OCI 的 resumable PATCH 持久化不可变 offset chunk，不再为每个新块下载并重写
+  旧字节；完成时只做一次有序摘要校验，并兼容旧的累计对象会话。完成、取消或过期的
+  Raw Session 会保留 PostgreSQL 轨迹，并由 durable reclaim 删除残留 prefix 与 chunk。
+- 每个 Gateway 默认最多允许 4 个 Raw Proxy 临时落盘任务并发执行，该正整数可配置。
+  admission 在访问上游前生效；饱和时返回带 `Retry-After: 1` 的 `503`，并递增
+  `artifact_gateway_raw_spool_rejections_total`。
+- 受控 HTTPS Docker 负载让 8 个并发客户端读取同一个 64 MiB 冷路径，只产生一次上游
+  body GET；停止上游后，又完成了逐字节一致的缓存回放。
+- signer/scanner 启动失败会记录真实根因；生产代码中的 `%v` 错误包装已替换为保留
+  error chain 的 `%w`。
+
+常量堆 Proxy 路径有意把 heap 压力换成临时磁盘压力。进程内 admission 已经限制同时
+落盘数量，但部署仍需独立临时卷、空闲空间监控，以及硬性的 ephemeral-storage
+request/limit。chunk 完成目前是 O(n)；后续可在不改变 HTTP chunk 契约的前提下，在
+对象存储端增加 S3 multipart compose，以去掉完整上传的完成阶段 spool。
 
 ## 主要质量缺口
 
@@ -99,10 +122,13 @@ Linux/amd64 Runner、资源上限、TLS/Ingress、读写混合和持续 soak。
    并保留搜索、筛选、深链和响应式状态的浏览器回归。
 3. **按领域拆分仓库记录。** 先机械移动类型，不同时修改持久化行为，并保持公开仓库接口稳定。
 4. **加深原生协议模块。** 按格式逐一分离 HTTP 解析/响应塑形与 Hosted/Proxy/Group 应用服务。
-5. **每次提取同步提升专项覆盖。** 先补有意义的边界测试再提高阈值；不得为通过 CI 下调门槛。
-6. **审慎升级性能证据。** 在受控 Linux/amd64 Runner 上复跑，再加入硬资源限制、混合
+5. **加固大对象字节面。** 增加部署级临时卷和 ephemeral-storage 限额，并在该限额下
+   验证大量不同对象并发 miss 的 admission 行为；再评估隐藏在 object-store port 后、
+   且不要求客户端固定 chunk 大小的 multipart compose。
+6. **每次提取同步提升专项覆盖。** 先补有意义的边界测试再提高阈值；不得为通过 CI 下调门槛。
+7. **审慎升级性能证据。** 在受控 Linux/amd64 Runner 上复跑，再加入硬资源限制、混合
    流量与 soak 阈值，不能把单台笔记本快照转化为通用结论。
-7. **维护准备矩阵。** 正式分发工作启动后，记录精确提交、干净工作区、不可变镜像、CI、
+8. **维护准备矩阵。** 正式分发工作启动后，记录精确提交、干净工作区、不可变镜像、CI、
    集成、恢复、目标环境和具名批准证据。
 
 ## 持续优化规则

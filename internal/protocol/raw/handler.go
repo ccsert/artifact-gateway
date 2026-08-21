@@ -2,8 +2,6 @@ package raw
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"io"
 	"net/http"
@@ -53,6 +51,7 @@ type Runtime interface {
 	RecordCacheMiss()
 	RecordNegativeCacheHit()
 	RecordQuotaDenied()
+	RecordSpoolRejected()
 }
 
 type Handler struct {
@@ -116,7 +115,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	members := g.Members
 	if p.Actor == "anonymous" {
-		members = members[:0]
+		members = make([]repository.Member, 0, len(g.Members))
 		for _, member := range g.Members {
 			if member.Anonymous {
 				members = append(members, member)
@@ -159,23 +158,112 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			hadProxyDenied = true
 			continue
 		}
+		if r.Method == http.MethodHead {
+			response, fetchErr := h.Client.FetchRaw(r.Context(), http.MethodHead, member, path, nil)
+			if fetchErr != nil {
+				h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusBadGateway, CacheDisposition: "bypass", Method: r.Method})
+				hadFailure = true
+				continue
+			}
+			_ = response.Body.Close()
+			if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusGone {
+				if h.Cache != nil {
+					_ = h.Cache.StoreNegative(r.Context(), key, member)
+				}
+				h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: cacheDisposition(h.Cache), Method: r.Method})
+				continue
+			}
+			if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+				h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusBadGateway, CacheDisposition: "bypass", Method: r.Method})
+				hadFailure = true
+				continue
+			}
+			copyHeadHeaders(w.Header(), response.Header)
+			w.WriteHeader(http.StatusOK)
+			h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditResolved, Status: http.StatusOK, CacheDisposition: cacheDisposition(h.Cache), Method: r.Method})
+			return
+		}
+		workCtx := r.Context()
+		release := func() error { return nil }
 		if h.Cache != nil {
-			release, lockErr := h.Cache.AcquireRequestLock(r.Context(), key)
+			var lockErr error
+			workCtx, release, lockErr = h.Cache.AcquireRequestLock(r.Context(), key)
 			if lockErr != nil {
 				http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
 				return
 			}
-			defer release()
-			cached := h.serveCached(w, r, group, path, member, p, key, &lastNegative)
-			if cached == cacheServed {
+			content, loadErr := h.Cache.Load(workCtx, key)
+			if loadErr == nil {
+				h.Runtime.RecordCacheHit()
+				if releaseErr := release(); releaseErr != nil {
+					http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
+					return
+				}
+				served := ServeContent(w, r, path, Content{Digest: content.Digest, ContentType: content.ContentType, Size: content.Size, Source: content})
+				h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditResolved, Status: served.Status, CacheDisposition: "hit", Bytes: served.Bytes, Method: r.Method})
 				return
 			}
-			if cached == cacheNegative {
+			if errors.Is(loadErr, ErrNegativeCache) {
+				h.Runtime.RecordNegativeCacheHit()
+				if releaseErr := release(); releaseErr != nil {
+					http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
+					return
+				}
+				h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: "hit", Method: r.Method})
+				copy := member
+				lastNegative = &copy
 				continue
 			}
 		}
-		response, fetchErr := h.Client.FetchRaw(r.Context(), http.MethodGet, member, path, nil)
+		releaseSpool := func() {}
+		if h.Cache != nil {
+			var spoolErr error
+			releaseSpool, spoolErr = h.Cache.AcquireSpool()
+			if spoolErr != nil {
+				if releaseErr := release(); releaseErr != nil {
+					http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
+					return
+				}
+				w.Header().Set("Retry-After", "1")
+				h.Runtime.RecordSpoolRejected()
+				h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditStorageError, Status: http.StatusServiceUnavailable, CacheDisposition: "miss", Method: r.Method})
+				http.Error(w, "Raw cache staging capacity is full", http.StatusServiceUnavailable)
+				return
+			}
+		}
+		releaseAll := func() error {
+			releaseSpool()
+			return release()
+		}
+		response, fetchErr := h.Client.FetchRaw(workCtx, http.MethodGet, member, path, nil)
 		if fetchErr != nil {
+			if releaseErr := releaseAll(); releaseErr != nil {
+				http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
+				return
+			}
+			h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusBadGateway, CacheDisposition: "bypass", Method: r.Method})
+			hadFailure = true
+			continue
+		}
+		if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusGone {
+			_ = response.Body.Close()
+			if h.Cache != nil {
+				_ = h.Cache.StoreNegative(workCtx, key, member)
+			}
+			releaseErr := releaseAll()
+			h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: cacheDisposition(h.Cache), Method: r.Method})
+			if releaseErr != nil {
+				http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
+				return
+			}
+			continue
+		}
+		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+			_ = response.Body.Close()
+			if releaseErr := releaseAll(); releaseErr != nil {
+				http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
+				return
+			}
 			h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusBadGateway, CacheDisposition: "bypass", Method: r.Method})
 			hadFailure = true
 			continue
@@ -184,43 +272,58 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if h.Cache != nil && h.Cache.MaxObjectBytes() > 0 {
 			limit = h.Cache.MaxObjectBytes()
 		}
-		body, readErr := io.ReadAll(io.LimitReader(response.Body, limit+1))
-		_ = response.Body.Close()
-		if int64(len(body)) > limit || readErr != nil || response.StatusCode >= 500 || response.StatusCode >= 300 && response.StatusCode != http.StatusNotFound && response.StatusCode != http.StatusGone {
+		content, readErr := StageContent(response.Body, limit)
+		closeErr := response.Body.Close()
+		if readErr != nil || closeErr != nil {
+			content.Cleanup()
+			if releaseErr := releaseAll(); releaseErr != nil {
+				http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
+				return
+			}
 			h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusBadGateway, CacheDisposition: "bypass", Method: r.Method})
 			hadFailure = true
 			continue
 		}
-		if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusGone {
-			if h.Cache != nil {
-				_ = h.Cache.StoreNegative(r.Context(), key, member)
-			}
-			h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditNotFound, Status: http.StatusNotFound, CacheDisposition: cacheDisposition(h.Cache), Method: r.Method})
-			continue
-		}
-		content := CachedContent{Body: body, ContentType: response.Header.Get("Content-Type"), Member: member.Name, Endpoint: member.Endpoint, Repository: group, Path: path, CacheQuotaBytes: g.CacheQuotaBytes}
+		content.ContentType, content.Member, content.Endpoint = response.Header.Get("Content-Type"), member.Name, member.Endpoint
+		content.Repository, content.Path, content.CacheQuotaBytes = group, path, g.CacheQuotaBytes
 		if content.ContentType == "" {
 			content.ContentType = "application/octet-stream"
 		}
-		sum := sha256.Sum256(body)
-		content.Digest = hex.EncodeToString(sum[:])
 		if strings.HasSuffix(path, ".sha256") || strings.HasSuffix(path, ".sha512") {
-			if !ValidChecksum(path, body) {
+			if !validStagedChecksum(workCtx, path, content) {
+				content.Cleanup()
+				if releaseErr := releaseAll(); releaseErr != nil {
+					http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
+					return
+				}
 				h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusBadGateway, CacheDisposition: "bypass", Method: r.Method, ChecksumFailure: true})
 				http.Error(w, "invalid checksum sidecar", http.StatusBadGateway)
 				return
 			}
 		}
 		if h.Cache != nil {
-			if err := h.Cache.Store(r.Context(), key, content); errors.Is(err, cache.ErrQuotaExceeded) {
+			if err := h.Cache.Store(workCtx, key, content); errors.Is(err, cache.ErrQuotaExceeded) {
 				h.Runtime.RecordQuotaDenied()
 			} else if err != nil {
+				content.Cleanup()
+				if releaseErr := releaseAll(); releaseErr != nil {
+					http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
+					return
+				}
 				h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditUpstreamError, Status: http.StatusInternalServerError, CacheDisposition: "bypass", Method: r.Method})
 				http.Error(w, "unable to cache Raw content", http.StatusInternalServerError)
 				return
 			}
 		}
-		served := ServeContent(w, r, path, Content{Body: content.Body, Digest: content.Digest, ContentType: content.ContentType})
+		if releaseErr := release(); releaseErr != nil {
+			content.Cleanup()
+			releaseSpool()
+			http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
+			return
+		}
+		served := ServeContent(w, r, path, Content{Digest: content.Digest, ContentType: content.ContentType, Size: content.Size, Source: content})
+		content.Cleanup()
+		releaseSpool()
 		h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: p.Actor, Outcome: repository.AuditResolved, Status: served.Status, CacheDisposition: cacheDisposition(h.Cache), Bytes: served.Bytes, Method: r.Method})
 		return
 	}
@@ -256,7 +359,7 @@ func (h Handler) serveCached(w http.ResponseWriter, r *http.Request, group, path
 	content, err := h.Cache.Load(r.Context(), key)
 	if err == nil {
 		h.Runtime.RecordCacheHit()
-		served := ServeContent(w, r, path, Content{Body: content.Body, Digest: content.Digest, ContentType: content.ContentType})
+		served := ServeContent(w, r, path, Content{Digest: content.Digest, ContentType: content.ContentType, Size: content.Size, Source: content})
 		h.audit(r.Context(), group, path, AuditEvent{Member: member, Actor: principal.Actor, Outcome: repository.AuditResolved, Status: served.Status, CacheDisposition: "hit", Bytes: served.Bytes, Method: r.Method})
 		return cacheServed
 	}
@@ -268,6 +371,27 @@ func (h Handler) serveCached(w http.ResponseWriter, r *http.Request, group, path
 		return cacheNegative
 	}
 	return cacheMiss
+}
+
+func validStagedChecksum(ctx context.Context, path string, content CachedContent) bool {
+	if content.Size > 129 {
+		return false
+	}
+	reader, _, err := content.Open(ctx)
+	if err != nil {
+		return false
+	}
+	body, readErr := io.ReadAll(io.LimitReader(reader, 130))
+	closeErr := reader.Close()
+	return readErr == nil && closeErr == nil && ValidChecksum(path, body)
+}
+
+func copyHeadHeaders(target, source http.Header) {
+	for _, name := range []string{"Accept-Ranges", "Content-Length", "Content-Type", "Digest", "ETag", "Last-Modified"} {
+		if value := source.Get(name); value != "" {
+			target.Set(name, value)
+		}
+	}
 }
 
 func (h Handler) audit(ctx context.Context, group, path string, event AuditEvent) {

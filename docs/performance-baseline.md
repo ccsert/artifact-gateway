@@ -112,6 +112,14 @@ The metadata result benefits from local loopback, a small response, and warm
 PostgreSQL caches. It is useful for comparison on the same machine, not as an
 internet-facing capacity promise.
 
+The 64 KiB workload above is a warm Native Raw Hosted read. It does not cover a
+Raw Proxy cache miss and must not be extrapolated to the old one-GiB proxy
+limit. Proxy misses now use a 128 KiB copy buffer, stage into a temporary file
+while hashing, publish through `PutVerifiedReader`, and serve cache hits through
+`Stat`/`Open`/`OpenRange`; focused tests reject any object-byte `Get()` on that
+path. An uncached `HEAD` is sent upstream as `HEAD` and does not populate a
+positive body cache.
+
 ## Memory under 128-way concurrency
 
 Docker resource samples were taken about once per second while the two
@@ -128,6 +136,64 @@ quiet average—while serving 128 concurrent clients. Docker CPU values exceeded
 load, caches remained warm: Gateway averaged 83.24 MiB and the full stack
 averaged 443.21 MiB, so this run does not claim immediate return to cold idle.
 
+## Large-object engineering checks
+
+On 2026-08-21, the extended script was run against an uncommitted worktree
+based on `77a6bc72`; this is engineering evidence for the Raw streaming change,
+not a replacement release baseline.
+
+### Warm Hosted reads
+
+The first check added one warm 64 MiB Native Raw Hosted object and transferred
+it 32 times at concurrency 8 (2 GiB total).
+
+| Workload | Concurrency | Requests | Requests/s | p50 | p95 | p99 | Transfer | Failed |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Raw 64 MiB | 8 | 32 | 3.23 | 2,013 ms | 4,130 ms | 4,459 ms | **206.96 MiB/s** | 0 |
+
+| Service | Idle maximum | Large-read average | Large-read maximum |
+| --- | ---: | ---: | ---: |
+| Gateway | 21.60 MiB | 116.10 MiB | **121.40 MiB** |
+| PostgreSQL | 60.04 MiB | 60.00 MiB | 60.29 MiB |
+| RustFS | 81.79 MiB | 202.75 MiB | 264.10 MiB |
+
+The Gateway maximum was 99.80 MiB above the same run's idle maximum. Eight
+fully materialized 64 MiB bodies alone could approach 512 MiB before other
+runtime state, so the observed peak is consistent with a streaming read path.
+It is not a heap profile. Raw measurements are preserved in
+[`reports/raw-large-object-performance-2026-08-21.csv`](reports/raw-large-object-performance-2026-08-21.csv)
+and [`reports/raw-large-object-resources-2026-08-21.csv`](reports/raw-large-object-resources-2026-08-21.csv).
+
+### Controlled HTTPS Proxy cold miss
+
+A second focused run exercised a real Raw Proxy miss against a temporary HTTPS
+upstream through a controlled HTTP CONNECT proxy. This keeps endpoint TLS,
+host allowlisting, DNS/IP validation, and the production egress policy active.
+The preflight was an upstream `HEAD`, so it did not warm the positive body
+cache. Eight clients then requested the same cold 64 MiB path concurrently.
+
+| Workload | Concurrency | Requests | Requests/s | p50 | p95 | p99 | Transfer | Failed |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Raw Proxy cold 64 MiB | 8 | 8 | 2.40 | 2,522 ms | 3,315 ms | 3,315 ms | **153.68 MiB/s** | 0 |
+
+The clients received 512 MiB in total, while the Gateway's observed maximum
+rose from 19.10 MiB at idle to 51.25 MiB, a 32.15 MiB delta. The upstream log
+recorded exactly one body `GET`, demonstrating same-path single-flight request
+coordination. Separate deterministic tests hold the lock beyond a shortened
+lease and verify renewal and cancellation on renewal failure; this 3.3-second
+performance phase was not long enough to observe the default 35-second lease
+renew. After the upstream was stopped, a full cached replay was byte-compared
+successfully.
+
+This was a deliberately shortened engineering run: unrelated workloads used
+reduced request counts, and the 3.3-second Proxy phase yielded only one
+approximately one-second resource sample. Peaks between samples may be missed.
+The result therefore supports the bounded streaming path but is not a heap
+profile, release baseline, or production throughput claim. Raw evidence is in
+[`reports/raw-proxy-cold-performance-2026-08-21.csv`](reports/raw-proxy-cold-performance-2026-08-21.csv),
+[`reports/raw-proxy-cold-resources-2026-08-21.csv`](reports/raw-proxy-cold-resources-2026-08-21.csv),
+and [`reports/raw-proxy-cold-upstream-2026-08-21.csv`](reports/raw-proxy-cold-upstream-2026-08-21.csv).
+
 ## Reproduce the baseline
 
 Prerequisites are Docker with Compose v2, Go 1.26.6, ApacheBench (`ab`), curl,
@@ -138,7 +204,7 @@ make performance-baseline
 ```
 
 The command allocates free loopback ports, creates an isolated Compose project
-and fresh volumes, builds the image and both Linux architectures, runs the six
+and fresh volumes, builds the image and both Linux architectures, runs the eight
 workloads, writes CSV evidence to a printed temporary directory, and removes
 the isolated containers, volumes, and ephemeral secrets on exit. It does not
 reuse or modify the normal `.env` or development volumes.
@@ -153,6 +219,11 @@ GATEWAY_PERF_METADATA_HIGH_REQUESTS=512 \
 GATEWAY_PERF_RAW_LOW_REQUESTS=128 \
 GATEWAY_PERF_RAW_MID_REQUESTS=256 \
 GATEWAY_PERF_RAW_HIGH_REQUESTS=512 \
+GATEWAY_PERF_RAW_LARGE_REQUESTS=8 \
+GATEWAY_PERF_RAW_LARGE_MIB=16 \
+GATEWAY_PERF_LARGE_CONCURRENCY=2 \
+GATEWAY_PERF_RAW_PROXY_COLD_REQUESTS=2 \
+GATEWAY_PERF_RAW_PROXY_COLD_CONCURRENCY=2 \
 GATEWAY_PERF_IDLE_SAMPLES=2 \
 make performance-baseline
 ```
@@ -162,12 +233,15 @@ reproduction of the published snapshot.
 
 ## Limits and next gates
 
-This first report deliberately does not claim production sizing. It uses one
-arm64 laptop, one Docker VM, one Gateway replica, warm reads, a single load
-generator, and no TLS, ingress, network latency, writes, cache misses, scanner,
-signer, or sustained soak.
+This report deliberately does not claim production sizing. It uses one arm64
+laptop, one Docker VM, one Gateway replica, and a single load generator. The
+main baseline uses warm reads without TLS or ingress. The focused addendum
+covers one same-path HTTPS Proxy miss but not remote network latency, mixed
+writes, many unique concurrent misses, scanner, signer, or sustained soak.
 
 Before treating performance as a release gate, repeat it on a controlled Linux
 amd64 runner with hard resource limits; add TLS/ingress and remote storage;
-measure mixed reads and writes, ranges and larger objects; run a 30–60 minute
-soak; and compare one-node with split-role and multi-Gateway deployments.
+measure mixed reads and writes, ranges, larger objects, and spool saturation
+from many unique misses under an ephemeral-storage quota; capture heap and disk
+profiles; run a 30–60 minute soak; and compare one-node with split-role and
+multi-Gateway deployments.

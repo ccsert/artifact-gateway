@@ -101,6 +101,11 @@ func (r rawRuntime) RecordQuotaDenied() {
 		r.handler.Metrics.cacheQuotaDenied.Add(1)
 	}
 }
+func (r rawRuntime) RecordSpoolRejected() {
+	if r.handler.Metrics != nil {
+		r.handler.Metrics.recordRawSpoolRejected()
+	}
+}
 
 func (r rawRuntime) Audit(ctx context.Context, group, path string, event rawprotocol.AuditEvent) {
 	if event.Actor == "" {

@@ -47,7 +47,7 @@ func (w ArtifactIntelligenceCopyWorker) execute(ctx context.Context, job reposit
 		return errors.New("invalid artifact intelligence copy payload")
 	}
 	if err := repository.CopyArtifactIntelligence(ctx, w.Store, job.RepositoryID, payload.SourceRepositoryID, payload.Format, payload.Coordinate, payload.Digest); err != nil {
-		return fmt.Errorf("copy artifact intelligence failed: %v", err)
+		return fmt.Errorf("copy artifact intelligence failed: %w", err)
 	}
 	return nil
 }

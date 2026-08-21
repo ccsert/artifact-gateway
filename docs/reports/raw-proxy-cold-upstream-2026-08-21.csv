@@ -1,0 +1,2 @@
+path,method,upstream_requests,cache_replay_after_upstream_stop
+/performance/payload-64m.bin,GET,1,true

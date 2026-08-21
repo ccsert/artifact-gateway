@@ -2,6 +2,7 @@ package raw
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,17 @@ type testObjectStore struct{ objects map[string]bool }
 func (s *testObjectStore) Delete(_ context.Context, key string) error {
 	delete(s.objects, key)
 	return nil
+}
+
+func (s *testObjectStore) List(_ context.Context, prefix string) ([]string, error) {
+	keys := make([]string, 0)
+	for key := range s.objects {
+		if strings.HasPrefix(key, prefix) {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	return keys, nil
 }
 
 type testMetrics struct {
@@ -68,5 +80,33 @@ func TestCollectorTracksAndCollectsUnreferencedObject(t *testing.T) {
 	}
 	if metrics.started != 1 || metrics.completed != 1 || metrics.inFlight != 0 {
 		t.Fatalf("lifecycle metrics started=%d completed=%d in_flight=%d", metrics.started, metrics.completed, metrics.inFlight)
+	}
+}
+
+func TestCollectorCancelsExpiredRawUploadAndDeletesAllChunks(t *testing.T) {
+	now := time.Now().UTC()
+	store := repository.NewMemoryStore()
+	upload := repository.RawUpload{
+		ID: "expired-upload", RepositoryID: "repo", Path: "release.iso",
+		ObjectKey: "native/raw/uploads/expired-upload", State: "open", ExpiresAt: now.Add(-time.Minute),
+	}
+	if _, err := store.CreateRawUpload(context.Background(), upload); err != nil {
+		t.Fatal(err)
+	}
+	objects := &testObjectStore{objects: map[string]bool{
+		upload.ObjectKey: true,
+		upload.ObjectKey + ".parts/00000000000000000000": true,
+		upload.ObjectKey + ".parts/00000000000000000005": true,
+	}}
+
+	if err := (Collector{Store: store, Objects: objects, Now: func() time.Time { return now }}).Collect(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(objects.objects) != 0 {
+		t.Fatalf("expired Raw upload objects remain: %v", objects.objects)
+	}
+	got, err := store.GetRawUpload(context.Background(), upload.ID)
+	if err != nil || got.State != "cancelled" {
+		t.Fatalf("expired Raw upload state=%q err=%v", got.State, err)
 	}
 }

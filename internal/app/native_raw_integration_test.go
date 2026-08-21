@@ -80,6 +80,33 @@ func TestPostgresNativeRawStateTransitions(t *testing.T) {
 	if err != nil || len(objects) != 0 {
 		t.Fatalf("collected raw objects=%#v err=%v", objects, err)
 	}
+	upload := repository.RawUpload{
+		ID: uuid.NewString(), RepositoryID: repo.ID, Path: "expired.iso",
+		ObjectKey: "native/raw/uploads/" + uuid.NewString(), State: "open", ExpiresAt: time.Now().Add(-time.Minute),
+	}
+	if _, err = store.CreateRawUpload(context.Background(), upload); err != nil {
+		t.Fatal(err)
+	}
+	partKey := upload.ObjectKey + ".parts/00000000000000000000"
+	if err = objectsStore.Put(context.Background(), upload.ObjectKey, []byte("legacy-prefix")); err != nil {
+		t.Fatal(err)
+	}
+	if err = objectsStore.Put(context.Background(), partKey, []byte("chunk")); err != nil {
+		t.Fatal(err)
+	}
+	if err = collector.Collect(context.Background()); err != nil {
+		t.Fatalf("collect expired Raw upload: %v", err)
+	}
+	if _, err = objectsStore.Get(context.Background(), upload.ObjectKey); !errors.Is(err, errOCICacheMiss) {
+		t.Fatalf("expired Raw legacy prefix err=%v", err)
+	}
+	if _, err = objectsStore.Get(context.Background(), partKey); !errors.Is(err, errOCICacheMiss) {
+		t.Fatalf("expired Raw chunk err=%v", err)
+	}
+	collectedUpload, err := store.GetRawUpload(context.Background(), upload.ID)
+	if err != nil || collectedUpload.State != "cancelled" || collectedUpload.CollectedAt.IsZero() {
+		t.Fatalf("collected Raw upload=%#v err=%v", collectedUpload, err)
+	}
 }
 
 func TestNativeRawListingAcrossPostgresAndRustFSGatewayInstances(t *testing.T) {

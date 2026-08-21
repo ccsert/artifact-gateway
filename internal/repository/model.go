@@ -277,7 +277,7 @@ type RawObject struct {
 type RawUpload struct {
 	ID, RepositoryID, Path, ObjectKey, State string
 	Offset                                   int64
-	ExpiresAt                                time.Time
+	ExpiresAt, CollectedAt                   time.Time
 }
 
 // NPMPackage is the registry packument identity projected from immutable

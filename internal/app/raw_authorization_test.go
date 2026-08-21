@@ -64,6 +64,34 @@ func TestRawAnonymousPolicyRequiresPublicGroupAndMember(t *testing.T) {
 	}
 }
 
+func TestRawAnonymousFilteringDoesNotMutateMemoryStoreGroupMembers(t *testing.T) {
+	store := repository.NewMemoryStore()
+	enableAnonymousAccess(t, store)
+	wantMembers := []repository.Member{
+		{Name: "private", Type: repository.MemberHosted, Endpoint: "https://private.example", Position: 0},
+		{Name: "public", Type: repository.MemberHosted, Endpoint: "https://public.example", Position: 1, Anonymous: true},
+	}
+	if _, err := store.CreateRawGroup(context.Background(), repository.Group{Name: "public", Anonymous: true, Members: wantMembers}); err != nil {
+		t.Fatal(err)
+	}
+	handler := RawHandler{
+		Store: store, Authenticator: testAuthenticator(),
+		Client: &rawFixtureClient{responses: map[string]int{"public": http.StatusOK}, body: []byte("artifact")},
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/raw/public/artifact", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("anonymous response=%d", response.Code)
+	}
+	group, err := store.GetRawGroup(context.Background(), "public")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(group.Members) != 2 || group.Members[0].Name != "private" || group.Members[1].Name != "public" {
+		t.Fatalf("stored members mutated: %#v", group.Members)
+	}
+}
+
 func TestRawDoesNotExposeOCIGroupAndChecksMemberGrantBeforeCache(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateGroup(context.Background(), repository.Group{Name: "shared", Members: []repository.Member{{Name: "oci", Type: repository.MemberHosted}}})

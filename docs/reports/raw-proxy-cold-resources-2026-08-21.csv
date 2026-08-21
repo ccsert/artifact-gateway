@@ -1,0 +1,7 @@
+phase,service,min_memory_mib,avg_memory_mib,max_memory_mib,max_cpu_percent
+idle,gateway,19.05,19.08,19.10,0.99
+raw-proxy-cold-64m-c8,gateway,51.25,51.25,51.25,7.01
+idle,postgres,54.49,54.55,54.61,0.12
+raw-proxy-cold-64m-c8,postgres,64.47,64.47,64.47,0.82
+idle,rustfs,79.43,79.56,79.68,0.05
+raw-proxy-cold-64m-c8,rustfs,143.30,143.30,143.30,0.20

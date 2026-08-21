@@ -7,6 +7,23 @@ import (
 	"time"
 )
 
+const rawUploadColumns = "id::text,repository_id::text,path,object_key,byte_offset,state,expires_at,collected_at"
+
+func scanRawUpload(scanner interface{ Scan(...any) error }, upload *RawUpload) error {
+	var collectedAt sql.NullTime
+	if err := scanner.Scan(&upload.ID, &upload.RepositoryID, &upload.Path, &upload.ObjectKey, &upload.Offset, &upload.State, &upload.ExpiresAt, &collectedAt); err != nil {
+		return err
+	}
+	if collectedAt.Valid {
+		upload.CollectedAt = collectedAt.Time
+	}
+	return nil
+}
+
+func prefixedRawUploadColumns(prefix string) string {
+	return prefix + ".id::text," + prefix + ".repository_id::text," + prefix + ".path," + prefix + ".object_key," + prefix + ".byte_offset," + prefix + ".state," + prefix + ".expires_at," + prefix + ".collected_at"
+}
+
 func (s *PostgresStore) CreateRawUpload(ctx context.Context, v RawUpload) (RawUpload, error) {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO native_raw_uploads (id,repository_id,path,object_key,byte_offset,state,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`, v.ID, v.RepositoryID, v.Path, v.ObjectKey, v.Offset, v.State, v.ExpiresAt)
 	return v, err
@@ -27,7 +44,7 @@ func (s *PostgresStore) LockRawUpload(ctx context.Context, id string) (func(), e
 }
 func (s *PostgresStore) GetRawUpload(ctx context.Context, id string) (RawUpload, error) {
 	var v RawUpload
-	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,path,object_key,byte_offset,state,expires_at FROM native_raw_uploads WHERE id::text=$1`, id).Scan(&v.ID, &v.RepositoryID, &v.Path, &v.ObjectKey, &v.Offset, &v.State, &v.ExpiresAt)
+	err := scanRawUpload(s.db.QueryRowContext(ctx, `SELECT `+rawUploadColumns+` FROM native_raw_uploads WHERE id::text=$1`, id), &v)
 	if errors.Is(err, sql.ErrNoRows) {
 		return RawUpload{}, ErrNotFound
 	}
@@ -35,7 +52,7 @@ func (s *PostgresStore) GetRawUpload(ctx context.Context, id string) (RawUpload,
 }
 func (s *PostgresStore) UpdateRawUpload(ctx context.Context, id string, offset int64) (RawUpload, error) {
 	var v RawUpload
-	err := s.db.QueryRowContext(ctx, `UPDATE native_raw_uploads SET byte_offset=$2 WHERE id::text=$1 AND state='open' AND expires_at>now() RETURNING id::text,repository_id::text,path,object_key,byte_offset,state,expires_at`, id, offset).Scan(&v.ID, &v.RepositoryID, &v.Path, &v.ObjectKey, &v.Offset, &v.State, &v.ExpiresAt)
+	err := scanRawUpload(s.db.QueryRowContext(ctx, `UPDATE native_raw_uploads SET byte_offset=$2 WHERE id::text=$1 AND state='open' AND expires_at>now() RETURNING `+rawUploadColumns, id, offset), &v)
 	if errors.Is(err, sql.ErrNoRows) {
 		return RawUpload{}, ErrNotFound
 	}
@@ -43,7 +60,7 @@ func (s *PostgresStore) UpdateRawUpload(ctx context.Context, id string, offset i
 }
 func (s *PostgresStore) CancelRawUpload(ctx context.Context, id string) (RawUpload, error) {
 	var v RawUpload
-	err := s.db.QueryRowContext(ctx, `UPDATE native_raw_uploads SET state='cancelled' WHERE id::text=$1 AND state='open' RETURNING id::text,repository_id::text,path,object_key,byte_offset,state,expires_at`, id).Scan(&v.ID, &v.RepositoryID, &v.Path, &v.ObjectKey, &v.Offset, &v.State, &v.ExpiresAt)
+	err := scanRawUpload(s.db.QueryRowContext(ctx, `UPDATE native_raw_uploads SET state='cancelled' WHERE id::text=$1 AND state='open' RETURNING `+rawUploadColumns, id), &v)
 	if errors.Is(err, sql.ErrNoRows) {
 		return RawUpload{}, ErrNotFound
 	}
@@ -77,6 +94,71 @@ func (s *PostgresStore) CompleteRawUpload(ctx context.Context, id string, asset 
 		return asset, err
 	}
 	return asset, tx.Commit()
+}
+
+func (s *PostgresStore) ExpireRawUploads(ctx context.Context, before time.Time, limit int) ([]RawUpload, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	rows, err := tx.QueryContext(ctx, `WITH candidates AS (
+        SELECT id FROM native_raw_uploads
+        WHERE state='open' AND expires_at < $1
+        ORDER BY expires_at FOR UPDATE SKIP LOCKED LIMIT $2
+    ) UPDATE native_raw_uploads u SET state='cancelled'
+    FROM candidates c WHERE u.id=c.id
+	RETURNING `+prefixedRawUploadColumns("u"), before, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	uploads := make([]RawUpload, 0)
+	for rows.Next() {
+		var upload RawUpload
+		if err = scanRawUpload(rows, &upload); err != nil {
+			return nil, err
+		}
+		uploads = append(uploads, upload)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return uploads, tx.Commit()
+}
+
+func (s *PostgresStore) ListUncollectedRawUploads(ctx context.Context, limit int) ([]RawUpload, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT `+rawUploadColumns+` FROM native_raw_uploads WHERE state IN ('completed','cancelled') AND collected_at IS NULL ORDER BY expires_at LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	uploads := make([]RawUpload, 0)
+	for rows.Next() {
+		var upload RawUpload
+		if err = scanRawUpload(rows, &upload); err != nil {
+			return nil, err
+		}
+		uploads = append(uploads, upload)
+	}
+	return uploads, rows.Err()
+}
+
+func (s *PostgresStore) MarkRawUploadCollected(ctx context.Context, id string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE native_raw_uploads SET collected_at=now() WHERE id::text=$1 AND state IN ('completed','cancelled') AND collected_at IS NULL`, id)
+	if err != nil {
+		return err
+	}
+	if count, _ := result.RowsAffected(); count != 1 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *PostgresStore) PutRawAsset(ctx context.Context, v RawAsset) (RawAsset, error) {

@@ -159,7 +159,7 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 			return repository.APTRepositorySnapshot{}, ErrInvalidSignature
 		}
 		p.recordSigning(SigningOutcomeUnavailable, time.Since(signingStartedAt))
-		return repository.APTRepositorySnapshot{}, fmt.Errorf("%w: %v", ErrSignerUnavailable, err)
+		return repository.APTRepositorySnapshot{}, fmt.Errorf("%w: %w", ErrSignerUnavailable, err)
 	}
 	if !validSignatureResult(signature) {
 		p.recordSigning(SigningOutcomeInvalidSignature, time.Since(signingStartedAt))

@@ -461,7 +461,7 @@ func (h nativeOCIHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 			writeOCIError(w, 404, "BLOB_UPLOAD_UNKNOWN", "blob upload unknown to registry")
 			return
 		}
-		_ = h.objects.Delete(r.Context(), upload.ObjectKey)
+		_ = deleteUploadObjects(r.Context(), h.objects, upload.ObjectKey)
 		w.WriteHeader(http.StatusNoContent)
 	case http.MethodPatch:
 		upload, err = h.appendUpload(r.Context(), r, upload)
@@ -484,7 +484,7 @@ func (h nativeOCIHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 			writeOCIError(w, 400, "DIGEST_INVALID", "valid sha256 digest is required")
 			return
 		}
-		spool, err := spoolStoredObject(r.Context(), h.objects, upload.ObjectKey)
+		spool, err := spoolStoredUpload(r.Context(), h.objects, upload.ObjectKey, upload.Offset)
 		if err != nil {
 			writeOCIError(w, 500, "UNKNOWN", "upload bytes are unavailable")
 			return
@@ -519,7 +519,7 @@ func (h nativeOCIHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 			writeOCIError(w, 409, "BLOB_UPLOAD_INVALID", "blob upload cannot be completed")
 			return
 		}
-		_ = h.objects.Delete(r.Context(), upload.ObjectKey)
+		_ = deleteUploadObjects(r.Context(), h.objects, upload.ObjectKey)
 		w.Header().Set("Location", "/v2/"+repo.Name+"/"+name+"/blobs/"+blob.Digest)
 		w.Header().Set("Docker-Content-Digest", blob.Digest)
 		w.WriteHeader(http.StatusCreated)
@@ -537,10 +537,18 @@ func (h nativeOCIHandler) appendUpload(ctx context.Context, r *http.Request, upl
 		return upload, err
 	}
 	defer func() { _ = spool.Close() }()
-	if err = h.objects.PutReader(ctx, upload.ObjectKey, spool.Reader(), spool.Size()); err != nil {
+	partKey := uploadPartKey(upload.ObjectKey, upload.Offset)
+	if err = h.objects.PutReader(ctx, partKey, spool.Reader(), spool.Size()); err != nil {
 		return upload, err
 	}
-	return h.store.UpdateOCIUpload(ctx, upload.ID, upload.Offset+chunkSize)
+	updated, err := h.store.UpdateOCIUpload(ctx, upload.ID, upload.Offset+chunkSize)
+	if err != nil {
+		// The database result can be ambiguous after a timeout. Keep the
+		// offset-addressed part: a retry can overwrite it, and upload reclaim
+		// removes it if the session never advances.
+		return upload, err
+	}
+	return updated, nil
 }
 
 func uploadRangeStart(value string) (int64, bool) {

@@ -81,18 +81,18 @@ func (r Runtime) runJob(ctx context.Context, format repository.Format, job repos
 	if r.LeaseProgressMessage != "" {
 		if err := r.Store.UpdateLifecycleJobProgress(jobCtx, job.ID, job.LeaseToken, job.ProgressCurrent, job.ProgressTotal, r.LeaseProgressMessage); err != nil {
 			cancelJob()
-			return r.fail(ctx, format, job, fmt.Errorf("%s lease renewal failed: %v", r.Name, err))
+			return r.fail(ctx, format, job, fmt.Errorf("%s lease renewal failed: %w", r.Name, err))
 		}
 	}
 	stopHeartbeat := r.startLeaseHeartbeat(jobCtx, cancelJob, job)
 	if err := handler(jobCtx, job); err != nil {
 		if leaseErr := stopHeartbeat(); leaseErr != nil {
-			err = fmt.Errorf("%s lease renewal failed: %v", r.Name, leaseErr)
+			err = fmt.Errorf("%s lease renewal failed: %w", r.Name, leaseErr)
 		}
 		return r.fail(ctx, format, job, err)
 	}
 	if leaseErr := stopHeartbeat(); leaseErr != nil {
-		return r.fail(ctx, format, job, fmt.Errorf("%s lease renewal failed: %v", r.Name, leaseErr))
+		return r.fail(ctx, format, job, fmt.Errorf("%s lease renewal failed: %w", r.Name, leaseErr))
 	}
 	if err := r.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken); err != nil {
 		return err

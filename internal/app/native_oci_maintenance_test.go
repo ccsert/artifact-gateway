@@ -22,6 +22,10 @@ func TestNativeOCICollectorRetainsExpiredUploadTrace(t *testing.T) {
 	if err := objects.PutReader(context.Background(), upload.ObjectKey, bytes.NewReader([]byte("partial")), 7); err != nil {
 		t.Fatal(err)
 	}
+	partKey := upload.ObjectKey + ".parts/00000000000000000007"
+	if err := objects.PutReader(context.Background(), partKey, bytes.NewReader([]byte("chunk")), 5); err != nil {
+		t.Fatal(err)
+	}
 	maintenance := NativeOCIMaintenance{Store: store, Objects: objects, Now: func() time.Time { return now }}
 	if err := maintenance.Schedule(context.Background()); err != nil {
 		t.Fatal(err)
@@ -38,6 +42,9 @@ func TestNativeOCICollectorRetainsExpiredUploadTrace(t *testing.T) {
 	}
 	if _, err := objects.Get(context.Background(), upload.ObjectKey); !errors.Is(err, errOCICacheMiss) {
 		t.Fatalf("partial object err=%v", err)
+	}
+	if _, err := objects.Get(context.Background(), partKey); !errors.Is(err, errOCICacheMiss) {
+		t.Fatalf("partial chunk err=%v", err)
 	}
 	remaining, err = store.ListUncollectedOCIUploads(context.Background(), 10)
 	if err != nil || len(remaining) != 0 {
