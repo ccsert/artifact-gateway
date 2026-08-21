@@ -46,6 +46,15 @@ import {
   type MavenArtifactGroup,
 } from "../lib/publicBrowseModel";
 import {
+  nextPublicOciTagCursor,
+  readPublicOciManifestDetail,
+  type PublicOciManifestDetail,
+} from "../lib/publicOci";
+import {
+  publicRepositoryUsage,
+  type PublicRepositoryFormat,
+} from "../lib/publicRepositoryUsage";
+import {
   MetadataItem,
   SearchableVersionSelect,
   UsageSnippetBlock,
@@ -58,9 +67,6 @@ import { GoModuleDetail } from "../components/GoModuleDetail";
 import { APTAssetDetail } from "../components/APTAssetDetail";
 import { useClipboardAction } from "../components/ConsolePrimitives";
 import { SiteBrandMark, SiteName } from "../components/SiteBrand";
-
-type PublicRepositoryFormat =
-  "oci" | "maven" | "conan" | "raw" | "npm" | "pypi" | "go" | "apt";
 
 interface PublicRepository {
   id: string;
@@ -88,12 +94,8 @@ interface OciTagPage {
   error?: string;
 }
 
-interface OciManifestDetail {
+interface OciManifestDetail extends PublicOciManifestDetail {
   loading: boolean;
-  digest?: string;
-  size?: number;
-  createdAt?: string;
-  publisher?: string;
   error?: string;
 }
 
@@ -157,102 +159,6 @@ const PUBLIC_FORMAT_STYLE: Record<
   },
 };
 
-function nextOciTagCursor(
-  response: Response,
-  tags: string[],
-): string | undefined {
-  const link = response.headers.get("Link");
-  const target = link?.match(/<([^>]+)>;\s*rel="next"/i)?.[1];
-  if (target) {
-    try {
-      return (
-        new URL(target, window.location.origin).searchParams.get("last") ??
-        undefined
-      );
-    } catch {
-      // Fall through to the page-size heuristic for non-standard registries.
-    }
-  }
-  return tags.length === VERSION_PAGE_SIZE ? tags.at(-1) : undefined;
-}
-
-const OCI_MANIFEST_ACCEPT = [
-  "application/vnd.oci.image.manifest.v1+json",
-  "application/vnd.docker.distribution.manifest.v2+json",
-  "application/vnd.oci.image.index.v1+json",
-  "application/vnd.docker.distribution.manifest.list.v2+json",
-].join(", ");
-
-type OciManifestEnvelope = {
-  config?: { digest?: string; size?: number };
-  layers?: Array<{ size?: number }>;
-  manifests?: Array<{ digest?: string }>;
-};
-
-type OciConfigEnvelope = {
-  created?: string;
-  author?: string;
-  config?: { Labels?: Record<string, string> };
-};
-
-async function readOciManifestDetail(
-  repositoryName: string,
-  imageName: string,
-  reference: string,
-  depth = 0,
-): Promise<Omit<OciManifestDetail, "loading">> {
-  const imagePath = imageName.split("/").map(encodeURIComponent).join("/");
-  const response = await fetch(
-    `/v2/${encodeURIComponent(repositoryName)}/${imagePath}/manifests/${encodeURIComponent(reference)}`,
-    { headers: { Accept: OCI_MANIFEST_ACCEPT } },
-  );
-  if (!response.ok)
-    throw new Error(`读取 OCI manifest 失败 (${response.status})`);
-  const envelope = (await response.json()) as OciManifestEnvelope;
-  const digest = response.headers.get("Docker-Content-Digest") ?? undefined;
-  const layerSize = (envelope.layers ?? []).reduce(
-    (total, layer) => total + (layer.size ?? 0),
-    envelope.config?.size ?? 0,
-  );
-
-  // Multi-platform indexes point to a child manifest. Read its config for the
-  // same useful metadata while retaining the digest of the selected tag.
-  if (!envelope.config && depth < 2) {
-    const child = envelope.manifests?.find((entry) => entry.digest);
-    if (child?.digest) {
-      const nested = await readOciManifestDetail(
-        repositoryName,
-        imageName,
-        child.digest,
-        depth + 1,
-      );
-      return {
-        ...nested,
-        digest: digest ?? nested.digest,
-        size: nested.size ?? layerSize,
-      };
-    }
-  }
-
-  let createdAt: string | undefined;
-  let publisher: string | undefined;
-  if (envelope.config?.digest) {
-    const configResponse = await fetch(
-      `/v2/${encodeURIComponent(repositoryName)}/${imagePath}/blobs/${encodeURIComponent(envelope.config.digest)}`,
-    );
-    if (configResponse.ok) {
-      const config = (await configResponse.json()) as OciConfigEnvelope;
-      const labels = config.config?.Labels ?? {};
-      createdAt = config.created ?? labels["org.opencontainers.image.created"];
-      publisher =
-        config.author ||
-        labels["org.opencontainers.image.authors"] ||
-        labels["org.opencontainers.image.vendor"];
-    }
-  }
-  return { digest, size: layerSize || undefined, createdAt, publisher };
-}
-
 type ProtocolVersion = {
   value: string;
   label: string;
@@ -278,94 +184,6 @@ interface PublicArtifactTableRow {
   ociDetail?: OciManifestDetail;
   selectedProtocolHref: string;
   snippets: UsageSnippet[];
-}
-
-function repositoryUsage(
-  format: PublicRepository["format"],
-  repoName: string,
-  text: (chinese: string, english: string) => string,
-): UsageSnippet[] {
-  const origin = window.location.origin;
-  const host = window.location.host;
-  if (format === "maven") {
-    const url = `${origin}/maven/${repoName}`;
-    return [
-      { label: text("Maven 仓库 URL", "Maven repository URL"), code: url },
-      {
-        label: "settings.xml",
-        code: `<repository>\n  <id>${repoName}</id>\n  <url>${url}</url>\n</repository>`,
-      },
-      { label: "Gradle repositories", code: `maven { url = uri("${url}") }` },
-    ];
-  }
-  if (format === "oci") {
-    return [
-      {
-        label: text("OCI Registry 地址", "OCI registry address"),
-        code: `${host}/${repoName}`,
-      },
-      {
-        label: text("Docker Registry 配置", "Docker registry setup"),
-        code: text(
-          `docker login ${host}\n# 镜像前缀：${host}/${repoName}/`,
-          `docker login ${host}\n# Image prefix: ${host}/${repoName}/`,
-        ),
-      },
-    ];
-  }
-  if (format === "conan") {
-    return [
-      {
-        label: text("Conan remote 地址", "Conan remote address"),
-        code: `conan remote add ${repoName} ${origin}/conan/v2/${repoName}`,
-      },
-    ];
-  }
-  if (format === "npm") {
-    const registry = `${origin}/npm/${repoName}/`;
-    return [
-      { label: text("npm Registry 地址", "npm registry URL"), code: registry },
-      { label: ".npmrc", code: `registry=${registry}` },
-    ];
-  }
-  if (format === "pypi") {
-    const index = `${origin}/pypi/${repoName}/simple/`;
-    return [
-      { label: text("PyPI Simple API", "PyPI Simple API"), code: index },
-      {
-        label: "pip",
-        code: `pip config set global.index-url ${index}`,
-      },
-    ];
-  }
-  if (format === "go") {
-    const proxy = `${origin}/go/${repoName}`;
-    return [
-      { label: "GOPROXY", code: `go env -w GOPROXY=${proxy}` },
-      {
-        label: text("临时使用", "One-off usage"),
-        code: `GOPROXY=${proxy} go mod download`,
-      },
-    ];
-  }
-  if (format === "apt") {
-    const source = `${origin}/apt/${repoName}`;
-    return [
-      {
-        label: text("APT 源地址", "APT source URL"),
-        code: source,
-      },
-      {
-        label: "sources.list",
-        code: `deb ${source} <suite> <component>`,
-      },
-      {
-        label: text("下载制品", "Download an artifact"),
-        code: `curl -fsSL ${source}/pool/<component>/<path>/<package>.deb -o package.deb`,
-      },
-    ];
-  }
-  return [{ label: "Raw 仓库地址", code: `${origin}/raw/${repoName}/` }];
 }
 
 interface MavenGroupTableProps {
@@ -1269,11 +1087,11 @@ export function PublicBrowsePage() {
         [key]: { ...(current[key] ?? {}), loading: true, error: undefined },
       }));
       try {
-        const detail = await readOciManifestDetail(
-          selectedRepository.name,
-          coordinate,
-          tag,
-        );
+        const detail = await readPublicOciManifestDetail({
+          repositoryName: selectedRepository.name,
+          imageName: coordinate,
+          reference: tag,
+        });
         setOciManifestDetails((current) => ({
           ...current,
           [key]: { ...detail, loading: false },
@@ -1353,7 +1171,12 @@ export function PublicBrowsePage() {
             items: after
               ? [...new Set([...(current[coordinate]?.items ?? []), ...page])]
               : page,
-            nextCursor: nextOciTagCursor(response, page),
+            nextCursor: nextPublicOciTagCursor(
+              response,
+              page,
+              VERSION_PAGE_SIZE,
+              window.location.origin,
+            ),
             loaded: true,
             loading: false,
           },
@@ -1472,7 +1295,13 @@ export function PublicBrowsePage() {
   };
 
   const globalUsage = selectedRepository
-    ? repositoryUsage(selectedRepository.format, selectedRepository.name, text)
+    ? publicRepositoryUsage({
+        format: selectedRepository.format,
+        repositoryName: selectedRepository.name,
+        origin: window.location.origin,
+        host: window.location.host,
+        text,
+      })
     : [];
   const groupedItems =
     selectedRepository?.format === "maven"
