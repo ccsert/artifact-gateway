@@ -28,6 +28,8 @@ for file in \
   docs/architecture-diagrams.zh-CN.md \
   docs/postgresql-capabilities.md \
   docs/postgresql-capabilities.en.md \
+  docs/performance-baseline.md \
+  docs/performance-baseline.zh-CN.md \
   docs/project-quality-assessment.md \
   docs/project-quality-assessment.zh-CN.md \
   docs/assets/artifact-gateway-hero.png \
@@ -45,6 +47,7 @@ for pair in \
   'docs/getting-started.md|getting-started.zh-CN.md' \
   'docs/architecture-diagrams.md|architecture-diagrams.zh-CN.md' \
   'docs/postgresql-capabilities.en.md|postgresql-capabilities.md' \
+  'docs/performance-baseline.md|performance-baseline.zh-CN.md' \
   'docs/project-quality-assessment.md|project-quality-assessment.zh-CN.md'; do
   source_file=${pair%%|*}
   target_name=${pair#*|}
@@ -60,6 +63,7 @@ for pair in \
   'docs/getting-started.zh-CN.md|getting-started.md' \
   'docs/architecture-diagrams.zh-CN.md|architecture-diagrams.md' \
   'docs/postgresql-capabilities.md|postgresql-capabilities.en.md' \
+  'docs/performance-baseline.zh-CN.md|performance-baseline.md' \
   'docs/project-quality-assessment.zh-CN.md|project-quality-assessment.md'; do
   source_file=${pair%%|*}
   target_name=${pair#*|}

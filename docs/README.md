@@ -15,6 +15,7 @@ the [protocol compatibility baseline](protocol-compatibility.md).
 - [Contributing](../CONTRIBUTING.md) — change workflow and required checks.
 - [Changelog](../CHANGELOG.md) — user-visible changes under active development.
 - [Project quality assessment](project-quality-assessment.md) — current strengths, risks, and improvement order.
+- [Performance baseline](performance-baseline.md) — binary and image size, quiet memory, local concurrency, and limits.
 
 ## Core contracts
 
@@ -60,6 +61,7 @@ the [protocol compatibility baseline](protocol-compatibility.md).
 
 ## Deployment and operations
 
+- [Performance baseline](performance-baseline.md)
 - [Distributed deployment](distributed-deployment.md)
 - [Kubernetes deployment](kubernetes-deployment.md)
 - [Recovery runbook](recovery-runbook.md)

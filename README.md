@@ -39,6 +39,11 @@ Artifact Gateway keeps the operational control plane intentionally small:
   state, authorization, lifecycle jobs, leases, locks, idempotency, audit, and
   operational coordination all use PostgreSQL.
 - **No Redis, Kafka, Elasticsearch, or external message queue is required.**
+- **Measured Go footprint.** The current local Docker baseline produced a
+  28.88 MiB Linux/arm64 Gateway binary and a 36.06 MiB runtime image. Gateway
+  averaged 53.59 MiB at quiet idle and peaked near 104 MiB while serving 128
+  concurrent clients; see the [performance baseline](docs/performance-baseline.md)
+  for throughput, full-stack memory, methodology, and limits.
 - **Artifact bytes stay outside the database.** Verified immutable bytes use
   an S3-compatible object-storage interface; the local stack bundles RustFS.
 - **Native protocols remain first-class.** Clients use familiar registry and
@@ -122,6 +127,7 @@ and [PostgreSQL capabilities](docs/postgresql-capabilities.en.md).
 | Understand core boundaries | [Architecture](ARCHITECTURE.md) |
 | Explore system and publication flows | [Architecture diagrams](docs/architecture-diagrams.md) |
 | Understand PostgreSQL coordination | [PostgreSQL capabilities](docs/postgresql-capabilities.en.md) |
+| Review size, memory, and local concurrency | [Performance baseline](docs/performance-baseline.md) |
 | Review current engineering quality | [Project quality assessment](docs/project-quality-assessment.md) |
 | Operate identity and access | [User governance](docs/user-governance.md), [OIDC SSO](docs/oidc-sso.md), [Service accounts](docs/service-account-operations.md) |
 | Deploy or recover | [Kubernetes](docs/kubernetes-deployment.md), [Distributed deployment](docs/distributed-deployment.md), [Recovery runbook](docs/recovery-runbook.md) |

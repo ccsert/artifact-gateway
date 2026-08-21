@@ -37,6 +37,10 @@ Artifact Gateway 有意把运维控制面保持得足够精简：
 - **PostgreSQL 是唯一的协调与数据库依赖。** 仓库状态、鉴权、生命周期任务、租约、
   锁、幂等、审计和运行协调统一由 PostgreSQL 承担。
 - **无需 Redis、Kafka、Elasticsearch 或额外消息队列。**
+- **经过实测的 Go 资源占用。** 当前本地 Docker 基线产出的 Linux/arm64 Gateway
+  二进制为 28.88 MiB，运行时镜像为 36.06 MiB；Gateway 静默平均占用
+  53.59 MiB，在 128 并发下观测峰值约 104 MiB。吞吐、完整栈内存、方法与边界详见
+  [性能基线](docs/performance-baseline.zh-CN.md)。
 - **制品字节不进入数据库。** 经过校验的不可变字节使用 S3 兼容对象存储接口；本地
   开发栈已经内置 RustFS。
 - **原生协议优先。** 客户端继续使用熟悉的镜像仓库和包管理器路径，而不是退化为
@@ -114,6 +118,7 @@ make down         # 停止 Compose 服务并保留数据卷
 | 理解代码与运行边界 | [整体架构](ARCHITECTURE.md) |
 | 查看系统、发布与后台任务流程 | [架构图](docs/architecture-diagrams.zh-CN.md) |
 | 理解 PostgreSQL 协调能力 | [PostgreSQL 能力](docs/postgresql-capabilities.md) |
+| 查看体积、内存与本地并发基线 | [性能基线](docs/performance-baseline.zh-CN.md) |
 | 查看当前工程质量 | [项目质量评估](docs/project-quality-assessment.zh-CN.md) |
 | 配置身份与权限 | [用户治理](docs/user-governance.md)、[OIDC SSO](docs/oidc-sso.md)、[Service Account](docs/service-account-operations.md) |
 | 部署与恢复 | [Kubernetes](docs/kubernetes-deployment.md)、[分布式部署](docs/distributed-deployment.md)、[恢复手册](docs/recovery-runbook.md) |

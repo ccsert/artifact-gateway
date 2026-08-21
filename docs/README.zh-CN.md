@@ -14,6 +14,7 @@
 - [参与开发](../CONTRIBUTING.md) — 变更流程与必需检查。
 - [变更记录](../CHANGELOG.md) — 当前开发阶段的用户可见变化。
 - [项目质量评估](project-quality-assessment.zh-CN.md) — 当前强项、风险与优化顺序。
+- [性能基线](performance-baseline.zh-CN.md) — 二进制与镜像体积、静默内存、本地并发和边界。
 
 ## 核心契约
 
@@ -59,6 +60,7 @@
 
 ## 部署与运维
 
+- [性能基线](performance-baseline.zh-CN.md)
 - [分布式部署](distributed-deployment.md)
 - [Kubernetes 部署](kubernetes-deployment.md)
 - [恢复手册](recovery-runbook.md)
