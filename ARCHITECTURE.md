@@ -15,23 +15,25 @@ single node or as role-specific cluster nodes.
 
 ## System context
 
-```text
-native clients and Console
-           |
-           v
-   API nodes / standalone
-      |             |
-      v             v
- PostgreSQL      S3 / RustFS
-      ^             ^
-      |             |
- scheduler ----> worker pools
+```mermaid
+flowchart LR
+    Clients[Native clients and Console] --> Gateway[API nodes / standalone]
+    Scheduler[Scheduler] --> PG[(PostgreSQL 16)]
+    Gateway --> PG
+    Workers[Worker pools] --> PG
+    Gateway --> S3[(S3 / RustFS)]
+    Workers --> S3
 ```
 
 PostgreSQL is the source of truth for repositories, authorization, artifact
 metadata, lifecycle state, audit records, idempotency, and background leases.
 S3/RustFS stores verified object bytes addressed by digest. Gateway processes do
 not keep durable artifact state on local disk.
+
+See [Architecture diagrams](docs/architecture-diagrams.md) for the standalone,
+split-role, publication, and worker flows, and
+[PostgreSQL capabilities](docs/postgresql-capabilities.en.md) for the database
+features behind coordination and search.
 
 ## Runtime roles
 

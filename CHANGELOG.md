@@ -64,6 +64,17 @@ a dated version heading without rewriting their meaning.
 
 ### Added
 
+- Added a preparation-stage bilingual project and documentation entry point,
+  an architecture-faithful README hero, a tested local-link documentation gate,
+  and `make dev-bootstrap` for idempotent generation of the six credentials
+  required by the local PostgreSQL/RustFS development stack.
+- Added bilingual, reviewable Mermaid diagrams for the system boundary,
+  standalone and split-role deployment, publication visibility, and durable
+  background work, generated icon-rich system and deployment architecture
+  overviews, plus an evidence-backed guide to the PostgreSQL-native locking,
+  queueing, notification, JSONB, search-index, and observability features that
+  keep the control plane lightweight.
+
 - A bounded Cargo C0 parser foundation that validates official publish framing
   and complete `.crate` gzip/tar archives, derives collision-safe immutable
   crate/version identity from normalized `Cargo.toml`, and translates current

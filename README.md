@@ -1,341 +1,149 @@
-# Artifact Gateway
+<p align="center">
+  <img src="docs/assets/artifact-gateway-hero.png" alt="Artifact streams converging through one verification gateway into PostgreSQL metadata and immutable object storage" width="100%">
+</p>
 
-Artifact Gateway serves native OCI, Raw, Maven, Conan 2, npm, PyPI, and Go Module
-Hosted repositories plus their Proxy/Group read paths and APT Proxy repositories, using PostgreSQL for lifecycle
-metadata and S3-compatible object storage for verified bytes. The bundled local
-stack uses RustFS. Legacy Groups
-remain available for allowlisted external Proxy reads, while V2 Groups resolve
-managed members.
+<h1 align="center">Artifact Gateway</h1>
 
-> **Project status:** active development. The core team is hardening contracts,
-> operations, and contributor-facing engineering practices before a stable
-> public release. Do not infer production support commitments from the current
-> package version.
+<p align="center">
+  A lightweight, protocol-native repository for verified software artifacts.
+</p>
 
-Artifact Gateway is intended to be a complete repository manager for the seven
-Hosted-capable formats: native client reads and publication, Hosted/Proxy/Group
-resolution, browsing and search, authorization, audit, retention, recovery,
-promotion, and replication. Go additionally provides a Gateway-specific atomic
-Hosted publication contract whose delete/restore, retention, reclaim, promotion,
-and replication operate on the complete `.info`/`.mod`/`.zip` version snapshot.
-APT is admitted under the protocol-only format rule and
-declares Proxy and Group protocol capabilities until a trusted installable
-publication workflow exists. APT additionally
-has a management-only Hosted preview for verified staging and atomic signed
-snapshot publication; its bundled signer is an H2 fixture, not production key custody. It is
-not a transparent rewrite proxy, a generic object browser, or a vulnerability
-scanner.
+<p align="center">
+  <a href="README.zh-CN.md">简体中文</a> ·
+  <a href="docs/README.md">Documentation</a> ·
+  <a href="ARCHITECTURE.md">Architecture</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
 
-## Local development
+<p align="center">
+  <a href="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Go 1.26.6" src="https://img.shields.io/badge/Go-1.26.6-00ADD8?logo=go&logoColor=white">
+  <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white">
+  <img alt="S3 compatible" src="https://img.shields.io/badge/Object_storage-S3_compatible-06B6D4">
+  <img alt="Status: preparing" src="https://img.shields.io/badge/status-preparing-6B7280">
+</p>
+
+> [!IMPORTANT]
+> **Project status: preparation stage.** The core team is still hardening
+> contracts, operations, documentation, and contribution workflows. This
+> repository is not yet a stable public release or a formally distributed
+> product, and the current package version does not imply support commitments.
+
+## Why Artifact Gateway
+
+Artifact Gateway keeps the operational control plane intentionally small:
+
+- **One Gateway binary.** The same image can run as a compact standalone node
+  or split into API, scheduler, and worker roles.
+- **PostgreSQL is the only coordination and database dependency.** Repository
+  state, authorization, lifecycle jobs, leases, locks, idempotency, audit, and
+  operational coordination all use PostgreSQL.
+- **No Redis, Kafka, Elasticsearch, or external message queue is required.**
+- **Artifact bytes stay outside the database.** Verified immutable bytes use
+  an S3-compatible object-storage interface; the local stack bundles RustFS.
+- **Native protocols remain first-class.** Clients use familiar registry and
+  package-manager routes instead of a generic upload-only object browser.
+
+In short: PostgreSQL owns the control plane, S3-compatible storage owns the
+byte plane, and Gateway connects the two without adding a middleware fleet.
+
+## Repository capabilities
+
+| Format | Hosted | Proxy | Group | Notes |
+| --- | :---: | :---: | :---: | --- |
+| OCI | ✓ | ✓ | ✓ | Registry V2 uploads, manifests, tags, ranges, and referrers |
+| Raw | ✓ | ✓ | ✓ | PUT/GET/HEAD, ranges, checksums, and resumable upload |
+| Maven | ✓ | ✓ | ✓ | Maven/Gradle staging with explicit coordinate commit |
+| Conan 2 | ✓ | ✓ | ✓ | Revision-aware publication and lifecycle |
+| npm | ✓ | ✓ | ✓ | Native publication, verified cache, merged packuments |
+| PyPI | ✓ | ✓ | ✓ | twine upload plus PEP 503/691 reads |
+| Go modules | Gateway extension | ✓ | ✓ | Standard GOPROXY reads; atomic single-ZIP Hosted publication |
+| APT | Preview only | ✓ | ✓ | Hosted signing remains unadvertised until production custody gates pass |
+
+Cargo is a staged parser/identity foundation and NuGet remains roadmap work;
+neither is advertised as a usable repository format. The detailed, test-bound
+compatibility statement lives in the
+[protocol compatibility baseline](docs/protocol-compatibility.md).
+
+Beyond protocol reads and writes, the current foundation includes repository
+grants, local users and OIDC, service accounts, anonymous-read policy, audit,
+search and browse, retention, recoverable deletion, promotion, replication,
+webhooks, scanner integration, quarantine, diagnostics, metrics, and backup /
+restore workflows. Each area is tracked from the [documentation index](docs/README.md).
+
+## Quick local start
+
+Prerequisites: Docker with Compose, Node.js 24+, npm, GNU Make, and OpenSSL.
 
 ```sh
-cp .env.example .env
-# Replace local-only credential placeholders.
+git clone https://github.com/ccsert/artifact-gateway.git
+cd artifact-gateway
+make dev-bootstrap
 make dev
 ```
 
-`make dev` builds and starts Gateway, PostgreSQL, and RustFS, then starts the
-Vite Console under a checkout-specific local supervisor. It waits for both
-Gateway readiness and the Console before printing their configured addresses.
-Use `make dev-status` as a repeatable health check.
+`make dev-bootstrap` creates a private `.env` when needed and generates only
+the six credentials required by the local Gateway/PostgreSQL/RustFS stack. It
+does not print secrets, overwrite real values, or create a new rollback copy
+when no change is needed.
 
-`./scripts/local-dev.sh bootstrap-rustfs-env` can add independent local RustFS
-credentials without printing them and retains a timestamped rollback copy.
-The current runtime is RustFS-only. If the helper detects legacy object-store
-containers or volumes, it fails closed and never deletes or mounts them.
+`make dev` builds and starts Gateway, PostgreSQL, and RustFS, installs pinned
+Console dependencies when absent, and waits for both the API and Console.
 
-Open the Console at `http://127.0.0.1:4173` by default. The checked-in example
-uses `GATEWAY_HTTP_PORT=8080` and `GATEWAY_CONSOLE_PORT=4173`; local `.env`
-overrides are reflected in the status output.
+Open the Console at <http://127.0.0.1:4173>. Sign in with the
+`GATEWAY_ADMIN_TOKEN` stored in `.env`, then create a Hosted, Proxy, or Group
+repository from the Repositories page.
 
 ```sh
-make dev-status
-make dev-down
+make dev-status   # Console, proxy, liveness, and readiness checks
+make dev-down     # stop only the checkout-managed Console
+make down         # stop Compose services and preserve data volumes
 ```
 
-`make dev-down` stops only the Console managed for this checkout; Gateway and
-its data volumes remain running. `make down` stops the Compose services while
-preserving local volumes.
+See [Getting started](docs/getting-started.md) for credential handling,
+first-repository guidance, ports, lifecycle commands, and troubleshooting.
 
-### Local Kubernetes
+## Architecture at a glance
 
-The repository also includes an executable Kustomize baseline for a local
-Kubernetes cluster:
+![Artifact Gateway lightweight system architecture](docs/assets/artifact-gateway-system-architecture.png)
+
+The default `standalone` role runs API, scheduler, and worker responsibilities
+in one process. Larger installations can split the same image by role without
+introducing a separate queue or service-discovery dependency. See
+[Architecture](ARCHITECTURE.md), [Architecture diagrams](docs/architecture-diagrams.md),
+and [PostgreSQL capabilities](docs/postgresql-capabilities.en.md).
+
+## Documentation map
+
+| Need | Start here |
+| --- | --- |
+| Set up a local checkout | [Getting started](docs/getting-started.md) |
+| Understand protocol behavior | [Protocol compatibility](docs/protocol-compatibility.md) |
+| Understand core boundaries | [Architecture](ARCHITECTURE.md) |
+| Explore system and publication flows | [Architecture diagrams](docs/architecture-diagrams.md) |
+| Understand PostgreSQL coordination | [PostgreSQL capabilities](docs/postgresql-capabilities.en.md) |
+| Review current engineering quality | [Project quality assessment](docs/project-quality-assessment.md) |
+| Operate identity and access | [User governance](docs/user-governance.md), [OIDC SSO](docs/oidc-sso.md), [Service accounts](docs/service-account-operations.md) |
+| Deploy or recover | [Kubernetes](docs/kubernetes-deployment.md), [Distributed deployment](docs/distributed-deployment.md), [Recovery runbook](docs/recovery-runbook.md) |
+| Extend a package format | [Format extension guide](docs/format-extension-guide.md) |
+| Change the management API | [OpenAPI governance](docs/openapi-governance-plan.md) |
+| Browse every maintained guide | [Documentation index](docs/README.md) |
+
+## Development workflow
 
 ```sh
-make kubernetes-local-check
-make kubernetes-local-up
-make kubernetes-local-status
-make kubernetes-local-verify
+make test
+make lint
+make vet
+make coverage
+make build
 ```
 
-It exposes the Console and every same-origin protocol/API route through a local
-Ingress at `http://artifact-gateway.localhost`; `http://127.0.0.1:18081`
-remains a direct Console fallback. The overlay provisions single-node PostgreSQL and
-RustFS storage for local validation and is intentionally not a production
-topology. See the [Kubernetes deployment guide](docs/kubernetes-deployment.md)
-for credential overrides, data deletion behavior, architecture, and the
-remaining production deployment work.
+Protocol, persistence, Console, and deployment changes have additional focused
+gates. Generated OpenAPI clients and server contracts must not be edited by
+hand. Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing code, and record
+user-visible behavior under `Unreleased` in [CHANGELOG.md](CHANGELOG.md).
 
-For the Compose workflow, use `GATEWAY_ADMIN_TOKEN` from the local `.env` file.
-The Kubernetes helper prints its effective local administrator token after
-startup and uses `local-gateway-admin-token` only as a disposable default.
-Anonymous browse remains available at `/browse` when the global policy and
-repository policy both permit it.
-
-### 单机与集群运行模式
-
-Gateway 默认以 `GATEWAY_NODE_ROLES=standalone` 启动，同时提供协议 API、
-周期调度和后台 worker。生产环境可以使用同一个镜像拆分节点职责：
-
-```text
-GATEWAY_NODE_ROLES=api
-GATEWAY_NODE_ROLES=scheduler
-GATEWAY_NODE_ROLES=worker GATEWAY_WORKER_FORMATS=oci
-```
-
-所有节点共享 PostgreSQL 和 S3 兼容对象存储；任务领取由数据库租约保证幂等。worker
-可以用 `GATEWAY_WORKER_FORMATS` 和 `GATEWAY_WORKER_KINDS` 限制格式与任务类型，
-例如只部署 OCI 的 `reclaim,replication` worker，或将 `scan` 交给配置了外部
-扫描器的隔离 worker；`webhook` 是不受格式过滤器影响的全局投递任务。非 API 节点仅暴露
-`/livez`、`/readyz` 和 `/metrics`，不会暴露制品协议或管理接口。
-
-拆分部署时应按副本数降低每个节点的数据库连接池上限，避免连接总数超过
-PostgreSQL 的 `max_connections`。
-
-Run `make test`, `make lint`, `make build`, or `make docker-build` from a clean
-checkout. `make integration-test` creates isolated PostgreSQL and RustFS
-containers, applies every migration, verifies a second migration run is a
-no-op, and runs the persistent-store tests. Applied migration filenames and
-SHA-256 checksums are recorded in `artifact_gateway_schema_migrations`; edit
-history only through a new forward migration.
-
-Integration tests refuse a `TEST_DATABASE_URL` whose database name does not
-end in `_test`, so fixture repositories cannot pollute a development or
-operator-visible database.
-
-Native protocol fixtures exercise the externally visible behavior without an
-external package service:
-
-```sh
-make native-oci-e2e
-make native-raw-e2e
-make native-maven-e2e
-make native-npm-e2e
-make native-pypi-e2e
-make native-go-e2e
-make native-apt-e2e
-make conan-e2e
-```
-
-The repository console is generated from the same OpenAPI contract. Check its
-client, types, lint rules, component behavior, production build, and browser
-flow with:
-
-```sh
-make console-api-check
-make console-typecheck
-make console-check
-make console-test
-make console-build
-make console-e2e
-```
-
-New package ecosystems follow the capability admission gate in
-[`docs/format-extension-guide.md`](docs/format-extension-guide.md); adding only
-an enum, route placeholder, or Console option is not considered format support.
-
-The high-level runtime and ownership boundaries are documented in
-[`ARCHITECTURE.md`](ARCHITECTURE.md). Engineering changes follow
-[`CONTRIBUTING.md`](CONTRIBUTING.md); security-sensitive findings follow
-[`SECURITY.md`](SECURITY.md), and user-visible changes are collected in
-[`CHANGELOG.md`](CHANGELOG.md).
-
-Local administrator-managed accounts support profile metadata, failed-login
-lockout, mandatory password changes, password reset, and immediate session
-revocation. Administrators can inspect active and retained session metadata,
-identify the current client, and revoke one client without signing out the
-account everywhere. Configure the lock threshold with
-`GATEWAY_LOCAL_AUTH_MAX_FAILED_ATTEMPTS` (default `5`) and the lock interval
-with `GATEWAY_LOCAL_AUTH_LOCKOUT_DURATION` (default `15m`). See the
-[local user governance guide](docs/user-governance.md) for API behavior,
-operator checks, and current limitations.
-
-## OpenAPI contract workflow
-
-The editable Native Hosted contract starts at
-`api/openapi/native-hosted.yaml`. Shared components, management routes, and
-protocol overlays live in its sibling YAML directories. Do not edit
-`api/openapi/native-hosted-v1.json`, `console/src/client`, or
-`internal/admin/openapi/generated.go` by hand: they are generated artifacts.
-
-```sh
-npm --prefix tools/openapi ci --ignore-scripts --no-audit --no-fund
-npm --prefix console ci --ignore-scripts --no-audit --no-fund
-make openapi-bundle
-make openapi-generate-admin
-make openapi-check
-```
-
-`make openapi-check` rebuilds the public JSON bundle, the generated Console
-client, and the generated repository-management Go contract; it then fails if
-any generated artifact differs from the worktree.
-
-The check validates but does not reinstall Node.js dependencies. When a lockfile
-changes, stop a running local Console with `make dev-down`, run the two pinned
-install commands above, and restart with `make dev`. This keeps Vite's optimized
-dependency cache consistent with `node_modules`.
-
-After a Gateway route or generated management contract changes, rebuild the
-running development service before testing the Console. Vite reloads the
-Console independently and can otherwise call a stale Gateway image.
-
-```sh
-docker compose up --build -d gateway
-docker compose ps gateway
-```
-
-## Native Hosted repositories
-
-Administrators create repositories through `POST /api/v2/repositories` with an
-idempotency key and a `format` of `oci`, `raw`, `maven`, `conan`, `npm`,
-`pypi`, `go`, or `apt`. Go supports Hosted and Proxy repositories. APT may use
-Proxy for installable reads or an explicit Hosted preview for management-owned
-signed snapshots; its advertised protocol profile remains Proxy/Group. OCI
-repositories are rooted at `/v2/<repository>/<image>/...`; Raw repositories use
-`/raw/<repository>/<path>`; Maven uses `/repository/maven/<repository>/...`;
-Conan 2 uses `/conan/v2/<repository>/...`; npm uses
-`/npm/<repository>/<package>`; PyPI exposes twine uploads at
-`/pypi/<repository>/legacy/` and the pip Simple API at
-`/pypi/<repository>/simple/`; Go uses
-`/go/<repository>/<escaped-module>/@v/...` as its `GOPROXY` root; APT uses
-`/apt/<repository>/dists/...` and `/apt/<repository>/pool/...` without rewriting
-signed upstream metadata.
-Twine authenticates with any non-empty username and the configured resolver
-token as its Basic-auth password. Anonymous-enabled repositories expose the
-Simple API without credentials.
-
-npm Groups expose Hosted and Proxy members through the same
-`/npm/<group>/` Registry URL. Their packuments merge versions and distribution
-tags by member priority, with Hosted members taking precedence over Proxy
-members when a version exists in more than one repository.
-PyPI Groups expose the same Simple API, merge Hosted and Proxy distribution
-files with Hosted-first conflict resolution, and keep cached Proxy files
-installable while the upstream is unavailable.
-Go Groups merge member version lists and resolve `.info`, `.mod`, and `.zip`
-assets by member priority while preserving offline reads from verified cache.
-Hosted members take precedence over Proxy members for the same module version.
-APT Groups resolve signed metadata and packages from Proxy members in configured
-order and keep cached bytes available when an upstream is unavailable.
-
-OCI supports blob upload, resumable PATCH, mounting, manifest/tag publication,
-GET/HEAD, byte ranges, and manifest deletion. Raw supports PUT, GET, HEAD,
-single byte ranges, and DELETE. Clients authenticate using the normal resolver
-Bearer token flow. Metadata and coordination are stored in PostgreSQL, while
-RustFS stores only content-addressed object bytes through the S3 contract.
-
-`GATEWAY_REPOSITORY_READERS` configures read grants in the form
-`actor=repository-pattern|repository-pattern`. `GATEWAY_REPOSITORY_CACHE_QUOTAS`
-sets legacy Proxy cache limits. `GATEWAY_RAW_CACHE_MAX_OBJECT_BYTES` and
-`GATEWAY_CONAN_CACHE_MAX_OBJECT_BYTES` cap an individual cached Proxy object
-for their respective formats (both default to 1 GiB). Configure OCI, Maven,
-and Raw Proxy host allowlists with their matching
-`GATEWAY_{OCI,MAVEN,RAW}_PROXY_ALLOWED_HOSTS` variables. Conan uses the
-allowlist attached to its bound Group member, so it has no global host variable.
-Maven Proxy caches immutable components for 24 hours by default; its metadata
-and negative-cache lifetimes default to 15 and 10 minutes and can be overridden
-with `GATEWAY_MAVEN_CACHE_TTL`, `GATEWAY_MAVEN_METADATA_CACHE_TTL`, and
-`GATEWAY_MAVEN_NEGATIVE_CACHE_TTL`.
-npm Proxy metadata, negative-cache, and circuit-breaker lifetimes default to
-15 minutes, 10 minutes, and 30 seconds. Override them with
-`GATEWAY_NPM_METADATA_CACHE_TTL`, `GATEWAY_NPM_NEGATIVE_CACHE_TTL`, and
-`GATEWAY_NPM_PROXY_BREAKER_TTL`. Each npm Proxy repository requires an HTTPS
-endpoint and an `allowedHosts` list covering the registry and any tarball CDN
-hosts it may use.
-Each Go Proxy repository likewise requires an endpoint and `allowedHosts`; it
-supports `@v/list`, `@latest`, `.info`, `.mod`, and `.zip` with immutable
-SHA-256 cache validation.
-Go Hosted publishes one canonical module ZIP and atomically derives the
-standard `.info` and `.mod` representations:
-
-```sh
-curl -u "publisher:${GATEWAY_TOKEN}" \
-  --upload-file module.zip \
-  "${GATEWAY_URL}/go/go-internal/example.com/team/widget/@v/v1.2.3.zip"
-```
-
-The ZIP root must be `example.com/team/widget@v1.2.3/` and its top-level
-`go.mod` must declare the same module path. Identical retries are idempotent;
-different content at the same version returns `409`.
-Management promotion reuses the verified immutable three-object snapshot in a
-second Hosted Repository, while checkpointed replication verifies and copies all
-three representations before atomically publishing the target version. Both use
-the canonical `module@version` coordinate and ZIP digest as the distribution
-identity, reject Proxy targets, and recheck quarantine across every representation
-before final publication.
-Each APT Proxy repository requires an endpoint and `allowedHosts`; see
-[`docs/apt-proxy.md`](docs/apt-proxy.md) for source configuration and route
-security rules. Hosted publication follows the staged
-[APT Hosted roadmap](docs/apt-hosted-roadmap.md); H2 is installable through the
-management preview but remains unadvertised until the production-signing gates
-pass. Operators may explicitly provision an APT Hosted preview repository,
-stage `.deb` revisions, and publish a signed snapshot through the management API;
-the format profile and Console continue to expose only executable Proxy/Group
-protocol capabilities. See [the signing and H3 rotation preview guide](docs/apt-hosted-signing.md)
-for local configuration, publication, recovery, external HTTPS rotation, and
-the remaining managed-key production boundary.
-For OIDC bearer validation, configure `GATEWAY_OIDC_ISSUER` and
-`GATEWAY_OIDC_AUDIENCE`; the JWKS URL is read from provider discovery unless
-explicitly configured.
-To enable browser SSO through Authorization Code + PKCE, also configure
-`GATEWAY_OIDC_CLIENT_ID` and `GATEWAY_OIDC_REDIRECT_URL`;
-`GATEWAY_OIDC_CLIENT_SECRET` is optional for public clients. The Console reads
-provider availability from `GET /auth/oidc/config` at runtime, so changing
-providers does not require a frontend rebuild. Keycloak realm/client roles,
-top-level roles, and GitLab-style groups can be mapped with
-`GATEWAY_OIDC_READER_ROLES`, `GATEWAY_OIDC_WRITER_ROLES`, and
-`GATEWAY_OIDC_ADMIN_ROLES`.
-Administrators can persist and apply the same settings from the Console's
-Authentication page without restarting the Gateway. Runtime client secrets are
-encrypted with `GATEWAY_SETTINGS_ENCRYPTION_KEY` and are never returned by the
-management API.
-
-For CI robots and third-party applications, create a stable Service Account and
-bind Repository Grants to `service-account:<id>`. Its independently revocable
-credentials work as Bearer tokens and as passwords for native clients that use
-HTTP Basic; credential rotation does not change the authorization principal.
-See [`docs/service-account-operations.md`](docs/service-account-operations.md)
-for least-privilege setup, client examples, zero-downtime rotation, and incident
-response.
-
-An authenticated client can inspect the identity used by authorization with
-`GET /api/v2/identity`. The response reports a bounded credential source
-(`static_admin`, `static_resolver`, `local_session`, `api_key`,
-`service_account_credential`, or `oidc`), the effective global role, and
-administrator status. For OIDC, it includes only
-configured role mappings that matched the validated token and whether the
-subject matched the configured administrator list; raw claims and token
-material are never returned.
-
-`GET /api/v2/repositories/{repositoryId}/effective-access` explains the same
-caller's read, write, admin, and anonymous-read decisions for a known
-Repository. Any authenticated caller may inspect its own denied decisions, so
-operators can diagnose a missing grant without first granting Repository read
-access. The endpoint cannot evaluate another actor and remains unavailable to
-anonymous requests. See `docs/anonymous-access-operations.md` for the anonymous
-policy gates and operational checks.
-
-Proxy repositories accept a per-repository egress proxy (`egressProxy` in the
-V2 management API) with `direct`, `environment`, and `custom` modes; custom
-supports HTTP CONNECT and SOCKS5 with optional authentication and a `noProxy`
-bypass list. Stored proxy passwords are encrypted with AES-256-GCM using
-`GATEWAY_EGRESS_PROXY_KEY` (32 bytes as hex, base64, or raw; generate with
-`openssl rand -hex 32`). `POST /api/v2/repositories/{id}/egress-proxy:test`
-probes the configured egress path, and the Console repository settings dialog
-exposes the full form. See `docs/proxy-egress-design.md`.
-
-Administrators can inspect audits at `GET /api/v1/audits`, metrics at
-`GET /metrics`, and cache maintenance at `GET /api/v1/operations/cache`.
-The Console uses the generated `/api/v2` management client for Repository
-operations and calls the `/api/v1/operations/cache` surface directly for
-administrator-only cache status and collection.
+New package ecosystems must pass the admission rules in the
+[format extension guide](docs/format-extension-guide.md). Adding an enum, route
+placeholder, or Console option alone is not considered protocol support.

@@ -14,14 +14,19 @@ contribution.
 - Rust/Cargo 1.96.0 when changing the staged Cargo protocol foundation
 - Node.js 24 and npm
 - GNU Make
+- OpenSSL
 
 Start the complete local stack from a checkout:
 
 ```sh
-cp .env.example .env
-# Replace every local credential placeholder before starting the stack.
+make dev-bootstrap
 make dev
 ```
+
+`make dev-bootstrap` creates a private `.env` when needed and generates only
+the credentials required by the local Gateway, PostgreSQL, and RustFS stack.
+It preserves existing real values and is safe to run again. See the
+[getting-started guide](docs/getting-started.md) for the complete workflow.
 
 `make dev-status` verifies the Console, its API proxy, and Gateway health.
 `make dev-down` stops only the checkout-managed Console; `make down` stops the
@@ -108,6 +113,9 @@ bytes back. Record the live evidence and use `make kubernetes-local-down` only
 when deleting the namespace and its local PVC data is intended.
 
 Run `make test` before submitting a change that affects shared backend behavior.
+Run `make docs-check` when changing Markdown entry points, capability claims,
+or local assets; it enforces bilingual entry-point links and validates local
+documentation references.
 The CI workflow is the final source of truth for the complete required matrix.
 
 ## Test expectations
