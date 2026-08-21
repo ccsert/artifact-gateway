@@ -20,7 +20,7 @@ Console modules safely while the feature surface continues to grow.
 | Protocol correctness | Strong | Compatibility limits are explicit and native-client fixtures exist for the advertised formats. |
 | Verification | Strong with coverage headroom | CI, contract, integration, E2E, recovery, and readiness gates exist; some global coverage floors remain intentionally conservative. |
 | Maintainability | Needs focused work | Several route, model, and native-protocol files are large enough to slow review and increase change coupling. |
-| Documentation | Good entry points, uneven depth | The README, quick start, and index are bilingual; most deep technical records remain single-language or mixed-language. |
+| Documentation | Core entry points bilingual, uneven depth | README, quick start, architecture, contributing, protocol compatibility, recovery, and the index have Chinese entry points; most deep contracts and research records remain English-only. |
 | Operability | Good preparation baseline | Health, metrics, diagnostics, recovery, Kubernetes, and distributed-role guidance exist; production evidence is still preparation work. |
 | Performance | Reproducible local baseline | Binary/image size, quiet memory, and authenticated PostgreSQL/RustFS reads are measured; controlled production-like load and soak remain open. |
 | Public-project readiness | Deliberately deferred | Licensing, formal distribution, a public security-reporting channel, and public support commitments are outside the current scope. |
@@ -43,6 +43,30 @@ Console modules safely while the feature surface continues to grow.
 - Preview work such as APT Hosted, Cargo, and NuGet is kept distinguishable
   from advertised support.
 
+## Maintainability work in progress
+
+The quality program has started, but it is not complete:
+
+- `console/src/lib/publicBrowseModel.ts` already owns pure Maven/Conan grouping
+  and deep-link state, with tests through that module interface.
+- `console/src/components/PublicBrowsePrimitives.tsx` already owns shared
+  version-selection, metadata, and usage-snippet presentation.
+- The current slice moves recursive OCI index/manifest/config reading and tag
+  pagination into `console/src/lib/publicOci.ts`. Its small interface accepts a
+  production or test HTTP adapter, and focused tests cover recursion, digest
+  retention, size aggregation, optional config failure, and error propagation.
+- Protocol-specific repository setup snippets now come from the pure
+  `console/src/lib/publicRepositoryUsage.ts` boundary. Tests cover all eight
+  formats without coupling them to browser state or the page component.
+- Together these slices reduce `PublicBrowse.tsx` from 2,705 to 2,534 lines
+  without changing its route or visible behavior. The page is still a hotspot;
+  Maven/Conan display sections and remaining format projections are the next
+  seams.
+
+No equivalent extraction has yet reduced `internal/repository/model.go` or the
+large native Maven/npm/OCI application modules. They remain planned work, not
+completed quality improvements.
+
 ## Main quality gaps
 
 ### 1. Large modules increase change coupling
@@ -51,7 +75,7 @@ Current hotspots include:
 
 | File | Approximate size | Recommended seam |
 | --- | ---: | --- |
-| `console/src/pages/PublicBrowse.tsx` | 2,705 lines | Route shell, query state, format projections, and presentational sections |
+| `console/src/pages/PublicBrowse.tsx` | 2,534 lines | Route shell, query state, format projections, and presentational sections |
 | `internal/repository/model.go` | 1,328 lines | Repository, identity, lifecycle, intelligence, and operations records |
 | `internal/app/native_maven.go` | 1,173 lines | HTTP adapter versus Maven publication/application service |
 | `internal/app/native_npm.go` | 1,160 lines | Registry HTTP shape versus Hosted/Proxy/Group orchestration |
@@ -73,10 +97,11 @@ rise as the large modules are split and public-boundary tests become cheaper.
 ### 3. Deep documentation is not fully bilingual
 
 The project now has equivalent English and Chinese README, documentation index,
-and getting-started paths. Translating every ADR and research note would add a
-large synchronization burden. Prioritize bilingual operator journeys,
-authentication, recovery, and protocol client examples; keep implementation
-research in one canonical language unless it becomes user-facing.
+getting-started, architecture, contributing, protocol-compatibility, and
+recovery paths. The Chinese index labels remaining English-only material
+instead of implying that a translated body exists. Translating every ADR and
+research note would add a large synchronization burden. Continue with identity
+and operator journeys before implementation research.
 
 ### 4. Preparation evidence is broader than one default test target
 
@@ -92,9 +117,11 @@ traffic, and sustained soak before it can become a release threshold.
 
 1. **Keep onboarding executable.** Treat `make dev-bootstrap`, the bilingual
    quick start, and documentation links as tested interfaces.
-2. **Split `PublicBrowse.tsx` without redesigning behavior.** Extract pure
-   format/view models first, then page sections; retain browser regression
-   coverage for search, filters, deep links, and responsive states.
+2. **Continue splitting `PublicBrowse.tsx` without redesigning behavior.** The
+   pure browse model, shared primitives, OCI reader, and repository usage
+   generator now have focused seams; extract Maven/Conan display sections next
+   while retaining browser regression coverage for search, filters, deep links,
+   and responsive states.
 3. **Partition repository records by domain.** Move types mechanically before
    changing persistence or behavior; keep public repository interfaces stable.
 4. **Deepen native protocol modules.** Separate HTTP parsing/response shaping

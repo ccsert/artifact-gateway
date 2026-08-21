@@ -1,5 +1,7 @@
 # Backup and Recovery Drill
 
+[简体中文](recovery-runbook.zh-CN.md)
+
 Run this drill from a workstation with Docker Desktop, a configured `.env`, and
 the local stack started by `make up`. The scripts keep backups under
 `.artifacts/`, which is intentionally not part of source control.

@@ -11,8 +11,8 @@
 <p align="center">
   <a href="README.md">English</a> ·
   <a href="docs/README.zh-CN.md">文档</a> ·
-  <a href="ARCHITECTURE.md">架构</a> ·
-  <a href="CONTRIBUTING.md">参与开发</a>
+  <a href="ARCHITECTURE.zh-CN.md">架构</a> ·
+  <a href="CONTRIBUTING.zh-CN.md">参与开发</a>
 </p>
 
 <p align="center">
@@ -64,7 +64,7 @@ Artifact Gateway 有意把运维控制面保持得足够精简：
 
 Cargo 目前只是分阶段建设的解析与身份基础，NuGet 仍属于路线图工作；两者都不作为
 可用仓库格式对外声明。准确且受测试约束的说明以
-[协议兼容性基线](docs/protocol-compatibility.md)为准。
+[协议兼容性基线](docs/protocol-compatibility.zh-CN.md)为准。
 
 除协议读写外，当前基础还包括仓库授权、本地用户与 OIDC、Service Account、匿名读取
 策略、审计、搜索与浏览、保留策略、可恢复删除、晋升、复制、Webhook、扫描器集成、
@@ -105,7 +105,7 @@ make down         # 停止 Compose 服务并保留数据卷
 ![Artifact Gateway 轻量级系统架构](docs/assets/artifact-gateway-system-architecture.png)
 
 默认 `standalone` 角色在一个进程中同时运行 API、Scheduler 和 Worker。规模扩大后可按
-角色拆分同一镜像，无需额外引入消息队列或服务发现。详见[整体架构](ARCHITECTURE.md)、
+角色拆分同一镜像，无需额外引入消息队列或服务发现。详见[整体架构](ARCHITECTURE.zh-CN.md)、
 [架构图](docs/architecture-diagrams.zh-CN.md)和
 [PostgreSQL 能力](docs/postgresql-capabilities.md)。
 
@@ -114,16 +114,16 @@ make down         # 停止 Compose 服务并保留数据卷
 | 需求 | 从这里开始 |
 | --- | --- |
 | 建立本地开发环境 | [快速入门](docs/getting-started.zh-CN.md) |
-| 确认协议实际能力 | [协议兼容性](docs/protocol-compatibility.md) |
-| 理解代码与运行边界 | [整体架构](ARCHITECTURE.md) |
+| 确认协议实际能力 | [协议兼容性](docs/protocol-compatibility.zh-CN.md) |
+| 理解代码与运行边界 | [整体架构](ARCHITECTURE.zh-CN.md) |
 | 查看系统、发布与后台任务流程 | [架构图](docs/architecture-diagrams.zh-CN.md) |
 | 理解 PostgreSQL 协调能力 | [PostgreSQL 能力](docs/postgresql-capabilities.md) |
 | 查看体积、内存与本地并发基线 | [性能基线](docs/performance-baseline.zh-CN.md) |
 | 查看当前工程质量 | [项目质量评估](docs/project-quality-assessment.zh-CN.md) |
-| 配置身份与权限 | [用户治理](docs/user-governance.md)、[OIDC SSO](docs/oidc-sso.md)、[Service Account](docs/service-account-operations.md) |
-| 部署与恢复 | [Kubernetes](docs/kubernetes-deployment.md)、[分布式部署](docs/distributed-deployment.md)、[恢复手册](docs/recovery-runbook.md) |
-| 扩展制品格式 | [格式扩展指南](docs/format-extension-guide.md) |
-| 修改管理 API | [OpenAPI 治理](docs/openapi-governance-plan.md) |
+| 配置身份与权限 | [用户治理](docs/user-governance.md)（仅英文）、[OIDC SSO](docs/oidc-sso.md)（仅英文）、[Service Account](docs/service-account-operations.md)（仅英文） |
+| 部署与恢复 | [Kubernetes](docs/kubernetes-deployment.md)（仅英文）、[分布式部署](docs/distributed-deployment.md)、[恢复手册](docs/recovery-runbook.zh-CN.md) |
+| 扩展制品格式 | [格式扩展指南](docs/format-extension-guide.md)（仅英文） |
+| 修改管理 API | [OpenAPI 治理](docs/openapi-governance-plan.md)（仅英文） |
 | 浏览全部维护文档 | [文档总索引](docs/README.zh-CN.md) |
 
 ## 开发工作流
@@ -137,7 +137,7 @@ make build
 ```
 
 协议、持久化、Console 和部署变更还有各自的专项门禁。禁止手工修改生成的 OpenAPI
-客户端与服务端契约。修改代码前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，并将用户
+客户端与服务端契约。修改代码前请阅读[参与开发](CONTRIBUTING.zh-CN.md)，并将用户
 可见变化记录到 [CHANGELOG.md](CHANGELOG.md) 的 `Unreleased` 章节。
 
 新增制品生态必须通过[格式准入规则](docs/format-extension-guide.md)。只增加枚举、路由
