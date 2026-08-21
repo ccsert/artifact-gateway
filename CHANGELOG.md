@@ -74,6 +74,11 @@ a dated version heading without rewriting their meaning.
   overviews, plus an evidence-backed guide to the PostgreSQL-native locking,
   queueing, notification, JSONB, search-index, and observability features that
   keep the control plane lightweight.
+- Added a reproducible isolated-Docker performance baseline covering stripped
+  Go binaries, the distroless runtime image, quiet Gateway/PostgreSQL/RustFS
+  memory, authenticated PostgreSQL metadata reads, and 64 KiB Raw reads through
+  RustFS, with bilingual evidence, explicit limitations, and a one-command
+  runner that removes its containers, volumes, and ephemeral credentials.
 
 - A bounded Cargo C0 parser foundation that validates official publish framing
   and complete `.crate` gzip/tar archives, derives collision-safe immutable

@@ -2,7 +2,7 @@
 
 [简体中文](project-quality-assessment.zh-CN.md) · [Documentation index](README.md)
 
-Snapshot: 2026-08-20. This assessment describes engineering quality during the
+Snapshot: 2026-08-21. This assessment describes engineering quality during the
 pre-public preparation stage. It is not a production certification or release
 approval.
 
@@ -22,6 +22,7 @@ Console modules safely while the feature surface continues to grow.
 | Maintainability | Needs focused work | Several route, model, and native-protocol files are large enough to slow review and increase change coupling. |
 | Documentation | Good entry points, uneven depth | The README, quick start, and index are bilingual; most deep technical records remain single-language or mixed-language. |
 | Operability | Good preparation baseline | Health, metrics, diagnostics, recovery, Kubernetes, and distributed-role guidance exist; production evidence is still preparation work. |
+| Performance | Reproducible local baseline | Binary/image size, quiet memory, and authenticated PostgreSQL/RustFS reads are measured; controlled production-like load and soak remain open. |
 | Public-project readiness | Deliberately deferred | Licensing, formal distribution, a public security-reporting channel, and public support commitments are outside the current scope. |
 
 ## What is already high quality
@@ -36,6 +37,9 @@ Console modules safely while the feature surface continues to grow.
   through one drift check.
 - Migration, backup/restore, readiness, dependency, and coverage checks are
   versioned with the repository.
+- The isolated-Docker [performance baseline](performance-baseline.md) quantifies
+  deliverable size, quiet memory, concurrent throughput, and observed peaks
+  without presenting a laptop result as a production SLA.
 - Preview work such as APT Hosted, Cargo, and NuGet is kept distinguishable
   from advertised support.
 
@@ -79,7 +83,10 @@ research in one canonical language unless it becomes user-facing.
 `make test` protects shared local behavior, while full protocol E2E,
 integration, browser, performance, rotation, upgrade, and recovery gates are
 separate targets. The preparation checklist must continue to point to exact CI
-evidence rather than treating one green command as full release proof.
+evidence rather than treating one green command as full release proof. The
+current performance report is a reproducible arm64 local baseline; it still
+needs a controlled Linux/amd64 runner, resource limits, TLS/ingress, mixed
+traffic, and sustained soak before it can become a release threshold.
 
 ## Recommended improvement sequence
 
@@ -94,7 +101,10 @@ evidence rather than treating one green command as full release proof.
    from Hosted/Proxy/Group application services one format at a time.
 5. **Raise focused coverage with each extraction.** Increase floors only after
    meaningful boundary tests exist; never lower a floor to pass CI.
-6. **Maintain a preparation matrix.** Record exact commit, clean worktree,
+6. **Promote performance evidence deliberately.** Repeat the baseline on a
+   controlled Linux/amd64 runner, then add hard limits, mixed traffic, and soak
+   thresholds without converting one laptop snapshot into a universal claim.
+7. **Maintain a preparation matrix.** Record exact commit, clean worktree,
    immutable image, CI run, integration evidence, recovery evidence, target
    environment, and named approval when formal distribution work begins.
 
