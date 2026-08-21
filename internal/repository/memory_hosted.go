@@ -156,6 +156,7 @@ func (s *MemoryStore) UpdateHostedRepository(_ context.Context, repo HostedRepos
 	current.Endpoint = repo.Endpoint
 	current.AllowedHosts = append([]string(nil), repo.AllowedHosts...)
 	current.AnonymousRead = repo.AnonymousRead
+	current.MavenStrictPublication = repo.MavenStrictPublication
 	current.EgressProxy = cloneEgressProxy(repo.EgressProxy)
 	current.Version = nextHostedGroupVersion(current.Version)
 	s.hostedRepositories[repo.ID] = current

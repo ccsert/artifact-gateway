@@ -12,11 +12,16 @@ async function mockRepositoryDetail(
   }: {
     scannerEnabled?: boolean;
     distributionEnabled?: boolean;
-    format?: "raw" | "npm";
+    format?: "raw" | "npm" | "maven";
   } = {},
 ) {
   await authenticateAsAdmin(page);
-  const repositoryName = format === "npm" ? "npm-hosted" : "release-files";
+  const repositoryName =
+    format === "npm"
+      ? "npm-hosted"
+      : format === "maven"
+        ? "maven-hosted"
+        : "release-files";
   const npmPackage = "pipeone-npm-frontend-validation-v2-beta";
   const npmDigest = `sha256:${"8".repeat(64)}`;
 
@@ -60,6 +65,7 @@ async function mockRepositoryDetail(
                 format: "raw",
                 type: "hosted",
                 anonymousRead: true,
+                mavenStrictPublication: false,
                 state: "active",
                 version: "1",
               },
@@ -69,6 +75,7 @@ async function mockRepositoryDetail(
                 format: "raw",
                 type: "hosted",
                 anonymousRead: false,
+                mavenStrictPublication: false,
                 state: "active",
                 version: "1",
               },
@@ -78,6 +85,7 @@ async function mockRepositoryDetail(
                 format: "raw",
                 type: "proxy",
                 anonymousRead: false,
+                mavenStrictPublication: false,
                 state: "active",
                 version: "1",
               },
@@ -162,6 +170,7 @@ async function mockRepositoryDetail(
           format,
           type: "hosted",
           anonymousRead: true,
+          mavenStrictPublication: false,
           state: "active",
           version: "2",
         },
@@ -314,6 +323,7 @@ async function mockRepositoryDetail(
         format,
         type: "hosted",
         anonymousRead: true,
+        mavenStrictPublication: false,
         state: "active",
         version: "1",
       },
@@ -583,7 +593,7 @@ test("repository detail keeps operational content above the fold", async ({
 test("repository settings live in a tab and keep the update workflow", async ({
   page,
 }, testInfo) => {
-  await mockRepositoryDetail(page);
+  await mockRepositoryDetail(page, { format: "maven" });
   const updateRequest = page.waitForRequest(
     (request) =>
       request.method() === "PATCH" &&
@@ -607,16 +617,51 @@ test("repository settings live in a tab and keep the update workflow", async ({
       return Math.abs(tabCenter - indicatorCenter);
     })
     .toBeLessThan(2);
-  await expect(page.getByRole("switch")).toBeVisible();
-  await expect(page.getByRole("switch")).toBeChecked();
+  const anonymousSwitch = page.getByRole("switch", { name: "允许匿名读取" });
+  const strictSwitch = page.getByRole("switch", { name: "严格发布" });
+  await expect(anonymousSwitch).toBeChecked();
+  await expect(strictSwitch).not.toBeChecked();
+
+  const [anonymousPolicy, strictPolicy] = await Promise.all([
+    anonymousSwitch.locator("..").boundingBox(),
+    strictSwitch.locator("..").boundingBox(),
+  ]);
+  expect(anonymousPolicy).not.toBeNull();
+  expect(strictPolicy).not.toBeNull();
+  const policyGap =
+    (strictPolicy?.y ?? 0) -
+    ((anonymousPolicy?.y ?? 0) + (anonymousPolicy?.height ?? 0));
+  expect(policyGap).toBeGreaterThanOrEqual(23);
+  expect(policyGap).toBeLessThanOrEqual(25);
+
+  await strictSwitch.click();
   await page.getByRole("button", { name: "保存更改" }).click();
 
-  await updateRequest;
+  const submitted = await updateRequest;
+  expect(submitted.postDataJSON()).toMatchObject({
+    anonymousRead: true,
+    mavenStrictPublication: true,
+  });
   await expect(page.getByText("仓库设置已保存")).toBeVisible();
 
   if (process.env.CAPTURE_REPOSITORY_DETAIL) {
     await page.screenshot({
-      path: testInfo.outputPath("repository-settings.png"),
+      path: testInfo.outputPath("repository-settings-desktop.png"),
+      fullPage: true,
+    });
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.body.scrollWidth - document.body.clientWidth,
+    ),
+  ).toBe(0);
+  await expect(strictSwitch).toBeVisible();
+
+  if (process.env.CAPTURE_REPOSITORY_DETAIL) {
+    await page.screenshot({
+      path: testInfo.outputPath("repository-settings-mobile.png"),
       fullPage: true,
     });
   }

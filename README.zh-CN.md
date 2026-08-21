@@ -55,7 +55,7 @@ Artifact Gateway 有意把运维控制面保持得足够精简：
 | --- | :---: | :---: | :---: | --- |
 | OCI | ✓ | ✓ | ✓ | Registry V2 上传、Manifest、Tag、Range 与 Referrer |
 | Raw | ✓ | ✓ | ✓ | PUT/GET/HEAD、Range、校验和与断点续传 |
-| Maven | ✓ | ✓ | ✓ | Maven/Gradle 暂存与显式坐标提交 |
+| Maven | ✓ | ✓ | ✓ | 默认支持标准 Maven/Gradle 直接发布；可选[严格坐标提交](docs/maven-hosted-publication.zh-CN.md) |
 | Conan 2 | ✓ | ✓ | ✓ | 感知 Revision 的发布与生命周期 |
 | npm | ✓ | ✓ | ✓ | 原生发布、可信缓存与 Packument 合并 |
 | PyPI | ✓ | ✓ | ✓ | twine 上传与 PEP 503/691 读取 |
@@ -65,6 +65,10 @@ Artifact Gateway 有意把运维控制面保持得足够精简：
 Cargo 目前只是分阶段建设的解析与身份基础，NuGet 仍属于路线图工作；两者都不作为
 可用仓库格式对外声明。准确且受测试约束的说明以
 [协议兼容性基线](docs/protocol-compatibility.zh-CN.md)为准。
+
+Maven Hosted 默认采用与 Nexus 兼容的直接发布，普通 `mvn deploy` 和 Gradle `publish`
+不需要 companion 步骤。需要单坐标原子可见性时，可以按仓库开启严格发布，并由 CI 或
+发布集成额外调用 Gateway commit。
 
 除协议读写外，当前基础还包括仓库授权、本地用户与 OIDC、Service Account、匿名读取
 策略、审计、搜索与浏览、保留策略、可恢复删除、晋升、复制、Webhook、扫描器集成、
@@ -115,6 +119,7 @@ make down         # 停止 Compose 服务并保留数据卷
 | --- | --- |
 | 建立本地开发环境 | [快速入门](docs/getting-started.zh-CN.md) |
 | 确认协议实际能力 | [协议兼容性](docs/protocol-compatibility.zh-CN.md) |
+| 发布 Maven Hosted 坐标 | [Maven Hosted 发布流程](docs/maven-hosted-publication.zh-CN.md) |
 | 理解代码与运行边界 | [整体架构](ARCHITECTURE.zh-CN.md) |
 | 查看系统、发布与后台任务流程 | [架构图](docs/architecture-diagrams.zh-CN.md) |
 | 理解 PostgreSQL 协调能力 | [PostgreSQL 能力](docs/postgresql-capabilities.md) |

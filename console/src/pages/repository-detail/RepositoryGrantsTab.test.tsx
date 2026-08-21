@@ -34,6 +34,7 @@ const repository: Repository = {
   format: "raw",
   type: "hosted",
   anonymousRead: false,
+  mavenStrictPublication: false,
   state: "active",
   version: "1",
 };

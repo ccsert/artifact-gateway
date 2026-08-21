@@ -2698,7 +2698,10 @@ type CreateRepository struct {
 	// Endpoint Upstream base URL. Required when type is proxy; must be empty for hosted repositories.
 	Endpoint *string `json:"endpoint,omitempty"`
 	Format   Format  `json:"format"`
-	Name     string  `json:"name"`
+
+	// MavenStrictPublication Maven Hosted only. Opt in to Gateway coordinate commits and atomic per-coordinate visibility. The default false mode accepts standard Maven/Gradle publishing without a companion integration.
+	MavenStrictPublication *bool  `json:"mavenStrictPublication,omitempty"`
+	Name                   string `json:"name"`
 
 	// Type APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
 	Type *CreateRepositoryType `json:"type,omitempty"`
@@ -3499,7 +3502,10 @@ type Repository struct {
 	Endpoint    *string      `json:"endpoint,omitempty"`
 	Format      Format       `json:"format"`
 	Id          string       `json:"id"`
-	Name        string       `json:"name"`
+
+	// MavenStrictPublication Maven Hosted only. When false (the default), successful standard Maven/Gradle PUTs are published directly. When true, uploaded coordinates remain unreadable until the Gateway coordinate commit succeeds.
+	MavenStrictPublication bool   `json:"mavenStrictPublication"`
+	Name                   string `json:"name"`
 
 	// State Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
 	State RepositoryState `json:"state"`
@@ -3899,7 +3905,7 @@ type SiteSettingsUpdate struct {
 	SiteName string `json:"siteName"`
 }
 
-// UpdateRepository Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
+// UpdateRepository Editable repository management policy and proxy configuration. Hosted repositories accept anonymousRead updates and Maven Hosted repositories also accept mavenStrictPublication updates; name, format, and type are immutable after creation.
 type UpdateRepository struct {
 	// AllowedHosts Hosts the proxy may egress to. Required for raw, conan, and npm proxies. npm tarball redirects are limited to this list.
 	AllowedHosts *[]string `json:"allowedHosts,omitempty"`
@@ -3912,6 +3918,9 @@ type UpdateRepository struct {
 
 	// Endpoint Upstream base URL (https). Required for proxy repositories.
 	Endpoint *string `json:"endpoint,omitempty"`
+
+	// MavenStrictPublication Maven Hosted only. False publishes successful standard PUTs directly; true requires a Gateway coordinate commit before reads can resolve the uploaded coordinate.
+	MavenStrictPublication *bool `json:"mavenStrictPublication,omitempty"`
 }
 
 // UpdateScheduledTask defines model for UpdateScheduledTask.

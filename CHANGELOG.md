@@ -243,6 +243,12 @@ a dated version heading without rewriting their meaning.
 
 ### Fixed
 
+- Made Maven Hosted publication Nexus-compatible by default: successful
+  standard Maven/Gradle uploads are directly readable without a companion
+  integration. Added the default-disabled `mavenStrictPublication` repository
+  switch for teams that prefer Gateway coordinate commits and atomic
+  per-coordinate visibility, plus bilingual guidance and real-client coverage
+  for both modes.
 - Generated Maven-compatible SNAPSHOT metadata using the latest timestamped
   version value and separate extension/classifier fields, so standard Maven
   clients can resolve POM, JAR, sources, and javadoc assets while older

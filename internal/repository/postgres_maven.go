@@ -243,6 +243,122 @@ func (s *PostgresStore) CommitMavenPublishSession(ctx context.Context, id string
 	return artifact, err
 }
 
+// PublishMavenProtocolAssets makes the paths from one successful standard
+// Maven PUT visible. It never changes bytes already assigned to a path; later
+// PUTs may only append previously absent classifier paths to a release.
+func (s *PostgresStore) PublishMavenProtocolAssets(ctx context.Context, id string, assets []MavenAsset) (MavenArtifact, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var session MavenPublishSession
+	var objects []byte
+	if err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,publisher,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE id::text=$1 FOR UPDATE`, id).Scan(&session.ID, &session.RepositoryID, &session.Coordinate, &session.Publisher, &session.PomObject, &session.State, &session.ExpiresAt, &objects); errors.Is(err, sql.ErrNoRows) {
+		return MavenArtifact{}, ErrNotFound
+	} else if err != nil {
+		return MavenArtifact{}, err
+	}
+	if session.State != "open" || time.Now().After(session.ExpiresAt) {
+		return MavenArtifact{}, ErrDisabled
+	}
+	if err = json.Unmarshal(objects, &session.Objects); err != nil || len(session.Objects) == 0 {
+		return MavenArtifact{}, ErrDisabled
+	}
+	lockKey := session.RepositoryID + ":" + session.Coordinate
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+		return MavenArtifact{}, err
+	}
+
+	var artifact MavenArtifact
+	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number FROM native_maven_artifacts WHERE id=$1`, id).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber)
+	if errors.Is(err, sql.ErrNoRows) && !IsMavenSnapshotCoordinate(session.Coordinate) {
+		err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number FROM native_maven_artifacts WHERE repository_id=$1 AND coordinate=$2 ORDER BY build_number DESC LIMIT 1 FOR UPDATE`, session.RepositoryID, session.Coordinate).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber)
+	}
+	if err == nil && artifact.State != "visible" {
+		return MavenArtifact{}, ErrNameExists
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return MavenArtifact{}, err
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		artifact = MavenArtifact{ID: id, RepositoryID: session.RepositoryID, Coordinate: session.Coordinate, Digest: session.Objects[0].Digest, State: "visible"}
+		if IsMavenSnapshotCoordinate(session.Coordinate) {
+			if err = tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(build_number),0)+1 FROM native_maven_artifacts WHERE repository_id=$1 AND coordinate=$2`, artifact.RepositoryID, artifact.Coordinate).Scan(&artifact.BuildNumber); err != nil {
+				return MavenArtifact{}, err
+			}
+		}
+		err = tx.QueryRowContext(ctx, `INSERT INTO native_maven_artifacts (id,repository_id,coordinate,digest,state,build_number) VALUES ($1,$2,$3,$4,'visible',$5) RETURNING created_at`, artifact.ID, artifact.RepositoryID, artifact.Coordinate, artifact.Digest, artifact.BuildNumber).Scan(&artifact.CreatedAt)
+		if isUnique(err) {
+			return MavenArtifact{}, ErrNameExists
+		}
+		if err != nil {
+			return MavenArtifact{}, err
+		}
+	}
+
+	for _, asset := range assets {
+		if asset.RepositoryID != session.RepositoryID {
+			return MavenArtifact{}, ErrDisabled
+		}
+		if artifact.BuildNumber > 0 {
+			asset.Path = mavenSnapshotTimestampedPath(asset.Path, artifact.Coordinate, artifact.CreatedAt, artifact.BuildNumber)
+		}
+		var existing MavenAsset
+		existingErr := tx.QueryRowContext(ctx, `SELECT repository_id::text,path,object_key,digest,size FROM native_maven_assets WHERE repository_id=$1 AND path=$2 FOR UPDATE`, asset.RepositoryID, asset.Path).Scan(&existing.RepositoryID, &existing.Path, &existing.ObjectKey, &existing.Digest, &existing.Size)
+		if existingErr == nil {
+			if existing.ObjectKey != asset.ObjectKey || existing.Digest != asset.Digest || existing.Size != asset.Size {
+				return MavenArtifact{}, ErrNameExists
+			}
+			continue
+		}
+		if !errors.Is(existingErr, sql.ErrNoRows) {
+			return MavenArtifact{}, existingErr
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_intents (object_key,session_id,digest,size) VALUES ($1,$2,$3,$4) ON CONFLICT (object_key) DO NOTHING`, asset.ObjectKey, session.ID, asset.Digest, asset.Size); err != nil {
+			return MavenArtifact{}, err
+		}
+		var claimed, deleted bool
+		if err = tx.QueryRowContext(ctx, `SELECT claimed_at IS NOT NULL, deleted_at IS NOT NULL FROM native_maven_object_intents WHERE object_key=$1 FOR UPDATE`, asset.ObjectKey).Scan(&claimed, &deleted); err != nil {
+			return MavenArtifact{}, err
+		}
+		if claimed || deleted {
+			return MavenArtifact{}, ErrDisabled
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_assets (repository_id,path,object_key,digest,size) VALUES ($1,$2,$3,$4,$5)`, asset.RepositoryID, asset.Path, asset.ObjectKey, asset.Digest, asset.Size); err != nil {
+			if isUnique(err) {
+				return MavenArtifact{}, ErrNameExists
+			}
+			if IsQuotaExceeded(err) {
+				return MavenArtifact{}, ErrQuotaExceeded
+			}
+			return MavenArtifact{}, err
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_references (object_key,repository_id) VALUES ($1,$2) ON CONFLICT (object_key) DO NOTHING`, asset.ObjectKey, asset.RepositoryID); err != nil {
+			return MavenArtifact{}, err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return MavenArtifact{}, err
+	}
+	return artifact, nil
+}
+
+func (s *PostgresStore) CompleteMavenProtocolPublications(ctx context.Context, repositoryID, publisher, selector string, exact bool) error {
+	if exact {
+		_, err := s.db.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET state='committed' WHERE repository_id=$1 AND publisher=$2 AND state='open' AND coordinate=$3`, repositoryID, publisher, selector)
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET state='committed' WHERE repository_id=$1 AND publisher=$2 AND state='open' AND coordinate LIKE $3 || '%' ESCAPE '\'`, repositoryID, publisher, escapeLikePrefix(selector))
+	return err
+}
+
+func (s *PostgresStore) HasOpenMavenPublishSessions(ctx context.Context, repositoryID string) (bool, error) {
+	var open bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_maven_publish_sessions WHERE repository_id=$1 AND state='open' AND expires_at>now())`, repositoryID).Scan(&open)
+	return open, err
+}
+
 func (s *PostgresStore) CommitMavenPublishSessionIdempotently(ctx context.Context, id, key, payload string, assets []MavenAsset) (MavenArtifact, bool, error) {
 	return s.commitMavenPublishSession(ctx, id, key, payload, assets)
 }

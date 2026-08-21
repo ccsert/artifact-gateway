@@ -249,15 +249,20 @@ func TestGlobalArtifactSearchContract(t *testing.T) {
 	}
 }
 
-func TestMavenCoordinateCommitContract(t *testing.T) {
+func TestMavenPublicationPolicyContract(t *testing.T) {
 	spec := loadNativeHostedSpec(t)
 	stage := operation(t, spec, "/repository/maven/{repository}/{assetPath}", "PUT")
 	for _, status := range []string{"201", "401", "409", "422"} {
 		requireResponse(t, stage, status)
 	}
 	path := spec.Paths.Find("/repository/maven/{repository}/{assetPath}")
-	if path.Extensions["x-gateway-publication"] != "stage_only_until_explicit_coordinate_commit" {
-		t.Fatal("Maven deploy must stage until explicit coordinate commit")
+	if path.Extensions["x-gateway-publication"] != "direct_by_default_strict_coordinate_commit_opt_in" {
+		t.Fatal("Maven deploy must publish directly by default and keep coordinate commit opt-in")
+	}
+	repositorySchema := spec.Components.Schemas["Repository"].Value
+	policy := repositorySchema.Properties["mavenStrictPublication"].Value
+	if policy == nil || policy.Type == nil || !policy.Type.Is("boolean") || policy.Default != false {
+		t.Fatalf("Maven strict publication policy must be a default-false boolean: %#v", policy)
 	}
 
 	commit := operation(t, spec, "/repository/maven/{repository}/coordinates/{coordinate}:commit", "POST")
@@ -317,14 +322,15 @@ func TestNativeHostedProtocolReadLifecycleFixtures(t *testing.T) {
 		status             []string
 		catchAll           string
 		securitySchemes    []string
+		visibility         string
 	}{
-		{"Raw multi-segment path", "/raw/{repository}/{path}", "GET", []string{"200", "401", "404"}, "path", []string{"protocolBasicAuth", "protocolBearerAuth"}},
-		{"Raw multi-segment path metadata", "/raw/{repository}/{path}", "HEAD", []string{"200", "401", "404"}, "path", []string{"protocolBasicAuth", "protocolBearerAuth"}},
-		{"OCI manifest by tag or digest", "/v2/{name}/manifests/{reference}", "GET", []string{"200", "401", "404", "406"}, "", []string{"ociBearerAuth"}},
-		{"OCI blob by digest", "/v2/{name}/blobs/{digest}", "GET", []string{"200", "401", "404"}, "", []string{"ociBearerAuth"}},
-		{"OCI tag list", "/v2/{name}/tags/list", "GET", []string{"200", "400", "401", "404"}, "", []string{"ociBearerAuth"}},
-		{"OCI tag list metadata", "/v2/{name}/tags/list", "HEAD", []string{"200", "400", "401", "404"}, "", []string{"ociBearerAuth"}},
-		{"Maven POM component metadata path", "/repository/maven/{repository}/{assetPath}", "GET", []string{"200", "401", "404"}, "assetPath", []string{"protocolBasicAuth", "protocolBearerAuth"}},
+		{"Raw multi-segment path", "/raw/{repository}/{path}", "GET", []string{"200", "401", "404"}, "path", []string{"protocolBasicAuth", "protocolBearerAuth"}, "committed_only"},
+		{"Raw multi-segment path metadata", "/raw/{repository}/{path}", "HEAD", []string{"200", "401", "404"}, "path", []string{"protocolBasicAuth", "protocolBearerAuth"}, "committed_only"},
+		{"OCI manifest by tag or digest", "/v2/{name}/manifests/{reference}", "GET", []string{"200", "401", "404", "406"}, "", []string{"ociBearerAuth"}, "committed_only"},
+		{"OCI blob by digest", "/v2/{name}/blobs/{digest}", "GET", []string{"200", "401", "404"}, "", []string{"ociBearerAuth"}, "committed_only"},
+		{"OCI tag list", "/v2/{name}/tags/list", "GET", []string{"200", "400", "401", "404"}, "", []string{"ociBearerAuth"}, "committed_only"},
+		{"OCI tag list metadata", "/v2/{name}/tags/list", "HEAD", []string{"200", "400", "401", "404"}, "", []string{"ociBearerAuth"}, "committed_only"},
+		{"Maven POM component metadata path", "/repository/maven/{repository}/{assetPath}", "GET", []string{"200", "401", "404"}, "assetPath", []string{"protocolBasicAuth", "protocolBearerAuth"}, "repository_policy"},
 	}
 	for _, fixture := range fixtures {
 		t.Run(fixture.name, func(t *testing.T) {
@@ -333,15 +339,15 @@ func TestNativeHostedProtocolReadLifecycleFixtures(t *testing.T) {
 			for _, status := range fixture.status {
 				requireResponse(t, op, status)
 			}
-			// 404 covers a staged session: protocol reads become addressable only after commit.
+			// A 404 covers absent content and, for strict Maven publication, a staged session.
 			if fixture.catchAll != "" && item.Extensions["x-gateway-catchAll"] != fixture.catchAll {
 				t.Fatalf("catch-all=%v want %q", item.Extensions["x-gateway-catchAll"], fixture.catchAll)
 			}
 			if len(item.Servers) != 1 || item.Servers[0].URL != "https://gateway.example.com" {
 				t.Fatalf("protocol route must override management API server: %#v", item.Servers)
 			}
-			if item.Extensions["x-gateway-visibility"] != "committed_only" {
-				t.Fatalf("protocol fixture must be unreadable before commit: %v", item.Extensions["x-gateway-visibility"])
+			if item.Extensions["x-gateway-visibility"] != fixture.visibility {
+				t.Fatalf("protocol fixture visibility=%v want %s", item.Extensions["x-gateway-visibility"], fixture.visibility)
 			}
 			if op.Security == nil {
 				t.Fatal("protocol operation must override management API security")
@@ -444,10 +450,10 @@ func TestNativeHostedContractHasLifecycleAndRetirementDecisions(t *testing.T) {
 	for _, phrase := range []string{
 		"PostgreSQL is authoritative", "Object upload precedes metadata promotion", "orphan collector",
 		"Idempotency-Key", "pageToken", "Native hosted completion boundary", "non-goals",
-		"/groups/{groupId}/members", "gateway catch-all", "Docker-Content-Digest", "generated from committed coordinates",
-		"Maven and Gradle do not define a portable transaction-complete request", "Gateway never infers publication completion",
-		"The production flow retains standard Maven repository URLs and HTTP `PUT`", "expected-name list is an incompleteness assertion",
-		"FOR UPDATE SKIP LOCKED", "session_expired",
+		"/groups/{groupId}/members", "gateway catch-all", "Docker-Content-Digest", "generated from visible, verified coordinates",
+		"Maven and Gradle do not define a portable transaction-complete request", "Direct mode deliberately accepts",
+		"mavenStrictPublication=false", "expected-name list is an incompleteness",
+		"FOR UPDATE SKIP LOCKED", "session_closed",
 	} {
 		if !strings.Contains(doc, phrase) {
 			t.Errorf("missing contract decision %q", phrase)

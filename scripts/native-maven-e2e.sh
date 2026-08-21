@@ -58,19 +58,25 @@ expect_status() {
 
 basic=(--user fixture:fixture-secret)
 
-# A partially staged coordinate, a reordered checksum, and client metadata
-# must all remain invisible. Maven and Gradle may emit these in any order.
-partial_pom='<project><modelVersion>4.0.0</modelVersion><groupId>org.example</groupId><artifactId>partial</artifactId><version>0.0.1</version></project>'
-expect_status 201 "${basic[@]}" -X PUT --data-binary "$partial_pom" "$gateway_url/repository/maven/deploys/org/example/partial/0.0.1/partial-0.0.1.pom"
-expect_status 201 "${basic[@]}" -X PUT --data-binary deadbeef "$gateway_url/repository/maven/deploys/org/example/partial/0.0.1/partial-0.0.1.jar.sha256"
-expect_status 201 "${basic[@]}" -X PUT --data-binary '<metadata/>' "$gateway_url/repository/maven/deploys/org/example/partial/maven-metadata.xml"
-for path in \
-  org/example/partial/0.0.1/partial-0.0.1.pom \
-  org/example/partial/0.0.1/partial-0.0.1.jar \
-  org/example/partial/0.0.1/partial-0.0.1.jar.sha256 \
-  org/example/partial/maven-metadata.xml; do
-  expect_status 404 "${basic[@]}" "$gateway_url/repository/maven/deploys/$path"
-done
+# Strict publication remains available as an explicit repository policy. A
+# complete coordinate stays invisible until the Gateway commit, while client
+# checksum sidecars and metadata remain non-authoritative assertions.
+strict_pom='<project><modelVersion>4.0.0</modelVersion><groupId>org.example</groupId><artifactId>strict-widget</artifactId><version>0.0.1</version></project>'
+expect_status 201 "${basic[@]}" -X PUT --data-binary "$strict_pom" "$gateway_url/repository/maven/strict-deploys/org/example/strict-widget/0.0.1/strict-widget-0.0.1.pom"
+expect_status 201 "${basic[@]}" -X PUT --data-binary strict-bytecode "$gateway_url/repository/maven/strict-deploys/org/example/strict-widget/0.0.1/strict-widget-0.0.1.jar"
+expect_status 201 "${basic[@]}" -X PUT --data-binary deadbeef "$gateway_url/repository/maven/strict-deploys/org/example/strict-widget/0.0.1/strict-widget-0.0.1.jar.sha256"
+expect_status 201 "${basic[@]}" -X PUT --data-binary '<metadata/>' "$gateway_url/repository/maven/strict-deploys/org/example/strict-widget/maven-metadata.xml"
+expect_status 404 "${basic[@]}" "$gateway_url/repository/maven/strict-deploys/org/example/strict-widget/0.0.1/strict-widget-0.0.1.jar"
+expect_status 200 "${basic[@]}" -H 'Idempotency-Key: strict-release' -H 'Content-Type: application/json' \
+  --data '{"expectedAssetNames":["strict-widget-0.0.1.pom","strict-widget-0.0.1.jar"]}' \
+  "$gateway_url/repository/maven/strict-deploys/coordinates/org.example:strict-widget:0.0.1:commit"
+expect_status 200 "${basic[@]}" "$gateway_url/repository/maven/strict-deploys/org/example/strict-widget/0.0.1/strict-widget-0.0.1.jar"
+expect_status 200 "${basic[@]}" -H 'Idempotency-Key: strict-release' -H 'Content-Type: application/json' \
+  --data '{"expectedAssetNames":["strict-widget-0.0.1.jar","strict-widget-0.0.1.pom"]}' \
+  "$gateway_url/repository/maven/strict-deploys/coordinates/org.example:strict-widget:0.0.1:commit"
+expect_status 409 "${basic[@]}" -H 'Idempotency-Key: strict-release-other' -H 'Content-Type: application/json' \
+  --data '{"expectedAssetNames":["strict-widget-0.0.1.pom","strict-widget-0.0.1.jar"]}' \
+  "$gateway_url/repository/maven/strict-deploys/coordinates/org.example:strict-widget:0.0.1:commit"
 
 maven_dir="$workdir/maven"
 mkdir -p "$maven_dir"
@@ -81,15 +87,8 @@ cat >"$maven_dir/pom.xml" <<EOF
 <project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>org.example</groupId><artifactId>maven-widget</artifactId><version>1.2.3</version><distributionManagement><repository><id>native</id><url>${gateway_url}/repository/maven/deploys</url></repository></distributionManagement></project>
 EOF
 (cd "$maven_dir" && mvn --batch-mode --settings settings.xml -Dmaven.repo.local="$workdir/maven-deploy-repository" deploy)
-expect_status 200 "${basic[@]}" -H 'Idempotency-Key: maven-release' -H 'Content-Type: application/json' \
-  --data '{"expectedAssetNames":["maven-widget-1.2.3.pom","maven-widget-1.2.3.jar"]}' \
-  "$gateway_url/repository/maven/deploys/coordinates/org.example:maven-widget:1.2.3:commit"
-# Commit retries use a canonical asset-name set. A different key must not turn
-# an immutable coordinate into an unbounded successful replay.
-expect_status 200 "${basic[@]}" -H 'Idempotency-Key: maven-release' -H 'Content-Type: application/json' \
-  --data '{"expectedAssetNames":["maven-widget-1.2.3.jar","maven-widget-1.2.3.pom"]}' \
-  "$gateway_url/repository/maven/deploys/coordinates/org.example:maven-widget:1.2.3:commit"
-expect_status 409 "${basic[@]}" -H 'Idempotency-Key: maven-release-other' -H 'Content-Type: application/json' \
+expect_status 200 "${basic[@]}" "$gateway_url/repository/maven/deploys/org/example/maven-widget/1.2.3/maven-widget-1.2.3.jar"
+expect_status 409 "${basic[@]}" -H 'Idempotency-Key: direct-mode-does-not-commit' -H 'Content-Type: application/json' \
   --data '{"expectedAssetNames":["maven-widget-1.2.3.pom","maven-widget-1.2.3.jar"]}' \
   "$gateway_url/repository/maven/deploys/coordinates/org.example:maven-widget:1.2.3:commit"
 
@@ -140,13 +139,13 @@ configurations { nativeResolve }
 dependencies { nativeResolve 'org.example:gradle-widget:2.0.0-SNAPSHOT' }
 tasks.register('resolveNative') { doLast { configurations.nativeResolve.files.each { println it } } }
 EOF
-(cd "$gradle_dir" && GRADLE_USER_HOME="$workdir/gradle-user-home" gradle --no-daemon --quiet publish)
-expect_status 200 "${basic[@]}" -H 'Idempotency-Key: gradle-snapshot' -H 'Content-Type: application/json' \
-  --data '{"expectedAssetNames":["gradle-widget-2.0.0-SNAPSHOT.pom","gradle-widget-2.0.0-SNAPSHOT.jar","gradle-widget-2.0.0-SNAPSHOT.module"]}' \
-  "$gateway_url/repository/maven/deploys/coordinates/org.example:gradle-widget:2.0.0-SNAPSHOT:commit"
+if ! (cd "$gradle_dir" && GRADLE_USER_HOME="$workdir/gradle-user-home" gradle --no-daemon --quiet publish); then
+  cat "$workdir/gateway.log" >&2
+  exit 1
+fi
 (cd "$gradle_dir" && GRADLE_USER_HOME="$workdir/gradle-user-home" gradle --no-daemon --quiet resolveNative | grep -F 'gradle-widget-2.0.0-SNAPSHOT.jar')
 
 expect_status 200 "${basic[@]}" "$gateway_url/repository/maven/deploys/org/example/maven-widget/1.2.3/maven-widget-1.2.3.jar.sha256"
 expect_status 200 "${basic[@]}" "$gateway_url/repository/maven/deploys/org/example/gradle-widget/2.0.0-SNAPSHOT/maven-metadata.xml"
 
-printf 'Native Maven Maven/Gradle publish and resolve E2E passed through %s\n' "$gateway_url"
+printf 'Native Maven direct-by-default and strict opt-in Maven/Gradle E2E passed through %s\n' "$gateway_url"

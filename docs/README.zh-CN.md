@@ -40,6 +40,7 @@
 
 ## 格式与上游
 
+- [Maven Hosted 发布流程](maven-hosted-publication.zh-CN.md)
 - [APT Proxy](apt-proxy.md)（仅英文）
 - [APT Hosted 路线图](apt-hosted-roadmap.md)（仅英文）
 - [APT Hosted 签名](apt-hosted-signing.md)（仅英文）
@@ -75,6 +76,7 @@
 
 - [Nexus 差距分析](nexus-gap-analysis.md)（仅英文）
 - [Nexus 差距复核（2026-08）](nexus-gap-review-2026-08.md)
+- [Nexus Maven 发布行为研究](nexus-maven-publication-research.md)
 - [仓库 Console 体验路线图](repository-console-experience-roadmap.md)（仅英文）
 - [发布准备工作清单](release-readiness.md)（仅英文）
 - [内部记录模板](release-record-template.md)（仅英文）

@@ -150,6 +150,118 @@ func (s *MemoryStore) MarkMavenPublishObject(_ context.Context, id, name, key st
 	s.mavenUploads[id][name] = key
 	return nil
 }
+
+// PublishMavenProtocolAssets makes one successful standard Maven PUT visible.
+// The open session groups the files of one client deployment, while release
+// coordinates may append previously absent classifier paths without allowing
+// an existing path to change bytes.
+func (s *MemoryStore) PublishMavenProtocolAssets(_ context.Context, id string, assets []MavenAsset) (MavenArtifact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.mavenSessions[id]
+	if !ok || session.State != "open" || time.Now().After(session.ExpiresAt) {
+		return MavenArtifact{}, ErrDisabled
+	}
+	artifact, found := s.mavenArtifacts[id]
+	if !found && !IsMavenSnapshotCoordinate(session.Coordinate) {
+		for _, existing := range s.mavenArtifacts {
+			if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate {
+				if existing.State != "visible" {
+					return MavenArtifact{}, ErrNameExists
+				}
+				artifact, found = existing, true
+				break
+			}
+		}
+	}
+	if !found {
+		buildNumber := 0
+		if IsMavenSnapshotCoordinate(session.Coordinate) {
+			for _, existing := range s.mavenArtifacts {
+				if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate && existing.BuildNumber >= buildNumber {
+					buildNumber = existing.BuildNumber + 1
+				}
+			}
+			if buildNumber == 0 {
+				buildNumber = 1
+			}
+		}
+		artifact = MavenArtifact{ID: id, RepositoryID: session.RepositoryID, Coordinate: session.Coordinate, Digest: session.Objects[0].Digest, State: "visible", BuildNumber: buildNumber, CreatedAt: time.Now().UTC()}
+	}
+
+	prepared := make([]MavenAsset, 0, len(assets))
+	additionalBytes := int64(0)
+	for _, asset := range assets {
+		if artifact.BuildNumber > 0 {
+			asset.Path = mavenSnapshotTimestampedPath(asset.Path, artifact.Coordinate, artifact.CreatedAt, artifact.BuildNumber)
+		}
+		key := asset.RepositoryID + "\x00" + asset.Path
+		if existing, exists := s.mavenAssets[key]; exists {
+			if existing.ObjectKey != asset.ObjectKey || existing.Digest != asset.Digest || existing.Size != asset.Size {
+				return MavenArtifact{}, ErrNameExists
+			}
+			continue
+		}
+		if intent, exists := s.mavenObjectIntents[asset.ObjectKey]; exists && (!intent.claimedAt.IsZero() || !intent.deletedAt.IsZero()) {
+			return MavenArtifact{}, ErrDisabled
+		}
+		prepared = append(prepared, asset)
+		additionalBytes += asset.Size
+	}
+	capacity, err := s.repositoryCapacityLocked(session.RepositoryID)
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	if capacity.QuotaBytes > 0 && capacity.UsedBytes+additionalBytes > capacity.QuotaBytes {
+		return MavenArtifact{}, ErrQuotaExceeded
+	}
+	if !found {
+		s.mavenArtifacts[artifact.ID] = artifact
+	}
+	for _, asset := range prepared {
+		if _, exists := s.mavenObjectIntents[asset.ObjectKey]; !exists {
+			s.mavenObjectIntents[asset.ObjectKey] = mavenObjectIntent{createdAt: time.Now().UTC()}
+		}
+		s.mavenAssets[asset.RepositoryID+"\x00"+asset.Path] = asset
+		s.mavenObjectRefs[asset.ObjectKey] = true
+	}
+	return artifact, nil
+}
+
+func (s *MemoryStore) CompleteMavenProtocolPublications(_ context.Context, repositoryID, publisher, selector string, exact bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, session := range s.mavenSessions {
+		matches := session.Coordinate == selector
+		if !exact {
+			matches = strings.HasPrefix(session.Coordinate, selector)
+		}
+		if session.RepositoryID == repositoryID && session.Publisher == publisher && session.State == "open" && matches {
+			session.State = "committed"
+			s.mavenSessions[id] = session
+		}
+	}
+	return nil
+}
+
+func (s *MemoryStore) HasOpenMavenPublishSessions(_ context.Context, repositoryID string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	for id, session := range s.mavenSessions {
+		if session.RepositoryID != repositoryID || session.State != "open" {
+			continue
+		}
+		if !session.ExpiresAt.After(now) {
+			session.State = "expired"
+			s.mavenSessions[id] = session
+			continue
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
 func (s *MemoryStore) CommitMavenPublishSession(_ context.Context, id string, assets []MavenAsset) (MavenArtifact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

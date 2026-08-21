@@ -4554,6 +4554,7 @@
           "name",
           "format",
           "anonymousRead",
+          "mavenStrictPublication",
           "state",
           "version"
         ],
@@ -4588,6 +4589,11 @@
           "anonymousRead": {
             "type": "boolean",
             "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
+          },
+          "mavenStrictPublication": {
+            "type": "boolean",
+            "default": false,
+            "description": "Maven Hosted only. When false (the default), successful standard Maven/Gradle PUTs are published directly. When true, uploaded coordinates remain unreadable until the Gateway coordinate commit succeeds."
           },
           "egressProxy": {
             "$ref": "#/components/schemas/EgressProxy"
@@ -4644,6 +4650,11 @@
             "type": "boolean",
             "default": false,
             "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
+          },
+          "mavenStrictPublication": {
+            "type": "boolean",
+            "default": false,
+            "description": "Maven Hosted only. Opt in to Gateway coordinate commits and atomic per-coordinate visibility. The default false mode accepts standard Maven/Gradle publishing without a companion integration."
           },
           "egressProxy": {
             "$ref": "#/components/schemas/EgressProxy"
@@ -9229,7 +9240,7 @@
       },
       "UpdateRepository": {
         "type": "object",
-        "description": "Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.",
+        "description": "Editable repository management policy and proxy configuration. Hosted repositories accept anonymousRead updates and Maven Hosted repositories also accept mavenStrictPublication updates; name, format, and type are immutable after creation.",
         "additionalProperties": false,
         "properties": {
           "endpoint": {
@@ -9246,6 +9257,10 @@
           "anonymousRead": {
             "type": "boolean",
             "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
+          },
+          "mavenStrictPublication": {
+            "type": "boolean",
+            "description": "Maven Hosted only. False publishes successful standard PUTs directly; true requires a Gateway coordinate commit before reads can resolve the uploaded coordinate."
           },
           "egressProxy": {
             "$ref": "#/components/schemas/EgressProxy"

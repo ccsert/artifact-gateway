@@ -1,32 +1,38 @@
 # ADR: Native Hosted Domain and Management API Contract
 
-Status: accepted for Native Hosted Platform V3 planning. This document freezes
-the implementation contract; it does not make the endpoints available in the
-current V2 binary.
+Status: accepted architectural contract, originally written for Native Hosted
+Platform V3 planning. The runtime has since implemented and expanded beyond
+the format inventory recorded here.
+
+Use this document for metadata authority, object lifecycle, idempotency, and
+transaction rules. Use [the protocol compatibility baseline](protocol-compatibility.md)
+for the current format and endpoint inventory. Where inventory statements
+conflict, the executable tests and compatibility baseline supersede them.
 
 ## Scope and terms
 
 A **Repository** is the durable policy, authorization, and retention namespace
-for exactly one format (`raw`, `oci`, `maven`, or `conan`). Raw, OCI, and Maven
-Repositories also own one Hosted storage source; a Conan Repository is only an
-authorization target for a read-through member. A **Group** is an ordered, read-only view of Repository
+for exactly one format. The original scope below focused on `raw`, `oci`,
+`maven`, and `conan`; it is not the current supported-format catalog. A
+**Group** is an ordered, read-only view of Repository
 members of the same format; it does not own artifact bytes. A **member** is the
 membership edge between a Group and a Repository, with a unique position. An
 **artifact coordinate** is the immutable identity used by its format: a Raw
 canonical path, an OCI `repository@sha256:<digest>` (tags are mutable refs), or
 a Maven `groupId:artifactId:version[:extension[:classifier]]`.
 
-Hosted write contracts are format-specific. A `conan` Repository is an
-authorization target for a Conan read-through Group member and does not expose
-native artifact storage or publication routes. Raw uses standard
+Hosted write contracts are format-specific. Current Conan Hosted publication
+is defined by the protocol compatibility baseline and supersedes the original
+read-through-only scope recorded by this planning contract. Raw uses standard
 `PUT /raw/{repository}/{path}` and makes the verified path visible when the
 object reference is committed. OCI uses the Registry V2 upload, blob, manifest,
-and tag routes directly. Maven is the only current format that exposes a
-management publish session: standard Maven/Gradle `PUT` requests stage verified
-objects under a server-derived coordinate, then
-`POST /repository/maven/{repository}/coordinates/{coordinate}:commit` is the
-explicit visibility signal. Maven publish sessions expire and cannot be reused
-after `committed`, `aborted`, or `expired`. `Idempotency-Key` scopes Maven
+and tag routes directly. Maven standard `PUT` traffic creates an implicit
+server-side staging session under a derived coordinate. It is finalized by
+`POST /repository/maven/{repository}/coordinates/{coordinate}:commit`; this
+POST is the explicit visibility signal. Conan uses a separate management publication
+contract described by the current compatibility baseline. Maven sessions
+expire and cannot be reused after `committed`, `aborted`, or `expired`.
+`Idempotency-Key` scopes Maven
 session creation or coordinate commit to its authenticated actor and request
 target for 24 hours; a reused key with a different payload returns
 `409 idempotency_conflict`.
@@ -40,9 +46,10 @@ membership edges and Group version in one PostgreSQL transaction. Repository
 responses may embed this read model, but no Repository member-write endpoint
 exists.
 
-This contract covers native Hosted Raw, OCI, and Maven. Conan remains V2
-read-through only. Group resolution, external Proxy, and read-through cache
-continue to obey `docs/v2-contract.md`.
+The detailed rules below cover the original Native Hosted Raw, OCI, and Maven
+scope. Current Conan, npm, PyPI, Go, and APT boundaries are owned by the
+compatibility baseline and their executable tests. Group and Proxy behavior
+follows the current runtime overlay rather than stale V2 inventory statements.
 
 ## Metadata, object lifecycle, and transactions
 
@@ -156,12 +163,13 @@ returns `400 invalid_page_token`.
 ## Native formats and protocol contracts
 
 Protocol routes are distinct from the authenticated management API and use the
-protocol principal mapped to the same Repository grant policy. Staged Maven
-objects remain unreadable until coordinate commit succeeds; Raw and OCI reads
-consult only committed path, blob, manifest, and tag references. Every protocol
-route returns `404` for an absent, staged, expired, aborted, or deleted
-coordinate/path. The versioned OpenAPI file carries these exact routes and
-response shapes.
+protocol principal mapped to the same Repository grant policy. Maven Hosted
+publishes verified standard PUTs directly by default; when strict publication
+is enabled, staged Maven objects remain unreadable until coordinate commit
+succeeds. Raw and OCI reads consult only committed path, blob, manifest, and tag
+references. Every protocol route returns `404` for an absent, strictly staged,
+expired, aborted, or deleted coordinate/path. The versioned OpenAPI file carries
+these exact routes and response shapes.
 
 **Raw.** `PUT /raw/{repository}/{path}` writes a canonical immutable object and
 `GET`/`HEAD /raw/{repository}/{path}` read it back after the verified object
@@ -191,74 +199,70 @@ tag movement, upload cancel, and manifest media-type negotiation. `GET`/`HEAD
 OCI uses a Bearer `WWW-Authenticate` challenge on `401`. Manifest/tag
 resolution and blob reads are invisible before commit; a tag move atomically
 changes only the tag reference while preserving immutable manifest coordinates.
-`_catalog`, referrers, and direct blob deletion are not part of the current
-compatibility target.
+Hosted `_catalog` and referrer reads are part of the current compatibility
+target. Direct blob deletion remains unsupported. Proxy/Group expose only the
+read subset listed in the protocol compatibility baseline.
 
 **Maven.** `GET /repository/maven/{repository}/{assetPath}` reads a canonical
 multi-segment Maven asset path, for example
-`org/acme/widget/1.2.3/widget-1.2.3.pom` or its component/checksum. A Maven
-coordinate commits its POM and declared component objects together; snapshot
-and repository metadata are generated from committed coordinates, never
-accepted as client-owned mutable metadata. Uncommitted POM, component, checksum,
-and generated metadata paths are all non-readable.
+`org/acme/widget/1.2.3/widget-1.2.3.pom` or its component/checksum. Snapshot and
+repository metadata are generated from visible, verified coordinates and are
+never accepted as client-owned mutable metadata.
 
-### Maven coordinate publication
+### Maven publication policy
+
+Maven Hosted has two repository-level publication policies. The default
+`mavenStrictPublication=false` policy publishes every verified primary PUT
+directly. It is the zero-change Maven/Nexus compatibility path: `mvn deploy` and
+Gradle `publish` need no Gateway-specific finalization call. The server derives
+the canonical asset name, byte digest, size, and coordinate, records the object
+intent before S3 upload, then publishes the asset fact transactionally in
+PostgreSQL. A successful `201` primary PUT is readable immediately.
+
+The opt-in `mavenStrictPublication=true` policy opens or appends to the
+publisher's one `open` session for the server-derived
+`repository + groupId:artifactId:version` coordinate. Successful PUTs remain
+unreadable until a CI integration, publishing wrapper, or optional Maven/Gradle
+plugin calls
+`POST /repository/maven/{repository}/coordinates/{coordinate}:commit` with an
+idempotency key and expected non-metadata asset names. Default direct
+repositories reject that endpoint with `409 publication_commit_disabled`.
 
 Maven and Gradle do not define a portable transaction-complete request across
 their independent POM, primary artifact, attached-artifact, checksum, and
 metadata uploads. `maven-metadata.xml`, a checksum sidecar, a last observed
-request, and a quiet period are therefore not commit signals: each can be
-absent, reordered, retried, or written before a failed attached artifact. The
-Gateway never infers publication completion from standard HTTP traffic.
+request, and a quiet period can each be absent, reordered, retried, or written
+before a later failure. Direct mode deliberately accepts the resulting
+partial-publication risk to minimize migration cost. Strict mode replaces that
+risk with an explicit integration requirement and one-coordinate atomic
+visibility; neither mode promises an atomic multi-GAV Reactor build.
 
-The production flow retains standard Maven repository URLs and HTTP `PUT`
-uploads. A publish-authorized `PUT /repository/maven/{repository}/{assetPath}`
-opens or appends to the publisher's one `open` session for the server-derived
-`repository + groupId:artifactId:version` coordinate. The Gateway derives the
-canonical asset name, byte digest, size, and coordinate from the path and bytes,
-records an intent before S3 upload, and returns `201` while the object is staged.
-Client checksum sidecars are assertions only: the Gateway verifies or discards
+Client checksum sidecars remain assertions only: Gateway verifies or discards
 them and generates readable checksums from verified primary objects. Client
-repository and snapshot metadata are accepted only as compatibility no-ops;
-readable metadata is generated from visible coordinates.
+repository and snapshot metadata remain compatibility no-ops; readable metadata
+is generated from visible coordinates.
 
-An optional Gateway Maven extension and Gradle plugin are required for atomic
-visibility. After their normal deploy uploads succeed, they call
-`POST /repository/maven/{repository}/coordinates/{coordinate}:commit` with an
-idempotency key and expected non-metadata asset names. The extension is a
-transport companion, not a replacement repository protocol: resolution and
-uploads remain standard Maven HTTP. A deploy without it may stage and resume
-uploads but cannot become visible; it expires rather than silently publishing a
-partial coordinate. This is an intentional compatibility limit because standard
-Maven clients expose no universal finalization hook.
+In strict mode, the commit caller must be the session publisher or a narrowly
+authorized release principal. Its expected-name list is an incompleteness
+assertion only; it never supplies a digest, size, metadata, object key, or
+visibility decision. In one PostgreSQL transaction, Gateway locks the open
+session and coordinate, validates the POM and every expected staged asset,
+derives checksum and metadata references, rejects immutable conflicts, inserts
+references, makes the coordinate visible, and marks the session committed.
 
-The commit caller must be the session publisher or a narrowly authorized release
-principal. Its expected-name list is an incompleteness assertion only; it never
-supplies a digest, size, metadata, object key, or visibility decision. In one
-PostgreSQL transaction, the Gateway locks the open session and coordinate,
-confirms the POM parses to the requested coordinate, confirms every expected
-asset is verified and staged, derives checksum and metadata references, rejects
-an already-visible immutable release coordinate, inserts all references, makes
-the coordinate visible, and marks the session `committed`. This transaction is
-the trusted server-controlled commit signal. Readers consult only committed
-references, so every POM, artifact, checksum, and metadata path is `404` until
-commit succeeds.
+Strict commit is idempotent for 24 hours per publisher, repository, coordinate,
+and `Idempotency-Key`. An identical retry returns the committed artifact; a
+changed expected-name set returns `409 idempotency_conflict`. Missing POMs,
+unverified objects, malformed POMs, and quota or coordinate conflicts leave the
+strict session invisible. Expired sessions return `409 session_closed`.
 
-Commit is idempotent for 24 hours per publisher, repository, coordinate, and
-`Idempotency-Key`: an identical retry returns the committed artifact, while a
-changed expected-name set returns `409 idempotency_conflict`. Concurrent commits
-and duplicate uploads serialize on the session and coordinate locks. A missing
-POM, unverified object, unexpected duplicate asset, coordinate conflict, or
-malformed POM leaves the session open and invisible and returns `422` or `409`.
-Expired sessions return `409 session_expired` and require a fresh upload session.
-Promotion never overwrites a release; snapshots create a new immutable
-timestamped coordinate and move generated metadata in the same transaction.
-Root-level `maven-metadata.xml` lists each visible version once. Its `latest`
-value may name a SNAPSHOT, but its `release` value is the latest visible
-non-SNAPSHOT version and is omitted when no release exists.
-Rollback before visibility is abort plus orphan collection. After visibility it
-is a logical tombstone or a new promotion under retention policy, never mutation
-or deletion of S3 bytes.
+Release coordinates never accept different bytes. Snapshots create immutable
+timestamped builds and advance generated metadata. Root-level
+`maven-metadata.xml` lists each visible version once; `release` excludes
+SNAPSHOT versions. After visibility, rollback is a logical tombstone or a new
+promotion under retention policy, never in-place mutation or immediate S3 byte
+deletion. The full publisher-facing contract is documented in
+[Maven Hosted publication](maven-hosted-publication.md).
 
 PostgreSQL owns the session, derived asset inventory, object intent, verified
 reference, idempotency record, and commit lock. S3 stores bytes only at

@@ -2963,7 +2963,7 @@
           "in": "path",
           "required": true,
           "allowReserved": true,
-          "description": "Canonical Maven asset path: groupId path, artifactId, version, and filename. This is a gateway catch-all parameter; only committed POMs, component assets, checksums, and generated metadata are readable.",
+          "description": "Canonical Maven asset path: groupId path, artifactId, version, and filename. This is a gateway catch-all parameter; directly published or strictly committed POMs, component assets, checksums, and generated metadata are readable.",
           "schema": {
             "type": "string",
             "minLength": 1
@@ -2995,7 +2995,7 @@
       },
       "put": {
         "operationId": "stageMavenProtocolAsset",
-        "description": "Standard Maven/Gradle deploy upload. The Gateway derives coordinate and verified object facts from this request and stages it only. Client checksum sidecars are assertions and client metadata is a compatibility no-op; the Gateway generates both from committed coordinates.",
+        "description": "Standard Maven/Gradle deploy upload. By default the Gateway publishes each verified upload directly so unmodified clients work without a companion call. When Maven strict publication is enabled for the Hosted repository, the request stages the object until coordinate commit. Client checksum sidecars are assertions and client metadata is a compatibility no-op; the Gateway derives authoritative checksums and metadata from verified objects.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3009,7 +3009,7 @@
         },
         "responses": {
           "201": {
-            "description": "Staged or idempotently replayed; not readable until coordinate commit"
+            "description": "Published directly by default, or staged when Maven strict publication is enabled; an idempotent replay is also accepted"
           },
           "401": {
             "$ref": "#/components/responses/BasicUnauthorized"
@@ -3031,8 +3031,8 @@
         ]
       },
       "x-gateway-catchAll": "assetPath",
-      "x-gateway-visibility": "committed_only",
-      "x-gateway-publication": "stage_only_until_explicit_coordinate_commit"
+      "x-gateway-visibility": "repository_policy",
+      "x-gateway-publication": "direct_by_default_strict_coordinate_commit_opt_in"
     },
     "/repository/maven/{repository}/coordinates/{coordinate}:commit": {
       "servers": [
@@ -3042,7 +3042,7 @@
       ],
       "post": {
         "operationId": "commitMavenCoordinate",
-        "description": "Called by the Gateway Maven/Gradle publisher extension after normal deploy uploads. It is the only Maven coordinate visibility signal; request ordering, client checksums, client metadata, and quiet time are never completion signals.",
+        "description": "Used only by Maven Hosted repositories with strict publication enabled. A CI integration, publishing wrapper, or optional Maven/Gradle extension calls it after normal deploy uploads. It is the strict mode coordinate visibility signal; request ordering, checksums, metadata, and quiet time are never completion signals. Repositories using the default direct mode reject this operation with 409 because their verified PUTs are already visible.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -3411,6 +3411,7 @@
           "name",
           "format",
           "anonymousRead",
+          "mavenStrictPublication",
           "state",
           "version"
         ],
@@ -3445,6 +3446,11 @@
           "anonymousRead": {
             "type": "boolean",
             "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
+          },
+          "mavenStrictPublication": {
+            "type": "boolean",
+            "default": false,
+            "description": "Maven Hosted only. When false (the default), successful standard Maven/Gradle PUTs are published directly. When true, uploaded coordinates remain unreadable until the Gateway coordinate commit succeeds."
           },
           "egressProxy": {
             "$ref": "#/components/schemas/EgressProxy"
@@ -3501,6 +3507,11 @@
             "type": "boolean",
             "default": false,
             "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
+          },
+          "mavenStrictPublication": {
+            "type": "boolean",
+            "default": false,
+            "description": "Maven Hosted only. Opt in to Gateway coordinate commits and atomic per-coordinate visibility. The default false mode accepts standard Maven/Gradle publishing without a companion integration."
           },
           "egressProxy": {
             "$ref": "#/components/schemas/EgressProxy"
@@ -5246,7 +5257,7 @@
       },
       "UpdateRepository": {
         "type": "object",
-        "description": "Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.",
+        "description": "Editable repository management policy and proxy configuration. Hosted repositories accept anonymousRead updates and Maven Hosted repositories also accept mavenStrictPublication updates; name, format, and type are immutable after creation.",
         "additionalProperties": false,
         "properties": {
           "endpoint": {
@@ -5263,6 +5274,10 @@
           "anonymousRead": {
             "type": "boolean",
             "description": "Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it."
+          },
+          "mavenStrictPublication": {
+            "type": "boolean",
+            "description": "Maven Hosted only. False publishes successful standard PUTs directly; true requires a Gateway coordinate commit before reads can resolve the uploaded coordinate."
           },
           "egressProxy": {
             "$ref": "#/components/schemas/EgressProxy"

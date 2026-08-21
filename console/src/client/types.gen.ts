@@ -57,6 +57,10 @@ export type Repository = {
    * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
    */
   anonymousRead: boolean;
+  /**
+   * Maven Hosted only. When false (the default), successful standard Maven/Gradle PUTs are published directly. When true, uploaded coordinates remain unreadable until the Gateway coordinate commit succeeds.
+   */
+  mavenStrictPublication: boolean;
   egressProxy?: EgressProxy;
   /**
    * Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
@@ -84,6 +88,10 @@ export type CreateRepository = {
    * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
    */
   anonymousRead?: boolean;
+  /**
+   * Maven Hosted only. Opt in to Gateway coordinate commits and atomic per-coordinate visibility. The default false mode accepts standard Maven/Gradle publishing without a companion integration.
+   */
+  mavenStrictPublication?: boolean;
   egressProxy?: EgressProxy;
 };
 
@@ -1401,7 +1409,7 @@ export type CreateScheduledTask = {
 export type UpdateScheduledTask = CreateScheduledTask;
 
 /**
- * Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
+ * Editable repository management policy and proxy configuration. Hosted repositories accept anonymousRead updates and Maven Hosted repositories also accept mavenStrictPublication updates; name, format, and type are immutable after creation.
  */
 export type UpdateRepository = {
   /**
@@ -1416,6 +1424,10 @@ export type UpdateRepository = {
    * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
    */
   anonymousRead?: boolean;
+  /**
+   * Maven Hosted only. False publishes successful standard PUTs directly; true requires a Gateway coordinate commit before reads can resolve the uploaded coordinate.
+   */
+  mavenStrictPublication?: boolean;
   egressProxy?: EgressProxy;
 };
 
@@ -1764,6 +1776,10 @@ export type RepositoryWritable = {
    * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
    */
   anonymousRead: boolean;
+  /**
+   * Maven Hosted only. When false (the default), successful standard Maven/Gradle PUTs are published directly. When true, uploaded coordinates remain unreadable until the Gateway coordinate commit succeeds.
+   */
+  mavenStrictPublication: boolean;
   egressProxy?: EgressProxyWritable;
   /**
    * Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
@@ -1791,6 +1807,10 @@ export type CreateRepositoryWritable = {
    * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
    */
   anonymousRead?: boolean;
+  /**
+   * Maven Hosted only. Opt in to Gateway coordinate commits and atomic per-coordinate visibility. The default false mode accepts standard Maven/Gradle publishing without a companion integration.
+   */
+  mavenStrictPublication?: boolean;
   egressProxy?: EgressProxyWritable;
 };
 
@@ -1874,7 +1894,7 @@ export type EgressProxyWritable = {
 };
 
 /**
- * Editable repository management policy and proxy configuration. Hosted repositories only accept anonymousRead updates; name, format, and type are immutable after creation.
+ * Editable repository management policy and proxy configuration. Hosted repositories accept anonymousRead updates and Maven Hosted repositories also accept mavenStrictPublication updates; name, format, and type are immutable after creation.
  */
 export type UpdateRepositoryWritable = {
   /**
@@ -1889,6 +1909,10 @@ export type UpdateRepositoryWritable = {
    * Anonymous read policy. Defaults to false and permits unauthenticated protocol GET/HEAD where effective policy allows it.
    */
   anonymousRead?: boolean;
+  /**
+   * Maven Hosted only. False publishes successful standard PUTs directly; true requires a Gateway coordinate commit before reads can resolve the uploaded coordinate.
+   */
+  mavenStrictPublication?: boolean;
   egressProxy?: EgressProxyWritable;
 };
 

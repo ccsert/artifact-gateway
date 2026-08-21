@@ -38,6 +38,7 @@ the [protocol compatibility baseline](protocol-compatibility.md).
 
 ## Formats and upstreams
 
+- [Maven Hosted publication](maven-hosted-publication.md)
 - [APT Proxy](apt-proxy.md)
 - [APT Hosted roadmap](apt-hosted-roadmap.md)
 - [APT Hosted signing](apt-hosted-signing.md)
@@ -74,6 +75,7 @@ not a public release, formal distribution record, or support commitment.
 
 - [Nexus gap analysis](nexus-gap-analysis.md)
 - [Nexus gap review, 2026-08](nexus-gap-review-2026-08.md)
+- [Nexus Maven publication research](nexus-maven-publication-research.md) (Chinese only)
 - [Repository Console experience roadmap](repository-console-experience-roadmap.md)
 - [Release-readiness working checklist](release-readiness.md)
 - [Release record template](release-record-template.md)

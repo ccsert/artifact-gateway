@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -32,20 +33,22 @@ type hostedRepositoryAPIHandler struct {
 }
 
 type createHostedRepositoryRequest struct {
-	Name          string              `json:"name"`
-	Format        repository.Format   `json:"format"`
-	Type          string              `json:"type,omitempty"`
-	Endpoint      string              `json:"endpoint,omitempty"`
-	AllowedHosts  []string            `json:"allowedHosts,omitempty"`
-	EgressProxy   *egressProxyRequest `json:"egressProxy,omitempty"`
-	AnonymousRead bool                `json:"anonymousRead,omitempty"`
+	Name                   string              `json:"name"`
+	Format                 repository.Format   `json:"format"`
+	Type                   string              `json:"type,omitempty"`
+	Endpoint               string              `json:"endpoint,omitempty"`
+	AllowedHosts           []string            `json:"allowedHosts,omitempty"`
+	EgressProxy            *egressProxyRequest `json:"egressProxy,omitempty"`
+	AnonymousRead          bool                `json:"anonymousRead,omitempty"`
+	MavenStrictPublication bool                `json:"mavenStrictPublication,omitempty"`
 }
 
 type updateHostedRepositoryRequest struct {
-	Endpoint      *string             `json:"endpoint,omitempty"`
-	AllowedHosts  []string            `json:"allowedHosts,omitempty"`
-	EgressProxy   *egressProxyRequest `json:"egressProxy,omitempty"`
-	AnonymousRead *bool               `json:"anonymousRead,omitempty"`
+	Endpoint               *string             `json:"endpoint,omitempty"`
+	AllowedHosts           []string            `json:"allowedHosts,omitempty"`
+	EgressProxy            *egressProxyRequest `json:"egressProxy,omitempty"`
+	AnonymousRead          *bool               `json:"anonymousRead,omitempty"`
+	MavenStrictPublication *bool               `json:"mavenStrictPublication,omitempty"`
 }
 
 type repositoryPage struct {
@@ -455,7 +458,7 @@ func (h hostedRepositoryAPIHandler) createWithIdempotencyKey(w http.ResponseWrit
 	}
 	payload, _ := json.Marshal(request)
 	digest := sha256.Sum256(payload)
-	repo, _, err := h.store.CreateHostedRepositoryIdempotently(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: request.Name, Format: request.Format, Type: repoType, Endpoint: request.Endpoint, AllowedHosts: request.AllowedHosts, EgressProxy: egressProxy, AnonymousRead: request.AnonymousRead}, principal.Actor, key, base64.RawURLEncoding.EncodeToString(digest[:]))
+	repo, _, err := h.store.CreateHostedRepositoryIdempotently(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: request.Name, Format: request.Format, Type: repoType, Endpoint: request.Endpoint, AllowedHosts: request.AllowedHosts, EgressProxy: egressProxy, AnonymousRead: request.AnonymousRead, MavenStrictPublication: request.MavenStrictPublication}, principal.Actor, key, base64.RawURLEncoding.EncodeToString(digest[:]))
 	if errors.Is(err, repository.ErrIdempotencyConflict) {
 		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used with a different request")
 		return
@@ -584,9 +587,34 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "repository update body must be valid")
 		return
 	}
-	updatedRepo := repository.HostedRepository{ID: repo.ID, Endpoint: repo.Endpoint, AllowedHosts: append([]string(nil), repo.AllowedHosts...), EgressProxy: repo.EgressProxy, AnonymousRead: repo.AnonymousRead}
+	updatedRepo := repository.HostedRepository{ID: repo.ID, Endpoint: repo.Endpoint, AllowedHosts: append([]string(nil), repo.AllowedHosts...), EgressProxy: repo.EgressProxy, AnonymousRead: repo.AnonymousRead, MavenStrictPublication: repo.MavenStrictPublication}
 	if request.AnonymousRead != nil {
 		updatedRepo.AnonymousRead = *request.AnonymousRead
+	}
+	if request.MavenStrictPublication != nil {
+		if repo.Format != repository.FormatMaven || repo.Type != repository.RepositoryTypeHosted {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "mavenStrictPublication only applies to Maven Hosted repositories")
+			return
+		}
+		if repo.MavenStrictPublication != *request.MavenStrictPublication {
+			mavenStore, ok := h.store.(interface {
+				HasOpenMavenPublishSessions(context.Context, string) (bool, error)
+			})
+			if !ok {
+				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "Maven publication policy guard is unavailable")
+				return
+			}
+			open, err := mavenStore.HasOpenMavenPublishSessions(r.Context(), repo.ID)
+			if err != nil {
+				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "check active Maven publications failed")
+				return
+			}
+			if open {
+				writeHostedProblem(w, http.StatusConflict, "active_maven_publication", "Maven publication policy cannot change while a publication is active")
+				return
+			}
+		}
+		updatedRepo.MavenStrictPublication = *request.MavenStrictPublication
 	}
 	if repo.Type == repository.RepositoryTypeProxy {
 		if request.Endpoint != nil {
@@ -611,11 +639,11 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 		updatedRepo.EgressProxy = egressProxy
 	} else {
 		if request.Endpoint != nil || request.AllowedHosts != nil || request.EgressProxy != nil {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "hosted repositories only support anonymousRead updates")
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "hosted repositories only support anonymousRead and Maven publication policy updates")
 			return
 		}
-		if request.AnonymousRead == nil {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "anonymousRead is required for hosted repository updates")
+		if request.AnonymousRead == nil && request.MavenStrictPublication == nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "an editable hosted repository setting is required")
 			return
 		}
 	}
@@ -653,9 +681,9 @@ func validHostedRepository(request createHostedRepositoryRequest) bool {
 	case repository.RepositoryTypeHosted:
 		// Hosted repositories serve local content only; an upstream endpoint or
 		// egress allow-list would be meaningless and likely a client mistake.
-		return request.Endpoint == "" && len(request.AllowedHosts) == 0
+		return request.Endpoint == "" && len(request.AllowedHosts) == 0 && (!request.MavenStrictPublication || request.Format == repository.FormatMaven)
 	case repository.RepositoryTypeProxy:
-		return validProxyConfiguration(request.Format, request.Endpoint, request.AllowedHosts)
+		return !request.MavenStrictPublication && validProxyConfiguration(request.Format, request.Endpoint, request.AllowedHosts)
 	default:
 		return false
 	}

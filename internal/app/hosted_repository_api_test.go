@@ -49,6 +49,62 @@ func TestHostedRepositoryManagementLifecycle(t *testing.T) {
 	}
 }
 
+func TestMavenStrictPublicationIsAnOptInRepositorySetting(t *testing.T) {
+	store := repository.NewMemoryStore()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	create := func(body, key string) *httptest.ResponseRecorder {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(body))
+		authorize(request, "admin-secret")
+		request.Header.Set("Idempotency-Key", key)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+
+	direct := create(`{"name":"maven-direct","format":"maven"}`, "maven-direct")
+	if direct.Code != http.StatusCreated || !strings.Contains(direct.Body.String(), `"mavenStrictPublication":false`) {
+		t.Fatalf("default Maven publication=%d %s", direct.Code, direct.Body.String())
+	}
+	strict := create(`{"name":"maven-strict","format":"maven","mavenStrictPublication":true}`, "maven-strict")
+	if strict.Code != http.StatusCreated || !strings.Contains(strict.Body.String(), `"mavenStrictPublication":true`) {
+		t.Fatalf("strict Maven publication=%d %s", strict.Code, strict.Body.String())
+	}
+	var created repository.HostedRepository
+	if err := json.Unmarshal(strict.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateMavenPublishSession(context.Background(), repository.MavenPublishSession{
+		ID: uuid.NewString(), RepositoryID: created.ID, Coordinate: "org.example:active:1.0.0", Publisher: "publisher", State: "open", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	blockedPatch := httptest.NewRequest(http.MethodPatch, "/api/v2/repositories/"+created.ID, strings.NewReader(`{"mavenStrictPublication":false}`))
+	authorize(blockedPatch, "admin-secret")
+	blockedPatch.Header.Set("If-Match", created.Version)
+	blocked := httptest.NewRecorder()
+	handler.ServeHTTP(blocked, blockedPatch)
+	if blocked.Code != http.StatusConflict || !strings.Contains(blocked.Body.String(), `"code":"active_maven_publication"`) {
+		t.Fatalf("active publication policy change=%d %s", blocked.Code, blocked.Body.String())
+	}
+	if err := store.CompleteMavenProtocolPublications(context.Background(), created.ID, "publisher", "org.example:active:1.0.0", true); err != nil {
+		t.Fatal(err)
+	}
+	patch := httptest.NewRequest(http.MethodPatch, "/api/v2/repositories/"+created.ID, strings.NewReader(`{"mavenStrictPublication":false}`))
+	authorize(patch, "admin-secret")
+	patch.Header.Set("If-Match", created.Version)
+	patched := httptest.NewRecorder()
+	handler.ServeHTTP(patched, patch)
+	if patched.Code != http.StatusOK || !strings.Contains(patched.Body.String(), `"mavenStrictPublication":false`) {
+		t.Fatalf("disable strict Maven publication=%d %s", patched.Code, patched.Body.String())
+	}
+
+	invalid := create(`{"name":"raw-strict","format":"raw","mavenStrictPublication":true}`, "raw-strict")
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("non-Maven strict publication=%d %s", invalid.Code, invalid.Body.String())
+	}
+}
+
 func TestRepositoryCapabilitiesReportImplementedFormatOperations(t *testing.T) {
 	store := repository.NewMemoryStore()
 	oci, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "capabilities-oci", Format: repository.FormatOCI})
