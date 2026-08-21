@@ -1,5 +1,7 @@
 # Artifact Format Extension Guide
 
+[简体中文](format-extension-guide.zh-CN.md) | [Documentation index](README.md)
+
 Artifact Gateway admits a format only as a complete repository capability, not
 as an enum value or a Console option. The server-owned catalog in
 `internal/repository/format_profiles.go` is the admission point, and

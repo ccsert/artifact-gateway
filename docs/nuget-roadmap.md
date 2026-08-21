@@ -1,5 +1,7 @@
 # NuGet Repository Roadmap
 
+[简体中文](nuget-roadmap.zh-CN.md) | [Documentation index](README.md)
+
 ## Status and priority
 
 NuGet is a deferred ecosystem candidate and is no longer a first-priority

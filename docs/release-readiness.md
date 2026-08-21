@@ -1,5 +1,7 @@
 # Full Artifact Repository V1 Release Readiness
 
+[简体中文](release-readiness.zh-CN.md) | [Documentation index](README.md)
+
 This document is the release gate for Artifact Gateway's OCI, Maven, Raw,
 Conan, npm, and PyPI Hosted/Proxy lifecycle and distribution paths plus the Go
 Module atomic Hosted publication and Hosted/Proxy/Group read paths.

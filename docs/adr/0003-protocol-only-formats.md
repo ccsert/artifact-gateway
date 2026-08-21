@@ -1,5 +1,7 @@
 # Protocol-Only Formats May Be Admitted Without Invented Publication APIs
 
+[简体中文](0003-protocol-only-formats.zh-CN.md) · [Documentation index](../README.md)
+
 Status: accepted
 
 Artifact Gateway normally admits a format only after Hosted, Proxy, Group, and

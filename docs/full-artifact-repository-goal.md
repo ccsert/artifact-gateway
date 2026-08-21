@@ -1,5 +1,7 @@
 # Full Artifact Repository V1 Goal
 
+[简体中文](full-artifact-repository-goal.zh-CN.md) | [Documentation index](README.md)
+
 ## Objective
 
 Deliver Artifact Gateway V1 as a complete artifact repository for its four

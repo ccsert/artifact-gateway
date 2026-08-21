@@ -1,5 +1,7 @@
 # Artifact Lifecycle Contract
 
+[简体中文](artifact-lifecycle-contract.zh-CN.md) | [Documentation index](README.md)
+
 ## States
 
 Every Artifact follows one of three lifecycle states:

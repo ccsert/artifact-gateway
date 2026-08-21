@@ -1,6 +1,6 @@
 # 架构图
 
-[English](architecture-diagrams.md) · [整体架构](../ARCHITECTURE.md) · [PostgreSQL 能力](postgresql-capabilities.md)
+[English](architecture-diagrams.md) · [整体架构](../ARCHITECTURE.md) · [PostgreSQL 能力](postgresql-capabilities.zh-CN.md)
 
 视觉总览图用于快速理解组件与部署选择；下方可执行 Mermaid 图继续作为精确、可评审的
 架构关系事实来源。

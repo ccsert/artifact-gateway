@@ -1,5 +1,7 @@
 # Full Artifact Repository Roadmap
 
+[简体中文](full-artifact-repository-roadmap.zh-CN.md) | [Documentation index](README.md)
+
 The authoritative delivery objective and completion criteria are in
 [Full Artifact Repository V1 Goal](full-artifact-repository-goal.md). This
 document records architecture sequencing and implementation status.

@@ -1,5 +1,7 @@
 # Cargo Repository Research And Recommended Roadmap
 
+[简体中文](cargo-repository-research.zh-CN.md) | [Documentation index](README.md)
+
 Status: research recommendation, not an implemented protocol or an admitted
 format profile. The C0 byte foundation is now implemented: strict bounded
 publish framing, complete `.crate` validation, normalized manifest identity,

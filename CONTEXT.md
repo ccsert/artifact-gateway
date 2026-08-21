@@ -1,5 +1,7 @@
 # Artifact Gateway Domain
 
+[简体中文](CONTEXT.zh-CN.md) | [Documentation index](docs/README.md)
+
 Artifact Gateway is a multi-format artifact repository. It stores, governs,
 and distributes software artifacts through native package protocols.
 

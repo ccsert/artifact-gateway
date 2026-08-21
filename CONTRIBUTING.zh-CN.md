@@ -107,6 +107,21 @@ Docker Desktop Kubernetes 可用时，再执行 `make kubernetes-local-up`、
 资产时运行 `make docs-check`；该门禁会检查双语入口互链和本地文档链接。完整必需矩阵以
 CI workflow 为最终事实来源。
 
+## 文档约定
+
+每份会进入文档站的 Markdown 都必须有英文规范路由和简体中文 companion。英文使用不带
+语言后缀的 `.md`，中文使用 `.zh-CN.md`。两页必须互相链接，并分别链接对应语言的文档索引。
+
+每个文档对都要加入 `docs/site-map.json` 的六个稳定分区之一。该文件是未来接入
+Docusaurus、VitePress 或 MkDocs 的框架中立导航契约；不要再用框架专属 frontmatter
+维护第二份导航事实。
+
+双语正文必须保持行为等价。配置键、路由、状态码、命令、兼容限制、预览状态和安全边界
+不能只存在于一种语言。只写语言跳转或简短占位说明不算翻译正文。
+
+新增、重命名或移动页面后运行 `make docs-check`。它会验证本地链接、语言文件命名、双向
+语言链接、本地化标题和完整导航覆盖。详见[文档站接入指南](docs/documentation-site-guide.zh-CN.md)。
+
 ## 测试要求
 
 - 通过 HTTP、存储、协议或导出包接口测试外部可观察行为。

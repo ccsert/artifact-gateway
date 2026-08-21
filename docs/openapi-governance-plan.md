@@ -1,5 +1,7 @@
 # OpenAPI Governance Plan
 
+[简体中文](openapi-governance-plan.zh-CN.md) | [Documentation index](README.md)
+
 Status: implemented governance baseline. This document defines the source,
 generation, and review boundaries for the Native Hosted contract.
 

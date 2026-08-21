@@ -28,7 +28,7 @@
 PostgreSQL 作为唯一的协调与数据库依赖。制品字节仍需要 S3 兼容的字节面，本次本地栈
 使用 RustFS；Redis、Kafka、Elasticsearch 和额外消息队列都不属于核心基线。
 这条边界背后的锁、队列、通知、搜索与可观测性原语详见
-[PostgreSQL 能力](postgresql-capabilities.md)。
+[PostgreSQL 能力](postgresql-capabilities.zh-CN.md)。
 
 ## 测试环境
 

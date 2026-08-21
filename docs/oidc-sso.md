@@ -1,5 +1,7 @@
 # OIDC Browser SSO
 
+[简体中文](oidc-sso.zh-CN.md) | [Documentation index](README.md)
+
 Artifact Gateway supports two OIDC credential paths:
 
 - bearer validation for CI and API clients;

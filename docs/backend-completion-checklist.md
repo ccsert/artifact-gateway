@@ -1,5 +1,7 @@
 # Backend Completion Checklist
 
+[简体中文](backend-completion-checklist.zh-CN.md) | [Documentation index](README.md)
+
 This checklist is the working backlog for the **Full Artifact Repository V1**
 goal. It intentionally excludes frontend work.
 

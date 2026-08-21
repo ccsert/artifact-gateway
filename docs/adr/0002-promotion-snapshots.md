@@ -1,5 +1,7 @@
 # Promotion Uses Immutable Source Snapshots
 
+[简体中文](0002-promotion-snapshots.zh-CN.md) · [Documentation index](../README.md)
+
 Status: accepted
 
 Promotion records an immutable source snapshot and creates destination metadata

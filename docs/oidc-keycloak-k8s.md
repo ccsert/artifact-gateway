@@ -1,5 +1,7 @@
 # Keycloak Kubernetes Acceptance
 
+[简体中文](oidc-keycloak-k8s.zh-CN.md) · [Documentation index](README.md)
+
 `scripts/oidc-keycloak-k8s-e2e.sh` starts an isolated, real Keycloak fixture
 in the current Kubernetes context. It also deploys a transient PostgreSQL,
 RustFS, and Gateway instance, runs every migration, forwards Gateway and

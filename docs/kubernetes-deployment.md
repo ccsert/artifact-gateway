@@ -1,5 +1,7 @@
 # Kubernetes Deployment
 
+[简体中文](kubernetes-deployment.zh-CN.md) | [Documentation index](README.md)
+
 Artifact Gateway ships a Kustomize base and a local-development overlay. The
 local overlay is an executable deployment baseline validated on Docker Desktop.
 It is not a production topology.

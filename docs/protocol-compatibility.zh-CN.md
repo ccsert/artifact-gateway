@@ -67,7 +67,7 @@ npm、PyPI、Go 和 APT 协议，并用中文说明已实现行为、明确限�
 
 README 只保留简明能力与入口，精确协议声明应更新本页及英文详细矩阵。增加枚举、路由
 占位符或 Console 选项不代表支持一种格式；新增生态必须先通过
-[格式扩展指南](format-extension-guide.md)中的完整准入门禁（该指南当前仅英文）。
+[格式扩展指南](format-extension-guide.zh-CN.md)中的完整准入门禁。
 
 任何协议能力变更都必须同步更新对应 OpenAPI 源、聚焦测试、真实客户端 E2E 和两种语言
 的兼容性说明。APT Hosted、Cargo 与 NuGet 等预览或研究能力不得混入公开支持矩阵。

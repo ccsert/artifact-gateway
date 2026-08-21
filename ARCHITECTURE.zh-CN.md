@@ -28,7 +28,7 @@ PostgreSQL 是仓库、授权、制品元数据、生命周期状态、审计、
 S3/RustFS 按摘要保存经过校验的对象字节；Gateway 进程不会在本地磁盘保留持久制品状态。
 
 单机、角色拆分、发布和 Worker 流程详见[架构图](docs/architecture-diagrams.zh-CN.md)；
-协调与搜索所使用的数据库能力详见[PostgreSQL 能力](docs/postgresql-capabilities.md)。
+协调与搜索所使用的数据库能力详见[PostgreSQL 能力](docs/postgresql-capabilities.zh-CN.md)。
 
 ## 运行角色
 
@@ -85,7 +85,7 @@ advisory lock、`FOR UPDATE SKIP LOCKED` 和尽力而为的 `LISTEN/NOTIFY` 唤�
 版本。复制独立维护持久字节传输、检查点和完整性校验。
 
 规范性生命周期决策记录在 `docs/adr/` 与
-`docs/artifact-lifecycle-contract.md`（当前仅英文）中。
+[制品生命周期契约](docs/artifact-lifecycle-contract.zh-CN.md)中。
 
 ## 接口契约归属
 

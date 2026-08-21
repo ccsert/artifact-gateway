@@ -1,5 +1,7 @@
 # Artifact scanner contract
 
+[简体中文](artifact-scanner-contract.zh-CN.md) | [Documentation index](README.md)
+
 The `internal/scanning` module is the controlled seam between Artifact Gateway
 and an external security scanner. It does not execute user-configured commands
 and does not allow a scanner to mutate repository state directly.

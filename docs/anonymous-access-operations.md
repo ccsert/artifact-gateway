@@ -1,5 +1,7 @@
 # Anonymous Access Operations
 
+[简体中文](anonymous-access-operations.zh-CN.md) | [Documentation index](README.md)
+
 Anonymous access is default-deny. It is limited to protocol and browse `GET`
 and `HEAD` requests; publication, deletion, promotion, cache mutation, and all
 other management writes always require authentication.

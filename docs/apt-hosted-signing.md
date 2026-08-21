@@ -1,5 +1,7 @@
 # APT Hosted Signing And H3 Rotation Preview
 
+[简体中文](apt-hosted-signing.zh-CN.md) | [Documentation index](README.md)
+
 APT Hosted H2 is an operator preview for validating the complete signed
 publication path. It is installable by Debian clients, but it is not a
 production signing service. H3 must add managed key custody, rotation,

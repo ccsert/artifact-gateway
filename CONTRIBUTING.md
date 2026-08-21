@@ -120,6 +120,28 @@ or local assets; it enforces bilingual entry-point links and validates local
 documentation references.
 The CI workflow is the final source of truth for the complete required matrix.
 
+## Documentation conventions
+
+Every published Markdown document has an English canonical route and a
+Simplified Chinese companion. English uses the unsuffixed `.md` filename;
+Chinese uses `.zh-CN.md`. Both pages link to each other and to the localized
+documentation index.
+
+Add every document pair to `docs/site-map.json` under one of the six stable
+sections. The map is the framework-neutral navigation contract for a future
+Docusaurus, VitePress, or MkDocs site; do not maintain framework-specific
+frontmatter as a second navigation authority.
+
+Keep translated pages behaviorally equivalent. Configuration keys, routes,
+status codes, commands, compatibility limits, preview status, and security
+boundaries must not disappear in one locale. A short language stub or a link
+to the other language is not a translated body.
+
+Run `make docs-check` after adding, renaming, or moving a page. It validates
+local links, language pairs, reciprocal links, localized titles, and complete
+site-map coverage. See the
+[documentation site guide](docs/documentation-site-guide.md).
+
 ## Test expectations
 
 - Test externally observable behavior through an HTTP, storage, protocol, or

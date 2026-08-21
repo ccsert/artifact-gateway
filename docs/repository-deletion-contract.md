@@ -1,5 +1,7 @@
 # Repository Deletion Contract
 
+[简体中文](repository-deletion-contract.zh-CN.md) · [Documentation index](README.md)
+
 Repository deletion is an asynchronous management operation.
 
 1. `DELETE /api/v2/repositories/{repositoryId}` changes an `active` repository

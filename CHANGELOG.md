@@ -1,5 +1,7 @@
 # Changelog
 
+[简体中文](CHANGELOG.zh-CN.md) | [Documentation index](docs/README.md)
+
 All user-visible changes to Artifact Gateway are recorded in this file.
 
 The project has not published a stable release. Changes are collected under
@@ -83,8 +85,8 @@ a dated version heading without rewriting their meaning.
   reads, tag pagination, and protocol-specific repository setup snippets from
   the large Console browse page behind tested pure module seams. Added Chinese
   architecture, contributing, protocol-compatibility, and recovery entry
-  points, while the Chinese
-  documentation index now identifies the remaining English-only material.
+  points, then completed substantive Chinese companions for every site
+  document and added a tested framework-neutral navigation map.
 
 - A bounded Cargo C0 parser foundation that validates official publish framing
   and complete `.crate` gzip/tar archives, derives collision-safe immutable

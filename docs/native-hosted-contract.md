@@ -1,5 +1,7 @@
 # ADR: Native Hosted Domain and Management API Contract
 
+[简体中文](native-hosted-contract.zh-CN.md) | [Documentation index](README.md)
+
 Status: accepted architectural contract, originally written for Native Hosted
 Platform V3 planning. The runtime has since implemented and expanded beyond
 the format inventory recorded here.

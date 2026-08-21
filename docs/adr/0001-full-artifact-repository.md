@@ -1,5 +1,7 @@
 # Full Artifact Repository Is The Product Boundary
 
+[简体中文](0001-full-artifact-repository.zh-CN.md) · [Documentation index](../README.md)
+
 Status: accepted
 
 Artifact Gateway will evolve from a primarily read-through gateway into a full

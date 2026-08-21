@@ -1,5 +1,7 @@
 # Nexus Gap Analysis
 
+[简体中文](nexus-gap-analysis.zh-CN.md) | [Documentation index](README.md)
+
 Status: feature and experience comparison between Artifact Gateway and
 Sonatype Nexus Repository Manager. This document owns the cross-product gap
 view; the per-protocol compatibility baseline lives in

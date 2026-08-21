@@ -31,7 +31,7 @@ process small and uses PostgreSQL as its only coordination and database
 dependency. Artifact bytes still require an S3-compatible byte plane; the
 tested local stack uses RustFS. Redis, Kafka, Elasticsearch, and an external
 message queue are not part of this core baseline. See
-[PostgreSQL capabilities](postgresql-capabilities.en.md) for the locking,
+[PostgreSQL capabilities](postgresql-capabilities.md) for the locking,
 queueing, notification, search, and observability primitives behind that
 boundary.
 
