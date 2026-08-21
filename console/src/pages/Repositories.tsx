@@ -5,7 +5,7 @@ import {
   PlusOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import { Button, Input, Segmented, Select, Space, Table } from "antd";
+import { Button, Input, Segmented, Select, Space, Switch, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link } from "react-router-dom";
 import {
@@ -54,6 +54,7 @@ function CreateRepositoryDialog({
   const [type, setType] = useState<"hosted" | "proxy">("hosted");
   const [endpoint, setEndpoint] = useState("");
   const [allowedHosts, setAllowedHosts] = useState("");
+  const [mavenStrictPublication, setMavenStrictPublication] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -87,6 +88,9 @@ function CreateRepositoryDialog({
         ...(type === "proxy"
           ? { endpoint: endpoint.trim(), allowedHosts: hosts }
           : {}),
+        ...(type === "hosted" && selectedFormat === "maven"
+          ? { mavenStrictPublication }
+          : {}),
       },
       headers: { "Idempotency-Key": crypto.randomUUID() },
     });
@@ -100,6 +104,7 @@ function CreateRepositoryDialog({
       setName("");
       setEndpoint("");
       setAllowedHosts("");
+      setMavenStrictPublication(false);
       setType("hosted");
       onCreated();
     }
@@ -208,6 +213,26 @@ function CreateRepositoryDialog({
               }))}
             />
           </Field>
+          {type === "hosted" && selectedFormat === "maven" && (
+            <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-zinc-200">
+                  {text("严格发布", "Strict publication")}
+                </div>
+                <div className="mt-1 max-w-[62ch] text-xs leading-5 text-zinc-500">
+                  {text(
+                    "默认关闭：Maven/Gradle 标准上传成功后立即可读，便于从 Nexus 直接迁移。开启后，同一坐标会在 Gateway commit 成功前保持不可见。",
+                    "Off by default: successful standard Maven/Gradle uploads are immediately readable for Nexus-compatible migration. When enabled, a coordinate stays hidden until its Gateway commit succeeds.",
+                  )}
+                </div>
+              </div>
+              <Switch
+                checked={mavenStrictPublication}
+                onChange={setMavenStrictPublication}
+                aria-label={text("严格发布", "Strict publication")}
+              />
+            </div>
+          )}
           {type === "proxy" && (
             <>
               <Field

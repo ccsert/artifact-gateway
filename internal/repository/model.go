@@ -40,17 +40,18 @@ const (
 )
 
 type HostedRepository struct {
-	ID            string          `json:"id"`
-	Name          string          `json:"name"`
-	Format        Format          `json:"format"`
-	Type          RepositoryType  `json:"type"`
-	Endpoint      string          `json:"endpoint,omitempty"`
-	AllowedHosts  []string        `json:"allowedHosts,omitempty"`
-	EgressProxy   *EgressProxy    `json:"egressProxy,omitempty"`
-	AnonymousRead bool            `json:"anonymousRead"`
-	State         RepositoryState `json:"state"`
-	Version       string          `json:"version"`
-	CreatedAt     time.Time       `json:"-"`
+	ID                     string          `json:"id"`
+	Name                   string          `json:"name"`
+	Format                 Format          `json:"format"`
+	Type                   RepositoryType  `json:"type"`
+	Endpoint               string          `json:"endpoint,omitempty"`
+	AllowedHosts           []string        `json:"allowedHosts,omitempty"`
+	EgressProxy            *EgressProxy    `json:"egressProxy,omitempty"`
+	AnonymousRead          bool            `json:"anonymousRead"`
+	MavenStrictPublication bool            `json:"mavenStrictPublication"`
+	State                  RepositoryState `json:"state"`
+	Version                string          `json:"version"`
+	CreatedAt              time.Time       `json:"-"`
 }
 
 // EgressProxyMode selects how a Proxy Repository reaches its upstream.

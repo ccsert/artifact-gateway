@@ -1,8 +1,10 @@
 ---
 x-gateway-protocol-overlay:
   officialSpecification: https://distribution.github.io/distribution/spec/api/
-  gatewayDecision: Implement the supported Registry V2 upload, blob, manifest, and
-    tag routes; exclude catalog, referrers, and direct blob deletion.
+  gatewayDecision: Hosted implements Registry V2 upload, blob, manifest, tag,
+    catalog, and referrer routes. Proxy is read-only for manifests and blobs;
+    Group is read-only for manifests, blobs, and tags. Direct blob deletion and
+    broader Proxy/Group aggregation are excluded.
 v2_name_blobs_uploads:
   servers:
   - url: https://gateway.example.com

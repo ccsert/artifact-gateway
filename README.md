@@ -58,7 +58,7 @@ byte plane, and Gateway connects the two without adding a middleware fleet.
 | --- | :---: | :---: | :---: | --- |
 | OCI | ✓ | ✓ | ✓ | Registry V2 uploads, manifests, tags, ranges, and referrers |
 | Raw | ✓ | ✓ | ✓ | PUT/GET/HEAD, ranges, checksums, and resumable upload |
-| Maven | ✓ | ✓ | ✓ | Maven/Gradle staging with explicit coordinate commit |
+| Maven | ✓ | ✓ | ✓ | Standard Maven/Gradle publication by default; [strict coordinate commit](docs/maven-hosted-publication.md) is optional |
 | Conan 2 | ✓ | ✓ | ✓ | Revision-aware publication and lifecycle |
 | npm | ✓ | ✓ | ✓ | Native publication, verified cache, merged packuments |
 | PyPI | ✓ | ✓ | ✓ | twine upload plus PEP 503/691 reads |
@@ -69,6 +69,11 @@ Cargo is a staged parser/identity foundation and NuGet remains roadmap work;
 neither is advertised as a usable repository format. The detailed, test-bound
 compatibility statement lives in the
 [protocol compatibility baseline](docs/protocol-compatibility.md).
+
+Maven Hosted defaults to Nexus-compatible direct publication, so ordinary
+`mvn deploy` and Gradle `publish` require no companion step. A repository can
+opt in to strict publication when atomic per-coordinate visibility is worth an
+additional Gateway commit integration.
 
 Beyond protocol reads and writes, the current foundation includes repository
 grants, local users and OIDC, service accounts, anonymous-read policy, audit,
@@ -124,6 +129,7 @@ and [PostgreSQL capabilities](docs/postgresql-capabilities.en.md).
 | --- | --- |
 | Set up a local checkout | [Getting started](docs/getting-started.md) |
 | Understand protocol behavior | [Protocol compatibility](docs/protocol-compatibility.md) |
+| Publish Maven Hosted coordinates | [Maven Hosted publication](docs/maven-hosted-publication.md) |
 | Understand core boundaries | [Architecture](ARCHITECTURE.md) |
 | Explore system and publication flows | [Architecture diagrams](docs/architecture-diagrams.md) |
 | Understand PostgreSQL coordination | [PostgreSQL capabilities](docs/postgresql-capabilities.en.md) |

@@ -1,6 +1,9 @@
 # ADR: V2 Anonymous Read, Raw, and Conan 2 Contract
 
-Status: accepted for V2 planning. This is the source of truth for V2 format work; implementations MUST NOT weaken it without a replacement ADR.
+Status: historical V2 contract, retained for migration and compatibility
+context. The current protocol inventory is owned by
+[`protocol-compatibility.md`](protocol-compatibility.md), the OpenAPI overlays,
+and executable tests. Those sources supersede stale route statements here.
 
 ## Terms and routing
 
@@ -40,15 +43,31 @@ Each attempt records timestamp, request ID / trace ID, actor (`anonymous` when a
 
 `CONTRACT: raw-path-normalization`
 
-Raw addresses use `/raw/<group>/<path>`. After validating the Group, the gateway returns `404` for a path ending in `/` before path-segment validation; this is the directory-listing response. Otherwise it percent-decodes each segment once and rejects empty segments, `.`, `..`, backslashes, NUL, encoded slash, and a path whose re-encoded form differs from canonical. It does not follow upstream redirects. Valid paths are joined with `/` and remain case-sensitive.
+Raw addresses use `/raw/<repository>/<path>`. File paths decode each segment
+once and reject empty segments, `.`, `..`, backslashes, NUL, encoded slash, and
+a path whose re-encoded form differs from canonical. Valid paths are joined
+with `/` and remain case-sensitive. Upstream redirects are not followed.
 
-Raw supports `GET` and `HEAD` of a file. It supports one RFC 7233 byte range and returns `206` / `416`; multipart ranges are rejected with `416`. Directory listing is not supported: a path ending in `/` returns `404`. Trusted upstream `Content-Type` is preserved; otherwise use `application/octet-stream`. Return a strong ETag when known and `Digest: sha-256=<base64>`.
+Raw supports `GET` and `HEAD` of a file. It supports one byte range and returns
+`206` or `416`; multipart ranges return `416`. A trailing-slash GET/HEAD on a
+Hosted Repository returns a paginated projection of visible paths below that
+prefix. This projection is not a general filesystem or Proxy directory index.
+
+Trusted upstream `Content-Type` is preserved; otherwise Raw uses
+`application/octet-stream`. Responses return a strong ETag when known and
+`Digest: sha-256=<base64>`.
 
 On a positive cache miss, `HEAD` is forwarded upstream as `HEAD`; the Gateway closes the response body without reading it and does not create a positive body cache entry. A cached `HEAD` uses only index/object metadata and does not open the object byte stream.
 
 `CONTRACT: raw-checksum`
 
-Checksum sidecars are ordinary read-only files named `<path>.sha256` or `<path>.sha512`. The Gateway validates that a sidecar body is lowercase hex plus an optional newline before serving or caching it. It does not generate, fetch, or use a sidecar to validate a Raw body: Raw has no authoritative manifest binding the two. A malformed sidecar returns `502`, audits `upstream_error`, and is not cached. When a body digest is known, a mismatching available sidecar is served unchanged because its immutable bytes are the requested artifact; the mismatch is recorded as `upstream_error` and the sidecar response is not cached. If both sidecars exist they are independent representations, with no preferred algorithm.
+Native Hosted checksum paths `<path>.sha256` and `<path>.sha512` are derived
+from the committed primary object. PUT to a checksum path is an assertion: it
+must match the primary object and never creates a second stored asset.
+
+Proxy/Group checksum paths remain upstream representations because Raw has no
+authoritative external manifest binding a sidecar to its body. Malformed
+upstream sidecars return `502`, are audited, and are not cached.
 
 `CONTRACT: raw-proxy-allowlist`
 

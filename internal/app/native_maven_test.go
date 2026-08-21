@@ -160,9 +160,116 @@ func TestNativeMavenPublishIsInvisibleUntilCommitAndAuditedOnRead(t *testing.T) 
 	}
 }
 
+func TestNativeMavenProtocolPublishesDirectlyByDefault(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects := NewMemoryOCIObjectStore()
+	handler := newNativeMavenHandler(store, objects, testAuthenticator())
+	put := func(name, body string) {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodPut, "/repository/maven/deploys/org/example/widget/1.2.0/"+name, strings.NewReader(body))
+		request.SetBasicAuth("maven", "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("PUT %s=%d %s", name, response.Code, response.Body.String())
+		}
+	}
+	get := func(name string) *httptest.ResponseRecorder {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodGet, "/repository/maven/deploys/org/example/widget/1.2.0/"+name, nil)
+		request.SetBasicAuth("maven", "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+
+	pom := "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.2.0</version></project>"
+	put("widget-1.2.0.pom", pom)
+	if response := get("widget-1.2.0.pom"); response.Code != http.StatusOK || response.Body.String() != pom {
+		t.Fatalf("direct POM read=%d %q", response.Code, response.Body.String())
+	}
+	put("widget-1.2.0.jar", "jar bytes")
+	if response := get("widget-1.2.0.jar"); response.Code != http.StatusOK || response.Body.String() != "jar bytes" {
+		t.Fatalf("direct JAR read=%d %q", response.Code, response.Body.String())
+	}
+
+	commit := httptest.NewRequest(http.MethodPost, "/repository/maven/deploys/coordinates/org.example:widget:1.2.0:commit", strings.NewReader(`{"expectedAssetNames":["widget-1.2.0.pom","widget-1.2.0.jar"]}`))
+	commit.SetBasicAuth("maven", "resolver-secret")
+	commit.Header.Set("Idempotency-Key", "not-required")
+	committed := httptest.NewRecorder()
+	handler.ServeHTTP(committed, commit)
+	if committed.Code != http.StatusConflict || !strings.Contains(committed.Body.String(), "publication_commit_disabled") {
+		t.Fatalf("disabled commit=%d %s", committed.Code, committed.Body.String())
+	}
+}
+
+func TestNativeMavenDirectSnapshotMetadataClosesTheBuildSession(t *testing.T) {
+	store := repository.NewMemoryStore()
+	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	put := func(path, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodPut, "/repository/maven/deploys/org/example/widget/1.0-SNAPSHOT/"+path, strings.NewReader(body))
+		request.SetBasicAuth("maven", "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	pom := func(description string) string {
+		return "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.0-SNAPSHOT</version><description>" + description + "</description></project>"
+	}
+	if response := put("widget-1.0-20260821.010101-1.pom", pom("first")); response.Code != http.StatusCreated {
+		t.Fatalf("first snapshot=%d %s", response.Code, response.Body.String())
+	}
+	if response := put("maven-metadata.xml", "<metadata/>"); response.Code != http.StatusCreated {
+		t.Fatalf("snapshot metadata=%d %s", response.Code, response.Body.String())
+	}
+	if response := put("widget-1.0-20260821.010102-2.pom", pom("second")); response.Code != http.StatusCreated {
+		t.Fatalf("second snapshot=%d %s", response.Code, response.Body.String())
+	}
+	metadata := httptest.NewRequest(http.MethodGet, "/repository/maven/deploys/org/example/widget/1.0-SNAPSHOT/maven-metadata.xml", nil)
+	metadata.SetBasicAuth("maven", "resolver-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, metadata)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "<buildNumber>2</buildNumber>") {
+		t.Fatalf("second snapshot metadata=%d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestNativeMavenDirectSnapshotAcceptsGradleJarBeforePOM(t *testing.T) {
+	store := repository.NewMemoryStore()
+	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven}); err != nil {
+		t.Fatal(err)
+	}
+	handler := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	put := func(name, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodPut, "/repository/maven/deploys/org/example/gradle-widget/2.0.0-SNAPSHOT/"+name, strings.NewReader(body))
+		request.SetBasicAuth("maven", "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	const timestamp = "20260821.084531-1"
+	if response := put("gradle-widget-2.0.0-"+timestamp+".jar", "gradle bytecode"); response.Code != http.StatusCreated {
+		t.Fatalf("Gradle snapshot JAR=%d %s", response.Code, response.Body.String())
+	}
+	pom := `<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>org.example</groupId><artifactId>gradle-widget</artifactId><version>2.0.0-SNAPSHOT</version></project>`
+	if response := put("gradle-widget-2.0.0-"+timestamp+".pom", pom); response.Code != http.StatusCreated {
+		t.Fatalf("Gradle snapshot POM after JAR=%d %s", response.Code, response.Body.String())
+	}
+}
+
 func TestNativeMavenProtocolPutPublishesAssetsAndMetadata(t *testing.T) {
 	store := repository.NewMemoryStore()
-	repo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
+	repo, _ := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven, MavenStrictPublication: true})
 	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
 	assets := map[string]string{
 		"widget-1.2.0.pom": "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.2.0</version></project>",
@@ -262,7 +369,7 @@ func TestNativeMavenProtocolReplacesExpiredOpenSessionBeforeStaging(t *testing.T
 
 func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *testing.T) {
 	store := repository.NewMemoryStore()
-	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
+	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven, MavenStrictPublication: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +537,7 @@ func TestNativeMavenProtocolFixtureCoversReleaseSnapshotAndFailedCoordinates(t *
 
 func TestNativeMavenCoordinateBrowseSearchProjection(t *testing.T) {
 	store := repository.NewMemoryStore()
-	mavenRepo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "maven-browse", Format: repository.FormatMaven})
+	mavenRepo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "maven-browse", Format: repository.FormatMaven, MavenStrictPublication: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -522,7 +629,7 @@ func TestNativeMavenCoordinateBrowseSearchProjection(t *testing.T) {
 
 func TestNativeMavenProtocolCommitRetryAfterControlPlaneFailure(t *testing.T) {
 	base := repository.NewMemoryStore()
-	repo, err := base.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
+	repo, err := base.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven, MavenStrictPublication: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -726,7 +833,7 @@ func TestNativeMavenUsesManagedRepositoryGrants(t *testing.T) {
 
 func TestNativeMavenProtocolSessionsArePublisherScoped(t *testing.T) {
 	store := repository.NewMemoryStore()
-	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "releases", Format: repository.FormatMaven})
+	_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "releases", Format: repository.FormatMaven, MavenStrictPublication: true})
 	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), Authenticator{ResolverToken: "resolver-secret", RepositoryWriters: map[string][]string{"alice": {"releases"}, "bob": {"releases"}}})
 	put := func(actor, name, body string) int {
 		r := httptest.NewRequest(http.MethodPut, "/repository/maven/releases/org/example/widget/1.0.0/"+name, strings.NewReader(body))
@@ -812,7 +919,7 @@ func TestNativeMavenCollectorRetainsIntentUntilObjectDeleteSucceeds(t *testing.T
 
 func TestNativeMavenSnapshotMultiBuildPublish(t *testing.T) {
 	store := repository.NewMemoryStore()
-	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven}); err != nil {
+	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven, MavenStrictPublication: true}); err != nil {
 		t.Fatal(err)
 	}
 	h := newNativeMavenHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())

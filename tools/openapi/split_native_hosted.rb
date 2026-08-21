@@ -71,7 +71,7 @@ protocol_overlays = {
   },
   "protocols/maven.yaml" => {
     "officialSpecification" => "https://maven.apache.org/repositories/index.html",
-    "gatewayDecision" => "Use standard PUT staging plus explicit Gateway coordinate commit; client metadata is not authoritative."
+    "gatewayDecision" => "Publish verified standard PUTs directly by default; strict publication is a repository opt-in that requires Gateway coordinate commit. Client metadata is not authoritative."
   }
 }
 

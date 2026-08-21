@@ -1,8 +1,9 @@
 ---
 x-gateway-protocol-overlay:
   officialSpecification: https://maven.apache.org/repositories/index.html
-  gatewayDecision: Use standard PUT staging plus explicit Gateway coordinate commit;
-    client metadata is not authoritative.
+  gatewayDecision: Publish successful standard Maven/Gradle PUTs directly by default.
+    A Maven Hosted repository may opt in to strict publication, which stages uploads
+    until an explicit Gateway coordinate commit. Client metadata is not authoritative.
 repository_maven_repository_assetPath:
   servers:
   - url: https://gateway.example.com
@@ -13,8 +14,8 @@ repository_maven_repository_assetPath:
     required: true
     allowReserved: true
     description: 'Canonical Maven asset path: groupId path, artifactId, version, and
-      filename. This is a gateway catch-all parameter; only committed POMs, component
-      assets, checksums, and generated metadata are readable.'
+      filename. This is a gateway catch-all parameter; directly published or strictly
+      committed POMs, component assets, checksums, and generated metadata are readable.'
     schema:
       type: string
       minLength: 1
@@ -33,10 +34,12 @@ repository_maven_repository_assetPath:
         "$ref": "../components/responses.yaml#/ProtocolNotFound"
   put:
     operationId: stageMavenProtocolAsset
-    description: Standard Maven/Gradle deploy upload. The Gateway derives coordinate
-      and verified object facts from this request and stages it only. Client checksum
-      sidecars are assertions and client metadata is a compatibility no-op; the Gateway
-      generates both from committed coordinates.
+    description: Standard Maven/Gradle deploy upload. By default the Gateway publishes
+      each verified upload directly so unmodified clients work without a companion call.
+      When Maven strict publication is enabled for the Hosted repository, the request
+      stages the object until coordinate commit. Client checksum sidecars are assertions
+      and client metadata is a compatibility no-op; the Gateway derives authoritative
+      checksums and metadata from verified objects.
     requestBody:
       required: true
       content:
@@ -46,8 +49,8 @@ repository_maven_repository_assetPath:
             contentEncoding: binary
     responses:
       '201':
-        description: Staged or idempotently replayed; not readable until coordinate
-          commit
+        description: Published directly by default, or staged when Maven strict
+          publication is enabled; an idempotent replay is also accepted
       '401':
         "$ref": "../components/responses.yaml#/BasicUnauthorized"
       '409':
@@ -58,16 +61,19 @@ repository_maven_repository_assetPath:
     - protocolBasicAuth: []
     - protocolBearerAuth: []
   x-gateway-catchAll: assetPath
-  x-gateway-visibility: committed_only
-  x-gateway-publication: stage_only_until_explicit_coordinate_commit
+  x-gateway-visibility: repository_policy
+  x-gateway-publication: direct_by_default_strict_coordinate_commit_opt_in
 repository_maven_repository_coordinates_coordinate_commit:
   servers:
   - url: https://gateway.example.com
   post:
     operationId: commitMavenCoordinate
-    description: Called by the Gateway Maven/Gradle publisher extension after normal
-      deploy uploads. It is the only Maven coordinate visibility signal; request ordering,
-      client checksums, client metadata, and quiet time are never completion signals.
+    description: Used only by Maven Hosted repositories with strict publication enabled.
+      A CI integration, publishing wrapper, or optional Maven/Gradle extension calls it
+      after normal deploy uploads. It is the strict mode coordinate visibility signal;
+      request ordering, checksums, metadata, and quiet time are never completion signals.
+      Repositories using the default direct mode reject this operation with 409 because
+      their verified PUTs are already visible.
     parameters:
     - "$ref": "../components/parameters.yaml#/IdempotencyKey"
     - "$ref": "../components/parameters.yaml#/RepositoryName"

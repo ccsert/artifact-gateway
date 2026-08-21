@@ -605,6 +605,10 @@ func (h nativeMavenHandler) coordinateCommit(w http.ResponseWriter, r *http.Requ
 		http.NotFound(w, r)
 		return
 	}
+	if !repo.MavenStrictPublication {
+		writeHostedProblem(w, http.StatusConflict, "publication_commit_disabled", "Maven strict publication is disabled for this repository")
+		return
+	}
 	if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryWrite, coordinate); !decision.Allowed {
 		h.recordAuthorizationDenial(decision)
 		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: coordinate, Operation: "commit", Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
@@ -702,8 +706,9 @@ func sameMavenAssetNames(expected []string, objects []repository.MavenDeclaredOb
 	return true
 }
 
-// deploy accepts Maven's ordinary HTTP PUT layout and only stages server-derived
-// object facts. A coordinate is visible exclusively through coordinateCommit.
+// deploy accepts Maven's ordinary HTTP PUT layout. Verified primary assets are
+// published directly by default; repositories that opt in to strict
+// publication stage the same server-derived facts until coordinateCommit.
 func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 	principal, ok := h.protocolPrincipal(r)
 	if !ok {
@@ -722,17 +727,12 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := parts[1:]
-	version, artifact := path[len(path)-2], path[len(path)-3]
-	group := strings.Join(path[:len(path)-3], ".")
 	name := path[len(path)-1]
-	if group == "" || artifact == "" || version == "" {
-		http.Error(w, "invalid Maven asset path", 400)
-		return
-	}
-	coordinate := group + ":" + artifact + ":" + version
-	if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryWrite, coordinate); !decision.Allowed {
+	assetPath := strings.Join(path, "/")
+	resource := mavenResourceFromPath(assetPath)
+	if decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryWrite, resource); !decision.Allowed {
 		h.recordAuthorizationDenial(decision)
-		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: strings.Join(parts[1:], "/"), Operation: "put", Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
+		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: assetPath, Operation: "put", Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 		http.Error(w, "repository write permission required", http.StatusForbidden)
 		return
 	}
@@ -740,9 +740,24 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 	// of their normal deploy protocol. They never decide coordinate visibility,
 	// so accept them for client compatibility without making them authoritative.
 	if name == "maven-metadata.xml" || strings.HasSuffix(name, ".sha1") || strings.HasSuffix(name, ".sha256") || strings.HasSuffix(name, ".sha512") || strings.HasSuffix(name, ".md5") {
+		if name == "maven-metadata.xml" && !repo.MavenStrictPublication {
+			if selector, exact, ok := mavenMetadataPublicationSelector(assetPath); ok {
+				if err := h.store.CompleteMavenProtocolPublications(r.Context(), repo.ID, principal.Actor, selector, exact); err != nil {
+					http.Error(w, "complete Maven protocol publication", http.StatusInternalServerError)
+					return
+				}
+			}
+		}
 		w.WriteHeader(http.StatusCreated)
 		return
 	}
+	version, artifact := path[len(path)-2], path[len(path)-3]
+	group := strings.Join(path[:len(path)-3], ".")
+	if group == "" || artifact == "" || version == "" {
+		http.Error(w, "invalid Maven asset path", 400)
+		return
+	}
+	coordinate := group + ":" + artifact + ":" + version
 	spool, err := spoolUpload(r.Body, 64<<20)
 	if err != nil {
 		if errors.Is(err, errUploadTooLarge) {
@@ -789,17 +804,89 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "stage Maven POM", http.StatusInternalServerError)
 			return
 		}
+		// The POM may arrive after the primary JAR (Gradle commonly uses this
+		// order). Refresh the session so validation sees the object appended by
+		// this request instead of the pre-append slice returned above.
+		s, err = h.store.GetMavenPublishSession(r.Context(), s.ID)
+		if err != nil {
+			http.Error(w, "load staged Maven POM", http.StatusInternalServerError)
+			return
+		}
 	}
 	key := "native/maven/sha256/" + strings.TrimPrefix(digest, "sha256:")
 	if err = h.store.MarkMavenPublishObject(r.Context(), s.ID, name, key); err != nil {
 		http.Error(w, "stage Maven asset", 500)
 		return
 	}
+	var directChecksums []mavenChecksum
+	if !repo.MavenStrictPublication {
+		directChecksums, err = generatedMavenChecksumsFromReader(spool.Reader())
+		if err != nil || spool.Rewind() != nil {
+			http.Error(w, "stage Maven asset", http.StatusInternalServerError)
+			return
+		}
+	}
 	if err = h.objects.PutVerifiedReader(r.Context(), key, spool.Reader(), spool.Size(), digest); err != nil {
 		http.Error(w, "stage Maven asset", 500)
 		return
 	}
+	if !repo.MavenStrictPublication {
+		base := mavenCoordinatePath(coordinate)
+		assets := []repository.MavenAsset{{RepositoryID: repo.ID, Path: base + "/" + name, ObjectKey: key, Digest: digest, Size: spool.Size()}}
+		for _, checksum := range directChecksums {
+			checksumKey := "native/maven/sha256/" + checksum.digest
+			if err = h.objects.PutVerifiedReader(r.Context(), checksumKey, strings.NewReader(checksum.body), int64(len(checksum.body)), "sha256:"+checksum.digest); err != nil {
+				http.Error(w, "stage Maven checksum", http.StatusInternalServerError)
+				return
+			}
+			assets = append(assets, repository.MavenAsset{RepositoryID: repo.ID, Path: base + "/" + name + checksum.extension, ObjectKey: checksumKey, Digest: "sha256:" + checksum.digest, Size: int64(len(checksum.body))})
+		}
+		if strings.HasSuffix(name, ".pom") {
+			if err = h.validatePOM(r.Context(), s); err != nil {
+				writeHostedProblem(w, http.StatusUnprocessableEntity, "invalid_maven_pom", err.Error())
+				return
+			}
+		}
+		published, publishErr := h.store.PublishMavenProtocolAssets(r.Context(), s.ID, assets)
+		if repository.IsQuotaExceeded(publishErr) {
+			writeHostedProblem(w, http.StatusInsufficientStorage, "quota_exceeded", "repository capacity quota exceeded")
+			return
+		}
+		if errors.Is(publishErr, repository.ErrNameExists) {
+			writeHostedProblem(w, http.StatusConflict, "asset_conflict", "Maven asset path already exists with different bytes")
+			return
+		}
+		if publishErr != nil {
+			http.Error(w, "publish Maven asset", http.StatusInternalServerError)
+			return
+		}
+		if h.publicationScanner != nil {
+			_ = h.publicationScanner.ScheduleRepository(r.Context(), repo.ID, repository.FormatMaven, published.Coordinate, published.Digest, principal.Actor)
+		}
+	}
 	w.WriteHeader(http.StatusCreated)
+}
+
+func mavenMetadataPublicationSelector(path string) (selector string, exact, ok bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 3 || parts[len(parts)-1] != "maven-metadata.xml" {
+		return "", false, false
+	}
+	parts = parts[:len(parts)-1]
+	if len(parts) >= 3 && strings.HasSuffix(parts[len(parts)-1], "-SNAPSHOT") {
+		version := parts[len(parts)-1]
+		artifact := parts[len(parts)-2]
+		group := strings.Join(parts[:len(parts)-2], ".")
+		if group != "" && artifact != "" {
+			return group + ":" + artifact + ":" + version, true, true
+		}
+	}
+	artifact := parts[len(parts)-1]
+	group := strings.Join(parts[:len(parts)-1], ".")
+	if group == "" || artifact == "" {
+		return "", false, false
+	}
+	return group + ":" + artifact + ":", false, true
 }
 
 func (h nativeMavenHandler) validatePOM(ctx context.Context, s repository.MavenPublishSession) error {

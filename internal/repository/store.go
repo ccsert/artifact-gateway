@@ -286,6 +286,9 @@ type NativeMavenStore interface {
 	CreateMavenPublishSessionIdempotently(context.Context, MavenPublishSession, string, string, string, string) (MavenPublishSession, bool, error)
 	GetMavenPublishSession(context.Context, string) (MavenPublishSession, error)
 	MarkMavenPublishObject(context.Context, string, string, string) error
+	PublishMavenProtocolAssets(context.Context, string, []MavenAsset) (MavenArtifact, error)
+	CompleteMavenProtocolPublications(context.Context, string, string, string, bool) error
+	HasOpenMavenPublishSessions(context.Context, string) (bool, error)
 	CommitMavenPublishSession(context.Context, string, []MavenAsset) (MavenArtifact, error)
 	CommitMavenPublishSessionIdempotently(context.Context, string, string, string, []MavenAsset) (MavenArtifact, bool, error)
 	GetMavenAsset(context.Context, string, string) (MavenAsset, error)

@@ -34,6 +34,8 @@ for file in \
   docs/postgresql-capabilities.en.md \
   docs/performance-baseline.md \
   docs/performance-baseline.zh-CN.md \
+  docs/maven-hosted-publication.md \
+  docs/maven-hosted-publication.zh-CN.md \
   docs/protocol-compatibility.zh-CN.md \
   docs/project-quality-assessment.md \
   docs/project-quality-assessment.zh-CN.md \
@@ -57,6 +59,7 @@ for pair in \
   'docs/architecture-diagrams.md|architecture-diagrams.zh-CN.md' \
   'docs/postgresql-capabilities.en.md|postgresql-capabilities.md' \
   'docs/performance-baseline.md|performance-baseline.zh-CN.md' \
+  'docs/maven-hosted-publication.md|maven-hosted-publication.zh-CN.md' \
   'docs/protocol-compatibility.md|protocol-compatibility.zh-CN.md' \
   'docs/recovery-runbook.md|recovery-runbook.zh-CN.md' \
   'docs/project-quality-assessment.md|project-quality-assessment.zh-CN.md'; do
@@ -77,6 +80,7 @@ for pair in \
   'docs/architecture-diagrams.zh-CN.md|architecture-diagrams.md' \
   'docs/postgresql-capabilities.md|postgresql-capabilities.en.md' \
   'docs/performance-baseline.zh-CN.md|performance-baseline.md' \
+  'docs/maven-hosted-publication.zh-CN.md|maven-hosted-publication.md' \
   'docs/protocol-compatibility.zh-CN.md|protocol-compatibility.md' \
   'docs/recovery-runbook.zh-CN.md|recovery-runbook.md' \
   'docs/project-quality-assessment.zh-CN.md|project-quality-assessment.md'; do
@@ -93,6 +97,14 @@ if ! contains_fixed_string 'PostgreSQL is the only coordination and database dep
   ! contains_fixed_string 'PostgreSQL 是唯一的协调与数据库依赖' README.zh-CN.md ||
   ! contains_fixed_string 'S3 兼容对象存储' README.zh-CN.md; then
   printf 'README lightweight storage boundary is missing or misleading\n' >&2
+  exit 1
+fi
+
+if ! contains_fixed_string 'Nexus-compatible direct publication' README.md ||
+  ! contains_fixed_string 'mavenStrictPublication' docs/maven-hosted-publication.md ||
+  ! contains_fixed_string 'Maven Hosted 默认采用与 Nexus 兼容的直接发布' README.zh-CN.md ||
+  ! contains_fixed_string 'mavenStrictPublication' docs/maven-hosted-publication.zh-CN.md; then
+  printf 'Maven direct-by-default and strict opt-in documentation is missing\n' >&2
   exit 1
 fi
 

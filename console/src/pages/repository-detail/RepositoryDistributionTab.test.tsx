@@ -38,6 +38,7 @@ const source: Repository = {
   format: "maven",
   type: "hosted",
   anonymousRead: false,
+  mavenStrictPublication: false,
   state: "active",
   version: "1",
 };

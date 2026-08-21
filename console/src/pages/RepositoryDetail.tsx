@@ -414,7 +414,7 @@ function EffectiveAccessPanel({
   );
 }
 
-function RepositorySettingsTab({
+export function RepositorySettingsTab({
   repo,
   capabilities,
   onUpdated,
@@ -427,6 +427,9 @@ function RepositorySettingsTab({
   const [endpoint, setEndpoint] = useState(repo.endpoint ?? "");
   const [hosts, setHosts] = useState((repo.allowedHosts ?? []).join(", "));
   const [anonymousRead, setAnonymousRead] = useState(repo.anonymousRead);
+  const [mavenStrictPublication, setMavenStrictPublication] = useState(
+    repo.mavenStrictPublication,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
@@ -467,6 +470,7 @@ function RepositorySettingsTab({
     setEndpoint(repo.endpoint ?? "");
     setHosts((repo.allowedHosts ?? []).join(", "));
     setAnonymousRead(repo.anonymousRead);
+    setMavenStrictPublication(repo.mavenStrictPublication);
     setEgressMode(repo.egressProxy?.mode ?? "environment");
     setEgressProtocol(repo.egressProxy?.protocol ?? "http");
     setEgressHost(repo.egressProxy?.host ?? "");
@@ -515,6 +519,9 @@ function RepositorySettingsTab({
       headers: { "If-Match": repo.version },
       body: {
         anonymousRead,
+        ...(repo.type === "hosted" && repo.format === "maven"
+          ? { mavenStrictPublication }
+          : {}),
         ...(repo.type === "proxy"
           ? {
               endpoint: endpoint.trim(),
@@ -586,8 +593,32 @@ function RepositorySettingsTab({
               )}
             </div>
           </div>
-          <Switch checked={anonymousRead} onChange={setAnonymousRead} />
+          <Switch
+            checked={anonymousRead}
+            onChange={setAnonymousRead}
+            aria-label={text("允许匿名读取", "Allow anonymous reads")}
+          />
         </div>
+        {repo.type === "hosted" && repo.format === "maven" && (
+          <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-zinc-200">
+                {text("严格发布", "Strict publication")}
+              </div>
+              <div className="mt-1 max-w-[72ch] text-xs leading-5 text-zinc-500">
+                {text(
+                  "默认关闭时与 Nexus 的直接可见行为一致，标准 Maven/Gradle 客户端无需额外集成。开启后，上传内容会在 Gateway 坐标提交成功前保持不可见。请不要在发布任务进行中切换。",
+                  "When off, Nexus-style direct visibility lets standard Maven/Gradle clients publish without an extra integration. When enabled, uploads stay hidden until the Gateway coordinate commit succeeds. Do not change this policy during an active publication.",
+                )}
+              </div>
+            </div>
+            <Switch
+              checked={mavenStrictPublication}
+              onChange={setMavenStrictPublication}
+              aria-label={text("严格发布", "Strict publication")}
+            />
+          </div>
+        )}
         {repo.type === "proxy" && (
           <Space orientation="vertical" size="middle" className="w-full">
             <Field

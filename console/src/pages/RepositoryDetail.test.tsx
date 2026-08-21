@@ -1,4 +1,5 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import {
@@ -6,9 +7,13 @@ import {
   getRepositoryCapabilities,
   getRepositoryCapacity,
   getRepositoryEffectiveAccess,
+  updateRepository,
 } from "../client";
 import { PreferencesProvider } from "../lib/preferences";
-import { RepositoryDetailPage } from "./RepositoryDetail";
+import {
+  RepositoryDetailPage,
+  RepositorySettingsTab,
+} from "./RepositoryDetail";
 
 const scanningTab = vi.hoisted(() => ({
   render: vi.fn((props: unknown) => {
@@ -25,6 +30,7 @@ vi.mock("../client", async () => {
     getRepositoryCapabilities: vi.fn(),
     getRepositoryCapacity: vi.fn(),
     getRepositoryEffectiveAccess: vi.fn(),
+    updateRepository: vi.fn(),
   };
 });
 
@@ -36,6 +42,7 @@ const mockGetRepository = vi.mocked(getRepository);
 const mockGetCapabilities = vi.mocked(getRepositoryCapabilities);
 const mockGetCapacity = vi.mocked(getRepositoryCapacity);
 const mockGetEffectiveAccess = vi.mocked(getRepositoryEffectiveAccess);
+const mockUpdateRepository = vi.mocked(updateRepository);
 
 afterEach(() => {
   cleanup();
@@ -51,6 +58,7 @@ describe("RepositoryDetailPage scanning deep link", () => {
       format: "npm",
       type: "hosted",
       anonymousRead: false,
+      mavenStrictPublication: false,
       state: "active",
       version: "1",
     } as const;
@@ -127,5 +135,50 @@ describe("RepositoryDetailPage scanning deep link", () => {
       canManage: true,
       canViewJobs: true,
     });
+  });
+});
+
+describe("RepositorySettingsTab Maven publication policy", () => {
+  it("keeps strict publication off by default and persists an explicit opt-in", async () => {
+    const user = userEvent.setup();
+    const repository = {
+      id: "22222222-2222-4222-8222-222222222222",
+      name: "maven-hosted",
+      format: "maven",
+      type: "hosted",
+      anonymousRead: false,
+      mavenStrictPublication: false,
+      state: "active",
+      version: "7",
+    } as const;
+    mockUpdateRepository.mockResolvedValue({ data: repository } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositorySettingsTab
+          repo={repository}
+          capabilities={null}
+          onUpdated={vi.fn()}
+        />
+      </PreferencesProvider>,
+    );
+
+    const strictSwitch = screen.getByRole("switch", { name: "严格发布" });
+    expect(strictSwitch).not.toBeChecked();
+    await user.click(strictSwitch);
+    await user.click(screen.getByRole("button", { name: "保存更改" }));
+
+    await waitFor(() =>
+      expect(mockUpdateRepository).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: { repositoryId: repository.id },
+          headers: { "If-Match": repository.version },
+          body: {
+            anonymousRead: false,
+            mavenStrictPublication: true,
+          },
+        }),
+      ),
+    );
   });
 });

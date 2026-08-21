@@ -3,6 +3,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -20,6 +21,42 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+func TestPostgresMavenProtocolPublishesDirectlyByDefault(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "maven-direct-" + uuid.NewString(), Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects := NewMemoryOCIObjectStore()
+	handler := NewGatewayHandler(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, Authenticator{
+		ResolverToken:     "resolver-secret",
+		RepositoryWriters: map[string][]string{"maven": {repo.Name}},
+	})
+	pom := []byte("<project><groupId>org.example</groupId><artifactId>direct</artifactId><version>1.0.0</version></project>")
+	put := httptest.NewRequest(http.MethodPut, "/repository/maven/"+repo.Name+"/org/example/direct/1.0.0/direct-1.0.0.pom", bytes.NewReader(pom))
+	put.SetBasicAuth("maven", "resolver-secret")
+	putResponse := httptest.NewRecorder()
+	handler.ServeHTTP(putResponse, put)
+	if putResponse.Code != http.StatusCreated {
+		t.Fatalf("PUT=%d %s", putResponse.Code, putResponse.Body.String())
+	}
+	get := httptest.NewRequest(http.MethodGet, "/repository/maven/"+repo.Name+"/org/example/direct/1.0.0/direct-1.0.0.pom", nil)
+	get.SetBasicAuth("maven", "resolver-secret")
+	getResponse := httptest.NewRecorder()
+	handler.ServeHTTP(getResponse, get)
+	if getResponse.Code != http.StatusOK || !bytes.Equal(getResponse.Body.Bytes(), pom) {
+		t.Fatalf("GET=%d %q", getResponse.Code, getResponse.Body.String())
+	}
+}
 
 func TestPostgresRustFSMavenPromotionSharesVerifiedObjectAndCompletesJob(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
@@ -869,7 +906,12 @@ func TestPostgresNativeMavenPromotionFailureLeavesS3ObjectsUnpublished(t *testin
 	if err = objects.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "promotion-retry-" + uuid.NewString(), Format: repository.FormatMaven})
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID:                     uuid.NewString(),
+		Name:                   "promotion-retry-" + uuid.NewString(),
+		Format:                 repository.FormatMaven,
+		MavenStrictPublication: true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

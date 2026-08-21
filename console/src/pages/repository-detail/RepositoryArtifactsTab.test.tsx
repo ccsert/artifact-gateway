@@ -25,6 +25,7 @@ const repository: Repository = {
   endpoint: "https://deb.example.test/debian",
   allowedHosts: ["deb.example.test"],
   anonymousRead: true,
+  mavenStrictPublication: false,
   state: "active",
   version: "1",
 };

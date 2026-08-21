@@ -20,13 +20,16 @@ func main() {
 	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven}); err != nil {
 		log.Fatal(err)
 	}
+	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "strict-deploys", Format: repository.FormatMaven, MavenStrictPublication: true}); err != nil {
+		log.Fatal(err)
+	}
 	address := os.Getenv("LISTEN_ADDR")
 	if address == "" {
 		address = "127.0.0.1:18080"
 	}
 	handler := app.NewGatewayHandler(app.Dependencies{}, store, app.TestAdapter{}, app.Authenticator{
 		ResolverToken:     "fixture-secret",
-		RepositoryWriters: map[string][]string{"fixture": {"deploys"}},
+		RepositoryWriters: map[string][]string{"fixture": {"deploys", "strict-deploys"}},
 	})
 	log.Printf("Native Maven fixture listening on %s", address)
 	log.Fatal(http.ListenAndServe(address, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
