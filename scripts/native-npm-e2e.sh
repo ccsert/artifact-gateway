@@ -15,9 +15,9 @@ upstream_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1
 proxy_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
 upstream_url="http://127.0.0.1:${upstream_port}"
 proxy_url="http://127.0.0.1:${proxy_port}"
-registry_url="${upstream_url}/npm/packages/"
-group_registry_url="${proxy_url}/npm/all-packages/"
-private_registry_url="${proxy_url}/npm/private/"
+registry_url="${upstream_url}/repository/packages/"
+group_registry_url="${proxy_url}/repository/all-packages/"
+private_registry_url="${proxy_url}/repository/private/"
 workdir=$(mktemp -d)
 upstream_pid=""
 proxy_pid=""
@@ -50,7 +50,7 @@ done
 auth_config="$workdir/auth.npmrc"
 anonymous_config="$workdir/anonymous.npmrc"
 touch "$anonymous_config"
-npm_config_userconfig="$auth_config" npm config set "//127.0.0.1:${upstream_port}/npm/packages/:_authToken" fixture-secret
+npm_config_userconfig="$auth_config" npm config set "//127.0.0.1:${upstream_port}/repository/packages/:_authToken" fixture-secret
 
 unscoped="$workdir/unscoped"
 mkdir "$unscoped"
@@ -152,7 +152,7 @@ until curl --silent --show-error --fail "$proxy_url/livez" >/dev/null; do
   sleep 0.1
 done
 
-npm_config_userconfig="$auth_config" npm config set "//127.0.0.1:${proxy_port}/npm/private/:_authToken" fixture-secret
+npm_config_userconfig="$auth_config" npm config set "//127.0.0.1:${proxy_port}/repository/private/:_authToken" fixture-secret
 
 # Corepack resolves pinned package-manager releases through npm's package
 # version endpoint (`/<package>/<version>`), not through the full packument.
@@ -246,4 +246,4 @@ mkdir "$offline_install"
   node -e 'for (const [name,version] of Object.entries({"ag-npm-private-fixture":"3.0.0","ag-npm-fixture":"1.0.0","@artifact-gateway/npm-fixture":"2.0.0"})) { const actual=require(`./node_modules/${name}/package.json`).version; if(actual!==version) process.exit(1) }'
 )
 
-printf 'Native npm Hosted, Proxy, Group, and cold package-lock online/offline npm ci E2E passed through %s\n' "$proxy_url"
+printf 'Native npm Hosted, Proxy, Group, and cold package-lock online/offline npm ci E2E passed through Nexus-compatible repository roots at %s\n' "$proxy_url"

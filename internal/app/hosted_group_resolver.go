@@ -121,22 +121,14 @@ func (r v2GroupResolver) resolveHostedGroup(ctx context.Context, name string, fo
 	if r.groups == nil {
 		return repository.HostedGroup{}, repository.ErrNotFound
 	}
-	after := ""
-	for {
-		groups, next, err := r.groups.ListHostedGroups(ctx, 200, after)
-		if err != nil {
-			return repository.HostedGroup{}, err
-		}
-		for _, group := range groups {
-			if group.Name == name && group.Format == format {
-				return group, nil
-			}
-		}
-		if next == "" {
-			return repository.HostedGroup{}, repository.ErrNotFound
-		}
-		after = next
+	group, err := r.groups.GetHostedGroupByName(ctx, name)
+	if err != nil {
+		return repository.HostedGroup{}, err
 	}
+	if group.Format != format {
+		return repository.HostedGroup{}, repository.ErrNotFound
+	}
+	return group, nil
 }
 
 // resolveMembers expands a V2 group's members into the legacy Member shape,
@@ -229,7 +221,11 @@ func (r v2GroupRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	resolver := v2GroupResolver{groups: r.groups, repos: r.repos, audit: r.audit, authorizer: r.authorizer}
-	group, err := resolver.resolveHostedGroup(req.Context(), name, r.format)
+	group, resolved := nexusRepositoryCompatibilityResolvedGroup(req.Context(), name, r.format)
+	var err error
+	if !resolved {
+		group, err = resolver.resolveHostedGroup(req.Context(), name, r.format)
+	}
 	if errors.Is(err, repository.ErrNotFound) {
 		r.next.ServeHTTP(w, req)
 		return

@@ -229,7 +229,7 @@ func (h nativeRawHandler) startUpload(w http.ResponseWriter, r *http.Request, re
 		http.Error(w, "create raw upload failed", 500)
 		return
 	}
-	h.uploadHeaders(w, repo.Name, upload)
+	h.uploadHeaders(r.Context(), w, repo.Name, upload)
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -247,7 +247,7 @@ func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 	}
 	switch r.Method {
 	case http.MethodGet:
-		h.uploadHeaders(w, repo.Name, upload)
+		h.uploadHeaders(r.Context(), w, repo.Name, upload)
 		w.WriteHeader(http.StatusNoContent)
 	case http.MethodDelete:
 		upload, err = h.store.CancelRawUpload(r.Context(), id)
@@ -265,7 +265,7 @@ func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 			http.Error(w, "upload offset is invalid", http.StatusConflict)
 			return
 		}
-		h.uploadHeaders(w, repo.Name, upload)
+		h.uploadHeaders(r.Context(), w, repo.Name, upload)
 		w.WriteHeader(http.StatusNoContent)
 	case http.MethodPut:
 		if r.URL.Query().Get("complete") != "1" {
@@ -350,8 +350,12 @@ func (h nativeRawHandler) appendUpload(ctx context.Context, r *http.Request, upl
 	}
 	return updated, nil
 }
-func (h nativeRawHandler) uploadHeaders(w http.ResponseWriter, repositoryName string, upload repository.RawUpload) {
-	w.Header().Set("Location", "/raw/"+repositoryName+"/"+upload.Path+"?uploadId="+upload.ID)
+func (h nativeRawHandler) uploadHeaders(ctx context.Context, w http.ResponseWriter, repositoryName string, upload repository.RawUpload) {
+	location := "/raw/" + repositoryName + "/" + upload.Path
+	if externalPath, ok := nexusRepositoryCompatibilityExternalEscapedPath(ctx, repositoryName); ok {
+		location = externalPath
+	}
+	w.Header().Set("Location", location+"?uploadId="+upload.ID)
 	w.Header().Set("Upload-Offset", strconv.FormatInt(upload.Offset, 10))
 }
 
@@ -507,7 +511,11 @@ func (h nativeRawHandler) list(w http.ResponseWriter, r *http.Request, repo repo
 	}
 	if len(assets) > limit {
 		assets = assets[:limit]
-		next := r.URL.EscapedPath() + "?n=" + strconv.Itoa(limit) + "&last=" + url.QueryEscape(assets[len(assets)-1].Path)
+		nextPath := r.URL.EscapedPath()
+		if externalPath, ok := nexusRepositoryCompatibilityExternalEscapedPath(r.Context(), repo.Name); ok {
+			nextPath = externalPath
+		}
+		next := nextPath + "?n=" + strconv.Itoa(limit) + "&last=" + url.QueryEscape(assets[len(assets)-1].Path)
 		w.Header().Set("Link", "<"+next+">; rel=\"next\"")
 	}
 	type item struct {

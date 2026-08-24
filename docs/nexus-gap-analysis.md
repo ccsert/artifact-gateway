@@ -14,8 +14,7 @@ Repository/Group/Hosted/Proxy Console improvement backlog lives in
 ## Scope
 
 Artifact Gateway is a complete artifact repository across OCI, Maven, Raw,
-Conan, npm, and PyPI Hosted/Proxy/Group paths, plus a read-only Go
-Proxy/Group path. Nexus Repository Manager is a mature, general-purpose
+Conan, npm, PyPI, and Go Hosted/Proxy/Group paths. Nexus Repository Manager is a mature, general-purpose
 artifact repository spanning twenty-plus package ecosystems.
 
 This analysis intentionally **excludes the difference in supported package
@@ -29,6 +28,22 @@ The baseline for the Artifact Gateway side is the completed V1 backend in
 [the backend completion checklist](backend-completion-checklist.md) (lifecycle,
 protocol, management API, distribution, and operations work is checked off) and
 the Console described in `console/src/app/router.tsx`.
+
+## Client Migration Boundary
+
+Artifact Gateway now accepts the Nexus-style `/repository/<name>/...` root for
+Maven, npm, PyPI, Raw, and Go Hosted/Proxy/Group clients. This removes the base-
+path rewrite from ordinary Maven/Gradle, npm, twine/pip, Raw HTTP, and GOPROXY
+configuration changes; Go Hosted also accepts Nexus 3.93+'s version-only ZIP
+upload and derives the authorized module identity from the archive. Real-client
+gates cover those flows. The exact target name `maven` remains reserved by the
+older canonical Maven prefix and must be renamed during migration. This does not import
+Nexus metadata or emulate Nexus management APIs. OCI remains a conditional
+migration because Registry V2 fixes `/v2/` at the host root and Nexus often
+binds Docker repositories to connector ports or virtual hosts. OCI deployments
+must map that external endpoint to the Gateway repository-name prefix or retag
+image names. See the exact paths and evidence in
+[the protocol compatibility matrix](protocol-compatibility.md#nexus-style-repository-roots).
 
 ## Gap Summary
 

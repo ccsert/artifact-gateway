@@ -1069,7 +1069,11 @@ func (h nativeNPMHandler) tarballURL(r *http.Request, repositoryName, packageNam
 	if forwarded := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0]); forwarded == "http" || forwarded == "https" {
 		scheme = forwarded
 	}
-	return (&url.URL{Scheme: scheme, Host: r.Host, Path: "/npm/" + repositoryName + "/" + npmprotocol.PackagePath(packageName) + "/-/" + tarballName}).String()
+	prefix := "/npm/" + repositoryName
+	if externalName, ok := nexusRepositoryCompatibilityExternalName(r.Context(), repositoryName); ok {
+		prefix = "/repository/" + externalName
+	}
+	return (&url.URL{Scheme: scheme, Host: r.Host, Path: prefix + "/" + npmprotocol.PackagePath(packageName) + "/-/" + tarballName}).String()
 }
 
 func (h nativeNPMHandler) challenge(w http.ResponseWriter, status int, message string) {

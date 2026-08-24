@@ -125,6 +125,10 @@ paths:
     "$ref": "./protocols/oci.yaml#/v2_name_tags_list"
   "/repository/maven/{repository}/{assetPath}":
     "$ref": "./protocols/maven.yaml#/repository_maven_repository_assetPath"
+  "/repository/{repository}/{path}":
+    "$ref": "./protocols/nexus-compatibility.yaml#/nexus_compatible_repository_path"
+  "/repository/{repository}/":
+    "$ref": "./protocols/nexus-compatibility.yaml#/nexus_compatible_pypi_upload_root"
   "/repository/maven/{repository}/coordinates/{coordinate}:commit":
     "$ref": "./protocols/maven.yaml#/repository_maven_repository_coordinates_coordinate_commit"
   "/go/{repository}/{modulePath}":

@@ -84,10 +84,10 @@ cat >"$maven_dir/settings.xml" <<EOF
 <settings><servers><server><id>native</id><username>fixture</username><password>fixture-secret</password></server></servers></settings>
 EOF
 cat >"$maven_dir/pom.xml" <<EOF
-<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>org.example</groupId><artifactId>maven-widget</artifactId><version>1.2.3</version><distributionManagement><repository><id>native</id><url>${gateway_url}/repository/maven/deploys</url></repository></distributionManagement></project>
+<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>org.example</groupId><artifactId>maven-widget</artifactId><version>1.2.3</version><distributionManagement><repository><id>native</id><url>${gateway_url}/repository/deploys</url></repository></distributionManagement></project>
 EOF
 (cd "$maven_dir" && mvn --batch-mode --settings settings.xml -Dmaven.repo.local="$workdir/maven-deploy-repository" deploy)
-expect_status 200 "${basic[@]}" "$gateway_url/repository/maven/deploys/org/example/maven-widget/1.2.3/maven-widget-1.2.3.jar"
+expect_status 200 "${basic[@]}" "$gateway_url/repository/deploys/org/example/maven-widget/1.2.3/maven-widget-1.2.3.jar"
 expect_status 409 "${basic[@]}" -H 'Idempotency-Key: direct-mode-does-not-commit' -H 'Content-Type: application/json' \
   --data '{"expectedAssetNames":["maven-widget-1.2.3.pom","maven-widget-1.2.3.jar"]}' \
   "$gateway_url/repository/maven/deploys/coordinates/org.example:maven-widget:1.2.3:commit"
@@ -95,7 +95,7 @@ expect_status 409 "${basic[@]}" -H 'Idempotency-Key: direct-mode-does-not-commit
 resolve_dir="$workdir/maven-resolve"
 mkdir -p "$resolve_dir"
 cat >"$resolve_dir/pom.xml" <<EOF
-<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>resolver</artifactId><version>1</version><repositories><repository><id>native</id><url>${gateway_url}/repository/maven/deploys</url></repository></repositories><dependencies><dependency><groupId>org.example</groupId><artifactId>maven-widget</artifactId><version>1.2.3</version></dependency></dependencies></project>
+<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>resolver</artifactId><version>1</version><repositories><repository><id>native</id><url>${gateway_url}/repository/deploys</url></repository></repositories><dependencies><dependency><groupId>org.example</groupId><artifactId>maven-widget</artifactId><version>1.2.3</version></dependency></dependencies></project>
 EOF
 (cd "$resolve_dir" && mvn --batch-mode --settings "$maven_dir/settings.xml" -Dmaven.repo.local="$workdir/maven-resolve-repository" dependency:resolve)
 
@@ -116,7 +116,7 @@ group = 'org.example'
 version = '2.0.0-SNAPSHOT'
 repositories {
   maven {
-    url = uri('${gateway_url}/repository/maven/deploys')
+    url = uri('${gateway_url}/repository/deploys')
     credentials { username = 'fixture'; password = 'fixture-secret' }
     allowInsecureProtocol = true
   }
@@ -129,7 +129,7 @@ publishing {
   }
   repositories {
     maven {
-      url = uri('${gateway_url}/repository/maven/deploys')
+      url = uri('${gateway_url}/repository/deploys')
       credentials { username = 'fixture'; password = 'fixture-secret' }
       allowInsecureProtocol = true
     }
@@ -145,7 +145,7 @@ if ! (cd "$gradle_dir" && GRADLE_USER_HOME="$workdir/gradle-user-home" gradle --
 fi
 (cd "$gradle_dir" && GRADLE_USER_HOME="$workdir/gradle-user-home" gradle --no-daemon --quiet resolveNative | grep -F 'gradle-widget-2.0.0-SNAPSHOT.jar')
 
-expect_status 200 "${basic[@]}" "$gateway_url/repository/maven/deploys/org/example/maven-widget/1.2.3/maven-widget-1.2.3.jar.sha256"
-expect_status 200 "${basic[@]}" "$gateway_url/repository/maven/deploys/org/example/gradle-widget/2.0.0-SNAPSHOT/maven-metadata.xml"
+expect_status 200 "${basic[@]}" "$gateway_url/repository/deploys/org/example/maven-widget/1.2.3/maven-widget-1.2.3.jar.sha256"
+expect_status 200 "${basic[@]}" "$gateway_url/repository/deploys/org/example/gradle-widget/2.0.0-SNAPSHOT/maven-metadata.xml"
 
-printf 'Native Maven direct-by-default and strict opt-in Maven/Gradle E2E passed through %s\n' "$gateway_url"
+printf 'Native Maven/Gradle E2E passed through Nexus-compatible roots; strict Gateway opt-in also passed through %s\n' "$gateway_url"
