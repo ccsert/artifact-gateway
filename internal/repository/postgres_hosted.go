@@ -370,6 +370,21 @@ func (s *PostgresStore) GetHostedGroup(ctx context.Context, id string) (HostedGr
 	return s.getHostedGroup(ctx, s.db, id)
 }
 
+func (s *PostgresStore) GetHostedGroupByName(ctx context.Context, name string) (HostedGroup, error) {
+	var group HostedGroup
+	err := s.db.QueryRowContext(ctx, `SELECT id::text, name, format, anonymous_read, version::text FROM hosted_groups WHERE name=$1`, name).Scan(&group.ID, &group.Name, &group.Format, &group.AnonymousRead, &group.Version)
+	if errors.Is(err, sql.ErrNoRows) {
+		return HostedGroup{}, ErrNotFound
+	}
+	if err != nil {
+		return HostedGroup{}, err
+	}
+	if err := scanHostedGroupMembers(ctx, s.db, &group); err != nil {
+		return HostedGroup{}, err
+	}
+	return group, nil
+}
+
 func (s *PostgresStore) replaceHostedGroup(ctx context.Context, id, name string, format Format, anonymousRead bool, members []GroupMember, expectedVersion string, replaceMetadata bool) (HostedGroup, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

@@ -255,6 +255,17 @@ func (s *MemoryStore) GetHostedGroup(_ context.Context, id string) (HostedGroup,
 	return cloneHostedGroup(group), nil
 }
 
+func (s *MemoryStore) GetHostedGroupByName(_ context.Context, name string) (HostedGroup, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, group := range s.hostedGroups {
+		if group.Name == name {
+			return cloneHostedGroup(group), nil
+		}
+	}
+	return HostedGroup{}, ErrNotFound
+}
+
 func (s *MemoryStore) ReplaceHostedGroup(_ context.Context, group HostedGroup, expectedVersion string) (HostedGroup, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

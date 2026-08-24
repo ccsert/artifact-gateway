@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -27,41 +28,42 @@ type nexusRepositoryCompatibilityRoute struct {
 }
 
 type nexusRepositoryCompatibilityTarget struct {
-	format repository.Format
-	group  bool
+	format      repository.Format
+	group       bool
+	hostedGroup repository.HostedGroup
 }
 
 type nexusRepositoryCompatibilityContextKey struct{}
 
-// nexusRepositoryMavenCanonicalRouter resolves the only ambiguous compatibility
-// root: a repository literally named "maven" overlaps the canonical Maven
-// prefix. An existing Maven repository in the next segment keeps canonical
-// precedence; otherwise the request is resolved as the Nexus-style alias.
-type nexusRepositoryMavenCanonicalRouter struct {
-	repositories  repository.HostedRepositoryStore
-	canonical     http.Handler
-	compatibility http.Handler
+type nexusRepositoryCompatibilityExternalRoute struct {
+	name        string
+	escapedPath string
+	hostedGroup repository.HostedGroup
 }
 
-func (h nexusRepositoryMavenCanonicalRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	name := repositoryNameAfterPrefix(r.URL.Path, "/repository/maven/")
-	if name != "" {
-		repo, err := h.repositories.GetHostedRepositoryByName(r.Context(), name)
-		if err == nil && repo.Format == repository.FormatMaven {
-			h.canonical.ServeHTTP(w, r)
-			return
-		}
-		if err != nil && !errors.Is(err, repository.ErrNotFound) {
-			http.Error(w, "repository lookup failed", http.StatusServiceUnavailable)
+type nexusGoRepositoryCompatibilityHandler struct {
+	native nativeGoHandler
+}
+
+func (h nexusGoRepositoryCompatibilityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPut {
+		if repositoryName, version, ok := parseNexusGoUploadPath(r.URL.EscapedPath()); ok {
+			h.native.serveNexusUpload(w, r, repositoryName, version)
 			return
 		}
 	}
-	h.compatibility.ServeHTTP(w, r)
+	h.native.ServeHTTP(w, r)
 }
 
 func (h nexusRepositoryCompatibilityRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	name, remainder, ok := nexusRepositoryCompatibilityPath(r.URL.Path)
 	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	escapedName, escapedRemainder, escapedOK := nexusRepositoryCompatibilityPath(r.URL.EscapedPath())
+	decodedEscapedName, unescapeErr := url.PathUnescape(escapedName)
+	if !escapedOK || unescapeErr != nil || decodedEscapedName != name {
 		http.NotFound(w, r)
 		return
 	}
@@ -83,17 +85,38 @@ func (h nexusRepositoryCompatibilityRouter) ServeHTTP(w http.ResponseWriter, r *
 		http.NotFound(w, r)
 		return
 	}
+	if target.format == repository.FormatPyPI && !target.group && r.Method == http.MethodPost && remainder == "/" {
+		remainder = "/legacy/"
+		escapedRemainder = "/legacy/"
+	}
 
-	forwardedContext := context.WithValue(r.Context(), nexusRepositoryCompatibilityContextKey{}, name)
+	overrideRepositoryRequestClass(r.Context(), target.format)
+	externalRoute := nexusRepositoryCompatibilityExternalRoute{name: name, escapedPath: r.URL.EscapedPath(), hostedGroup: target.hostedGroup}
+	forwardedContext := context.WithValue(r.Context(), nexusRepositoryCompatibilityContextKey{}, externalRoute)
 	forwarded := r.Clone(forwardedContext)
 	forwarded.URL.Path = prefix + name + remainder
-	forwarded.URL.RawPath = ""
+	forwarded.URL.RawPath = prefix + escapedName + escapedRemainder
 	handler.ServeHTTP(w, forwarded)
 }
 
 func nexusRepositoryCompatibilityExternalName(ctx context.Context, repositoryName string) (string, bool) {
-	name, ok := ctx.Value(nexusRepositoryCompatibilityContextKey{}).(string)
-	return name, ok && name == repositoryName
+	route, ok := nexusRepositoryCompatibilityExternalRouteFromContext(ctx, repositoryName)
+	return route.name, ok
+}
+
+func nexusRepositoryCompatibilityExternalEscapedPath(ctx context.Context, repositoryName string) (string, bool) {
+	route, ok := nexusRepositoryCompatibilityExternalRouteFromContext(ctx, repositoryName)
+	return route.escapedPath, ok
+}
+
+func nexusRepositoryCompatibilityExternalRouteFromContext(ctx context.Context, repositoryName string) (nexusRepositoryCompatibilityExternalRoute, bool) {
+	route, ok := ctx.Value(nexusRepositoryCompatibilityContextKey{}).(nexusRepositoryCompatibilityExternalRoute)
+	return route, ok && route.name == repositoryName
+}
+
+func nexusRepositoryCompatibilityResolvedGroup(ctx context.Context, name string, format repository.Format) (repository.HostedGroup, bool) {
+	route, ok := nexusRepositoryCompatibilityExternalRouteFromContext(ctx, name)
+	return route.hostedGroup, ok && route.hostedGroup.Name == name && route.hostedGroup.Format == format
 }
 
 func (h nexusRepositoryCompatibilityRouter) resolveTarget(ctx context.Context, name string) (nexusRepositoryCompatibilityTarget, error) {
@@ -108,22 +131,11 @@ func (h nexusRepositoryCompatibilityRouter) resolveTarget(ctx context.Context, n
 		return nexusRepositoryCompatibilityTarget{}, repository.ErrNotFound
 	}
 
-	after := ""
-	for {
-		groups, next, listErr := h.groups.ListHostedGroups(ctx, 200, after)
-		if listErr != nil {
-			return nexusRepositoryCompatibilityTarget{}, listErr
-		}
-		for _, group := range groups {
-			if group.Name == name {
-				return nexusRepositoryCompatibilityTarget{format: group.Format, group: true}, nil
-			}
-		}
-		if next == "" {
-			return nexusRepositoryCompatibilityTarget{}, repository.ErrNotFound
-		}
-		after = next
+	group, err := h.groups.GetHostedGroupByName(ctx, name)
+	if err != nil {
+		return nexusRepositoryCompatibilityTarget{}, err
 	}
+	return nexusRepositoryCompatibilityTarget{format: group.Format, group: true, hostedGroup: group}, nil
 }
 
 func nexusRepositoryCompatibilityPath(path string) (name, remainder string, ok bool) {
@@ -137,15 +149,4 @@ func nexusRepositoryCompatibilityPath(path string) (name, remainder string, ok b
 		return "", "", false
 	}
 	return relative[:separator], relative[separator:], true
-}
-
-func repositoryNameAfterPrefix(path, prefix string) string {
-	relative := strings.TrimPrefix(path, prefix)
-	if relative == path || relative == "" {
-		return ""
-	}
-	if separator := strings.IndexByte(relative, '/'); separator >= 0 {
-		return relative[:separator]
-	}
-	return relative
 }

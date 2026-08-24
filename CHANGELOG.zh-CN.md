@@ -6,6 +6,13 @@
 
 ## Unreleased
 
+- 新增 Maven、npm、PyPI、Raw、Go Hosted/Proxy/Group 的 Nexus 风格
+  `/repository/<name>/...` 迁移根路径；真实 Maven/Gradle、npm、twine/pip、Raw HTTP 与
+  Go 客户端可保留原 Base Path，npm Tarball、Raw 分页/断点上传、PyPI 与 Go 发布返回地址
+  也保持该根路径。PyPI 可直接在 Repository 根路径接收 Twine，Go Hosted 支持 Nexus
+  3.93+ 的版本 ZIP 上传并从归档推导、授权模块身份。为避免跨仓库歧义，旧 Maven
+  canonical 前缀继续保留精确名称 `maven`。
+
 - 新增 Go Hosted：认证单 ZIP 发布、模块与 `go.mod` 校验、原子生成 `.info`/`.mod`、PostgreSQL/RustFS 按内容持久化、幂等重放、不可变冲突拒绝、发布扫描、墓碑/恢复、保留、24 小时恢复窗口、引用安全回收、三表示晋级与断点复制、Hosted-first Group，以及真实 `go mod download` 门禁。
 - 新增面向 Jenkins、CI、扫描器和第三方应用的稳定 Service Account：一次性过期凭证、零停机轮换、立即禁用、Bearer/Basic 认证、Repository Grant、审计、双语 Console 和独立发布门禁。
 - 重做公开制品目录，明确只读边界、来源/格式摘要、搜索/过滤及 Hosted/Proxy/Group 引导；管理员界面展示全局、Repository、Group/成员门禁和影响范围，不改变默认拒绝策略。

@@ -7,6 +7,43 @@ x-gateway-protocol-overlay:
     to that format's canonical handler. Authentication, authorization, auditing,
     validation, and object lifecycle remain canonical. OCI is excluded because
     Registry V2 clients require the /v2 protocol root.
+nexus_compatible_pypi_upload_root:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - name: repository
+    in: path
+    required: true
+    description: Existing PyPI Hosted repository name; the exact name `maven`
+      is reserved by the legacy canonical Maven prefix.
+    schema:
+      type: string
+      pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+  post:
+    operationId: uploadNexusCompatiblePyPIDistribution
+    description: Accepts the Nexus Twine repository root and dispatches the multipart
+      upload to the canonical PyPI legacy upload handler.
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      '201':
+        description: Distribution published; Location remains under this repository root
+        headers:
+          Location:
+            schema:
+              type: string
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
 nexus_compatible_repository_path:
   servers:
   - url: https://gateway.example.com
@@ -15,7 +52,8 @@ nexus_compatible_repository_path:
     in: path
     required: true
     description: Existing Hosted, Proxy, or Group name. A Hosted/Proxy repository
-      takes precedence over a same-named Group, matching canonical routing.
+      takes precedence over a same-named Group, matching canonical routing. The
+      exact name `maven` is reserved by the legacy canonical Maven prefix.
     schema:
       type: string
       pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
@@ -32,6 +70,13 @@ nexus_compatible_repository_path:
     description: Reads through the existing Maven, npm, PyPI, Raw, or Go protocol
       handler. Group targets remain read-only. npm tarball URLs preserve this
       repository root so newly generated lockfiles do not switch route families.
+    parameters:
+    - name: uploadId
+      in: query
+      description: Raw resumable-upload identifier; ignored by other formats.
+      schema:
+        type: string
+        format: uuid
     security:
     - protocolBasicAuth: []
     - protocolBearerAuth: []
@@ -62,9 +107,34 @@ nexus_compatible_repository_path:
         "$ref": "../components/responses.yaml#/ProtocolNotFound"
   put:
     operationId: putNexusCompatibleRepositoryPath
-    description: Dispatches standard Maven/Gradle, npm, Raw, or Gateway Go Hosted
-      publication to the existing format handler. Proxy and Group targets reject
-      writes according to their canonical contracts.
+    description: Dispatches standard Maven/Gradle, npm, Raw, Nexus-style Go
+      version-ZIP, or Gateway Go Hosted publication to the existing format handler.
+      Proxy and Group targets reject writes according to their canonical contracts.
+    parameters:
+    - name: uploadId
+      in: query
+      description: Raw resumable-upload identifier when completing an upload.
+      schema:
+        type: string
+        format: uuid
+    - name: complete
+      in: query
+      description: Must be `1` when completing a Raw resumable upload.
+      schema:
+        type: string
+        enum: ['1']
+    - name: Upload-Offset
+      in: header
+      description: Current Raw upload offset when final bytes are appended.
+      schema:
+        type: integer
+        minimum: 0
+    - name: Digest
+      in: header
+      description: Required sha-256 assertion when completing a Raw resumable upload.
+      schema:
+        type: string
+        pattern: '^sha-256=[A-Za-z0-9+/]+={0,2}$'
     security:
     - protocolBasicAuth: []
     - protocolBearerAuth: []
@@ -84,6 +154,11 @@ nexus_compatible_repository_path:
         description: Idempotent publication replay accepted
       '201':
         description: Artifact published or staged by the target repository policy
+        headers:
+          Location:
+            description: Present for Go publication and remains under the compatibility root.
+            schema:
+              type: string
       '401':
         "$ref": "../components/responses.yaml#/BasicUnauthorized"
       '422':
@@ -92,6 +167,13 @@ nexus_compatible_repository_path:
     operationId: postNexusCompatibleRepositoryPath
     description: Dispatches PyPI legacy multipart upload or Raw resumable-upload
       creation to the existing Hosted handler.
+    parameters:
+    - name: resumable
+      in: query
+      description: Must be `1` when this operation starts a Raw resumable upload.
+      schema:
+        type: string
+        enum: ['1']
     security:
     - protocolBasicAuth: []
     - protocolBearerAuth: []
@@ -109,6 +191,14 @@ nexus_compatible_repository_path:
     responses:
       '201':
         description: Distribution published or resumable upload created
+        headers:
+          Location:
+            schema:
+              type: string
+          Upload-Offset:
+            schema:
+              type: integer
+              minimum: 0
       '401':
         "$ref": "../components/responses.yaml#/BasicUnauthorized"
       '422':
@@ -117,6 +207,19 @@ nexus_compatible_repository_path:
     operationId: patchNexusCompatibleRepositoryPath
     description: Appends a Raw resumable-upload chunk when the query and offset
       headers satisfy the canonical Raw contract.
+    parameters:
+    - name: uploadId
+      in: query
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: Upload-Offset
+      in: header
+      required: true
+      schema:
+        type: integer
+        minimum: 0
     security:
     - protocolBasicAuth: []
     - protocolBearerAuth: []
@@ -130,6 +233,14 @@ nexus_compatible_repository_path:
     responses:
       '204':
         description: Chunk appended
+        headers:
+          Location:
+            schema:
+              type: string
+          Upload-Offset:
+            schema:
+              type: integer
+              minimum: 0
       '401':
         "$ref": "../components/responses.yaml#/BasicUnauthorized"
       '422':
@@ -138,6 +249,13 @@ nexus_compatible_repository_path:
     operationId: deleteNexusCompatibleRepositoryPath
     description: Dispatches a Raw Hosted delete to the canonical lifecycle path;
       formats without protocol delete support reject the operation.
+    parameters:
+    - name: uploadId
+      in: query
+      description: Raw resumable-upload identifier when cancelling an open upload.
+      schema:
+        type: string
+        format: uuid
     security:
     - protocolBasicAuth: []
     - protocolBearerAuth: []

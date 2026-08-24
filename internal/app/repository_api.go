@@ -325,16 +325,18 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		})}
 	mavenProtocol := hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatMaven, next: mavenGroupRouter}
 	mux.Handle("/maven/", mavenProtocol)
+	rawRepositoryHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if nativeRaw.ServeHTTP(w, r) {
+			return
+		}
+		RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}.ServeHTTP(w, r)
+	})
 	rawGroupRouter := v2GroupRouter{format: repository.FormatRaw, groups: store, repos: store, audit: store, auth: authenticator,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
 		raw:        &v2GroupRawHandler{native: &nativeRaw, auth: authenticator},
-		next: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if nativeRaw.ServeHTTP(w, r) {
-				return
-			}
-			RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}.ServeHTTP(w, r)
-		})}
+		next:       rawRepositoryHandler}
 	rawProtocol := hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: rawGroupRouter}
+	rawRepositoryProtocol := hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: rawRepositoryHandler}
 	mux.Handle("/raw/", rawProtocol)
 	npmGroupRouter := v2GroupRouter{format: repository.FormatNPM, groups: store, repos: store, audit: store, auth: authenticator,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
@@ -383,21 +385,20 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 				groupPrefix: "/pypi/", groupHandler: pypiGroupRouter,
 			},
 			repository.FormatRaw: {
-				repositoryPrefix: "/raw/", repositoryHandler: rawProtocol,
+				repositoryPrefix: "/raw/", repositoryHandler: rawRepositoryProtocol,
 				groupPrefix: "/raw/", groupHandler: rawProtocol,
 			},
 			repository.FormatGo: {
-				repositoryPrefix: "/go/", repositoryHandler: goGroupRouter,
+				repositoryPrefix: "/go/", repositoryHandler: nexusGoRepositoryCompatibilityHandler{native: nativeGo},
 				groupPrefix: "/go/", groupHandler: goGroupRouter,
 			},
 		},
 	}
 	mux.Handle("/repository/", nexusCompatibility)
-	mux.Handle("/repository/maven/", nexusRepositoryMavenCanonicalRouter{
-		repositories:  store,
-		canonical:     nativeMaven,
-		compatibility: nexusCompatibility,
-	})
+	// This legacy canonical Maven prefix is intentionally more specific than
+	// the Nexus-style catch-all. A compatibility target named "maven" is
+	// therefore reserved rather than ambiguously routing artifact path segments.
+	mux.Handle("/repository/maven/", nativeMaven)
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	mux.HandleFunc("POST /auth/login", userLoginHandler(store, store, authenticator))
 	mux.HandleFunc("POST /auth/change-password", userChangePasswordHandler(store, store, authenticator))

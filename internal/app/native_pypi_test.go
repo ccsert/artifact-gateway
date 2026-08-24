@@ -141,7 +141,7 @@ func TestNativePyPIRealTwineUploadAndPipDownload(t *testing.T) {
 		}
 		return string(output)
 	}
-	run("-m", "twine", "upload", "--disable-progress-bar", "--repository-url", server.URL+"/repository/python/legacy/", "--username", "ci", "--password", "resolver-secret", wheelPath)
+	run("-m", "twine", "upload", "--disable-progress-bar", "--repository-url", server.URL+"/repository/python/", "--username", "ci", "--password", "resolver-secret", wheelPath)
 	downloadDirectory := filepath.Join(temporary, "download")
 	if err = os.Mkdir(downloadDirectory, 0o700); err != nil {
 		t.Fatal(err)

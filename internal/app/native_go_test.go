@@ -917,7 +917,7 @@ func TestNativeGoRealClientDownloadsHostedPublication(t *testing.T) {
 		TestAdapter{}, testAuthenticator(),
 	))
 	defer server.Close()
-	publish, err := http.NewRequest(http.MethodPut, server.URL+"/repository/"+repo.Name+"/"+escapedModule+"/@v/"+version+".zip", bytes.NewReader(archive))
+	publish, err := http.NewRequest(http.MethodPut, server.URL+"/repository/"+repo.Name+"/"+version+".zip", bytes.NewReader(archive))
 	if err != nil {
 		t.Fatal(err)
 	}

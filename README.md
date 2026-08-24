@@ -61,8 +61,8 @@ byte plane, and Gateway connects the two without adding a middleware fleet.
 | Maven | ✓ | ✓ | ✓ | Standard Maven/Gradle publication by default; [strict coordinate commit](docs/maven-hosted-publication.md) is optional |
 | Conan 2 | ✓ | ✓ | ✓ | Revision-aware publication and lifecycle |
 | npm | ✓ | ✓ | ✓ | Native publication, verified cache, merged packuments |
-| PyPI | ✓ | ✓ | ✓ | twine upload plus PEP 503/691 reads |
-| Go modules | Gateway extension | ✓ | ✓ | Standard GOPROXY reads; atomic single-ZIP Hosted publication |
+| PyPI | ✓ | ✓ | ✓ | Nexus-root twine upload plus PEP 503/691 reads |
+| Go modules | ✓ | ✓ | ✓ | Standard GOPROXY reads; Nexus-compatible version-ZIP publication |
 | APT | Preview only | ✓ | ✓ | Hosted signing remains unadvertised until production custody gates pass |
 
 Cargo is a staged parser/identity foundation and NuGet remains roadmap work;
@@ -79,7 +79,10 @@ For client migration, Maven, npm, PyPI, Raw, and Go Hosted/Proxy/Group targets
 also accept the Nexus-style root `/repository/<name>/...`. Requests still use
 the canonical protocol authorization, validation, audit, and lifecycle paths;
 npm metadata keeps generated tarball URLs on the same compatibility root so
-new lockfiles do not switch route families. OCI remains on the specification-
+npm lockfiles do not switch route families. Raw pagination and upload discovery,
+PyPI uploads, and Go publication also keep response URLs on that root. The name
+`maven` remains reserved by Gateway's older canonical Maven prefix; migrate a
+Nexus target with that exact name under a different repository name. OCI remains on the specification-
 required `/v2/` registry root and therefore needs registry-name or ingress
 mapping rather than an HTTP base-path alias.
 

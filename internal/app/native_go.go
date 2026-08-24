@@ -144,6 +144,50 @@ func (h nativeGoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// serveNexusUpload accepts Nexus Go Hosted's version-only upload path. The
+// module path is recovered from the canonical module ZIP root before the same
+// resource authorization and atomic publication path used by Gateway uploads.
+func (h nativeGoHandler) serveNexusUpload(w http.ResponseWriter, r *http.Request, repositoryName, version string) {
+	repo, err := h.repos.GetHostedRepositoryByName(r.Context(), repositoryName)
+	if errors.Is(err, repository.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, "repository unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if repo.Format != repository.FormatGo || repo.State != repository.RepositoryActive {
+		http.NotFound(w, r)
+		return
+	}
+	if repo.Type != repository.RepositoryTypeHosted {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	principal, authenticated := h.protocolPrincipal(r)
+	if !authenticated {
+		h.challenge(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	spool, ok := h.spoolGoModuleUpload(w, r)
+	if !ok {
+		return
+	}
+	defer func() { _ = spool.Close() }()
+	modulePath, identityErr := goModulePathFromZipFile(spool.file.Name(), version)
+	if identityErr != nil {
+		h.writePublishError(w, http.StatusUnprocessableEntity, "Go module ZIP identity is invalid")
+		return
+	}
+	decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryWrite, modulePath)
+	if !decision.Allowed {
+		h.challenge(w, http.StatusForbidden, "repository permission required")
+		return
+	}
+	h.publishSpool(w, r, repo, goRoute{repository: repo.Name, module: modulePath, version: version, kind: "zip"}, principal.Actor, spool)
+}
+
 func parseGoProxyPath(escapedPath string) (goRoute, bool) {
 	if !strings.HasPrefix(escapedPath, "/go/") {
 		return goRoute{}, false
@@ -187,6 +231,30 @@ func parseGoProxyPath(escapedPath string) (goRoute, bool) {
 		return goRoute{repository: repositoryName, module: modulePath, version: version, kind: kind}, true
 	}
 	return goRoute{}, false
+}
+
+func parseNexusGoUploadPath(escapedPath string) (repositoryName, version string, ok bool) {
+	if !strings.HasPrefix(escapedPath, "/go/") {
+		return "", "", false
+	}
+	remainder := strings.TrimPrefix(escapedPath, "/go/")
+	escapedRepository, asset, found := strings.Cut(remainder, "/")
+	if !found || escapedRepository == "" || strings.Contains(asset, "/") || !strings.HasSuffix(asset, ".zip") {
+		return "", "", false
+	}
+	repositoryName, err := url.PathUnescape(escapedRepository)
+	if err != nil || repositoryName == "" || strings.Contains(repositoryName, "/") {
+		return "", "", false
+	}
+	escapedVersion, err := url.PathUnescape(strings.TrimSuffix(asset, ".zip"))
+	if err != nil {
+		return "", "", false
+	}
+	version, err = module.UnescapeVersion(escapedVersion)
+	if err != nil || !semver.IsValid(version) {
+		return "", "", false
+	}
+	return repositoryName, version, true
 }
 
 func unescapeGoModulePath(value string) (string, bool) {
@@ -369,21 +437,33 @@ func (h nativeGoHandler) loadAsset(r *http.Request, repo repository.HostedReposi
 }
 
 func (h nativeGoHandler) publish(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, route goRoute, publisher string) {
-	spool, err := spoolUpload(r.Body, goZipLimit)
-	if errors.Is(err, errUploadTooLarge) {
-		h.writePublishError(w, http.StatusRequestEntityTooLarge, "Go module ZIP is too large")
-		return
-	}
-	if err != nil {
-		h.writePublishError(w, http.StatusBadRequest, "read Go module ZIP failed")
+	spool, ok := h.spoolGoModuleUpload(w, r)
+	if !ok {
 		return
 	}
 	defer func() { _ = spool.Close() }()
+	h.publishSpool(w, r, repo, route, publisher, spool)
+}
+
+func (h nativeGoHandler) spoolGoModuleUpload(w http.ResponseWriter, r *http.Request) (*uploadSpool, bool) {
+	spool, err := spoolUpload(r.Body, goZipLimit)
+	if errors.Is(err, errUploadTooLarge) {
+		h.writePublishError(w, http.StatusRequestEntityTooLarge, "Go module ZIP is too large")
+		return nil, false
+	}
+	if err != nil {
+		h.writePublishError(w, http.StatusBadRequest, "read Go module ZIP failed")
+		return nil, false
+	}
+	return spool, true
+}
+
+func (h nativeGoHandler) publishSpool(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, route goRoute, publisher string, spool *uploadSpool) {
 	if spool.Size() == 0 {
 		h.writePublishError(w, http.StatusUnprocessableEntity, "Go module ZIP is empty")
 		return
 	}
-	if _, err = modzip.CheckZip(module.Version{Path: route.module, Version: route.version}, spool.file.Name()); err != nil {
+	if _, err := modzip.CheckZip(module.Version{Path: route.module, Version: route.version}, spool.file.Name()); err != nil {
 		h.writePublishError(w, http.StatusUnprocessableEntity, "Go module ZIP is invalid")
 		return
 	}
@@ -500,6 +580,37 @@ func (h nativeGoHandler) publish(w http.ResponseWriter, r *http.Request, repo re
 	h.writeGoPublicationSuccess(w, r, repo, route, publisher, version, assets[2], replayed)
 }
 
+func goModulePathFromZipFile(filename, version string) (string, error) {
+	archive, err := zip.OpenReader(filename)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = archive.Close() }()
+	root := ""
+	modulePath := ""
+	rootMarker := "@" + version + "/"
+	for _, file := range archive.File {
+		if root == "" {
+			markerIndex := strings.Index(file.Name, rootMarker)
+			if markerIndex <= 0 {
+				return "", errors.New("go module ZIP root does not match upload version")
+			}
+			modulePath = file.Name[:markerIndex]
+			if module.Check(modulePath, version) != nil {
+				return "", errors.New("go module ZIP root is invalid")
+			}
+			root = modulePath + "@" + version
+		}
+		if !strings.HasPrefix(file.Name, root+"/") {
+			return "", errors.New("go module ZIP contains multiple module roots")
+		}
+	}
+	if modulePath == "" {
+		return "", errors.New("go module ZIP is empty")
+	}
+	return modulePath, nil
+}
+
 func enqueueGoPublicationReclaim(ctx context.Context, store repository.LifecycleJobStore, repositoryID, objectKey string) (repository.LifecycleJob, error) {
 	payload, err := json.Marshal(goReclaimPayload{Format: repository.FormatGo, ObjectKey: objectKey})
 	if err != nil {
@@ -564,7 +675,11 @@ func (h nativeGoHandler) writeGoPublicationSuccess(w http.ResponseWriter, r *htt
 		status = http.StatusOK
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Location", r.URL.Path)
+	location := r.URL.EscapedPath()
+	if externalPath, ok := nexusRepositoryCompatibilityExternalEscapedPath(r.Context(), repo.Name); ok {
+		location = externalPath
+	}
+	w.Header().Set("Location", location)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"module": route.module, "version": version.Version, "digest": zipAsset.Digest, "replayed": replayed,

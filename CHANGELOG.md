@@ -10,6 +10,16 @@ a dated version heading without rewriting their meaning.
 
 ## Unreleased
 
+- Added a Nexus-style `/repository/<name>/...` migration root for Maven, npm,
+  PyPI, Raw, and Go Hosted/Proxy/Group traffic. Real Maven/Gradle, npm,
+  twine/pip, Raw HTTP, and Go clients now retain their Nexus base paths;
+  generated npm tarball, Raw pagination/upload, PyPI publication, and Go
+  publication URLs remain on that root. PyPI accepts Twine uploads at the
+  repository root, and Go Hosted accepts Nexus 3.93+'s version-only ZIP upload
+  after deriving and authorizing the module identity. The legacy canonical
+  Maven prefix reserves the exact target name `maven` to prevent ambiguous
+  cross-repository routing.
+
 - Added Go Hosted repositories with authenticated single-ZIP publication,
   canonical module and `go.mod` validation, atomically derived `.info`/`.mod`
   representations, content-addressed PostgreSQL/RustFS persistence, idempotent

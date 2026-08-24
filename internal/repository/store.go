@@ -99,6 +99,7 @@ type HostedGroupStore interface {
 	CreateHostedGroupIdempotently(context.Context, HostedGroup, string, string, string) (HostedGroup, bool, error)
 	ListHostedGroups(context.Context, int, string) ([]HostedGroup, string, error)
 	GetHostedGroup(context.Context, string) (HostedGroup, error)
+	GetHostedGroupByName(context.Context, string) (HostedGroup, error)
 	ReplaceHostedGroup(context.Context, HostedGroup, string) (HostedGroup, error)
 	ReplaceHostedGroupMembers(context.Context, string, []GroupMember, string) (HostedGroup, error)
 	DeleteHostedGroup(context.Context, string) error

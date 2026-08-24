@@ -3,6 +3,9 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -51,6 +54,40 @@ func TestNexusRepositoryCompatibilityAliasPreservesRawProtocolBehavior(t *testin
 	if canonical.Code != http.StatusOK || canonical.Body.String() != "native raw artifact" {
 		t.Fatalf("canonical Raw GET status=%d body=%q", canonical.Code, canonical.Body.String())
 	}
+
+	encodedSlash := request(http.MethodPut, "/repository/raw-releases/releases%2Fescaped.txt", []byte("must be rejected"))
+	if encodedSlash.Code == http.StatusCreated {
+		t.Fatalf("Nexus-compatible Raw PUT accepted encoded slash: status=%d body=%q", encodedSlash.Code, encodedSlash.Body.String())
+	}
+}
+
+func TestNexusRepositoryCompatibilityAliasReportsResolvedProtocolMetrics(t *testing.T) {
+	store := repository.NewMemoryStore()
+	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "raw-migration-metrics", Name: "raw-releases", Format: repository.FormatRaw,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	metrics := &Metrics{}
+	handler := metrics.Instrument(NewGatewayHandler(
+		Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()},
+		store,
+		TestAdapter{},
+		testAuthenticator(),
+	))
+	request := httptest.NewRequest(http.MethodGet, "/repository/raw-releases/missing.txt", nil)
+	authorize(request, "resolver-secret")
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+
+	response := httptest.NewRecorder()
+	metrics.Handler(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body := response.Body.String()
+	if !strings.Contains(body, `artifact_gateway_http_requests_total{class="raw",status="4xx"} 1`) {
+		t.Fatalf("Nexus-compatible request was not classified as Raw:\n%s", body)
+	}
+	if !strings.Contains(body, `artifact_gateway_http_requests_total{class="other",status="4xx"} 0`) {
+		t.Fatalf("Nexus-compatible request leaked into other metrics:\n%s", body)
+	}
 }
 
 func TestNexusRepositoryCompatibilityAliasResolvesRawGroups(t *testing.T) {
@@ -85,6 +122,92 @@ func TestNexusRepositoryCompatibilityAliasResolvesRawGroups(t *testing.T) {
 	handler.ServeHTTP(getResponse, get)
 	if getResponse.Code != http.StatusOK || getResponse.Body.String() != "group artifact" {
 		t.Fatalf("Nexus-compatible Raw group GET status=%d body=%q", getResponse.Code, getResponse.Body.String())
+	}
+}
+
+func TestNexusRepositoryCompatibilityAliasPrefersRawRepositoryOverSameNamedGroup(t *testing.T) {
+	store := repository.NewMemoryStore()
+	target, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "raw-same-name-target", Name: "raw-shared", Format: repository.FormatRaw,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	member, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "raw-same-name-member", Name: "raw-member", Format: repository.FormatRaw,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createV2Group(t, store, target.Name, repository.FormatRaw,
+		repository.GroupMember{RepositoryID: member.ID, Position: 0},
+	)
+	handler := NewGatewayHandler(
+		Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()},
+		store,
+		TestAdapter{},
+		testAuthenticator(),
+	)
+
+	put := httptest.NewRequest(http.MethodPut, "/repository/raw-shared/releases/app.txt", strings.NewReader("repository artifact"))
+	authorize(put, "resolver-secret")
+	putResponse := httptest.NewRecorder()
+	handler.ServeHTTP(putResponse, put)
+	if putResponse.Code != http.StatusCreated {
+		t.Fatalf("same-named Raw repository PUT status=%d body=%q", putResponse.Code, putResponse.Body.String())
+	}
+	stored, err := store.GetRawAsset(context.Background(), target.ID, "releases/app.txt")
+	if err != nil || stored.Path != "releases/app.txt" {
+		t.Fatalf("same-named Raw repository did not receive artifact: asset=%#v err=%v", stored, err)
+	}
+}
+
+func TestNexusRepositoryCompatibilityAliasKeepsRawDiscoveryURLsOnExternalRoot(t *testing.T) {
+	store := repository.NewMemoryStore()
+	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "raw-migration-discovery", Name: "raw-releases", Format: repository.FormatRaw,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(
+		Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()},
+		store,
+		TestAdapter{},
+		testAuthenticator(),
+	)
+	request := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		authorize(req, "resolver-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+
+	for _, name := range []string{"alpha.txt", "beta.txt"} {
+		response := request(http.MethodPut, "/repository/raw-releases/releases/"+name, name)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("Nexus-compatible Raw PUT %s status=%d body=%q", name, response.Code, response.Body.String())
+		}
+	}
+	listing := request(http.MethodGet, "/repository/raw-releases/releases/?n=1", "")
+	if listing.Code != http.StatusOK {
+		t.Fatalf("Nexus-compatible Raw listing status=%d body=%q", listing.Code, listing.Body.String())
+	}
+	if link := listing.Header().Get("Link"); !strings.HasPrefix(link, "</repository/raw-releases/releases/") || strings.Contains(link, "</raw/") {
+		t.Fatalf("Nexus-compatible Raw listing leaked canonical pagination link %q", link)
+	}
+
+	started := request(http.MethodPost, "/repository/raw-releases/releases/large.bin?resumable=1", "")
+	if started.Code != http.StatusCreated {
+		t.Fatalf("Nexus-compatible Raw resumable start status=%d body=%q", started.Code, started.Body.String())
+	}
+	location := started.Header().Get("Location")
+	if !strings.HasPrefix(location, "/repository/raw-releases/releases/large.bin?uploadId=") || strings.HasPrefix(location, "/raw/") {
+		t.Fatalf("Nexus-compatible Raw upload leaked canonical location %q", location)
+	}
+	cancelled := request(http.MethodDelete, location, "")
+	if cancelled.Code != http.StatusNoContent {
+		t.Fatalf("follow Nexus-compatible Raw upload location status=%d body=%q", cancelled.Code, cancelled.Body.String())
 	}
 }
 
@@ -123,7 +246,7 @@ func TestNexusRepositoryCompatibilityAliasPreservesMavenDirectPublication(t *tes
 	}
 }
 
-func TestNexusRepositoryCompatibilityAliasAllowsRepositoryNamedMaven(t *testing.T) {
+func TestNexusRepositoryCompatibilityKeepsCanonicalMavenPrefixReserved(t *testing.T) {
 	store := repository.NewMemoryStore()
 	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
 		ID: "maven-name-collision-repository", Name: "maven", Format: repository.FormatMaven,
@@ -139,24 +262,14 @@ func TestNexusRepositoryCompatibilityAliasAllowsRepositoryNamedMaven(t *testing.
 		authenticator,
 	)
 
-	const (
-		assetPath = "/repository/maven/org/example/widget/1.2.0/widget-1.2.0.pom"
-		pom       = "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.2.0</version></project>"
-	)
+	const assetPath = "/repository/maven/missing/org/example/widget/1.2.0/widget-1.2.0.pom"
+	const pom = "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.2.0</version></project>"
 	put := httptest.NewRequest(http.MethodPut, assetPath, strings.NewReader(pom))
 	put.SetBasicAuth("maven", "resolver-secret")
 	putResponse := httptest.NewRecorder()
 	handler.ServeHTTP(putResponse, put)
-	if putResponse.Code != http.StatusCreated {
-		t.Fatalf("Nexus-compatible repository named maven PUT status=%d body=%q", putResponse.Code, putResponse.Body.String())
-	}
-
-	get := httptest.NewRequest(http.MethodGet, assetPath, nil)
-	get.SetBasicAuth("maven", "resolver-secret")
-	getResponse := httptest.NewRecorder()
-	handler.ServeHTTP(getResponse, get)
-	if getResponse.Code != http.StatusOK || getResponse.Body.String() != pom {
-		t.Fatalf("Nexus-compatible repository named maven GET status=%d body=%q", getResponse.Code, getResponse.Body.String())
+	if putResponse.Code != http.StatusNotFound {
+		t.Fatalf("reserved canonical Maven prefix was reinterpreted as repository maven: status=%d body=%q", putResponse.Code, putResponse.Body.String())
 	}
 }
 
@@ -305,6 +418,62 @@ func TestNexusRepositoryCompatibilityAliasPreservesPyPISimpleReads(t *testing.T)
 	}
 }
 
+func TestNexusRepositoryCompatibilityAliasAcceptsPyPITwineRootUpload(t *testing.T) {
+	store := repository.NewMemoryStore()
+	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "pypi-nexus-upload", Name: "python", Format: repository.FormatPyPI,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	wheel := pypiFixtureWheel(t, "gateway_widget", "1.2.3")
+	sum := sha256.Sum256(wheel)
+	body := new(bytes.Buffer)
+	writer := multipart.NewWriter(body)
+	for key, value := range map[string]string{
+		":action": "file_upload", "name": "gateway-widget", "version": "1.2.3",
+		"filetype": "bdist_wheel", "pyversion": "py3", "sha256_digest": hex.EncodeToString(sum[:]),
+	} {
+		if err := writer.WriteField(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	part, err := writer.CreateFormFile("content", "gateway_widget-1.2.3-py3-none-any.whl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = part.Write(wheel); err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(
+		Dependencies{NativePyPIObjectStore: NewMemoryOCIObjectStore()},
+		store,
+		TestAdapter{},
+		testAuthenticator(),
+	)
+	upload := httptest.NewRequest(http.MethodPost, "/repository/python/", body)
+	upload.Header.Set("Content-Type", writer.FormDataContentType())
+	authorize(upload, "resolver-secret")
+	uploaded := httptest.NewRecorder()
+	handler.ServeHTTP(uploaded, upload)
+	if uploaded.Code != http.StatusCreated {
+		t.Fatalf("Nexus-compatible PyPI root upload status=%d body=%q", uploaded.Code, uploaded.Body.String())
+	}
+	location := uploaded.Header().Get("Location")
+	if !strings.HasPrefix(location, "/repository/python/packages/") || strings.HasPrefix(location, "/pypi/") {
+		t.Fatalf("Nexus-compatible PyPI upload leaked canonical location %q", location)
+	}
+	download := httptest.NewRequest(http.MethodGet, location, nil)
+	authorize(download, "resolver-secret")
+	downloaded := httptest.NewRecorder()
+	handler.ServeHTTP(downloaded, download)
+	if downloaded.Code != http.StatusOK || !bytes.Equal(downloaded.Body.Bytes(), wheel) {
+		t.Fatalf("follow Nexus-compatible PyPI location status=%d bytes=%d", downloaded.Code, downloaded.Body.Len())
+	}
+}
+
 func TestNexusRepositoryCompatibilityAliasResolvesPyPIGroups(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
@@ -358,12 +527,16 @@ func TestNexusRepositoryCompatibilityAliasPreservesGOPROXYReads(t *testing.T) {
 		"go.mod":    "module " + modulePath + "\n\ngo 1.26\n",
 		"widget.go": "package widget\n",
 	})
-	publish := httptest.NewRequest(http.MethodPut, "/go/"+repo.Name+"/"+escapedModule+"/@v/"+version+".zip", bytes.NewReader(archive))
+	publishPath := "/repository/" + repo.Name + "/" + version + ".zip"
+	publish := httptest.NewRequest(http.MethodPut, publishPath, bytes.NewReader(archive))
 	authorize(publish, "resolver-secret")
 	publishResponse := httptest.NewRecorder()
 	handler.ServeHTTP(publishResponse, publish)
 	if publishResponse.Code != http.StatusCreated {
-		t.Fatalf("canonical Go publish status=%d body=%q", publishResponse.Code, publishResponse.Body.String())
+		t.Fatalf("Nexus-compatible Go publish status=%d body=%q", publishResponse.Code, publishResponse.Body.String())
+	}
+	if location := publishResponse.Header().Get("Location"); location != publishPath {
+		t.Fatalf("Nexus-compatible Go publish location=%q want=%q", location, publishPath)
 	}
 
 	list := httptest.NewRequest(http.MethodGet, "/repository/"+repo.Name+"/"+escapedModule+"/@v/list", nil)
