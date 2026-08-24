@@ -179,16 +179,6 @@ if [[ "$skip_console" -eq 0 ]]; then
   create_tar_gz "$openapi_stage" "$output/artifact-gateway-openapi_${version}.tar.gz"
 fi
 
-(
-  cd "$output"
-  : > SHA256SUMS
-  for artifact in artifact-gateway_*; do
-    if command -v sha256sum >/dev/null 2>&1; then
-      sha256sum "$artifact" >> SHA256SUMS
-    else
-      shasum -a 256 "$artifact" >> SHA256SUMS
-    fi
-  done
-)
+bash "$root/scripts/write-release-checksums.sh" "$output"
 
 printf 'Built Artifact Gateway %s release artifacts in %s.\n' "$version" "$output"

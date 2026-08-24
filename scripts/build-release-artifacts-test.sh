@@ -37,6 +37,21 @@ fi
 test -f "$archive"
 test -f "$workdir/dist/SHA256SUMS"
 
+mkdir -p "$workdir/checksum-fixtures"
+cp "$archive" "$workdir/checksum-fixtures/${archive##*/}"
+cp "$archive" "$workdir/checksum-fixtures/artifact-gateway-console_${version}_web.tar.gz"
+cp "$archive" "$workdir/checksum-fixtures/artifact-gateway-openapi_${version}.tar.gz"
+printf '%s\n' 'not a release archive' > "$workdir/checksum-fixtures/ignored.txt"
+bash "$root/scripts/write-release-checksums.sh" "$workdir/checksum-fixtures"
+test "$(wc -l < "$workdir/checksum-fixtures/SHA256SUMS" | tr -d '[:space:]')" = 3
+grep -F "artifact-gateway_${version}_${goos}_${goarch}" "$workdir/checksum-fixtures/SHA256SUMS" >/dev/null
+grep -F "artifact-gateway-console_${version}_web.tar.gz" "$workdir/checksum-fixtures/SHA256SUMS" >/dev/null
+grep -F "artifact-gateway-openapi_${version}.tar.gz" "$workdir/checksum-fixtures/SHA256SUMS" >/dev/null
+if grep -F 'ignored.txt' "$workdir/checksum-fixtures/SHA256SUMS" >/dev/null; then
+  printf '%s\n' 'release checksum manifest included a non-archive file' >&2
+  exit 1
+fi
+
 mkdir -p "$workdir/unpacked"
 if [[ "$archive" == *.zip ]]; then
   unzip -q "$archive" -d "$workdir/unpacked"
