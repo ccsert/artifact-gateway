@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"runtime"
-	"runtime/debug"
 	"strings"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
+	"github.com/artifact-gateway/artifact-gateway/internal/buildinfo"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -79,7 +78,7 @@ type DiagnosticRuntime struct {
 }
 
 func NewDependencies(cfg config.Config) Dependencies {
-	version, revision, modified := buildIdentity()
+	build := buildinfo.Read()
 	roles := make([]string, 0, len(cfg.NodeRoles))
 	for _, role := range cfg.NodeRoles {
 		roles = append(roles, string(role))
@@ -93,10 +92,10 @@ func NewDependencies(cfg config.Config) Dependencies {
 			postgresChecker{databaseURL: cfg.DatabaseURL},
 			httpChecker{url: rustFSEndpointURL(cfg.RustFSEndpoint)},
 		},
-		BuildVersion:                  version,
-		BuildRevision:                 revision,
-		BuildModified:                 modified,
-		BuildGoVersion:                runtime.Version(),
+		BuildVersion:                  build.Version,
+		BuildRevision:                 build.Revision,
+		BuildModified:                 build.Modified,
+		BuildGoVersion:                build.GoVersion,
 		ArtifactScannerHealthTimeout:  2 * time.Second,
 		ArtifactScannerDatabaseMaxAge: 24 * time.Hour,
 		ConsoleThemes:                 consoletheme.NewRegistry(cfg.ConsoleThemeDir),
@@ -118,28 +117,6 @@ func aptSigningRuntime(cfg config.Config) APTSigningRuntime {
 		mode = APTSigningModeReference
 	}
 	return APTSigningRuntime{Mode: mode, TrustedFingerprints: append([]string(nil), cfg.APTSignerTrustedFingerprints...)}
-}
-
-func buildIdentity() (version, revision string, modified bool) {
-	version, revision = "dev", "unknown"
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		return version, revision, false
-	}
-	if info.Main.Version != "" && info.Main.Version != "(devel)" {
-		version = info.Main.Version
-	}
-	for _, setting := range info.Settings {
-		switch setting.Key {
-		case "vcs.revision":
-			if setting.Value != "" {
-				revision = setting.Value
-			}
-		case "vcs.modified":
-			modified = setting.Value == "true"
-		}
-	}
-	return version, revision, modified
 }
 
 func (d Dependencies) WithDatabasePool(db *sql.DB) Dependencies {

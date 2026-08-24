@@ -10,6 +10,19 @@ run_psql() {
   psql -X -h "$pg_host" -U "$pg_user" -d "$pg_database" -v ON_ERROR_STOP=1 "$@"
 }
 
+file_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+    return
+  fi
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+    return
+  fi
+  printf '%s\n' 'A SHA-256 utility (sha256sum or shasum) is required.' >&2
+  exit 1
+}
+
 run_psql <<'SQL'
 CREATE TABLE IF NOT EXISTS artifact_gateway_schema_migrations (
     filename TEXT PRIMARY KEY,
@@ -27,7 +40,7 @@ for migration in "$migration_dir"/*.sql; do
       ;;
   esac
 
-  checksum=$(sha256sum "$migration" | awk '{print $1}')
+  checksum=$(file_sha256 "$migration")
   recorded_checksum=$(run_psql -At -v migration_name="$filename" <<'SQL'
 SELECT checksum
 FROM artifact_gateway_schema_migrations

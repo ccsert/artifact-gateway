@@ -1,13 +1,21 @@
-# Full Artifact Repository V1 Release Readiness
+# Artifact Gateway 0.1.x Controlled Deployment Readiness
 
 [简体中文](release-readiness.zh-CN.md) | [Documentation index](README.md)
 
-This document is the release gate for Artifact Gateway's OCI, Maven, Raw,
-Conan, npm, and PyPI Hosted/Proxy lifecycle and distribution paths plus the Go
-Module atomic Hosted publication and Hosted/Proxy/Group read paths.
+This document is the additional evidence gate for approving a controlled target
+deployment of Artifact Gateway 0.1.x. It is intentionally broader than the
+GitHub tag-release gate: `v0.1.0` requires a clean `main` commit with successful
+CI, mainline assets, and immutable image candidates, while this suite also
+exercises environment-specific operations, performance, upgrade, and recovery.
+A GitHub Release does not claim that this checklist has been executed against a
+production target.
+
+The suite covers OCI, Maven, Raw, Conan, npm, and PyPI Hosted/Proxy lifecycle
+and distribution paths plus Go Module atomic Hosted publication and
+Hosted/Proxy/Group read paths.
 The gate also carries the unadvertised APT Hosted signing preview through a
 real Debian client and exact signed-snapshot recovery rehearsal; passing it does
-not promote APT Hosted into the V1 compatibility claim.
+not promote APT Hosted into the 0.1.0 compatibility claim.
 Run it from a clean checkout on a Docker Desktop workstation with a configured
 local `.env`; it does not require an external package service or production
 credentials.
@@ -48,7 +56,7 @@ their output, Git revision, operator, UTC start/end, and any deviation in the
 [release record](release-record-template.md). Do not include bearer tokens,
 storage credentials, or unredacted upstream URLs in that record.
 
-## Release Checklist
+## Controlled Deployment Checklist
 
 - [ ] `make test`, `make integration-test`, `make native-oci-e2e`,
 	  `make native-raw-e2e`, `make native-maven-e2e`, `make native-npm-e2e`,

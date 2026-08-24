@@ -1,10 +1,16 @@
-# 完整制品库 V1 发布就绪
+# Artifact Gateway 0.1.x 受控部署就绪
 
 [English](release-readiness.md) | [文档索引](README.zh-CN.md)
 
-本文是 OCI、Maven、Raw、Conan、npm、PyPI 的 Hosted/Proxy 生命周期与分发，以及 Go Module 原子 Hosted 发布和 Hosted/Proxy/Group 读取的发布门禁。
+本文是 Artifact Gateway 0.1.x 获批进入特定受控环境前的附加证据门禁，范围有意大于
+GitHub Tag Release 门禁：`v0.1.0` 要求来自干净 `main` 提交，且 CI、主线制品与不可变
+镜像候选全部成功；本文还覆盖目标环境相关的运维、性能、升级与恢复。GitHub Release
+成功并不代表已经针对生产目标执行完本清单。
 
-门禁还通过真实 Debian 客户端和签名快照恢复演练覆盖未公开的 APT Hosted 预览；通过不等于把 APT Hosted 纳入 V1 兼容声明。
+本套件覆盖 OCI、Maven、Raw、Conan、npm、PyPI 的 Hosted/Proxy 生命周期与分发，以及
+Go Module 原子 Hosted 发布和 Hosted/Proxy/Group 读取。
+
+门禁还通过真实 Debian 客户端和签名快照恢复演练覆盖未公开的 APT Hosted 预览；通过不等于把 APT Hosted 纳入 0.1.0 兼容声明。
 
 从干净 checkout、配置本地 `.env` 的 Docker Desktop 工作站执行，无需外部包服务或生产凭证：
 
@@ -38,7 +44,7 @@ make backup-restore-readiness
 
 `make test` 包含隔离的 `dev/dev-status/dev-down` CLI 边界。把输出、Git revision、operator、UTC 起止和偏差写入[发布记录](release-record-template.zh-CN.md)，不得记录 Bearer、存储凭证或未脱敏上游 URL。
 
-## 发布清单
+## 受控部署清单
 
 - [ ] 上述 test、integration、各 native E2E、APT signer rotation、Cargo contract 和 Conan E2E 全部通过。
 - [ ] Integration 包含 PostgreSQL/RustFS 中 OCI、Maven、Raw、Conan 晋级和断点复制证据，验证对象发布、retry/resume 与 SHA-256；迁移执行两次证明第二次 no-op，并拒绝已应用文件 checksum drift。

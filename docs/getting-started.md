@@ -18,6 +18,27 @@ service-discovery component is required.
 Go is required for backend development and the version declared by `go.mod`
 should be used. `kubectl` is only required for the Kubernetes workflow.
 
+## Install a packaged release
+
+Version 0.1.0 is available from [GitHub Releases](https://github.com/ccsert/artifact-gateway/releases/tag/v0.1.0)
+as Linux/macOS amd64/arm64 Gateway archives, a Console static bundle, resolved
+OpenAPI contracts, and checksums. Verify `SHA256SUMS` before unpacking and run
+`gateway version` to confirm the embedded version and Git revision.
+
+Each Gateway archive also contains `migrations/`, `run-migrations.sh`, an
+environment example, and a compact installation guide. A binary installation
+requires `psql`; export `PGHOST`, `PGUSER`, `PGDATABASE`, and `PGPASSWORD`, then
+apply the schema before starting Gateway:
+
+```sh
+MIGRATION_DIR=./migrations ./run-migrations.sh
+```
+
+Release containers use `ghcr.io/ccsert/artifact-gateway:0.1.0` and
+`ghcr.io/ccsert/artifact-gateway-console:0.1.0`. The corresponding `main` tags
+are moving CI-qualified snapshots and should not replace a pinned release tag
+or digest in a controlled deployment.
+
 ## 1. Prepare the environment
 
 ```sh

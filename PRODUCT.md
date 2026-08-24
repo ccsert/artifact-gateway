@@ -79,8 +79,9 @@ scanner; external scanners contribute intelligence only through versioned contra
   multiple credentials may overlap during rotation; plaintext is returned once.
 - PostgreSQL is the metadata and coordination source of truth. S3-compatible
   storage contains only verified bytes. Recovery pairs database and object-store evidence.
-- The project remains in active development; package versions do not imply a
-  stable public release or production support commitment.
+- Version 0.1.0 is an early packaged release. The project remains in active
+  development and does not imply a stable public release or production support
+  commitment.
 
 ## Brand Commitments
 

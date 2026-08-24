@@ -17,6 +17,25 @@ Kafka、Elasticsearch、外部消息队列或服务发现组件。
 后端开发需要 Go，并应使用 `go.mod` 声明的版本。只有 Kubernetes 工作流需要
 `kubectl`。
 
+## 安装已打包版本
+
+0.1.0 已在 [GitHub Releases](https://github.com/ccsert/artifact-gateway/releases/tag/v0.1.0)
+提供 Linux/macOS amd64/arm64 Gateway 归档、Console 静态包、已解析 OpenAPI 契约和
+校验和。解压前应验证 `SHA256SUMS`，并通过 `gateway version` 确认二进制内嵌的版本与
+Git Revision。
+
+每个 Gateway 归档还包含 `migrations/`、`run-migrations.sh`、环境示例和简明安装说明。
+二进制安装需要 `psql`；导出 `PGHOST`、`PGUSER`、`PGDATABASE`、`PGPASSWORD` 后，先应用
+Schema 再启动 Gateway：
+
+```sh
+MIGRATION_DIR=./migrations ./run-migrations.sh
+```
+
+发布容器使用 `ghcr.io/ccsert/artifact-gateway:0.1.0` 与
+`ghcr.io/ccsert/artifact-gateway-console:0.1.0`。对应的 `main` Tag 是持续移动、通过 CI
+的主线快照，在受控部署中不能代替固定 Release Tag 或 Digest。
+
 ## 1. 准备环境
 
 ```sh

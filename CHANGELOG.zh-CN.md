@@ -2,9 +2,19 @@
 
 [English](CHANGELOG.md) | [文档索引](docs/README.zh-CN.md)
 
-本文件记录 Artifact Gateway 的用户可见变化。项目尚未发布稳定版本，所有变化归入 `Unreleased`；正式发布时才移动到带日期的版本标题，且不改写其含义。
+本文件记录 Artifact Gateway 的用户可见变化。项目遵循语义化版本；1.0 之前已经是可用
+分发版本，但契约仍可能演进。所有变化先归入 `Unreleased`，发布时移动到带日期的版本
+标题，且不改写其含义。
 
 ## Unreleased
+
+_暂无变化。_
+
+## 0.1.0 - 2026-08-24
+
+- 发布首批可复现、带版本且包含 Migrations 与环境模板的 Gateway/healthcheck 二进制归档，
+  以及 Console 静态包、已解析 OpenAPI 契约、校验和、GHCR 镜像和通过 CI 的 `main` 主线
+  快照；Release 二进制与镜像统一报告版本号和 Git Revision。
 
 - 新增 Maven、npm、PyPI、Raw、Go Hosted/Proxy/Group 的 Nexus 风格
   `/repository/<name>/...` 迁移根路径；真实 Maven/Gradle、npm、twine/pip、Raw HTTP 与

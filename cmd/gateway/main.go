@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/artifact-gateway/artifact-gateway/internal/app"
 	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
+	"github.com/artifact-gateway/artifact-gateway/internal/buildinfo"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
@@ -23,6 +25,11 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "version" || os.Args[1] == "--version") {
+		build := buildinfo.Read()
+		fmt.Printf("artifact-gateway %s (revision %s, %s)\n", build.Version, build.Revision, build.GoVersion)
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "preflight" {
 		os.Exit(preflight.RunCLI(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	}
