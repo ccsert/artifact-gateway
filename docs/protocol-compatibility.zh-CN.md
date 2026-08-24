@@ -14,6 +14,28 @@ npm、PyPI、Go 和 APT 协议，并用中文说明已实现行为、明确限�
 - **回归门禁通过**证明当前 fixture 和真实客户端流程成立，不代表所有客户端版本、认证方式和扩展组合都经过测试。
 - **预览或研究**不得当作公开支持能力。APT Hosted、Cargo 和 NuGet 仍属于这一层级。
 
+## Nexus 风格 Repository 根路径
+
+Maven、npm、PyPI、Raw、Go 客户端迁移到 Artifact Gateway 时，可以继续使用熟悉的
+`/repository/<name>/...` 根路径；`<name>` 可以指向 Hosted、Proxy 或 Group。兼容路由
+只负责解析目标并内部转发给已有格式 Handler，不会复制或绕过鉴权、授权、审计、协议
+校验和对象生命周期。同名 Repository 与 Group 同时存在时，Repository 优先，与规范
+路由保持一致。
+
+| 格式 | Nexus 风格客户端根路径 | 已验证迁移流程 |
+| --- | --- | --- |
+| Maven | `/repository/<name>/` | 真实 Maven deploy/resolve 与 Gradle publish/resolve；默认直接发布不需要 companion commit。 |
+| npm | `/repository/<name>/` | 真实 scope/非 scope 发布、Group 安装、冷 package-lock、在线/离线 `npm ci`；生成的 Tarball URL 保持该根路径。 |
+| PyPI | `/repository/<name>/legacy/` 与 `/repository/<name>/simple/` | 真实 twine 上传，Hosted/Proxy/Group pip 下载及 Proxy 离线缓存。 |
+| Raw | `/repository/<name>/<path>` | 通过原生 HTTP 门禁验证 PUT、GET、HEAD、Range 和 DELETE。 |
+| Go | 把 `/repository/<name>` 设为 `GOPROXY` | 真实 `go mod download` 覆盖 Hosted 与在线/离线 Proxy；Hosted 单 ZIP PUT 仍是 Gateway 扩展。 |
+
+这只是包管理客户端迁移入口，不模拟 Nexus REST API、任务、用户权限或 Blob Store。
+OCI 被明确排除：Docker/ORAS 要求 Registry V2 根路径固定为 `/v2/`，而 Nexus 常通过
+Connector 端口或虚拟主机选择 Docker Repository。OCI 迁移必须映射 Registry Host 与
+Gateway Repository 名称前缀（或使用等价的 Ingress Rewrite），
+`/repository/<name>/...` 不能成为合规的 Docker Registry 地址。
+
 ## 能力矩阵
 
 | 协议 | 当前支持 | 明确限制 | 主要回归门禁 |
@@ -39,7 +61,7 @@ npm、PyPI、Go 和 APT 协议，并用中文说明已实现行为、明确限�
   Gateway 扩展。
 - `api/openapi/native-hosted.yaml` 及其 `components`、`management`、`protocols` 片段是
   可编辑契约源；JSON bundle、Console 客户端和 Go 服务端契约由此生成。
-- [Native Hosted 契约](native-hosted-contract.md)当前仍只有英文，负责元数据权威、对象
+- [Native Hosted 契约](native-hosted-contract.zh-CN.md)负责元数据权威、对象
   生命周期、幂等和删除语义；本页负责对外协议兼容性摘要。
 
 ## 官方规范与 Gateway overlay

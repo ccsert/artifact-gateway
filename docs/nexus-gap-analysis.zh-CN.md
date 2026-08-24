@@ -12,6 +12,16 @@ Artifact Gateway 已覆盖 OCI、Maven、Raw、Conan、npm、PyPI 的 Hosted/Pro
 
 本文刻意不把“格式数量差异”列为一般差距，而比较任意成熟制品库都应具有的横向能力；共同格式的深度差异单列。Gateway 基线为后端完成清单与当前 React 19/Ant Design 6 Console。
 
+## 客户端迁移边界
+
+Artifact Gateway 现已为 Maven、npm、PyPI、Raw、Go 的 Hosted/Proxy/Group 接受 Nexus
+风格 `/repository/<name>/...` 根路径。普通 Maven/Gradle、npm、twine/pip、Raw HTTP 和
+GOPROXY 迁移不再需要改写 Base Path，并有真实客户端门禁覆盖。这不负责导入 Nexus
+元数据，也不模拟 Nexus 管理 API。OCI 仍属于有条件迁移：Registry V2 把 `/v2/` 固定
+在 Host 根路径，而 Nexus 常用 Connector 端口或虚拟主机选择 Docker Repository；部署
+时需要把外部端点映射到 Gateway Repository 名称前缀，或对镜像重新命名。精确路径与
+证据见[协议兼容性矩阵](protocol-compatibility.zh-CN.md#nexus-风格-repository-根路径)。
+
 ## 差距摘要
 
 | 区域 | Artifact Gateway 现状 | 剩余差距 | 严重度 |

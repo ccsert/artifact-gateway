@@ -70,6 +70,12 @@ Maven Hosted 默认采用与 Nexus 兼容的直接发布，普通 `mvn deploy` �
 不需要 companion 步骤。需要单坐标原子可见性时，可以按仓库开启严格发布，并由 CI 或
 发布集成额外调用 Gateway commit。
 
+为降低客户端迁移成本，Maven、npm、PyPI、Raw、Go 的 Hosted/Proxy/Group 也接受
+Nexus 风格根路径 `/repository/<name>/...`。兼容入口仍复用原协议的鉴权、校验、审计和
+生命周期处理；npm 生成的 Tarball URL 也会保持在同一兼容根路径，避免新 lockfile
+切回 Gateway 专属地址。OCI 必须遵守规范固定的 `/v2/` Registry 根路径，因此需要通过
+镜像名称或 Ingress 映射迁移，不能伪装成普通 HTTP Base Path。
+
 除协议读写外，当前基础还包括仓库授权、本地用户与 OIDC、Service Account、匿名读取
 策略、审计、搜索与浏览、保留策略、可恢复删除、晋升、复制、Webhook、扫描器集成、
 隔离、诊断、指标以及备份恢复流程。各领域入口统一收录在[文档索引](docs/README.zh-CN.md)。

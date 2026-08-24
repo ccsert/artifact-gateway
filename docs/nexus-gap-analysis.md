@@ -30,6 +30,19 @@ The baseline for the Artifact Gateway side is the completed V1 backend in
 protocol, management API, distribution, and operations work is checked off) and
 the Console described in `console/src/app/router.tsx`.
 
+## Client Migration Boundary
+
+Artifact Gateway now accepts the Nexus-style `/repository/<name>/...` root for
+Maven, npm, PyPI, Raw, and Go Hosted/Proxy/Group clients. This removes the base-
+path rewrite from ordinary Maven/Gradle, npm, twine/pip, Raw HTTP, and GOPROXY
+configuration changes; real-client gates cover those flows. It does not import
+Nexus metadata or emulate Nexus management APIs. OCI remains a conditional
+migration because Registry V2 fixes `/v2/` at the host root and Nexus often
+binds Docker repositories to connector ports or virtual hosts. OCI deployments
+must map that external endpoint to the Gateway repository-name prefix or retag
+image names. See the exact paths and evidence in
+[the protocol compatibility matrix](protocol-compatibility.md#nexus-style-repository-roots).
+
 ## Gap Summary
 
 | Area | Nexus | Artifact Gateway | Severity |

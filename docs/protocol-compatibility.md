@@ -15,6 +15,33 @@ product boundary; see [the full repository roadmap](full-artifact-repository-roa
 - **A passing regression gate** proves the current fixture and client flows. It is not evidence for every client version, authentication mode, or extension combination.
 - **Preview or research** is not a public support claim. APT Hosted, Cargo, and NuGet remain in this category.
 
+## Nexus-style repository roots
+
+Maven, npm, PyPI, Raw, and Go clients may keep the familiar
+`/repository/<name>/...` repository root while moving to Artifact Gateway.
+`<name>` may identify a Hosted, Proxy, or Group target. The compatibility
+router only resolves the target and internally dispatches to the canonical
+format handler, so it does not duplicate or bypass authentication,
+authorization, auditing, protocol validation, or object lifecycle behavior.
+If a Repository and Group share a name, the Repository wins, matching canonical
+route precedence.
+
+| Format | Nexus-style client root | Verified migration flow |
+| --- | --- | --- |
+| Maven | `/repository/<name>/` | Real Maven deploy/resolve and Gradle publish/resolve; default direct publication requires no companion commit. |
+| npm | `/repository/<name>/` | Real scoped/unscoped publish, Group install, cold package-lock and online/offline `npm ci`; generated tarball URLs retain this root. |
+| PyPI | `/repository/<name>/legacy/` and `/repository/<name>/simple/` | Real twine upload plus Hosted, Proxy, and Group pip download, including offline Proxy cache. |
+| Raw | `/repository/<name>/<path>` | PUT, GET, HEAD, Range, and DELETE through the native HTTP gate. |
+| Go | `/repository/<name>` as `GOPROXY` | Real `go mod download` through Hosted and online/offline Proxy paths; Hosted single-ZIP PUT remains a Gateway extension. |
+
+This is a package-client migration surface, not Nexus REST API, task, user,
+permission, or blob-store emulation. OCI is intentionally excluded: Docker and
+ORAS require the Registry V2 root `/v2/`, and Nexus commonly selects a Docker
+repository by connector port or virtual host. An OCI migration must therefore
+map the registry host and Gateway repository-name prefix (or perform the
+equivalent ingress rewrite); `/repository/<name>/...` cannot be a conforming
+Docker Registry endpoint.
+
 ## Compatibility matrix
 
 | Protocol | Current support | Explicitly unsupported | Nexus difference | Regression gate |

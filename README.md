@@ -75,6 +75,14 @@ Maven Hosted defaults to Nexus-compatible direct publication, so ordinary
 opt in to strict publication when atomic per-coordinate visibility is worth an
 additional Gateway commit integration.
 
+For client migration, Maven, npm, PyPI, Raw, and Go Hosted/Proxy/Group targets
+also accept the Nexus-style root `/repository/<name>/...`. Requests still use
+the canonical protocol authorization, validation, audit, and lifecycle paths;
+npm metadata keeps generated tarball URLs on the same compatibility root so
+new lockfiles do not switch route families. OCI remains on the specification-
+required `/v2/` registry root and therefore needs registry-name or ingress
+mapping rather than an HTTP base-path alias.
+
 Beyond protocol reads and writes, the current foundation includes repository
 grants, local users and OIDC, service accounts, anonymous-read policy, audit,
 search and browse, retention, recoverable deletion, promotion, replication,

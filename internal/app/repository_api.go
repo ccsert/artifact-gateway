@@ -313,7 +313,6 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 			oci.ServeHTTP(w, r)
 		})}
 	mux.Handle("/v2/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatOCI, next: ociGroupRouter})
-	mux.Handle("/repository/maven/", nativeMaven)
 	mavenLegacy := MavenHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: mavenClient, Metrics: metrics, Cache: mavenCache}
 	mavenGroupRouter := v2GroupRouter{format: repository.FormatMaven, groups: store, repos: store, audit: store, auth: authenticator,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
@@ -324,7 +323,8 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 			}
 			mavenLegacy.ServeHTTP(w, r)
 		})}
-	mux.Handle("/maven/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatMaven, next: mavenGroupRouter})
+	mavenProtocol := hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatMaven, next: mavenGroupRouter}
+	mux.Handle("/maven/", mavenProtocol)
 	rawGroupRouter := v2GroupRouter{format: repository.FormatRaw, groups: store, repos: store, audit: store, auth: authenticator,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
 		raw:        &v2GroupRawHandler{native: &nativeRaw, auth: authenticator},
@@ -334,7 +334,8 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 			}
 			RawHandler{Store: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: rawClient, Metrics: metrics, Cache: rawCache}.ServeHTTP(w, r)
 		})}
-	mux.Handle("/raw/", hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: rawGroupRouter})
+	rawProtocol := hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: rawGroupRouter}
+	mux.Handle("/raw/", rawProtocol)
 	npmGroupRouter := v2GroupRouter{format: repository.FormatNPM, groups: store, repos: store, audit: store, auth: authenticator,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
 		npm:        &v2GroupNPMHandler{native: &nativeNPM},
@@ -365,6 +366,38 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		next:  conan}
 	mux.Handle("/conan/v2/", conanGroupRouter)
 	mux.Handle("/conan/", conan)
+	nexusCompatibility := nexusRepositoryCompatibilityRouter{
+		repositories: store,
+		groups:       store,
+		routes: map[repository.Format]nexusRepositoryCompatibilityRoute{
+			repository.FormatMaven: {
+				repositoryPrefix: "/repository/maven/", repositoryHandler: nativeMaven,
+				groupPrefix: "/maven/", groupHandler: mavenProtocol,
+			},
+			repository.FormatNPM: {
+				repositoryPrefix: "/npm/", repositoryHandler: npmGroupRouter,
+				groupPrefix: "/npm/", groupHandler: npmGroupRouter,
+			},
+			repository.FormatPyPI: {
+				repositoryPrefix: "/pypi/", repositoryHandler: pypiGroupRouter,
+				groupPrefix: "/pypi/", groupHandler: pypiGroupRouter,
+			},
+			repository.FormatRaw: {
+				repositoryPrefix: "/raw/", repositoryHandler: rawProtocol,
+				groupPrefix: "/raw/", groupHandler: rawProtocol,
+			},
+			repository.FormatGo: {
+				repositoryPrefix: "/go/", repositoryHandler: goGroupRouter,
+				groupPrefix: "/go/", groupHandler: goGroupRouter,
+			},
+		},
+	}
+	mux.Handle("/repository/", nexusCompatibility)
+	mux.Handle("/repository/maven/", nexusRepositoryMavenCanonicalRouter{
+		repositories:  store,
+		canonical:     nativeMaven,
+		compatibility: nexusCompatibility,
+	})
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	mux.HandleFunc("POST /auth/login", userLoginHandler(store, store, authenticator))
 	mux.HandleFunc("POST /auth/change-password", userChangePasswordHandler(store, store, authenticator))

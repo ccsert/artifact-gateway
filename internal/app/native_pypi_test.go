@@ -141,13 +141,13 @@ func TestNativePyPIRealTwineUploadAndPipDownload(t *testing.T) {
 		}
 		return string(output)
 	}
-	run("-m", "twine", "upload", "--disable-progress-bar", "--repository-url", server.URL+"/pypi/python/legacy/", "--username", "ci", "--password", "resolver-secret", wheelPath)
+	run("-m", "twine", "upload", "--disable-progress-bar", "--repository-url", server.URL+"/repository/python/legacy/", "--username", "ci", "--password", "resolver-secret", wheelPath)
 	downloadDirectory := filepath.Join(temporary, "download")
 	if err = os.Mkdir(downloadDirectory, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	authenticatedURL := strings.Replace(server.URL, "http://", "http://ci:resolver-secret@", 1)
-	run("-m", "pip", "download", "--disable-pip-version-check", "--no-deps", "--keyring-provider", "disabled", "--index-url", authenticatedURL+"/pypi/python/simple/", "--trusted-host", strings.TrimPrefix(server.URL, "http://"), "--dest", downloadDirectory, "gateway-widget==1.2.3")
+	run("-m", "pip", "download", "--disable-pip-version-check", "--no-deps", "--keyring-provider", "disabled", "--index-url", authenticatedURL+"/repository/python/simple/", "--trusted-host", strings.TrimPrefix(server.URL, "http://"), "--dest", downloadDirectory, "gateway-widget==1.2.3")
 	downloaded, err := os.ReadFile(filepath.Join(downloadDirectory, filepath.Base(wheelPath)))
 	if err != nil {
 		t.Fatal(err)
@@ -163,14 +163,14 @@ func TestNativePyPIRealTwineUploadAndPipDownload(t *testing.T) {
 	if err = os.Mkdir(groupDownload, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	authenticatedGroupURL := strings.Replace(server.URL, "http://", "http://ci:resolver-secret@", 1) + "/pypi/" + group.Name + "/simple/"
+	authenticatedGroupURL := strings.Replace(server.URL, "http://", "http://ci:resolver-secret@", 1) + "/repository/" + group.Name + "/simple/"
 	run("-m", "pip", "download", "--disable-pip-version-check", "--no-deps", "--keyring-provider", "disabled", "--index-url", authenticatedGroupURL, "--trusted-host", strings.TrimPrefix(server.URL, "http://"), "--dest", groupDownload, "proxy-widget==2.4.0")
 	upstream.Close()
 	offlineDownload := filepath.Join(temporary, "offline-download")
 	if err = os.Mkdir(offlineDownload, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	authenticatedProxyURL := strings.Replace(server.URL, "http://", "http://ci:resolver-secret@", 1) + "/pypi/" + proxy.Name + "/simple/"
+	authenticatedProxyURL := strings.Replace(server.URL, "http://", "http://ci:resolver-secret@", 1) + "/repository/" + proxy.Name + "/simple/"
 	run("-m", "pip", "download", "--disable-pip-version-check", "--no-deps", "--keyring-provider", "disabled", "--index-url", authenticatedProxyURL, "--trusted-host", strings.TrimPrefix(server.URL, "http://"), "--dest", offlineDownload, "proxy-widget==2.4.0")
 	offlineBytes, err := os.ReadFile(filepath.Join(offlineDownload, proxyFilename))
 	if err != nil || !bytes.Equal(offlineBytes, proxyWheel) {
