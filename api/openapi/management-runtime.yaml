@@ -1,8 +1,8 @@
 ---
 info:
   title: Artifact Gateway Native Hosted Management API
-  version: 1.0.0
-  description: Frozen contract for the planned Native Hosted Platform V3.
+  version: 0.1.0
+  description: Runtime management contract for Artifact Gateway 0.1.
 servers:
 - url: https://gateway.example.com/api/v2
 security:

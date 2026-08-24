@@ -2,9 +2,9 @@
 
 [简体中文](project-quality-assessment.zh-CN.md) · [Documentation index](README.md)
 
-Snapshot: 2026-08-21. This assessment describes engineering quality during the
-pre-public preparation stage. It is not a production certification or release
-approval.
+Snapshot: 2026-08-24. This assessment describes engineering quality at the
+0.1.0 early-release boundary. It is not a production certification or support
+commitment.
 
 ## Executive assessment
 
@@ -21,9 +21,9 @@ Console modules safely while the feature surface continues to grow.
 | Verification | Strong with coverage headroom | CI, contract, integration, E2E, recovery, and readiness gates exist; some global coverage floors remain intentionally conservative. |
 | Maintainability | Needs focused work | Several route, model, and native-protocol files are large enough to slow review and increase change coupling. |
 | Documentation | Complete bilingual source set | Every site document has an English canonical route and a substantive Simplified Chinese companion; a tested site map owns navigation and pair coverage. |
-| Operability | Good preparation baseline | Health, metrics, diagnostics, recovery, Kubernetes, and distributed-role guidance exist; production evidence is still preparation work. |
+| Operability | Good early-release baseline | Health, metrics, diagnostics, recovery, Kubernetes, and distributed-role guidance exist; production-environment evidence remains separate. |
 | Performance | Reproducible local baseline | Binary/image size, quiet memory, authenticated PostgreSQL/RustFS reads, warm 64 MiB reads, and a controlled HTTPS Proxy cold miss are measured; controlled production-like load and soak remain open. |
-| Public-project readiness | Deliberately deferred | Licensing, formal distribution, a public security-reporting channel, and public support commitments are outside the current scope. |
+| Public-project readiness | Private early release | Versioned distribution exists; licensing, public visibility, a public security-reporting channel, and public support commitments remain deliberately deferred. |
 
 ## What is already high quality
 
@@ -137,11 +137,11 @@ The remaining risk is synchronization rather than initial coverage. Behavior,
 commands, compatibility limits, and preview status must change in both locales
 within the same review.
 
-### 4. Preparation evidence is broader than one default test target
+### 4. Release evidence is broader than one default test target
 
 `make test` protects shared local behavior, while full protocol E2E,
 integration, browser, performance, rotation, upgrade, and recovery gates are
-separate targets. The preparation checklist must continue to point to exact CI
+separate targets. The release checklist must continue to point to exact CI
 evidence rather than treating one green command as full release proof. The
 current performance report is a reproducible arm64 local baseline; it still
 needs a controlled Linux/amd64 runner, resource limits, TLS/ingress, mixed
@@ -169,9 +169,9 @@ traffic, and sustained soak before it can become a release threshold.
 7. **Promote performance evidence deliberately.** Repeat the baseline on a
    controlled Linux/amd64 runner, then add hard limits, mixed traffic, and soak
    thresholds without converting one laptop snapshot into a universal claim.
-8. **Maintain a preparation matrix.** Record exact commit, clean worktree,
+8. **Maintain a release matrix.** Record exact commit, clean worktree,
    immutable image, CI run, integration evidence, recovery evidence, target
-   environment, and named approval when formal distribution work begins.
+   environment, and named approval for each controlled deployment decision.
 
 ## Quality rules for ongoing work
 

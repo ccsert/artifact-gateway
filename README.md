@@ -17,17 +17,18 @@
 
 <p align="center">
   <a href="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/ccsert/artifact-gateway/releases/tag/v0.1.0"><img alt="Release 0.1.0" src="https://img.shields.io/badge/release-0.1.0-2563EB"></a>
   <img alt="Go 1.26.6" src="https://img.shields.io/badge/Go-1.26.6-00ADD8?logo=go&logoColor=white">
   <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white">
   <img alt="S3 compatible" src="https://img.shields.io/badge/Object_storage-S3_compatible-06B6D4">
-  <img alt="Status: preparing" src="https://img.shields.io/badge/status-preparing-6B7280">
+  <img alt="Status: early release" src="https://img.shields.io/badge/status-early_release-6B7280">
 </p>
 
 > [!IMPORTANT]
-> **Project status: preparation stage.** The core team is still hardening
-> contracts, operations, documentation, and contribution workflows. This
-> repository is not yet a stable public release or a formally distributed
-> product, and the current package version does not imply support commitments.
+> **Project status: early release.** Version 0.1.0 is the first packaged
+> distribution. It is suitable for evaluation and controlled migration work,
+> but pre-1.0 contracts can still evolve and it does not imply production
+> support commitments.
 
 ## Why Artifact Gateway
 
@@ -91,6 +92,39 @@ grants, local users and OIDC, service accounts, anonymous-read policy, audit,
 search and browse, retention, recoverable deletion, promotion, replication,
 webhooks, scanner integration, quarantine, diagnostics, metrics, and backup /
 restore workflows. Each area is tracked from the [documentation index](docs/README.md).
+
+## Install 0.1.0
+
+The [0.1.0 Release](https://github.com/ccsert/artifact-gateway/releases/tag/v0.1.0)
+contains Linux and macOS archives for amd64/arm64, the static Console bundle,
+resolved OpenAPI contracts, and `SHA256SUMS`. Every Gateway archive includes
+the server and healthcheck binaries, PostgreSQL migrations, a portable
+migration runner, and an environment template. Verify the identity with:
+
+```sh
+./gateway version
+```
+
+For a binary installation, install `psql`, configure PostgreSQL and
+S3-compatible object storage, then apply the bundled migrations before starting
+Gateway:
+
+```sh
+MIGRATION_DIR=./migrations ./run-migrations.sh
+```
+
+Container images are published to GHCR for both release and development use:
+
+```text
+ghcr.io/ccsert/artifact-gateway:0.1.0
+ghcr.io/ccsert/artifact-gateway-console:0.1.0
+ghcr.io/ccsert/artifact-gateway:main
+ghcr.io/ccsert/artifact-gateway-console:main
+```
+
+`main` is a moving, CI-qualified development snapshot. Release deployments
+should pin `0.1.0` or the reported image digest. Package visibility follows
+the GitHub repository and GHCR package visibility.
 
 ## Quick local start
 

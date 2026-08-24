@@ -20,6 +20,7 @@ console/*.tsbuildinfo
 console/openapi-ts-error-*.log
 /.playwright-cli/
 /output/
+/dist/
 /console/.product-design-audit/
 .vscode/
 console/*.png

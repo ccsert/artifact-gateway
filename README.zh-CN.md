@@ -17,16 +17,16 @@
 
 <p align="center">
   <a href="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/ccsert/artifact-gateway/releases/tag/v0.1.0"><img alt="Release 0.1.0" src="https://img.shields.io/badge/release-0.1.0-2563EB"></a>
   <img alt="Go 1.26.6" src="https://img.shields.io/badge/Go-1.26.6-00ADD8?logo=go&logoColor=white">
   <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white">
   <img alt="S3 兼容对象存储" src="https://img.shields.io/badge/Object_storage-S3_compatible-06B6D4">
-  <img alt="状态：准备中" src="https://img.shields.io/badge/status-preparing-6B7280">
+  <img alt="状态：早期版本" src="https://img.shields.io/badge/status-early_release-6B7280">
 </p>
 
 > [!IMPORTANT]
-> **项目状态：公开前准备阶段。** 核心团队仍在持续加固协议契约、运维能力、文档和
-> 贡献流程。当前仓库不是稳定公开版本，也尚未进入正式分发阶段；请勿根据当前包版本
-> 推断生产支持承诺。
+> **项目状态：早期版本。** 0.1.0 是首个完成打包的分发版本，适合评估和受控迁移；
+> 1.0 之前的契约仍可能演进，也不代表已经提供生产支持承诺。
 
 ## 为什么选择 Artifact Gateway
 
@@ -81,6 +81,36 @@ Nexus 风格根路径 `/repository/<name>/...`。兼容入口仍复用原协议�
 除协议读写外，当前基础还包括仓库授权、本地用户与 OIDC、Service Account、匿名读取
 策略、审计、搜索与浏览、保留策略、可恢复删除、晋升、复制、Webhook、扫描器集成、
 隔离、诊断、指标以及备份恢复流程。各领域入口统一收录在[文档索引](docs/README.zh-CN.md)。
+
+## 安装 0.1.0
+
+[0.1.0 Release](https://github.com/ccsert/artifact-gateway/releases/tag/v0.1.0)
+提供 Linux/macOS 的 amd64/arm64 归档、Console 静态包、已解析 OpenAPI 契约和
+`SHA256SUMS`。每个 Gateway 归档同时包含服务端、健康检查二进制、PostgreSQL
+Migrations、可移植迁移脚本和环境模板，可通过以下命令确认版本身份：
+
+```sh
+./gateway version
+```
+
+使用二进制安装时，先安装 `psql`，配置 PostgreSQL 与 S3 兼容对象存储，并在启动 Gateway
+前应用归档内的迁移：
+
+```sh
+MIGRATION_DIR=./migrations ./run-migrations.sh
+```
+
+Gateway 与 Console 的发布镜像和主线镜像都会推送到 GHCR：
+
+```text
+ghcr.io/ccsert/artifact-gateway:0.1.0
+ghcr.io/ccsert/artifact-gateway-console:0.1.0
+ghcr.io/ccsert/artifact-gateway:main
+ghcr.io/ccsert/artifact-gateway-console:main
+```
+
+`main` 是持续移动、通过 CI 的开发快照；Release 部署应固定 `0.1.0` 或镜像 digest。
+制品可见性跟随 GitHub Repository 与 GHCR Package 的可见性设置。
 
 ## 快速本地启动
 

@@ -4,11 +4,22 @@
 
 All user-visible changes to Artifact Gateway are recorded in this file.
 
-The project has not published a stable release. Changes are collected under
-`Unreleased` using the fixed categories below; a release moves those entries to
-a dated version heading without rewriting their meaning.
+Artifact Gateway follows semantic versioning. Pre-1.0 releases are usable
+distributions whose contracts can still evolve. Changes are collected under
+`Unreleased`; a release moves them to a dated version heading without rewriting
+their meaning.
 
 ## Unreleased
+
+_No changes yet._
+
+## 0.1.0 - 2026-08-24
+
+- Published the first reproducible, versioned Gateway/healthcheck binary
+  archives with migrations and an environment template, plus the Console static
+  bundle, resolved OpenAPI contracts, checksums, GHCR images, and CI-qualified
+  `main` snapshots. Release binaries and images report the same version and Git
+  revision.
 
 - Added a Nexus-style `/repository/<name>/...` migration root for Maven, npm,
   PyPI, Raw, and Go Hosted/Proxy/Group traffic. Real Maven/Gradle, npm,
