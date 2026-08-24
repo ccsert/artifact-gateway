@@ -75,6 +75,20 @@ create_tar_gz() {
   local source=$1
   local destination=$2
   normalize_stage "$source"
+  if tar --version 2>/dev/null | grep -Fq 'GNU tar'; then
+    (
+      cd "$source"
+      find . -print | LC_ALL=C sort | tar \
+        --no-recursion \
+        --format ustar \
+        --owner 0 \
+        --group 0 \
+        --numeric-owner \
+        -cf - \
+        -T - | gzip -n > "$destination"
+    )
+    return
+  fi
   (
     cd "$source"
     find . -print | LC_ALL=C sort | COPYFILE_DISABLE=1 tar \
