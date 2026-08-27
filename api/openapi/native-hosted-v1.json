@@ -1669,9 +1669,10 @@
           {
             "name": "q",
             "in": "query",
+            "description": "Format-aware coordinate prefix. Raw repositories accept a canonical percent-encoded path of up to 4096 characters; other formats apply their own stricter coordinate grammar.",
             "schema": {
               "type": "string",
-              "maxLength": 255
+              "maxLength": 4096
             }
           },
           {
@@ -1944,10 +1945,11 @@
           "in": "path",
           "required": true,
           "allowReserved": true,
-          "description": "Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded segments are rejected.",
+          "description": "Canonical Raw path. This is a gateway catch-all parameter and may contain one or more slash-separated segments. Unicode and spaces use canonical percent encoding; empty, dot, dot-dot, encoded separators, control characters, bidirectional formatting controls, and non-canonical escapes are rejected.",
           "schema": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 4096
           }
         }
       ],
@@ -1975,7 +1977,15 @@
         ],
         "responses": {
           "200": {
-            "description": "Raw bytes or a Raw directory-prefix JSON page"
+            "description": "Raw bytes or a Raw directory-prefix JSON page",
+            "headers": {
+              "Content-Disposition": {
+                "description": "Present for file and checksum responses; suggests the decoded final path segment as filename.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/BasicUnauthorized"
@@ -1998,7 +2008,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/BinaryObject"
+            "$ref": "#/components/responses/RawBinaryObject"
           },
           "401": {
             "$ref": "#/components/responses/BasicUnauthorized"
@@ -2010,7 +2020,7 @@
       },
       "put": {
         "operationId": "putRawHostedContent",
-        "description": "Standard Raw Hosted write. The request body is stored directly under the canonical Raw path; no management publish session is used for Raw. A `.sha256` or `.sha512` target validates that checksum against an existing primary object and returns no content without storing a sidecar asset. With `uploadId` and `complete=1`, appends any final bytes, requires a `Digest: sha-256=<base64>` header, and atomically publishes the resumable upload.\n",
+        "description": "Standard Raw Hosted write. The request body is stored as immutable verified content and the canonical Raw path is atomically created or replaced; no management publish session is used for Raw. A `.sha256` or `.sha512` target validates that checksum against an existing primary object and returns no content without storing a sidecar asset. With `uploadId` and `complete=1`, appends any final bytes, requires a `Digest: sha-256=<base64>` header, and atomically publishes the resumable upload.\n",
         "parameters": [
           {
             "name": "uploadId",
@@ -2068,7 +2078,7 @@
         },
         "responses": {
           "201": {
-            "description": "Stored and immediately addressable at this Raw path"
+            "description": "Immutable content stored and the Raw path reference atomically created or replaced"
           },
           "401": {
             "$ref": "#/components/responses/BasicUnauthorized"
@@ -7105,6 +7115,25 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/ConanReferencePage"
+            }
+          }
+        }
+      },
+      "RawBinaryObject": {
+        "description": "Committed Raw object with an optional readable save-as filename",
+        "headers": {
+          "Content-Disposition": {
+            "description": "Optional inline disposition carrying the decoded final path segment as filename.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/octet-stream": {
+            "schema": {
+              "type": "string",
+              "contentEncoding": "binary"
             }
           }
         }

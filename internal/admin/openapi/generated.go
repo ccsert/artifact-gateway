@@ -4375,6 +4375,7 @@ type ReconcileRepositoryArtifactScansParams struct {
 
 // SearchRepositoryArtifactsParams defines parameters for SearchRepositoryArtifacts.
 type SearchRepositoryArtifactsParams struct {
+	// Q Format-aware coordinate prefix. Raw repositories accept a canonical percent-encoded path of up to 4096 characters; other formats apply their own stricter coordinate grammar.
 	Q         *string    `form:"q,omitempty" json:"q,omitempty"`
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`

@@ -5,10 +5,12 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	npmprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/npm"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/v2contract"
 )
 
 func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.SearchRepositoryArtifactsParams) {
@@ -343,15 +345,20 @@ func parseConanRestoreCoordinate(value string) (reference, recipeRevision, packa
 }
 
 func validRawAssetPrefix(value string) bool {
-	if len(value) > 255 || strings.HasPrefix(value, "/") || strings.ContainsAny(value, "\\\x00") {
+	if len(value) > v2contract.MaxRawPathBytes || strings.HasPrefix(value, "/") || strings.ContainsRune(value, '\\') || strings.IndexFunc(value, invalidRawSearchRune) >= 0 {
 		return false
 	}
-	for _, segment := range strings.Split(value, "/") {
-		if segment == "." || segment == ".." {
+	segments := strings.Split(value, "/")
+	for index, segment := range segments {
+		if segment == "." || segment == ".." || segment == "" && index < len(segments)-1 {
 			return false
 		}
 	}
 	return true
+}
+
+func invalidRawSearchRune(value rune) bool {
+	return unicode.IsControl(value) || value == '\u061c' || value == '\u200e' || value == '\u200f' || value >= '\u202a' && value <= '\u202e' || value >= '\u2066' && value <= '\u2069'
 }
 
 func validArtifactSearchQuery(format repository.Format, query string) bool {

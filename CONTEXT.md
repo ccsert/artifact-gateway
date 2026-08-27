@@ -27,8 +27,10 @@ does not own artifact bytes.
 _Avoid_: Repository group, virtual repository
 
 **Artifact**:
-A client-visible immutable version, manifest, or coordinate in a Repository.
-Its format determines its canonical identity.
+A client-visible version, manifest, or path resolution in a Repository. Its
+format determines the canonical identity. Artifact bytes are immutable;
+protocol references such as an OCI tag or Raw path may point to a newer
+immutable identity.
 _Avoid_: File, package
 
 **Artifact Identity**:
@@ -43,6 +45,13 @@ _Avoid_: Search result, latest version, client-built coordinate
 One immutable byte object belonging to an Artifact, such as a Maven JAR, OCI
 blob, or Conan package file.
 _Avoid_: Artifact file, blob
+
+**Raw Path Reference**:
+A mutable, Repository-local canonical path that atomically points to one
+verified immutable content object. Standard PUT replaces the current mapping;
+the path and SHA-256 digest pair is the immutable identity used by governance,
+Promotion, and Replication.
+_Avoid_: Immutable Raw coordinate, object key
 
 **Service Account**:
 A stable non-human authorization principal for one CI system or external

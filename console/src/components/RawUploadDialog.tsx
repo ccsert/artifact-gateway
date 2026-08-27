@@ -7,6 +7,11 @@ import { Field } from "./Layout";
 import { ErrorBanner } from "./Feedback";
 import type { Repository } from "../client";
 import { usePreferences } from "../lib/preferences";
+import {
+  containsDisallowedRawPathCharacters,
+  encodeRawPathSegment,
+  rawResourceURL,
+} from "../lib/rawPath";
 
 // Uploads a single object to a Raw Hosted repository via the native
 // /raw/<repository>/<path> PUT route. The server computes the sha256 digest,
@@ -33,16 +38,61 @@ export function RawUploadDialog({
 
   const submit = async () => {
     if (!file) return;
-    const segments = (path.trim() || file.name)
-      .replace(/^\/+/, "")
-      .split("/")
-      .map((s) => encodeURIComponent(s));
-    if (segments.length === 0 || segments.some((s) => s === "")) {
+    const targetPath = path === "" ? file.name : path;
+    if (targetPath.startsWith("/")) {
       setError(
         new Error(
           text(
-            "目标路径不能为空或包含空段",
-            "The target path cannot be empty or contain empty segments",
+            "目标路径必须相对于仓库根，不能以 / 开头。",
+            "The target path must be relative to the repository root and cannot start with /.",
+          ),
+        ),
+      );
+      return;
+    }
+    const rawSegments = targetPath.split("/");
+    if (
+      rawSegments.length === 0 ||
+      rawSegments.some(
+        (segment) =>
+          segment === "" ||
+          segment === "." ||
+          segment === ".." ||
+          segment.includes("\\") ||
+          containsDisallowedRawPathCharacters(segment),
+      )
+    ) {
+      setError(
+        new Error(
+          text(
+            "目标路径无效：不能使用空路径段、. 或 .. 路径段、反斜杠、控制字符或双向格式化字符。支持中文、空格和括号。",
+            "Invalid target path: empty, dot, dot-dot, backslash, control, and bidirectional formatting characters are not allowed. Unicode, spaces, and parentheses are supported.",
+          ),
+        ),
+      );
+      return;
+    }
+    let segments: string[];
+    try {
+      segments = rawSegments.map(encodeRawPathSegment);
+    } catch {
+      setError(
+        new Error(
+          text(
+            "目标路径包含无法编码的字符，请修改文件名或目标路径后重试。",
+            "The target path contains characters that cannot be encoded. Change the file name or target path and try again.",
+          ),
+        ),
+      );
+      return;
+    }
+    const canonicalPath = segments.join("/");
+    if (canonicalPath.length > 4096) {
+      setError(
+        new Error(
+          text(
+            "目标路径编码后不能超过 4096 字节，请缩短目录或文件名。",
+            "The encoded target path cannot exceed 4096 bytes. Shorten the directories or file name.",
           ),
         ),
       );
@@ -51,20 +101,25 @@ export function RawUploadDialog({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/raw/${encodeURIComponent(repo.name)}/${segments.join("/")}`,
-        {
-          method: "PUT",
-          credentials: "include",
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            "Content-Type": file.type || "application/octet-stream",
-          },
-          body: file,
+      const res = await fetch(rawResourceURL(repo.name, canonicalPath), {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          "Content-Type": file.type || "application/octet-stream",
         },
-      );
+        body: file,
+      });
       if (!res.ok) {
-        const detail = await res.text().catch(() => "");
+        const detail = (await res.text().catch(() => "")).trim();
+        if (res.status === 400 && detail === "invalid raw path") {
+          throw new Error(
+            text(
+              "上传失败（400）：目标路径不符合 Raw 路径规则。支持中文、空格和括号；请删除空路径段、.、..、反斜杠或空字符后重试。",
+              "Upload failed (400): the target does not follow the Raw path rules. Unicode, spaces, and parentheses are supported; remove empty, dot, dot-dot, backslash, or NUL segments and try again.",
+            ),
+          );
+        }
         throw new Error(
           `${text("上传失败", "Upload failed")} (${res.status})${
             detail ? `: ${detail.slice(0, 200)}` : ""
@@ -114,7 +169,12 @@ export function RawUploadDialog({
         }
       >
         <div className="space-y-4">
-          {error ? <ErrorBanner error={error} /> : null}
+          {error ? (
+            <ErrorBanner
+              error={error}
+              title={text("Raw 文件上传失败", "Raw file upload failed")}
+            />
+          ) : null}
           <Field label={text("文件", "File")} group>
             <Space>
               <Upload
@@ -140,8 +200,8 @@ export function RawUploadDialog({
           <Field
             label={text("目标路径", "Target path")}
             hint={text(
-              "相对于仓库根；留空则用文件名。不要以 / 开头。",
-              "Relative to the repository root. Leave empty to use the file name. Do not start with /.",
+              "相对于仓库根且不能以 / 开头；留空则用文件名。支持中文、空格和括号；编码后最多 4096 字节，不能使用空路径段、.、..、反斜杠、控制字符或双向格式化字符。",
+              "Relative to the repository root and cannot start with /. Leave empty to use the file name. Unicode, spaces, and parentheses are supported up to 4096 encoded bytes; empty, dot, dot-dot, backslash, control, and bidirectional formatting characters are not.",
             )}
           >
             <Input

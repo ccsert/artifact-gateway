@@ -1,6 +1,7 @@
 package raw
 
 import (
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -40,6 +41,18 @@ func TestServeContentAppliesSingleRange(t *testing.T) {
 	result := ServeContent(response, request, "artifact", Content{Body: []byte("abcdef"), Digest: "bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1f6c5c6dcd93c4721", ContentType: "application/octet-stream"})
 	if response.Code != http.StatusPartialContent || response.Body.String() != "cde" || result.Status != http.StatusPartialContent || result.Bytes != 3 {
 		t.Fatalf("response=%d body=%q result=%+v", response.Code, response.Body.String(), result)
+	}
+}
+
+func TestServeContentSuggestsReadableDownloadFilename(t *testing.T) {
+	const encodedName = "ChatGPT%20Image%202026%E5%B9%B48%E6%9C%8819%E6%97%A5%2013_56_07%20%282%29.png"
+	request := httptest.NewRequest(http.MethodGet, "/raw/releases/"+encodedName, nil)
+	response := httptest.NewRecorder()
+
+	ServeContent(response, request, encodedName, Content{Body: []byte("image"), ContentType: "image/png"})
+	mediaType, parameters, err := mime.ParseMediaType(response.Header().Get("Content-Disposition"))
+	if err != nil || mediaType != "inline" || parameters["filename"] != "ChatGPT Image 2026年8月19日 13_56_07 (2).png" {
+		t.Fatalf("content-disposition=%q media-type=%q parameters=%#v err=%v", response.Header().Get("Content-Disposition"), mediaType, parameters, err)
 	}
 }
 

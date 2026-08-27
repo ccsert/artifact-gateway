@@ -35,9 +35,11 @@ export function isNotFound(error: unknown): boolean {
 export function ErrorBanner({
   error,
   onRetry,
+  title,
 }: {
   error: unknown;
   onRetry?: () => void;
+  title?: string;
 }) {
   const { text } = usePreferences();
   const problem =
@@ -62,7 +64,7 @@ export function ErrorBanner({
       className="ag-feedback-enter"
       type="error"
       showIcon
-      title={text("请求出错", "Request failed")}
+      title={title ?? text("请求出错", "Request failed")}
       description={
         <span>
           {message}

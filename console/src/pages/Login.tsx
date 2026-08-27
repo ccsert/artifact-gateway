@@ -82,9 +82,12 @@ export function LoginPage() {
   useEffect(() => {
     const oidcError = params.get("oidc_error");
     if (oidcError) setError(t("auth.ssoFailed"));
-    if (params.get("oidc") !== "success" || identityLoading) return;
-    if (authenticated) navigate(redirect, { replace: true });
-    else setError(t("auth.ssoFailed"));
+    if (identityLoading) return;
+    if (authenticated) {
+      navigate(redirect, { replace: true });
+      return;
+    }
+    if (params.get("oidc") === "success") setError(t("auth.ssoFailed"));
   }, [authenticated, identityLoading, navigate, params, redirect, t]);
 
   const finish = (next: string, role?: string) => {

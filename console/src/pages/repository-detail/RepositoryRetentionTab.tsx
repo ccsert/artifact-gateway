@@ -34,6 +34,7 @@ import { useAuth } from "../../lib/auth";
 import { downloadCsv } from "../../lib/csv";
 import { formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
+import { artifactCoordinateForDisplay } from "../../lib/rawPath";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 
 type Localize = (chinese: string, english: string) => string;
@@ -596,14 +597,21 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
       dataIndex: "coordinate",
       key: "coordinate",
       width: 360,
-      render: (value: string) => (
-        <span
-          className="block max-w-md truncate font-mono text-xs text-zinc-200"
-          title={value}
-        >
-          {value}
-        </span>
-      ),
+      render: (value: string) => {
+        const displayCoordinate = artifactCoordinateForDisplay(
+          repo.format,
+          value,
+        );
+        return (
+          <span
+            className="block max-w-md truncate font-mono text-xs text-zinc-200"
+            title={displayCoordinate}
+            dir="auto"
+          >
+            {displayCoordinate}
+          </span>
+        );
+      },
     },
     {
       title: text("摘要", "Digest"),

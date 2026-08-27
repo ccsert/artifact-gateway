@@ -1,22 +1,28 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AntdProvider } from "../app/AntdProvider";
 import { PreferencesProvider } from "../lib/preferences";
 import { LoginPage } from "./Login";
 
 const auth = vi.hoisted(() => ({
+  authenticated: false,
+  identityLoading: false,
   setToken: vi.fn(),
 }));
 
 vi.mock("../lib/auth", () => ({
   useAuth: () => ({
-    authenticated: false,
-    identityLoading: false,
+    authenticated: auth.authenticated,
+    identityLoading: auth.identityLoading,
     setToken: auth.setToken,
   }),
 }));
+
+function LocationProbe() {
+  return <div data-testid="location">{useLocation().pathname}</div>;
+}
 
 function renderPage() {
   return render(
@@ -36,7 +42,38 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+beforeEach(() => {
+  Object.assign(auth, {
+    authenticated: false,
+    identityLoading: false,
+  });
+});
+
 describe("LoginPage forced password change", () => {
+  it("skips the login form when the current browser session is already authenticated", async () => {
+    Object.assign(auth, { authenticated: true });
+
+    render(
+      <PreferencesProvider>
+        <AntdProvider>
+          <MemoryRouter initialEntries={["/login?redirect=%2Frepositories"]}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/repositories" element={<LocationProbe />} />
+            </Routes>
+          </MemoryRouter>
+        </AntdProvider>
+      </PreferencesProvider>,
+    );
+
+    expect(await screen.findByTestId("location")).toHaveTextContent(
+      "/repositories",
+    );
+    expect(
+      screen.queryByRole("heading", { name: "登录控制台" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps the restricted token in memory, changes the password, and signs in again", async () => {
     const fetchMock = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {

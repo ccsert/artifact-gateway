@@ -110,7 +110,7 @@ func (h nativeRawHandler) serveHostedRead(w http.ResponseWriter, r *http.Request
 			http.Error(w, "raw object unavailable", http.StatusInternalServerError)
 			return true
 		}
-		h.serveChecksum(w, r, body)
+		h.serveChecksum(w, r, path, body)
 		return true
 	}
 	asset, err := h.store.GetRawAsset(r.Context(), repo.ID, path)

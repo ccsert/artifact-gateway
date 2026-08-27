@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -89,6 +90,16 @@ func TestNativeRawHostedPutReadRangeHeadAndDelete(t *testing.T) {
 	handler.ServeHTTP(verified, putWithDigest)
 	if verified.Code != http.StatusCreated {
 		t.Fatalf("verified PUT=%d", verified.Code)
+	}
+	const encodedName = "ChatGPT%20Image%202026%E5%B9%B48%E6%9C%8819%E6%97%A5%2013_56_07%20%282%29.png"
+	readablePut := request(http.MethodPut, "/raw/downloads/releases/"+encodedName, []byte("image"))
+	if readablePut.Code != http.StatusCreated {
+		t.Fatalf("readable-name PUT=%d body=%q", readablePut.Code, readablePut.Body.String())
+	}
+	readableGet := request(http.MethodGet, "/raw/downloads/releases/"+encodedName, nil)
+	mediaType, parameters, dispositionErr := mime.ParseMediaType(readableGet.Header().Get("Content-Disposition"))
+	if readableGet.Code != http.StatusOK || dispositionErr != nil || mediaType != "inline" || parameters["filename"] != "ChatGPT Image 2026年8月19日 13_56_07 (2).png" {
+		t.Fatalf("readable-name GET=%d content-disposition=%q media-type=%q parameters=%#v err=%v", readableGet.Code, readableGet.Header().Get("Content-Disposition"), mediaType, parameters, dispositionErr)
 	}
 	rangeRequest := httptest.NewRequest(http.MethodGet, "/raw/downloads/releases/app.txt", nil)
 	rangeRequest.Header.Set("Range", "bytes=7-9")
@@ -230,7 +241,7 @@ func TestNativeRawHostedGeneratesAndValidatesChecksumSidecars(t *testing.T) {
 	sha256Sum := sha256.Sum256(payload)
 	sha256Body := []byte(hex.EncodeToString(sha256Sum[:]) + "\n")
 	sha256Response := request(http.MethodGet, "/raw/downloads/releases/app.bin.sha256", nil)
-	if sha256Response.Code != http.StatusOK || !bytes.Equal(sha256Response.Body.Bytes(), sha256Body) || sha256Response.Header().Get("Content-Type") != "text/plain; charset=utf-8" {
+	if sha256Response.Code != http.StatusOK || !bytes.Equal(sha256Response.Body.Bytes(), sha256Body) || sha256Response.Header().Get("Content-Type") != "text/plain; charset=utf-8" || sha256Response.Header().Get("Content-Disposition") != `inline; filename=app.bin.sha256` {
 		t.Fatalf("sha256=%d headers=%v body=%q", sha256Response.Code, sha256Response.Header(), sha256Response.Body.Bytes())
 	}
 	sha512Sum := sha512.Sum512(payload)

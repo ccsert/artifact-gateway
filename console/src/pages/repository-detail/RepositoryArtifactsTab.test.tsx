@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { searchRepositoryArtifacts } from "../../client";
@@ -116,5 +116,109 @@ describe("RepositoryArtifactsTab APT browse", () => {
     expect(screen.queryByText("首次缓存")).not.toBeInTheDocument();
     expect(screen.queryByText("上游地址")).not.toBeInTheDocument();
     expect(screen.queryByText("最近缓存")).not.toBeInTheDocument();
+  });
+});
+
+describe("RepositoryArtifactsTab Raw browse", () => {
+  it("shows a readable file path while preserving the canonical coordinate", async () => {
+    const user = userEvent.setup();
+    const encodedPath =
+      "ChatGPT%20Image%202026%E5%B9%B48%E6%9C%8819%E6%97%A5%2013_56_07%20%282%29.png";
+    const readablePath = "ChatGPT Image 2026年8月19日 13_56_07 (2).png";
+    const rawRepository: Repository = {
+      ...repository,
+      id: "33333333-3333-4333-8333-333333333333",
+      name: "raw-releases",
+      format: "raw",
+      type: "hosted",
+      endpoint: undefined,
+      allowedHosts: [],
+    };
+    mockSearchRepositoryArtifacts.mockResolvedValue({
+      data: {
+        items: [
+          {
+            coordinate: encodedPath,
+            digest:
+              "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            size: 1024,
+            contentType: "image/png",
+            createdAt: "2026-08-27T06:06:14Z",
+          },
+        ],
+      },
+    } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={rawRepository} canWrite />
+      </PreferencesProvider>,
+    );
+
+    expect(await screen.findByText(readablePath)).toBeInTheDocument();
+    expect(screen.queryByText(encodedPath)).not.toBeInTheDocument();
+
+    await user.click(screen.getByText(readablePath));
+    expect(await screen.findByText("image/png")).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText("搜索路径…"), readablePath);
+    await user.click(screen.getByRole("button", { name: /搜\s*索/ }));
+    await waitFor(() =>
+      expect(mockSearchRepositoryArtifacts).toHaveBeenLastCalledWith({
+        path: { repositoryId: rawRepository.id },
+        query: {
+          q: encodedPath,
+          pageSize: 50,
+          pageToken: undefined,
+        },
+      }),
+    );
+  });
+
+  it("keeps a deep-linked Raw coordinate canonical while showing a readable search value", async () => {
+    const canonical = "report%2520final.txt";
+    const rawRepository: Repository = {
+      ...repository,
+      id: "44444444-4444-4444-8444-444444444444",
+      name: "raw-releases",
+      format: "raw",
+      type: "hosted",
+      endpoint: undefined,
+      allowedHosts: [],
+    };
+    mockSearchRepositoryArtifacts.mockResolvedValue({
+      data: {
+        items: [
+          {
+            coordinate: canonical,
+            digest: `sha256:${"d".repeat(64)}`,
+            size: 8,
+            contentType: "text/plain",
+          },
+        ],
+      },
+    } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositoryArtifactsTab
+          repo={rawRepository}
+          canWrite
+          artifactTarget={canonical}
+        />
+      </PreferencesProvider>,
+    );
+
+    expect(
+      await screen.findByDisplayValue("report%20final.txt"),
+    ).toBeInTheDocument();
+    expect(mockSearchRepositoryArtifacts).toHaveBeenCalledWith({
+      path: { repositoryId: rawRepository.id },
+      query: {
+        q: canonical,
+        pageSize: 50,
+        pageToken: undefined,
+      },
+    });
   });
 });

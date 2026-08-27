@@ -14,11 +14,13 @@ Artifact Gateway 是多格式制品库，通过原生包协议存储、治理和
 
 **Group**：Hosted 与 Proxy Repository 的有序、格式专用视图，不拥有制品字节。避免称为 Repository Group 或 virtual repository。
 
-**Artifact（制品）**：Repository 中客户端可见且不可变的版本、manifest 或坐标，规范身份由格式决定。避免笼统称为 File 或 package。
+**Artifact（制品）**：Repository 中客户端可见的版本、manifest 或路径解析，规范身份由格式决定。制品字节不可变；OCI tag、Raw path 等协议引用可以指向新的不可变身份。避免笼统称为 File 或 package。
 
 **Artifact Identity**：一个可见、不可变且本地可解析 Artifact 的协议规范坐标与 SHA-256 摘要对。管理客户端按操作目的向 Repository 获取身份，不从浏览投影重建坐标。只有上游元数据但未缓存字节的 Proxy 结果不具备扫描或分发身份。
 
 **Asset（资产）**：属于 Artifact 的一个不可变字节对象，例如 Maven JAR、OCI blob 或 Conan package file。
+
+**Raw Path Reference（Raw 路径引用）**：Repository 本地、可变的规范路径，原子指向一个已验证的不可变内容对象。标准 PUT 会替换当前映射；路径与 SHA-256 摘要对才是治理、晋级和复制使用的不可变身份。不要称为不可变 Raw 坐标或对象存储 key。
 
 **Service Account**：CI 或外部应用使用的稳定非人类授权 principal。Grant 绑定 `service-account:<id>`，凭证轮换时不变；Service Account 没有全局角色。不要把它与 API Key、机器人用户或凭证混称。
 
