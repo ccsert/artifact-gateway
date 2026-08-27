@@ -33,16 +33,20 @@ test("a scoped token signs in through identity without repository discovery", as
     }),
   );
   await page.route("**/auth/session", (route) =>
-    route.fulfill({
-      json: {
-        authenticated: true,
-        identity: {
-          actor: "gateway-resolver",
-          kind: "static_resolver",
-          administrator: false,
-        },
-      },
-    }),
+    route.fulfill(
+      route.request().headers().authorization === "Bearer scoped-token"
+        ? {
+            json: {
+              authenticated: true,
+              identity: {
+                actor: "gateway-resolver",
+                kind: "static_resolver",
+                administrator: false,
+              },
+            },
+          }
+        : { json: { authenticated: false } },
+    ),
   );
   await page.route("**/api/v2/repositories?**", (route) => {
     repositoryDiscoveryRequests += 1;
