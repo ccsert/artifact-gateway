@@ -67,6 +67,11 @@ import { GoModuleDetail } from "../components/GoModuleDetail";
 import { APTAssetDetail } from "../components/APTAssetDetail";
 import { useClipboardAction } from "../components/ConsolePrimitives";
 import { SiteBrandMark, SiteName } from "../components/SiteBrand";
+import { useAuth } from "../lib/auth";
+import {
+  artifactCoordinateForDisplay,
+  canonicalRawSearchPrefix,
+} from "../lib/rawPath";
 
 interface PublicRepository {
   id: string;
@@ -922,6 +927,7 @@ function ConanGroupTable({
 }
 
 export function PublicBrowsePage() {
+  const { authenticated } = useAuth();
   const { locale, t, text } = usePreferences();
   const [params, setParams] = useSearchParams();
   const repositoryId = params.get("repository") ?? "";
@@ -1018,12 +1024,19 @@ export function PublicBrowsePage() {
       setError(null);
       return;
     }
+    if (!selectedRepository) return;
     let cancelled = false;
     setItems(null);
     setError(null);
     void searchRepositoryArtifacts({
       path: { repositoryId },
-      query: { q: query || undefined, pageSize: 100 },
+      query: {
+        q:
+          (selectedRepository.format === "raw"
+            ? canonicalRawSearchPrefix(query)
+            : query) || undefined,
+        pageSize: 100,
+      },
     }).then(({ data, error: requestError }) => {
       if (cancelled) return;
       if (requestError) setError(requestError);
@@ -1032,7 +1045,7 @@ export function PublicBrowsePage() {
     return () => {
       cancelled = true;
     };
-  }, [repositoryId, query]);
+  }, [query, repositoryId, selectedRepository]);
 
   useEffect(() => {
     if (!repositoryId || !items) return;
@@ -1491,14 +1504,21 @@ export function PublicBrowsePage() {
             : text("制品坐标", "Artifact coordinate"),
       key: "coordinate",
       width: 320,
-      render: (_, row) => (
-        <span
-          className="block max-w-md truncate font-mono text-xs text-zinc-100"
-          title={row.item.coordinate}
-        >
-          {row.item.coordinate}
-        </span>
-      ),
+      render: (_, row) => {
+        const displayCoordinate = artifactCoordinateForDisplay(
+          selectedRepository?.format ?? "",
+          row.item.coordinate,
+        );
+        return (
+          <span
+            className="block max-w-md truncate font-mono text-xs text-zinc-100"
+            title={displayCoordinate}
+            dir="auto"
+          >
+            {displayCoordinate}
+          </span>
+        );
+      },
     },
     ...(selectedRepository?.format === "oci"
       ? [
@@ -1653,8 +1673,8 @@ export function PublicBrowsePage() {
               type="text"
               size="small"
               aria-label={text(
-                `复制 ${row.item.coordinate}`,
-                `Copy ${row.item.coordinate}`,
+                `复制 ${artifactCoordinateForDisplay(selectedRepository?.format ?? "", row.item.coordinate)}`,
+                `Copy ${artifactCoordinateForDisplay(selectedRepository?.format ?? "", row.item.coordinate)}`,
               )}
               onClick={() => void copyCoordinate(row.item.coordinate)}
               icon={
@@ -1771,7 +1791,10 @@ export function PublicBrowsePage() {
             />
             <MetadataItem
               label={text("制品坐标", "Artifact coordinate")}
-              value={row.item.coordinate}
+              value={artifactCoordinateForDisplay(
+                selectedRepository?.format ?? "",
+                row.item.coordinate,
+              )}
               mono
             />
             <MetadataItem
@@ -2007,10 +2030,14 @@ export function PublicBrowsePage() {
           <div className="flex shrink-0 items-center gap-3">
             <PreferenceControls compact />
             <Link
-              to="/login"
+              to={authenticated ? "/" : "/login"}
               className="text-sm text-zinc-400 hover:text-cyan-300"
             >
-              {t("public.managementLogin")}
+              {t(
+                authenticated
+                  ? "public.managementConsole"
+                  : "public.managementLogin",
+              )}
             </Link>
           </div>
         </div>
@@ -2198,10 +2225,14 @@ export function PublicBrowsePage() {
                   }
                   action={
                     <Link
-                      to="/login"
+                      to={authenticated ? "/" : "/login"}
                       className="text-sm font-medium text-cyan-300 hover:text-cyan-200"
                     >
-                      {t("public.managementLogin")}
+                      {t(
+                        authenticated
+                          ? "public.managementConsole"
+                          : "public.managementLogin",
+                      )}
                     </Link>
                   }
                 />

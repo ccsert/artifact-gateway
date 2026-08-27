@@ -1,4 +1,5 @@
 import type { Format } from "../client";
+import { decodeRawPathForDisplay, rawResourceURL } from "./rawPath";
 
 // 按格式生成制品的"使用方法"（可复制的接入方式）
 
@@ -154,10 +155,16 @@ export function conanUsage(
 
 // Raw 文件 → 下载
 export function rawUsage(repoName: string, path: string): UsageSnippet[] {
-  const url = `${gatewayBase()}/raw/${repoName}/${path}`;
+  const url = `${gatewayBase()}${rawResourceURL(repoName, path)}`;
+  const readablePath = decodeRawPathForDisplay(path);
+  const filename = readablePath.slice(readablePath.lastIndexOf("/") + 1);
+  const shellQuote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
   return [
     { label: "下载 URL", code: url },
-    { label: "curl 下载", code: `curl -O ${url}` },
+    {
+      label: "curl 下载",
+      code: `curl --fail --location --output ${shellQuote(filename)} ${shellQuote(url)}`,
+    },
   ];
 }
 

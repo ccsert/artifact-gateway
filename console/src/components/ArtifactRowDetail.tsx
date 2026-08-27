@@ -16,6 +16,7 @@ import { useAuth } from "../lib/auth";
 import { mavenGA, mavenVersion } from "../lib/usage";
 import { formatDate } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
+import { rawResourceURL } from "../lib/rawPath";
 
 // Maven 制品详情：使用方法 + 按发布版本、快照构建分开的版本列表。
 // meta.coordinate 可以是完整 GAV（com.example:hello:1.0.0）或 GA（com.example:hello）。
@@ -571,14 +572,11 @@ export function RawArtifactDetail({
     setDeleting(true);
     setDeleteError("");
     try {
-      const response = await fetch(
-        `/raw/${encodeURIComponent(repoName)}/${meta.coordinate.split("/").map(encodeURIComponent).join("/")}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        },
-      );
+      const response = await fetch(rawResourceURL(repoName, meta.coordinate), {
+        method: "DELETE",
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
       if (!response.ok && response.status !== 204)
         throw new Error(
           `${response.status}: ${(await response.text()).slice(0, 120)}`,

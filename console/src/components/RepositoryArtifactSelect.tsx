@@ -8,6 +8,10 @@ import type {
 } from "../client";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
+import {
+  artifactCoordinateForDisplay,
+  canonicalRawSearchPrefix,
+} from "../lib/rawPath";
 
 export type RepositoryArtifactIdentity = {
   key: string;
@@ -91,7 +95,14 @@ export function RepositoryArtifactSelect({
               path: { repositoryId: repo.id },
               query: {
                 purpose,
-                ...(trimmedQuery ? { q: trimmedQuery } : {}),
+                ...(trimmedQuery
+                  ? {
+                      q:
+                        repo.format === "raw"
+                          ? canonicalRawSearchPrefix(trimmedQuery)
+                          : trimmedQuery,
+                    }
+                  : {}),
                 pageSize: 50,
               },
             });
@@ -123,7 +134,7 @@ export function RepositoryArtifactSelect({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [enabled, purpose, query, repo.id]);
+  }, [enabled, purpose, query, repo.format, repo.id]);
 
   const selectableOptions = useMemo(() => {
     if (value && !options.some((option) => option.key === value.key)) {
@@ -150,7 +161,7 @@ export function RepositoryArtifactSelect({
         showSearch={{ filterOption: false, onSearch: setQuery }}
         options={selectableOptions.map((option) => ({
           value: option.key,
-          label: option.coordinate,
+          label: artifactCoordinateForDisplay(repo.format, option.coordinate),
         }))}
         optionRender={(option) => {
           const artifact = selectableOptions.find(
@@ -162,7 +173,10 @@ export function RepositoryArtifactSelect({
             <div className="flex min-w-0 items-center justify-between gap-4 py-1">
               <div className="min-w-0">
                 <div className="truncate font-mono text-xs text-zinc-200">
-                  {artifact.coordinate}
+                  {artifactCoordinateForDisplay(
+                    repo.format,
+                    artifact.coordinate,
+                  )}
                 </div>
                 <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-zinc-500">
                   <span className="font-mono">

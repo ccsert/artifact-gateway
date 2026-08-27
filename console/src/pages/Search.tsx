@@ -22,6 +22,7 @@ import { PyPIProjectDetail } from "../components/PyPIProjectDetail";
 import { GoModuleDetail } from "../components/GoModuleDetail";
 import { CopyableValue, MetricStrip } from "../components/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
+import { artifactCoordinateForDisplay } from "../lib/rawPath";
 
 const SEARCH_PAGE_SIZE = 100;
 
@@ -225,11 +226,19 @@ export function SearchPage() {
       render: (_, tableRow) => {
         const expanded = expandedRow === tableRow.key;
         const row = tableRow.row;
+        const displayCoordinate = artifactCoordinateForDisplay(
+          row.format,
+          row.coordinate,
+        );
         return (
           <div>
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate font-mono text-xs text-zinc-200">
-                {row.coordinate}
+              <span
+                className="truncate font-mono text-xs text-zinc-200"
+                title={displayCoordinate}
+                dir="auto"
+              >
+                {displayCoordinate}
               </span>
               <Badge
                 tone={

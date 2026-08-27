@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { searchRepositoryArtifacts } from "../client";
 import { PreferencesProvider } from "../lib/preferences";
 import { PublicBrowsePage } from "./PublicBrowse";
@@ -10,7 +10,23 @@ vi.mock("../client", async (importOriginal) => ({
   searchRepositoryArtifacts: vi.fn(),
 }));
 
+const auth = vi.hoisted(() => ({
+  authenticated: false,
+  identityLoading: false,
+}));
+
+vi.mock("../lib/auth", () => ({
+  useAuth: () => auth,
+}));
+
 const mockSearchRepositoryArtifacts = vi.mocked(searchRepositoryArtifacts);
+
+beforeEach(() => {
+  Object.assign(auth, {
+    authenticated: false,
+    identityLoading: false,
+  });
+});
 
 afterEach(() => {
   cleanup();
@@ -19,6 +35,31 @@ afterEach(() => {
 });
 
 describe("PublicBrowsePage APT browse", () => {
+  it("sends an authenticated operator directly back to the management console", async () => {
+    Object.assign(auth, { authenticated: true });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ enabled: true, items: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/browse"]}>
+        <PreferencesProvider>
+          <PublicBrowsePage />
+        </PreferencesProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("link", { name: "进入管理端" }),
+    ).toHaveAttribute("href", "/");
+    expect(
+      screen.queryByRole("link", { name: "管理登录" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("deep-links to an anonymously readable cached APT asset", async () => {
     const repositoryId = "11111111-1111-4111-8111-111111111111";
     const path = "dists/bookworm/InRelease";
@@ -135,5 +176,63 @@ describe("PublicBrowsePage APT browse", () => {
     fireEvent.click(screen.getByRole("button", { name: "OCI" }));
     expect(screen.getByText("platform-images")).toBeInTheDocument();
     expect(screen.queryByText("maven-public")).not.toBeInTheDocument();
+  });
+
+  it("shows and searches Raw files by their readable path", async () => {
+    const repositoryId = "33333333-3333-4333-8333-333333333333";
+    const readable = "ChatGPT Image 2026年8月19日 (2).png";
+    const canonical =
+      "ChatGPT%20Image%202026%E5%B9%B48%E6%9C%8819%E6%97%A5%20%282%29.png";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          enabled: true,
+          items: [
+            {
+              id: repositoryId,
+              name: "raw-public",
+              format: "raw",
+              type: "hosted",
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    mockSearchRepositoryArtifacts.mockResolvedValue({
+      data: {
+        items: [
+          {
+            coordinate: canonical,
+            digest: `sha256:${"c".repeat(64)}`,
+            size: 1024,
+            contentType: "image/png",
+            createdAt: "2026-08-27T06:06:14Z",
+          },
+        ],
+      },
+    } as never);
+    const params = new URLSearchParams({
+      repository: repositoryId,
+      q: readable,
+    });
+
+    render(
+      <MemoryRouter initialEntries={[`/browse?${params.toString()}`]}>
+        <PreferencesProvider>
+          <PublicBrowsePage />
+        </PreferencesProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(readable)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: `复制 ${readable}` }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(canonical)).not.toBeInTheDocument();
+    expect(mockSearchRepositoryArtifacts).toHaveBeenLastCalledWith({
+      path: { repositoryId },
+      query: { q: canonical, pageSize: 100 },
+    });
   });
 });

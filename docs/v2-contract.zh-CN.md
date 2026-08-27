@@ -27,7 +27,7 @@ Audit 记录 actor、group/repository/member、format、outcome、authorization 
 
 ## Raw 协议
 
-Raw 路由接受规范多段路径，单次 decode 后拒绝空段、`.`、`..`、反斜杠、NUL 和任何编码形式的分隔符绕过。Hosted 提供认证 PUT/DELETE 与 GET/HEAD；Proxy/Group 提供 GET/HEAD。
+Raw 路由接受编码后最多 4096 字节的规范多段路径，单次 decode 后拒绝空段、`.`、`..`、反斜杠、控制/双向格式化字符和任何编码形式的分隔符绕过。Hosted 提供认证 PUT/DELETE 与 GET/HEAD；path 是可原子替换的可变引用，`path + digest` 是不可变快照身份。Proxy/Group 提供 GET/HEAD；文件与 checksum 响应使用 `Content-Disposition` 建议可读文件名。
 
 响应支持稳定 ETag、`Digest`、Content-Type、条件请求与单 byte range。校验和 sidecar 从已验证主对象派生，不信任客户端 sidecar。缺失对象可负缓存，但授权拒绝、上游 401/403/429/5xx、传输错误或校验失败不得负缓存。
 

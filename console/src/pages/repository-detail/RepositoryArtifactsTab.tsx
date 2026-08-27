@@ -45,6 +45,10 @@ import {
   shortDigest,
 } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
+import {
+  canonicalRawSearchPrefix,
+  decodeRawPathForDisplay,
+} from "../../lib/rawPath";
 import { mavenGA, mavenUsage, mavenVersion } from "../../lib/usage";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 import {
@@ -758,7 +762,11 @@ export function RepositoryArtifactsTab({
 }) {
   const { token } = useAuth();
   const { text } = usePreferences();
-  const [q, setQ] = useState(artifactTarget);
+  const [q, setQ] = useState(
+    repo.format === "raw"
+      ? decodeRawPathForDisplay(artifactTarget)
+      : artifactTarget,
+  );
   const [rows, setRows] = useState<ArtifactRow[]>([]);
   const [nextToken, setNextToken] = useState<string | undefined>();
   const [proxyPage, setProxyPage] = useState(1);
@@ -944,7 +952,12 @@ export function RepositoryArtifactsTab({
       } else if (format === "raw" || format === "apt") {
         const r = await searchRepositoryArtifacts({
           path: { repositoryId: repo.id },
-          query: { q: query || undefined, ...page },
+          query: {
+            q:
+              (format === "raw" ? canonicalRawSearchPrefix(query) : query) ||
+              undefined,
+            ...page,
+          },
         });
         err = r.error;
         items = (r.data?.items ?? []).map((x, i) => ({
@@ -989,9 +1002,13 @@ export function RepositoryArtifactsTab({
   );
 
   useEffect(() => {
-    setQ(artifactTarget);
-    void load(artifactTarget);
-  }, [load, artifactTarget]);
+    const targetQuery =
+      format === "raw"
+        ? decodeRawPathForDisplay(artifactTarget)
+        : artifactTarget;
+    setQ(targetQuery);
+    void load(targetQuery);
+  }, [artifactTarget, format, load]);
 
   const searchPlaceholder: Record<string, string> = {
     oci: text("按镜像名前缀过滤…", "Filter by image name prefix…"),
@@ -1223,18 +1240,21 @@ export function RepositoryArtifactsTab({
               ]
             : [
                 {
-                  title: text("坐标", "Coordinate"),
+                  title: text("文件路径", "File path"),
                   dataIndex: "coordinate",
                   key: "coordinate",
                   ellipsis: true,
-                  render: (value: string, record) => (
-                    <span
-                      className="font-mono text-xs text-zinc-200"
-                      title={record.coordinate}
-                    >
-                      {value}
-                    </span>
-                  ),
+                  render: (value: string) => {
+                    const displayPath = decodeRawPathForDisplay(value);
+                    return (
+                      <span
+                        className="font-mono text-xs text-zinc-200"
+                        title={displayPath}
+                      >
+                        {displayPath}
+                      </span>
+                    );
+                  },
                 },
                 {
                   title: text("摘要", "Digest"),
@@ -1406,6 +1426,7 @@ export function RepositoryArtifactsTab({
           coordinate: r.coordinate,
           digest: r.digest,
           size: r.size,
+          contentType: r.contentType,
           createdAt: r.createdAt,
         }}
       />

@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -109,6 +110,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Reques
 }
 
 func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http.Request, repo repository.HostedRepository, query repository.ArtifactSearchQuery, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {
+	query = repositorySearchQueryForFormat(repo.Format, query)
 	items := make([]adminopenapi.ArtifactSummary, 0, limit)
 	if h.searchProjection != nil {
 		projected, err := h.searchProjection.SearchArtifactProjection(r.Context(), repo.ID, repo.Format, query, limit, repository.ArtifactSearchPosition{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber, Digest: after.Digest})
@@ -204,6 +206,29 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 		}
 	}
 	return items, nil
+}
+
+func repositorySearchQueryForFormat(format repository.Format, query repository.ArtifactSearchQuery) repository.ArtifactSearchQuery {
+	if format != repository.FormatRaw || query.Mode != repository.ArtifactSearchByCoordinate || query.Value == "" {
+		return query
+	}
+	segments := strings.Split(query.Value, "/")
+	canonical := true
+	for _, segment := range segments {
+		decoded, err := url.PathUnescape(segment)
+		if err != nil || url.PathEscape(decoded) != segment {
+			canonical = false
+			break
+		}
+	}
+	if canonical {
+		return query
+	}
+	for index, segment := range segments {
+		segments[index] = url.PathEscape(segment)
+	}
+	query.Value = strings.Join(segments, "/")
+	return query
 }
 
 func (h generatedRepositoryAPIAdapter) listHostedGroupConanRecipeRevisions(w http.ResponseWriter, r *http.Request, group repository.HostedGroup, params adminopenapi.ListConanRecipeRevisionsParams) {

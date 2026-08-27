@@ -111,6 +111,7 @@ const zhCN = {
   "public.description":
     "仅显示已启用匿名读取的仓库内容；写入与管理操作仍需登录。",
   "public.managementLogin": "管理登录",
+  "public.managementConsole": "进入管理端",
 } as const;
 
 type MessageKey = keyof typeof zhCN;
@@ -200,6 +201,7 @@ const enUS: Record<MessageKey, string> = {
   "public.description":
     "Only repositories with anonymous reads enabled are shown. Writes and management still require sign-in.",
   "public.managementLogin": "Management sign in",
+  "public.managementConsole": "Open management console",
 };
 
 interface PreferencesContextValue {

@@ -90,6 +90,18 @@ BinaryObject:
       schema:
         type: string
         contentEncoding: binary
+RawBinaryObject:
+  description: Committed Raw object with an optional readable save-as filename
+  headers:
+    Content-Disposition:
+      description: Optional inline disposition carrying the decoded final path segment as filename.
+      schema:
+        type: string
+  content:
+    application/octet-stream:
+      schema:
+        type: string
+        contentEncoding: binary
 OCIManifest:
   description: Committed OCI manifest, returned with Docker-Content-Digest
   headers:

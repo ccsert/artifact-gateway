@@ -6,7 +6,10 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 )
+
+const MaxRawPathBytes = 4096
 
 type MemberType string
 
@@ -180,16 +183,20 @@ func endpointHost(endpoint string) string {
 }
 
 func CanonicalRawPath(path string) (string, bool) {
-	if path == "" || strings.HasSuffix(path, "/") {
+	if path == "" || len(path) > MaxRawPathBytes || strings.HasSuffix(path, "/") {
 		return "", false
 	}
 	for _, encoded := range strings.Split(path, "/") {
 		decoded, err := url.PathUnescape(encoded)
-		if err != nil || decoded == "" || decoded == "." || decoded == ".." || strings.ContainsAny(decoded, "\\\x00") || strings.Contains(strings.ToLower(encoded), "%2f") || url.PathEscape(decoded) != encoded {
+		if err != nil || decoded == "" || decoded == "." || decoded == ".." || strings.ContainsRune(decoded, '\\') || strings.IndexFunc(decoded, invalidRawPathRune) >= 0 || strings.Contains(strings.ToLower(encoded), "%2f") || url.PathEscape(decoded) != encoded {
 			return "", false
 		}
 	}
 	return path, true
+}
+
+func invalidRawPathRune(value rune) bool {
+	return unicode.IsControl(value) || value == '\u061c' || value == '\u200e' || value == '\u200f' || value >= '\u202a' && value <= '\u202e' || value >= '\u2066' && value <= '\u2069'
 }
 
 func ConanReadEndpoint(method, path string) bool {

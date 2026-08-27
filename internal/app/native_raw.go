@@ -392,7 +392,7 @@ func (h nativeRawHandler) checksum(w http.ResponseWriter, r *http.Request, repo 
 		http.Error(w, "raw object unavailable", http.StatusInternalServerError)
 		return
 	}
-	h.serveChecksum(w, r, body)
+	h.serveChecksum(w, r, path, body)
 }
 
 func (h nativeRawHandler) verifyChecksumUpload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string) {
@@ -443,11 +443,14 @@ func (h nativeRawHandler) rawChecksum(ctx context.Context, asset repository.RawA
 	return []byte(hex.EncodeToString(sum.Sum(nil)) + "\n"), nil
 }
 
-func (h nativeRawHandler) serveChecksum(w http.ResponseWriter, r *http.Request, body []byte) {
+func (h nativeRawHandler) serveChecksum(w http.ResponseWriter, r *http.Request, path string, body []byte) {
 	sum := sha256.Sum256(body)
 	digest := hex.EncodeToString(sum[:])
 	etag := `"sha256-` + digest + `"`
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	if disposition := rawprotocol.ContentDisposition(path); disposition != "" {
+		w.Header().Set("Content-Disposition", disposition)
+	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Digest", "sha-256="+base64.StdEncoding.EncodeToString(sum[:]))
@@ -598,6 +601,9 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 			return
 		}
 		copyRawHeadHeaders(w.Header(), response.Header)
+		if disposition := rawprotocol.ContentDisposition(path); disposition != "" {
+			w.Header().Set("Content-Disposition", disposition)
+		}
 		w.WriteHeader(http.StatusOK)
 		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditResolved, http.StatusOK, "miss", 0)
 		return
@@ -801,6 +807,9 @@ func serveNativeRawObject(w http.ResponseWriter, r *http.Request, name string, a
 	statusWriter := &nativeRawStatusWriter{ResponseWriter: w}
 	digest := strings.TrimPrefix(asset.Digest, "sha256:")
 	w.Header().Set("Content-Type", asset.ContentType)
+	if disposition := rawprotocol.ContentDisposition(name); disposition != "" {
+		w.Header().Set("Content-Disposition", disposition)
+	}
 	etag := `"sha256-` + digest + `"`
 	w.Header().Set("ETag", etag)
 	if decoded, err := hex.DecodeString(digest); err == nil {

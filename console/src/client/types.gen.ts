@@ -5808,6 +5808,9 @@ export type SearchRepositoryArtifactsData = {
     repositoryId: string;
   };
   query?: {
+    /**
+     * Format-aware coordinate prefix. Raw repositories accept a canonical percent-encoded path of up to 4096 characters; other formats apply their own stricter coordinate grammar.
+     */
     q?: string;
     pageSize?: number;
     pageToken?: string;

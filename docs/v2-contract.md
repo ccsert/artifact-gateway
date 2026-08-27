@@ -77,7 +77,7 @@ A Raw Proxy endpoint MUST use HTTPS and its host MUST appear in that repository'
 
 `CONTRACT: raw-cache`
 
-Raw successful file bodies are read-through cached for 15 minutes by default, subject to Group quota. `404` and `410` are negatively cached for one minute; authorization failures, malformed paths, and upstream `5xx` are not cached. A miss is copied through a bounded buffer into a temporary file while SHA-256 is calculated; the immutable object is published before its cache index. A hit validates object metadata and reads bytes with `Open` or `OpenRange` instead of materializing the object through `Get`. Entries retain content type, digest, size, member, and endpoint. Invalidation is explicit by canonical path and cannot remove a Hosted entry because a Proxy refreshes.
+Raw successful file bodies are read-through cached for 15 minutes by default, subject to Group quota. `404` and `410` are negatively cached for one minute; authorization failures, malformed paths, and upstream `5xx` are not cached. A miss is copied through a bounded buffer into a temporary file while SHA-256 is calculated; the immutable object is published before its cache index. A hit validates object metadata and reads bytes with `Open` or `OpenRange` instead of materializing the object through `Get`. Entries retain content type, digest, size, member, and endpoint. Hosted Raw paths are mutable references whose replacement is atomic; `path + digest` is the immutable snapshot identity. Invalidation is explicit by canonical path and cannot remove a Hosted entry because a Proxy refreshes.
 
 Each Gateway admits at most four concurrent Raw staging files by default. The
 positive limit is configurable and is checked after distributed single-flight

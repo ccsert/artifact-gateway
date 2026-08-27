@@ -187,3 +187,21 @@ func TestParseGlobalArtifactSearchQueryRecognizesOnlyCompleteSHA256Digests(t *te
 		}
 	}
 }
+
+func TestRepositorySearchQueryCanonicalizesReadableRawPrefixes(t *testing.T) {
+	query := repositorySearchQueryForFormat(
+		repository.FormatRaw,
+		repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: "ChatGPT Image 2026年8月19日"},
+	)
+	if query.Value != "ChatGPT%20Image%202026%E5%B9%B48%E6%9C%8819%E6%97%A5" {
+		t.Fatalf("canonical Raw query=%q", query.Value)
+	}
+
+	canonical := repositorySearchQueryForFormat(
+		repository.FormatRaw,
+		repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: query.Value},
+	)
+	if canonical.Value != query.Value {
+		t.Fatalf("canonical Raw query was double-encoded: %q", canonical.Value)
+	}
+}
