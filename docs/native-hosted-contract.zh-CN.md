@@ -8,7 +8,7 @@
 
 ## 范围与术语
 
-**Repository** 是恰好一个格式的持久策略、授权和保留 namespace。**Group** 是同格式 Repository 的有序只读视图，不拥有字节。**Member** 是 Group 与 Repository 的成员关系，position 唯一。**Artifact coordinate** 是格式定义的不可变身份，如 Raw path、OCI `repository@sha256:<digest>` 或 Maven GAVCE。
+**Repository** 是恰好一个格式的持久策略、授权和保留 namespace。**Group** 是同格式 Repository 的有序只读视图，不拥有字节。**Member** 是 Group 与 Repository 的成员关系，position 唯一。**Artifact coordinate** 是格式定义的身份；Raw 使用 path 与 digest 快照，OCI 使用 `repository@sha256:<digest>`，Maven 使用 GAVCE。Raw path 与 OCI tag 是可变引用，不单独构成不可变身份。
 
 Hosted 写契约按格式区分。Raw 使用标准 `PUT /raw/{repository}/{path}`，对象引用提交后可见。OCI 直接使用 Registry V2 upload/blob/manifest/tag。Maven 默认成功 PUT 直接发布；严格模式下服务端创建 staging session，并由 `POST .../coordinates/{coordinate}:commit` 显式切换可见性。Conan 使用当前兼容基线定义的管理发布契约。
 
@@ -26,7 +26,7 @@ PostgreSQL advisory lock 和事务 idempotency record 提供短期协调；连�
 
 PostgreSQL 无法加入 S3 事务，所以对象上传先于 metadata promotion。Raw/OCI 先记录格式 object intent，再上传 digest object、验证 size/digest，最后写可见 path/blob/manifest/tag。Maven strict commit 锁 session 与 coordinate，在一事务插入 reference、切换可见并标记 committed。
 
-Reader 只能经 visible coordinate/path 和 committed reference 读取。未提交对象不可达；已提交 coordinate 不指向未验证对象。不可变 coordinate 覆盖返回 `409 coordinate_exists`；OCI tag 可原子移动到新不可变 manifest。删除写 Tombstone 并移出解析，Retention 只评估 visible coordinate，不扫描裸 S3 列表。
+Reader 只能经 visible coordinate/path 和 committed reference 读取。未提交对象不可达；已提交 coordinate 不指向未验证对象。Maven Release 等不可变 coordinate 覆盖返回 `409 coordinate_exists`；Raw 标准 PUT 可原子替换 path 到新不可变内容对象，OCI tag 可原子移动到新不可变 manifest。删除写 Tombstone 并移出解析，Retention 只评估 visible coordinate，不扫描裸 S3 列表。
 
 Hosted Repository 默认 Retention Policy 为 version 1、`keepDays=30`、`minimumVersions=1`。PUT 同时要求 representation version 与 `If-Match`，成功递增，过期返回 `412`。配置不直接删除内容；scheduler 为支持格式创建持久任务。
 
@@ -52,7 +52,7 @@ Collection 使用不透明 URL-safe `pageToken` 和 `pageSize`（默认 50、最
 
 协议路由独立于管理 API。Raw/OCI 只读 committed reference；Maven 默认直接发布验证后的 PUT，strict 模式下 commit 前不可读。不存在、staged、expired、aborted、deleted 均返回 `404`。
 
-**Raw：** PUT canonical 多段 path，GET/HEAD 在 reference commit 后读取；拒绝空、directory、dot/dot-dot 和编码绕过。读取支持 HEAD、Digest、ETag 和单 range，经对象存储流式接口。未认证返回 `401` challenge。
+**Raw：** PUT canonical 多段 path，把已验证不可变内容对象原子绑定或重绑定到 path；GET/HEAD 只读取 committed reference。Unicode 与空格使用规范百分号编码；拒绝空、directory、dot/dot-dot、编码分隔符、非规范 escape、控制/双向格式化字符及编码后超过 4096 字节的路径。读取提供可读 `Content-Disposition`、HEAD、Digest、ETag 和单 range，经对象存储流式接口。未认证返回 `401` challenge。
 
 Raw/OCI resumable PATCH 将每段保存为 offset-addressed 不可变 chunk，不重写历史。完成时验证连续、只流式组装一次、验证 digest、提交可见并清理 chunk。升级期间允许旧 cumulative prefix 完成；持久 reclaim 清理完成、取消、过期 session 的剩余 chunk，保留 PostgreSQL 记录。
 

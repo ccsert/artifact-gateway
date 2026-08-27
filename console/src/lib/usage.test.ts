@@ -8,8 +8,22 @@ import {
   npmUsage,
   pypiIndexURL,
   pypiUsage,
+  rawUsage,
   usageFor,
 } from "./usage";
+
+describe("Raw usage", () => {
+  it("downloads to the readable file name and shell-quotes every user-controlled value", () => {
+    const snippets = rawUsage(
+      "raw-releases",
+      "releases/Joe%27s%20draft%20&%20notes.png",
+    );
+
+    expect(snippets[1].code).toBe(
+      `curl --fail --location --output 'Joe'"'"'s draft & notes.png' '${window.location.origin}/raw/raw-releases/releases/Joe%27s%20draft%20&%20notes.png'`,
+    );
+  });
+});
 
 describe("APT usage", () => {
   it("builds repository registration and exact asset download snippets", () => {

@@ -3,7 +3,8 @@ x-gateway-protocol-overlay:
   officialSpecification: No protocol-wide Raw repository HTTP standard; this is a
     Gateway overlay.
   gatewayDecision: Use PUT, GET, HEAD, and DELETE at /raw/{repository}/{path}; path
-    is a catch-all. GET or HEAD on a trailing-slash directory prefix lists visible
+    is a mutable catch-all reference to immutable verified content. Repeating PUT
+    atomically replaces the current path mapping. GET or HEAD on a trailing-slash directory prefix lists visible
     Hosted assets below that prefix. `.sha256` and `.sha512` paths are derived
     checksum sidecars; PUT validates an assertion and never stores another asset.
     A resumable Hosted upload starts with POST `?resumable=1`, then uses its
@@ -46,11 +47,13 @@ raw_repository_path:
     required: true
     allowReserved: true
     description: Canonical Raw path. This is a gateway catch-all parameter and may
-      contain one or more slash-separated segments; empty, dot, dot-dot, and percent-encoded
-      segments are rejected.
+      contain one or more slash-separated segments. Unicode and spaces use canonical
+      percent encoding; empty, dot, dot-dot, encoded separators, control characters,
+      bidirectional formatting controls, and non-canonical escapes are rejected.
     schema:
       type: string
       minLength: 1
+      maxLength: 4096
   get:
     operationId: readRawContent
     description: Returns Raw bytes for a file path. `.sha256` and `.sha512` suffixes
@@ -72,6 +75,11 @@ raw_repository_path:
     responses:
       '200':
         description: Raw bytes or a Raw directory-prefix JSON page
+        headers:
+          Content-Disposition:
+            description: Present for file and checksum responses; suggests the decoded final path segment as filename.
+            schema:
+              type: string
       '401':
         "$ref": "../components/responses.yaml#/BasicUnauthorized"
       '404':
@@ -84,7 +92,7 @@ raw_repository_path:
     - {}
     responses:
       '200':
-        "$ref": "../components/responses.yaml#/BinaryObject"
+        "$ref": "../components/responses.yaml#/RawBinaryObject"
       '401':
         "$ref": "../components/responses.yaml#/BasicUnauthorized"
       '404':
@@ -92,8 +100,9 @@ raw_repository_path:
   put:
     operationId: putRawHostedContent
     description: >
-      Standard Raw Hosted write. The request body is stored directly under the canonical
-      Raw path; no management publish session is used for Raw. A `.sha256` or `.sha512`
+      Standard Raw Hosted write. The request body is stored as immutable verified content
+      and the canonical Raw path is atomically created or replaced; no management publish
+      session is used for Raw. A `.sha256` or `.sha512`
       target validates that checksum against an existing primary object and returns no
       content without storing a sidecar asset. With `uploadId` and `complete=1`, appends
       any final bytes, requires a `Digest: sha-256=<base64>` header, and atomically
@@ -131,7 +140,7 @@ raw_repository_path:
             contentEncoding: binary
     responses:
       '201':
-        description: Stored and immediately addressable at this Raw path
+        description: Immutable content stored and the Raw path reference atomically created or replaced
       '401':
         "$ref": "../components/responses.yaml#/BasicUnauthorized"
       '422':

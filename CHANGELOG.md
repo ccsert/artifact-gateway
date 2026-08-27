@@ -11,7 +11,22 @@ their meaning.
 
 ## Unreleased
 
-_No changes yet._
+- Improved Raw usability across the Console: Unicode and space-containing paths
+  are displayed as readable names in repository browse, public browse, global
+  search, retention previews, and distribution selectors while canonical
+  coordinates remain unchanged for protocol actions. Search now preserves
+  literal percent signs, download snippets choose a readable shell-quoted file
+  name, and file/checksum responses advertise it with `Content-Disposition`.
+- Hardened Raw path validation with a 4096-byte encoded limit and rejection of
+  control and bidirectional-formatting characters. Upload validation no longer
+  silently trims spaces or removes a leading slash, and reports actionable
+  errors before sending invalid paths.
+- Reused an existing authenticated browser session when moving from public
+  browse to the management Console. The public entry now opens the Console
+  directly, and `/login` redirects an already authenticated user to the
+  requested management location.
+- Clarified that a Raw path is a Nexus-compatible mutable reference while
+  `path + digest` is the immutable governance and distribution snapshot.
 
 ## 0.1.0 - 2026-08-24
 

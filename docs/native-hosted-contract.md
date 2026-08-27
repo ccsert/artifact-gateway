@@ -173,14 +173,17 @@ references. Every protocol route returns `404` for an absent, strictly staged,
 expired, aborted, or deleted coordinate/path. The versioned OpenAPI file carries
 these exact routes and response shapes.
 
-**Raw.** `PUT /raw/{repository}/{path}` writes a canonical immutable object and
-`GET`/`HEAD /raw/{repository}/{path}` read it back after the verified object
-reference is committed. `path` is a gateway catch-all rather than a single URL
-segment, so a canonical path such as `releases/acme/app-1.2.3.tar.gz` remains a
-multi-segment path; it rejects empty, directory, dot, dot-dot, and
-percent-encoded segments. Reads support HEAD, Digest, ETag, and single byte
-ranges through the object-store streaming interface. An unauthenticated request
-returns `401` plus `WWW-Authenticate`.
+**Raw.** `PUT /raw/{repository}/{path}` stores an immutable verified content
+object and atomically creates or replaces its canonical path reference.
+`GET`/`HEAD /raw/{repository}/{path}` resolve only the committed reference.
+`path` is a gateway catch-all rather than a single URL segment, so a canonical
+path such as `releases/acme/app-1.2.3.tar.gz` remains multi-segment. Unicode and
+spaces use canonical percent encoding. Empty, directory, dot, dot-dot, encoded
+separator, non-canonical escape, control, bidirectional-formatting, and paths
+over 4096 encoded bytes are rejected. Reads support a readable
+`Content-Disposition`, HEAD, Digest, ETag, and one byte range through the
+object-store streaming interface. An unauthenticated request returns `401` plus
+`WWW-Authenticate`.
 
 Raw and OCI resumable PATCH requests persist each accepted byte range as an
 immutable offset-addressed chunk. A PATCH never downloads or rewrites earlier
@@ -302,8 +305,8 @@ Non-goals for CCS-44 are guessing a completion event for unmodified clients,
 making client metadata authoritative, cross-coordinate transactions, and a
 runtime fallback in the write path.
 
-Raw accepts a canonical non-directory path through standard PUT and immutable
-byte digest. OCI accepts Registry V2 blob upload and manifest publication by
+Raw accepts a mutable canonical non-directory path reference through standard
+PUT and snapshots its immutable byte digest. OCI accepts Registry V2 blob upload and manifest publication by
 digest, then optional tag movement. Maven accepts a complete coordinate plus POM
 and component objects followed by the explicit Maven commit signal. Direct
 bucket access, arbitrary Maven metadata writes, OCI digest deletion,

@@ -13,8 +13,25 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/v2contract"
 	"github.com/google/uuid"
 )
+
+func TestValidRawAssetPrefixUsesProtocolPathBoundary(t *testing.T) {
+	if !validRawAssetPrefix(strings.Repeat("a", v2contract.MaxRawPathBytes)) {
+		t.Fatal("maximum-size Raw prefix was rejected")
+	}
+	for _, value := range []string{
+		strings.Repeat("a", v2contract.MaxRawPathBytes+1),
+		"release\nname.txt",
+		"release\u202egnp.txt",
+		"release//name.txt",
+	} {
+		if validRawAssetPrefix(value) {
+			t.Fatalf("unsafe Raw prefix was accepted: %q", value)
+		}
+	}
+}
 
 func TestCrossFormatArtifactSearchUsesFormatProjectionsAndBoundPagination(t *testing.T) {
 	ctx := context.Background()

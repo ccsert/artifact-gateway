@@ -198,4 +198,62 @@ describe("RepositoryRetentionTab", () => {
     expect(await screen.findByText("npm 包版本")).toBeInTheDocument();
     expect(screen.queryByText("Recipe revision")).not.toBeInTheDocument();
   });
+
+  it("shows a readable Raw path in retention dry-run results", async () => {
+    const user = userEvent.setup();
+    mockGetRetentionPolicy.mockResolvedValue({
+      data: {
+        version: "3",
+        enabled: true,
+        keepDays: 30,
+        snapshotKeepDays: 30,
+        minimumVersions: 1,
+        maximumVersions: 0,
+        coordinatePatterns: [],
+        protectedPatterns: [],
+      },
+    } as never);
+    mockDryRunRepositoryRetention.mockResolvedValue({
+      data: {
+        policyVersion: "3",
+        totalCandidates: 1,
+        summary: {
+          reasonCounts: { age: 1, maximumVersions: 0 },
+          versionTypeCounts: {
+            release: 0,
+            snapshot: 0,
+            version: 0,
+            asset: 1,
+          },
+          oldestCandidateAt: "2026-07-01T00:00:00Z",
+        },
+        candidates: [
+          {
+            format: "raw",
+            coordinate: "ChatGPT%20Image%20%282%29.png",
+            digest: `sha256:${"a".repeat(64)}`,
+            createdAt: "2026-07-01T00:00:00Z",
+            reasons: ["age"],
+            ageDays: 42,
+            versionType: "asset",
+          },
+        ],
+      },
+    } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositoryRetentionTab repo={{ ...repository, format: "raw" }} />
+      </PreferencesProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "试运行" }));
+
+    expect(
+      await screen.findByText("ChatGPT Image (2).png"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("ChatGPT%20Image%20%282%29.png"),
+    ).not.toBeInTheDocument();
+  });
 });

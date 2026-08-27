@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
@@ -39,6 +40,20 @@ type ContentSource interface {
 type ServeResult struct {
 	Status int
 	Bytes  int64
+}
+
+// ContentDisposition keeps the protocol coordinate encoded while suggesting
+// a readable final path segment to browsers when a Raw response is saved.
+func ContentDisposition(path string) string {
+	name := path
+	if index := strings.LastIndex(name, "/"); index >= 0 {
+		name = name[index+1:]
+	}
+	decoded, err := url.PathUnescape(name)
+	if err != nil || decoded == "" || strings.ContainsAny(decoded, "\r\n") {
+		return ""
+	}
+	return mime.FormatMediaType("inline", map[string]string{"filename": decoded})
 }
 
 // ParsePath accepts only a canonical Raw resource below a named group.
@@ -122,6 +137,9 @@ func MemberProxyAllowed(member repository.Member) bool {
 func ServeContent(w http.ResponseWriter, r *http.Request, name string, content Content) ServeResult {
 	statusWriter := &statusWriter{ResponseWriter: w}
 	w.Header().Set("Content-Type", content.ContentType)
+	if disposition := ContentDisposition(name); disposition != "" {
+		w.Header().Set("Content-Disposition", disposition)
+	}
 	etag := `"sha256-` + content.Digest + `"`
 	w.Header().Set("ETag", etag)
 	digest, _ := hex.DecodeString(content.Digest)

@@ -197,13 +197,16 @@ func TestNativeRawProxyRepositoryPullsThroughUpstreamAndCaches(t *testing.T) {
 	if got := client.Calls(); len(got) != 1 || got[0] != "raw-proxy" {
 		t.Fatalf("upstream calls=%v, want a single fetch through the proxy member", got)
 	}
-	headRequest := httptest.NewRequest(http.MethodHead, "/raw/raw-proxy/release/large.iso", nil)
+	headRequest := httptest.NewRequest(http.MethodHead, "/raw/raw-proxy/release/ChatGPT%20Image.png", nil)
 	authorize(headRequest, "resolver-secret")
 	head := httptest.NewRecorder()
 	handler.ServeHTTP(head, headRequest)
 	methods := client.Methods()
 	if head.Code != http.StatusOK || head.Body.Len() != 0 || len(methods) != 2 || methods[1] != http.MethodHead {
 		t.Fatalf("HEAD status=%d body=%q upstream methods=%v", head.Code, head.Body.String(), methods)
+	}
+	if got := head.Header().Get("Content-Disposition"); !strings.Contains(got, "ChatGPT Image.png") {
+		t.Fatalf("HEAD content disposition=%q", got)
 	}
 }
 
