@@ -2,7 +2,7 @@
 
 [简体中文](project-quality-assessment.zh-CN.md) · [Documentation index](README.md)
 
-Snapshot: 2026-08-24. This assessment describes engineering quality at the
+Snapshot: 2026-08-29. This assessment describes engineering quality at the
 0.1.0 early-release boundary. It is not a production certification or support
 commitment.
 
@@ -23,7 +23,7 @@ Console modules safely while the feature surface continues to grow.
 | Documentation | Complete bilingual source set | Every site document has an English canonical route and a substantive Simplified Chinese companion; a tested site map owns navigation and pair coverage. |
 | Operability | Good early-release baseline | Health, metrics, diagnostics, recovery, Kubernetes, and distributed-role guidance exist; production-environment evidence remains separate. |
 | Performance | Reproducible local baseline | Binary/image size, quiet memory, authenticated PostgreSQL/RustFS reads, warm 64 MiB reads, and a controlled HTTPS Proxy cold miss are measured; controlled production-like load and soak remain open. |
-| Public-project readiness | Private early release | Versioned distribution exists; licensing, public visibility, a public security-reporting channel, and public support commitments remain deliberately deferred. |
+| Public-project readiness | Public early release | The repository is public, versioned distributions exist, and the project uses the MIT License; a public security-reporting channel and explicit support commitments remain open. |
 
 ## What is already high quality
 

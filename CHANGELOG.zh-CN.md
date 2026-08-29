@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Artifact Gateway 正式采用 MIT License，并在双语 README 与贡献指南中明确项目和
+  贡献许可条款。
 - 改善 Raw Console 体验：仓库浏览、公开浏览、全局搜索、保留预览和分发选择器统一显示
   可读的 Unicode/空格路径，但协议操作继续使用不变的规范坐标。搜索可正确处理文件名中的
   字面 `%`，下载命令显式选择经过 shell 引号保护的可读文件名，文件及 checksum 响应通过
