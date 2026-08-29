@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Licensed Artifact Gateway under the MIT License and documented the project
+  and contribution licensing terms in both README languages.
 - Improved Raw usability across the Console: Unicode and space-containing paths
   are displayed as readable names in repository browse, public browse, global
   search, retention previews, and distribution selectors while canonical

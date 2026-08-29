@@ -154,3 +154,8 @@ docs: describe clustered runtime roles
 ```
 
 选择最窄且有意义的 scope。契约或源变更产生的生成文件应放在同一个提交中。
+
+## 贡献许可
+
+向 Artifact Gateway 提交贡献，即表示你同意该贡献按照项目的
+[MIT License](LICENSE) 授权，除非另有明确说明。

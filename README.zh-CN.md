@@ -18,6 +18,7 @@
 <p align="center">
   <a href="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/ccsert/artifact-gateway/releases/tag/v0.1.0"><img alt="Release 0.1.0" src="https://img.shields.io/badge/release-0.1.0-2563EB"></a>
+  <a href="LICENSE"><img alt="开源许可：MIT" src="https://img.shields.io/badge/license-MIT-22C55E"></a>
   <img alt="Go 1.26.6" src="https://img.shields.io/badge/Go-1.26.6-00ADD8?logo=go&logoColor=white">
   <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white">
   <img alt="S3 兼容对象存储" src="https://img.shields.io/badge/Object_storage-S3_compatible-06B6D4">
@@ -185,3 +186,8 @@ make build
 
 新增制品生态必须通过[格式准入规则](docs/format-extension-guide.md)。只增加枚举、路由
 占位符或 Console 选项，不代表已经支持该协议。
+
+## 开源许可
+
+Artifact Gateway 基于 [MIT License](LICENSE) 开源。第三方组件与资源仍遵循各自的
+许可证条款。

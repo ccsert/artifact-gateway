@@ -181,3 +181,9 @@ docs: describe clustered runtime roles
 
 Choose the narrowest useful scope. Keep generated output in the same commit as
 the contract or source change that produced it.
+
+## Contribution license
+
+By submitting a contribution to Artifact Gateway, you agree that it is
+licensed under the project's [MIT License](LICENSE), unless explicitly stated
+otherwise.
