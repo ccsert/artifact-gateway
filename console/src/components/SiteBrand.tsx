@@ -26,7 +26,7 @@ export function SiteBrandMark({
   const settings = preview ?? current;
   const markLength = Math.max(1, Array.from(settings.brandMark).length);
   const markStyle = {
-    "--ag-brand-mark-font-size": `${0.78 * Math.min(1, 2 / markLength)}em`,
+    "--ag-identity-mark-font-size": `${0.78 * Math.min(1, 2 / markLength)}em`,
   } as CSSProperties;
 
   return (

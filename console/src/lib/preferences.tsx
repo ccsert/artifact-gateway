@@ -11,7 +11,12 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import type { ConsoleTheme } from "../client";
-import { applyConsoleTheme, defaultConsoleThemes } from "./consoleTheme";
+import {
+  applyResolvedConsoleTheme,
+  defaultConsoleThemes,
+  resolveConsoleTheme,
+  type ResolvedConsoleTheme,
+} from "./consoleTheme";
 import { useSiteSettings } from "./siteSettings";
 
 export type ColorMode = "dark" | "light";
@@ -207,6 +212,7 @@ const enUS: Record<MessageKey, string> = {
 interface PreferencesContextValue {
   themeId: string;
   activeTheme: ConsoleTheme;
+  resolvedTheme: ResolvedConsoleTheme;
   availableThemes: ConsoleTheme[];
   colorMode: ColorMode;
   locale: AppLocale;
@@ -275,6 +281,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     availableThemes[0] ??
     defaultConsoleThemes[0];
   const colorMode: ColorMode = activeTheme.mode;
+  const resolvedTheme = useMemo(
+    () => resolveConsoleTheme(activeTheme),
+    [activeTheme],
+  );
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -282,14 +292,14 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     root.dataset.theme = colorMode;
     root.classList.toggle("dark", colorMode === "dark");
     root.style.colorScheme = colorMode;
-    applyConsoleTheme(activeTheme, root);
+    applyResolvedConsoleTheme(resolvedTheme, root);
     try {
       localStorage.setItem(THEME_ID_KEY, activeTheme.id);
       localStorage.setItem(THEME_MODE_KEY, colorMode);
     } catch {
       // Preferences still work for this session when storage is unavailable.
     }
-  }, [activeTheme, colorMode]);
+  }, [activeTheme.id, colorMode, resolvedTheme]);
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -395,6 +405,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     () => ({
       themeId: activeTheme.id,
       activeTheme,
+      resolvedTheme,
       availableThemes,
       colorMode,
       locale,
@@ -410,6 +421,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       availableThemes,
       colorMode,
       locale,
+      resolvedTheme,
       setThemeId,
       setColorMode,
       setLocale,

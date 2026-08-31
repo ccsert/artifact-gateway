@@ -267,9 +267,9 @@ export function MavenPublishWizard({
       width: 120,
       render: (value: boolean) =>
         value ? (
-          <Badge tone="green">{text("已上传", "Uploaded")}</Badge>
+          <Badge tone="success">{text("已上传", "Uploaded")}</Badge>
         ) : (
-          <Badge tone="zinc">{text("待上传", "Pending")}</Badge>
+          <Badge tone="neutral">{text("待上传", "Pending")}</Badge>
         ),
     },
   ];

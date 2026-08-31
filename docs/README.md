@@ -36,6 +36,7 @@ agree with executable tests and the
 - [ADR 0002: promotion snapshots](adr/0002-promotion-snapshots.md)
 - [ADR 0003: protocol-only formats](adr/0003-protocol-only-formats.md)
 - [ADR 0004: Go Hosted publication](adr/0004-go-hosted-publication.md)
+- [ADR 0005: Console semantic theme system](adr/0005-console-semantic-theme-system.md)
 
 ## Protocols and formats
 

@@ -486,7 +486,7 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
         </div>
 
         {selectedArtifact && !manualIdentity && (
-          <div className="mt-3 rounded-md border border-cyan-500/20 bg-cyan-500/5 px-3 py-2.5">
+          <div className="mt-3 rounded-md border border-[var(--ag-status-info-border)] bg-[var(--ag-status-info-soft)] px-3 py-2.5">
             <p className="truncate font-mono text-xs text-zinc-200">
               {selectedArtifact.coordinate}
             </p>
@@ -694,7 +694,9 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
                 {formatDate(detail.createdAt)}
               </span>
               {detail.lastError && (
-                <span className="text-rose-400">{detail.lastError}</span>
+                <span className="text-[var(--ag-status-danger)]">
+                  {detail.lastError}
+                </span>
               )}
             </div>
             {detail.checkpoints.length === 0 ? (

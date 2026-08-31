@@ -121,7 +121,10 @@ export function DashboardPage() {
 
   const active = repos.filter((r) => r.state === "active").length;
   const inactive = repos.length - active;
-  const healthTone = inactive > 0 ? "text-amber-300" : "text-emerald-300";
+  const healthTone =
+    inactive > 0
+      ? "text-[var(--ag-status-warning)]"
+      : "text-[var(--ag-status-success)]";
   const lifecycleStages = [
     {
       key: "source",
@@ -221,7 +224,7 @@ export function DashboardPage() {
       render: (value: string, repository) => (
         <Link
           to={`/repositories/${repository.id}`}
-          className="font-medium text-zinc-100 hover:text-cyan-300"
+          className="font-medium text-[var(--ag-content-strong)] hover:text-[var(--ag-link-hover)]"
         >
           {value}
         </Link>
@@ -317,7 +320,7 @@ export function DashboardPage() {
       <div className="ag-health-strip flex items-center justify-between gap-6 border-y border-zinc-800/80 py-3">
         <div className="flex items-center gap-3">
           <span
-            className={`flex h-7 w-7 items-center justify-center rounded-full ${inactive > 0 ? "bg-amber-400/10" : "bg-emerald-400/10"} ${healthTone}`}
+            className={`flex h-7 w-7 items-center justify-center rounded-full ${inactive > 0 ? "bg-[var(--ag-status-warning-soft)]" : "bg-[var(--ag-status-success-soft)]"} ${healthTone}`}
           >
             <span className="h-2 w-2 rounded-full bg-current" />
           </span>
@@ -432,7 +435,7 @@ export function DashboardPage() {
             extra={
               <Link
                 to="/repositories"
-                className="text-xs text-cyan-400 hover:text-cyan-300"
+                className="text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
               >
                 {text("查看仓库 →", "View repositories →")}
               </Link>
@@ -475,7 +478,7 @@ export function DashboardPage() {
             extra={
               <Link
                 to="/repositories"
-                className="text-xs text-cyan-400 hover:text-cyan-300"
+                className="text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
               >
                 {text("查看全部 →", "View all →")}
               </Link>
@@ -506,7 +509,7 @@ export function DashboardPage() {
                 </span>
                 <Link
                   to="/audits"
-                  className="text-cyan-400 hover:text-cyan-300"
+                  className="text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
                 >
                   {text("查看全部 →", "View all →")}
                 </Link>

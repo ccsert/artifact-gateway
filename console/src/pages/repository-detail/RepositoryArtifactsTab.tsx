@@ -389,7 +389,7 @@ function ProxyMavenUsage({
             {text("健康", "Health")}
           </div>
           <div
-            className={`mt-1 text-xs font-semibold ${health?.reachable ? "text-emerald-300" : "text-rose-300"}`}
+            className={`mt-1 text-xs font-semibold ${health?.reachable ? "text-[var(--ag-status-success)]" : "text-[var(--ag-status-danger)]"}`}
           >
             {health
               ? health.reachable
@@ -403,7 +403,7 @@ function ProxyMavenUsage({
             Circuit
           </div>
           <div
-            className={`mt-1 text-xs font-semibold ${health?.circuitOpen ? "text-rose-300" : "text-emerald-300"}`}
+            className={`mt-1 text-xs font-semibold ${health?.circuitOpen ? "text-[var(--ag-status-danger)]" : "text-[var(--ag-status-success)]"}`}
           >
             {health?.circuitOpen ? "open" : "closed"}
           </div>
@@ -420,10 +420,12 @@ function ProxyMavenUsage({
         </div>
       </div>
       {healthError && (
-        <div className="text-xs text-rose-300">{healthError}</div>
+        <div className="text-xs text-[var(--ag-status-danger)]">
+          {healthError}
+        </div>
       )}
       <details className="group">
-        <summary className="cursor-pointer text-sm font-medium text-zinc-100 hover:text-cyan-300">
+        <summary className="cursor-pointer text-sm font-medium text-[var(--ag-content-strong)] hover:text-[var(--ag-link-hover)]">
           {text("使用方法", "Usage")}{" "}
           <span className="text-xs text-zinc-600 group-open:hidden">
             {text("（展开）", "(expand)")}
@@ -472,21 +474,25 @@ function ProxyMavenUsage({
           </Button>
         </div>
         {warmError && (
-          <div className="mt-2 text-xs text-rose-300">{warmError}</div>
+          <div className="mt-2 text-xs text-[var(--ag-status-danger)]">
+            {warmError}
+          </div>
         )}
         {warmResult && (
           <div
-            className={`mt-2 text-xs ${warmResult.status < 400 ? "text-emerald-300" : "text-rose-300"}`}
+            className={`mt-2 text-xs ${warmResult.status < 400 ? "text-[var(--ag-status-success)]" : "text-[var(--ag-status-danger)]"}`}
           >
             HTTP {warmResult.status} · {formatBytes(warmResult.bytes)}
           </div>
         )}
         {refreshError && (
-          <div className="mt-2 text-xs text-rose-300">{refreshError}</div>
+          <div className="mt-2 text-xs text-[var(--ag-status-danger)]">
+            {refreshError}
+          </div>
         )}
         {refreshResult && (
           <div
-            className={`mt-2 text-xs ${refreshResult.refreshed ? "text-emerald-300" : "text-rose-300"}`}
+            className={`mt-2 text-xs ${refreshResult.refreshed ? "text-[var(--ag-status-success)]" : "text-[var(--ag-status-danger)]"}`}
           >
             {text("刷新", "Refresh")} HTTP {refreshResult.status}
             {refreshResult.size !== undefined
@@ -554,10 +560,12 @@ function ProxyMavenUsage({
           )}
         </div>
         {invalidateError && (
-          <div className="mt-2 text-xs text-rose-300">{invalidateError}</div>
+          <div className="mt-2 text-xs text-[var(--ag-status-danger)]">
+            {invalidateError}
+          </div>
         )}
         {invalidateResult !== null && (
-          <div className="mt-2 text-xs text-emerald-300">
+          <div className="mt-2 text-xs text-[var(--ag-status-success)]">
             {text(
               `已失效 ${invalidateResult} 个缓存条目。`,
               `${invalidateResult} cache entries invalidated.`,
@@ -565,10 +573,12 @@ function ProxyMavenUsage({
           </div>
         )}
         {negativeError && (
-          <div className="mt-2 text-xs text-rose-300">{negativeError}</div>
+          <div className="mt-2 text-xs text-[var(--ag-status-danger)]">
+            {negativeError}
+          </div>
         )}
         {negativeResult !== null && (
-          <div className="mt-2 text-xs text-emerald-300">
+          <div className="mt-2 text-xs text-[var(--ag-status-success)]">
             {text(
               `已清理 ${negativeResult} 个负-cache 条目。`,
               `${negativeResult} negative-cache entries cleared.`,
@@ -634,7 +644,7 @@ function ProxyMavenCacheDetail({
               >
                 {file.name}
               </code>
-              {file.sidecar && <Badge tone="zinc">checksum</Badge>}
+              {file.sidecar && <Badge tone="neutral">checksum</Badge>}
             </div>
             <div className="mt-1 flex flex-wrap gap-3 text-xs text-zinc-500">
               <span>{formatBytes(file.size)}</span>
@@ -646,7 +656,7 @@ function ProxyMavenCacheDetail({
           </div>
           <CopyButton text={url} />
         </div>
-        <code className="mt-1 block break-all font-mono text-xs leading-5 text-cyan-300">
+        <code className="mt-1 block break-all font-mono text-xs leading-5 text-[var(--ag-content-secondary)]">
           {url}
         </code>
       </div>
@@ -692,14 +702,16 @@ function ProxyMavenCacheDetail({
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-3 font-mono text-xs leading-6 text-zinc-300">
             <div className="text-zinc-500">{parsed.groupId}</div>
             <div className="pl-4 text-zinc-400">└─ {parsed.artifactId}</div>
-            <div className="pl-8 text-cyan-300">└─ {parsed.version}</div>
+            <div className="pl-8 text-[var(--ag-content-secondary)]">
+              └─ {parsed.version}
+            </div>
             <div className="pl-12 text-zinc-500">
               {text("主文件：", "Primary files: ")}
               {meta.primaryFiles?.join(", ") || "—"}
             </div>
           </div>
           <details className="group">
-            <summary className="cursor-pointer text-sm font-medium text-zinc-200 hover:text-cyan-300">
+            <summary className="cursor-pointer text-sm font-medium text-[var(--ag-content-primary)] hover:text-[var(--ag-link-hover)]">
               {text("Maven 坐标用法", "Maven coordinate usage")}{" "}
               <span className="text-xs text-zinc-600 group-open:hidden">
                 {text("（展开）", "(expand)")}
@@ -726,7 +738,7 @@ function ProxyMavenCacheDetail({
           {primary.map(renderFile)}
           {sidecars.length > 0 && (
             <details className="group">
-              <summary className="cursor-pointer px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">
+              <summary className="cursor-pointer px-3 py-2 text-xs text-[var(--ag-content-tertiary)] hover:text-[var(--ag-content-secondary)]">
                 {text(
                   `校验 / 签名文件（${sidecars.length}）`,
                   `Checksums / signatures (${sidecars.length})`,
@@ -1087,7 +1099,7 @@ export function RepositoryArtifactsTab({
               key: "fileCount",
               width: 120,
               render: (_, record) => (
-                <Badge tone="zinc">
+                <Badge tone="neutral">
                   {text(
                     `${record.fileCount ?? record.files?.length ?? 0} 个文件`,
                     `${record.fileCount ?? record.files?.length ?? 0} files`,
@@ -1213,7 +1225,7 @@ export function RepositoryArtifactsTab({
                   key: "versionCount",
                   width: 120,
                   render: (_, record) => (
-                    <Badge tone="zinc">
+                    <Badge tone="neutral">
                       {record.versionCount !== undefined
                         ? text(
                             `${record.versionCount} 个版本`,
@@ -1229,7 +1241,7 @@ export function RepositoryArtifactsTab({
                   key: "latestVersion",
                   width: 160,
                   render: (value: string | undefined) => (
-                    <span className="font-mono text-xs text-cyan-300">
+                    <span className="font-mono text-xs text-[var(--ag-content-secondary)]">
                       {value ?? "—"}
                     </span>
                   ),

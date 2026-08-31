@@ -493,8 +493,8 @@ export function ServiceAccountsPage() {
                   type="button"
                   className={`w-full rounded-lg border px-3 py-3 text-left transition-colors ${
                     account.id === selectedAccountId
-                      ? "border-blue-500/40 bg-blue-500/10"
-                      : "border-transparent hover:border-zinc-800 hover:bg-zinc-900/60"
+                      ? "border-[var(--ag-border-default)] bg-[var(--ag-navigation-selected-start)]"
+                      : "border-transparent hover:border-[var(--ag-border-subtle)] hover:bg-[var(--ag-surface-hover)]"
                   }`}
                   onClick={() => setSelectedAccountId(account.id)}
                 >
@@ -502,7 +502,9 @@ export function ServiceAccountsPage() {
                     <span className="truncate text-sm font-medium text-zinc-200">
                       {account.name}
                     </span>
-                    <Badge tone={account.state === "active" ? "green" : "zinc"}>
+                    <Badge
+                      tone={account.state === "active" ? "success" : "neutral"}
+                    >
                       {account.state}
                     </Badge>
                   </div>
@@ -532,7 +534,7 @@ export function ServiceAccountsPage() {
               <div className="border-b border-zinc-800/70 px-5 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-300">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-[var(--ag-border-default)] bg-[var(--ag-surface-hover)] text-[var(--ag-content-secondary)]">
                       <RobotOutlined />
                     </div>
                     <div className="min-w-0">
@@ -543,8 +545,8 @@ export function ServiceAccountsPage() {
                         <Badge
                           tone={
                             selectedAccount.state === "active"
-                              ? "green"
-                              : "zinc"
+                              ? "success"
+                              : "neutral"
                           }
                         >
                           {selectedAccount.state}

@@ -346,7 +346,9 @@ export function RepositoryBrowseTree({
                 {nodeIcon(selected.kind, true)}
                 <strong>{selected.name}</strong>
               </div>
-              <Badge tone={selected.kind === "asset" ? "cyan" : "zinc"}>
+              <Badge
+                tone={selected.kind === "asset" ? "visualization-1" : "neutral"}
+              >
                 {nodeKindLabel(selected.kind, text)}
               </Badge>
             </div>

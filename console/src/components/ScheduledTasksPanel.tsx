@@ -263,7 +263,11 @@ export function ScheduledTasksPanel() {
       key: "kind",
       width: 170,
       render: (kind: ScheduledTask["kind"]) => (
-        <Badge tone={kind === "audit-retention" ? "violet" : "amber"}>
+        <Badge
+          tone={
+            kind === "audit-retention" ? "visualization-6" : "visualization-2"
+          }
+        >
           {kind === "audit-retention"
             ? text("审计保留", "Audit retention")
             : text("仓库保留", "Repository retention")}
@@ -687,7 +691,10 @@ function TaskRunHistory({
       title: text("失败原因", "Failure reason"),
       dataIndex: "lastError",
       render: (value?: string) => (
-        <span className="block truncate text-xs text-rose-300" title={value}>
+        <span
+          className="block truncate text-xs text-[var(--ag-status-danger)]"
+          title={value}
+        >
           {value ?? "—"}
         </span>
       ),

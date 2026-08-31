@@ -261,7 +261,9 @@ function CapacityDialog({ group }: { group: Group }) {
       key: "type",
       width: 110,
       render: (type: GroupCapacityMember["type"]) => (
-        <Badge tone={type === "proxy" ? "blue" : "green"}>{type}</Badge>
+        <Badge tone={type === "proxy" ? "visualization-5" : "visualization-4"}>
+          {type}
+        </Badge>
       ),
     },
     {
@@ -655,7 +657,7 @@ export function GroupsPage() {
       key: "anonymousRead",
       width: 140,
       render: (anonymousRead: boolean) => (
-        <Badge tone={anonymousRead ? "green" : "zinc"}>
+        <Badge tone={anonymousRead ? "success" : "neutral"}>
           {anonymousRead
             ? text("匿名可读", "Anonymous read")
             : text("私有", "Private")}

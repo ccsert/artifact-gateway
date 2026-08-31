@@ -1,5 +1,6 @@
 import { Alert, Tag } from "antd";
 import type { AptRepositorySigningState } from "../../client";
+import { Badge } from "../../components/Badge";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import {
@@ -19,7 +20,7 @@ export function APTSigningStatePanel({
   return (
     <div className="space-y-4">
       <div className="border-b border-zinc-800/80 pb-4">
-        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-500">
+        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ag-content-tertiary)]">
           {text("APT 发布信任", "APT publication trust")}
         </div>
         <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-zinc-100">
@@ -90,16 +91,18 @@ export function APTSigningStatePanel({
                   key={fingerprint}
                   className={`flex flex-col gap-2 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
                     isCurrent
-                      ? "border-cyan-700/50 bg-[var(--ag-brand-soft)]"
-                      : "border-zinc-800/80 bg-[var(--ag-table-header)]"
+                      ? "border-[var(--ag-border-default)] bg-[var(--ag-navigation-selected-start)]"
+                      : "border-zinc-800/80 bg-[var(--ag-surface-table-header)]"
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <Tag color={index === 0 ? "blue" : "purple"}>
+                    <Badge
+                      tone={index === 0 ? "visualization-5" : "visualization-6"}
+                    >
                       {index === 0
                         ? text("主密钥", "Primary")
                         : text("轮换密钥", "Next")}
-                    </Tag>
+                    </Badge>
                     {isCurrent && (
                       <Tag color="success">{text("当前使用", "In use")}</Tag>
                     )}
@@ -174,7 +177,7 @@ function SigningEvidence({
   mono?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-lg border border-zinc-800/80 bg-[var(--ag-table-header)] px-4 py-3">
+    <div className="min-w-0 rounded-lg border border-zinc-800/80 bg-[var(--ag-surface-table-header)] px-4 py-3">
       <div className="text-xs font-medium text-zinc-600">{label}</div>
       <div
         className={`mt-1 break-all text-xs text-zinc-300 ${mono ? "font-mono" : "font-medium"}`}

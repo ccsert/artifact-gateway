@@ -310,7 +310,11 @@ export function ApiKeysPage() {
             <Badge
               key={role}
               tone={
-                role === "admin" ? "red" : role === "writer" ? "blue" : "green"
+                role === "admin"
+                  ? "visualization-3"
+                  : role === "writer"
+                    ? "visualization-5"
+                    : "visualization-4"
               }
             >
               {role}

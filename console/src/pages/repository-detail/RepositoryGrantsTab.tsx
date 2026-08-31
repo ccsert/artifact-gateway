@@ -18,7 +18,7 @@ import type {
   ServiceAccount,
   User,
 } from "../../client";
-import { Badge } from "../../components/Badge";
+import { Badge, type BadgeTone } from "../../components/Badge";
 import {
   EmptyState,
   ErrorBanner,
@@ -64,11 +64,11 @@ function principalEditorKind(principal: string): PrincipalKind | "" {
   return principal ? principalKind(principal) : "";
 }
 
-function grantTone(level: GrantLevel): "red" | "blue" | "green" | "cyan" {
-  if (level === "intelligence") return "cyan";
-  if (level === "admin") return "red";
-  if (level === "write") return "blue";
-  return "green";
+function grantTone(level: GrantLevel): BadgeTone {
+  if (level === "intelligence") return "visualization-1";
+  if (level === "admin") return "visualization-3";
+  if (level === "write") return "visualization-5";
+  return "visualization-4";
 }
 
 function grantLevel(scopes: Grant["scopes"]): GrantLevel {

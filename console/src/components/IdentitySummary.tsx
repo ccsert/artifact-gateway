@@ -54,7 +54,9 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
           {
             key: "kind",
             label: text("认证来源", "Authentication"),
-            children: <Badge tone="cyan">{kindLabels[identity.kind]}</Badge>,
+            children: (
+              <Badge tone="visualization-1">{kindLabels[identity.kind]}</Badge>
+            ),
           },
           {
             key: "role",
@@ -63,10 +65,10 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
               <Badge
                 tone={
                   role === "admin"
-                    ? "red"
+                    ? "visualization-3"
                     : role === "writer"
-                      ? "blue"
-                      : "green"
+                      ? "visualization-5"
+                      : "visualization-4"
                 }
               >
                 {roleLabels[role]}
@@ -81,9 +83,9 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
             key: "administrator",
             label: text("管理员身份", "Administrator"),
             children: identity.administrator ? (
-              <Badge tone="red">{text("是", "Yes")}</Badge>
+              <Badge tone="danger">{text("是", "Yes")}</Badge>
             ) : (
-              <Badge tone="zinc">{text("否", "No")}</Badge>
+              <Badge tone="neutral">{text("否", "No")}</Badge>
             ),
           },
         ]}
@@ -95,7 +97,7 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
           </span>
           <div className="flex min-w-0 flex-wrap gap-2">
             {identity.oidc.adminSubject && (
-              <Badge tone="red">
+              <Badge tone="danger">
                 {text(
                   "subject 管理员名单 → admin",
                   "Administrator subject list → admin",
@@ -107,10 +109,10 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
                 key={`${mapping.externalRole}-${mapping.gatewayRole}`}
                 tone={
                   mapping.gatewayRole === "admin"
-                    ? "red"
+                    ? "visualization-3"
                     : mapping.gatewayRole === "writer"
-                      ? "blue"
-                      : "green"
+                      ? "visualization-5"
+                      : "visualization-4"
                 }
               >
                 {mapping.externalRole} → {mapping.gatewayRole}

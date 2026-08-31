@@ -1,22 +1,35 @@
 import type { ReactNode } from "react";
+import { artifactFormatVisualizationTone } from "../lib/artifactFormatVisuals";
 import { usePreferences } from "../lib/preferences";
 
-const toneClasses: Record<string, string> = {
-  green: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-  red: "border-rose-500/30 bg-rose-500/10 text-rose-300",
-  amber: "border-amber-500/30 bg-amber-500/10 text-amber-300",
-  blue: "border-sky-500/30 bg-sky-500/10 text-sky-300",
-  zinc: "border-zinc-600/40 bg-zinc-700/20 text-zinc-400",
-  cyan: "border-cyan-500/30 bg-cyan-500/10 text-cyan-300",
-  violet: "border-violet-500/30 bg-violet-500/10 text-violet-300",
-};
+const toneClasses = {
+  success:
+    "border-[var(--ag-status-success-border)] bg-[var(--ag-status-success-soft)] text-[var(--ag-status-success)]",
+  danger:
+    "border-[var(--ag-status-danger-border)] bg-[var(--ag-status-danger-soft)] text-[var(--ag-status-danger)]",
+  warning:
+    "border-[var(--ag-status-warning-border)] bg-[var(--ag-status-warning-soft)] text-[var(--ag-status-warning)]",
+  info: "border-[var(--ag-status-info-border)] bg-[var(--ag-status-info-soft)] text-[var(--ag-status-info)]",
+  neutral:
+    "border-[var(--ag-border-default)] bg-[var(--ag-surface-disabled)] text-[var(--ag-content-secondary)]",
+  "visualization-1": "ag-visualization-tone ag-visualization-tone-1",
+  "visualization-2": "ag-visualization-tone ag-visualization-tone-2",
+  "visualization-3": "ag-visualization-tone ag-visualization-tone-3",
+  "visualization-4": "ag-visualization-tone ag-visualization-tone-4",
+  "visualization-5": "ag-visualization-tone ag-visualization-tone-5",
+  "visualization-6": "ag-visualization-tone ag-visualization-tone-6",
+  "visualization-7": "ag-visualization-tone ag-visualization-tone-7",
+  "visualization-8": "ag-visualization-tone ag-visualization-tone-8",
+} as const;
+
+export type BadgeTone = keyof typeof toneClasses;
 
 export function Badge({
   children,
-  tone = "zinc",
+  tone = "neutral",
 }: {
   children: ReactNode;
-  tone?: keyof typeof toneClasses;
+  tone?: BadgeTone;
 }) {
   return (
     <span
@@ -27,40 +40,40 @@ export function Badge({
   );
 }
 
-const stateTone: Record<string, keyof typeof toneClasses> = {
-  active: "green",
-  deleting: "amber",
-  deleted: "red",
-  visible: "green",
-  pending: "amber",
-  retrying: "amber",
-  delivering: "blue",
-  running: "blue",
-  completed: "green",
-  failed: "red",
-  cancelled: "zinc",
-  open: "blue",
-  committed: "green",
-  aborted: "zinc",
-  expired: "zinc",
-  verified: "green",
-  copying: "blue",
-  success: "green",
-  allow: "green",
-  deny: "red",
-  denied: "red",
-  revoked: "red",
-  enabled: "green",
-  disabled: "zinc",
-  online: "green",
-  stale: "amber",
-  offline: "red",
-  healthy: "green",
-  degraded: "amber",
-  critical: "red",
-  submitted: "green",
-  succeeded: "green",
-  dead: "red",
+const stateTone: Record<string, BadgeTone> = {
+  active: "success",
+  deleting: "warning",
+  deleted: "danger",
+  visible: "success",
+  pending: "warning",
+  retrying: "warning",
+  delivering: "info",
+  running: "info",
+  completed: "success",
+  failed: "danger",
+  cancelled: "neutral",
+  open: "info",
+  committed: "success",
+  aborted: "neutral",
+  expired: "neutral",
+  verified: "success",
+  copying: "info",
+  success: "success",
+  allow: "success",
+  deny: "danger",
+  denied: "danger",
+  revoked: "danger",
+  enabled: "success",
+  disabled: "neutral",
+  online: "success",
+  stale: "warning",
+  offline: "danger",
+  healthy: "success",
+  degraded: "warning",
+  critical: "danger",
+  submitted: "success",
+  succeeded: "success",
+  dead: "danger",
 };
 
 export function StateBadge({ state }: { state: string | undefined }) {
@@ -95,24 +108,17 @@ export function StateBadge({ state }: { state: string | undefined }) {
   };
   const label = labels[value];
   return (
-    <Badge tone={stateTone[value] ?? "zinc"}>
+    <Badge tone={stateTone[value] ?? "neutral"}>
       {label ? text(label[0], label[1]) : value}
     </Badge>
   );
 }
 
-const formatTone: Record<string, keyof typeof toneClasses> = {
-  oci: "cyan",
-  maven: "amber",
-  conan: "violet",
-  raw: "blue",
-  npm: "green",
-  pypi: "cyan",
-  go: "blue",
-  apt: "amber",
-};
-
 export function FormatBadge({ format }: { format: string | undefined }) {
   const value = format ?? "?";
-  return <Badge tone={formatTone[value] ?? "zinc"}>{value}</Badge>;
+  return (
+    <Badge tone={artifactFormatVisualizationTone(value) ?? "neutral"}>
+      {value}
+    </Badge>
+  );
 }

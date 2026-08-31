@@ -25,6 +25,7 @@ import {
   listUserIdentities,
 } from "../../client";
 import type { CreateUserIdentity, UserIdentity } from "../../client";
+import { Badge } from "../../components/Badge";
 import { ErrorBanner } from "../../components/Feedback";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
@@ -161,10 +162,10 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <LinkOutlined className="text-cyan-400" />
-                  <Tag color="blue">OIDC</Tag>
+                  <LinkOutlined className="text-[var(--ag-link)]" />
+                  <Badge tone="visualization-5">OIDC</Badge>
                   {identity.emailVerified ? (
-                    <Tag color="green">
+                    <Tag color="success">
                       {text("邮箱已验证", "Email verified")}
                     </Tag>
                   ) : null}

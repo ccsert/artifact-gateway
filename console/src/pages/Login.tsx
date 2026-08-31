@@ -227,7 +227,7 @@ export function LoginPage() {
             <SiteBrandMark className="flex h-11 w-11 items-center justify-center rounded-lg text-base font-bold text-white" />
             <div>
               <div className="text-sm font-semibold text-white">Console</div>
-              <div className="mt-0.5 font-mono text-xs uppercase tracking-wider text-cyan-200">
+              <div className="mt-0.5 font-mono text-xs uppercase tracking-wider text-[var(--ag-content-secondary)]">
                 Native Hosted API v2
               </div>
             </div>

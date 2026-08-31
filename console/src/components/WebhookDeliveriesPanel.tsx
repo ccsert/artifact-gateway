@@ -231,7 +231,7 @@ export function WebhookDeliveriesPanel() {
       render: (eventTypes: WebhookEventType[]) => (
         <Space size={[4, 4]} wrap>
           {eventTypes.map((eventType) => (
-            <Badge key={eventType} tone="violet">
+            <Badge key={eventType} tone="visualization-6">
               {eventType}
             </Badge>
           ))}
@@ -244,7 +244,7 @@ export function WebhookDeliveriesPanel() {
       key: "secretConfigured",
       width: 100,
       render: (configured: boolean) => (
-        <Badge tone={configured ? "green" : "red"}>
+        <Badge tone={configured ? "success" : "danger"}>
           {configured ? text("已配置", "Configured") : text("缺失", "Missing")}
         </Badge>
       ),
@@ -328,7 +328,7 @@ export function WebhookDeliveriesPanel() {
           <div>{delivery.lastStatus ? `HTTP ${delivery.lastStatus}` : "—"}</div>
           {delivery.lastError ? (
             <div
-              className="mt-1 truncate text-rose-300"
+              className="mt-1 truncate text-[var(--ag-status-danger)]"
               title={delivery.lastError}
             >
               {delivery.lastError}

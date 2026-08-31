@@ -223,7 +223,7 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
         }
       />
       <div className="px-5 py-3 text-xs text-zinc-500">
-        <SafetyCertificateOutlined className="mr-2 text-cyan-400" />
+        <SafetyCertificateOutlined className="mr-2 text-[var(--ag-content-tertiary)]" />
         {text(
           "角色复用一组权限。选入模板或授权规则时会复制权限快照，之后修改或删除角色不会改变已有授权。",
           "Roles reuse permission sets. Templates and grants copy a scope snapshot, so later role edits or deletion never change saved access.",

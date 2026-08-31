@@ -95,7 +95,7 @@ function Decision({
       <div className="text-xs font-medium text-zinc-500">{label}</div>
       <div
         className={`mt-1.5 flex items-center gap-1.5 text-sm font-semibold ${
-          decision.allowed ? "text-emerald-300" : "text-zinc-400"
+          decision.allowed ? "text-[var(--ag-status-success)]" : "text-zinc-400"
         }`}
       >
         {decision.allowed ? <CheckCircleFilled /> : <CloseCircleFilled />}

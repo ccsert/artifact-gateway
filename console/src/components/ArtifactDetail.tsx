@@ -39,7 +39,7 @@ function Snippet({ snippet }: { snippet: UsageSnippet }) {
         </span>
         <CopyButton text={snippet.code} />
       </div>
-      <code className="block whitespace-pre-wrap break-all font-mono text-xs leading-5 text-cyan-300">
+      <code className="block whitespace-pre-wrap break-all font-mono text-xs leading-5 text-[var(--ag-content-secondary)]">
         {snippet.code}
       </code>
     </div>
@@ -258,7 +258,7 @@ export function VersionList({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-sm font-medium text-zinc-200">
-        {title} <Badge tone="zinc">{items.length}</Badge>
+        {title} <Badge tone="neutral">{items.length}</Badge>
       </div>
       <Select
         className="w-full"

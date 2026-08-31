@@ -48,14 +48,14 @@ function toDraft(settings: SiteSettings): SiteSettingsDraft {
 }
 
 function ThemePreview({ theme }: { theme: ConsoleTheme }) {
-  const token = resolveConsoleTheme(theme);
+  const { roles } = resolveConsoleTheme(theme);
   const style = {
-    "--preview-bg": token.colorBgLayout,
-    "--preview-surface": token.colorBgContainer,
-    "--preview-border": token.colorBorderSecondary,
-    "--preview-text": token.colorText,
-    "--preview-muted": token.colorTextSecondary,
-    "--preview-primary": token.colorPrimary,
+    "--preview-bg": roles.surface.canvas,
+    "--preview-surface": roles.surface.container,
+    "--preview-border": roles.border.subtle,
+    "--preview-text": roles.content.primary,
+    "--preview-muted": roles.content.secondary,
+    "--preview-primary": roles.action.primary,
   } as CSSProperties;
   return (
     <div className="ag-theme-preview" style={style} aria-hidden="true">

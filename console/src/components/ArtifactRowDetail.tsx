@@ -194,7 +194,9 @@ export function MavenArtifactDetail({
                 {effectiveMeta.coordinate}
               </div>
               {deleteError && (
-                <div className="mt-1 text-xs text-rose-300">{deleteError}</div>
+                <div className="mt-1 text-xs text-[var(--ag-status-danger)]">
+                  {deleteError}
+                </div>
               )}
             </div>
             <Popconfirm
@@ -488,7 +490,7 @@ export function ConanArtifactDetail({
                   return (
                     <div
                       key={packageKey}
-                      className={`flex items-center justify-between gap-3 border-b border-zinc-800/60 px-3 py-2 last:border-0 ${selected ? "bg-cyan-950/20" : ""}`}
+                      className={`flex items-center justify-between gap-3 border-b border-zinc-800/60 px-3 py-2 last:border-0 ${selected ? "bg-[var(--ag-navigation-selected-start)]" : ""}`}
                     >
                       <div className="min-w-0">
                         <div className="font-mono text-xs text-zinc-200">
@@ -607,7 +609,9 @@ export function RawArtifactDetail({
             {text("Raw 文件", "Raw file")}
           </div>
           {deleteError && (
-            <div className="mt-1 text-xs text-rose-300">{deleteError}</div>
+            <div className="mt-1 text-xs text-[var(--ag-status-danger)]">
+              {deleteError}
+            </div>
           )}
         </div>
         <Popconfirm

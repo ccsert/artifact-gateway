@@ -168,7 +168,7 @@ function OperationStatus({ row, text }: { row: OperationRow; text: Localize }) {
         </div>
       )}
       {row.lastError && (
-        <div className="mt-2 line-clamp-2 break-words text-xs leading-5 text-rose-300">
+        <div className="mt-2 line-clamp-2 break-words text-xs leading-5 text-[var(--ag-status-danger)]">
           {row.lastError}
         </div>
       )}
@@ -328,7 +328,7 @@ function OperationDetailsPanel({
       </dl>
       {row.details && <LifecycleJobDetails details={row.details} />}
       {row.lastError && (
-        <div className="break-words rounded-md border border-rose-900/50 bg-rose-950/20 px-4 py-2 text-xs leading-5 text-rose-300">
+        <div className="break-words rounded-md border border-[var(--ag-status-danger-border)] bg-[var(--ag-status-danger-soft)] px-4 py-2 text-xs leading-5 text-[var(--ag-status-danger)]">
           {row.lastError}
         </div>
       )}

@@ -23,22 +23,22 @@ export function ArtifactSecurityBadge({
   text: Localize;
 }) {
   if (!summary)
-    return <Badge tone="zinc">{text("未扫描", "Not scanned")}</Badge>;
+    return <Badge tone="neutral">{text("未扫描", "Not scanned")}</Badge>;
   if (summary.vulnerabilityStatus === "affected") {
     return (
-      <Badge tone="red">
+      <Badge tone="danger">
         {text("有风险", "Affected")} · {artifactSecurityFindings(summary)}
       </Badge>
     );
   }
   if (summary.vulnerabilityStatus === "clean") {
-    return <Badge tone="green">{text("通过", "Clean")}</Badge>;
+    return <Badge tone="success">{text("通过", "Clean")}</Badge>;
   }
   if (summary.vulnerabilityStatus === "error") {
-    return <Badge tone="amber">{text("扫描错误", "Scan error")}</Badge>;
+    return <Badge tone="warning">{text("扫描错误", "Scan error")}</Badge>;
   }
   return (
-    <Badge tone="cyan">
+    <Badge tone="info">
       {summary.signatureCount + summary.sbomCount + summary.licenseCount}{" "}
       {text("项证据", "evidence")}
     </Badge>

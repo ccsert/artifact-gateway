@@ -184,7 +184,7 @@ function TokenDialog() {
   return (
     <>
       <Button
-        color={token ? "green" : "orange"}
+        color="default"
         variant="filled"
         icon={<KeyOutlined />}
         aria-label={token ? t("auth.tokenConfigured") : t("auth.setToken")}

@@ -471,7 +471,7 @@ export function AuthenticationPage() {
                       </Button>
                     </Popconfirm>
                   )}
-                  <Badge tone={clearSecret ? "red" : "green"}>
+                  <Badge tone={clearSecret ? "danger" : "success"}>
                     {clearSecret
                       ? text("等待保存", "Pending save")
                       : text("已加密存储", "Encrypted at rest")}
@@ -487,7 +487,11 @@ export function AuthenticationPage() {
                     <dt>{text("来源", "Source")}</dt>
                     <dd>
                       <Badge
-                        tone={settings.source === "database" ? "cyan" : "zinc"}
+                        tone={
+                          settings.source === "database"
+                            ? "visualization-1"
+                            : "neutral"
+                        }
                       >
                         {sourceLabel}
                       </Badge>

@@ -220,7 +220,7 @@ export function UserDetailsDrawer({
           <Space size={8}>
             <Badge tone={roleTone(user.role)}>{user.role}</Badge>
             {locked ? (
-              <Badge tone="amber">{text("已锁定", "Locked")}</Badge>
+              <Badge tone="warning">{text("已锁定", "Locked")}</Badge>
             ) : (
               <StateBadge state={user.state} />
             )}

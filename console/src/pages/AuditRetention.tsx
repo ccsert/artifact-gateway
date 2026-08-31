@@ -173,7 +173,7 @@ export function AuditRetentionPage() {
       width: 320,
       render: (value: string | undefined) => (
         <span
-          className="block max-w-80 truncate text-xs text-rose-400"
+          className="block max-w-80 truncate text-xs text-[var(--ag-status-danger)]"
           title={value}
         >
           {value ?? "—"}

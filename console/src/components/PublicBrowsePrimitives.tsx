@@ -78,7 +78,7 @@ export function UsageSnippetBlock({
         </Tooltip>
       </div>
       <pre
-        className={`max-w-full overflow-x-auto whitespace-pre font-mono text-xs leading-5 text-cyan-100 ${compact ? "max-h-24" : ""}`}
+        className={`max-w-full overflow-x-auto whitespace-pre font-mono text-xs leading-5 text-[var(--ag-content-secondary)] ${compact ? "max-h-24" : ""}`}
       >
         {snippet.code}
       </pre>

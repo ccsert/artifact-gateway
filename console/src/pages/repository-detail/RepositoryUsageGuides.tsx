@@ -33,7 +33,7 @@ export function RepositorySnippetBlock({
         </span>
         <CopyButton text={code} />
       </div>
-      <code className="block whitespace-pre-wrap break-all font-mono text-xs leading-5 text-cyan-300">
+      <code className="block whitespace-pre-wrap break-all font-mono text-xs leading-5 text-[var(--ag-content-secondary)]">
         {code}
       </code>
     </div>

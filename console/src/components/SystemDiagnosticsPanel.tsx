@@ -41,11 +41,11 @@ const scannerStatusLabels: Record<
 };
 
 const scannerStatusTone: Record<DiagnosticScanner["status"], string> = {
-  healthy: "text-emerald-400",
-  degraded: "text-amber-400",
-  unhealthy: "text-rose-400",
-  unreachable: "text-rose-400",
-  unknown: "text-amber-400",
+  healthy: "text-[var(--ag-status-success)]",
+  degraded: "text-[var(--ag-status-warning)]",
+  unhealthy: "text-[var(--ag-status-danger)]",
+  unreachable: "text-[var(--ag-status-danger)]",
+  unknown: "text-[var(--ag-status-warning)]",
   not_configured: "text-zinc-500",
 };
 
@@ -390,7 +390,7 @@ export function SystemDiagnosticsPanel() {
             {nodeIssues.map((issue) => (
               <div key={issue.code} className="ag-diagnostic-issue-row">
                 <div className="min-w-0">
-                  <div className="font-mono text-xs text-amber-300">
+                  <div className="font-mono text-xs text-[var(--ag-status-warning)]">
                     {issue.code}
                   </div>
                   <div className="mt-1 break-words text-xs leading-5 text-zinc-400">
@@ -518,7 +518,9 @@ export function SystemDiagnosticsPanel() {
                     </div>
                     <span
                       className={`shrink-0 text-xs ${
-                        reachable ? "text-emerald-400" : "text-amber-400"
+                        reachable
+                          ? "text-[var(--ag-status-success)]"
+                          : "text-[var(--ag-status-warning)]"
                       }`}
                     >
                       {reachable ? (

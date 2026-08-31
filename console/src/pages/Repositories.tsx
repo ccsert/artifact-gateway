@@ -416,7 +416,7 @@ export function RepositoriesPage() {
       render: (name: string, repository) => (
         <Link
           to={`/repositories/${repository.id}`}
-          className="font-medium text-zinc-100 hover:text-cyan-300"
+          className="font-medium text-[var(--ag-content-strong)] hover:text-[var(--ag-link-hover)]"
         >
           {name}
         </Link>
@@ -428,7 +428,7 @@ export function RepositoriesPage() {
       key: "type",
       width: 105,
       render: (type: Repository["type"]) => (
-        <Badge tone={type === "proxy" ? "amber" : "cyan"}>
+        <Badge tone={type === "proxy" ? "visualization-2" : "visualization-1"}>
           {type === "proxy" ? "proxy" : "hosted"}
         </Badge>
       ),
@@ -527,7 +527,7 @@ export function RepositoriesPage() {
             onClick={() => setToDelete(repository)}
           />
         ) : repository.state === "deleting" ? (
-          <Badge tone="amber">{text("删除中", "Deleting")}</Badge>
+          <Badge tone="warning">{text("删除中", "Deleting")}</Badge>
         ) : (
           <span className="text-xs text-zinc-600">—</span>
         ),

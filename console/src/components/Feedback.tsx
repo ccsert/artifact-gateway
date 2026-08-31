@@ -69,12 +69,12 @@ export function ErrorBanner({
         <span>
           {message}
           {problem?.code && (
-            <span className="ml-2 font-mono text-xs text-rose-400/70">
+            <span className="ml-2 font-mono text-xs text-[var(--ag-status-danger)] opacity-70">
               [{problem.code}]
             </span>
           )}
           {problem?.requestId && (
-            <span className="ml-2 font-mono text-xs text-rose-400/50">
+            <span className="ml-2 font-mono text-xs text-[var(--ag-status-danger)] opacity-50">
               req: {problem.requestId}
             </span>
           )}
