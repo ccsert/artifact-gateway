@@ -27,6 +27,11 @@ interface ThemeViewTransition {
   skipTransition: () => void;
 }
 
+interface ThemeTransitionOrigin {
+  x: number;
+  y: number;
+}
+
 type ThemeTransitionDocument = Document & {
   startViewTransition?: (
     update: () => void | Promise<void>,
@@ -216,7 +221,7 @@ interface PreferencesContextValue {
   availableThemes: ConsoleTheme[];
   colorMode: ColorMode;
   locale: AppLocale;
-  setThemeId: (id: string) => void;
+  setThemeId: (id: string, origin?: ThemeTransitionOrigin) => void;
   setColorMode: (mode: ColorMode) => void;
   setLocale: (locale: AppLocale) => void;
   toggleColorMode: () => void;
@@ -225,6 +230,35 @@ interface PreferencesContextValue {
 }
 
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
+
+function setThemeRevealGeometry(
+  root: HTMLElement,
+  origin?: ThemeTransitionOrigin,
+) {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const candidateX =
+    origin?.x !== undefined && Number.isFinite(origin.x)
+      ? origin.x
+      : viewportWidth;
+  const candidateY =
+    origin?.y !== undefined && Number.isFinite(origin.y) ? origin.y : 0;
+  const x = Math.min(Math.max(candidateX, 0), viewportWidth);
+  const y = Math.min(Math.max(candidateY, 0), viewportHeight);
+  const radius = Math.ceil(
+    Math.hypot(Math.max(x, viewportWidth - x), Math.max(y, viewportHeight - y)),
+  );
+
+  root.style.setProperty("--ag-theme-reveal-x", `${x}px`);
+  root.style.setProperty("--ag-theme-reveal-y", `${y}px`);
+  root.style.setProperty("--ag-theme-reveal-radius", `${radius}px`);
+}
+
+function clearThemeRevealGeometry(root: HTMLElement) {
+  root.style.removeProperty("--ag-theme-reveal-x");
+  root.style.removeProperty("--ag-theme-reveal-y");
+  root.style.removeProperty("--ag-theme-reveal-radius");
+}
 
 function storedThemeId(themes: ConsoleTheme[], defaultThemeId: string): string {
   try {
@@ -311,7 +345,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, [locale]);
 
   const setThemeId = useCallback(
-    (nextThemeID: string) => {
+    (nextThemeID: string, origin?: ThemeTransitionOrigin) => {
       if (
         nextThemeID === themeId ||
         !availableThemes.some((theme) => theme.id === nextThemeID)
@@ -330,6 +364,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      setThemeRevealGeometry(root, origin);
       root.dataset.themeTransition = "view";
       const transition = transitionDocument.startViewTransition(async () => {
         commit();
@@ -343,6 +378,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         if (activeThemeTransition.current === transition) {
           activeThemeTransition.current = null;
           delete root.dataset.themeTransition;
+          clearThemeRevealGeometry(root);
         }
       });
     },

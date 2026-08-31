@@ -202,12 +202,19 @@ html {
 }
 
 ::view-transition-new(root) {
-  animation: ag-theme-reveal 200ms var(--ease-out-expo) both;
+  animation: ag-theme-radial-reveal 240ms var(--ease-out-expo) both;
 }
 
-@keyframes ag-theme-reveal {
+@keyframes ag-theme-radial-reveal {
   from {
-    opacity: 0;
+    clip-path: circle(0 at var(--ag-theme-reveal-x) var(--ag-theme-reveal-y));
+  }
+
+  to {
+    clip-path: circle(
+      var(--ag-theme-reveal-radius) at var(--ag-theme-reveal-x)
+        var(--ag-theme-reveal-y)
+    );
   }
 }
 

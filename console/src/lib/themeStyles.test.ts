@@ -63,13 +63,17 @@ describe("semantic theme CSS contract", () => {
     expect(primaryUses?.length ?? 0).toBeLessThanOrEqual(3);
   });
 
-  it("reveals the new theme over a stable old snapshot", () => {
+  it("reveals the new theme radially over a stable old snapshot", () => {
     expect(runtimeStyles).toMatch(
       /::view-transition-old\(root\)\s*\{\s*animation:\s*none;/u,
     );
     expect(runtimeStyles).toMatch(
-      /::view-transition-new\(root\)\s*\{[^}]*ag-theme-reveal\s+200ms/u,
+      /::view-transition-new\(root\)\s*\{[^}]*ag-theme-radial-reveal\s+240ms/u,
     );
+    expect(runtimeStyles).toContain("--ag-theme-reveal-x");
+    expect(runtimeStyles).toContain("--ag-theme-reveal-y");
+    expect(runtimeStyles).toContain("--ag-theme-reveal-radius");
+    expect(runtimeStyles).toMatch(/clip-path:\s*circle\(/u);
     expect(runtimeStyles).not.toContain("ag-theme-fade-out");
     expect(runtimeStyles).not.toContain('data-theme-transition="fallback"');
   });

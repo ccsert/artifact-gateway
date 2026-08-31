@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreferencesProvider } from "../lib/preferences";
 import { PreferenceControls } from "./PreferenceControls";
 
@@ -13,12 +13,24 @@ describe("PreferenceControls", () => {
   it("commits the complete theme through one view transition", async () => {
     const user = userEvent.setup();
     let transitionCalls = 0;
+    let transitionGeometry: Record<string, string> = {};
     const original = (document as Document & { startViewTransition?: unknown })
       .startViewTransition;
     Object.defineProperty(document, "startViewTransition", {
       configurable: true,
       value: (update: () => void) => {
         transitionCalls += 1;
+        transitionGeometry = {
+          x: document.documentElement.style.getPropertyValue(
+            "--ag-theme-reveal-x",
+          ),
+          y: document.documentElement.style.getPropertyValue(
+            "--ag-theme-reveal-y",
+          ),
+          radius: document.documentElement.style.getPropertyValue(
+            "--ag-theme-reveal-radius",
+          ),
+        };
         update();
         return {
           finished: Promise.resolve(),
@@ -34,14 +46,37 @@ describe("PreferenceControls", () => {
         </PreferencesProvider>,
       );
 
-      await user.click(
-        screen.getByRole("button", { name: /选择主题.*Gateway Dark/ }),
-      );
+      const themeButton = screen.getByRole("button", {
+        name: /选择主题.*Gateway Dark/,
+      });
+      vi.spyOn(themeButton, "getBoundingClientRect").mockReturnValue({
+        x: 900,
+        y: 20,
+        left: 900,
+        top: 20,
+        right: 940,
+        bottom: 60,
+        width: 40,
+        height: 40,
+        toJSON: () => ({}),
+      });
+
+      await user.click(themeButton);
       await user.click(
         await screen.findByRole("menuitem", { name: /Aerok Light/ }),
       );
 
       expect(transitionCalls).toBe(1);
+      expect(transitionGeometry).toEqual({
+        x: "920px",
+        y: "40px",
+        radius: `${Math.ceil(
+          Math.hypot(
+            Math.max(920, window.innerWidth - 920),
+            Math.max(40, window.innerHeight - 40),
+          ),
+        )}px`,
+      });
       expect(document.documentElement).toHaveAttribute("data-theme", "light");
       expect(document.documentElement).toHaveAttribute(
         "data-theme-id",
@@ -50,6 +85,17 @@ describe("PreferenceControls", () => {
       expect(document.documentElement).not.toHaveAttribute(
         "data-theme-transition",
       );
+      expect(
+        document.documentElement.style.getPropertyValue("--ag-theme-reveal-x"),
+      ).toBe("");
+      expect(
+        document.documentElement.style.getPropertyValue("--ag-theme-reveal-y"),
+      ).toBe("");
+      expect(
+        document.documentElement.style.getPropertyValue(
+          "--ag-theme-reveal-radius",
+        ),
+      ).toBe("");
       expect(localStorage.getItem("ag.console.theme")).toBe("light");
       expect(localStorage.getItem("ag.console.theme.id")).toBe("aerok-light");
       expect(
