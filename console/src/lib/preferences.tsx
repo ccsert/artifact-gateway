@@ -254,8 +254,10 @@ function storedLocale(): AppLocale {
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const { settings } = useSiteSettings();
   const availableThemes = useMemo(() => {
-    const enabled = new Set(settings.enabledThemeIds);
-    const themes = settings.availableThemes.filter((theme) =>
+    // Site-settings payloads from older builds may omit the theme lists; a
+    // missing list must degrade to the built-in themes, not blank the app.
+    const enabled = new Set(settings.enabledThemeIds ?? []);
+    const themes = (settings.availableThemes ?? []).filter((theme) =>
       enabled.has(theme.id),
     );
     return themes.length > 0 ? themes : defaultConsoleThemes;
@@ -268,7 +270,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   // Keep a just-disabled theme mounted for one render so the effect below can
   // animate to the configured default instead of swapping the whole UI first.
   const activeTheme =
-    settings.availableThemes.find((theme) => theme.id === themeId) ??
+    (settings.availableThemes ?? []).find((theme) => theme.id === themeId) ??
     availableThemes.find((theme) => theme.id === settings.defaultThemeId) ??
     availableThemes[0] ??
     defaultConsoleThemes[0];

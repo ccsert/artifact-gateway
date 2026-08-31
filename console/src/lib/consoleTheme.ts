@@ -382,6 +382,14 @@ export function resolveConsoleTheme(theme: ConsoleTheme) {
 
 export function applyConsoleTheme(theme: ConsoleTheme, root: HTMLElement) {
   const token = resolveConsoleTheme(theme);
+  // Ant Design derives *Bg/*Border alias tokens from the seed hue with its own
+  // palette ramp. Dark seeds (e.g. light-theme success #047857) produce murky
+  // mid-tone washes, so the shell derives translucent washes from the semantic
+  // colors directly instead. The alphas mirror the styles.css bootstrap values.
+  const softAlpha = theme.mode === "dark" ? 12 : 8;
+  const borderAlpha = theme.mode === "dark" ? 28 : 20;
+  const mix = (color: string, alpha: number) =>
+    `color-mix(in srgb, ${color} ${alpha}%, transparent)`;
   const variables: Record<string, string> = {
     "--ag-bg": token.colorBgLayout,
     "--ag-bg-grad-a": token.colorBgLayout,
@@ -393,20 +401,20 @@ export function applyConsoleTheme(theme: ConsoleTheme, root: HTMLElement) {
     "--ag-border": token.colorBorder,
     "--ag-border-subtle": token.colorBorderSecondary,
     "--ag-brand": token.colorPrimary,
-    "--ag-brand-soft": token.colorPrimaryBg,
-    "--ag-brand-glow": token.controlOutline,
+    "--ag-brand-soft": mix(token.colorPrimary, softAlpha),
+    "--ag-brand-glow": mix(token.colorPrimary, borderAlpha),
     "--ag-danger": token.colorError,
-    "--ag-danger-soft": token.colorErrorBg,
-    "--ag-danger-border": token.colorErrorBorder,
+    "--ag-danger-soft": mix(token.colorError, softAlpha),
+    "--ag-danger-border": mix(token.colorError, borderAlpha),
     "--ag-success": token.colorSuccess,
-    "--ag-success-soft": token.colorSuccessBg,
-    "--ag-success-border": token.colorSuccessBorder,
+    "--ag-success-soft": mix(token.colorSuccess, softAlpha),
+    "--ag-success-border": mix(token.colorSuccess, borderAlpha),
     "--ag-warning": token.colorWarning,
-    "--ag-warning-soft": token.colorWarningBg,
-    "--ag-warning-border": token.colorWarningBorder,
+    "--ag-warning-soft": mix(token.colorWarning, softAlpha),
+    "--ag-warning-border": mix(token.colorWarning, borderAlpha),
     "--ag-info": token.colorInfo,
-    "--ag-info-soft": token.colorInfoBg,
-    "--ag-info-border": token.colorInfoBorder,
+    "--ag-info-soft": mix(token.colorInfo, softAlpha),
+    "--ag-info-border": mix(token.colorInfo, borderAlpha),
     "--ag-text": token.colorText,
     "--ag-text-strong": token.colorTextHeading,
     "--ag-text-dim": token.colorTextSecondary,
@@ -421,7 +429,10 @@ export function applyConsoleTheme(theme: ConsoleTheme, root: HTMLElement) {
     "--ag-table-hover": token.colorFillContent,
     "--ag-scrollbar": token.colorBorder,
     "--ag-scrollbar-hover": token.colorTextQuaternary,
-    "--ag-selection-bg": token.colorPrimaryBg,
+    "--ag-selection-bg": mix(
+      token.colorPrimary,
+      theme.mode === "dark" ? 30 : 20,
+    ),
     "--ag-selection-text": token.colorPrimaryText,
     "--ag-nav-indicator-start": token.colorPrimaryHover,
     "--ag-nav-indicator-end": token.colorPrimaryActive,

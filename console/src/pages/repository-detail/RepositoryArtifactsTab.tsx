@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Checkbox, Input, Select, Table } from "antd";
+import { FolderOutlined, UnorderedListOutlined } from "@ant-design/icons";
+import { Button, Checkbox, Input, Segmented, Select, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   clearProxyNegativeCache,
@@ -51,6 +52,7 @@ import {
 } from "../../lib/rawPath";
 import { mavenGA, mavenUsage, mavenVersion } from "../../lib/usage";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
+import { RepositoryBrowseTree } from "./RepositoryBrowseTree";
 import {
   CopyButton,
   RepositorySnippetBlock as SnippetBlock,
@@ -767,6 +769,7 @@ export function RepositoryArtifactsTab({
       ? decodeRawPathForDisplay(artifactTarget)
       : artifactTarget,
   );
+  const [view, setView] = useState<"directory" | "list">("list");
   const [rows, setRows] = useState<ArtifactRow[]>([]);
   const [nextToken, setNextToken] = useState<string | undefined>();
   const [proxyPage, setProxyPage] = useState(1);
@@ -785,6 +788,11 @@ export function RepositoryArtifactsTab({
   const proxyAPT = format === "apt" && repo.type === "proxy";
   const hostedAPT = format === "apt" && repo.type === "hosted";
   const canUploadRaw = format === "raw" && repo.type !== "proxy";
+  const supportsDirectory = format === "maven" || format === "raw";
+
+  useEffect(() => {
+    setView("list");
+  }, [repo.id]);
 
   const load = useCallback(
     async (query: string, pageToken?: string) => {
@@ -1433,9 +1441,70 @@ export function RepositoryArtifactsTab({
     );
   };
 
+  if (view === "directory" && supportsDirectory) {
+    return (
+      <div className="ag-artifact-browser">
+        <div className="ag-artifact-view-toolbar">
+          <Segmented<"directory" | "list">
+            aria-label={text("制品浏览视图", "Artifact browse view")}
+            options={[
+              {
+                value: "directory",
+                label: text("目录", "Directory"),
+                icon: <FolderOutlined />,
+              },
+              {
+                value: "list",
+                label: text("列表", "List"),
+                icon: <UnorderedListOutlined />,
+              },
+            ]}
+            value={view}
+            onChange={setView}
+          />
+          {canUploadRaw && (
+            <RawUploadDialog repo={repo} onUploaded={() => void load(q)} />
+          )}
+        </div>
+        <RepositoryBrowseTree
+          repo={repo}
+          onOpenInList={(coordinate) => {
+            const query =
+              format === "raw"
+                ? decodeRawPathForDisplay(coordinate)
+                : coordinate;
+            setView("list");
+            setQ(query);
+            setExpandedImage(null);
+            void load(query);
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+    <div className="ag-artifact-browser">
+      <div className="ag-artifact-view-toolbar">
+        {supportsDirectory && (
+          <Segmented<"directory" | "list">
+            aria-label={text("制品浏览视图", "Artifact browse view")}
+            options={[
+              {
+                value: "directory",
+                label: text("目录", "Directory"),
+                icon: <FolderOutlined />,
+              },
+              {
+                value: "list",
+                label: text("列表", "List"),
+                icon: <UnorderedListOutlined />,
+              },
+            ]}
+            value={view}
+            onChange={setView}
+          />
+        )}
         <Input.Search
           allowClear
           className="w-80"

@@ -1,5 +1,28 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { defaultConsoleThemes } from "../src/lib/consoleTheme";
 import { authenticateAsAdmin } from "./support/auth";
+
+async function mockDefaultSiteSettings(page: Page) {
+  await page.route("**/api/v2/site-settings", (route) =>
+    route.fulfill({
+      json: {
+        version: "1",
+        siteName: "Artifact Gateway",
+        logoUrl: "",
+        brandMark: "AG",
+        enabledThemeIds: [
+          "gateway-dark",
+          "gateway-light",
+          "aerok-dark",
+          "aerok-light",
+        ],
+        defaultThemeId: "gateway-dark",
+        availableThemes: defaultConsoleThemes,
+        updatedAt: "2026-08-27T00:00:00Z",
+      },
+    }),
+  );
+}
 
 async function mockFormatProfiles(page: Page) {
   await page.route("**/api/v2/formats", (route) =>
@@ -162,10 +185,17 @@ test("theme and language preferences persist on the sign-in surface", async ({
   ).toBeVisible();
 });
 
-test("generated sign-in artwork stays theme-aware and size-appropriate", async ({
+test("sign-in artwork and source-derived backdrop stay theme-aware and size-appropriate", async ({
   browser,
   page,
 }, testInfo) => {
+  const runtimeErrors: string[] = [];
+  page.on("pageerror", (error) => runtimeErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") runtimeErrors.push(message.text());
+  });
+
+  await mockDefaultSiteSettings(page);
   await page.route("**/auth/session", (route) =>
     route.fulfill({ json: { authenticated: false } }),
   );
@@ -183,6 +213,34 @@ test("generated sign-in artwork stays theme-aware and size-appropriate", async (
 
   const brandPanel = page.locator(".ag-login-brand-panel");
   await expect(brandPanel).toBeVisible();
+  const beams = page.locator('[data-kokonutui-component="beams-background"]');
+  const beamsCanvas = beams.locator("canvas");
+  await expect(beams).toBeVisible();
+  await expect(brandPanel.locator("canvas")).toHaveCount(0);
+  await expect(beamsCanvas).toHaveAttribute("data-ready", "true");
+  const initialBeamFrame = await beamsCanvas.evaluate((canvas) =>
+    (canvas as HTMLCanvasElement).toDataURL(),
+  );
+  await expect
+    .poll(() =>
+      beamsCanvas.evaluate((canvas) =>
+        (canvas as HTMLCanvasElement).toDataURL(),
+      ),
+    )
+    .not.toBe(initialBeamFrame);
+  const beamsLayout = await beams.evaluate((backdrop) => {
+    const panel = backdrop.parentElement!;
+    const backdropBox = backdrop.getBoundingClientRect();
+    const panelBox = panel.getBoundingClientRect();
+    return {
+      widthDelta: Math.abs(backdropBox.width - panelBox.width),
+      heightDelta: Math.abs(backdropBox.height - panelBox.height),
+      active: backdrop.getAttribute("data-active"),
+    };
+  });
+  expect(beamsLayout.widthDelta).toBeLessThanOrEqual(1);
+  expect(beamsLayout.heightDelta).toBeLessThanOrEqual(1);
+  expect(beamsLayout.active).toBe("true");
   const brandLayout = await brandPanel.evaluate((panel) => {
     const panelBox = panel.getBoundingClientRect();
     const copyBox = panel
@@ -260,6 +318,8 @@ test("generated sign-in artwork stays theme-aware and size-appropriate", async (
   await page.getByRole("menuitem", { name: /Gateway Light/ }).click();
   await lightArtworkResponse;
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(beams).toHaveAttribute("data-color-mode", "light");
+  await expect(beamsCanvas).toHaveAttribute("data-ready", "true");
   await expect
     .poll(() =>
       page
@@ -299,11 +359,16 @@ test("generated sign-in artwork stays theme-aware and size-appropriate", async (
     viewport: { width: 900, height: 900 },
   });
   const mobilePage = await mobileContext.newPage();
+  mobilePage.on("pageerror", (error) => runtimeErrors.push(error.message));
+  mobilePage.on("console", (message) => {
+    if (message.type() === "error") runtimeErrors.push(message.text());
+  });
   const mobileArtworkRequests: string[] = [];
   mobilePage.on("request", (request) => {
     if (request.url().includes("artifact-control-plane"))
       mobileArtworkRequests.push(request.url());
   });
+  await mockDefaultSiteSettings(mobilePage);
   await mobilePage.route("**/auth/session", (route) =>
     route.fulfill({ json: { authenticated: false } }),
   );
@@ -315,6 +380,10 @@ test("generated sign-in artwork stays theme-aware and size-appropriate", async (
   await expect(mobilePage.locator(".ag-login-brand-panel")).toBeHidden();
   await expect(mobilePage.locator(".ag-login-panel")).toBeVisible();
   expect(mobileArtworkRequests).toEqual([]);
+  await expect(
+    mobilePage.locator('[data-kokonutui-component="beams-background"]'),
+  ).toHaveAttribute("data-active", "false");
+  await expect(mobilePage.locator(".ag-login-beams canvas")).toHaveCount(0);
   await expect
     .poll(() =>
       mobilePage.evaluate(
@@ -331,6 +400,38 @@ test("generated sign-in artwork stays theme-aware and size-appropriate", async (
     });
   }
   await mobileContext.close();
+
+  const reducedMotionContext = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    reducedMotion: "reduce",
+  });
+  const reducedMotionPage = await reducedMotionContext.newPage();
+  reducedMotionPage.on("pageerror", (error) =>
+    runtimeErrors.push(error.message),
+  );
+  reducedMotionPage.on("console", (message) => {
+    if (message.type() === "error") runtimeErrors.push(message.text());
+  });
+  await mockDefaultSiteSettings(reducedMotionPage);
+  await reducedMotionPage.route("**/auth/session", (route) =>
+    route.fulfill({ json: { authenticated: false } }),
+  );
+  await reducedMotionPage.route("**/auth/oidc/config", (route) =>
+    route.fulfill({ json: { enabled: false } }),
+  );
+  await reducedMotionPage.goto("/login");
+  await reducedMotionPage.waitForLoadState("networkidle");
+  await expect(
+    reducedMotionPage.locator(".ag-login-brand-panel"),
+  ).toBeVisible();
+  await expect(
+    reducedMotionPage.locator('[data-kokonutui-component="beams-background"]'),
+  ).toHaveAttribute("data-active", "false");
+  await expect(reducedMotionPage.locator(".ag-login-beams canvas")).toHaveCount(
+    0,
+  );
+  await reducedMotionContext.close();
+  expect(runtimeErrors).toEqual([]);
 });
 
 test("OIDC, password, and token sign-in modes share a stable layout", async ({

@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { defaultConsoleThemes } from "../src/lib/consoleTheme";
 import { authenticateAsAdmin } from "./support/auth";
 
 async function measureArtwork(artwork: Locator) {
@@ -63,6 +64,34 @@ async function measureEmptyStateFlow(emptyState: Locator) {
   });
 }
 
+async function measureSplitEmptyState(emptyState: Locator) {
+  return emptyState.evaluate((root) => {
+    const rootBox = root.getBoundingClientRect();
+    const artwork = root
+      .querySelector<HTMLElement>("[data-empty-artwork]")!
+      .getBoundingClientRect();
+    const description = root
+      .querySelector<HTMLElement>(".ant-empty-description")!
+      .getBoundingClientRect();
+    const footer = root
+      .querySelector<HTMLElement>(".ant-empty-footer")!
+      .getBoundingClientRect();
+    return {
+      artworkDescriptionGap: description.left - artwork.right,
+      descriptionActionGap: footer.top - description.bottom,
+      artworkDescriptionOverlap: artwork.right > description.left,
+      descriptionActionOverlap: description.bottom > footer.top,
+      contentInside:
+        artwork.left >= rootBox.left &&
+        artwork.right <= rootBox.right &&
+        description.left >= rootBox.left &&
+        description.right <= rootBox.right &&
+        footer.left >= rootBox.left &&
+        footer.right <= rootBox.right,
+    };
+  });
+}
+
 function captureRuntimeErrors(page: Page) {
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
@@ -111,12 +140,38 @@ async function mockFormatProfiles(page: Page) {
   );
 }
 
+async function mockAnonymousShell(page: Page) {
+  await page.route("**/auth/session", (route) =>
+    route.fulfill({ json: { authenticated: false } }),
+  );
+  await page.route("**/api/v2/site-settings", (route) =>
+    route.fulfill({
+      json: {
+        version: "1",
+        siteName: "Artifact Gateway",
+        logoUrl: "",
+        brandMark: "AG",
+        enabledThemeIds: [
+          "gateway-dark",
+          "gateway-light",
+          "aerok-dark",
+          "aerok-light",
+        ],
+        defaultThemeId: "gateway-dark",
+        availableThemes: defaultConsoleThemes,
+        updatedAt: "2026-08-27T00:00:00Z",
+      },
+    }),
+  );
+}
+
 test("public catalog empty state uses responsive theme artwork", async ({
   page,
-}) => {
+}, testInfo) => {
   const runtimeErrors = captureRuntimeErrors(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await useDarkChinesePreferences(page);
+  await mockAnonymousShell(page);
   await page.route("**/api/v2/public/repositories", (route) =>
     route.fulfill({ json: { enabled: true, items: [] } }),
   );
@@ -141,9 +196,41 @@ test("public catalog empty state uses responsive theme artwork", async ({
     overflowsViewport: false,
   });
   const desktop = await measureArtwork(artwork);
-  expect(desktop.width).toBeLessThanOrEqual(210);
-  expect(desktop.density).toBeGreaterThanOrEqual(2.8);
-  expectBoundedEmptyStateFlow(await measureEmptyStateFlow(emptyState));
+  expect(desktop.width).toBeLessThanOrEqual(330);
+  expect(desktop.density).toBeGreaterThanOrEqual(1.8);
+  const desktopFlow = await measureSplitEmptyState(emptyState);
+  expect(desktopFlow.artworkDescriptionGap).toBeGreaterThanOrEqual(28);
+  expect(desktopFlow.descriptionActionGap).toBeGreaterThanOrEqual(12);
+  expect(desktopFlow.descriptionActionGap).toBeLessThanOrEqual(26);
+  expect(desktopFlow.artworkDescriptionOverlap).toBe(false);
+  expect(desktopFlow.descriptionActionOverlap).toBe(false);
+  expect(desktopFlow.contentInside).toBe(true);
+
+  const alignedSurfaces = await page
+    .locator(".ag-public-browse-page")
+    .evaluate((root) => {
+      const hero = root.querySelector<HTMLElement>(".ag-page-primary")!;
+      const empty = root.querySelector<HTMLElement>(
+        ".ag-public-catalog-empty-surface",
+      )!;
+      const heroBox = hero.getBoundingClientRect();
+      const emptyBox = empty.getBoundingClientRect();
+      return {
+        leftDelta: Math.abs(heroBox.left - emptyBox.left),
+        rightDelta: Math.abs(heroBox.right - emptyBox.right),
+        widthDelta: Math.abs(heroBox.width - emptyBox.width),
+      };
+    });
+  expect(alignedSurfaces.leftDelta).toBeLessThanOrEqual(1);
+  expect(alignedSurfaces.rightDelta).toBeLessThanOrEqual(1);
+  expect(alignedSurfaces.widthDelta).toBeLessThanOrEqual(1);
+
+  if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+    await page.screenshot({
+      path: testInfo.outputPath("public-catalog-empty-desktop-dark.png"),
+      fullPage: true,
+    });
+  }
 
   await page.getByRole("button", { name: /选择主题.*Gateway Dark/ }).click();
   await page.getByRole("menuitem", { name: /Gateway Light/ }).click();
@@ -154,11 +241,17 @@ test("public catalog empty state uses responsive theme artwork", async ({
   );
   await page.setViewportSize({ width: 390, height: 844 });
   const mobile = await measureArtwork(artwork);
-  expect(mobile.width).toBeLessThanOrEqual(174);
+  expect(mobile.width).toBeLessThanOrEqual(190);
   expect(mobile.density).toBeGreaterThanOrEqual(3);
   expect(mobile.cornerAlpha).toBe(0);
   expect(mobile.overflowsViewport).toBe(false);
   expectBoundedEmptyStateFlow(await measureEmptyStateFlow(emptyState));
+  if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+    await page.screenshot({
+      path: testInfo.outputPath("public-catalog-empty-mobile-light.png"),
+      fullPage: true,
+    });
+  }
   expect(runtimeErrors.consoleErrors).toEqual([]);
   expect(runtimeErrors.pageErrors).toEqual([]);
 });

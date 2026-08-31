@@ -84,4 +84,34 @@ describe("EmptyState", () => {
       screen.getByRole("button", { name: "New repository" }),
     ).toBeVisible();
   });
+
+  it("supports a split layout without changing the empty-state semantics", () => {
+    render(
+      <PreferencesProvider>
+        <EmptyState
+          layout="split"
+          className="catalog-empty"
+          title="No public repositories"
+          hint="Public sources will appear here."
+          action={<button type="button">Open management</button>}
+          image={
+            <EmptyStateArtwork
+              darkSrc="/empty-dark.webp"
+              lightSrc="/empty-light.webp"
+              name="public-catalog"
+            />
+          }
+        />
+      </PreferencesProvider>,
+    );
+
+    const empty = screen
+      .getByText("No public repositories")
+      .closest(".ant-empty");
+    expect(empty).toHaveClass("ag-empty-state-split", "catalog-empty");
+    expect(screen.getByText("Public sources will appear here.")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Open management" }),
+    ).toBeVisible();
+  });
 });

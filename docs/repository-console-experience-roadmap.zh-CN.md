@@ -26,6 +26,20 @@ Repository Detail 使用 Overview、Artifacts、Scanning、Security、Access Gra
 - Lifecycle state、Tombstone 恢复窗口、Job 状态与错误。
 - Scanner evidence、Quarantine 和独立 read-enforcement policy。
 
+## Repository 目录树
+
+Console 应补充目录树交互，但不能假装所有格式都存在物理文件夹。目录树是只读、格式感知的投影：Maven 可展示 `groupId -> artifactId -> version -> asset`，Raw 可展示路径分段；其他格式必须由专用 adapter 定义，不能由浏览器猜路径。
+
+建议合同如下：
+
+- `GET /api/v2/repositories/{repositoryId}/browse` 按可选的 opaque `parent` 返回直属子节点，并使用有界 `pageSize` 与 opaque `pageToken`。
+- 节点显式区分 `directory`、`namespace`、`component`、`version`、`asset`；可操作叶子携带现有详情流程需要的规范 coordinate/path 与不可变证据。
+- 返回子节点前先执行授权与匿名策略，各格式 adapter 负责生命周期可见性；Quarantine 读阻断仍在原生协议边界执行。未来 Group 结果还需携带来源成员和优先级；Proxy 只暴露自身已知缓存范围。
+- 节点 ID 与 cursor 不由浏览器重建，并按适用范围签名绑定 Repository、format、parent、principal、过期时间和稳定排序位置。
+- 合成目录不自动拥有删除语义。未来若支持子树清理，必须由服务端解析不可变身份、先展示有界 dry-run，再通过可审计异步 Job 执行。
+
+首批已交付 Maven、Raw Hosted adapter 与 Proxy 本地缓存边界，同时验证语义层级和路径层级。现有列表/搜索继续保留，用于跨 Repository 发现与无障碍访问；Group provenance 和其他格式 adapter 仍是后续工作。
+
 ## Maven Proxy 浏览体验
 
 Maven 应按 groupId/artifactId/version/build/asset 分层显示，而不是平铺对象键。SNAPSHOT 显示 timestamp/build number，并把 POM、主 JAR、classifier 与 Gateway 派生 checksum 归为同一 publication。
@@ -89,6 +103,9 @@ Operations 显示 circuit、cache hit/miss/negative、最近失败和 collection
 - 服务端 cursor、filter、sorting 和权限过滤。
 - 跨 Repository 搜索与精确 digest/coordinate lookup。
 - Group owner 与 Proxy cache state 使用同一解析来源。
+- 新增直属子节点 browse contract，使用 opaque node ID/cursor。
+- 已实现 Maven、Raw adapter 和 Proxy 本地缓存边界；Group provenance 待实现。
+- Console 增加 lazy、键盘可访问的目录树，同时保留列表/搜索。
 
 ### 阶段 3：容量与存储
 

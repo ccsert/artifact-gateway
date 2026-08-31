@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import {
   ArrowLeftOutlined,
   ArrowRightOutlined,
@@ -83,6 +83,23 @@ interface PublicRepository {
 interface PublicRepositoryCatalogResponse {
   enabled?: boolean;
   items?: PublicRepository[];
+}
+
+function PublicBrowseStateSurface({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card
+      className={`ag-public-state-surface overflow-hidden ${className}`}
+      bodyClassName="p-5 sm:p-6"
+    >
+      {children}
+    </Card>
+  );
 }
 
 interface ConanRevision {
@@ -2013,9 +2030,9 @@ export function PublicBrowsePage() {
   };
 
   return (
-    <main className="ag-login-shell min-h-screen px-4 py-6 text-zinc-200 sm:px-6 sm:py-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="ag-public-browse-header mb-6 flex flex-wrap items-center justify-between gap-4">
+    <main className="ag-public-browse-shell min-h-screen px-4 py-6 text-zinc-200 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+      <div className="ag-public-browse-page ag-page-stack mx-auto w-full max-w-[1440px]">
+        <div className="ag-public-browse-header ag-page-header flex flex-wrap items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <SiteBrandMark className="flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white" />
             <div className="min-w-0">
@@ -2043,7 +2060,7 @@ export function PublicBrowsePage() {
         </div>
         {!repositoryId ? (
           <Card
-            className="overflow-hidden border-zinc-800/90 bg-zinc-950/35"
+            className="ag-page-primary overflow-hidden border-zinc-800/90 bg-zinc-950/35"
             bodyClassName="p-6 sm:p-8 lg:p-10"
           >
             <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
@@ -2064,18 +2081,20 @@ export function PublicBrowsePage() {
                     "Search images, dependencies, and packages from repositories explicitly published by your team. Reading needs no sign-in; publishing, grants, and repository administration always require authentication.",
                   )}
                 </p>
-                <Input
-                  allowClear
-                  size="large"
-                  prefix={<SearchOutlined className="text-zinc-500" />}
-                  className="mt-6 max-w-2xl"
-                  placeholder={text(
-                    "搜索仓库名称或格式",
-                    "Search repository name or format",
-                  )}
-                  value={catalogQuery}
-                  onChange={(event) => setCatalogQuery(event.target.value)}
-                />
+                {(!repositories || repositories.length > 0) && (
+                  <Input
+                    allowClear
+                    size="large"
+                    prefix={<SearchOutlined className="text-zinc-500" />}
+                    className="mt-6 max-w-2xl"
+                    placeholder={text(
+                      "搜索仓库名称或格式",
+                      "Search repository name or format",
+                    )}
+                    value={catalogQuery}
+                    onChange={(event) => setCatalogQuery(event.target.value)}
+                  />
+                )}
               </div>
               <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10 shadow-2xl shadow-black/20">
                 <div className="bg-zinc-950/70 p-4">
@@ -2088,7 +2107,7 @@ export function PublicBrowsePage() {
                 </div>
                 <div className="bg-zinc-950/70 p-4">
                   <div className="text-2xl font-semibold text-zinc-50">
-                    {publicFormats.length || "—"}
+                    {repositories ? publicFormats.length : "—"}
                   </div>
                   <div className="mt-1 text-xs text-zinc-500">
                     {text("种制品格式", "artifact formats")}
@@ -2157,85 +2176,98 @@ export function PublicBrowsePage() {
           </Card>
         )}
         <div
+          data-public-browse-workspace
           className={
             selectedRepository
-              ? "mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start"
-              : "mt-6"
+              ? "grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start"
+              : ""
           }
         >
           <section>
             {catalogError ? (
-              <ErrorBanner error={catalogError} />
+              <PublicBrowseStateSurface>
+                <ErrorBanner error={catalogError} />
+              </PublicBrowseStateSurface>
             ) : !repositories ? (
-              <Loading
-                label={text(
-                  "正在读取公开仓库…",
-                  "Loading public repositories…",
-                )}
-              />
-            ) : anonymousEnabled === false ? (
-              <EmptyState
-                title={text(
-                  "全局匿名读取未启用",
-                  "Global anonymous reads are disabled",
-                )}
-                hint={text(
-                  "请管理员在访问控制中启用全局匿名读取，仓库的匿名读取设置才会生效。",
-                  "An administrator must enable global anonymous reads before repository settings take effect.",
-                )}
-                action={
-                  <Link
-                    to="/access"
-                    className="text-sm text-cyan-300 hover:text-cyan-200"
-                  >
-                    {text("前往访问控制", "Open access control")}
-                  </Link>
-                }
-              />
-            ) : repositoryId && !selectedRepository ? (
-              <EmptyState
-                title={text(
-                  "公开仓库不存在或不可见",
-                  "Public repository not found or visible",
-                )}
-                hint={text(
-                  "返回公开仓库目录，选择一个已启用匿名读取的仓库。",
-                  "Return to the catalog and choose a repository with anonymous reads enabled.",
-                )}
-                action={
-                  <Button type="primary" onClick={() => setParams({})}>
-                    {text("返回目录", "Back to catalog")}
-                  </Button>
-                }
-              />
-            ) : !repositoryId ? (
-              repositories.length === 0 ? (
-                <EmptyState
-                  title={text("暂无公开仓库", "No public repositories")}
-                  hint={text(
-                    "管理员需先启用全局匿名访问，并在仓库上允许匿名读取。",
-                    "An administrator must enable global anonymous access and allow reads on a repository.",
+              <PublicBrowseStateSurface>
+                <Loading
+                  label={text(
+                    "正在读取公开仓库…",
+                    "Loading public repositories…",
                   )}
-                  image={
-                    <EmptyStateArtwork
-                      darkSrc={emptyPublicCatalogDark}
-                      lightSrc={emptyPublicCatalogLight}
-                      name="public-catalog"
-                    />
-                  }
+                />
+              </PublicBrowseStateSurface>
+            ) : anonymousEnabled === false ? (
+              <PublicBrowseStateSurface>
+                <EmptyState
+                  title={text(
+                    "全局匿名读取未启用",
+                    "Global anonymous reads are disabled",
+                  )}
+                  hint={text(
+                    "请管理员在访问控制中启用全局匿名读取，仓库的匿名读取设置才会生效。",
+                    "An administrator must enable global anonymous reads before repository settings take effect.",
+                  )}
                   action={
                     <Link
-                      to={authenticated ? "/" : "/login"}
-                      className="text-sm font-medium text-cyan-300 hover:text-cyan-200"
+                      to="/access"
+                      className="text-sm text-cyan-300 hover:text-cyan-200"
                     >
-                      {t(
-                        authenticated
-                          ? "public.managementConsole"
-                          : "public.managementLogin",
-                      )}
+                      {text("前往访问控制", "Open access control")}
                     </Link>
                   }
                 />
+              </PublicBrowseStateSurface>
+            ) : repositoryId && !selectedRepository ? (
+              <PublicBrowseStateSurface>
+                <EmptyState
+                  title={text(
+                    "公开仓库不存在或不可见",
+                    "Public repository not found or visible",
+                  )}
+                  hint={text(
+                    "返回公开仓库目录，选择一个已启用匿名读取的仓库。",
+                    "Return to the catalog and choose a repository with anonymous reads enabled.",
+                  )}
+                  action={
+                    <Button type="primary" onClick={() => setParams({})}>
+                      {text("返回目录", "Back to catalog")}
+                    </Button>
+                  }
+                />
+              </PublicBrowseStateSurface>
+            ) : !repositoryId ? (
+              repositories.length === 0 ? (
+                <PublicBrowseStateSurface className="ag-public-catalog-empty-surface">
+                  <EmptyState
+                    layout="split"
+                    className="ag-public-catalog-empty"
+                    title={text("暂无公开仓库", "No public repositories")}
+                    hint={text(
+                      "管理员需先启用全局匿名访问，并在仓库上允许匿名读取。公开仓库出现后，这里会直接展示可匿名使用的来源与格式。",
+                      "An administrator must enable global anonymous access and allow reads on a repository. Public sources and formats will appear here as soon as they are available.",
+                    )}
+                    image={
+                      <EmptyStateArtwork
+                        darkSrc={emptyPublicCatalogDark}
+                        lightSrc={emptyPublicCatalogLight}
+                        name="public-catalog"
+                      />
+                    }
+                    action={
+                      <Button
+                        type="primary"
+                        href={authenticated ? "/" : "/login"}
+                      >
+                        {t(
+                          authenticated
+                            ? "public.managementConsole"
+                            : "public.managementLogin",
+                        )}
+                      </Button>
+                    }
+                  />
+                </PublicBrowseStateSurface>
               ) : (
                 <div>
                   <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -2376,30 +2408,36 @@ export function PublicBrowsePage() {
                 </div>
               )
             ) : error ? (
-              <ErrorBanner error={error} />
+              <PublicBrowseStateSurface>
+                <ErrorBanner error={error} />
+              </PublicBrowseStateSurface>
             ) : !items ? (
-              <Loading
-                label={text("正在读取公开制品…", "Loading public artifacts…")}
-              />
+              <PublicBrowseStateSurface>
+                <Loading
+                  label={text("正在读取公开制品…", "Loading public artifacts…")}
+                />
+              </PublicBrowseStateSurface>
             ) : items.length === 0 ? (
-              <EmptyState
-                compact
-                title={text(
-                  "没有匹配的公开制品",
-                  "No matching public artifacts",
-                )}
-                hint={text(
-                  "确认仓库已启用匿名读取，或调整查询条件。",
-                  "Confirm anonymous reads are enabled or adjust the query.",
-                )}
-                image={
-                  <EmptyStateArtwork
-                    darkSrc={emptyPublicCatalogDark}
-                    lightSrc={emptyPublicCatalogLight}
-                    name="public-catalog"
-                  />
-                }
-              />
+              <PublicBrowseStateSurface>
+                <EmptyState
+                  layout="split"
+                  title={text(
+                    "没有匹配的公开制品",
+                    "No matching public artifacts",
+                  )}
+                  hint={text(
+                    "确认仓库已启用匿名读取，或调整上方查询条件。",
+                    "Confirm anonymous reads are enabled or adjust the query above.",
+                  )}
+                  image={
+                    <EmptyStateArtwork
+                      darkSrc={emptyPublicCatalogDark}
+                      lightSrc={emptyPublicCatalogLight}
+                      name="public-catalog"
+                    />
+                  }
+                />
+              </PublicBrowseStateSurface>
             ) : (
               <Card>
                 <div className="flex items-center justify-between border-b border-zinc-800/80 px-4 py-3">

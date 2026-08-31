@@ -1017,9 +1017,9 @@ export function RepositoryDetailPage() {
           {tab === "artifacts" && (
             <RepositoryArtifactsTab
               repo={repo}
-              canWrite={effectiveAccess?.permissions.write.allowed === true}
+              canWrite={effectiveAccess?.permissions?.write.allowed === true}
               canQuarantine={
-                effectiveAccess?.permissions.admin.allowed === true
+                effectiveAccess?.permissions?.admin.allowed === true
               }
               artifactTarget={artifactTarget}
               buildTarget={buildTarget}
@@ -1068,9 +1068,9 @@ export function RepositoryDetailPage() {
               capabilitiesLoading={capsLoading}
               capabilitiesError={capsError}
               canManage={
-                effectiveAccess?.permissions.intelligence.allowed === true
+                effectiveAccess?.permissions?.intelligence.allowed === true
               }
-              canViewJobs={effectiveAccess?.permissions.admin.allowed === true}
+              canViewJobs={effectiveAccess?.permissions?.admin.allowed === true}
             />
           )}
           {tab === "security" && (

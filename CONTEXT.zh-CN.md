@@ -20,6 +20,8 @@ Artifact Gateway 是多格式制品库，通过原生包协议存储、治理和
 
 **Asset（资产）**：属于 Artifact 的一个不可变字节对象，例如 Maven JAR、OCI blob 或 Conan package file。
 
+**Browse Node（浏览节点）**：Repository 目录树使用的只读、格式感知导航投影。节点可以表示合成目录、命名空间、组件、版本或 Asset，但它不是 Artifact Identity，也不代表对象存储中的物理目录。节点 ID 与分页游标由服务端签发且对客户端不透明。避免称为目录 owner、对象存储目录或客户端拼装坐标。
+
 **Raw Path Reference（Raw 路径引用）**：Repository 本地、可变的规范路径，原子指向一个已验证的不可变内容对象。标准 PUT 会替换当前映射；路径与 SHA-256 摘要对才是治理、晋级和复制使用的不可变身份。不要称为不可变 Raw 坐标或对象存储 key。
 
 **Service Account**：CI 或外部应用使用的稳定非人类授权 principal。Grant 绑定 `service-account:<id>`，凭证轮换时不变；Service Account 没有全局角色。不要把它与 API Key、机器人用户或凭证混称。

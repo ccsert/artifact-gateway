@@ -656,7 +656,9 @@ export function GroupsPage() {
       width: 140,
       render: (anonymousRead: boolean) => (
         <Badge tone={anonymousRead ? "green" : "zinc"}>
-          {anonymousRead ? "anonymous read" : "private"}
+          {anonymousRead
+            ? text("匿名可读", "Anonymous read")
+            : text("私有", "Private")}
         </Badge>
       ),
     },

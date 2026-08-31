@@ -13,6 +13,8 @@ paths:
     "$ref": "./management/formats.yaml#/formats"
   "/artifact-search":
     "$ref": "./management/search.yaml#/artifact_search"
+  "/repositories/{repositoryId}/browse":
+    "$ref": "./management/search.yaml#/repositories_repositoryId_browse"
   "/authentication/oidc":
     "$ref": "./management/authentication.yaml#/oidc_settings"
   "/authentication/oidc:test":
@@ -73,6 +75,10 @@ paths:
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts_artifactId"
 components:
   schemas:
+    BrowseNode:
+      "$ref": "./components/schemas.yaml#/BrowseNode"
+    BrowseNodePage:
+      "$ref": "./components/schemas.yaml#/BrowseNodePage"
     Format:
       "$ref": "./components/schemas.yaml#/Format"
     FormatProfile:

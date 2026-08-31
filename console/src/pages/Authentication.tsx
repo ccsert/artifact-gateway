@@ -265,10 +265,9 @@ export function AuthenticationPage() {
           {
             label: text("配置来源", "Configuration source"),
             value: sourceLabel,
-            hint: text(
-              `版本 ${settings.version}`,
-              `Version ${settings.version}`,
-            ),
+            hint: settings.version
+              ? text(`版本 ${settings.version}`, `Version ${settings.version}`)
+              : text("版本未知", "Version unknown"),
           },
           {
             label: text("客户端密钥", "Client secret"),
@@ -496,7 +495,7 @@ export function AuthenticationPage() {
                   </div>
                   <div>
                     <dt>{text("版本", "Version")}</dt>
-                    <dd className="font-mono">{settings.version}</dd>
+                    <dd className="font-mono">{settings.version || "—"}</dd>
                   </div>
                   <div>
                     <dt>{text("其他节点", "Other nodes")}</dt>

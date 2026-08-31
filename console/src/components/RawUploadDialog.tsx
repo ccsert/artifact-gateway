@@ -38,18 +38,10 @@ export function RawUploadDialog({
 
   const submit = async () => {
     if (!file) return;
-    const targetPath = path === "" ? file.name : path;
-    if (targetPath.startsWith("/")) {
-      setError(
-        new Error(
-          text(
-            "目标路径必须相对于仓库根，不能以 / 开头。",
-            "The target path must be relative to the repository root and cannot start with /.",
-          ),
-        ),
-      );
-      return;
-    }
+    const enteredPath = path === "" ? file.name : path;
+    const targetPath = enteredPath.startsWith("/")
+      ? enteredPath.slice(1)
+      : enteredPath;
     const rawSegments = targetPath.split("/");
     if (
       rawSegments.length === 0 ||
@@ -98,6 +90,7 @@ export function RawUploadDialog({
       );
       return;
     }
+    if (path !== "" && path !== targetPath) setPath(targetPath);
     setBusy(true);
     setError(null);
     try {
@@ -200,8 +193,8 @@ export function RawUploadDialog({
           <Field
             label={text("目标路径", "Target path")}
             hint={text(
-              "相对于仓库根且不能以 / 开头；留空则用文件名。支持中文、空格和括号；编码后最多 4096 字节，不能使用空路径段、.、..、反斜杠、控制字符或双向格式化字符。",
-              "Relative to the repository root and cannot start with /. Leave empty to use the file name. Unicode, spaces, and parentheses are supported up to 4096 encoded bytes; empty, dot, dot-dot, backslash, control, and bidirectional formatting characters are not.",
+              "相对于仓库根；可以用一个前导 / 明确表示仓库根，上传时会自动转换。留空则用文件名。支持中文、空格和括号；编码后最多 4096 字节，不能使用空路径段、.、..、反斜杠、控制字符或双向格式化字符。",
+              "Relative to the repository root. One optional leading / may explicitly represent the repository root and is removed on upload. Leave empty to use the file name. Unicode, spaces, and parentheses are supported up to 4096 encoded bytes; empty, dot, dot-dot, backslash, control, and bidirectional formatting characters are not.",
             )}
           >
             <Input

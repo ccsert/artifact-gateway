@@ -2087,6 +2087,60 @@ ArtifactSummaryPage:
         "$ref": "#/ArtifactSummary"
     nextPageToken:
       type: string
+BrowseNodeKind:
+  type: string
+  enum: [directory, namespace, component, version, asset]
+BrowseNode:
+  type: object
+  additionalProperties: false
+  required: [id, kind, name, hasChildren]
+  properties:
+    id:
+      type: string
+      minLength: 1
+      maxLength: 4096
+      description: Server-issued opaque node ID. Submit it unchanged as parent.
+    kind:
+      "$ref": "#/BrowseNodeKind"
+    name:
+      type: string
+      minLength: 1
+      maxLength: 4096
+      description: Format-aware display name for this level.
+    hasChildren:
+      type: boolean
+    path:
+      type: string
+      maxLength: 4096
+      description: Canonical Repository-relative asset path when the node represents a path.
+    coordinate:
+      type: string
+      maxLength: 4096
+      description: Protocol-owned canonical coordinate when available.
+    digest:
+      type: string
+      pattern: "^sha256:[a-f0-9]{64}$"
+    size:
+      type: integer
+      format: int64
+      minimum: 0
+    contentType:
+      type: string
+      maxLength: 255
+    createdAt:
+      type: string
+      format: date-time
+BrowseNodePage:
+  type: object
+  additionalProperties: false
+  required: [items]
+  properties:
+    items:
+      type: array
+      items:
+        "$ref": "#/BrowseNode"
+    nextPageToken:
+      type: string
 ArtifactIdentityPurpose:
   type: string
   enum: [scan, distribution]

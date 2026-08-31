@@ -91,9 +91,11 @@ describe("RawUploadDialog", () => {
     ).toBeInTheDocument();
   });
 
-  it("rejects an absolute-looking path instead of silently removing its leading slash", async () => {
+  it("accepts one leading slash as an explicit repository-root path", async () => {
     const user = userEvent.setup();
-    const fetchMock = vi.fn();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
     render(
       <PreferencesProvider>
@@ -108,13 +110,14 @@ describe("RawUploadDialog", () => {
     await user.upload(fileInput!, new File(["image"], "image.png"));
     const pathInput = within(dialog).getByRole("textbox", { name: "目标路径" });
     await user.clear(pathInput);
-    await user.type(pathInput, "/releases/image.png");
+    await user.type(pathInput, "/rust/omz-tui-source-v0.1.0-dev.tar.gz");
     await user.click(within(dialog).getByRole("button", { name: /上\s*传/ }));
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(
-      await within(dialog).findByText(/目标路径必须相对于仓库根/),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/raw/raw-releases/rust/omz-tui-source-v0.1.0-dev.tar.gz",
+      expect.objectContaining({ method: "PUT" }),
+    );
   });
 
   it("preserves intentional leading and trailing spaces in a relative path", async () => {

@@ -220,7 +220,11 @@ path search, supports server-side pagination, and links directly to the exact
 repository artifact (including Maven SNAPSHOT build numbers). Repository
 Artifacts tabs provide format-specific version selection and metadata. Checksum
 search, saved queries, popularity sorting, and a richer Group resolution view
-remain future work.
+remain future work. The first Nexus-style directory-tree slice is delivered for
+Maven and Raw Hosted repositories plus locally cached Proxy assets. It uses a
+server-issued, format-aware browse-node contract, opaque parent IDs and cursors,
+so the Console does not infer physical folders or rebuild Artifact Identity
+from display paths. Group provenance and adapters for other formats remain open.
 
 ### Upload And Publish UI
 
@@ -314,7 +318,7 @@ behind; several design decisions are stricter or more modern than Nexus:
   and does not guarantee content integrity at the same level.
 - **Contract discipline.** The Console client and the repository-management Go
   contract are generated from `api/openapi/native-hosted.yaml`; `make
-  openapi-check` fails on drift. Nexus REST is hand-written.
+openapi-check` fails on drift. Nexus REST is hand-written.
 - **Idempotency.** Repository creation and distribution operations carry an
   `Idempotency-Key`; Nexus has no equivalent.
 - **Modern stack.** React 19, Vite, and Tailwind 4 against Nexus 3's older UI
@@ -325,6 +329,11 @@ behind; several design decisions are stricter or more modern than Nexus:
 Work shipped against this analysis. Items are partial unless noted; see the
 referenced commits.
 
+- **Format-aware Repository browse tree (P1).** The V2 management contract now
+  exposes authorized direct children with signed, repository/principal-scoped
+  node IDs and page cursors. Maven and Raw adapters cover Memory/PostgreSQL
+  Hosted data and locally cached Proxy assets; the Console lazy-loads a
+  keyboard-accessible tree while retaining the prior list/search view.
 - **Global cross-repository artifact search (P1).** A header search bar and a
   `/search` results page use the server-side `/api/v2/artifact-search` cursor
   endpoint, enforce per-repository read permissions, and preserve exact deep

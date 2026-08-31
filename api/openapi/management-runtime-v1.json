@@ -3285,6 +3285,63 @@
         }
       }
     },
+    "/repositories/{repositoryId}/browse": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "browseRepository",
+        "summary": "List direct children in a format-aware Repository browse tree",
+        "description": "Returns server-issued navigation projections. Node IDs and page tokens are opaque and bound to the Repository, format, parent, ordering, authorization context, and expiry. Browse Nodes are not physical object-store directories or client-constructed Artifact Identities. The first supported adapters are Maven and Raw.",
+        "parameters": [
+          {
+            "name": "parent",
+            "in": "query",
+            "description": "Opaque ID of a previously returned node. Omit for root nodes.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Direct children of the requested browse position",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowseNodePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/artifact-identities": {
       "parameters": [
         {
@@ -4416,6 +4473,81 @@
   },
   "components": {
     "schemas": {
+      "BrowseNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "hasChildren"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Server-issued opaque node ID. Submit it unchanged as parent."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BrowseNodeKind"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Format-aware display name for this level."
+          },
+          "hasChildren": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Canonical Repository-relative asset path when the node represents a path."
+          },
+          "coordinate": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Protocol-owned canonical coordinate when available."
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "contentType": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BrowseNodePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BrowseNode"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          }
+        }
+      },
       "Format": {
         "type": "string",
         "enum": [
@@ -9696,6 +9828,16 @@
             }
           }
         }
+      },
+      "BrowseNodeKind": {
+        "type": "string",
+        "enum": [
+          "directory",
+          "namespace",
+          "component",
+          "version",
+          "asset"
+        ]
       },
       "ArtifactIdentityPurpose": {
         "type": "string",
