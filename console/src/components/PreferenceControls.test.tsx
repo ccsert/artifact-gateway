@@ -63,6 +63,44 @@ describe("PreferenceControls", () => {
     }
   });
 
+  it("commits atomically when view transitions are unavailable", async () => {
+    const user = userEvent.setup();
+    const original = (document as Document & { startViewTransition?: unknown })
+      .startViewTransition;
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: undefined,
+    });
+
+    try {
+      render(
+        <PreferencesProvider>
+          <PreferenceControls />
+        </PreferencesProvider>,
+      );
+
+      await user.click(
+        screen.getByRole("button", { name: /选择主题.*Gateway Dark/ }),
+      );
+      await user.click(
+        await screen.findByRole("menuitem", { name: /Gateway Light/ }),
+      );
+
+      expect(document.documentElement).toHaveAttribute("data-theme", "light");
+      expect(document.documentElement).not.toHaveAttribute(
+        "data-theme-transition",
+      );
+      expect(
+        screen.getByRole("button", { name: /选择主题.*Gateway Light/ }),
+      ).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(document, "startViewTransition", {
+        configurable: true,
+        value: original,
+      });
+    }
+  });
+
   it("opens the language menu without showing a tooltip", async () => {
     const user = userEvent.setup();
     render(

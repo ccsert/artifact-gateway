@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ReloadOutlined } from "@ant-design/icons";
+import { InboxOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Empty, Spin } from "antd";
 import type { Problem } from "../client";
 import { usePreferences } from "../lib/preferences";
@@ -100,37 +100,33 @@ export function EmptyState({
   title,
   hint,
   action,
-  image,
+  icon,
   compact = false,
-  layout = "centered",
   className = "",
 }: {
   title: string;
   hint?: string;
   action?: ReactNode;
-  image?: ReactNode;
+  icon?: ReactNode;
   compact?: boolean;
-  layout?: "centered" | "split";
   className?: string;
 }) {
-  const split = layout === "split";
-
   return (
     <Empty
-      className={`ag-feedback-enter ${image ? "ag-empty-state-with-artwork" : ""} ${compact ? "ag-empty-state-compact py-5" : "py-12"} ${split ? "ag-empty-state-split" : ""} ${className}`}
+      className={`ag-feedback-enter ag-empty-state ${compact ? "ag-empty-state-compact py-5" : "py-10"} ${className}`}
       style={compact ? { marginBlock: 0, marginInline: 0 } : undefined}
-      image={image ?? Empty.PRESENTED_IMAGE_SIMPLE}
+      image={
+        <span className="ag-empty-state-icon" aria-hidden="true">
+          {icon ?? <InboxOutlined />}
+        </span>
+      }
       description={
-        <div className={`space-y-1 ${split ? "text-left" : "text-center"}`}>
-          <p
-            className={`${split ? "text-base text-zinc-200" : "text-sm text-zinc-400"} font-medium`}
-          >
+        <div className="space-y-1 text-center">
+          <p className="text-sm font-medium text-[var(--ag-content-primary)]">
             {title}
           </p>
           {hint && (
-            <p
-              className={`${split ? "max-w-xl text-sm leading-6" : "text-xs"} text-zinc-600`}
-            >
+            <p className="mx-auto max-w-xl text-xs leading-5 text-[var(--ag-content-tertiary)]">
               {hint}
             </p>
           )}
@@ -139,30 +135,5 @@ export function EmptyState({
     >
       {action}
     </Empty>
-  );
-}
-
-export function EmptyStateArtwork({
-  darkSrc,
-  lightSrc,
-  name,
-}: {
-  darkSrc: string;
-  lightSrc: string;
-  name: string;
-}) {
-  const { colorMode } = usePreferences();
-
-  return (
-    <img
-      className="ag-empty-state-artwork"
-      src={colorMode === "light" ? lightSrc : darkSrc}
-      width="600"
-      height="400"
-      alt=""
-      aria-hidden="true"
-      decoding="async"
-      data-empty-artwork={name}
-    />
   );
 }

@@ -162,6 +162,13 @@ Every projection is complete, so switching themes cannot retain a stale value
 from the previous theme. Reduced-motion continues to skip spatial theme
 transitions while applying the same final colors.
 
+Theme motion uses a single-layer 200 ms reveal: the old document snapshot
+stays opaque while the new snapshot settles above it. Browsers without View
+Transitions, and users requesting reduced motion, receive the same atomic
+commit without descendant-by-descendant color interpolation. Neutral empty
+states use small semantic icons and useful copy rather than theme-specific
+decorative illustrations.
+
 ## Migration rules
 
 - Custom CSS must consume semantic `--ag-*` roles; it must not read generated

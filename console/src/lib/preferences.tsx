@@ -326,11 +326,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 
       activeThemeTransition.current?.skipTransition();
       if (reduceMotion || !transitionDocument.startViewTransition) {
-        if (!reduceMotion) root.dataset.themeTransition = "fallback";
         commit();
-        window.setTimeout(() => {
-          delete root.dataset.themeTransition;
-        }, 220);
         return;
       }
 

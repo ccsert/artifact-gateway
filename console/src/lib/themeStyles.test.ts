@@ -63,6 +63,17 @@ describe("semantic theme CSS contract", () => {
     expect(primaryUses?.length ?? 0).toBeLessThanOrEqual(3);
   });
 
+  it("reveals the new theme over a stable old snapshot", () => {
+    expect(runtimeStyles).toMatch(
+      /::view-transition-old\(root\)\s*\{\s*animation:\s*none;/u,
+    );
+    expect(runtimeStyles).toMatch(
+      /::view-transition-new\(root\)\s*\{[^}]*ag-theme-reveal\s+200ms/u,
+    );
+    expect(runtimeStyles).not.toContain("ag-theme-fade-out");
+    expect(runtimeStyles).not.toContain('data-theme-transition="fallback"');
+  });
+
   it("does not consume the retired generic theme aliases", () => {
     const retired = [
       "--ag-bg",

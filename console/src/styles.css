@@ -185,37 +185,30 @@ html {
 }
 
 ::view-transition-group(root) {
-  animation-duration: 220ms;
-  animation-timing-function: var(--ease-out-expo);
+  animation: none;
+}
+
+::view-transition-image-pair(root) {
+  isolation: isolate;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  mix-blend-mode: normal;
 }
 
 ::view-transition-old(root) {
-  animation: ag-theme-fade-out 160ms ease-out both;
+  animation: none;
 }
 
 ::view-transition-new(root) {
-  animation: ag-theme-fade-in 220ms var(--ease-out-expo) both;
+  animation: ag-theme-reveal 200ms var(--ease-out-expo) both;
 }
 
-@keyframes ag-theme-fade-out {
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes ag-theme-fade-in {
+@keyframes ag-theme-reveal {
   from {
     opacity: 0;
   }
-}
-
-html[data-theme-transition="fallback"] *,
-html[data-theme-transition="fallback"] *::before,
-html[data-theme-transition="fallback"] *::after {
-  transition-duration: 180ms !important;
-  transition-property:
-    color, background-color, border-color, box-shadow, fill, stroke !important;
-  transition-timing-function: var(--ease-out-expo) !important;
 }
 
 /* The document snapshot owns the theme motion. Component-level color
@@ -2056,9 +2049,6 @@ html .ag-brand-mark.text-white {
     animation-duration: 1ms;
   }
 
-  html[data-theme-transition="fallback"] *,
-  html[data-theme-transition="fallback"] *::before,
-  html[data-theme-transition="fallback"] *::after,
   .ag-theme-toggle-icon {
     transition: none !important;
   }
@@ -2257,90 +2247,45 @@ html .ag-brand-mark.text-white {
   animation: ag-feedback-enter 220ms var(--ease-out-expo) both;
 }
 
-.ag-empty-state-with-artwork .ant-empty-image {
-  width: min(210px, 56vw);
+.ag-empty-state .ant-empty-image {
+  display: flex;
+  width: auto;
   height: auto;
-  margin: 0 auto 18px;
-  aspect-ratio: 3 / 2;
-}
-
-.ag-empty-state-with-artwork.ag-empty-state-compact .ant-empty-image {
-  width: min(168px, 48vw);
-  margin-bottom: 14px;
-}
-
-.ag-empty-state-artwork {
-  display: block;
-  width: 100%;
-  height: auto;
-  object-fit: contain;
-}
-
-.ag-empty-state-split {
-  display: grid;
-  grid-template-columns: minmax(210px, 0.42fr) minmax(260px, 0.58fr);
-  grid-template-rows: auto auto;
   align-items: center;
-  justify-items: start;
-  column-gap: clamp(28px, 5vw, 72px);
-  row-gap: 18px;
-  min-height: 250px;
-  padding: clamp(14px, 2.5vw, 28px) !important;
-  text-align: left;
+  justify-content: center;
+  margin: 0 auto 14px;
 }
 
-.ag-empty-state-split .ant-empty-image {
-  grid-row: 1 / 3;
-  width: min(100%, 330px);
-  margin: 0 !important;
-  justify-self: center;
+.ag-empty-state-icon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ag-border-subtle);
+  border-radius: var(--ag-radius-control);
+  background: var(--ag-surface-disabled);
+  box-shadow: var(--ag-shadow-structural);
+  color: var(--ag-content-tertiary);
+  font-size: 18px;
 }
 
-.ag-empty-state-split .ant-empty-description {
-  align-self: end;
-  margin: 0;
+.ag-empty-state-compact .ant-empty-image {
+  margin-bottom: 12px;
 }
 
-.ag-empty-state-split .ant-empty-footer {
-  align-self: start;
-  margin-top: 0;
+.ag-empty-state-compact .ag-empty-state-icon {
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
 }
 
-@media (max-width: 600px) {
-  .ag-empty-state-with-artwork .ant-empty-image {
-    width: min(174px, 52vw);
-  }
+.ag-empty-state .ant-empty-description {
+  margin-bottom: 0;
+}
 
-  .ag-empty-state-with-artwork.ag-empty-state-compact .ant-empty-image {
-    width: min(144px, 44vw);
-  }
-
-  .ag-empty-state-split {
-    display: flex;
-    min-height: 0;
-    flex-direction: column;
-    gap: 0;
-    padding: 8px 0 !important;
-    text-align: center;
-  }
-
-  .ag-empty-state-split .ant-empty-image {
-    width: min(190px, 58vw);
-    margin: 0 auto 16px !important;
-  }
-
-  .ag-empty-state-split .ant-empty-description {
-    align-self: stretch;
-  }
-
-  .ag-empty-state-split .ant-empty-description > div {
-    text-align: center;
-  }
-
-  .ag-empty-state-split .ant-empty-footer {
-    align-self: center;
-    margin-top: 18px;
-  }
+.ag-empty-state .ant-empty-footer {
+  margin-top: 16px;
 }
 
 @keyframes ag-feedback-enter {

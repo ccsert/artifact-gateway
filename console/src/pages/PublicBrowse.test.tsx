@@ -59,7 +59,8 @@ describe("PublicBrowsePage APT browse", () => {
     expect(title.closest(".ag-public-state-surface")).toHaveClass(
       "ag-public-catalog-empty-surface",
     );
-    expect(title.closest(".ant-empty")).toHaveClass("ag-empty-state-split");
+    expect(title.closest(".ant-empty")).toHaveClass("ag-empty-state");
+    expect(title.closest(".ant-empty")?.querySelector("img")).toBeNull();
     expect(
       screen.queryByPlaceholderText("搜索仓库名称或格式"),
     ).not.toBeInTheDocument();

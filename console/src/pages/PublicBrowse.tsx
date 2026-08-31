@@ -5,6 +5,7 @@ import {
   ArrowRightOutlined,
   CheckOutlined,
   CopyOutlined,
+  DatabaseOutlined,
   DownOutlined,
   LinkOutlined,
   ReloadOutlined,
@@ -22,12 +23,7 @@ import {
 } from "../client";
 import type { ArtifactSummary } from "../client";
 import { Card } from "../components/Layout";
-import {
-  Loading,
-  ErrorBanner,
-  EmptyState,
-  EmptyStateArtwork,
-} from "../components/Feedback";
+import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
 import { FormatBadge, Badge } from "../components/Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { usageFor, type UsageSnippet } from "../lib/usage";
@@ -60,8 +56,6 @@ import {
   SearchableVersionSelect,
   UsageSnippetBlock,
 } from "../components/PublicBrowsePrimitives";
-import emptyPublicCatalogDark from "../assets/empty-public-catalog.webp";
-import emptyPublicCatalogLight from "../assets/empty-public-catalog-light.webp";
 import { NpmPackageDetail } from "../components/NpmPackageDetail";
 import { PyPIProjectDetail } from "../components/PyPIProjectDetail";
 import { GoModuleDetail } from "../components/GoModuleDetail";
@@ -2194,6 +2188,7 @@ export function PublicBrowsePage() {
             ) : anonymousEnabled === false ? (
               <PublicBrowseStateSurface>
                 <EmptyState
+                  icon={<SafetyCertificateOutlined />}
                   title={text(
                     "全局匿名读取未启用",
                     "Global anonymous reads are disabled",
@@ -2215,6 +2210,7 @@ export function PublicBrowsePage() {
             ) : repositoryId && !selectedRepository ? (
               <PublicBrowseStateSurface>
                 <EmptyState
+                  icon={<SearchOutlined />}
                   title={text(
                     "公开仓库不存在或不可见",
                     "Public repository not found or visible",
@@ -2234,20 +2230,13 @@ export function PublicBrowsePage() {
               repositories.length === 0 ? (
                 <PublicBrowseStateSurface className="ag-public-catalog-empty-surface">
                   <EmptyState
-                    layout="split"
                     className="ag-public-catalog-empty"
+                    icon={<DatabaseOutlined />}
                     title={text("暂无公开仓库", "No public repositories")}
                     hint={text(
                       "管理员需先启用全局匿名访问，并在仓库上允许匿名读取。公开仓库出现后，这里会直接展示可匿名使用的来源与格式。",
                       "An administrator must enable global anonymous access and allow reads on a repository. Public sources and formats will appear here as soon as they are available.",
                     )}
-                    image={
-                      <EmptyStateArtwork
-                        darkSrc={emptyPublicCatalogDark}
-                        lightSrc={emptyPublicCatalogLight}
-                        name="public-catalog"
-                      />
-                    }
                     action={
                       <Button
                         type="primary"
@@ -2307,6 +2296,7 @@ export function PublicBrowsePage() {
                   {visibleRepositories.length === 0 ? (
                     <EmptyState
                       compact
+                      icon={<SearchOutlined />}
                       title={text(
                         "没有匹配的公开仓库",
                         "No matching public repositories",
@@ -2324,13 +2314,6 @@ export function PublicBrowsePage() {
                         >
                           {text("清除筛选", "Clear filters")}
                         </Button>
-                      }
-                      image={
-                        <EmptyStateArtwork
-                          darkSrc={emptyPublicCatalogDark}
-                          lightSrc={emptyPublicCatalogLight}
-                          name="public-catalog"
-                        />
                       }
                     />
                   ) : (
@@ -2414,7 +2397,7 @@ export function PublicBrowsePage() {
             ) : items.length === 0 ? (
               <PublicBrowseStateSurface>
                 <EmptyState
-                  layout="split"
+                  icon={<SearchOutlined />}
                   title={text(
                     "没有匹配的公开制品",
                     "No matching public artifacts",
@@ -2423,13 +2406,6 @@ export function PublicBrowsePage() {
                     "确认仓库已启用匿名读取，或调整上方查询条件。",
                     "Confirm anonymous reads are enabled or adjust the query above.",
                   )}
-                  image={
-                    <EmptyStateArtwork
-                      darkSrc={emptyPublicCatalogDark}
-                      lightSrc={emptyPublicCatalogLight}
-                      name="public-catalog"
-                    />
-                  }
                 />
               </PublicBrowseStateSurface>
             ) : (

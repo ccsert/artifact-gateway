@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ClearOutlined,
+  DatabaseOutlined,
   DeleteOutlined,
   PlusOutlined,
   SearchOutlined,
@@ -16,12 +17,7 @@ import {
 } from "../client";
 import type { Repository, Format, FormatProfile } from "../client";
 import { PageHeader, Card, Pagination, Field } from "../components/Layout";
-import {
-  Loading,
-  ErrorBanner,
-  EmptyState,
-  EmptyStateArtwork,
-} from "../components/Feedback";
+import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
 import { FormatBadge, StateBadge, Badge } from "../components/Badge";
 import { Modal, ConfirmDialog, useDisclosure } from "../components/Modal";
 import { formatBytes, formatNumber } from "../lib/format";
@@ -37,8 +33,6 @@ import {
   repositoryFormats,
   repositoryTypes,
 } from "../lib/formatProfiles";
-import emptyRepositoriesDark from "../assets/empty-repositories.webp";
-import emptyRepositoriesLight from "../assets/empty-repositories-light.webp";
 
 function CreateRepositoryDialog({
   profiles,
@@ -654,6 +648,9 @@ export function RepositoriesPage() {
       ) : visible.length === 0 ? (
         <Card>
           <EmptyState
+            icon={
+              items.length === 0 ? <DatabaseOutlined /> : <SearchOutlined />
+            }
             title={
               items.length === 0
                 ? text("暂无仓库", "No repositories")
@@ -675,15 +672,6 @@ export function RepositoriesPage() {
                       "Adjust the filters and try again",
                     )
             }
-            image={
-              items.length === 0 ? (
-                <EmptyStateArtwork
-                  darkSrc={emptyRepositoriesDark}
-                  lightSrc={emptyRepositoriesLight}
-                  name="repositories"
-                />
-              ) : undefined
-            }
             action={
               items.length === 0 ? (
                 <CreateRepositoryDialog
@@ -698,6 +686,7 @@ export function RepositoriesPage() {
         <Card>
           {visible.length === 0 ? (
             <EmptyState
+              icon={<SearchOutlined />}
               title={text("没有匹配的仓库", "No matching repositories")}
               hint={text(
                 "调整筛选条件，或继续加载更多仓库",
