@@ -37,7 +37,8 @@ func TestPostgresArtifactBrowseProjectsMavenAndRaw(t *testing.T) {
 		_ = store.Close()
 		t.Fatal(err)
 	}
-	rawDigest := "sha256:" + strings.Repeat("d", 64)
+	rawDigestSeed := strings.ReplaceAll(uuid.NewString(), "-", "")
+	rawDigest := "sha256:" + rawDigestSeed + rawDigestSeed
 	t.Cleanup(func() {
 		_, _ = store.db.ExecContext(context.Background(), `DELETE FROM native_maven_assets WHERE repository_id=$1`, mavenRepo.ID)
 		_, _ = store.db.ExecContext(context.Background(), `DELETE FROM native_maven_artifacts WHERE repository_id=$1`, mavenRepo.ID)

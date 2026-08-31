@@ -1508,7 +1508,7 @@ export function RepositoryArtifactsTab({
         )}
         <Input.Search
           allowClear
-          className="w-80"
+          className="ag-artifact-view-search"
           placeholder={searchPlaceholder[format] ?? text("搜索…", "Search…")}
           value={q}
           onChange={(e) => {
