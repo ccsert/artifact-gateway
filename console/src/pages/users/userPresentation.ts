@@ -6,10 +6,16 @@ export function isUserLocked(user: User, now = Date.now()): boolean {
   return Number.isFinite(lockedUntil) && lockedUntil > now;
 }
 
-export function roleTone(role: User["role"]): "red" | "blue" | "green" {
-  if (role === "admin") return "red";
+export function roleTone(
+  role: User["role"],
+): "cyan" | "blue" | "green" | "zinc" {
+  // Cyan marks the governance privilege; red stays reserved for failure
+  // states. Violet is unavailable here: the theme remap folds it into info
+  // blue, which would make admin and writer indistinguishable.
+  if (role === "admin") return "cyan";
   if (role === "writer") return "blue";
-  return "green";
+  if (role === "reader") return "green";
+  return "zinc";
 }
 
 export function userInitials(user: User): string {

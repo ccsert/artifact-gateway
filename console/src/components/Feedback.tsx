@@ -102,22 +102,38 @@ export function EmptyState({
   action,
   image,
   compact = false,
+  layout = "centered",
+  className = "",
 }: {
   title: string;
   hint?: string;
   action?: ReactNode;
   image?: ReactNode;
   compact?: boolean;
+  layout?: "centered" | "split";
+  className?: string;
 }) {
+  const split = layout === "split";
+
   return (
     <Empty
-      className={`ag-feedback-enter ${image ? "ag-empty-state-with-artwork" : ""} ${compact ? "ag-empty-state-compact py-5" : "py-12"}`}
+      className={`ag-feedback-enter ${image ? "ag-empty-state-with-artwork" : ""} ${compact ? "ag-empty-state-compact py-5" : "py-12"} ${split ? "ag-empty-state-split" : ""} ${className}`}
       style={compact ? { marginBlock: 0, marginInline: 0 } : undefined}
       image={image ?? Empty.PRESENTED_IMAGE_SIMPLE}
       description={
-        <div className="space-y-1 text-center">
-          <p className="text-sm font-medium text-zinc-400">{title}</p>
-          {hint && <p className="text-xs text-zinc-600">{hint}</p>}
+        <div className={`space-y-1 ${split ? "text-left" : "text-center"}`}>
+          <p
+            className={`${split ? "text-base text-zinc-200" : "text-sm text-zinc-400"} font-medium`}
+          >
+            {title}
+          </p>
+          {hint && (
+            <p
+              className={`${split ? "max-w-xl text-sm leading-6" : "text-xs"} text-zinc-600`}
+            >
+              {hint}
+            </p>
+          )}
         </div>
       }
     >

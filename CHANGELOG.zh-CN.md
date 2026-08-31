@@ -8,6 +8,10 @@
 
 ## Unreleased
 
+- 为 Maven、Raw Hosted Repository 增加服务端所有、按需加载的目录树；签名节点 ID 与游标
+  绑定 Repository 和 principal，Maven SNAPSHOT 节点保留精确构建，Raw 路径保持可读展示，
+  复制及操作继续使用规范值。
+- 优化登录、公开目录、空状态和主题界面，并补充响应式几何与 reduced-motion 行为检查。
 - Artifact Gateway 正式采用 MIT License，并在双语 README 与贡献指南中明确项目和
   贡献许可条款。
 - 改善 Raw Console 体验：仓库浏览、公开浏览、全局搜索、保留预览和分发选择器统一显示

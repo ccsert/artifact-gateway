@@ -46,6 +46,13 @@ One immutable byte object belonging to an Artifact, such as a Maven JAR, OCI
 blob, or Conan package file.
 _Avoid_: Artifact file, blob
 
+**Browse Node**:
+A read-only, format-aware navigation projection used by a Repository browse
+tree. A node can represent a synthetic directory, namespace, component, version, or Asset,
+but it is not an Artifact Identity and does not imply a physical object-store
+directory. Node IDs and pagination cursors are server-issued and opaque.
+_Avoid_: Folder owner, object-store directory, client-built coordinate
+
 **Raw Path Reference**:
 A mutable, Repository-local canonical path that atomically points to one
 verified immutable content object. Standard PUT replaces the current mapping;

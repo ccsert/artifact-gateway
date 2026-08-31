@@ -140,6 +140,7 @@ type GatewayStore interface {
 	repository.ScheduledTaskStore
 	repository.WebhookStore
 	repository.BackgroundOperationQueueStore
+	repository.ArtifactBrowseStore
 }
 
 func NewGatewayHandler(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {
@@ -285,7 +286,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if candidate, ok := any(store).(repository.ArtifactSearchStore); ok {
 		searchProjection = candidate
 	}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptPublications: store, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemes: dependencies.ConsoleThemes, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, serviceAccounts: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, queueStats: store, diagnostics: dependencies, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptPublications: store, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemes: dependencies.ConsoleThemes, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, serviceAccounts: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, queueStats: store, browse: store, diagnostics: dependencies, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {

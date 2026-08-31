@@ -35,6 +35,37 @@ afterEach(() => {
 });
 
 describe("PublicBrowsePage APT browse", () => {
+  it("keeps the zero-data catalog on the same full-width surface as populated states", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ enabled: true, items: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/browse"]}>
+        <PreferencesProvider>
+          <PublicBrowsePage />
+        </PreferencesProvider>
+      </MemoryRouter>,
+    );
+
+    const title = await screen.findByText("暂无公开仓库", { exact: true });
+    expect(document.querySelector(".ag-public-browse-page")).toHaveClass(
+      "w-full",
+      "max-w-[1440px]",
+    );
+    expect(title.closest(".ag-public-state-surface")).toHaveClass(
+      "ag-public-catalog-empty-surface",
+    );
+    expect(title.closest(".ant-empty")).toHaveClass("ag-empty-state-split");
+    expect(
+      screen.queryByPlaceholderText("搜索仓库名称或格式"),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("0", { selector: ".text-2xl" })).toHaveLength(2);
+  });
+
   it("sends an authenticated operator directly back to the management console", async () => {
     Object.assign(auth, { authenticated: true });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(

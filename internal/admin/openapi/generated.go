@@ -460,6 +460,33 @@ func (e AuthorizationTemplateGrantScopes) Valid() bool {
 	}
 }
 
+// Defines values for BrowseNodeKind.
+const (
+	BrowseNodeKindAsset     BrowseNodeKind = "asset"
+	BrowseNodeKindComponent BrowseNodeKind = "component"
+	BrowseNodeKindDirectory BrowseNodeKind = "directory"
+	BrowseNodeKindNamespace BrowseNodeKind = "namespace"
+	BrowseNodeKindVersion   BrowseNodeKind = "version"
+)
+
+// Valid indicates whether the value is a known member of the BrowseNodeKind enum.
+func (e BrowseNodeKind) Valid() bool {
+	switch e {
+	case BrowseNodeKindAsset:
+		return true
+	case BrowseNodeKindComponent:
+		return true
+	case BrowseNodeKindDirectory:
+		return true
+	case BrowseNodeKindNamespace:
+		return true
+	case BrowseNodeKindVersion:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConanPackageRevisionState.
 const (
 	ConanPackageRevisionStateDeleted ConanPackageRevisionState = "deleted"
@@ -2535,6 +2562,37 @@ type AuthorizationTemplateWritable struct {
 	Name        string                       `json:"name"`
 }
 
+// BrowseNode defines model for BrowseNode.
+type BrowseNode struct {
+	ContentType *string `json:"contentType,omitempty"`
+
+	// Coordinate Protocol-owned canonical coordinate when available.
+	Coordinate  *string    `json:"coordinate,omitempty"`
+	CreatedAt   *time.Time `json:"createdAt,omitempty"`
+	Digest      *string    `json:"digest,omitempty"`
+	HasChildren bool       `json:"hasChildren"`
+
+	// Id Server-issued opaque node ID. Submit it unchanged as parent.
+	Id   string         `json:"id"`
+	Kind BrowseNodeKind `json:"kind"`
+
+	// Name Format-aware display name for this level.
+	Name string `json:"name"`
+
+	// Path Canonical Repository-relative asset path when the node represents a path.
+	Path *string `json:"path,omitempty"`
+	Size *int64  `json:"size,omitempty"`
+}
+
+// BrowseNodeKind defines model for BrowseNodeKind.
+type BrowseNodeKind string
+
+// BrowseNodePage defines model for BrowseNodePage.
+type BrowseNodePage struct {
+	Items         []BrowseNode `json:"items"`
+	NextPageToken *string      `json:"nextPageToken,omitempty"`
+}
+
 // ConanPackageIdList defines model for ConanPackageIdList.
 type ConanPackageIdList struct {
 	Items []string `json:"items"`
@@ -4387,6 +4445,14 @@ type ListArtifactsParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// BrowseRepositoryParams defines parameters for BrowseRepository.
+type BrowseRepositoryParams struct {
+	// Parent Opaque ID of a previously returned node. Omit for root nodes.
+	Parent    *string    `form:"parent,omitempty" json:"parent,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // ListProxyCacheEntriesParams defines parameters for ListProxyCacheEntries.
 type ListProxyCacheEntriesParams struct {
 	Q           *string                                 `form:"q,omitempty" json:"q,omitempty"`
@@ -4975,6 +5041,9 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/artifacts/{artifactId})
 	GetArtifact(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, artifactId openapi_types.UUID)
+	// BrowseRepository List direct children in a format-aware Repository browse tree
+	// (GET /repositories/{repositoryId}/browse)
+	BrowseRepository(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params BrowseRepositoryParams)
 
 	// (GET /repositories/{repositoryId}/cache/entries)
 	ListProxyCacheEntries(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListProxyCacheEntriesParams)
@@ -7720,6 +7789,74 @@ func (siw *ServerInterfaceWrapper) GetArtifact(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetArtifact(w, r, repositoryId, artifactId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BrowseRepository operation middleware
+func (siw *ServerInterfaceWrapper) BrowseRepository(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BrowseRepositoryParams
+
+	// ------------- Optional query parameter "parent" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "parent", r.URL.Query(), &params.Parent, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "parent"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "parent", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BrowseRepository(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11102,6 +11239,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts", wrapper.ListArtifacts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.DeleteArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.GetArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/browse", wrapper.BrowseRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/cache/entries", wrapper.ListProxyCacheEntries)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/cache/invalidate", wrapper.InvalidateProxyCache)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/cache/negative:clear", wrapper.ClearProxyNegativeCache)
@@ -14853,6 +14991,101 @@ func (response GetArtifact200JSONResponse) VisitGetArtifactResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseRepositoryRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       BrowseRepositoryParams
+}
+
+type BrowseRepositoryResponseObject interface {
+	VisitBrowseRepositoryResponse(w http.ResponseWriter) error
+}
+
+type BrowseRepository200JSONResponse BrowseNodePage
+
+func (response BrowseRepository200JSONResponse) VisitBrowseRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseRepository400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response BrowseRepository400ApplicationProblemPlusJSONResponse) VisitBrowseRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseRepository401ApplicationProblemPlusJSONResponse Problem
+
+func (response BrowseRepository401ApplicationProblemPlusJSONResponse) VisitBrowseRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseRepository403ApplicationProblemPlusJSONResponse Problem
+
+func (response BrowseRepository403ApplicationProblemPlusJSONResponse) VisitBrowseRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseRepository404ApplicationProblemPlusJSONResponse Problem
+
+func (response BrowseRepository404ApplicationProblemPlusJSONResponse) VisitBrowseRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseRepository500ApplicationProblemPlusJSONResponse Problem
+
+func (response BrowseRepository500ApplicationProblemPlusJSONResponse) VisitBrowseRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -19677,6 +19910,9 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/artifacts/{artifactId})
 	GetArtifact(ctx context.Context, request GetArtifactRequestObject) (GetArtifactResponseObject, error)
+	// BrowseRepository List direct children in a format-aware Repository browse tree
+	// (GET /repositories/{repositoryId}/browse)
+	BrowseRepository(ctx context.Context, request BrowseRepositoryRequestObject) (BrowseRepositoryResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/cache/entries)
 	ListProxyCacheEntries(ctx context.Context, request ListProxyCacheEntriesRequestObject) (ListProxyCacheEntriesResponseObject, error)
@@ -21721,6 +21957,33 @@ func (sh *strictHandler) GetArtifact(w http.ResponseWriter, r *http.Request, rep
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetArtifactResponseObject); ok {
 		if err := validResponse.VisitGetArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// BrowseRepository operation middleware
+func (sh *strictHandler) BrowseRepository(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params BrowseRepositoryParams) {
+	var request BrowseRepositoryRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.BrowseRepository(ctx, request.(BrowseRepositoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "BrowseRepository")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(BrowseRepositoryResponseObject); ok {
+		if err := validResponse.VisitBrowseRepositoryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

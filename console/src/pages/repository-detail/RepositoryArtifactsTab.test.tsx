@@ -1,13 +1,14 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { searchRepositoryArtifacts } from "../../client";
+import { browseRepository, searchRepositoryArtifacts } from "../../client";
 import type { Repository } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RepositoryArtifactsTab } from "./RepositoryArtifactsTab";
 
 vi.mock("../../client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../client")>()),
+  browseRepository: vi.fn(),
   searchRepositoryArtifacts: vi.fn(),
 }));
 
@@ -16,6 +17,7 @@ vi.mock("../../lib/auth", () => ({
 }));
 
 const mockSearchRepositoryArtifacts = vi.mocked(searchRepositoryArtifacts);
+const mockBrowseRepository = vi.mocked(browseRepository);
 
 const repository: Repository = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -120,6 +122,52 @@ describe("RepositoryArtifactsTab APT browse", () => {
 });
 
 describe("RepositoryArtifactsTab Raw browse", () => {
+  it("switches between the existing list and the format-aware directory", async () => {
+    const user = userEvent.setup();
+    const rawRepository: Repository = {
+      ...repository,
+      id: "55555555-5555-4555-8555-555555555555",
+      name: "raw-releases",
+      format: "raw",
+      type: "hosted",
+      endpoint: undefined,
+      allowedHosts: [],
+    };
+    mockSearchRepositoryArtifacts.mockResolvedValue({
+      data: { items: [] },
+    } as never);
+    mockBrowseRepository.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "node-docs",
+            kind: "directory",
+            name: "docs",
+            hasChildren: true,
+            path: "docs",
+          },
+        ],
+      },
+    } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={rawRepository} canWrite />
+      </PreferencesProvider>,
+    );
+
+    await user.click(screen.getByText("目录"));
+    expect(await screen.findByText("制品目录")).toBeInTheDocument();
+    expect(screen.getByText("docs")).toBeInTheDocument();
+    expect(mockBrowseRepository).toHaveBeenCalledWith({
+      path: { repositoryId: rawRepository.id },
+      query: { pageSize: 50 },
+    });
+
+    await user.click(screen.getByText("列表"));
+    expect(screen.getByPlaceholderText("搜索路径…")).toBeInTheDocument();
+  });
+
   it("shows a readable file path while preserving the canonical coordinate", async () => {
     const user = userEvent.setup();
     const encodedPath =

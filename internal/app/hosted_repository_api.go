@@ -93,6 +93,18 @@ type artifactSearchPageCursor struct {
 	ExpiresAt                                         int64
 }
 
+type repositoryBrowseNodeCursor struct {
+	Endpoint, RepositoryID, Format, Principal, Kind string
+	Namespace, Component, Version, Path             string
+	BuildNumber                                     int
+	ExpiresAt                                       int64
+}
+
+type repositoryBrowsePageCursor struct {
+	Endpoint, RepositoryID, Format, Principal, Parent, After string
+	ExpiresAt                                                int64
+}
+
 type artifactSearchPosition struct {
 	Coordinate  string
 	BuildNumber int
@@ -198,7 +210,7 @@ func managementBrowseRepositoryID(path string) (string, bool) {
 		return "", false
 	}
 	parts := strings.Split(rest, "/")
-	if len(parts) == 2 && (parts[1] == "artifacts" || parts[1] == "artifact-search" || parts[1] == "artifact-intelligence") {
+	if len(parts) == 2 && (parts[1] == "artifacts" || parts[1] == "artifact-search" || parts[1] == "artifact-intelligence" || parts[1] == "browse") {
 		return parts[0], true
 	}
 	if len(parts) == 3 && parts[1] == "artifacts" {
@@ -253,6 +265,7 @@ type generatedRepositoryAPIAdapter struct {
 	scheduledTasks         repository.ScheduledTaskStore
 	webhooks               repository.WebhookStore
 	queueStats             repository.BackgroundOperationQueueStore
+	browse                 repository.ArtifactBrowseStore
 	diagnostics            Dependencies
 	artifactScanner        scanning.Scanner
 	artifactScanFormats    []repository.Format

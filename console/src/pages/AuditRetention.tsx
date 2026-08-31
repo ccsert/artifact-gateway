@@ -49,8 +49,8 @@ export function AuditRetentionPage() {
     }
     if (p.data) {
       setPolicy(p.data);
-      setEnabled(p.data.enabled);
-      setKeepDays(p.data.keepDays);
+      setEnabled(p.data.enabled ?? false);
+      setKeepDays(p.data.keepDays ?? 90);
     }
     setJobs(j.data ?? []);
   }, []);

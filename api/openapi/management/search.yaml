@@ -52,6 +52,46 @@ repositories_repositoryId_artifact_search:
       '400':
         "$ref": "../components/responses.yaml#/Problem"
 
+repositories_repositoryId_browse:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: browseRepository
+    summary: List direct children in a format-aware Repository browse tree
+    description: Returns server-issued navigation projections. Node IDs and page
+      tokens are opaque and bound to the Repository, format, parent, ordering,
+      authorization context, and expiry. Browse Nodes are not physical object-store
+      directories or client-constructed Artifact Identities. The first supported
+      adapters are hosted Maven and Raw; Proxy repositories continue to use the
+      bounded cache-browse endpoint.
+    parameters:
+    - name: parent
+      in: query
+      description: Opaque ID of a previously returned node. Omit for root nodes.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 4096
+    - "$ref": "../components/parameters.yaml#/PageSize"
+    - "$ref": "../components/parameters.yaml#/PageToken"
+    responses:
+      '200':
+        description: Direct children of the requested browse position
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/BrowseNodePage"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"
+
 repositories_repositoryId_artifact_identities:
   parameters:
   - "$ref": "../components/parameters.yaml#/RepositoryId"

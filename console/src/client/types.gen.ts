@@ -4,6 +4,36 @@ export type ClientOptions = {
   baseUrl: "https://gateway.example.com/api/v2" | (string & {});
 };
 
+export type BrowseNode = {
+  /**
+   * Server-issued opaque node ID. Submit it unchanged as parent.
+   */
+  id: string;
+  kind: BrowseNodeKind;
+  /**
+   * Format-aware display name for this level.
+   */
+  name: string;
+  hasChildren: boolean;
+  /**
+   * Canonical Repository-relative asset path when the node represents a path.
+   */
+  path?: string;
+  /**
+   * Protocol-owned canonical coordinate when available.
+   */
+  coordinate?: string;
+  digest?: string;
+  size?: number;
+  contentType?: string;
+  createdAt?: string;
+};
+
+export type BrowseNodePage = {
+  items: Array<BrowseNode>;
+  nextPageToken?: string;
+};
+
 export type Format =
   "raw" | "oci" | "maven" | "conan" | "npm" | "pypi" | "go" | "apt";
 
@@ -1564,6 +1594,9 @@ export type GroupCapacity = {
   format: Format;
   members: Array<GroupCapacityMember>;
 };
+
+export type BrowseNodeKind =
+  "directory" | "namespace" | "component" | "version" | "asset";
 
 export type ArtifactIdentityPurpose = "scan" | "distribution";
 
@@ -5837,6 +5870,58 @@ export type SearchRepositoryArtifactsResponses = {
 
 export type SearchRepositoryArtifactsResponse =
   SearchRepositoryArtifactsResponses[keyof SearchRepositoryArtifactsResponses];
+
+export type BrowseRepositoryData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: {
+    /**
+     * Opaque ID of a previously returned node. Omit for root nodes.
+     */
+    parent?: string;
+    pageSize?: number;
+    pageToken?: string;
+  };
+  url: "/repositories/{repositoryId}/browse";
+};
+
+export type BrowseRepositoryErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type BrowseRepositoryError =
+  BrowseRepositoryErrors[keyof BrowseRepositoryErrors];
+
+export type BrowseRepositoryResponses = {
+  /**
+   * Direct children of the requested browse position
+   */
+  200: BrowseNodePage;
+};
+
+export type BrowseRepositoryResponse =
+  BrowseRepositoryResponses[keyof BrowseRepositoryResponses];
 
 export type ListRepositoryArtifactIdentitiesData = {
   body?: never;

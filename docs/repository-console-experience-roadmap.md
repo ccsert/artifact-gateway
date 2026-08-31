@@ -100,6 +100,38 @@ enabled or adapted by repository type.
 - **Retention Policy**: Hosted lifecycle rule. Proxy cache cleanup should be
   presented as cache policy, not retention.
 
+## Repository Browse Tree
+
+The Console should add a directory-tree interaction without pretending every
+format has physical folders. The tree is a read-only, format-aware projection:
+Maven can expose `groupId -> artifactId -> version -> asset`, while Raw can
+expose path segments. Other formats require their own adapter instead of a
+client-side path heuristic.
+
+Proposed contract:
+
+- `GET /api/v2/repositories/{repositoryId}/browse` returns direct children for
+  an optional opaque `parent`, with bounded `pageSize` and opaque `pageToken`.
+- Nodes use explicit `kind` values such as `directory`, `namespace`,
+  `component`, `version`, and `asset`; actionable leaves carry the canonical
+  coordinate/path and immutable evidence needed by the existing detail flow.
+- Authorization and anonymous policy are applied before children are returned;
+  each format adapter owns lifecycle visibility. Quarantine read enforcement
+  remains at the native protocol boundary. A future Group result also needs the
+  source member and precedence; a Proxy returns only its known cache scope.
+- Node IDs and cursors are never reconstructed by the browser. They are signed
+  and scoped to repository, format, parent, principal, expiry, and stable sort
+  position as applicable.
+- Synthetic directories do not gain delete semantics. A future subtree cleanup
+  must first resolve immutable identities server-side, show a bounded dry-run,
+  and execute as an audited asynchronous job.
+
+The first delivered adapters cover Maven and Raw Hosted repositories plus local
+Proxy cache evidence, validating both a semantic hierarchy and a path
+hierarchy. The existing list/search view remains available for
+cross-repository discovery and accessibility. Group provenance and additional
+format adapters remain future work.
+
 ## Maven Proxy Browse Experience
 
 Current issue: Proxy cache listings expose every cached path as a top-level row,
@@ -347,6 +379,13 @@ Group-only interactions:
 - [x] Add formal OpenAPI schema and generated client coverage for the V2 Proxy
   browse endpoint and operations.
 - [x] Extend V2 Proxy browse endpoint beyond Maven.
+- [x] Add the direct-child Repository browse contract with opaque node IDs and
+      cursors.
+- [x] Implement Maven and Raw Hosted adapters.
+- [ ] Add a storage-backed direct-child projection for Proxy caches without
+      scanning every cached entry per page.
+- [ ] Add Group provenance and adapters for additional formats.
+- [x] Add a lazy, keyboard-accessible Console tree while retaining list/search.
 
 ### Phase 3: Capacity And Storage
 

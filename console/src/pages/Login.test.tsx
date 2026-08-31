@@ -50,6 +50,21 @@ beforeEach(() => {
 });
 
 describe("LoginPage forced password change", () => {
+  it("mounts the source-derived Beams background behind the whole sign-in card", () => {
+    renderPage();
+
+    const beams = document.querySelector(
+      '[data-kokonutui-component="beams-background"]',
+    );
+    expect(beams).toBeInTheDocument();
+    expect(beams?.parentElement).toHaveClass("ag-login-shell");
+    expect(beams?.nextElementSibling).toHaveClass("ag-login-toolbar");
+    expect(
+      document.querySelector(".ag-login-brand-panel")?.contains(beams),
+    ).toBe(false);
+    expect(beams).toHaveAttribute("data-color-mode", "dark");
+  });
+
   it("skips the login form when the current browser session is already authenticated", async () => {
     Object.assign(auth, { authenticated: true });
 

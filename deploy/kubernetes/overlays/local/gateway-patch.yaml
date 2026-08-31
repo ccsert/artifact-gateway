@@ -60,7 +60,7 @@ spec:
                   name: artifact-gateway-secrets
                   key: GATEWAY_APT_SIGNER_TOKEN
             - name: REFERENCE_APT_SIGNER_KEY_FILE
-              value: /var/lib/reference-apt-signer/apt-release-private.gpg
+              value: /var/lib/reference-apt-signer/keys/apt-release-private.gpg
             - name: REFERENCE_APT_SIGNER_RSA_BITS
               value: "4096"
           startupProbe:

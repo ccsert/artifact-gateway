@@ -12,6 +12,7 @@ import { useAuth } from "../lib/auth";
 import { client } from "../client/client.gen";
 import { getCurrentIdentity } from "../client";
 import { Field } from "../components/Layout";
+import { LoginBeamsBackground } from "../components/kokonutui/LoginBeamsBackground";
 import { PreferenceControls } from "../components/PreferenceControls";
 import { SiteBrandMark, SiteName } from "../components/SiteBrand";
 import { usePreferences } from "../lib/preferences";
@@ -44,7 +45,7 @@ interface PendingPasswordChange {
 // app shell.
 export function LoginPage() {
   const { authenticated, identityLoading, setToken } = useAuth();
-  const { t } = usePreferences();
+  const { colorMode, t } = usePreferences();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const redirect = params.get("redirect") || "/";
@@ -215,6 +216,7 @@ export function LoginPage() {
 
   return (
     <div className="ag-login-shell">
+      <LoginBeamsBackground mode={colorMode} />
       <div className="ag-login-toolbar">
         <PreferenceControls />
       </div>
@@ -232,10 +234,7 @@ export function LoginPage() {
           </div>
 
           <div className="ag-login-brand-copy">
-            <div className="font-mono text-xs uppercase tracking-wider text-cyan-300">
-              {t("auth.loginTitle")}
-            </div>
-            <h1 className="mt-4 break-words text-3xl font-semibold leading-tight text-white xl:text-4xl">
+            <h1 className="break-words text-3xl font-semibold leading-tight text-white xl:text-4xl">
               <SiteName />
             </h1>
             <p className="mt-3 max-w-xs text-sm leading-6 text-zinc-400">
@@ -258,12 +257,9 @@ export function LoginPage() {
 
         <section className="ag-login-panel" aria-labelledby="login-heading">
           <header>
-            <div className="font-mono text-xs uppercase tracking-wider text-cyan-400">
-              {t("auth.loginTitle")}
-            </div>
             <h2
               id="login-heading"
-              className="mt-2 text-2xl font-semibold text-zinc-100"
+              className="text-2xl font-semibold text-zinc-100"
             >
               {t("auth.welcome")}
             </h2>
