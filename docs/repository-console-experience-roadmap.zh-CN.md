@@ -38,7 +38,7 @@ Console 应补充目录树交互，但不能假装所有格式都存在物理文
 - 节点 ID 与 cursor 不由浏览器重建，并按适用范围签名绑定 Repository、format、parent、principal、过期时间和稳定排序位置。
 - 合成目录不自动拥有删除语义。未来若支持子树清理，必须由服务端解析不可变身份、先展示有界 dry-run，再通过可审计异步 Job 执行。
 
-首批已交付 Maven、Raw Hosted adapter 与 Proxy 本地缓存边界，同时验证语义层级和路径层级。现有列表/搜索继续保留，用于跨 Repository 发现与无障碍访问；Group provenance 和其他格式 adapter 仍是后续工作。
+首批已交付 Maven、Raw Hosted adapter，同时验证语义层级和路径层级。Proxy 在实现无需逐页扫描全部缓存项的存储层直接子节点投影前继续使用现有有界 cache browse。现有列表/搜索继续保留，用于跨 Repository 发现与无障碍访问；Group provenance 和其他格式 adapter 仍是后续工作。
 
 ## Maven Proxy 浏览体验
 
@@ -104,7 +104,7 @@ Operations 显示 circuit、cache hit/miss/negative、最近失败和 collection
 - 跨 Repository 搜索与精确 digest/coordinate lookup。
 - Group owner 与 Proxy cache state 使用同一解析来源。
 - 新增直属子节点 browse contract，使用 opaque node ID/cursor。
-- 已实现 Maven、Raw adapter 和 Proxy 本地缓存边界；Group provenance 待实现。
+- 已实现 Maven、Raw Hosted adapter；Proxy 存储层直接子节点投影与 Group provenance 待实现。
 - Console 增加 lazy、键盘可访问的目录树，同时保留列表/搜索。
 
 ### 阶段 3：容量与存储

@@ -62,7 +62,8 @@ repositories_repositoryId_browse:
       tokens are opaque and bound to the Repository, format, parent, ordering,
       authorization context, and expiry. Browse Nodes are not physical object-store
       directories or client-constructed Artifact Identities. The first supported
-      adapters are Maven and Raw.
+      adapters are hosted Maven and Raw; Proxy repositories continue to use the
+      bounded cache-browse endpoint.
     parameters:
     - name: parent
       in: query

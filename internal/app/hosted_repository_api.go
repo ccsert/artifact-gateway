@@ -96,6 +96,7 @@ type artifactSearchPageCursor struct {
 type repositoryBrowseNodeCursor struct {
 	Endpoint, RepositoryID, Format, Principal, Kind string
 	Namespace, Component, Version, Path             string
+	BuildNumber                                     int
 	ExpiresAt                                       int64
 }
 

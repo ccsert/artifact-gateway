@@ -21,6 +21,7 @@ import { Badge } from "../../components/Badge";
 import { EmptyState, ErrorBanner, Loading } from "../../components/Feedback";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
+import { decodeRawPathForDisplay } from "../../lib/rawPath";
 import { CopyButton } from "./RepositoryUsageGuides";
 
 interface RepositoryTreeDataNode extends TreeDataNode {
@@ -149,26 +150,31 @@ export function RepositoryBrowseTree({
         setLoading(true);
       }
       setError(null);
-      const response = await browseRepository({
-        path: { repositoryId: repo.id },
-        query: { pageSize: 50 },
-      });
-      if (version !== requestVersion.current) return;
-      setLoading(false);
-      if (response.error || !response.data) {
-        setError(
-          response.error ??
-            new Error(text("读取目录失败", "Failed to load directory")),
+      try {
+        const response = await browseRepository({
+          path: { repositoryId: repo.id },
+          query: { pageSize: 50 },
+        });
+        if (version !== requestVersion.current) return;
+        if (response.error || !response.data) {
+          setError(
+            response.error ??
+              new Error(text("读取目录失败", "Failed to load directory")),
+          );
+          return;
+        }
+        setTreeData(
+          toTreeNodes(
+            response.data.items,
+            undefined,
+            response.data.nextPageToken,
+          ),
         );
-        return;
+      } catch (requestError) {
+        if (version === requestVersion.current) setError(requestError);
+      } finally {
+        if (version === requestVersion.current) setLoading(false);
       }
-      setTreeData(
-        toTreeNodes(
-          response.data.items,
-          undefined,
-          response.data.nextPageToken,
-        ),
-      );
     },
     [repo.id, text, toTreeNodes],
   );
@@ -264,6 +270,10 @@ export function RepositoryBrowseTree({
     return <Loading label={text("正在读取目录…", "Loading directory…")} />;
   }
 
+  if (treeData.length === 0 && error !== null) {
+    return <ErrorBanner error={error} onRetry={() => void loadRoot(false)} />;
+  }
+
   if (treeData.length === 0 && error === null) {
     return (
       <EmptyState
@@ -344,7 +354,13 @@ export function RepositoryBrowseTree({
               <div className="ag-repository-tree-field">
                 <span>{text("规范位置", "Canonical location")}</span>
                 <div>
-                  <code>{selected.coordinate ?? selected.path}</code>
+                  <code>
+                    {repo.format === "raw"
+                      ? decodeRawPathForDisplay(
+                          selected.coordinate ?? selected.path ?? "",
+                        )
+                      : (selected.coordinate ?? selected.path)}
+                  </code>
                   <CopyButton
                     text={selected.coordinate ?? selected.path ?? ""}
                   />

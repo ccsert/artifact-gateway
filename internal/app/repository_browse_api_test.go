@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,44 +82,8 @@ func TestRepositoryBrowseProjectsMavenNamespaceComponentVersionAndAssets(t *test
 	}
 }
 
-func TestRepositoryBrowseProjectsMavenProxyCacheWithTheSameHierarchy(t *testing.T) {
-	handler, store, _, _, mavenCache, _, _ := newCacheEntriesTestHandler(t)
-	ctx := context.Background()
-	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
-		ID: uuid.NewString(), Name: "maven-central", Format: repository.FormatMaven,
-		Type: repository.RepositoryTypeProxy, Endpoint: "https://repo.maven.apache.org/maven2",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{{Principal: "proxy-browser", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
-		t.Fatal(err)
-	}
-	for _, path := range []string{
-		"org/example/widget/1.0/widget-1.0.jar",
-		"org/example/widget/1.0/widget-1.0.pom",
-	} {
-		if err = mavenCache.Store(ctx, mavenCache.Key(repo.Name, path), path, CachedMavenContent{
-			Body: []byte(path), ContentType: "application/octet-stream", Member: "central", Endpoint: repo.Endpoint, Repository: repo.Name,
-		}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	token := testAuthenticator().IssueToken("proxy-browser")
-	_, root := browseRepositoryForTest(t, handler, token, repo.ID, "", "", 50)
-	if len(root.Items) != 1 || root.Items[0].Name != "org.example" {
-		t.Fatalf("root=%+v", root)
-	}
-	_, components := browseRepositoryForTest(t, handler, token, repo.ID, root.Items[0].ID, "", 50)
-	_, versions := browseRepositoryForTest(t, handler, token, repo.ID, components.Items[0].ID, "", 50)
-	_, assets := browseRepositoryForTest(t, handler, token, repo.ID, versions.Items[0].ID, "", 50)
-	if len(assets.Items) != 2 || assets.Items[0].Path != "org/example/widget/1.0/widget-1.0.jar" || assets.Items[1].Path != "org/example/widget/1.0/widget-1.0.pom" {
-		t.Fatalf("assets=%+v", assets)
-	}
-}
-
-func TestRepositoryBrowseProjectsRawProxyCacheAsPathSegments(t *testing.T) {
-	handler, store, _, _, _, rawCache, _ := newCacheEntriesTestHandler(t)
+func TestRepositoryBrowseRejectsUnboundedProxyProjection(t *testing.T) {
+	store := repository.NewMemoryStore()
 	ctx := context.Background()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
 		ID: uuid.NewString(), Name: "raw-downloads", Format: repository.FormatRaw,
@@ -130,21 +95,11 @@ func TestRepositoryBrowseProjectsRawProxyCacheAsPathSegments(t *testing.T) {
 	if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{{Principal: "proxy-browser", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	path := "docs/release%20notes.txt"
-	if err = rawCache.Store(ctx, rawCache.Key(repo.Name, path, "origin", repo.Endpoint), RawContent{
-		Body: []byte("release notes"), Repository: repo.Name, Path: path,
-		Member: "origin", Endpoint: repo.Endpoint, ContentType: "text/plain", CacheQuotaBytes: 10000,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	token := testAuthenticator().IssueToken("proxy-browser")
-	_, root := browseRepositoryForTest(t, handler, token, repo.ID, "", "", 50)
-	if len(root.Items) != 1 || root.Items[0].Name != "docs" || !root.Items[0].HasChildren {
-		t.Fatalf("root=%+v", root)
-	}
-	_, children := browseRepositoryForTest(t, handler, token, repo.ID, root.Items[0].ID, "", 50)
-	if len(children.Items) != 1 || children.Items[0].Name != "release notes.txt" || children.Items[0].Path != path || children.Items[0].Size == nil || *children.Items[0].Size != int64(len("release notes")) {
-		t.Fatalf("children=%+v", children)
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	response, _ := browseRepositoryForTest(t, handler, authenticator.IssueToken("proxy-browser"), repo.ID, "", "", 50)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"unsupported_repository_type"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

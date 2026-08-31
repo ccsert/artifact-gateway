@@ -2,7 +2,8 @@ package repository
 
 import (
 	"context"
-	"sort"
+	"database/sql"
+	"errors"
 	"strings"
 	"time"
 )
@@ -62,8 +63,8 @@ func (s *PostgresStore) listPostgresMavenBrowseNodes(ctx context.Context, reposi
 		}
 		return items, rows.Err()
 	case BrowseNodeComponent:
-		rows, err := s.db.QueryContext(ctx, `SELECT coordinate,digest,created_at FROM (
-				SELECT coordinate,digest,created_at,
+		rows, err := s.db.QueryContext(ctx, `SELECT coordinate,digest,created_at,build_number FROM (
+				SELECT coordinate,digest,created_at,build_number,
 					row_number() OVER (PARTITION BY coordinate ORDER BY build_number DESC, created_at DESC) AS browse_rank
 				FROM native_maven_artifacts
 				WHERE repository_id=$1::uuid AND state='visible'
@@ -78,38 +79,53 @@ func (s *PostgresStore) listPostgresMavenBrowseNodes(ctx context.Context, reposi
 		items := make([]ArtifactBrowseNode, 0)
 		for rows.Next() {
 			var coordinate, digest string
+			var buildNumber int
 			var createdAt time.Time
-			if err := rows.Scan(&coordinate, &digest, &createdAt); err != nil {
+			if err := rows.Scan(&coordinate, &digest, &createdAt, &buildNumber); err != nil {
 				return nil, err
 			}
 			parts := strings.Split(coordinate, ":")
 			if len(parts) < 3 {
 				continue
 			}
-			items = append(items, ArtifactBrowseNode{Key: coordinate, Kind: BrowseNodeVersion, Name: parts[2], HasChildren: true, Namespace: parent.Namespace, Component: parent.Component, Version: parts[2], Coordinate: coordinate, Digest: digest, CreatedAt: createdAt})
+			items = append(items, ArtifactBrowseNode{Key: coordinate, Kind: BrowseNodeVersion, Name: parts[2], HasChildren: true, Namespace: parent.Namespace, Component: parent.Component, Version: parts[2], Coordinate: coordinate, BuildNumber: buildNumber, Digest: digest, CreatedAt: createdAt})
 		}
 		return items, rows.Err()
 	case BrowseNodeVersion:
-		assets, err := s.ListMavenAssets(ctx, repositoryID, parent.Version)
+		var createdAt time.Time
+		err := s.db.QueryRowContext(ctx, `SELECT created_at FROM native_maven_artifacts
+			WHERE repository_id=$1::uuid AND coordinate=$2 AND build_number=$3 AND state='visible'`, repositoryID, parent.Version, parent.BuildNumber).Scan(&createdAt)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		if err != nil {
 			return nil, err
 		}
-		items := make([]ArtifactBrowseNode, 0, len(assets))
-		for _, asset := range assets {
-			if asset.Path <= after {
-				continue
+		prefix := mavenArtifactPathPrefix(parent.Version)
+		if parent.BuildNumber > 0 {
+			prefix += mavenSnapshotBuildFilePrefix(parent.Version, createdAt, parent.BuildNumber)
+		}
+		rows, err := s.db.QueryContext(ctx, `SELECT path,digest,size FROM native_maven_assets
+			WHERE repository_id=$1::uuid AND left(path,length($2))=$2 AND path>$3
+			ORDER BY path LIMIT $4`, repositoryID, prefix, after, limit)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = rows.Close() }()
+		items := make([]ArtifactBrowseNode, 0)
+		for rows.Next() {
+			var path, digest string
+			var size int64
+			if err := rows.Scan(&path, &digest, &size); err != nil {
+				return nil, err
 			}
-			name := asset.Path
+			name := path
 			if slash := strings.LastIndex(name, "/"); slash >= 0 {
 				name = name[slash+1:]
 			}
-			items = append(items, ArtifactBrowseNode{Key: asset.Path, Kind: BrowseNodeAsset, Name: name, Path: asset.Path, Coordinate: parent.Version, Digest: asset.Digest, Size: asset.Size})
+			items = append(items, ArtifactBrowseNode{Key: path, Kind: BrowseNodeAsset, Name: name, Path: path, Coordinate: parent.Version, Digest: digest, Size: size})
 		}
-		sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
-		if len(items) > limit {
-			items = items[:limit]
-		}
-		return items, nil
+		return items, rows.Err()
 	default:
 		return nil, ErrUnsupportedBrowseFormat
 	}

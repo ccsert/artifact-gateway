@@ -788,7 +788,8 @@ export function RepositoryArtifactsTab({
   const proxyAPT = format === "apt" && repo.type === "proxy";
   const hostedAPT = format === "apt" && repo.type === "hosted";
   const canUploadRaw = format === "raw" && repo.type !== "proxy";
-  const supportsDirectory = format === "maven" || format === "raw";
+  const supportsDirectory =
+    repo.type === "hosted" && (format === "maven" || format === "raw");
 
   useEffect(() => {
     setView("list");

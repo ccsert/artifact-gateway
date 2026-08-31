@@ -381,8 +381,9 @@ Group-only interactions:
 - [x] Extend V2 Proxy browse endpoint beyond Maven.
 - [x] Add the direct-child Repository browse contract with opaque node IDs and
       cursors.
-- [x] Implement Maven and Raw Hosted adapters plus the Proxy local-cache
-      boundary.
+- [x] Implement Maven and Raw Hosted adapters.
+- [ ] Add a storage-backed direct-child projection for Proxy caches without
+      scanning every cached entry per page.
 - [ ] Add Group provenance and adapters for additional formats.
 - [x] Add a lazy, keyboard-accessible Console tree while retaining list/search.
 

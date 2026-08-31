@@ -1,11 +1,10 @@
 package app
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"net/url"
-	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +16,10 @@ func (h generatedRepositoryAPIAdapter) BrowseRepository(w http.ResponseWriter, r
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(principal Principal, repo repository.HostedRepository) {
 		if repo.Format != repository.FormatMaven && repo.Format != repository.FormatRaw {
 			writeHostedProblem(w, http.StatusBadRequest, "unsupported_format", "directory browsing is currently available for Maven and Raw repositories")
+			return
+		}
+		if repo.Type == repository.RepositoryTypeProxy {
+			writeHostedProblem(w, http.StatusBadRequest, "unsupported_repository_type", "directory browsing is currently available for hosted Maven and Raw repositories")
 			return
 		}
 		pageSize := 50
@@ -46,12 +49,7 @@ func (h generatedRepositoryAPIAdapter) BrowseRepository(w http.ResponseWriter, r
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
 			return
 		}
-		var items []repository.ArtifactBrowseNode
-		if repo.Type == repository.RepositoryTypeProxy {
-			items, err = h.listProxyRepositoryBrowseNodes(r.Context(), repo, parent, pageSize+1, after)
-		} else {
-			items, err = h.browse.ListArtifactBrowseNodes(r.Context(), repo.ID, repo.Format, parent, pageSize+1, after)
-		}
+		items, err := h.browse.ListArtifactBrowseNodes(r.Context(), repo.ID, repo.Format, parent, pageSize+1, after)
 		if errors.Is(err, repository.ErrNotFound) {
 			items, err = []repository.ArtifactBrowseNode{}, nil
 		}
@@ -79,97 +77,12 @@ func (h generatedRepositoryAPIAdapter) BrowseRepository(w http.ResponseWriter, r
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) listProxyRepositoryBrowseNodes(ctx context.Context, repo repository.HostedRepository, parent repository.ArtifactBrowseParent, limit int, after string) ([]repository.ArtifactBrowseNode, error) {
-	if h.proxyCache.maintenance == nil {
-		return nil, errors.New("proxy cache browsing is not enabled")
-	}
-	items, err := h.proxyCache.proxyCacheItems(ctx, repo, "", "asset", "all")
-	if err != nil {
-		return nil, err
-	}
-	var nodes []repository.ArtifactBrowseNode
-	switch repo.Format {
-	case repository.FormatMaven:
-		nodes = projectMavenProxyBrowseNodes(items, parent)
-	case repository.FormatRaw:
-		nodes = projectRawProxyBrowseNodes(items, parent)
-	default:
-		return nil, repository.ErrUnsupportedBrowseFormat
-	}
-	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Key < nodes[j].Key })
-	start := sort.Search(len(nodes), func(index int) bool { return nodes[index].Key > after })
-	end := min(start+limit, len(nodes))
-	return append([]repository.ArtifactBrowseNode(nil), nodes[start:end]...), nil
-}
-
-func projectMavenProxyBrowseNodes(items []proxyCacheBrowseItem, parent repository.ArtifactBrowseParent) []repository.ArtifactBrowseNode {
-	nodes := make(map[string]repository.ArtifactBrowseNode)
-	for _, item := range items {
-		parsed, ok := parseMavenCacheCoordinate(item.Path)
-		if !ok {
-			continue
-		}
-		coordinate := parsed.GroupID + ":" + parsed.ArtifactID + ":" + parsed.Version
-		switch parent.Kind {
-		case "":
-			nodes[parsed.GroupID] = repository.ArtifactBrowseNode{Key: parsed.GroupID, Kind: repository.BrowseNodeNamespace, Name: parsed.GroupID, HasChildren: true, Namespace: parsed.GroupID}
-		case repository.BrowseNodeNamespace:
-			if parsed.GroupID == parent.Namespace {
-				nodes[parsed.ArtifactID] = repository.ArtifactBrowseNode{Key: parsed.ArtifactID, Kind: repository.BrowseNodeComponent, Name: parsed.ArtifactID, HasChildren: true, Namespace: parsed.GroupID, Component: parsed.ArtifactID}
-			}
-		case repository.BrowseNodeComponent:
-			if parsed.GroupID == parent.Namespace && parsed.ArtifactID == parent.Component {
-				nodes[coordinate] = repository.ArtifactBrowseNode{Key: coordinate, Kind: repository.BrowseNodeVersion, Name: parsed.Version, HasChildren: true, Namespace: parsed.GroupID, Component: parsed.ArtifactID, Version: parsed.Version, Coordinate: coordinate}
-			}
-		case repository.BrowseNodeVersion:
-			if coordinate == parent.Version {
-				nodes[item.Path] = repository.ArtifactBrowseNode{Key: item.Path, Kind: repository.BrowseNodeAsset, Name: parsed.FileName, Path: item.Path, Coordinate: coordinate, Digest: item.Digest, Size: item.Size, ContentType: item.ContentType}
-			}
-		}
-	}
-	return projectedBrowseNodeValues(nodes)
-}
-
-func projectRawProxyBrowseNodes(items []proxyCacheBrowseItem, parent repository.ArtifactBrowseParent) []repository.ArtifactBrowseNode {
-	prefix := parent.Path
-	if prefix != "" && !strings.HasSuffix(prefix, "/") {
-		prefix += "/"
-	}
-	nodes := make(map[string]repository.ArtifactBrowseNode)
-	for _, item := range items {
-		if !strings.HasPrefix(item.Path, prefix) {
-			continue
-		}
-		remainder := strings.TrimPrefix(item.Path, prefix)
-		if remainder == "" {
-			continue
-		}
-		if slash := strings.IndexByte(remainder, '/'); slash >= 0 {
-			segment := remainder[:slash]
-			key := segment + "\x1f0"
-			nodes[key] = repository.ArtifactBrowseNode{Key: key, Kind: repository.BrowseNodeDirectory, Name: segment, HasChildren: true, Path: prefix + segment}
-			continue
-		}
-		key := remainder + "\x1f1"
-		nodes[key] = repository.ArtifactBrowseNode{Key: key, Kind: repository.BrowseNodeAsset, Name: remainder, Path: item.Path, Coordinate: item.Path, Digest: item.Digest, Size: item.Size, ContentType: item.ContentType}
-	}
-	return projectedBrowseNodeValues(nodes)
-}
-
-func projectedBrowseNodeValues(nodes map[string]repository.ArtifactBrowseNode) []repository.ArtifactBrowseNode {
-	items := make([]repository.ArtifactBrowseNode, 0, len(nodes))
-	for _, node := range nodes {
-		items = append(items, node)
-	}
-	return items
-}
-
 func repositoryBrowsePrincipalKey(principal Principal) string {
 	return string(principal.AuthenticationKind) + "\x1f" + principal.Actor
 }
 
 func repositoryBrowseParentKey(parent repository.ArtifactBrowseParent) string {
-	return strings.Join([]string{string(parent.Kind), parent.Namespace, parent.Component, parent.Version, parent.Path}, "\x1f")
+	return strings.Join([]string{string(parent.Kind), parent.Namespace, parent.Component, parent.Version, strconv.Itoa(parent.BuildNumber), parent.Path}, "\x1f")
 }
 
 func (h hostedRepositoryAPIHandler) decodeRepositoryBrowseParent(token string, repo repository.HostedRepository, principal string) (repository.ArtifactBrowseParent, string, error) {
@@ -181,7 +94,7 @@ func (h hostedRepositoryAPIHandler) decodeRepositoryBrowseParent(token string, r
 	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "repository-browse-node" || cursor.RepositoryID != repo.ID || cursor.Format != string(repo.Format) || cursor.Principal != principal || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return repository.ArtifactBrowseParent{}, "", errors.New("invalid parent")
 	}
-	parent := repository.ArtifactBrowseParent{Kind: repository.BrowseNodeKind(cursor.Kind), Namespace: cursor.Namespace, Component: cursor.Component, Version: cursor.Version, Path: cursor.Path}
+	parent := repository.ArtifactBrowseParent{Kind: repository.BrowseNodeKind(cursor.Kind), Namespace: cursor.Namespace, Component: cursor.Component, Version: cursor.Version, BuildNumber: cursor.BuildNumber, Path: cursor.Path}
 	if !validRepositoryBrowseParent(repo.Format, parent) {
 		return repository.ArtifactBrowseParent{}, "", errors.New("invalid parent")
 	}
@@ -223,7 +136,7 @@ func (h hostedRepositoryAPIHandler) encodeRepositoryBrowsePageToken(repo reposit
 func (h hostedRepositoryAPIHandler) repositoryBrowseNodeResponse(repo repository.HostedRepository, principal string, node repository.ArtifactBrowseNode) adminopenapi.BrowseNode {
 	cursor := repositoryBrowseNodeCursor{
 		Endpoint: "repository-browse-node", RepositoryID: repo.ID, Format: string(repo.Format), Principal: principal,
-		Kind: string(node.Kind), Namespace: node.Namespace, Component: node.Component, Version: node.Coordinate, Path: node.Path,
+		Kind: string(node.Kind), Namespace: node.Namespace, Component: node.Component, Version: node.Coordinate, BuildNumber: node.BuildNumber, Path: node.Path,
 		ExpiresAt: time.Now().UTC().Add(time.Hour).Unix(),
 	}
 	name := node.Name

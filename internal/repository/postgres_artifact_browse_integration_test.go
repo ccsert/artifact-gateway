@@ -5,8 +5,10 @@ package repository
 import (
 	"context"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -70,6 +72,28 @@ func TestPostgresArtifactBrowseProjectsMavenAndRaw(t *testing.T) {
 	assets, err := store.ListArtifactBrowseNodes(ctx, mavenRepo.ID, FormatMaven, ArtifactBrowseParent{Kind: BrowseNodeVersion, Namespace: "com.acme", Component: "widget", Version: coordinate}, 50, "")
 	if err != nil || len(assets) != 1 || assets[0].Path != assetPath || assets[0].Size != 42 {
 		t.Fatalf("maven assets=%#v err=%v", assets, err)
+	}
+
+	snapshotCoordinate := "com.acme:widget:2.0-SNAPSHOT"
+	snapshotCreated := time.Date(2026, 8, 31, 2, 3, 4, 0, time.UTC)
+	for buildNumber := 1; buildNumber <= 2; buildNumber++ {
+		digest := "sha256:" + strings.Repeat(strconv.Itoa(buildNumber), 64)
+		createdAt := snapshotCreated.Add(time.Duration(buildNumber) * time.Minute)
+		if _, err = store.db.ExecContext(ctx, `INSERT INTO native_maven_artifacts (id,repository_id,coordinate,digest,state,build_number,created_at) VALUES ($1,$2,$3,$4,'visible',$5,$6)`, uuid.NewString(), mavenRepo.ID, snapshotCoordinate, digest, buildNumber, createdAt); err != nil {
+			t.Fatal(err)
+		}
+		path := mavenArtifactPathPrefix(snapshotCoordinate) + mavenSnapshotBuildFilePrefix(snapshotCoordinate, createdAt, buildNumber) + ".jar"
+		if _, err = store.db.ExecContext(ctx, `INSERT INTO native_maven_assets (repository_id,path,object_key,digest,size) VALUES ($1,$2,$3,$4,$5)`, mavenRepo.ID, path, "browse/maven/"+uuid.NewString(), digest, buildNumber); err != nil {
+			t.Fatal(err)
+		}
+	}
+	versions, err = store.ListArtifactBrowseNodes(ctx, mavenRepo.ID, FormatMaven, ArtifactBrowseParent{Kind: BrowseNodeComponent, Namespace: "com.acme", Component: "widget"}, 50, "")
+	if err != nil || len(versions) != 2 || versions[1].Coordinate != snapshotCoordinate || versions[1].BuildNumber != 2 {
+		t.Fatalf("snapshot versions=%#v err=%v", versions, err)
+	}
+	snapshotAssets, err := store.ListArtifactBrowseNodes(ctx, mavenRepo.ID, FormatMaven, ArtifactBrowseParent{Kind: BrowseNodeVersion, Namespace: "com.acme", Component: "widget", Version: snapshotCoordinate, BuildNumber: 2}, 50, "")
+	if err != nil || len(snapshotAssets) != 1 || snapshotAssets[0].Size != 2 || !strings.Contains(snapshotAssets[0].Path, "-2.jar") {
+		t.Fatalf("snapshot assets=%#v err=%v", snapshotAssets, err)
 	}
 
 	if _, err = store.PutRawAsset(ctx, RawAsset{

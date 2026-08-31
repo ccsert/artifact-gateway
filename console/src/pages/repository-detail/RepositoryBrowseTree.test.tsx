@@ -81,7 +81,10 @@ describe("RepositoryBrowseTree", () => {
     });
 
     await user.click(screen.getByText("release notes.txt"));
-    expect(screen.getByText("docs/release%20notes.txt")).toBeInTheDocument();
+    expect(screen.getByText("docs/release notes.txt")).toBeInTheDocument();
+    expect(
+      screen.queryByText("docs/release%20notes.txt"),
+    ).not.toBeInTheDocument();
     expect(screen.getAllByText("0 B")).toHaveLength(2);
     expect(screen.getByText("text/plain")).toBeInTheDocument();
 
@@ -123,6 +126,31 @@ describe("RepositoryBrowseTree", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("packages")).toBeInTheDocument();
     await waitFor(() => expect(mockBrowseRepository).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows only the initial error until a retry succeeds", async () => {
+    const user = userEvent.setup();
+    mockBrowseRepository
+      .mockResolvedValueOnce({
+        error: { message: "initial browse failure" },
+      } as never)
+      .mockResolvedValueOnce({ data: { items: [] } } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositoryBrowseTree repo={repository} onOpenInList={vi.fn()} />
+      </PreferencesProvider>,
+    );
+
+    expect(
+      await screen.findByText("initial browse failure"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("制品目录")).not.toBeInTheDocument();
+    expect(screen.queryByText("暂无可浏览制品")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /重试/ }));
+    expect(await screen.findByText("暂无可浏览制品")).toBeInTheDocument();
+    expect(mockBrowseRepository).toHaveBeenCalledTimes(2);
   });
 
   it("appends a bounded root page without discarding earlier nodes", async () => {

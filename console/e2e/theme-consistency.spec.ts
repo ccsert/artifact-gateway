@@ -97,6 +97,7 @@ async function measurePanelArtwork(panel: Locator) {
 test("theme and language preferences persist on the sign-in surface", async ({
   page,
 }) => {
+  await mockDefaultSiteSettings(page);
   await page.route("**/auth/session", (route) =>
     route.fulfill({ json: { authenticated: false } }),
   );
@@ -169,7 +170,7 @@ test("theme and language preferences persist on the sign-in surface", async ({
   await page.getByRole("menuitem", { name: "English" }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "en-US");
   await expect(
-    page.locator(".ag-login-panel").getByText("Console Sign In", {
+    page.locator(".ag-login-panel").getByText("Sign in to the console", {
       exact: true,
     }),
   ).toBeVisible();

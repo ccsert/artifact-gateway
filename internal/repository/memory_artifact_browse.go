@@ -63,23 +63,25 @@ func (s *MemoryStore) listMemoryMavenBrowseNodes(repositoryID string, parent Art
 				nodes[artifact.Coordinate] = ArtifactBrowseNode{
 					Key: artifact.Coordinate, Kind: BrowseNodeVersion, Name: parts[2], HasChildren: true,
 					Namespace: parts[0], Component: parts[1], Version: parts[2], Coordinate: artifact.Coordinate,
-					Digest: artifact.Digest, CreatedAt: artifact.CreatedAt,
+					BuildNumber: artifact.BuildNumber, Digest: artifact.Digest, CreatedAt: artifact.CreatedAt,
 				}
 			}
 		}
 	case BrowseNodeVersion:
-		for _, asset := range s.mavenAssets {
-			if asset.RepositoryID != repositoryID {
+		var selected *MavenArtifact
+		for _, artifact := range artifacts {
+			if artifact.Coordinate != parent.Version || artifact.BuildNumber != parent.BuildNumber {
 				continue
 			}
-			belongs := false
-			for _, artifact := range artifacts {
-				if artifact.Coordinate == parent.Version && mavenAssetBelongsToArtifactBuild(asset, artifact) {
-					belongs = true
-					break
-				}
-			}
-			if !belongs {
+			candidate := artifact
+			selected = &candidate
+			break
+		}
+		if selected == nil {
+			return nil
+		}
+		for _, asset := range s.mavenAssets {
+			if asset.RepositoryID != repositoryID || !mavenAssetBelongsToArtifactBuild(asset, *selected) {
 				continue
 			}
 			name := asset.Path

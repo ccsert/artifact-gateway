@@ -25,7 +25,10 @@ type ArtifactBrowseParent struct {
 	Namespace string
 	Component string
 	Version   string
-	Path      string
+	// BuildNumber pins a mutable Maven SNAPSHOT coordinate to the exact
+	// visible build selected by the server-owned version node.
+	BuildNumber int
+	Path        string
 }
 
 // ArtifactBrowseNode is a format-aware navigation projection. Key is an
@@ -38,6 +41,7 @@ type ArtifactBrowseNode struct {
 	Namespace   string
 	Component   string
 	Version     string
+	BuildNumber int
 	Path        string
 	Coordinate  string
 	Digest      string

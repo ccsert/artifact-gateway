@@ -11,6 +11,12 @@ their meaning.
 
 ## Unreleased
 
+- Added a lazy, server-owned directory tree for Maven and Raw Hosted
+  repositories. Signed node IDs and cursors bind navigation to the repository
+  and principal, Maven SNAPSHOT nodes retain the exact selected build, and Raw
+  paths stay readable while copy and actions preserve their canonical value.
+- Refined the sign-in, public catalog, empty-state, and theme surfaces with
+  responsive geometry checks and reduced-motion-safe visual behavior.
 - Licensed Artifact Gateway under the MIT License and documented the project
   and contribution licensing terms in both README languages.
 - Improved Raw usability across the Console: Unicode and space-containing paths

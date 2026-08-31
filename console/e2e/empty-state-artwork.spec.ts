@@ -140,10 +140,7 @@ async function mockFormatProfiles(page: Page) {
   );
 }
 
-async function mockAnonymousShell(page: Page) {
-  await page.route("**/auth/session", (route) =>
-    route.fulfill({ json: { authenticated: false } }),
-  );
+async function mockDefaultSiteSettings(page: Page) {
   await page.route("**/api/v2/site-settings", (route) =>
     route.fulfill({
       json: {
@@ -163,6 +160,13 @@ async function mockAnonymousShell(page: Page) {
       },
     }),
   );
+}
+
+async function mockAnonymousShell(page: Page) {
+  await page.route("**/auth/session", (route) =>
+    route.fulfill({ json: { authenticated: false } }),
+  );
+  await mockDefaultSiteSettings(page);
 }
 
 test("public catalog empty state uses responsive theme artwork", async ({
@@ -263,6 +267,7 @@ test("repository first-use artwork leads directly to creation", async ({
   await page.setViewportSize({ width: 1440, height: 1000 });
   await useDarkChinesePreferences(page);
   await authenticateAsAdmin(page);
+  await mockDefaultSiteSettings(page);
   await mockFormatProfiles(page);
   await page.route("**/api/v2/repository-capacities", (route) =>
     route.fulfill({ json: [] }),
@@ -320,6 +325,7 @@ test("repository filter-only empty state keeps the standard feedback", async ({
   const runtimeErrors = captureRuntimeErrors(page);
   await useDarkChinesePreferences(page);
   await authenticateAsAdmin(page);
+  await mockDefaultSiteSettings(page);
   await mockFormatProfiles(page);
   await page.route("**/api/v2/repository-capacities", (route) =>
     route.fulfill({ json: [] }),
