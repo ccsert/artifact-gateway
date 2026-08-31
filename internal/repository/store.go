@@ -31,6 +31,8 @@ var (
 	ErrWebhookSubscriptionNameExists = errors.New("webhook subscription name already exists")
 	ErrInvalidWebhookDeliveryState   = errors.New("webhook delivery state is invalid")
 	ErrAPTPackageConflict            = errors.New("APT package identity already has different immutable bytes")
+	ErrConsoleThemeExists            = errors.New("Console theme already exists")
+	ErrConsoleThemeNotFound          = errors.New("Console theme not found")
 )
 
 type HostedRepositoryStore interface {
@@ -52,6 +54,17 @@ type AnonymousAccessPolicyStore interface {
 type SiteSettingsStore interface {
 	GetSiteSettings(context.Context) (SiteSettings, error)
 	ReplaceSiteSettings(context.Context, SiteSettings, string) (SiteSettings, error)
+}
+
+// ConsoleThemeStore persists administrator-managed theme packages. Bundled
+// and directory-backed packages remain outside this store and are immutable
+// through the management API.
+type ConsoleThemeStore interface {
+	ListConsoleThemePackages(context.Context) ([]ConsoleThemePackage, error)
+	GetConsoleThemePackage(context.Context, string) (ConsoleThemePackage, error)
+	CreateConsoleThemePackage(context.Context, ConsoleThemePackage) (ConsoleThemePackage, error)
+	ReplaceConsoleThemePackage(context.Context, ConsoleThemePackage, string) (ConsoleThemePackage, error)
+	DeleteConsoleThemePackage(context.Context, string, string) error
 }
 
 type OIDCSettingsStore interface {

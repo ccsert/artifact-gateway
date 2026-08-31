@@ -244,6 +244,7 @@ type generatedRepositoryAPIAdapter struct {
 	auditRetention         repository.AuditRetentionStore
 	anonymousAccess        repository.AnonymousAccessPolicyStore
 	siteSettings           repository.SiteSettingsStore
+	consoleThemePackages   repository.ConsoleThemeStore
 	consoleThemes          *consoletheme.Registry
 	oidcRuntime            *OIDCRuntime
 	replication            repository.ReplicationStore

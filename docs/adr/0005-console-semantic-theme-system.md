@@ -59,7 +59,9 @@ the other approaches lack. It is the selected design.
 
 Theme Package schema version 1 remains the external contract. It continues to
 accept stable color seed/alias tokens and cannot change typography, density,
-spacing, component geometry, or arbitrary CSS. No API migration is required.
+spacing, component geometry, or arbitrary CSS. The package schema does not
+change. Administrator-managed packages add management resources and persistent
+storage without widening the package's executable surface.
 
 The Console owns a `ResolvedConsoleTheme` deep module with this public shape:
 
@@ -89,6 +91,28 @@ The CSS bootstrap palette exists only to prevent an unthemed first paint while
 site settings load. It uses the same semantic variable names, supports both
 color modes, and is completely overwritten by the runtime projection. It is
 not a fifth source of theme behavior.
+
+## Package ownership and lifecycle
+
+The runtime catalog has three explicit sources with fixed ownership:
+
+1. `builtin` packages ship with the Gateway binary;
+2. `directory` packages are owned by operators through
+   `GATEWAY_CONSOLE_THEME_DIR` and the `gateway theme` CLI;
+3. `managed` packages are uploaded by administrators and stored in PostgreSQL.
+
+Built-in and directory IDs are reserved and cannot be replaced or deleted by
+the management API. Managed packages use an integer version exposed as an
+opaque string and require `If-Match` for replacement and deletion. A managed
+package must be disabled in persisted site settings before it can be deleted.
+Install, replace, and delete operations are audited.
+
+The Console sends an uploaded JSON object to the server for authoritative
+strict validation before showing a preview. Installing a new package stages it
+in the enabled-theme draft when capacity allows; it does not become available
+to users until an administrator saves site settings. This separates package
+storage from deployment-wide activation and keeps concurrent site-setting
+changes protected by their own version.
 
 ## Semantic role contract
 
@@ -197,7 +221,10 @@ A theme-system change is complete only when:
 - lint, type checking, unit tests, Ant Design checks, formatting, and build pass;
 - real-browser checks cover dark/light, desktop/mobile, keyboard focus, text
   selection, rapid switching, and `prefers-reduced-motion`;
-- custom extension themes continue to work without a server schema change.
+- custom extension themes continue to work without a server schema change;
+- package upload covers strict validation, preview, install/replace, optimistic
+  concurrency, audit, activation, and delete protection;
+- a second Gateway instance reads the same managed catalog from PostgreSQL.
 
 ## Consequences
 

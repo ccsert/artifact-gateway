@@ -184,6 +184,178 @@
         }
       }
     },
+    "/console-themes:validate": {
+      "post": {
+        "operationId": "validateConsoleThemePackage",
+        "description": "Strictly validates a Theme Package v1 and reports whether its ID can be installed or replaced.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleThemePackage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Theme package validation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsoleThemePackageValidation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/console-themes": {
+      "post": {
+        "operationId": "installConsoleThemePackage",
+        "description": "Installs a validated administrator-managed Theme Package v1.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleThemePackage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Theme package installed",
+            "headers": {
+              "ETag": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsoleTheme"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/console-themes/{themeId}": {
+      "parameters": [
+        {
+          "name": "themeId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "replaceConsoleThemePackage",
+        "description": "Replaces an administrator-managed Theme Package using optimistic concurrency.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleThemePackage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Theme package replaced",
+            "headers": {
+              "ETag": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsoleTheme"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteConsoleThemePackage",
+        "description": "Deletes a disabled administrator-managed Theme Package using optimistic concurrency.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Theme package deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/authentication/oidc": {
       "get": {
         "operationId": "getOIDCSettings",
@@ -7574,6 +7746,9 @@
         ],
         "additionalProperties": false,
         "properties": {
+          "$schema": {
+            "type": "string"
+          },
           "schemaVersion": {
             "type": "integer",
             "enum": [
@@ -7602,6 +7777,20 @@
           },
           "token": {
             "$ref": "#/components/schemas/ConsoleThemeToken"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "builtin",
+              "directory",
+              "managed"
+            ],
+            "description": "Runtime ownership of the catalog item. Only managed themes can be replaced or deleted through the API."
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$",
+            "description": "Optimistic-concurrency version for a managed theme."
           }
         }
       },
@@ -8198,6 +8387,84 @@
           },
           "nextPageToken": {
             "type": "string"
+          }
+        }
+      },
+      "ConsoleThemePackage": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "id",
+          "name",
+          "mode",
+          "token"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 240
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "dark",
+              "light"
+            ]
+          },
+          "token": {
+            "$ref": "#/components/schemas/ConsoleThemeToken"
+          }
+        }
+      },
+      "ConsoleThemePackageValidation": {
+        "type": "object",
+        "required": [
+          "theme",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "theme": {
+            "$ref": "#/components/schemas/ConsoleThemePackage"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "replaceable",
+              "reserved"
+            ]
+          },
+          "existingSource": {
+            "type": "string",
+            "enum": [
+              "builtin",
+              "directory",
+              "managed"
+            ]
+          },
+          "existingVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
           }
         }
       },
