@@ -155,7 +155,7 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       dataIndex: "kind",
       key: "kind",
       width: 150,
-      render: (value: string) => <Badge tone="blue">{value}</Badge>,
+      render: (value: string) => <Badge tone="visualization-5">{value}</Badge>,
     },
     {
       title: text("状态", "Status"),
@@ -193,7 +193,7 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       width: 300,
       render: (value?: string) => (
         <span
-          className="block max-w-72 truncate text-xs text-rose-400"
+          className="block max-w-72 truncate text-xs text-[var(--ag-status-danger)]"
           title={value}
         >
           {value ?? "—"}
@@ -224,8 +224,8 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
         {scanReconcileAction}
       </div>
       {failedIntelligenceJobs.length > 0 && (
-        <div className="flex items-center justify-between gap-4 rounded-md border border-cyan-900/50 bg-cyan-950/20 px-4 py-3">
-          <div className="text-xs text-cyan-200/80">
+        <div className="flex items-center justify-between gap-4 rounded-md border border-[var(--ag-status-info-border)] bg-[var(--ag-status-info-soft)] px-4 py-3">
+          <div className="text-xs text-[var(--ag-status-info)]">
             {text(
               `${failedIntelligenceJobs.length} 个情报同步任务需要补偿`,
               `${failedIntelligenceJobs.length} intelligence sync job(s) need reconciliation`,
@@ -270,7 +270,7 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
             <div className="space-y-2 py-1">
               {job.details && <LifecycleJobDetails details={job.details} />}
               {job.lastError && (
-                <div className="rounded-md border border-rose-900/50 bg-rose-950/20 px-4 py-2 text-xs text-rose-300">
+                <div className="rounded-md border border-[var(--ag-status-danger-border)] bg-[var(--ag-status-danger-soft)] px-4 py-2 text-xs text-[var(--ag-status-danger)]">
                   {job.lastError}
                 </div>
               )}

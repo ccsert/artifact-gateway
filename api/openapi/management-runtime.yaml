@@ -19,6 +19,12 @@ paths:
     "$ref": "./management/anonymous-access.yaml#/anonymous_access_policy"
   "/site-settings":
     "$ref": "./management/site-settings.yaml#/site_settings"
+  "/console-themes:validate":
+    "$ref": "./management/console-themes.yaml#/console_themes_validate"
+  "/console-themes":
+    "$ref": "./management/console-themes.yaml#/console_themes"
+  "/console-themes/{themeId}":
+    "$ref": "./management/console-themes.yaml#/console_themes_themeId"
   "/authentication/oidc":
     "$ref": "./management/authentication.yaml#/oidc_settings"
   "/authentication/oidc:test":

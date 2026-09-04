@@ -260,7 +260,9 @@ export function RepositoryScanningTab({
         dataIndex: "lastError",
         key: "lastError",
         render: (value?: string) => (
-          <span className="text-xs text-rose-400">{value ?? "—"}</span>
+          <span className="text-xs text-[var(--ag-status-danger)]">
+            {value ?? "—"}
+          </span>
         ),
       },
     ],
@@ -458,7 +460,7 @@ export function RepositoryScanningTab({
             </Form.Item>
 
             {selectedArtifact && !manualIdentity && (
-              <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-md border border-cyan-500/20 bg-cyan-500/5 px-3 py-2.5 md:col-span-2">
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--ag-status-info-border)] bg-[var(--ag-status-info-soft)] px-3 py-2.5 md:col-span-2">
                 <div className="min-w-0">
                   <p className="truncate font-mono text-xs text-zinc-200">
                     {selectedArtifact.coordinate}

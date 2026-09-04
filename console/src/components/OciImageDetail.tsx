@@ -389,7 +389,7 @@ export function OciImageDetail({
             {selectedVersion.digest}
           </code>
           {selectedVersion.kind === "digest" && (
-            <Badge tone="amber">无标签</Badge>
+            <Badge tone="warning">无标签</Badge>
           )}
         </div>
       )}
@@ -536,7 +536,9 @@ export function OciImageDetail({
             <div className="mb-1.5 flex items-center gap-2 text-xs uppercase tracking-wider text-zinc-500">
               {text("文件层", "Layers")} ({manifest.layers?.length ?? 0})
               {manifest.mediaType && (
-                <Badge tone="zinc">{manifest.mediaType.split(".").pop()}</Badge>
+                <Badge tone="neutral">
+                  {manifest.mediaType.split(".").pop()}
+                </Badge>
               )}
             </div>
             <Table<OciDescriptor>

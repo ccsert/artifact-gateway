@@ -69,11 +69,11 @@ export function ArtifactIntelligencePanel({
   const vulnerability = metadata.vulnerability;
   const vulnerabilityTone =
     vulnerability?.status === "affected"
-      ? "red"
+      ? "error"
       : vulnerability?.status === "clean"
-        ? "green"
+        ? "success"
         : vulnerability?.status === "error"
-          ? "orange"
+          ? "warning"
           : "default";
   const vulnerabilityLabel = vulnerability
     ? {

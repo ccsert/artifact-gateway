@@ -1,5 +1,4 @@
 import type { LineConfig, PieConfig } from "@ant-design/plots";
-import { theme as antdTheme } from "antd";
 import {
   lazy,
   Suspense,
@@ -9,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { formatBytes } from "../lib/format";
+import { artifactFormatVisualizationSlot } from "../lib/artifactFormatVisuals";
 import type { DashboardSample } from "../lib/history";
 import { usePreferences } from "../lib/preferences";
 
@@ -18,17 +18,6 @@ const DashboardPiePlot = lazy(
 const DashboardLinePlot = lazy(
   () => import("./dashboard-charts/DashboardLinePlot"),
 );
-
-const FORMAT_COLORS: Record<string, string> = {
-  oci: "#22d3ee",
-  maven: "#fbbf24",
-  npm: "#f43f5e",
-  pypi: "#34d399",
-  go: "#60a5fa",
-  conan: "#a78bfa",
-  raw: "#38bdf8",
-  apt: "#fb923c",
-};
 
 const FORMAT_ORDER = [
   "oci",
@@ -45,6 +34,9 @@ interface StorageChartDatum {
   format: string;
   label: string;
   bytes: number;
+}
+
+interface ThemedStorageChartDatum extends StorageChartDatum {
   color: string;
 }
 
@@ -70,7 +62,6 @@ export function buildStorageChartData(
       format,
       label: format.toUpperCase(),
       bytes: Math.max(0, bytesByFormat[format] ?? 0),
-      color: FORMAT_COLORS[format] ?? "#71717a",
     }))
     .filter((datum) => datum.bytes > 0);
 }
@@ -167,9 +158,18 @@ export function StorageByFormatChart({
   bytesByFormat: Record<string, number> | null;
   totalBytes: number | null;
 }) {
-  const { colorMode, text } = usePreferences();
-  const { token } = antdTheme.useToken();
-  const data = bytesByFormat ? buildStorageChartData(bytesByFormat) : [];
+  const { colorMode, resolvedTheme, text } = usePreferences();
+  const chartData = bytesByFormat ? buildStorageChartData(bytesByFormat) : [];
+  const palette = resolvedTheme.roles.visualization.categorical;
+  const data: ThemedStorageChartDatum[] = chartData.map((datum) => {
+    const slot = artifactFormatVisualizationSlot(datum.format);
+    return {
+      ...datum,
+      color:
+        (slot === undefined ? undefined : palette[slot]) ??
+        resolvedTheme.roles.visualization.fallback,
+    };
+  });
 
   if (totalBytes === null || totalBytes <= 0 || data.length === 0) {
     return (
@@ -182,7 +182,7 @@ export function StorageByFormatChart({
     );
   }
 
-  const surfaceColor = token.colorBgContainer;
+  const surfaceColor = resolvedTheme.roles.surface.container;
   const config: PieConfig = {
     data,
     angleField: "bytes",
@@ -286,12 +286,11 @@ function TrendLineChart({
   valueFormatter: (value: number) => string;
   emptyLabel: string;
 }) {
-  const { colorMode, locale, text } = usePreferences();
-  const { token } = antdTheme.useToken();
+  const { colorMode, locale, resolvedTheme, text } = usePreferences();
 
   if (data.length === 0) return <EmptyChart>{emptyLabel}</EmptyChart>;
 
-  const surfaceColor = token.colorBgContainer;
+  const surfaceColor = resolvedTheme.roles.surface.container;
   const config: LineConfig = {
     data,
     xField: "time",
@@ -370,8 +369,7 @@ export function DashboardTrendCharts({
 }: {
   history: DashboardSample[];
 }) {
-  const { locale, text } = usePreferences();
-  const { token } = antdTheme.useToken();
+  const { locale, resolvedTheme, text } = usePreferences();
   const orderedHistory = [...history].sort((a, b) => a.t - b.t);
   const repositoryData = orderedHistory.map((sample) => ({
     time: new Date(sample.t),
@@ -400,7 +398,7 @@ export function DashboardTrendCharts({
         </h3>
         <TrendLineChart
           data={repositoryData}
-          color={token.colorPrimary}
+          color={resolvedTheme.roles.visualization.trendPrimary}
           label={text("仓库数", "Repositories")}
           valueFormatter={(value) => String(Math.round(value))}
           emptyLabel={text("暂无历史数据", "No history yet")}
@@ -415,7 +413,7 @@ export function DashboardTrendCharts({
         </h3>
         <TrendLineChart
           data={storageData}
-          color={token.colorWarning}
+          color={resolvedTheme.roles.visualization.trendSecondary}
           label={text("存储占用", "Storage used")}
           valueFormatter={formatBytes}
           emptyLabel={text("容量未启用", "Capacity unavailable")}

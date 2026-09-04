@@ -16,7 +16,7 @@ function TypeDot({ type }: { type?: "hosted" | "proxy" }) {
   return (
     <span
       title={proxy ? "proxy" : "hosted"}
-      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${proxy ? "bg-amber-400" : "bg-cyan-400"}`}
+      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${proxy ? "bg-[var(--ag-content-disabled)]" : "bg-[var(--ag-content-secondary)]"}`}
     />
   );
 }
@@ -97,9 +97,9 @@ export function MemberOrderPicker({
           {memberIds.map((id, i) => (
             <div
               key={id}
-              className="flex items-center gap-1 rounded-md bg-cyan-500/5 px-2 py-1.5"
+              className="flex items-center gap-1 rounded-md bg-[var(--ag-surface-hover)] px-2 py-1.5"
             >
-              <span className="w-5 shrink-0 text-center font-mono text-xs text-cyan-400">
+              <span className="w-5 shrink-0 text-center font-mono text-xs text-[var(--ag-content-secondary)]">
                 {i + 1}
               </span>
               <TypeDot type={repoOf(id)?.type} />

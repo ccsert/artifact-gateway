@@ -41,8 +41,10 @@ test("Gateway Dark preserves the established shell and menu palette", async ({
       selectedBackgroundImage: selected.backgroundImage,
       selectedColor: selected.color,
       indicatorBackgroundImage: indicator.backgroundImage,
-      surface: root.getPropertyValue("--ag-surface").trim(),
-      brandSoft: root.getPropertyValue("--ag-brand-soft").trim(),
+      surface: root
+        .getPropertyValue("--ag-surface-container-translucent")
+        .trim(),
+      actionSoft: root.getPropertyValue("--ag-action-primary-soft").trim(),
     };
   });
 
@@ -57,7 +59,7 @@ test("Gateway Dark preserves the established shell and menu palette", async ({
     indicatorBackgroundImage:
       "linear-gradient(rgb(34, 211, 238), rgb(8, 145, 178))",
     surface: "rgba(24, 24, 27, 0.55)",
-    brandSoft: "rgba(6, 182, 212, 0.12)",
+    actionSoft: "rgba(6, 182, 212, 0.12)",
   });
   if (process.env.CAPTURE_THEME_EVIDENCE === "1") {
     await page.screenshot({
@@ -107,8 +109,10 @@ test("Gateway Light preserves the established shell and menu palette", async ({
       selectedBackgroundImage: selected.backgroundImage,
       selectedColor: selected.color,
       indicatorBackgroundImage: indicator.backgroundImage,
-      surface: root.getPropertyValue("--ag-surface").trim(),
-      brandSoft: root.getPropertyValue("--ag-brand-soft").trim(),
+      surface: root
+        .getPropertyValue("--ag-surface-container-translucent")
+        .trim(),
+      actionSoft: root.getPropertyValue("--ag-action-primary-soft").trim(),
     };
   });
 
@@ -123,7 +127,7 @@ test("Gateway Light preserves the established shell and menu palette", async ({
     indicatorBackgroundImage:
       "linear-gradient(rgb(34, 211, 238), rgb(8, 145, 178))",
     surface: "rgba(255, 255, 255, 0.9)",
-    brandSoft: "rgba(8, 145, 178, 0.1)",
+    actionSoft: "rgba(8, 145, 178, 0.1)",
   });
   if (process.env.CAPTURE_THEME_EVIDENCE === "1") {
     await page.screenshot({
@@ -198,3 +202,95 @@ test("switching back from an extension theme restores Gateway Dark exactly", asy
         "linear-gradient(rgb(34, 211, 238), rgb(8, 145, 178))",
     });
 });
+
+const semanticThemeCases = [
+  ["gateway-dark", "#06b6d4"],
+  ["gateway-light", "#0891b2"],
+  ["aerok-dark", "#3258d0"],
+  ["aerok-light", "#26499d"],
+] as const;
+
+for (const [themeID, expectedAction] of semanticThemeCases) {
+  test(`${themeID} commits one complete semantic browser contract`, async ({
+    page,
+  }, testInfo) => {
+    await page.addInitScript((id) => {
+      localStorage.setItem("ag.console.theme.id", id);
+      localStorage.setItem(
+        "ag.console.theme",
+        id.endsWith("-light") ? "light" : "dark",
+      );
+    }, themeID);
+    await authenticateAsAdmin(page);
+
+    await page.goto("/site-settings");
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-theme-contract",
+      "semantic-v1",
+    );
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-theme-id",
+      themeID,
+    );
+    await expect(page.getByRole("heading", { name: "站点设置" })).toBeVisible();
+
+    const contract = await page.evaluate(() => {
+      const root = document.documentElement;
+      const style = getComputedStyle(root);
+      const resolveColor = (value: string) => {
+        const probe = document.createElement("span");
+        probe.style.color = value;
+        document.body.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      };
+      return {
+        action: style.getPropertyValue("--ag-action-primary").trim(),
+        actionComputed: resolveColor("var(--ag-action-primary)"),
+        onIdentityComputed: resolveColor("var(--ag-content-on-identity)"),
+        brandMarkColor: getComputedStyle(
+          document.querySelector<HTMLElement>(".ag-brand-mark")!,
+        ).color,
+        contentComputed: resolveColor("var(--ag-content-primary)"),
+        bodyColor: getComputedStyle(document.body).color,
+        selectionSource: style
+          .getPropertyValue("--ag-selection-background")
+          .trim(),
+        selectionComputed: getComputedStyle(document.body, "::selection")
+          .backgroundColor,
+        visualization: style.getPropertyValue("--ag-visualization-1").trim(),
+        statusInfo: style.getPropertyValue("--ag-status-info").trim(),
+        semanticVariableCount: Array.from(root.style).filter((name) =>
+          name.startsWith("--ag-"),
+        ).length,
+        legacyBrand: root.style.getPropertyValue("--ag-brand"),
+        legacyText: root.style.getPropertyValue("--ag-text"),
+      };
+    });
+
+    expect(contract.action.toLowerCase()).toBe(expectedAction);
+    expect(contract.brandMarkColor).toBe(contract.onIdentityComputed);
+    expect(contract.bodyColor).toBe(contract.contentComputed);
+    expect(contract.selectionSource.toLowerCase()).not.toContain(
+      expectedAction,
+    );
+    expect(contract.selectionComputed).not.toBe(contract.actionComputed);
+    expect(contract.visualization.toLowerCase()).not.toBe(expectedAction);
+    expect(contract.visualization.toLowerCase()).not.toBe(
+      contract.statusInfo.toLowerCase(),
+    );
+    expect(contract.semanticVariableCount).toBeGreaterThan(70);
+    expect(contract.legacyBrand).toBe("");
+    expect(contract.legacyText).toBe("");
+
+    if (process.env.CAPTURE_THEME_EVIDENCE === "1") {
+      // Let entry motion settle so visual evidence represents the steady state.
+      await page.waitForTimeout(250);
+      await page.screenshot({
+        path: testInfo.outputPath(`${themeID}-semantic-contract.png`),
+        fullPage: true,
+      });
+    }
+  });
+}

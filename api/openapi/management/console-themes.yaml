@@ -1,0 +1,84 @@
+---
+console_themes_validate:
+  post:
+    operationId: validateConsoleThemePackage
+    description: Strictly validates a Theme Package v1 and reports whether its ID can be installed or replaced.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {"$ref": "../components/schemas.yaml#/ConsoleThemePackage"}
+    responses:
+      '200':
+        description: Theme package validation result
+        content:
+          application/json:
+            schema: {"$ref": "../components/schemas.yaml#/ConsoleThemePackageValidation"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+
+console_themes:
+  post:
+    operationId: installConsoleThemePackage
+    description: Installs a validated administrator-managed Theme Package v1.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {"$ref": "../components/schemas.yaml#/ConsoleThemePackage"}
+    responses:
+      '201':
+        description: Theme package installed
+        headers:
+          ETag:
+            required: true
+            schema: {type: string}
+        content:
+          application/json:
+            schema: {"$ref": "../components/schemas.yaml#/ConsoleTheme"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+
+console_themes_themeId:
+  parameters:
+  - name: themeId
+    in: path
+    required: true
+    schema: {type: string, pattern: '^[a-z0-9][a-z0-9-]{1,63}$'}
+  put:
+    operationId: replaceConsoleThemePackage
+    description: Replaces an administrator-managed Theme Package using optimistic concurrency.
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {"$ref": "../components/schemas.yaml#/ConsoleThemePackage"}
+    responses:
+      '200':
+        description: Theme package replaced
+        headers:
+          ETag:
+            required: true
+            schema: {type: string}
+        content:
+          application/json:
+            schema: {"$ref": "../components/schemas.yaml#/ConsoleTheme"}
+      '400': {"$ref": "../components/responses.yaml#/Problem"}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+      '412': {"$ref": "../components/responses.yaml#/Problem"}
+  delete:
+    operationId: deleteConsoleThemePackage
+    description: Deletes a disabled administrator-managed Theme Package using optimistic concurrency.
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    responses:
+      '204': {description: Theme package deleted}
+      '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '404': {"$ref": "../components/responses.yaml#/Problem"}
+      '409': {"$ref": "../components/responses.yaml#/Problem"}
+      '412': {"$ref": "../components/responses.yaml#/Problem"}

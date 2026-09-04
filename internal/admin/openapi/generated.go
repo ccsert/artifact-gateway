@@ -525,16 +525,16 @@ func (e ConanRecipeRevisionState) Valid() bool {
 
 // Defines values for ConsoleThemeMode.
 const (
-	Dark  ConsoleThemeMode = "dark"
-	Light ConsoleThemeMode = "light"
+	ConsoleThemeModeDark  ConsoleThemeMode = "dark"
+	ConsoleThemeModeLight ConsoleThemeMode = "light"
 )
 
 // Valid indicates whether the value is a known member of the ConsoleThemeMode enum.
 func (e ConsoleThemeMode) Valid() bool {
 	switch e {
-	case Dark:
+	case ConsoleThemeModeDark:
 		return true
-	case Light:
+	case ConsoleThemeModeLight:
 		return true
 	default:
 		return false
@@ -543,13 +543,109 @@ func (e ConsoleThemeMode) Valid() bool {
 
 // Defines values for ConsoleThemeSchemaVersion.
 const (
-	N1 ConsoleThemeSchemaVersion = 1
+	ConsoleThemeSchemaVersionN1 ConsoleThemeSchemaVersion = 1
 )
 
 // Valid indicates whether the value is a known member of the ConsoleThemeSchemaVersion enum.
 func (e ConsoleThemeSchemaVersion) Valid() bool {
 	switch e {
-	case N1:
+	case ConsoleThemeSchemaVersionN1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsoleThemeSource.
+const (
+	ConsoleThemeSourceBuiltin   ConsoleThemeSource = "builtin"
+	ConsoleThemeSourceDirectory ConsoleThemeSource = "directory"
+	ConsoleThemeSourceManaged   ConsoleThemeSource = "managed"
+)
+
+// Valid indicates whether the value is a known member of the ConsoleThemeSource enum.
+func (e ConsoleThemeSource) Valid() bool {
+	switch e {
+	case ConsoleThemeSourceBuiltin:
+		return true
+	case ConsoleThemeSourceDirectory:
+		return true
+	case ConsoleThemeSourceManaged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsoleThemePackageMode.
+const (
+	ConsoleThemePackageModeDark  ConsoleThemePackageMode = "dark"
+	ConsoleThemePackageModeLight ConsoleThemePackageMode = "light"
+)
+
+// Valid indicates whether the value is a known member of the ConsoleThemePackageMode enum.
+func (e ConsoleThemePackageMode) Valid() bool {
+	switch e {
+	case ConsoleThemePackageModeDark:
+		return true
+	case ConsoleThemePackageModeLight:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsoleThemePackageSchemaVersion.
+const (
+	ConsoleThemePackageSchemaVersionN1 ConsoleThemePackageSchemaVersion = 1
+)
+
+// Valid indicates whether the value is a known member of the ConsoleThemePackageSchemaVersion enum.
+func (e ConsoleThemePackageSchemaVersion) Valid() bool {
+	switch e {
+	case ConsoleThemePackageSchemaVersionN1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsoleThemePackageValidationExistingSource.
+const (
+	ConsoleThemePackageValidationExistingSourceBuiltin   ConsoleThemePackageValidationExistingSource = "builtin"
+	ConsoleThemePackageValidationExistingSourceDirectory ConsoleThemePackageValidationExistingSource = "directory"
+	ConsoleThemePackageValidationExistingSourceManaged   ConsoleThemePackageValidationExistingSource = "managed"
+)
+
+// Valid indicates whether the value is a known member of the ConsoleThemePackageValidationExistingSource enum.
+func (e ConsoleThemePackageValidationExistingSource) Valid() bool {
+	switch e {
+	case ConsoleThemePackageValidationExistingSourceBuiltin:
+		return true
+	case ConsoleThemePackageValidationExistingSourceDirectory:
+		return true
+	case ConsoleThemePackageValidationExistingSourceManaged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsoleThemePackageValidationStatus.
+const (
+	Available   ConsoleThemePackageValidationStatus = "available"
+	Replaceable ConsoleThemePackageValidationStatus = "replaceable"
+	Reserved    ConsoleThemePackageValidationStatus = "reserved"
+)
+
+// Valid indicates whether the value is a known member of the ConsoleThemePackageValidationStatus enum.
+func (e ConsoleThemePackageValidationStatus) Valid() bool {
+	switch e {
+	case Available:
+		return true
+	case Replaceable:
+		return true
+	case Reserved:
 		return true
 	default:
 		return false
@@ -2650,12 +2746,19 @@ type ConanReferencePage struct {
 
 // ConsoleTheme defines model for ConsoleTheme.
 type ConsoleTheme struct {
+	Schema        *string                   `json:"$schema,omitempty"`
 	Description   *string                   `json:"description,omitempty"`
 	Id            string                    `json:"id"`
 	Mode          ConsoleThemeMode          `json:"mode"`
 	Name          string                    `json:"name"`
 	SchemaVersion ConsoleThemeSchemaVersion `json:"schemaVersion"`
-	Token         ConsoleThemeToken         `json:"token"`
+
+	// Source Runtime ownership of the catalog item. Only managed themes can be replaced or deleted through the API.
+	Source *ConsoleThemeSource `json:"source,omitempty"`
+	Token  ConsoleThemeToken   `json:"token"`
+
+	// Version Optimistic-concurrency version for a managed theme.
+	Version *string `json:"version,omitempty"`
 }
 
 // ConsoleThemeMode defines model for ConsoleTheme.Mode.
@@ -2663,6 +2766,40 @@ type ConsoleThemeMode string
 
 // ConsoleThemeSchemaVersion defines model for ConsoleTheme.SchemaVersion.
 type ConsoleThemeSchemaVersion int
+
+// ConsoleThemeSource Runtime ownership of the catalog item. Only managed themes can be replaced or deleted through the API.
+type ConsoleThemeSource string
+
+// ConsoleThemePackage defines model for ConsoleThemePackage.
+type ConsoleThemePackage struct {
+	Schema        *string                          `json:"$schema,omitempty"`
+	Description   *string                          `json:"description,omitempty"`
+	Id            string                           `json:"id"`
+	Mode          ConsoleThemePackageMode          `json:"mode"`
+	Name          string                           `json:"name"`
+	SchemaVersion ConsoleThemePackageSchemaVersion `json:"schemaVersion"`
+	Token         ConsoleThemeToken                `json:"token"`
+}
+
+// ConsoleThemePackageMode defines model for ConsoleThemePackage.Mode.
+type ConsoleThemePackageMode string
+
+// ConsoleThemePackageSchemaVersion defines model for ConsoleThemePackage.SchemaVersion.
+type ConsoleThemePackageSchemaVersion int
+
+// ConsoleThemePackageValidation defines model for ConsoleThemePackageValidation.
+type ConsoleThemePackageValidation struct {
+	ExistingSource  *ConsoleThemePackageValidationExistingSource `json:"existingSource,omitempty"`
+	ExistingVersion *string                                      `json:"existingVersion,omitempty"`
+	Status          ConsoleThemePackageValidationStatus          `json:"status"`
+	Theme           ConsoleThemePackage                          `json:"theme"`
+}
+
+// ConsoleThemePackageValidationExistingSource defines model for ConsoleThemePackageValidation.ExistingSource.
+type ConsoleThemePackageValidationExistingSource string
+
+// ConsoleThemePackageValidationStatus defines model for ConsoleThemePackageValidation.Status.
+type ConsoleThemePackageValidationStatus string
 
 // ConsoleThemeToken defines model for ConsoleThemeToken.
 type ConsoleThemeToken struct {
@@ -4314,6 +4451,16 @@ type ApplyAuthorizationTemplateParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// DeleteConsoleThemePackageParams defines parameters for DeleteConsoleThemePackage.
+type DeleteConsoleThemePackageParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ReplaceConsoleThemePackageParams defines parameters for ReplaceConsoleThemePackage.
+type ReplaceConsoleThemePackageParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // ListGroupsParams defines parameters for ListGroups.
 type ListGroupsParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
@@ -4706,6 +4853,15 @@ type UpdateAuthorizationTemplateJSONRequestBody = AuthorizationTemplateWritable
 // ApplyAuthorizationTemplateJSONRequestBody defines body for ApplyAuthorizationTemplate for application/json ContentType.
 type ApplyAuthorizationTemplateJSONRequestBody = ApplyAuthorizationTemplate
 
+// InstallConsoleThemePackageJSONRequestBody defines body for InstallConsoleThemePackage for application/json ContentType.
+type InstallConsoleThemePackageJSONRequestBody = ConsoleThemePackage
+
+// ReplaceConsoleThemePackageJSONRequestBody defines body for ReplaceConsoleThemePackage for application/json ContentType.
+type ReplaceConsoleThemePackageJSONRequestBody = ConsoleThemePackage
+
+// ValidateConsoleThemePackageJSONRequestBody defines body for ValidateConsoleThemePackage for application/json ContentType.
+type ValidateConsoleThemePackageJSONRequestBody = ConsoleThemePackage
+
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = CreateGroup
 
@@ -4930,6 +5086,18 @@ type ServerInterface interface {
 
 	// (POST /authorization-templates/{templateId}/apply)
 	ApplyAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateId AuthorizationTemplateId, params ApplyAuthorizationTemplateParams)
+
+	// (POST /console-themes)
+	InstallConsoleThemePackage(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /console-themes/{themeId})
+	DeleteConsoleThemePackage(w http.ResponseWriter, r *http.Request, themeId string, params DeleteConsoleThemePackageParams)
+
+	// (PUT /console-themes/{themeId})
+	ReplaceConsoleThemePackage(w http.ResponseWriter, r *http.Request, themeId string, params ReplaceConsoleThemePackageParams)
+
+	// (POST /console-themes:validate)
+	ValidateConsoleThemePackage(w http.ResponseWriter, r *http.Request)
 	// GetDiagnostics Get sanitized runtime and dependency diagnostics
 	// (GET /diagnostics)
 	GetDiagnostics(w http.ResponseWriter, r *http.Request)
@@ -6245,6 +6413,142 @@ func (siw *ServerInterfaceWrapper) ApplyAuthorizationTemplate(w http.ResponseWri
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ApplyAuthorizationTemplate(w, r, templateId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// InstallConsoleThemePackage operation middleware
+func (siw *ServerInterfaceWrapper) InstallConsoleThemePackage(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.InstallConsoleThemePackage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteConsoleThemePackage operation middleware
+func (siw *ServerInterfaceWrapper) DeleteConsoleThemePackage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "themeId" -------------
+	var themeId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "themeId", r.PathValue("themeId"), &themeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "themeId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteConsoleThemePackageParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteConsoleThemePackage(w, r, themeId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceConsoleThemePackage operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceConsoleThemePackage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "themeId" -------------
+	var themeId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "themeId", r.PathValue("themeId"), &themeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "themeId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceConsoleThemePackageParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceConsoleThemePackage(w, r, themeId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ValidateConsoleThemePackage operation middleware
+func (siw *ServerInterfaceWrapper) ValidateConsoleThemePackage(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ValidateConsoleThemePackage(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11202,6 +11506,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/authorization-templates/{templateId}", wrapper.GetAuthorizationTemplate)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/authorization-templates/{templateId}", wrapper.UpdateAuthorizationTemplate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/authorization-templates/{templateId}/apply", wrapper.ApplyAuthorizationTemplate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/console-themes", wrapper.InstallConsoleThemePackage)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/console-themes/{themeId}", wrapper.DeleteConsoleThemePackage)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/console-themes/{themeId}", wrapper.ReplaceConsoleThemePackage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/console-themes:validate", wrapper.ValidateConsoleThemePackage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/diagnostics", wrapper.GetDiagnostics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/formats", wrapper.ListFormatProfiles)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups", wrapper.ListGroups)
@@ -12772,6 +13080,311 @@ func (response ApplyAuthorizationTemplate412ApplicationProblemPlusJSONResponse) 
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InstallConsoleThemePackageRequestObject struct {
+	Body *InstallConsoleThemePackageJSONRequestBody
+}
+
+type InstallConsoleThemePackageResponseObject interface {
+	VisitInstallConsoleThemePackageResponse(w http.ResponseWriter) error
+}
+
+type InstallConsoleThemePackage201ResponseHeaders struct {
+	ETag string
+}
+
+type InstallConsoleThemePackage201JSONResponse struct {
+	Body    ConsoleTheme
+	Headers InstallConsoleThemePackage201ResponseHeaders
+}
+
+func (response InstallConsoleThemePackage201JSONResponse) VisitInstallConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InstallConsoleThemePackage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response InstallConsoleThemePackage400ApplicationProblemPlusJSONResponse) VisitInstallConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InstallConsoleThemePackage401ApplicationProblemPlusJSONResponse Problem
+
+func (response InstallConsoleThemePackage401ApplicationProblemPlusJSONResponse) VisitInstallConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InstallConsoleThemePackage409ApplicationProblemPlusJSONResponse Problem
+
+func (response InstallConsoleThemePackage409ApplicationProblemPlusJSONResponse) VisitInstallConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteConsoleThemePackageRequestObject struct {
+	ThemeId string `json:"themeId"`
+	Params  DeleteConsoleThemePackageParams
+}
+
+type DeleteConsoleThemePackageResponseObject interface {
+	VisitDeleteConsoleThemePackageResponse(w http.ResponseWriter) error
+}
+
+type DeleteConsoleThemePackage204Response struct {
+}
+
+func (response DeleteConsoleThemePackage204Response) VisitDeleteConsoleThemePackageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteConsoleThemePackage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteConsoleThemePackage401ApplicationProblemPlusJSONResponse) VisitDeleteConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteConsoleThemePackage404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteConsoleThemePackage404ApplicationProblemPlusJSONResponse) VisitDeleteConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteConsoleThemePackage409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteConsoleThemePackage409ApplicationProblemPlusJSONResponse) VisitDeleteConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteConsoleThemePackage412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteConsoleThemePackage412ApplicationProblemPlusJSONResponse) VisitDeleteConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceConsoleThemePackageRequestObject struct {
+	ThemeId string `json:"themeId"`
+	Params  ReplaceConsoleThemePackageParams
+	Body    *ReplaceConsoleThemePackageJSONRequestBody
+}
+
+type ReplaceConsoleThemePackageResponseObject interface {
+	VisitReplaceConsoleThemePackageResponse(w http.ResponseWriter) error
+}
+
+type ReplaceConsoleThemePackage200ResponseHeaders struct {
+	ETag string
+}
+
+type ReplaceConsoleThemePackage200JSONResponse struct {
+	Body    ConsoleTheme
+	Headers ReplaceConsoleThemePackage200ResponseHeaders
+}
+
+func (response ReplaceConsoleThemePackage200JSONResponse) VisitReplaceConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceConsoleThemePackage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceConsoleThemePackage400ApplicationProblemPlusJSONResponse) VisitReplaceConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceConsoleThemePackage401ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceConsoleThemePackage401ApplicationProblemPlusJSONResponse) VisitReplaceConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceConsoleThemePackage404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceConsoleThemePackage404ApplicationProblemPlusJSONResponse) VisitReplaceConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceConsoleThemePackage409ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceConsoleThemePackage409ApplicationProblemPlusJSONResponse) VisitReplaceConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceConsoleThemePackage412ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceConsoleThemePackage412ApplicationProblemPlusJSONResponse) VisitReplaceConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ValidateConsoleThemePackageRequestObject struct {
+	Body *ValidateConsoleThemePackageJSONRequestBody
+}
+
+type ValidateConsoleThemePackageResponseObject interface {
+	VisitValidateConsoleThemePackageResponse(w http.ResponseWriter) error
+}
+
+type ValidateConsoleThemePackage200JSONResponse ConsoleThemePackageValidation
+
+func (response ValidateConsoleThemePackage200JSONResponse) VisitValidateConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ValidateConsoleThemePackage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ValidateConsoleThemePackage400ApplicationProblemPlusJSONResponse) VisitValidateConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ValidateConsoleThemePackage401ApplicationProblemPlusJSONResponse Problem
+
+func (response ValidateConsoleThemePackage401ApplicationProblemPlusJSONResponse) VisitValidateConsoleThemePackageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -19799,6 +20412,18 @@ type StrictServerInterface interface {
 
 	// (POST /authorization-templates/{templateId}/apply)
 	ApplyAuthorizationTemplate(ctx context.Context, request ApplyAuthorizationTemplateRequestObject) (ApplyAuthorizationTemplateResponseObject, error)
+
+	// (POST /console-themes)
+	InstallConsoleThemePackage(ctx context.Context, request InstallConsoleThemePackageRequestObject) (InstallConsoleThemePackageResponseObject, error)
+
+	// (DELETE /console-themes/{themeId})
+	DeleteConsoleThemePackage(ctx context.Context, request DeleteConsoleThemePackageRequestObject) (DeleteConsoleThemePackageResponseObject, error)
+
+	// (PUT /console-themes/{themeId})
+	ReplaceConsoleThemePackage(ctx context.Context, request ReplaceConsoleThemePackageRequestObject) (ReplaceConsoleThemePackageResponseObject, error)
+
+	// (POST /console-themes:validate)
+	ValidateConsoleThemePackage(ctx context.Context, request ValidateConsoleThemePackageRequestObject) (ValidateConsoleThemePackageResponseObject, error)
 	// GetDiagnostics Get sanitized runtime and dependency diagnostics
 	// (GET /diagnostics)
 	GetDiagnostics(ctx context.Context, request GetDiagnosticsRequestObject) (GetDiagnosticsResponseObject, error)
@@ -20907,6 +21532,129 @@ func (sh *strictHandler) ApplyAuthorizationTemplate(w http.ResponseWriter, r *ht
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ApplyAuthorizationTemplateResponseObject); ok {
 		if err := validResponse.VisitApplyAuthorizationTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// InstallConsoleThemePackage operation middleware
+func (sh *strictHandler) InstallConsoleThemePackage(w http.ResponseWriter, r *http.Request) {
+	var request InstallConsoleThemePackageRequestObject
+
+	var body InstallConsoleThemePackageJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.InstallConsoleThemePackage(ctx, request.(InstallConsoleThemePackageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "InstallConsoleThemePackage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(InstallConsoleThemePackageResponseObject); ok {
+		if err := validResponse.VisitInstallConsoleThemePackageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteConsoleThemePackage operation middleware
+func (sh *strictHandler) DeleteConsoleThemePackage(w http.ResponseWriter, r *http.Request, themeId string, params DeleteConsoleThemePackageParams) {
+	var request DeleteConsoleThemePackageRequestObject
+
+	request.ThemeId = themeId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteConsoleThemePackage(ctx, request.(DeleteConsoleThemePackageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteConsoleThemePackage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteConsoleThemePackageResponseObject); ok {
+		if err := validResponse.VisitDeleteConsoleThemePackageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceConsoleThemePackage operation middleware
+func (sh *strictHandler) ReplaceConsoleThemePackage(w http.ResponseWriter, r *http.Request, themeId string, params ReplaceConsoleThemePackageParams) {
+	var request ReplaceConsoleThemePackageRequestObject
+
+	request.ThemeId = themeId
+	request.Params = params
+
+	var body ReplaceConsoleThemePackageJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceConsoleThemePackage(ctx, request.(ReplaceConsoleThemePackageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceConsoleThemePackage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceConsoleThemePackageResponseObject); ok {
+		if err := validResponse.VisitReplaceConsoleThemePackageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ValidateConsoleThemePackage operation middleware
+func (sh *strictHandler) ValidateConsoleThemePackage(w http.ResponseWriter, r *http.Request) {
+	var request ValidateConsoleThemePackageRequestObject
+
+	var body ValidateConsoleThemePackageJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ValidateConsoleThemePackage(ctx, request.(ValidateConsoleThemePackageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ValidateConsoleThemePackage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ValidateConsoleThemePackageResponseObject); ok {
+		if err := validResponse.VisitValidateConsoleThemePackageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

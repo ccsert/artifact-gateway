@@ -272,7 +272,7 @@ export function PyPIProjectDetail({
             {project}=={selectedVersion}
           </span>
           <Tag
-            color={cachedCount === selectedFiles.length ? "green" : "default"}
+            color={cachedCount === selectedFiles.length ? "success" : "default"}
             variant="filled"
           >
             {cachedCount === selectedFiles.length

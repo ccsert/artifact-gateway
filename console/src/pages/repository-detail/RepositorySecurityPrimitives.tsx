@@ -37,7 +37,7 @@ export function PolicyCard({
 
 export function ScopeFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 bg-[var(--ag-table-header)] px-4 py-3">
+    <div className="min-w-0 bg-[var(--ag-surface-table-header)] px-4 py-3">
       <div className="text-xs font-medium text-zinc-600">{label}</div>
       <div
         className="mt-1 truncate text-xs font-medium text-zinc-300"

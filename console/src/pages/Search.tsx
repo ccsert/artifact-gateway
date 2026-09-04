@@ -243,8 +243,8 @@ export function SearchPage() {
               <Badge
                 tone={
                   tableRow.representative.matchKind === "digest"
-                    ? "cyan"
-                    : "zinc"
+                    ? "visualization-1"
+                    : "neutral"
                 }
               >
                 {tableRow.representative.matchKind === "digest"
@@ -277,7 +277,7 @@ export function SearchPage() {
         <Link
           to={artifactTarget(tableRow.representative)}
           onClick={(event) => event.stopPropagation()}
-          className="text-xs text-cyan-400 hover:text-cyan-300"
+          className="text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
         >
           {tableRow.row.repositoryName}
         </Link>
@@ -417,7 +417,7 @@ export function SearchPage() {
               return (
                 <div
                   key={versionKey}
-                  className={`flex items-center justify-between gap-4 border-b border-zinc-800/60 px-3 py-2 last:border-b-0 ${selected ? "bg-cyan-400/10" : ""}`}
+                  className={`flex items-center justify-between gap-4 border-b border-zinc-800/60 px-3 py-2 last:border-b-0 ${selected ? "bg-[var(--ag-navigation-selected-start)]" : ""}`}
                 >
                   <button
                     type="button"
@@ -567,7 +567,11 @@ export function SearchPage() {
           <div className="mb-4 rounded-md border border-zinc-800/80 bg-zinc-950/40 px-3 py-2.5">
             <div className="mb-1 flex items-center gap-2 text-xs font-medium text-zinc-500">
               <span>SHA-256 Digest</span>
-              <Badge tone={row.matchKind === "digest" ? "cyan" : "zinc"}>
+              <Badge
+                tone={
+                  row.matchKind === "digest" ? "visualization-1" : "neutral"
+                }
+              >
                 {row.matchKind === "digest"
                   ? text("精确匹配", "Exact match")
                   : text("校验信息", "Checksum")}

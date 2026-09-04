@@ -271,7 +271,7 @@ export function RepositorySecurityTab({
   return (
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(320px,0.78fr)_minmax(0,1.55fr)]">
       <div className="border-b border-zinc-800/80 pb-4 xl:col-span-2">
-        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-500">
+        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ag-content-tertiary)]">
           {text("仓库安全防线", "Repository guardrails")}
         </div>
         <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-zinc-100">
@@ -639,7 +639,7 @@ function SettingRow({
   children: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800/80 bg-[var(--ag-table-header)] px-4 py-3.5">
+    <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800/80 bg-[var(--ag-surface-table-header)] px-4 py-3.5">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-zinc-200">{label}</span>
@@ -667,8 +667,8 @@ function PolicySwitch({
     <div
       className={`flex min-h-24 items-start justify-between gap-5 rounded-lg border px-4 py-3.5 transition-colors ${
         checked
-          ? "border-cyan-700/50 bg-[var(--ag-brand-soft)]"
-          : "border-zinc-800/80 bg-[var(--ag-table-header)]"
+          ? "border-[var(--ag-border-default)] bg-[var(--ag-navigation-selected-start)]"
+          : "border-zinc-800/80 bg-[var(--ag-surface-table-header)]"
       }`}
     >
       <div className="min-w-0">

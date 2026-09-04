@@ -12,11 +12,27 @@ import {
   UndoOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
-import { App, Button, Checkbox, Input, Radio, Upload } from "antd";
 import {
+  Alert,
+  App,
+  Button,
+  Checkbox,
+  Input,
+  Modal,
+  Popconfirm,
+  Radio,
+  Upload,
+} from "antd";
+import {
+  deleteConsoleThemePackage,
   getSiteSettings,
+  installConsoleThemePackage,
+  replaceConsoleThemePackage,
   replaceSiteSettings,
+  validateConsoleThemePackage,
   type ConsoleTheme,
+  type ConsoleThemePackage,
+  type ConsoleThemePackageValidation,
   type SiteSettings,
 } from "../client";
 import { Card, PageHeader } from "../components/Layout";
@@ -27,6 +43,8 @@ import { usePreferences } from "../lib/preferences";
 import { resolveConsoleTheme } from "../lib/consoleTheme";
 
 const maxLogoBytes = 192 * 1024;
+const maxThemePackageBytes = 256 * 1024;
+const maxEnabledThemes = 32;
 const supportedLogoTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 interface SiteSettingsDraft {
@@ -35,6 +53,11 @@ interface SiteSettingsDraft {
   brandMark: string;
   enabledThemeIds: string[];
   defaultThemeId: string;
+}
+
+interface PendingThemePackage {
+  fileName: string;
+  validation: ConsoleThemePackageValidation;
 }
 
 function toDraft(settings: SiteSettings): SiteSettingsDraft {
@@ -48,14 +71,14 @@ function toDraft(settings: SiteSettings): SiteSettingsDraft {
 }
 
 function ThemePreview({ theme }: { theme: ConsoleTheme }) {
-  const token = resolveConsoleTheme(theme);
+  const { roles } = resolveConsoleTheme(theme);
   const style = {
-    "--preview-bg": token.colorBgLayout,
-    "--preview-surface": token.colorBgContainer,
-    "--preview-border": token.colorBorderSecondary,
-    "--preview-text": token.colorText,
-    "--preview-muted": token.colorTextSecondary,
-    "--preview-primary": token.colorPrimary,
+    "--preview-bg": roles.surface.canvas,
+    "--preview-surface": roles.surface.container,
+    "--preview-border": roles.border.subtle,
+    "--preview-text": roles.content.primary,
+    "--preview-muted": roles.content.secondary,
+    "--preview-primary": roles.action.primary,
   } as CSSProperties;
   return (
     <div className="ag-theme-preview" style={style} aria-hidden="true">
@@ -78,6 +101,15 @@ function readAsDataURL(file: File): Promise<string> {
   });
 }
 
+function readAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+    reader.readAsText(file);
+  });
+}
+
 export function SiteSettingsPage() {
   const { message } = App.useApp();
   const { text } = usePreferences();
@@ -88,8 +120,14 @@ export function SiteSettingsPage() {
   );
   const [initialError, setInitialError] = useState<unknown>(null);
   const [mutationError, setMutationError] = useState<unknown>(null);
+  const [themePackageError, setThemePackageError] = useState<unknown>(null);
+  const [pendingThemePackage, setPendingThemePackage] =
+    useState<PendingThemePackage | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [validatingThemePackage, setValidatingThemePackage] = useState(false);
+  const [installingThemePackage, setInstallingThemePackage] = useState(false);
+  const [deletingThemeID, setDeletingThemeID] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,6 +171,7 @@ export function SiteSettingsPage() {
     normalizedDraft.brandMark.length > 0 &&
     Array.from(normalizedDraft.brandMark).length <= 8 &&
     normalizedDraft.enabledThemeIds.length > 0 &&
+    normalizedDraft.enabledThemeIds.length <= maxEnabledThemes &&
     normalizedDraft.enabledThemeIds.includes(normalizedDraft.defaultThemeId);
 
   const save = async () => {
@@ -183,6 +222,163 @@ export function SiteSettingsPage() {
       setDraft((current) => ({ ...current, logoUrl }));
     } catch {
       void message.error(text("读取 Logo 失败", "Could not read the logo"));
+    }
+  };
+
+  const selectThemePackage = async (file: File) => {
+    setThemePackageError(null);
+    setPendingThemePackage(null);
+    if (file.size <= 0 || file.size > maxThemePackageBytes) {
+      setThemePackageError(
+        new Error(
+          text(
+            "主题包必须是 1 字节到 256 KiB 的 JSON 文件",
+            "The theme package must be a JSON file between 1 byte and 256 KiB",
+          ),
+        ),
+      );
+      return;
+    }
+
+    setValidatingThemePackage(true);
+    try {
+      let themePackage: ConsoleThemePackage;
+      try {
+        themePackage = JSON.parse(
+          await readAsText(file),
+        ) as ConsoleThemePackage;
+      } catch {
+        throw new Error(
+          text(
+            "主题包不是有效的 JSON 文件",
+            "The theme package is not valid JSON",
+          ),
+        );
+      }
+      const { data, error } = await validateConsoleThemePackage({
+        body: themePackage,
+      });
+      if (error || !data) {
+        throw error ?? new Error("theme package validation failed");
+      }
+      setPendingThemePackage({ fileName: file.name, validation: data });
+    } catch (error) {
+      setThemePackageError(error);
+    } finally {
+      setValidatingThemePackage(false);
+    }
+  };
+
+  const commitThemePackage = async () => {
+    if (
+      !settings ||
+      !pendingThemePackage ||
+      pendingThemePackage.validation.status === "reserved"
+    ) {
+      return;
+    }
+    const { validation } = pendingThemePackage;
+    setInstallingThemePackage(true);
+    setThemePackageError(null);
+    try {
+      const result =
+        validation.status === "available"
+          ? await installConsoleThemePackage({ body: validation.theme })
+          : validation.existingVersion
+            ? await replaceConsoleThemePackage({
+                body: validation.theme,
+                path: { themeId: validation.theme.id },
+                headers: { "If-Match": validation.existingVersion },
+              })
+            : {
+                error: new Error("managed theme version is unavailable"),
+                data: undefined,
+              };
+      if (result.error || !result.data) {
+        throw result.error ?? new Error("theme package mutation failed");
+      }
+
+      const replacingExistingTheme = settings.availableThemes.some(
+        (theme) => theme.id === result.data.id,
+      );
+      const availableThemes = replacingExistingTheme
+        ? settings.availableThemes.map((theme) =>
+            theme.id === result.data.id ? result.data : theme,
+          )
+        : [...settings.availableThemes, result.data];
+      const nextSettings = { ...settings, availableThemes };
+      setSettings(nextSettings);
+      applySettings(nextSettings);
+      const stageForEnable =
+        validation.status === "available" &&
+        draft.enabledThemeIds.length < maxEnabledThemes;
+      if (stageForEnable) {
+        setDraft((current) => ({
+          ...current,
+          enabledThemeIds: current.enabledThemeIds.includes(result.data.id)
+            ? current.enabledThemeIds
+            : [...current.enabledThemeIds, result.data.id],
+        }));
+      }
+      setPendingThemePackage(null);
+      void message.success(
+        validation.status === "available"
+          ? stageForEnable
+            ? text(
+                "主题已安装并加入启用列表；请保存并应用后对用户生效",
+                "Theme installed and added to the enabled set; save and apply to make it available to users",
+              )
+            : text(
+                "主题已安装；启用主题已达到 32 个上限，请先停用其他主题",
+                "Theme installed; the 32-theme enabled limit has been reached, so disable another theme first",
+              )
+          : text(
+              "主题包已替换；已启用主题将在重新载入设置时使用新版本",
+              "Theme package replaced; enabled themes will use the new version when settings reload",
+            ),
+      );
+    } catch (error) {
+      setThemePackageError(error);
+    } finally {
+      setInstallingThemePackage(false);
+    }
+  };
+
+  const deleteManagedTheme = async (theme: ConsoleTheme) => {
+    if (!settings || theme.source !== "managed" || !theme.version) return;
+    const inUse =
+      settings.enabledThemeIds.includes(theme.id) ||
+      draft.enabledThemeIds.includes(theme.id);
+    if (inUse) return;
+
+    setDeletingThemeID(theme.id);
+    setThemePackageError(null);
+    try {
+      const { error } = await deleteConsoleThemePackage({
+        path: { themeId: theme.id },
+        headers: { "If-Match": theme.version },
+      });
+      if (error) throw error;
+
+      const nextSettings = {
+        ...settings,
+        availableThemes: settings.availableThemes.filter(
+          (item) => item.id !== theme.id,
+        ),
+      };
+      setSettings(nextSettings);
+      applySettings(nextSettings);
+      setDraft((current) => ({
+        ...current,
+        enabledThemeIds: current.enabledThemeIds.filter(
+          (themeID) => themeID !== theme.id,
+        ),
+      }));
+      void message.success(text("已删除上传主题", "Uploaded theme deleted"));
+    } catch (error) {
+      setThemePackageError(error);
+    } finally {
+      setDeletingThemeID(null);
     }
   };
 
@@ -344,20 +540,50 @@ export function SiteSettingsPage() {
           </div>
 
           <section className="ag-site-theme-settings">
-            <div className="ag-site-settings-section-heading">
-              <h2>{text("Console 主题", "Console themes")}</h2>
-              <p>
-                {text(
-                  "启用用户可以选择的主题，并指定首次访问时使用的默认主题。主题颜色统一由 Ant Design token 解析。",
-                  "Enable the themes users may choose and select the default for first-time visitors. All theme colors are resolved from Ant Design tokens.",
-                )}
-              </p>
+            <div className="ag-site-settings-section-heading ag-site-settings-section-heading-action">
+              <div>
+                <h2>{text("Console 主题", "Console themes")}</h2>
+                <p>
+                  {text(
+                    "启用用户可以选择的主题，并指定首次访问时使用的默认主题。主题颜色统一由 Ant Design token 解析。",
+                    "Enable the themes users may choose and select the default for first-time visitors. All theme colors are resolved from Ant Design tokens.",
+                  )}
+                </p>
+              </div>
+              <Upload
+                accept=".json,application/json"
+                maxCount={1}
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  void selectThemePackage(file);
+                  return false;
+                }}
+              >
+                <Button
+                  icon={<UploadOutlined />}
+                  loading={validatingThemePackage}
+                  aria-label={text("上传主题包", "Upload theme package")}
+                >
+                  {text("上传主题包", "Upload theme package")}
+                </Button>
+              </Upload>
             </div>
+            {themePackageError !== null && pendingThemePackage === null && (
+              <ErrorBanner
+                error={themePackageError}
+                title={text("主题包处理失败", "Theme package failed")}
+              />
+            )}
             <div className="ag-theme-option-grid">
               {settings.availableThemes.map((theme) => {
                 const enabled = draft.enabledThemeIds.includes(theme.id);
                 const onlyEnabled =
                   enabled && draft.enabledThemeIds.length === 1;
+                const source = theme.source ?? "builtin";
+                const persistedEnabled = settings.enabledThemeIds.includes(
+                  theme.id,
+                );
+                const deletionBlocked = persistedEnabled || enabled;
                 return (
                   <article
                     key={theme.id}
@@ -377,34 +603,85 @@ export function SiteSettingsPage() {
                           {theme.name}
                         </span>
                       </Checkbox>
-                      <span className="ag-theme-option-mode">
-                        {theme.mode === "dark"
-                          ? text("深色", "Dark")
-                          : text("浅色", "Light")}
+                      <span className="ag-theme-option-meta">
+                        <span className="ag-theme-option-mode">
+                          {theme.mode === "dark"
+                            ? text("深色", "Dark")
+                            : text("浅色", "Light")}
+                        </span>
+                        <span
+                          className="ag-theme-option-source"
+                          data-source={source}
+                        >
+                          {source === "managed"
+                            ? text("已上传", "Uploaded")
+                            : source === "directory"
+                              ? text("目录", "Directory")
+                              : text("内置", "Built in")}
+                        </span>
                       </span>
                     </div>
                     <ThemePreview theme={theme} />
                     <p>{theme.description}</p>
-                    <Radio
-                      checked={draft.defaultThemeId === theme.id}
-                      disabled={!enabled}
-                      onChange={() =>
-                        setDraft((current) => ({
-                          ...current,
-                          defaultThemeId: theme.id,
-                        }))
-                      }
-                    >
-                      {text("设为默认", "Use as default")}
-                    </Radio>
+                    <div className="ag-theme-option-footer">
+                      <Radio
+                        checked={draft.defaultThemeId === theme.id}
+                        disabled={!enabled}
+                        onChange={() =>
+                          setDraft((current) => ({
+                            ...current,
+                            defaultThemeId: theme.id,
+                          }))
+                        }
+                      >
+                        {text("设为默认", "Use as default")}
+                      </Radio>
+                      {source === "managed" && (
+                        <Popconfirm
+                          disabled={deletionBlocked}
+                          title={text(
+                            "删除这个上传主题？",
+                            "Delete this uploaded theme?",
+                          )}
+                          description={text(
+                            "删除后无法恢复；若仍需使用，需要重新上传主题包。",
+                            "This cannot be undone; upload the package again to restore it.",
+                          )}
+                          okText={text("删除", "Delete")}
+                          cancelText={text("取消", "Cancel")}
+                          okButtonProps={{ danger: true }}
+                          onConfirm={() => deleteManagedTheme(theme)}
+                        >
+                          <Button
+                            danger
+                            type="text"
+                            size="small"
+                            icon={<DeleteOutlined />}
+                            aria-label={text("删除", "Delete")}
+                            loading={deletingThemeID === theme.id}
+                            disabled={deletionBlocked}
+                            title={
+                              deletionBlocked
+                                ? text(
+                                    "请先取消启用并保存站点设置",
+                                    "Disable the theme and save site settings first",
+                                  )
+                                : undefined
+                            }
+                          >
+                            {text("删除", "Delete")}
+                          </Button>
+                        </Popconfirm>
+                      )}
+                    </div>
                   </article>
                 );
               })}
             </div>
             <p className="ag-theme-package-hint">
               {text(
-                "新增主题无需修改 Console：让 AI 按 themes/console-theme.schema.json 生成配置，再运行 gateway theme validate 与 gateway theme install。",
-                "Add themes without changing the Console: generate against themes/console-theme.schema.json, then run gateway theme validate and gateway theme install.",
+                "上传符合 themes/console-theme.schema.json 的 Theme Package v1 即可动态安装；主题包只允许受限颜色 token，不会执行 CSS、脚本或外部资源。运维目录主题仍可通过 gateway theme 命令管理。",
+                "Upload a Theme Package v1 matching themes/console-theme.schema.json to install it dynamically. Packages contain bounded color tokens only—no CSS, scripts, or external assets. Operator directory themes remain available through gateway theme commands.",
               )}
             </p>
           </section>
@@ -470,6 +747,105 @@ export function SiteSettingsPage() {
           </p>
         </aside>
       </Card>
+      <Modal
+        open={pendingThemePackage !== null}
+        width={620}
+        destroyOnHidden
+        mask={{ closable: !installingThemePackage }}
+        closable={!installingThemePackage}
+        title={
+          pendingThemePackage?.validation.status === "replaceable"
+            ? text("替换上传主题", "Replace uploaded theme")
+            : text("安装主题包", "Install theme package")
+        }
+        okText={
+          pendingThemePackage?.validation.status === "replaceable"
+            ? text("确认替换", "Replace theme")
+            : pendingThemePackage?.validation.status === "reserved"
+              ? text("ID 不可用", "ID unavailable")
+              : text("安装并启用", "Install and enable")
+        }
+        cancelText={text("取消", "Cancel")}
+        okButtonProps={{
+          disabled: pendingThemePackage?.validation.status === "reserved",
+        }}
+        confirmLoading={installingThemePackage}
+        onCancel={() => {
+          if (!installingThemePackage) setPendingThemePackage(null);
+        }}
+        onOk={() => void commitThemePackage()}
+      >
+        {pendingThemePackage && (
+          <div className="ag-theme-package-review">
+            {themePackageError !== null && (
+              <ErrorBanner
+                error={themePackageError}
+                title={text("主题包处理失败", "Theme package failed")}
+              />
+            )}
+            <Alert
+              showIcon
+              type={
+                pendingThemePackage.validation.status === "available"
+                  ? "success"
+                  : pendingThemePackage.validation.status === "replaceable"
+                    ? "warning"
+                    : "error"
+              }
+              title={
+                pendingThemePackage.validation.status === "available"
+                  ? text(
+                      "校验通过，可以安装",
+                      "Validation passed; ready to install",
+                    )
+                  : pendingThemePackage.validation.status === "replaceable"
+                    ? text(
+                        "该 ID 已由上传主题使用，将创建新版本",
+                        "This ID belongs to an uploaded theme; a new version will replace it",
+                      )
+                    : text(
+                        "该 ID 属于内置或目录主题，不能通过上传覆盖",
+                        "This ID belongs to a built-in or directory theme and cannot be overwritten",
+                      )
+              }
+            />
+            <ThemePreview theme={pendingThemePackage.validation.theme} />
+            <dl className="ag-theme-package-details">
+              <div>
+                <dt>{text("名称", "Name")}</dt>
+                <dd>{pendingThemePackage.validation.theme.name}</dd>
+              </div>
+              <div>
+                <dt>ID</dt>
+                <dd>{pendingThemePackage.validation.theme.id}</dd>
+              </div>
+              <div>
+                <dt>{text("模式", "Mode")}</dt>
+                <dd>
+                  {pendingThemePackage.validation.theme.mode === "dark"
+                    ? text("深色", "Dark")
+                    : text("浅色", "Light")}
+                </dd>
+              </div>
+              <div>
+                <dt>{text("文件", "File")}</dt>
+                <dd>{pendingThemePackage.fileName}</dd>
+              </div>
+            </dl>
+            {pendingThemePackage.validation.theme.description && (
+              <p className="ag-theme-package-description">
+                {pendingThemePackage.validation.theme.description}
+              </p>
+            )}
+            <p className="ag-theme-package-safety-note">
+              {text(
+                "主题包将在服务端按严格 v1 规范再次解析；安装新主题后，还需要保存站点设置才会向用户开放。",
+                "The server strictly parses the package against v1. After installing a new theme, save site settings to make it available to users.",
+              )}
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

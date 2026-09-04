@@ -1606,12 +1606,48 @@ ConsoleTheme:
   required: [schemaVersion, id, name, mode, token]
   additionalProperties: false
   properties:
+    '$schema': {type: string}
     schemaVersion: {type: integer, enum: [1]}
     id: {type: string, pattern: '^[a-z0-9][a-z0-9-]{1,63}$'}
     name: {type: string, minLength: 1, maxLength: 80}
     description: {type: string, maxLength: 240}
     mode: {type: string, enum: [dark, light]}
     token: {"$ref": "#/ConsoleThemeToken"}
+    source:
+      type: string
+      enum: [builtin, directory, managed]
+      description: Runtime ownership of the catalog item. Only managed themes can be replaced or deleted through the API.
+    version:
+      type: string
+      pattern: '^[1-9][0-9]*$'
+      description: Optimistic-concurrency version for a managed theme.
+ConsoleThemePackage:
+  type: object
+  required: [schemaVersion, id, name, mode, token]
+  additionalProperties: false
+  properties:
+    '$schema': {type: string}
+    schemaVersion: {type: integer, enum: [1]}
+    id: {type: string, pattern: '^[a-z0-9][a-z0-9-]{1,63}$'}
+    name: {type: string, minLength: 1, maxLength: 80}
+    description: {type: string, maxLength: 240}
+    mode: {type: string, enum: [dark, light]}
+    token: {"$ref": "#/ConsoleThemeToken"}
+ConsoleThemePackageValidation:
+  type: object
+  required: [theme, status]
+  additionalProperties: false
+  properties:
+    theme: {"$ref": "#/ConsoleThemePackage"}
+    status:
+      type: string
+      enum: [available, replaceable, reserved]
+    existingSource:
+      type: string
+      enum: [builtin, directory, managed]
+    existingVersion:
+      type: string
+      pattern: '^[1-9][0-9]*$'
 ConsoleThemeToken:
   type: object
   required: [colorPrimary, colorSuccess, colorWarning, colorError, colorInfo, colorTextBase, colorBgBase]

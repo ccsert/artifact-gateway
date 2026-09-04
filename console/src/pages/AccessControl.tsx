@@ -46,7 +46,7 @@ import {
   EmptyState,
   Spinner,
 } from "../components/Feedback";
-import { FormatBadge, Badge } from "../components/Badge";
+import { FormatBadge, Badge, type BadgeTone } from "../components/Badge";
 import { AccessDecisionSummary } from "../components/AccessDecisionSummary";
 import { useAuth } from "../lib/auth";
 import {
@@ -128,27 +128,27 @@ function resourcePlaceholder(format: Repository["format"] | undefined) {
 
 const ROLE_REFERENCE: {
   role: string;
-  tone: "red" | "blue" | "green";
+  tone: BadgeTone;
   desc: string;
   descEn: string;
 }[] = [
   {
     role: "admin",
-    tone: "red",
+    tone: "visualization-3",
     desc: "全部操作：浏览、发布、删除、授权、密钥管理",
     descEn:
       "All operations: browse, publish, delete, grants, and key management",
   },
   {
     role: "writer",
-    tone: "blue",
+    tone: "visualization-5",
     desc: "读 + 写：发布、编辑、复制；不可管理密钥与 admin 授权",
     descEn:
       "Read and write: publish, edit, and replicate; no key or admin grant management",
   },
   {
     role: "reader",
-    tone: "green",
+    tone: "visualization-4",
     desc: "只读：浏览、搜索、拉取",
     descEn: "Read-only: browse, search, and pull",
   },
@@ -190,24 +190,36 @@ function scopeLabel(
 ): {
   key: "read" | "write" | "admin" | "intelligence" | "unknown";
   label: string;
-  tone: "red" | "blue" | "green" | "cyan" | "zinc";
+  tone: BadgeTone;
 } {
   if (scopes.includes("repositories:intelligence"))
     return {
       key: "intelligence",
       label: english ? "Artifact intelligence" : "制品情报",
-      tone: "cyan",
+      tone: "visualization-1",
     };
   if (scopes.includes("repositories:admin"))
-    return { key: "admin", label: english ? "Admin" : "管理员", tone: "red" };
+    return {
+      key: "admin",
+      label: english ? "Admin" : "管理员",
+      tone: "visualization-3",
+    };
   if (scopes.includes("repositories:write"))
-    return { key: "write", label: english ? "Write" : "写入", tone: "blue" };
+    return {
+      key: "write",
+      label: english ? "Write" : "写入",
+      tone: "visualization-5",
+    };
   if (scopes.includes("repositories:read"))
-    return { key: "read", label: english ? "Read" : "读取", tone: "green" };
+    return {
+      key: "read",
+      label: english ? "Read" : "读取",
+      tone: "visualization-4",
+    };
   return {
     key: "unknown",
     label: scopes.join(", ") || (english ? "Not configured" : "未配置"),
-    tone: "zinc",
+    tone: "neutral",
   };
 }
 
@@ -683,7 +695,7 @@ export function AccessControlPage() {
       render: (value: string, row) => (
         <Link
           to={`/repositories/${row.repositoryId}`}
-          className="text-xs text-cyan-400 hover:text-cyan-300"
+          className="text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
         >
           {value}
         </Link>
@@ -706,7 +718,7 @@ export function AccessControlPage() {
           <span>
             <Badge tone={scope.tone}>{scope.label}</Badge>
             {scope.key === "admin" && (
-              <span className="ml-2 text-xs text-rose-300">
+              <span className="ml-2 text-xs text-[var(--ag-status-danger)]">
                 {text("高权限", "Elevated")}
               </span>
             )}
@@ -733,7 +745,7 @@ export function AccessControlPage() {
       render: (_, row) => (
         <Link
           to={`/repositories/${row.repositoryId}?tab=grants`}
-          className="text-xs text-zinc-500 hover:text-cyan-300"
+          className="text-xs text-[var(--ag-content-tertiary)] hover:text-[var(--ag-link-hover)]"
         >
           {text("编辑 →", "Edit →")}
         </Link>
@@ -935,7 +947,7 @@ export function AccessControlPage() {
                   <div className="flex items-start justify-between gap-6 border-b border-zinc-800/70 px-5 py-4">
                     <div>
                       <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
-                        <ExperimentOutlined className="text-cyan-400" />
+                        <ExperimentOutlined className="text-[var(--ag-content-tertiary)]" />
                         {text("权限检查", "Access evaluation")}
                       </div>
                       <p className="mt-1 text-xs text-zinc-500">
@@ -1114,7 +1126,9 @@ export function AccessControlPage() {
                     {evaluation && (
                       <div className="mt-4 border-t border-zinc-800/70 pt-4">
                         <div className="mb-3 flex min-w-0 items-center gap-2 text-xs text-zinc-500">
-                          <Badge tone={evaluation.simulated ? "cyan" : "green"}>
+                          <Badge
+                            tone={evaluation.simulated ? "info" : "success"}
+                          >
                             {evaluation.simulated
                               ? text("模拟结果", "Simulated")
                               : text("当前身份", "Current identity")}
@@ -1206,7 +1220,7 @@ export function AccessControlPage() {
                   <div className="ag-public-access-header px-5 py-5">
                     <div className="flex flex-wrap items-start justify-between gap-5">
                       <div className="flex min-w-0 items-start gap-3">
-                        <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-lg text-emerald-300">
+                        <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-[var(--ag-border-default)] bg-[var(--ag-surface-hover)] text-lg text-[var(--ag-content-secondary)]">
                           <GlobalOutlined />
                         </div>
                         <div className="min-w-0">
@@ -1215,7 +1229,9 @@ export function AccessControlPage() {
                               {text("公开访问边界", "Public access boundary")}
                             </h2>
                             <Badge
-                              tone={anonymousPolicy?.enabled ? "green" : "zinc"}
+                              tone={
+                                anonymousPolicy?.enabled ? "success" : "neutral"
+                              }
                             >
                               {anonymousPolicy?.enabled
                                 ? text("总闸已开启", "Global gate on")
@@ -1291,7 +1307,9 @@ export function AccessControlPage() {
                             {text("加载中…", "Loading…")}
                           </span>
                         ) : (
-                          <Badge tone="zinc">{text("只读", "Read-only")}</Badge>
+                          <Badge tone="neutral">
+                            {text("只读", "Read-only")}
+                          </Badge>
                         )}
                       </div>
                     </div>
@@ -1347,7 +1365,7 @@ export function AccessControlPage() {
                   </ol>
                   <div className="ag-public-access-footer flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                     <div className="flex items-center gap-2 text-xs text-zinc-500">
-                      <Badge tone="green">
+                      <Badge tone="success">
                         {text("只开放读取协议", "Read protocols only")}
                       </Badge>
                       <span>

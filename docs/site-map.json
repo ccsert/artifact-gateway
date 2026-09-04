@@ -33,7 +33,8 @@
         { "id": "adr-full-repository", "title": { "en": "ADR 0001: full repository", "zh-CN": "ADR 0001：完整制品库" }, "en": "docs/adr/0001-full-artifact-repository.md", "zh-CN": "docs/adr/0001-full-artifact-repository.zh-CN.md" },
         { "id": "adr-promotion-snapshots", "title": { "en": "ADR 0002: promotion snapshots", "zh-CN": "ADR 0002：晋升快照" }, "en": "docs/adr/0002-promotion-snapshots.md", "zh-CN": "docs/adr/0002-promotion-snapshots.zh-CN.md" },
         { "id": "adr-protocol-only", "title": { "en": "ADR 0003: protocol-only formats", "zh-CN": "ADR 0003：仅协议格式" }, "en": "docs/adr/0003-protocol-only-formats.md", "zh-CN": "docs/adr/0003-protocol-only-formats.zh-CN.md" },
-        { "id": "adr-go-hosted", "title": { "en": "ADR 0004: Go Hosted publication", "zh-CN": "ADR 0004：Go Hosted 发布" }, "en": "docs/adr/0004-go-hosted-publication.md", "zh-CN": "docs/adr/0004-go-hosted-publication.zh-CN.md" }
+        { "id": "adr-go-hosted", "title": { "en": "ADR 0004: Go Hosted publication", "zh-CN": "ADR 0004：Go Hosted 发布" }, "en": "docs/adr/0004-go-hosted-publication.md", "zh-CN": "docs/adr/0004-go-hosted-publication.zh-CN.md" },
+        { "id": "adr-console-theme-system", "title": { "en": "ADR 0005: Console semantic theme system", "zh-CN": "ADR 0005：Console 语义主题系统" }, "en": "docs/adr/0005-console-semantic-theme-system.md", "zh-CN": "docs/adr/0005-console-semantic-theme-system.zh-CN.md" }
       ]
     },
     {

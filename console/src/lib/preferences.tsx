@@ -11,7 +11,12 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import type { ConsoleTheme } from "../client";
-import { applyConsoleTheme, defaultConsoleThemes } from "./consoleTheme";
+import {
+  applyResolvedConsoleTheme,
+  defaultConsoleThemes,
+  resolveConsoleTheme,
+  type ResolvedConsoleTheme,
+} from "./consoleTheme";
 import { useSiteSettings } from "./siteSettings";
 
 export type ColorMode = "dark" | "light";
@@ -20,6 +25,11 @@ export type AppLocale = "zh-CN" | "en-US";
 interface ThemeViewTransition {
   finished: Promise<void>;
   skipTransition: () => void;
+}
+
+interface ThemeTransitionOrigin {
+  x: number;
+  y: number;
 }
 
 type ThemeTransitionDocument = Document & {
@@ -207,10 +217,11 @@ const enUS: Record<MessageKey, string> = {
 interface PreferencesContextValue {
   themeId: string;
   activeTheme: ConsoleTheme;
+  resolvedTheme: ResolvedConsoleTheme;
   availableThemes: ConsoleTheme[];
   colorMode: ColorMode;
   locale: AppLocale;
-  setThemeId: (id: string) => void;
+  setThemeId: (id: string, origin?: ThemeTransitionOrigin) => void;
   setColorMode: (mode: ColorMode) => void;
   setLocale: (locale: AppLocale) => void;
   toggleColorMode: () => void;
@@ -219,6 +230,35 @@ interface PreferencesContextValue {
 }
 
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
+
+function setThemeRevealGeometry(
+  root: HTMLElement,
+  origin?: ThemeTransitionOrigin,
+) {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const candidateX =
+    origin?.x !== undefined && Number.isFinite(origin.x)
+      ? origin.x
+      : viewportWidth;
+  const candidateY =
+    origin?.y !== undefined && Number.isFinite(origin.y) ? origin.y : 0;
+  const x = Math.min(Math.max(candidateX, 0), viewportWidth);
+  const y = Math.min(Math.max(candidateY, 0), viewportHeight);
+  const radius = Math.ceil(
+    Math.hypot(Math.max(x, viewportWidth - x), Math.max(y, viewportHeight - y)),
+  );
+
+  root.style.setProperty("--ag-theme-reveal-x", `${x}px`);
+  root.style.setProperty("--ag-theme-reveal-y", `${y}px`);
+  root.style.setProperty("--ag-theme-reveal-radius", `${radius}px`);
+}
+
+function clearThemeRevealGeometry(root: HTMLElement) {
+  root.style.removeProperty("--ag-theme-reveal-x");
+  root.style.removeProperty("--ag-theme-reveal-y");
+  root.style.removeProperty("--ag-theme-reveal-radius");
+}
 
 function storedThemeId(themes: ConsoleTheme[], defaultThemeId: string): string {
   try {
@@ -267,6 +307,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   );
   const [locale, setLocaleState] = useState<AppLocale>(storedLocale);
   const activeThemeTransition = useRef<ThemeViewTransition | null>(null);
+  const themeCommitSequence = useRef(0);
   // Keep a just-disabled theme mounted for one render so the effect below can
   // animate to the configured default instead of swapping the whole UI first.
   const activeTheme =
@@ -275,6 +316,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     availableThemes[0] ??
     defaultConsoleThemes[0];
   const colorMode: ColorMode = activeTheme.mode;
+  const resolvedTheme = useMemo(
+    () => resolveConsoleTheme(activeTheme),
+    [activeTheme],
+  );
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -282,14 +327,14 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     root.dataset.theme = colorMode;
     root.classList.toggle("dark", colorMode === "dark");
     root.style.colorScheme = colorMode;
-    applyConsoleTheme(activeTheme, root);
+    applyResolvedConsoleTheme(resolvedTheme, root);
     try {
       localStorage.setItem(THEME_ID_KEY, activeTheme.id);
       localStorage.setItem(THEME_MODE_KEY, colorMode);
     } catch {
       // Preferences still work for this session when storage is unavailable.
     }
-  }, [activeTheme, colorMode]);
+  }, [activeTheme.id, colorMode, resolvedTheme]);
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -301,7 +346,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, [locale]);
 
   const setThemeId = useCallback(
-    (nextThemeID: string) => {
+    (nextThemeID: string, origin?: ThemeTransitionOrigin) => {
       if (
         nextThemeID === themeId ||
         !availableThemes.some((theme) => theme.id === nextThemeID)
@@ -313,17 +358,30 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       ).matches;
       const transitionDocument = document as ThemeTransitionDocument;
       const commit = () => flushSync(() => setThemeIdState(nextThemeID));
+      const commitSequence = ++themeCommitSequence.current;
 
       activeThemeTransition.current?.skipTransition();
       if (reduceMotion || !transitionDocument.startViewTransition) {
-        if (!reduceMotion) root.dataset.themeTransition = "fallback";
+        activeThemeTransition.current = null;
+        clearThemeRevealGeometry(root);
+        root.dataset.themeTransition = "instant";
         commit();
-        window.setTimeout(() => {
-          delete root.dataset.themeTransition;
-        }, 220);
+        // Flush the new palette while transitions are disabled. Removing the
+        // marker on the next frame cannot retroactively start per-component
+        // interpolation, so unsupported/reduced-motion browsers switch atomically.
+        void root.offsetWidth;
+        window.requestAnimationFrame(() => {
+          if (
+            themeCommitSequence.current === commitSequence &&
+            root.dataset.themeTransition === "instant"
+          ) {
+            delete root.dataset.themeTransition;
+          }
+        });
         return;
       }
 
+      setThemeRevealGeometry(root, origin);
       root.dataset.themeTransition = "view";
       const transition = transitionDocument.startViewTransition(async () => {
         commit();
@@ -337,6 +395,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         if (activeThemeTransition.current === transition) {
           activeThemeTransition.current = null;
           delete root.dataset.themeTransition;
+          clearThemeRevealGeometry(root);
         }
       });
     },
@@ -395,6 +454,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     () => ({
       themeId: activeTheme.id,
       activeTheme,
+      resolvedTheme,
       availableThemes,
       colorMode,
       locale,
@@ -410,6 +470,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       availableThemes,
       colorMode,
       locale,
+      resolvedTheme,
       setThemeId,
       setColorMode,
       setLocale,

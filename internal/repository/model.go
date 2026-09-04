@@ -1213,6 +1213,17 @@ type SiteSettings struct {
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
+// ConsoleThemePackage is the durable representation of one validated Theme
+// Package. Payload contains canonical JSON produced after strict parsing; the
+// API never serves an unvalidated stored payload to the Console.
+type ConsoleThemePackage struct {
+	ID        string    `json:"id"`
+	Version   string    `json:"version"`
+	Payload   []byte    `json:"-"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 // OIDCSettings is the persisted singleton configuration for API bearer and
 // browser OIDC authentication. ClientSecret contains ciphertext at the
 // repository boundary and must never be serialized by an API response.

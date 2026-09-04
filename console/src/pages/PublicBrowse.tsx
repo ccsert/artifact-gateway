@@ -5,6 +5,7 @@ import {
   ArrowRightOutlined,
   CheckOutlined,
   CopyOutlined,
+  DatabaseOutlined,
   DownOutlined,
   LinkOutlined,
   ReloadOutlined,
@@ -22,17 +23,13 @@ import {
 } from "../client";
 import type { ArtifactSummary } from "../client";
 import { Card } from "../components/Layout";
-import {
-  Loading,
-  ErrorBanner,
-  EmptyState,
-  EmptyStateArtwork,
-} from "../components/Feedback";
+import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
 import { FormatBadge, Badge } from "../components/Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { usageFor, type UsageSnippet } from "../lib/usage";
 import { PreferenceControls } from "../components/PreferenceControls";
 import { usePreferences } from "../lib/preferences";
+import { artifactFormatVisualizationClass } from "../lib/artifactFormatVisuals";
 import {
   artifactBrowseParams,
   artifactBrowsePath,
@@ -59,8 +56,6 @@ import {
   SearchableVersionSelect,
   UsageSnippetBlock,
 } from "../components/PublicBrowsePrimitives";
-import emptyPublicCatalogDark from "../assets/empty-public-catalog.webp";
-import emptyPublicCatalogLight from "../assets/empty-public-catalog-light.webp";
 import { NpmPackageDetail } from "../components/NpmPackageDetail";
 import { PyPIProjectDetail } from "../components/PyPIProjectDetail";
 import { GoModuleDetail } from "../components/GoModuleDetail";
@@ -143,41 +138,30 @@ const PUBLIC_FORMAT_ORDER: PublicRepositoryFormat[] = [
   "raw",
 ];
 
-const PUBLIC_FORMAT_STYLE: Record<
-  PublicRepositoryFormat,
-  { icon: string; surface: string }
-> = {
+const PUBLIC_FORMAT_STYLE: Record<PublicRepositoryFormat, { icon: string }> = {
   oci: {
     icon: "OCI",
-    surface: "border-violet-400/20 bg-violet-400/10 text-violet-200",
   },
   maven: {
     icon: "MVN",
-    surface: "border-orange-400/20 bg-orange-400/10 text-orange-200",
   },
   npm: {
     icon: "NPM",
-    surface: "border-rose-400/20 bg-rose-400/10 text-rose-200",
   },
   pypi: {
     icon: "PY",
-    surface: "border-blue-400/20 bg-blue-400/10 text-blue-200",
   },
   go: {
     icon: "GO",
-    surface: "border-cyan-400/20 bg-cyan-400/10 text-cyan-200",
   },
   apt: {
     icon: "APT",
-    surface: "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
   },
   conan: {
     icon: "C++",
-    surface: "border-amber-400/20 bg-amber-400/10 text-amber-200",
   },
   raw: {
     icon: "RAW",
-    surface: "border-zinc-400/20 bg-zinc-400/10 text-zinc-200",
   },
 };
 
@@ -390,7 +374,7 @@ function MavenGroupTable({
               {row.selectedVersion.coordinate}
             </span>
             {row.selectedVersion.buildNumber ? (
-              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-300">
+              <span className="rounded bg-[var(--ag-status-warning-soft)] px-1.5 py-0.5 text-xs text-[var(--ag-status-warning)]">
                 SNAPSHOT #{row.selectedVersion.buildNumber}
               </span>
             ) : null}
@@ -798,7 +782,9 @@ function ConanGroupTable({
           </Button>
         </div>
         {row.page?.error && (
-          <div className="mt-2 text-xs text-rose-300">{row.page.error}</div>
+          <div className="mt-2 text-xs text-[var(--ag-status-danger)]">
+            {row.page.error}
+          </div>
         )}
         <SearchableVersionSelect
           className="mt-3"
@@ -850,7 +836,9 @@ function ConanGroupTable({
               <span className="font-mono text-xs text-zinc-100">
                 {row.selectedReference}
               </span>
-              <span className="rounded bg-violet-500/10 px-1.5 py-0.5 text-xs text-violet-300">
+              <span
+                className={`${artifactFormatVisualizationClass("conan")} rounded px-1.5 py-0.5 text-xs`}
+              >
                 {row.selectedRevisionItem.revision}
               </span>
               <Button
@@ -1849,7 +1837,7 @@ export function PublicBrowsePage() {
             </span>
           </div>
           {row.protocolVersionsError && (
-            <div className="mt-2 flex items-center justify-between gap-2 text-xs text-rose-300">
+            <div className="mt-2 flex items-center justify-between gap-2 text-xs text-[var(--ag-status-danger)]">
               <span>{row.protocolVersionsError}</span>
               <Button
                 type="link"
@@ -1916,7 +1904,7 @@ export function PublicBrowsePage() {
                 <span className="font-mono text-xs text-zinc-100">
                   {row.item.coordinate}
                 </span>
-                <span className="rounded bg-cyan-500/10 px-1.5 py-0.5 text-xs text-cyan-300">
+                <span className="rounded bg-[var(--ag-surface-hover)] px-1.5 py-0.5 text-xs text-[var(--ag-content-secondary)]">
                   {row.selectedProtocolVersionItem.label}
                 </span>
                 <Button
@@ -1990,7 +1978,7 @@ export function PublicBrowsePage() {
                 />
               </div>
               {row.ociDetail?.error && (
-                <div className="mt-2 flex items-center gap-2 text-xs text-rose-300">
+                <div className="mt-2 flex items-center gap-2 text-xs text-[var(--ag-status-danger)]">
                   <span>{row.ociDetail.error}</span>
                   <Button
                     type="link"
@@ -2048,7 +2036,7 @@ export function PublicBrowsePage() {
             <PreferenceControls compact />
             <Link
               to={authenticated ? "/" : "/login"}
-              className="text-sm text-zinc-400 hover:text-cyan-300"
+              className="text-sm text-[var(--ag-content-secondary)] hover:text-[var(--ag-link-hover)]"
             >
               {t(
                 authenticated
@@ -2065,7 +2053,7 @@ export function PublicBrowsePage() {
           >
             <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
               <div className="max-w-3xl">
-                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-medium text-emerald-200">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--ag-status-success-border)] bg-[var(--ag-status-success-soft)] px-3 py-1 text-xs font-medium text-[var(--ag-status-success)]">
                   <SafetyCertificateOutlined />
                   {text("公开只读", "Public read-only")}
                 </div>
@@ -2114,7 +2102,7 @@ export function PublicBrowsePage() {
                   </div>
                 </div>
                 <div className="col-span-2 flex items-center gap-3 bg-zinc-950/70 p-4">
-                  <div className="flex size-9 items-center justify-center rounded-lg bg-cyan-400/10 text-cyan-200">
+                  <div className="flex size-9 items-center justify-center rounded-lg bg-[var(--ag-surface-hover)] text-[var(--ag-content-secondary)]">
                     <SafetyCertificateOutlined />
                   </div>
                   <div>
@@ -2200,6 +2188,7 @@ export function PublicBrowsePage() {
             ) : anonymousEnabled === false ? (
               <PublicBrowseStateSurface>
                 <EmptyState
+                  icon={<SafetyCertificateOutlined />}
                   title={text(
                     "全局匿名读取未启用",
                     "Global anonymous reads are disabled",
@@ -2211,7 +2200,7 @@ export function PublicBrowsePage() {
                   action={
                     <Link
                       to="/access"
-                      className="text-sm text-cyan-300 hover:text-cyan-200"
+                      className="text-sm text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
                     >
                       {text("前往访问控制", "Open access control")}
                     </Link>
@@ -2221,6 +2210,7 @@ export function PublicBrowsePage() {
             ) : repositoryId && !selectedRepository ? (
               <PublicBrowseStateSurface>
                 <EmptyState
+                  icon={<SearchOutlined />}
                   title={text(
                     "公开仓库不存在或不可见",
                     "Public repository not found or visible",
@@ -2240,20 +2230,13 @@ export function PublicBrowsePage() {
               repositories.length === 0 ? (
                 <PublicBrowseStateSurface className="ag-public-catalog-empty-surface">
                   <EmptyState
-                    layout="split"
                     className="ag-public-catalog-empty"
+                    icon={<DatabaseOutlined />}
                     title={text("暂无公开仓库", "No public repositories")}
                     hint={text(
                       "管理员需先启用全局匿名访问，并在仓库上允许匿名读取。公开仓库出现后，这里会直接展示可匿名使用的来源与格式。",
                       "An administrator must enable global anonymous access and allow reads on a repository. Public sources and formats will appear here as soon as they are available.",
                     )}
-                    image={
-                      <EmptyStateArtwork
-                        darkSrc={emptyPublicCatalogDark}
-                        lightSrc={emptyPublicCatalogLight}
-                        name="public-catalog"
-                      />
-                    }
                     action={
                       <Button
                         type="primary"
@@ -2313,6 +2296,7 @@ export function PublicBrowsePage() {
                   {visibleRepositories.length === 0 ? (
                     <EmptyState
                       compact
+                      icon={<SearchOutlined />}
                       title={text(
                         "没有匹配的公开仓库",
                         "No matching public repositories",
@@ -2331,13 +2315,6 @@ export function PublicBrowsePage() {
                           {text("清除筛选", "Clear filters")}
                         </Button>
                       }
-                      image={
-                        <EmptyStateArtwork
-                          darkSrc={emptyPublicCatalogDark}
-                          lightSrc={emptyPublicCatalogLight}
-                          name="public-catalog"
-                        />
-                      }
                     />
                   ) : (
                     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -2348,12 +2325,12 @@ export function PublicBrowsePage() {
                           className="group block text-left"
                         >
                           <Card
-                            className="ag-public-repository-card h-full border-zinc-800/90 bg-zinc-950/35 group-hover:border-cyan-400/35 group-hover:bg-zinc-900/80"
+                            className="ag-public-repository-card h-full border-[var(--ag-border-subtle)] bg-[var(--ag-surface-container-translucent)] group-hover:border-[var(--ag-border-default)] group-hover:bg-[var(--ag-surface-hover)]"
                             bodyClassName="flex h-full min-h-52 flex-col p-5"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div
-                                className={`flex h-11 min-w-11 items-center justify-center rounded-xl border px-2 text-xs font-semibold tracking-wide ${PUBLIC_FORMAT_STYLE[repository.format].surface}`}
+                                className={`flex h-11 min-w-11 items-center justify-center rounded-xl border px-2 text-xs font-semibold tracking-wide ${artifactFormatVisualizationClass(repository.format)}`}
                               >
                                 {PUBLIC_FORMAT_STYLE[repository.format].icon}
                               </div>
@@ -2361,10 +2338,10 @@ export function PublicBrowsePage() {
                                 <Badge
                                   tone={
                                     repository.type === "proxy"
-                                      ? "amber"
+                                      ? "visualization-2"
                                       : repository.type === "group"
-                                        ? "violet"
-                                        : "cyan"
+                                        ? "visualization-6"
+                                        : "visualization-1"
                                   }
                                 >
                                   {(repository.type ?? "hosted").toUpperCase()}
@@ -2395,7 +2372,7 @@ export function PublicBrowsePage() {
                               <span className="text-zinc-600">
                                 {text("无需登录即可读取", "No sign-in to read")}
                               </span>
-                              <span className="flex items-center gap-1 font-medium text-cyan-300 transition-colors group-hover:text-cyan-200">
+                              <span className="flex items-center gap-1 font-medium text-[var(--ag-link)] transition-colors group-hover:text-[var(--ag-link-hover)]">
                                 {text("进入仓库", "Open repository")}
                                 <ArrowRightOutlined />
                               </span>
@@ -2420,7 +2397,7 @@ export function PublicBrowsePage() {
             ) : items.length === 0 ? (
               <PublicBrowseStateSurface>
                 <EmptyState
-                  layout="split"
+                  icon={<SearchOutlined />}
                   title={text(
                     "没有匹配的公开制品",
                     "No matching public artifacts",
@@ -2429,13 +2406,6 @@ export function PublicBrowsePage() {
                     "确认仓库已启用匿名读取，或调整上方查询条件。",
                     "Confirm anonymous reads are enabled or adjust the query above.",
                   )}
-                  image={
-                    <EmptyStateArtwork
-                      darkSrc={emptyPublicCatalogDark}
-                      lightSrc={emptyPublicCatalogLight}
-                      name="public-catalog"
-                    />
-                  }
                 />
               </PublicBrowseStateSurface>
             ) : (

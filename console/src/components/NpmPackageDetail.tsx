@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Tag } from "antd";
+import { Badge } from "./Badge";
 import { Loading } from "./Feedback";
 import {
   MetadataItem,
@@ -203,17 +204,15 @@ export function NpmPackageDetail({
             {packageName}@{selectedVersion}
           </span>
           {packument["dist-tags"].latest === selectedVersion ? (
-            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs text-emerald-300">
+            <span className="rounded bg-[var(--ag-status-success-soft)] px-1.5 py-0.5 text-xs text-[var(--ag-status-success)]">
               latest
             </span>
           ) : null}
           {artifactMetadata?.source === "proxy" ? (
-            <Tag color="blue" variant="filled">
-              Proxy
-            </Tag>
+            <Badge tone="visualization-5">Proxy</Badge>
           ) : null}
           {artifactMetadata?.cacheStatus ? (
-            <Tag color={metadataOnly ? "default" : "green"} variant="filled">
+            <Tag color={metadataOnly ? "default" : "success"} variant="filled">
               {metadataOnly
                 ? text("仅元数据", "Metadata only")
                 : text("已缓存", "Cached")}

@@ -12,7 +12,6 @@ import (
 	"unicode/utf8"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
-	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
@@ -24,7 +23,7 @@ func (h generatedRepositoryAPIAdapter) GetSiteSettings(w http.ResponseWriter, r 
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get site settings failed")
 		return
 	}
-	themes, err := h.availableConsoleThemes()
+	themes, err := h.availableConsoleThemes(r.Context())
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "load Console themes failed")
 		return
@@ -50,7 +49,13 @@ func (h generatedRepositoryAPIAdapter) ReplaceSiteSettings(w http.ResponseWriter
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "site settings request is invalid")
 		return
 	}
-	themes, err := h.availableConsoleThemes()
+	release, err := h.lockConsoleThemeCatalog(r.Context())
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lock Console theme catalog failed")
+		return
+	}
+	defer release()
+	themes, err := h.availableConsoleThemes(r.Context())
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "load Console themes failed")
 		return
@@ -85,7 +90,7 @@ func (h generatedRepositoryAPIAdapter) ReplaceSiteSettings(w http.ResponseWriter
 	writeNativeMavenJSON(w, http.StatusOK, response)
 }
 
-func normalizeSiteSettings(siteName, logoURL, brandMark string, enabledThemeIDs []string, defaultThemeID string, themes []consoletheme.Theme) (repository.SiteSettings, error) {
+func normalizeSiteSettings(siteName, logoURL, brandMark string, enabledThemeIDs []string, defaultThemeID string, themes []consoleThemeCatalogItem) (repository.SiteSettings, error) {
 	settings := repository.SiteSettings{
 		SiteName: strings.TrimSpace(siteName), LogoURL: strings.TrimSpace(logoURL), BrandMark: strings.TrimSpace(brandMark),
 		EnabledThemeIDs: append([]string(nil), enabledThemeIDs...), DefaultThemeID: strings.TrimSpace(defaultThemeID),
@@ -105,13 +110,13 @@ func normalizeSiteSettings(siteName, logoURL, brandMark string, enabledThemeIDs 
 	return settings, nil
 }
 
-func validateThemeSelection(enabledThemeIDs []string, defaultThemeID string, themes []consoletheme.Theme) error {
+func validateThemeSelection(enabledThemeIDs []string, defaultThemeID string, themes []consoleThemeCatalogItem) error {
 	if len(enabledThemeIDs) == 0 || len(enabledThemeIDs) > 32 {
 		return errors.New("enabledThemeIds must contain 1 to 32 themes")
 	}
 	available := make(map[string]struct{}, len(themes))
 	for _, theme := range themes {
-		available[theme.ID] = struct{}{}
+		available[theme.Theme.ID] = struct{}{}
 	}
 	enabled := make(map[string]struct{}, len(enabledThemeIDs))
 	for _, id := range enabledThemeIDs {
@@ -174,22 +179,11 @@ func validateSiteLogoDataURL(value string) error {
 	return nil
 }
 
-func (h generatedRepositoryAPIAdapter) availableConsoleThemes() ([]consoletheme.Theme, error) {
-	if h.consoleThemes == nil {
-		return consoletheme.NewRegistry("").List()
-	}
-	return h.consoleThemes.List()
-}
-
-func siteSettingsResponse(settings repository.SiteSettings, themes []consoletheme.Theme) (adminopenapi.SiteSettings, error) {
+func siteSettingsResponse(settings repository.SiteSettings, themes []consoleThemeCatalogItem) (adminopenapi.SiteSettings, error) {
 	available := make([]adminopenapi.ConsoleTheme, 0, len(themes))
 	for _, theme := range themes {
-		data, err := json.Marshal(theme)
+		item, err := consoleThemeCatalogResponse(theme)
 		if err != nil {
-			return adminopenapi.SiteSettings{}, err
-		}
-		var item adminopenapi.ConsoleTheme
-		if err := json.Unmarshal(data, &item); err != nil {
 			return adminopenapi.SiteSettings{}, err
 		}
 		available = append(available, item)

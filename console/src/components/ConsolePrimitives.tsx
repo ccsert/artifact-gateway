@@ -18,9 +18,9 @@ export interface MetricItem {
 
 const metricTone: Record<NonNullable<MetricItem["tone"]>, string> = {
   default: "text-zinc-100",
-  success: "text-emerald-300",
-  warning: "text-amber-300",
-  danger: "text-rose-300",
+  success: "text-[var(--ag-status-success)]",
+  warning: "text-[var(--ag-status-warning)]",
+  danger: "text-[var(--ag-status-danger)]",
 };
 
 export function MetricStrip({ items }: { items: MetricItem[] }) {

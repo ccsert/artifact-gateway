@@ -8,6 +8,11 @@
 
 ## Unreleased
 
+- 新增 Console 语义主题系统：内置四套主题，文本选择保持中性，强调色按预算使用；主题切换
+  以选择器为圆心径向揭幕，并在 reduced motion 下原子生效。管理员无需重建 Gateway 即可
+  严格校验、预览、安装、替换、启用和删除 PostgreSQL 托管主题，版本校验、删除保护和审计
+  记录共同约束其生命周期。
+- 以紧凑语义图标、可执行说明和响应式布局替代装饰性空状态贴图。
 - 为 Maven、Raw Hosted Repository 增加服务端所有、按需加载的目录树；签名节点 ID 与游标
   绑定 Repository 和 principal，Maven SNAPSHOT 节点保留精确构建，Raw 路径保持可读展示，
   复制及操作继续使用规范值。

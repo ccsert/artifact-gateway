@@ -1,12 +1,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { PreferencesProvider } from "../lib/preferences";
-import {
-  EmptyState,
-  EmptyStateArtwork,
-  ErrorBanner,
-  Loading,
-} from "./Feedback";
+import { SearchOutlined } from "@ant-design/icons";
+import { EmptyState, ErrorBanner, Loading } from "./Feedback";
 
 afterEach(cleanup);
 
@@ -55,52 +51,38 @@ describe("ErrorBanner", () => {
 });
 
 describe("EmptyState", () => {
-  it("renders a theme-aware decorative artwork without replacing its useful copy", () => {
+  it("renders a quiet semantic icon without decorative imagery", () => {
     render(
       <PreferencesProvider>
         <EmptyState
           title="No repositories"
           hint="Create the first repository"
           action={<button type="button">New repository</button>}
-          image={
-            <EmptyStateArtwork
-              darkSrc="/empty-dark.webp"
-              lightSrc="/empty-light.webp"
-              name="repositories"
-            />
-          }
         />
       </PreferencesProvider>,
     );
 
-    const artwork = document.querySelector<HTMLImageElement>(
-      '[data-empty-artwork="repositories"]',
+    expect(document.querySelector("img")).not.toBeInTheDocument();
+    expect(document.querySelector(".ag-empty-state-icon")).toHaveAttribute(
+      "aria-hidden",
+      "true",
     );
-    expect(artwork).toHaveAttribute("src", "/empty-dark.webp");
-    expect(artwork).toHaveAttribute("alt", "");
-    expect(artwork).toHaveAttribute("aria-hidden", "true");
     expect(screen.getByText("No repositories")).toBeVisible();
     expect(
       screen.getByRole("button", { name: "New repository" }),
     ).toBeVisible();
   });
 
-  it("supports a split layout without changing the empty-state semantics", () => {
+  it("supports compact contextual states without changing their semantics", () => {
     render(
       <PreferencesProvider>
         <EmptyState
-          layout="split"
+          compact
           className="catalog-empty"
+          icon={<SearchOutlined data-testid="search-empty-icon" />}
           title="No public repositories"
           hint="Public sources will appear here."
           action={<button type="button">Open management</button>}
-          image={
-            <EmptyStateArtwork
-              darkSrc="/empty-dark.webp"
-              lightSrc="/empty-light.webp"
-              name="public-catalog"
-            />
-          }
         />
       </PreferencesProvider>,
     );
@@ -108,7 +90,12 @@ describe("EmptyState", () => {
     const empty = screen
       .getByText("No public repositories")
       .closest(".ant-empty");
-    expect(empty).toHaveClass("ag-empty-state-split", "catalog-empty");
+    expect(empty).toHaveClass(
+      "ag-empty-state",
+      "ag-empty-state-compact",
+      "catalog-empty",
+    );
+    expect(screen.getByTestId("search-empty-icon")).toBeInTheDocument();
     expect(screen.getByText("Public sources will appear here.")).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Open management" }),

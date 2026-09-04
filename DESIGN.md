@@ -134,10 +134,12 @@ The interface is an **Operate** surface. Density, scanability, predictable Ant D
 
 The palette is neutral-first with a single cool signal family and explicit semantic status colors.
 
+Runtime themes follow [ADR 0005](docs/adr/0005-console-semantic-theme-system.md): a constrained Theme Package is resolved once into typed surface, content, border, action, link, focus, selection, navigation, status, visualization, identity, and effect roles. Ant Design component tokens and custom CSS variables consume that same projection. Page CSS must name a semantic role rather than a palette color.
+
 ### Primary
 
 - **Signal Cyan** (`primary-dark`, `primary-light`): primary actions, links, focus, selected navigation, trusted lifecycle affordances, and current-state emphasis.
-- **Signal Wash** (`primary-soft-dark`, `primary-soft-light`): selected or informational backgrounds that must remain subordinate to content.
+- **Signal Wash** (`primary-soft-dark`, `primary-soft-light`): selected action or current-location backgrounds that must remain subordinate to content. Informational surfaces use the `info` status family instead.
 
 ### Neutral
 
@@ -153,6 +155,10 @@ The palette is neutral-first with a single cool signal family and explicit seman
 ### Named Rules
 
 **The Signal Rarity Rule.** Cyan is reserved for action, location, focus, and trusted system links; it should not become a general decorative fill.
+
+**The Neutral Selection Rule.** Native text selection is a content state. Its background is derived from foreground and container neutrals, never from the primary action color.
+
+**The Accent Budget Rule.** Generic icons, neutral badges, empty states, disabled controls, ordinary hover, card borders, and large decorative washes do not spend the primary accent. Actual identity marks are the only decorative exception.
 
 **The Status Has Words Rule.** Success, warning, and error colors must be paired with text, an icon, or both. Color alone never communicates operational state.
 

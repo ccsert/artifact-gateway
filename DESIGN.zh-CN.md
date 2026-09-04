@@ -27,10 +27,12 @@ Console 应像一个所有声明都可被证明的系统控制台。视觉语言
 
 调色板以中性色为主，只包含一组冷色信号色和明确的语义状态色。权威 token 值保存在英文页 frontmatter 与 Console 主题变量中。
 
+运行时主题遵循 [ADR 0005](docs/adr/0005-console-semantic-theme-system.zh-CN.md)：受约束的 Theme Package 只解析一次，形成带类型的 Surface、Content、Border、Action、Link、Focus、Selection、Navigation、Status、Visualization、Identity 与 Effect 角色。Ant Design 组件 Token 与自定义 CSS 变量消费同一份投影；页面 CSS 必须命名语义角色，不能直接命名调色板颜色。
+
 ### 主色
 
 - **Signal Cyan**（`primary-dark`、`primary-light`）：主操作、链接、焦点、选中导航、可信生命周期操作和当前状态。
-- **Signal Wash**（`primary-soft-dark`、`primary-soft-light`）：选中或信息背景，必须从属于正文。
+- **Signal Wash**（`primary-soft-dark`、`primary-soft-light`）：选中操作或当前位置背景，必须从属于正文；信息表面使用 `info` 状态家族。
 
 ### 中性色
 
@@ -42,6 +44,10 @@ Console 应像一个所有声明都可被证明的系统控制台。视觉语言
 - **Daylight Canvas**：浅色页面与表面，层级与深色主题一致。
 
 **信号稀缺规则：** 青色只用于动作、位置、焦点和可信系统链接，不作为普通装饰填充。
+
+**中性文本选择规则：** 浏览器原生文本选择属于内容状态，背景从前景文字与容器中性色推导，不能使用主操作色。
+
+**强调色预算规则：** 通用图标、中性 Badge、空状态、禁用控件、普通 Hover、卡片边框和大面积装饰光晕都不消耗主强调色；真正的产品/站点标志是唯一装饰性例外。
 
 **状态必须有文字规则：** 成功、警告和错误颜色必须搭配文字、图标或两者，不能只靠颜色表达。
 

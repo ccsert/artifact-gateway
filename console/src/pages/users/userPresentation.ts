@@ -1,4 +1,5 @@
 import type { User } from "../../client";
+import type { BadgeTone } from "../../components/Badge";
 
 export function isUserLocked(user: User, now = Date.now()): boolean {
   if (!user.lockedUntil) return false;
@@ -6,16 +7,13 @@ export function isUserLocked(user: User, now = Date.now()): boolean {
   return Number.isFinite(lockedUntil) && lockedUntil > now;
 }
 
-export function roleTone(
-  role: User["role"],
-): "cyan" | "blue" | "green" | "zinc" {
-  // Cyan marks the governance privilege; red stays reserved for failure
-  // states. Violet is unavailable here: the theme remap folds it into info
-  // blue, which would make admin and writer indistinguishable.
-  if (role === "admin") return "cyan";
-  if (role === "writer") return "blue";
-  if (role === "reader") return "green";
-  return "zinc";
+export function roleTone(role: User["role"]): BadgeTone {
+  // Roles are categories, not success or failure states. Keep them on the
+  // visualization palette so operational status colors retain one meaning.
+  if (role === "admin") return "visualization-3";
+  if (role === "writer") return "visualization-5";
+  if (role === "reader") return "visualization-4";
+  return "neutral";
 }
 
 export function userInitials(user: User): string {

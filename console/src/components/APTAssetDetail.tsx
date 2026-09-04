@@ -61,7 +61,7 @@ export function APTAssetDetail({
                 {text("上游地址", "Upstream URL")}
               </div>
               <a
-                className="mt-0.5 block truncate font-mono text-xs text-cyan-300 hover:text-cyan-200"
+                className="mt-0.5 block truncate font-mono text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
                 href={meta.sourceUrl}
                 target="_blank"
                 rel="noreferrer"

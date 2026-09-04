@@ -280,7 +280,7 @@ export function GoModuleDetail({
               className="flex min-w-0 items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2"
             >
               <a
-                className="min-w-0 flex-1 truncate font-mono text-xs text-cyan-300 hover:text-cyan-200"
+                className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
                 href={asset.url}
               >
                 {asset.label}

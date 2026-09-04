@@ -129,6 +129,21 @@ test("theme and language preferences persist on the sign-in surface", async ({
   const loginSurfaces = await page
     .locator(".ag-login-frame")
     .evaluate((frame) => {
+      const roleColor = (
+        variable: string,
+        property: "backgroundColor" | "color",
+      ) => {
+        const probe = document.createElement("span");
+        if (property === "backgroundColor") {
+          probe.style.backgroundColor = `var(${variable})`;
+        } else {
+          probe.style.color = `var(${variable})`;
+        }
+        document.body.append(probe);
+        const value = getComputedStyle(probe)[property];
+        probe.remove();
+        return value;
+      };
       const brandPanel = frame.querySelector<HTMLElement>(
         ".ag-login-brand-panel",
       );
@@ -148,14 +163,15 @@ test("theme and language preferences persist on the sign-in surface", async ({
           ? getComputedStyle(formPanel).backgroundColor
           : null,
         heading: heading ? getComputedStyle(heading).color : null,
+        containerRole: roleColor("--ag-surface-container", "backgroundColor"),
+        secondaryRole: roleColor("--ag-content-secondary", "color"),
+        strongRole: roleColor("--ag-content-strong", "color"),
       };
     });
-  expect(loginSurfaces).toEqual({
-    brandBackground: "rgb(238, 243, 245)",
-    brandDescription: "rgb(82, 82, 91)",
-    formBackground: "rgb(255, 255, 255)",
-    heading: "rgb(24, 24, 27)",
-  });
+  expect(loginSurfaces.formBackground).toBe(loginSurfaces.containerRole);
+  expect(loginSurfaces.brandDescription).toBe(loginSurfaces.secondaryRole);
+  expect(loginSurfaces.heading).toBe(loginSurfaces.strongRole);
+  expect(loginSurfaces.brandBackground).not.toBe(loginSurfaces.formBackground);
   await expect
     .poll(() =>
       page
@@ -321,21 +337,30 @@ test("sign-in artwork and source-derived backdrop stay theme-aware and size-appr
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(beams).toHaveAttribute("data-color-mode", "light");
   await expect(beamsCanvas).toHaveAttribute("data-ready", "true");
-  await expect
-    .poll(() =>
-      page
-        .locator(".ag-login-form .ant-input-affix-wrapper")
-        .first()
-        .evaluate((element) => getComputedStyle(element).backgroundColor),
-    )
-    .toBe("rgb(255, 255, 255)");
-  await expect
-    .poll(() =>
-      page
-        .locator(".ag-login-modes")
-        .evaluate((element) => getComputedStyle(element).backgroundColor),
-    )
-    .toBe("rgb(238, 240, 243)");
+  const lightControlSurfaces = await page.evaluate(() => {
+    const roleBackground = (variable: string) => {
+      const probe = document.createElement("span");
+      probe.style.backgroundColor = `var(${variable})`;
+      document.body.append(probe);
+      const value = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return value;
+    };
+    return {
+      input: getComputedStyle(
+        document.querySelector<HTMLElement>(
+          ".ag-login-form .ant-input-affix-wrapper",
+        )!,
+      ).backgroundColor,
+      modes: getComputedStyle(
+        document.querySelector<HTMLElement>(".ag-login-modes")!,
+      ).backgroundColor,
+      containerRole: roleBackground("--ag-surface-container"),
+      disabledRole: roleBackground("--ag-surface-disabled"),
+    };
+  });
+  expect(lightControlSurfaces.input).toBe(lightControlSurfaces.containerRole);
+  expect(lightControlSurfaces.modes).toBe(lightControlSurfaces.disabledRole);
   const desktopLightArtwork = await measurePanelArtwork(brandPanel);
   expect(desktopLightArtwork.source).toContain(
     "artifact-control-plane-light.webp",

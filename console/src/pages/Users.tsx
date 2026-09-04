@@ -131,7 +131,7 @@ export function UsersPage() {
       render: (_value, user) =>
         isUserLocked(user) ? (
           <Space size={6}>
-            <Badge tone="amber">
+            <Badge tone="warning">
               <LockOutlined /> {text("已锁定", "Locked")}
             </Badge>
           </Space>

@@ -20,6 +20,7 @@ import {
 } from "antd";
 import { listUserSessions, revokeUserSession } from "../../client";
 import type { UserSession } from "../../client";
+import { Badge } from "../../components/Badge";
 import { ErrorBanner } from "../../components/Feedback";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
@@ -170,13 +171,17 @@ export function UserSessionsPanel({
                     ) : (
                       <LaptopOutlined aria-hidden />
                     )}
-                    <Tag color={session.kind === "oidc" ? "blue" : "default"}>
+                    <Badge
+                      tone={
+                        session.kind === "oidc" ? "visualization-5" : "neutral"
+                      }
+                    >
                       {session.kind === "oidc"
                         ? "OIDC"
                         : text("本地登录", "Local sign-in")}
-                    </Tag>
+                    </Badge>
                     {session.current ? (
-                      <Tag color="green">{text("当前", "Current")}</Tag>
+                      <Tag color="success">{text("当前", "Current")}</Tag>
                     ) : null}
                     {session.revokedAt ? (
                       <Tag>{text("已撤销", "Revoked")}</Tag>

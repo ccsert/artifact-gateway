@@ -5,12 +5,13 @@ import {
   SunOutlined,
 } from "@ant-design/icons";
 import { Button, Dropdown, Space } from "antd";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { usePreferences, type AppLocale } from "../lib/preferences";
 
 export function PreferenceControls({ compact = false }: { compact?: boolean }) {
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const themeToggleRef = useRef<HTMLAnchorElement | HTMLButtonElement>(null);
   const {
     activeTheme,
     availableThemes,
@@ -49,15 +50,24 @@ export function PreferenceControls({ compact = false }: { compact?: boolean }) {
             ),
           })),
           onClick: ({ key }) => {
+            const bounds = themeToggleRef.current?.getBoundingClientRect();
+            const origin =
+              bounds && bounds.width > 0 && bounds.height > 0
+                ? {
+                    x: bounds.left + bounds.width / 2,
+                    y: bounds.top + bounds.height / 2,
+                  }
+                : undefined;
             // Close the overlay before the View Transition captures its old
             // snapshot; otherwise a desktop-width popup can briefly overflow
             // after the viewport changes to mobile.
             flushSync(() => setThemeMenuOpen(false));
-            setThemeId(key);
+            setThemeId(key, origin);
           },
         }}
       >
         <Button
+          ref={themeToggleRef}
           className="ag-theme-toggle"
           type="text"
           aria-label={`${t("common.theme.select")}，${themeLabel}`}

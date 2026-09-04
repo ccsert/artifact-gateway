@@ -960,12 +960,21 @@ export type SiteSettingsUpdate = {
 };
 
 export type ConsoleTheme = {
+  $schema?: string;
   schemaVersion: 1;
   id: string;
   name: string;
   description?: string;
   mode: "dark" | "light";
   token: ConsoleThemeToken;
+  /**
+   * Runtime ownership of the catalog item. Only managed themes can be replaced or deleted through the API.
+   */
+  source?: "builtin" | "directory" | "managed";
+  /**
+   * Optimistic-concurrency version for a managed theme.
+   */
+  version?: string;
 };
 
 export type ConsoleThemeToken = {
@@ -1108,6 +1117,23 @@ export type GlobalArtifactSearchPage = {
    */
   searchedRepositories: number;
   nextPageToken?: string;
+};
+
+export type ConsoleThemePackage = {
+  $schema?: string;
+  schemaVersion: 1;
+  id: string;
+  name: string;
+  description?: string;
+  mode: "dark" | "light";
+  token: ConsoleThemeToken;
+};
+
+export type ConsoleThemePackageValidation = {
+  theme: ConsoleThemePackage;
+  status: "available" | "replaceable" | "reserved";
+  existingSource?: "builtin" | "directory" | "managed";
+  existingVersion?: string;
 };
 
 export type WebhookEventType = "artifact.quarantined" | "artifact.released";
@@ -2224,6 +2250,164 @@ export type ReplaceSiteSettingsResponses = {
 
 export type ReplaceSiteSettingsResponse =
   ReplaceSiteSettingsResponses[keyof ReplaceSiteSettingsResponses];
+
+export type ValidateConsoleThemePackageData = {
+  body: ConsoleThemePackage;
+  path?: never;
+  query?: never;
+  url: "/console-themes:validate";
+};
+
+export type ValidateConsoleThemePackageErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+};
+
+export type ValidateConsoleThemePackageError =
+  ValidateConsoleThemePackageErrors[keyof ValidateConsoleThemePackageErrors];
+
+export type ValidateConsoleThemePackageResponses = {
+  /**
+   * Theme package validation result
+   */
+  200: ConsoleThemePackageValidation;
+};
+
+export type ValidateConsoleThemePackageResponse =
+  ValidateConsoleThemePackageResponses[keyof ValidateConsoleThemePackageResponses];
+
+export type InstallConsoleThemePackageData = {
+  body: ConsoleThemePackage;
+  path?: never;
+  query?: never;
+  url: "/console-themes";
+};
+
+export type InstallConsoleThemePackageErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+};
+
+export type InstallConsoleThemePackageError =
+  InstallConsoleThemePackageErrors[keyof InstallConsoleThemePackageErrors];
+
+export type InstallConsoleThemePackageResponses = {
+  /**
+   * Theme package installed
+   */
+  201: ConsoleTheme;
+};
+
+export type InstallConsoleThemePackageResponse =
+  InstallConsoleThemePackageResponses[keyof InstallConsoleThemePackageResponses];
+
+export type DeleteConsoleThemePackageData = {
+  body?: never;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    themeId: string;
+  };
+  query?: never;
+  url: "/console-themes/{themeId}";
+};
+
+export type DeleteConsoleThemePackageErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type DeleteConsoleThemePackageError =
+  DeleteConsoleThemePackageErrors[keyof DeleteConsoleThemePackageErrors];
+
+export type DeleteConsoleThemePackageResponses = {
+  /**
+   * Theme package deleted
+   */
+  204: void;
+};
+
+export type DeleteConsoleThemePackageResponse =
+  DeleteConsoleThemePackageResponses[keyof DeleteConsoleThemePackageResponses];
+
+export type ReplaceConsoleThemePackageData = {
+  body: ConsoleThemePackage;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    themeId: string;
+  };
+  query?: never;
+  url: "/console-themes/{themeId}";
+};
+
+export type ReplaceConsoleThemePackageErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type ReplaceConsoleThemePackageError =
+  ReplaceConsoleThemePackageErrors[keyof ReplaceConsoleThemePackageErrors];
+
+export type ReplaceConsoleThemePackageResponses = {
+  /**
+   * Theme package replaced
+   */
+  200: ConsoleTheme;
+};
+
+export type ReplaceConsoleThemePackageResponse =
+  ReplaceConsoleThemePackageResponses[keyof ReplaceConsoleThemePackageResponses];
 
 export type GetOidcSettingsData = {
   body?: never;

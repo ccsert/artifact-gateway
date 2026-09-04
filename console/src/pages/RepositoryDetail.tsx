@@ -350,7 +350,7 @@ function RepositorySummary({
         {repo.anonymousRead && (
           <Link
             to={`/browse?repository=${encodeURIComponent(repo.id)}`}
-            className="font-medium text-cyan-300 hover:text-cyan-200"
+            className="font-medium text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
           >
             {text("打开公开浏览", "Open public browser")}
           </Link>
@@ -843,7 +843,7 @@ export function RepositorySettingsTab({
                 </span>
                 {egressTestResult &&
                   (egressTestResult.reachable ? (
-                    <span className="text-xs text-emerald-400">
+                    <span className="text-xs text-[var(--ag-status-success)]">
                       {text("代理可达", "Proxy reachable")}
                       {egressTestResult.upstreamStatus
                         ? ` · ${text(`上游返回 ${egressTestResult.upstreamStatus}`, `upstream returned ${egressTestResult.upstreamStatus}`)}`
@@ -853,7 +853,7 @@ export function RepositorySettingsTab({
                         : ""}
                     </span>
                   ) : (
-                    <span className="text-xs text-red-400">
+                    <span className="text-xs text-[var(--ag-status-danger)]">
                       {text("连接失败：", "Connection failed: ")}
                       {egressTestResult.error ??
                         text("未知错误", "Unknown error")}
@@ -869,7 +869,7 @@ export function RepositorySettingsTab({
               {text("支持的操作", "Supported operations")}
             </span>
             {capabilities.operations.map((operation) => (
-              <Badge key={operation} tone="zinc">
+              <Badge key={operation} tone="neutral">
                 {operation}
               </Badge>
             ))}
@@ -981,7 +981,10 @@ export function RepositoryDetailPage() {
     <div className="ag-page-stack">
       <div>
         <div className="mb-1 text-xs text-zinc-500">
-          <Link to="/repositories" className="hover:text-cyan-300">
+          <Link
+            to="/repositories"
+            className="hover:text-[var(--ag-link-hover)]"
+          >
             {text("仓库", "Repositories")}
           </Link>
           <span className="mx-1.5">/</span>

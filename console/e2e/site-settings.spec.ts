@@ -81,6 +81,14 @@ test("site identity and theme transition stay coordinated across desktop and mob
         const card = document.querySelector<HTMLElement>(".ag-card");
         const primaryButton =
           document.querySelector<HTMLElement>(".ant-btn-primary");
+        const roleBackground = (variable: string) => {
+          const probe = document.createElement("span");
+          probe.style.backgroundColor = `var(${variable})`;
+          document.body.append(probe);
+          const value = getComputedStyle(probe).backgroundColor;
+          probe.remove();
+          return value;
+        };
         window.__themeTransitionCommit = {
           theme: document.documentElement.dataset.theme,
           bodyBackground: body.backgroundColor,
@@ -88,6 +96,11 @@ test("site identity and theme transition stay coordinated across desktop and mob
           primaryBackground: primaryButton
             ? getComputedStyle(primaryButton).backgroundColor
             : null,
+          canvasRoleBackground: roleBackground("--ag-surface-canvas"),
+          cardRoleBackground: roleBackground(
+            "--ag-surface-container-translucent",
+          ),
+          primaryRoleBackground: roleBackground("--ag-action-primary"),
         };
       });
     };
@@ -191,20 +204,28 @@ test("site identity and theme transition stay coordinated across desktop and mob
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect
     .poll(() =>
-      page.evaluate(() => ({
-        calls: window.__themeTransitionCalls,
-        commit: window.__themeTransitionCommit,
-      })),
+      page.evaluate(() => window.__themeTransitionCommit?.theme ?? null),
     )
-    .toEqual({
-      calls: 1,
-      commit: {
-        theme: "light",
-        bodyBackground: "rgb(245, 245, 245)",
-        cardBackground: "rgb(255, 255, 255)",
-        primaryBackground: "rgb(38, 73, 157)",
-      },
-    });
+    .toBe("light");
+  const transitionState = await page.evaluate(() => ({
+    calls: window.__themeTransitionCalls,
+    commit: window.__themeTransitionCommit,
+  }));
+  expect(transitionState.calls).toBe(1);
+  expect(transitionState.commit).toMatchObject({
+    theme: "light",
+    bodyBackground: "rgb(245, 245, 245)",
+    primaryBackground: "rgb(38, 73, 157)",
+  });
+  expect(transitionState.commit?.bodyBackground).toBe(
+    transitionState.commit?.canvasRoleBackground,
+  );
+  expect(transitionState.commit?.cardBackground).toBe(
+    transitionState.commit?.cardRoleBackground,
+  );
+  expect(transitionState.commit?.primaryBackground).toBe(
+    transitionState.commit?.primaryRoleBackground,
+  );
 
   const siteName = page.getByLabel("站点名称");
   const brandMark = page.getByLabel("品牌标识");
@@ -377,6 +398,9 @@ declare global {
       bodyBackground: string;
       cardBackground: string | null;
       primaryBackground: string | null;
+      canvasRoleBackground: string;
+      cardRoleBackground: string;
+      primaryRoleBackground: string;
     } | null;
   }
 }

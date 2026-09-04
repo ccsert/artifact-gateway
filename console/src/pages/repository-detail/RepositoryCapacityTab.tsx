@@ -9,7 +9,7 @@ import { usePreferences } from "../../lib/preferences";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 
 export function RepositoryCapacityTab({ repo }: { repo: Repository }) {
-  const { text } = usePreferences();
+  const { resolvedTheme, text } = usePreferences();
   type CapacityDetail = RepositoryCapacity & {
     primaryBytes?: number;
     sidecarBytes?: number;
@@ -167,7 +167,11 @@ export function RepositoryCapacityTab({ repo }: { repo: Repository }) {
             percent={pct}
             showInfo={false}
             status={pct > 90 ? "exception" : "normal"}
-            strokeColor={pct > 70 && pct <= 90 ? "#f59e0b" : undefined}
+            strokeColor={
+              pct > 70 && pct <= 90
+                ? resolvedTheme.roles.status.warning.foreground
+                : undefined
+            }
           />
         </div>
       )}

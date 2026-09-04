@@ -213,7 +213,7 @@ export function RepositoryArtifactSelect({
         listHeight={320}
       />
       {searchError !== null && (
-        <p className="mt-1 text-xs text-rose-400" role="alert">
+        <p className="mt-1 text-xs text-[var(--ag-status-danger)]" role="alert">
           {text(
             "制品搜索失败，请修改关键词后重试。",
             "Artifact search failed. Change the query and try again.",

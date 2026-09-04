@@ -176,7 +176,7 @@ export function ArtifactScanStatus({
       )}
       {job?.lastError && status.state === "failed" && (
         <div
-          className="mt-2 truncate text-xs text-rose-400"
+          className="mt-2 truncate text-xs text-[var(--ag-status-danger)]"
           title={job.lastError}
         >
           {job.lastError}

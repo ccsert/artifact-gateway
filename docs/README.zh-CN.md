@@ -33,6 +33,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [ADR 0002：晋级快照](adr/0002-promotion-snapshots.zh-CN.md)
 - [ADR 0003：仅协议格式](adr/0003-protocol-only-formats.zh-CN.md)
 - [ADR 0004：Go Hosted 发布](adr/0004-go-hosted-publication.zh-CN.md)
+- [ADR 0005：Console 语义主题系统](adr/0005-console-semantic-theme-system.zh-CN.md)
 
 ## 协议与仓库格式
 

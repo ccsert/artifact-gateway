@@ -454,7 +454,7 @@ export function AuthorizationTemplatesPanel({
         }
       />
       <div className="px-5 py-3 text-xs text-zinc-500">
-        <SafetyCertificateOutlined className="mr-2 text-cyan-400" />
+        <SafetyCertificateOutlined className="mr-2 text-[var(--ag-content-tertiary)]" />
         {text(
           "模板只保存可复用规则，不会自动修改仓库；应用时会检查仓库当前版本。",
           "Templates store reusable rules only. Applying one updates a repository with optimistic version checks.",
