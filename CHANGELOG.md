@@ -11,6 +11,14 @@ their meaning.
 
 ## Unreleased
 
+- Added a semantic Console theme system with four built-in packages, neutral
+  text selection, restrained accent usage, and a reduced-motion-safe radial
+  reveal anchored to the theme selector. Administrators can strictly validate,
+  preview, install, replace, enable, and delete PostgreSQL-backed theme packages
+  without rebuilding the Gateway; version checks, deletion protection, and
+  audit records guard the managed lifecycle.
+- Replaced decorative empty-state artwork with compact semantic icons,
+  actionable explanations, and responsive layouts.
 - Added a lazy, server-owned directory tree for Maven and Raw Hosted
   repositories. Signed node IDs and cursors bind navigation to the repository
   and principal, Maven SNAPSHOT nodes retain the exact selected build, and Raw

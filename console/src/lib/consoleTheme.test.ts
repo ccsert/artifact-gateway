@@ -186,6 +186,41 @@ describe("console themes", () => {
     expect(Object.keys(resolved.cssVariables).length).toBeGreaterThan(50);
   });
 
+  it.each([
+    "#1234",
+    "#12345678",
+    "rgb(12, 34, 56)",
+    "rgb(12%, 34%, 56%)",
+    "rgba(12, 34, 56, 0.5)",
+    "hsl(240, 100%, 50%)",
+    "hsla(240, 100%, 50%, 25%)",
+  ])(
+    "derives stable semantic colors from the server color subset: %s",
+    (colorPrimary) => {
+      const base = defaultConsoleThemes[0];
+      const resolved = resolveConsoleTheme({
+        schemaVersion: 1,
+        id: "server-color-contract",
+        name: "Server Color Contract",
+        mode: "dark",
+        token: {
+          colorPrimary,
+          colorSuccess: base.token.colorSuccess,
+          colorWarning: base.token.colorWarning,
+          colorError: base.token.colorError,
+          colorInfo: base.token.colorInfo,
+          colorTextBase: base.token.colorTextBase,
+          colorBgBase: base.token.colorBgBase,
+        },
+      });
+
+      expect(resolved.roles.action.primary).toBe(colorPrimary);
+      expect(resolved.roles.action.hover).not.toBe("#0e0e0e");
+      expect(resolved.roles.action.active).not.toBe("#070707");
+      expect(Object.values(resolved.cssVariables)).not.toContain("");
+    },
+  );
+
   it("removes obsolete generic variables when applying the semantic contract", () => {
     document.documentElement.style.setProperty("--ag-brand", "hotpink");
     document.documentElement.style.setProperty("--ag-text", "hotpink");

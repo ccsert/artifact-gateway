@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestMemoryConsoleThemePackagesAreVersionedAndCopied(t *testing.T) {
@@ -45,5 +46,42 @@ func TestMemoryConsoleThemePackageRejectsDuplicate(t *testing.T) {
 	}
 	if _, err := store.CreateConsoleThemePackage(t.Context(), theme); !errors.Is(err, ErrConsoleThemeExists) {
 		t.Fatalf("duplicate error=%v", err)
+	}
+}
+
+func TestMemoryConsoleThemeCatalogLockSerializesMutations(t *testing.T) {
+	store := NewMemoryStore()
+	release, err := store.LockConsoleThemeCatalog(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type result struct {
+		release func()
+		err     error
+	}
+	attempted := make(chan struct{})
+	acquired := make(chan result, 1)
+	go func() {
+		close(attempted)
+		nextRelease, lockErr := store.LockConsoleThemeCatalog(t.Context())
+		acquired <- result{release: nextRelease, err: lockErr}
+	}()
+	<-attempted
+	select {
+	case <-acquired:
+		t.Fatal("second catalog mutation acquired the lock before release")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	release()
+	select {
+	case next := <-acquired:
+		if next.err != nil {
+			t.Fatal(next.err)
+		}
+		next.release()
+	case <-time.After(time.Second):
+		t.Fatal("second catalog mutation did not acquire the released lock")
 	}
 }

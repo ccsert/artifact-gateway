@@ -7,6 +7,11 @@ import (
 	"strconv"
 )
 
+func (s *PostgresStore) LockConsoleThemeCatalog(ctx context.Context) (func(), error) {
+	_, release, err := s.lockPostgresAdvisoryKeys(ctx, []string{"console-theme-catalog"})
+	return release, err
+}
+
 func scanConsoleThemePackage(scanner interface{ Scan(...any) error }) (ConsoleThemePackage, error) {
 	var theme ConsoleThemePackage
 	var version int64

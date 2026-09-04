@@ -31,8 +31,8 @@ var (
 	ErrWebhookSubscriptionNameExists = errors.New("webhook subscription name already exists")
 	ErrInvalidWebhookDeliveryState   = errors.New("webhook delivery state is invalid")
 	ErrAPTPackageConflict            = errors.New("APT package identity already has different immutable bytes")
-	ErrConsoleThemeExists            = errors.New("Console theme already exists")
-	ErrConsoleThemeNotFound          = errors.New("Console theme not found")
+	ErrConsoleThemeExists            = errors.New("console theme already exists")
+	ErrConsoleThemeNotFound          = errors.New("console theme not found")
 )
 
 type HostedRepositoryStore interface {
@@ -60,6 +60,10 @@ type SiteSettingsStore interface {
 // and directory-backed packages remain outside this store and are immutable
 // through the management API.
 type ConsoleThemeStore interface {
+	// LockConsoleThemeCatalog serializes the cross-resource decision that saves
+	// enabled theme IDs or removes a managed theme. Implementations must share
+	// the lock across Gateway instances backed by the same persistence store.
+	LockConsoleThemeCatalog(context.Context) (func(), error)
 	ListConsoleThemePackages(context.Context) ([]ConsoleThemePackage, error)
 	GetConsoleThemePackage(context.Context, string) (ConsoleThemePackage, error)
 	CreateConsoleThemePackage(context.Context, ConsoleThemePackage) (ConsoleThemePackage, error)

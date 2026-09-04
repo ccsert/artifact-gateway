@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreferencesProvider } from "../lib/preferences";
@@ -118,6 +118,8 @@ describe("PreferenceControls", () => {
       value: undefined,
     });
 
+    let animationFrameCallbacks: FrameRequestCallback[] = [];
+    let animationFrameSpy: { mockRestore: () => void } | undefined;
     try {
       render(
         <PreferencesProvider>
@@ -128,18 +130,35 @@ describe("PreferenceControls", () => {
       await user.click(
         screen.getByRole("button", { name: /选择主题.*Gateway Dark/ }),
       );
-      await user.click(
-        await screen.findByRole("menuitem", { name: /Gateway Light/ }),
-      );
+      const lightTheme = await screen.findByRole("menuitem", {
+        name: /Gateway Light/,
+      });
+      animationFrameSpy = vi
+        .spyOn(window, "requestAnimationFrame")
+        .mockImplementation((callback) => {
+          animationFrameCallbacks.push(callback);
+          return animationFrameCallbacks.length;
+        });
+      await user.click(lightTheme);
 
       expect(document.documentElement).toHaveAttribute("data-theme", "light");
-      expect(document.documentElement).not.toHaveAttribute(
+      expect(document.documentElement).toHaveAttribute(
         "data-theme-transition",
+        "instant",
+      );
+      const pendingCallbacks = animationFrameCallbacks;
+      animationFrameCallbacks = [];
+      for (const callback of pendingCallbacks) callback(0);
+      await waitFor(() =>
+        expect(document.documentElement).not.toHaveAttribute(
+          "data-theme-transition",
+        ),
       );
       expect(
         screen.getByRole("button", { name: /选择主题.*Gateway Light/ }),
       ).toBeInTheDocument();
     } finally {
+      animationFrameSpy?.mockRestore();
       Object.defineProperty(document, "startViewTransition", {
         configurable: true,
         value: original,

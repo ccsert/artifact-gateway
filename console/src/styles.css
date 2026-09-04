@@ -184,24 +184,24 @@ html {
   background: var(--ag-surface-canvas);
 }
 
-::view-transition-group(root) {
+html[data-theme-transition="view"]::view-transition-group(root) {
   animation: none;
 }
 
-::view-transition-image-pair(root) {
+html[data-theme-transition="view"]::view-transition-image-pair(root) {
   isolation: isolate;
 }
 
-::view-transition-old(root),
-::view-transition-new(root) {
+html[data-theme-transition="view"]::view-transition-old(root),
+html[data-theme-transition="view"]::view-transition-new(root) {
   mix-blend-mode: normal;
 }
 
-::view-transition-old(root) {
+html[data-theme-transition="view"]::view-transition-old(root) {
   animation: none;
 }
 
-::view-transition-new(root) {
+html[data-theme-transition="view"]::view-transition-new(root) {
   animation: ag-theme-radial-reveal 240ms var(--ease-out-expo) both;
 }
 
@@ -220,9 +220,9 @@ html {
 
 /* The document snapshot owns the theme motion. Component-level color
    transitions must settle immediately so they cannot replay inside it. */
-html[data-theme-transition="view"] *,
-html[data-theme-transition="view"] *::before,
-html[data-theme-transition="view"] *::after {
+html[data-theme-transition] *,
+html[data-theme-transition] *::before,
+html[data-theme-transition] *::after {
   transition: none !important;
 }
 
@@ -2159,9 +2159,9 @@ html .ag-brand-mark.text-white {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(root),
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
+  html[data-theme-transition="view"]::view-transition-group(root),
+  html[data-theme-transition="view"]::view-transition-old(root),
+  html[data-theme-transition="view"]::view-transition-new(root) {
     animation-duration: 1ms;
   }
 

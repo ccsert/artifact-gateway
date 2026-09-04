@@ -49,6 +49,12 @@ func (h generatedRepositoryAPIAdapter) ReplaceSiteSettings(w http.ResponseWriter
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "site settings request is invalid")
 		return
 	}
+	release, err := h.lockConsoleThemeCatalog(r.Context())
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lock Console theme catalog failed")
+		return
+	}
+	defer release()
 	themes, err := h.availableConsoleThemes(r.Context())
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "load Console themes failed")

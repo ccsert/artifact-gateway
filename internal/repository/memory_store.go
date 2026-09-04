@@ -7,6 +7,7 @@ import (
 
 type MemoryStore struct {
 	mu                     sync.RWMutex
+	consoleThemeCatalogMu  sync.Mutex
 	groups                 map[string]Group
 	mavenGroups            map[string]Group
 	rawGroups              map[string]Group

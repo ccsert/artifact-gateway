@@ -65,17 +65,21 @@ describe("semantic theme CSS contract", () => {
 
   it("reveals the new theme radially over a stable old snapshot", () => {
     expect(runtimeStyles).toMatch(
-      /::view-transition-old\(root\)\s*\{\s*animation:\s*none;/u,
+      /html\[data-theme-transition="view"\]::view-transition-old\(root\)\s*\{\s*animation:\s*none;/u,
     );
     expect(runtimeStyles).toMatch(
-      /::view-transition-new\(root\)\s*\{[^}]*ag-theme-radial-reveal\s+240ms/u,
+      /html\[data-theme-transition="view"\]::view-transition-new\(root\)\s*\{[^}]*ag-theme-radial-reveal\s+240ms/u,
     );
+    expect(runtimeStyles).not.toMatch(/(?:^|\n)::view-transition-/u);
     expect(runtimeStyles).toContain("--ag-theme-reveal-x");
     expect(runtimeStyles).toContain("--ag-theme-reveal-y");
     expect(runtimeStyles).toContain("--ag-theme-reveal-radius");
     expect(runtimeStyles).toMatch(/clip-path:\s*circle\(/u);
     expect(runtimeStyles).not.toContain("ag-theme-fade-out");
     expect(runtimeStyles).not.toContain('data-theme-transition="fallback"');
+    expect(runtimeStyles).toMatch(
+      /html\[data-theme-transition\] \*[\s\S]*?transition:\s*none\s*!important;/u,
+    );
   });
 
   it("does not consume the retired generic theme aliases", () => {

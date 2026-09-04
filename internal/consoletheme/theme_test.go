@@ -52,6 +52,62 @@ func TestParseRejectsUnknownAndUnsafeTokens(t *testing.T) {
 	if _, err := Parse([]byte(unsafe)); err == nil {
 		t.Fatal("Parse accepted an unsafe CSS value")
 	}
+	for _, color := range []string{
+		"#12345",
+		"rgb(,,,)",
+		"rgb(256, 0, 0)",
+		"rgb(12%, 34, 56%)",
+		"RGB(12, 34, 56)",
+		"rgba(0, 0, 0, 1.1)",
+		"HSL(240, 100%, 50%)",
+		"hsl(0, 101%, 50%)",
+		"hsla(0, 50%, 50%)",
+		"transparent",
+		"currentColor",
+		" #123456",
+	} {
+		invalid := strings.Replace(base, `"colorPrimary":"#123456"`, `"colorPrimary":"`+color+`"`, 1)
+		if _, err := ParseForInstall([]byte(invalid)); err == nil {
+			t.Errorf("ParseForInstall accepted unstable color %q", color)
+		}
+	}
+	for _, color := range []string{
+		"#1234",
+		"#12345678",
+		"rgb(12, 34, 56)",
+		"rgb(12%, 34%, 56%)",
+		"rgba(12, 34, 56, 0.5)",
+		"hsl(240, 100%, 50%)",
+		"hsla(240, 100%, 50%, 25%)",
+	} {
+		valid := strings.Replace(base, `"colorPrimary":"#123456"`, `"colorPrimary":"`+color+`"`, 1)
+		if _, err := ParseForInstall([]byte(valid)); err != nil {
+			t.Errorf("ParseForInstall rejected stable color %q: %v", color, err)
+		}
+	}
+}
+
+func TestParseRetainsPublishedVersionOneColorCompatibility(t *testing.T) {
+	base := `{"schemaVersion":1,"id":"legacy-theme","name":"Legacy","mode":"dark","token":{"colorPrimary":"#123456","colorSuccess":"#123456","colorWarning":"#123456","colorError":"#123456","colorInfo":"#123456","colorTextBase":"#ffffff","colorBgBase":"#000000"}}`
+	for _, color := range []string{
+		"#12345",
+		"rgb(,,,)",
+		"rgb(256, 0, 0)",
+		"rgb(12%, 34, 56%)",
+		"RGB(12, 34, 56)",
+		"rgba(0, 0, 0, 1.1)",
+		"HSL(240, 100%, 50%)",
+		"hsl(0, 101%, 50%)",
+		"hsla(0, 50%, 50%)",
+		"transparent",
+		"currentColor",
+		" #123456",
+	} {
+		legacy := strings.Replace(base, `"colorPrimary":"#123456"`, `"colorPrimary":"`+color+`"`, 1)
+		if _, err := Parse([]byte(legacy)); err != nil {
+			t.Errorf("Parse broke v1 compatibility for %q: %v", color, err)
+		}
+	}
 }
 
 func TestRegistryHotLoadsExternalThemesAndRejectsBuiltinReplacement(t *testing.T) {

@@ -15,6 +15,17 @@ an AI-generated theme can change the visual palette without silently changing
 typography, control density, or responsive layout. Theme Package v1 therefore
 rejects component overrides, font tokens, and geometry tokens.
 
+Theme Package v1's published color grammar remains the compatibility contract
+for packages already stored in PostgreSQL or present in an operator directory.
+They continue to load during upgrades. New Console uploads and CLI
+`validate`/`install` operations additionally apply a stable-color admission
+profile: exact 3/4/6/8-digit hex values; lowercase `rgb()`/`rgba()` with three
+consistently numeric or percentage channels; or lowercase `hsl()`/`hsla()`.
+Dynamic keywords, mixed-unit RGB channels, out-of-range components, malformed
+functions, and uppercase function names are rejected for new installs because
+they do not produce stable Ant Design derived tokens. A future change to the
+wire grammar requires a new schema version and an explicit migration.
+
 Generate a package against [`console-theme.schema.json`](console-theme.schema.json).
 An administrator can upload it from **Site settings → Console themes**. The
 server strictly validates the package, shows a resolved preview, and then lets

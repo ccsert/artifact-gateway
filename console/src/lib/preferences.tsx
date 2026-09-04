@@ -307,6 +307,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   );
   const [locale, setLocaleState] = useState<AppLocale>(storedLocale);
   const activeThemeTransition = useRef<ThemeViewTransition | null>(null);
+  const themeCommitSequence = useRef(0);
   // Keep a just-disabled theme mounted for one render so the effect below can
   // animate to the configured default instead of swapping the whole UI first.
   const activeTheme =
@@ -357,10 +358,26 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       ).matches;
       const transitionDocument = document as ThemeTransitionDocument;
       const commit = () => flushSync(() => setThemeIdState(nextThemeID));
+      const commitSequence = ++themeCommitSequence.current;
 
       activeThemeTransition.current?.skipTransition();
       if (reduceMotion || !transitionDocument.startViewTransition) {
+        activeThemeTransition.current = null;
+        clearThemeRevealGeometry(root);
+        root.dataset.themeTransition = "instant";
         commit();
+        // Flush the new palette while transitions are disabled. Removing the
+        // marker on the next frame cannot retroactively start per-component
+        // interpolation, so unsupported/reduced-motion browsers switch atomically.
+        void root.offsetWidth;
+        window.requestAnimationFrame(() => {
+          if (
+            themeCommitSequence.current === commitSequence &&
+            root.dataset.themeTransition === "instant"
+          ) {
+            delete root.dataset.themeTransition;
+          }
+        });
         return;
       }
 

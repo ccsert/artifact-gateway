@@ -43,7 +43,7 @@ func runValidate(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "--file is required")
 		return 2
 	}
-	theme, err := LoadFile(*file)
+	theme, err := LoadFileForInstall(*file)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "invalid theme: %v\n", err)
 		return 1
@@ -69,7 +69,7 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "--file is required")
 		return 2
 	}
-	theme, err := LoadFile(*file)
+	theme, err := LoadFileForInstall(*file)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "invalid theme: %v\n", err)
 		return 1

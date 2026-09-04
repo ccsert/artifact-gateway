@@ -1,13 +1,50 @@
 package app
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
+
+type catalogLockObservingStore struct {
+	*repository.MemoryStore
+	observationMu          sync.Mutex
+	lockHeld               bool
+	lockCount              int
+	replacedSettingsLocked bool
+	deletedThemeLocked     bool
+}
+
+func (s *catalogLockObservingStore) LockConsoleThemeCatalog(_ context.Context) (func(), error) {
+	s.observationMu.Lock()
+	s.lockHeld = true
+	s.lockCount++
+	s.observationMu.Unlock()
+	return func() {
+		s.observationMu.Lock()
+		s.lockHeld = false
+		s.observationMu.Unlock()
+	}, nil
+}
+
+func (s *catalogLockObservingStore) ReplaceSiteSettings(ctx context.Context, settings repository.SiteSettings, expectedVersion string) (repository.SiteSettings, error) {
+	s.observationMu.Lock()
+	s.replacedSettingsLocked = s.lockHeld
+	s.observationMu.Unlock()
+	return s.MemoryStore.ReplaceSiteSettings(ctx, settings, expectedVersion)
+}
+
+func (s *catalogLockObservingStore) DeleteConsoleThemePackage(ctx context.Context, id, expectedVersion string) error {
+	s.observationMu.Lock()
+	s.deletedThemeLocked = s.lockHeld
+	s.observationMu.Unlock()
+	return s.MemoryStore.DeleteConsoleThemePackage(ctx, id, expectedVersion)
+}
 
 const acmeDarkTheme = `{
   "$schema":"https://artifact-gateway.local/schemas/console-theme-v1.json",
@@ -125,6 +162,11 @@ func TestConsoleThemePackageRejectsInvalidAndReservedPackages(t *testing.T) {
 	if invalid.Code != http.StatusBadRequest || !strings.Contains(invalid.Body.String(), "invalid_theme_package") {
 		t.Fatalf("invalid = %d %s", invalid.Code, invalid.Body.String())
 	}
+	malformedColorBody := strings.Replace(acmeDarkTheme, `"colorPrimary":"#7C3AED"`, `"colorPrimary":"rgb(,,,)"`, 1)
+	malformedColor := request("/api/v2/console-themes:validate", malformedColorBody)
+	if malformedColor.Code != http.StatusBadRequest || !strings.Contains(malformedColor.Body.String(), "invalid_theme_package") {
+		t.Fatalf("malformed color = %d %s", malformedColor.Code, malformedColor.Body.String())
+	}
 	reservedBody := strings.Replace(acmeDarkTheme, `"id":"acme-dark"`, `"id":"gateway-dark"`, 1)
 	reserved := request("/api/v2/console-themes:validate", reservedBody)
 	if reserved.Code != http.StatusOK || !strings.Contains(reserved.Body.String(), `"status":"reserved"`) || !strings.Contains(reserved.Body.String(), `"existingSource":"builtin"`) {
@@ -133,5 +175,38 @@ func TestConsoleThemePackageRejectsInvalidAndReservedPackages(t *testing.T) {
 	conflict := request("/api/v2/console-themes", reservedBody)
 	if conflict.Code != http.StatusConflict {
 		t.Fatalf("reserved install = %d %s", conflict.Code, conflict.Body.String())
+	}
+}
+
+func TestConsoleThemeCatalogMutationsShareOneLock(t *testing.T) {
+	store := &catalogLockObservingStore{MemoryStore: repository.NewMemoryStore()}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+
+	settingsBody := `{"siteName":"Artifact Gateway","logoUrl":"","brandMark":"AG","enabledThemeIds":["gateway-dark","gateway-light","aerok-dark","aerok-light"],"defaultThemeId":"gateway-dark"}`
+	settingsRequest := httptest.NewRequest(http.MethodPut, "/api/v2/site-settings", strings.NewReader(settingsBody))
+	authorize(settingsRequest, "admin-secret")
+	settingsRequest.Header.Set("If-Match", "1")
+	settingsResponse := httptest.NewRecorder()
+	handler.ServeHTTP(settingsResponse, settingsRequest)
+	if settingsResponse.Code != http.StatusOK {
+		t.Fatalf("replace settings = %d %s", settingsResponse.Code, settingsResponse.Body.String())
+	}
+
+	if _, err := store.CreateConsoleThemePackage(t.Context(), repository.ConsoleThemePackage{ID: "acme-dark", Payload: []byte(acmeDarkTheme)}); err != nil {
+		t.Fatal(err)
+	}
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/v2/console-themes/acme-dark", nil)
+	authorize(deleteRequest, "admin-secret")
+	deleteRequest.Header.Set("If-Match", "1")
+	deleteResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deleteResponse, deleteRequest)
+	if deleteResponse.Code != http.StatusNoContent {
+		t.Fatalf("delete theme = %d %s", deleteResponse.Code, deleteResponse.Body.String())
+	}
+
+	store.observationMu.Lock()
+	defer store.observationMu.Unlock()
+	if store.lockCount != 2 || !store.replacedSettingsLocked || !store.deletedThemeLocked {
+		t.Fatalf("lock observations = count:%d replace:%t delete:%t", store.lockCount, store.replacedSettingsLocked, store.deletedThemeLocked)
 	}
 }

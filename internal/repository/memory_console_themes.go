@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+func (s *MemoryStore) LockConsoleThemeCatalog(_ context.Context) (func(), error) {
+	s.consoleThemeCatalogMu.Lock()
+	return s.consoleThemeCatalogMu.Unlock, nil
+}
+
 func cloneConsoleThemePackage(theme ConsoleThemePackage) ConsoleThemePackage {
 	theme.Payload = append([]byte(nil), theme.Payload...)
 	return theme

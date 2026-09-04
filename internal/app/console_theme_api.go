@@ -104,7 +104,7 @@ func readConsoleThemePackage(r *http.Request) (consoletheme.Theme, []byte, error
 	if err != nil {
 		return consoletheme.Theme{}, nil, err
 	}
-	theme, err := consoletheme.Parse(data)
+	theme, err := consoletheme.ParseForInstall(data)
 	if err != nil {
 		return consoletheme.Theme{}, nil, err
 	}
@@ -122,6 +122,13 @@ func findConsoleTheme(catalog []consoleThemeCatalogItem, id string) (consoleThem
 		}
 	}
 	return consoleThemeCatalogItem{}, false
+}
+
+func (h generatedRepositoryAPIAdapter) lockConsoleThemeCatalog(ctx context.Context) (func(), error) {
+	if h.consoleThemePackages == nil {
+		return func() {}, nil
+	}
+	return h.consoleThemePackages.LockConsoleThemeCatalog(ctx)
 }
 
 func (h generatedRepositoryAPIAdapter) ValidateConsoleThemePackage(w http.ResponseWriter, r *http.Request) {
@@ -252,6 +259,12 @@ func (h generatedRepositoryAPIAdapter) DeleteConsoleThemePackage(w http.Response
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "managed Console themes are unavailable")
 		return
 	}
+	release, err := h.lockConsoleThemeCatalog(r.Context())
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lock Console theme catalog failed")
+		return
+	}
+	defer release()
 	settings, err := h.siteSettings.GetSiteSettings(r.Context())
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "load site settings failed")

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -76,11 +77,12 @@ type Theme struct {
 var builtinFiles embed.FS
 
 var (
-	idPattern    = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,63}$`)
-	colorPattern = regexp.MustCompile(`(?i)^(#[0-9a-f]{3,8}|rgba?\([0-9.,% ]+\)|hsla?\([0-9.,% ]+\)|transparent|currentcolor)$`)
-	builtins     []Theme
-	builtinErr   error
-	builtinOnce  sync.Once
+	idPattern       = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,63}$`)
+	colorPattern    = regexp.MustCompile(`(?i)^(#[0-9a-f]{3,8}|rgba?\([0-9.,% ]+\)|hsla?\([0-9.,% ]+\)|transparent|currentcolor)$`)
+	hexColorPattern = regexp.MustCompile(`(?i)^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$`)
+	builtins        []Theme
+	builtinErr      error
+	builtinOnce     sync.Once
 )
 
 func Parse(data []byte) (Theme, error) {
@@ -103,7 +105,31 @@ func Parse(data []byte) (Theme, error) {
 	return theme, nil
 }
 
+// ParseForInstall applies the stable-color admission profile used for new
+// packages. Parse intentionally keeps the published v1 read contract so an
+// upgrade cannot make an existing directory or managed theme unloadable.
+func ParseForInstall(data []byte) (Theme, error) {
+	theme, err := Parse(data)
+	if err != nil {
+		return Theme{}, err
+	}
+	if err := theme.ValidateForInstall(); err != nil {
+		return Theme{}, err
+	}
+	return theme, nil
+}
+
 func LoadFile(path string) (Theme, error) {
+	return loadFile(path, Parse)
+}
+
+// LoadFileForInstall validates a package before it enters an operator-owned
+// directory. Existing directory packages continue to load through LoadFile.
+func LoadFileForInstall(path string) (Theme, error) {
+	return loadFile(path, ParseForInstall)
+}
+
+func loadFile(path string, parse func([]byte) (Theme, error)) (Theme, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return Theme{}, err
@@ -120,7 +146,7 @@ func LoadFile(path string) (Theme, error) {
 	if err != nil {
 		return Theme{}, err
 	}
-	return Parse(data)
+	return parse(data)
 }
 
 func (theme Theme) Validate() error {
@@ -151,6 +177,116 @@ func (theme Theme) Validate() error {
 		}
 	}
 	return nil
+}
+
+// ValidateForInstall narrows new packages to color spellings that Ant Design
+// derives deterministically. It is deliberately separate from Validate:
+// Theme Package v1 already admitted a broader legacy color grammar, and those
+// stored packages must remain readable until a versioned migration exists.
+func (theme Theme) ValidateForInstall() error {
+	if err := theme.Validate(); err != nil {
+		return err
+	}
+	for name, value := range theme.Token.colors() {
+		if value != "" && !validStableCSSColor(value) {
+			return fmt.Errorf("token.%s must use a stable CSS color literal for new installs", name)
+		}
+	}
+	return nil
+}
+
+func validStableCSSColor(value string) bool {
+	if value != strings.TrimSpace(value) {
+		return false
+	}
+	if hexColorPattern.MatchString(value) {
+		return true
+	}
+	open := strings.IndexByte(value, '(')
+	if open <= 0 || !strings.HasSuffix(value, ")") {
+		return false
+	}
+	// Keep the function spelling canonical. Ant Design's color derivation
+	// accepts lowercase legacy functions but silently falls back for uppercase
+	// names and dynamic keywords such as currentColor or transparent.
+	name := value[:open]
+	parts := strings.Split(value[open+1:len(value)-1], ",")
+	switch name {
+	case "rgb", "rgba":
+		want := 3
+		if name == "rgba" {
+			want = 4
+		}
+		if len(parts) != want {
+			return false
+		}
+		channelsUsePercent := false
+		for index, part := range parts[:3] {
+			component, percent, ok := parseColorNumber(part)
+			if !ok || (percent && component > 100) || (!percent && component > 255) {
+				return false
+			}
+			if index == 0 {
+				channelsUsePercent = percent
+			} else if percent != channelsUsePercent {
+				return false
+			}
+		}
+		return want == 3 || validAlpha(parts[3])
+	case "hsl", "hsla":
+		want := 3
+		if name == "hsla" {
+			want = 4
+		}
+		if len(parts) != want {
+			return false
+		}
+		hue, huePercent, ok := parseColorNumber(parts[0])
+		if !ok || huePercent || hue > 360 {
+			return false
+		}
+		for _, part := range parts[1:3] {
+			component, percent, componentOK := parseColorNumber(part)
+			if !componentOK || !percent || component > 100 {
+				return false
+			}
+		}
+		return want == 3 || validAlpha(parts[3])
+	default:
+		return false
+	}
+}
+
+func parseColorNumber(value string) (float64, bool, bool) {
+	value = strings.TrimSpace(value)
+	percent := strings.HasSuffix(value, "%")
+	if percent {
+		value = strings.TrimSuffix(value, "%")
+	}
+	if value == "" || value == "." || strings.Count(value, ".") > 1 {
+		return 0, false, false
+	}
+	for _, character := range value {
+		if (character < '0' || character > '9') && character != '.' {
+			return 0, false, false
+		}
+	}
+	number, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return 0, false, false
+	}
+	return number, percent, true
+}
+
+func validAlpha(value string) bool {
+	alpha, percent, ok := parseColorNumber(value)
+	if !ok {
+		return false
+	}
+	if percent {
+		return alpha <= 100
+	}
+	return alpha <= 1
 }
 
 func (token Token) colors() map[string]string {
