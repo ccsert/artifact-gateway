@@ -4,7 +4,7 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
 
-compose=(docker compose -f compose.integration.yml)
+compose=(docker compose --env-file /dev/null --project-name artifact-gateway-integration -f compose.integration.yml)
 cleanup() {
   "${compose[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
 }

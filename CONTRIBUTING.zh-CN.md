@@ -156,6 +156,10 @@ make integration-test
 
 集成测试会对全新 PostgreSQL 应用所有迁移，并验证第二次执行不会产生变化。
 
+集成测试生命周期命令显式使用 `artifact-gateway-integration` Compose 项目和
+`/dev/null` 环境文件，忽略工作区 `.env` 及外部 `COMPOSE_PROJECT_NAME`，避免测试清理
+选中正常开发栈。使用 `make integration-down` 清理该测试项目。
+
 ## 提交消息
 
 使用祈使语态 Conventional Commit 标题：

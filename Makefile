@@ -100,6 +100,7 @@ down:
 	@docker compose --env-file .env -f compose.yml down
 
 test:
+	@./scripts/integration-isolation-test.sh
 	@./scripts/local-dev-test.sh
 	@./scripts/rustfs-only-contract-test.sh
 	@./scripts/run-rustfs-test.sh
@@ -124,7 +125,7 @@ integration-test:
 integration-down:
 	@docker volume create artifact-gateway-go-mod >/dev/null
 	@docker volume create artifact-gateway-go-build >/dev/null
-	@docker compose -f compose.integration.yml down -v --remove-orphans
+	@docker compose --env-file /dev/null --project-name artifact-gateway-integration -f compose.integration.yml down -v --remove-orphans
 
 lint:
 	@docker run --rm -v "$(CURDIR):/src" -w /src $(LINT_IMAGE) golangci-lint run
