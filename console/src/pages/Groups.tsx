@@ -46,6 +46,7 @@ import {
 import { usePreferences } from "../lib/preferences";
 import { groupFormats, loadFormatProfiles } from "../lib/formatProfiles";
 import { goProxyURL, npmRegistryURL, pypiIndexURL } from "../lib/usage";
+import { GroupResolutionDialog } from "./groups/GroupResolutionDialog";
 
 function CreateGroupDialog({
   repos,
@@ -167,8 +168,8 @@ function CreateGroupDialog({
           <Field
             label={text("成员仓库", "Member repositories")}
             hint={text(
-              "分组按成员顺序（自上而下）解析制品",
-              "Artifacts resolve in member order, from top to bottom",
+              "Hosted 优先，同类型成员按配置顺序解析",
+              "Hosted members come first; members of the same type follow configured order",
             )}
             group
           >
@@ -510,8 +511,8 @@ function MembersDialog({
           {error !== null && <ErrorBanner error={error} />}
           <p className="text-xs text-zinc-500">
             {text(
-              "调整成员及其优先级顺序（position 自上而下）。",
-              "Arrange members by priority (position from top to bottom).",
+              "配置顺序在同类型成员内生效；Hosted 始终优先于 Proxy。",
+              "Set the order within each type; Hosted members are tried before Proxy members.",
             )}
           </p>
           <MemberOrderPicker
@@ -665,7 +666,7 @@ export function GroupsPage() {
       ),
     },
     {
-      title: text("成员（按优先级）", "Members (priority order)"),
+      title: text("成员（配置顺序）", "Members (configured order)"),
       key: "members",
       width: 440,
       render: (_value, group) => (
@@ -681,7 +682,7 @@ export function GroupsPage() {
                   title={member.repositoryId}
                 >
                   {member.position + 1}. {repoName(member.repositoryId)} ·{" "}
-                  {repository?.type ?? "hosted"} ·{" "}
+                  {repository?.type ?? text("未知", "unknown")} ·{" "}
                   {repository?.anonymousRead ? "anon" : "private"}
                 </span>
               );
@@ -709,7 +710,8 @@ export function GroupsPage() {
       width: 280,
       align: "right",
       render: (_value, group) => (
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <GroupResolutionDialog group={group} />
           <RenameGroupDialog group={group} onSaved={load} />
           <MembersDialog group={group} repos={repos} onSaved={load} />
           <CapacityDialog group={group} />
@@ -730,7 +732,7 @@ export function GroupsPage() {
   ];
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("分组", "Groups")}
         description={text(
@@ -801,7 +803,7 @@ export function GroupsPage() {
               },
             ]}
           />
-          <Card>
+          <Card className="ag-page-primary">
             <FilterBar
               className="border-x-0 border-t-0 rounded-none"
               actions={

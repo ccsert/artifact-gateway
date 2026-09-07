@@ -1638,6 +1638,23 @@ export type GroupCapacity = {
   members: Array<GroupCapacityMember>;
 };
 
+export type GroupResolutionMember = {
+  repositoryId: string;
+  repositoryName: string;
+  type: "hosted" | "proxy";
+  configuredPosition: number;
+  resolutionOrder: number;
+};
+
+export type GroupResolution = {
+  groupId: string;
+  groupVersion: string;
+  format: Format;
+  strategy: "hosted_first";
+  excludedMemberCount: number;
+  members: Array<GroupResolutionMember>;
+};
+
 export type BrowseNodeKind =
   "directory" | "namespace" | "component" | "version" | "asset";
 
@@ -5981,6 +5998,43 @@ export type GetGroupCapacityResponses = {
 
 export type GetGroupCapacityResponse =
   GetGroupCapacityResponses[keyof GetGroupCapacityResponses];
+
+export type GetGroupResolutionData = {
+  body?: never;
+  path: {
+    groupId: string;
+  };
+  query?: never;
+  url: "/groups/{groupId}/resolution";
+};
+
+export type GetGroupResolutionErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetGroupResolutionError =
+  GetGroupResolutionErrors[keyof GetGroupResolutionErrors];
+
+export type GetGroupResolutionResponses = {
+  /**
+   * Current eligible member candidates
+   */
+  200: GroupResolution;
+};
+
+export type GetGroupResolutionResponse =
+  GetGroupResolutionResponses[keyof GetGroupResolutionResponses];
 
 export type CreatePublishSessionData = {
   body: CreatePublishSession;

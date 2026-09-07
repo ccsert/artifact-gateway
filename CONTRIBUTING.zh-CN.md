@@ -54,6 +54,20 @@ npm --prefix console ci --ignore-scripts --no-audit --no-fund
 Console，安装依赖后再执行 `make dev`；在运行中的 Vite 进程下替换 `node_modules` 会使
 优化后的依赖 URL 失效。
 
+## 从 Issue 到合并的追溯
+
+每个用户可见变更或缺陷都用 GitHub Issue 记录现象、目标行为、明确范围、验收条件和
+依赖关系。每个 Issue 应能独立验证和合并；涉及不同协议或缓存语义时，拆成互相链接的
+后续 Issue。
+
+分支可命名为 `codex/issue-24-group-resolution`。PR 正文用 `Closes #24` 关联 Issue，
+描述最终行为，并按 PR head SHA 记录检查命令和结果。必需检查在该 SHA 上通过后再合并。
+在 Issue 中留下 PR、合并 SHA 和剩余限制；确认没有 worktree 使用后，删除已合并的
+功能分支。不能仅因分支年代久远就删除尚未合并的工作。
+
+CI、隔离协议 fixture、本地运行时检查和发布验收属于不同证据。关闭实现 Issue 不代表
+版本可以发布；升级、恢复和部署验收应明确跟踪。
+
 ## 必需检查
 
 后端变更：

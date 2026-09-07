@@ -82,8 +82,9 @@ func (h v2GroupRawHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 		if err != nil {
 			continue
 		}
-		h.native.proxyRead(w, r, repo, path, principal)
-		return
+		if h.native.tryProxyRead(w, r, repo, path, principal) {
+			return
+		}
 	}
 	resolver.auditResolution(r.Context(), group, repository.FormatRaw, path, strings.ToLower(r.Method), principal.Actor, repository.AuditNotFound, http.StatusNotFound)
 	http.NotFound(w, r)

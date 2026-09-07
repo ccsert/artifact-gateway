@@ -88,3 +88,23 @@ groups_groupId_capacity:
         "$ref": "../components/responses.yaml#/GroupCapacity"
       '404':
         "$ref": "../components/responses.yaml#/Problem"
+groups_groupId_resolution:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/GroupId"
+  get:
+    operationId: getGroupResolution
+    summary: Inspect the server-owned Group member candidate order
+    description: Administrative configuration inspection. Uses the protocol resolver's Hosted-first order with configured positions within each type. Missing, inactive and mismatched repositories are excluded. No artifacts or upstreams are queried; this is not a per-artifact hit result or an authorization decision for a particular reader.
+    responses:
+      '200':
+        description: Current eligible member candidates
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/GroupResolution"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"

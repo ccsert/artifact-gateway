@@ -84,8 +84,8 @@ export function MemberOrderPicker({
       <div>
         <div className="mb-1.5 text-xs uppercase tracking-wider text-zinc-500">
           {text(
-            `成员顺序（${memberIds.length}，自上而下解析）`,
-            `Member order (${memberIds.length}, top to bottom)`,
+            `配置顺序（${memberIds.length}，同类型内生效）`,
+            `Configured order (${memberIds.length}, within each type)`,
           )}
         </div>
         <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-zinc-800 p-1.5">

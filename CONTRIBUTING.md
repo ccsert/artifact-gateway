@@ -60,6 +60,24 @@ the managed Console with `make dev-down`, install dependencies, then restart it
 with `make dev`; replacing `node_modules` under a live Vite process invalidates
 its optimized dependency URLs.
 
+## Issue-to-merge traceability
+
+Track each user-visible change or defect in a GitHub Issue with the observed
+problem, intended behavior, explicit scope, acceptance criteria, and dependencies.
+Keep each Issue small enough to validate and merge independently; split unrelated
+protocol or cache semantics into linked follow-up Issues.
+
+Use a branch such as `codex/issue-24-group-resolution`. Link the Issue in the PR
+body with `Closes #24`, describe the final behavior, and record commands and
+results against the PR head SHA. Merge only after the required checks pass for
+that SHA. Record the PR, merge SHA, and remaining limitations in the Issue, then
+remove the merged feature branch after checking that no worktree still uses it.
+Do not remove unmerged branches solely because they are old.
+
+CI, isolated protocol fixtures, local runtime checks, and release acceptance are
+separate evidence. Closing an implementation Issue does not declare a release
+ready; track upgrade, restore, and deployment acceptance explicitly.
+
 ## Required checks
 
 For a backend-only change:

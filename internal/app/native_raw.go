@@ -552,19 +552,27 @@ func validRawListCursor(repositoryName, prefix, cursor string) bool {
 // namespace (the group slot); the upstream object path is the remainder.
 // Proxy repositories are read-only.
 func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string, principal Principal) {
+	if !h.tryProxyRead(w, r, repo, path, principal) {
+		http.NotFound(w, r)
+	}
+}
+
+// tryProxyRead leaves the response untouched on a confirmed miss. Groups may
+// then try the next member; denials, upstream errors and served content claim
+// the response and preserve the direct Repository behavior.
+func (h nativeRawHandler) tryProxyRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string, principal Principal) bool {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
+		return true
 	}
 	if h.proxyClient == nil {
-		http.NotFound(w, r)
-		return
+		return false
 	}
 	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
 	if !rawprotocol.MemberProxyAllowed(member) {
 		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditProxyDenied, http.StatusForbidden, "bypass", 0)
 		http.Error(w, "upstream repository is not allowed", http.StatusForbidden)
-		return
+		return true
 	}
 	key := ""
 	if h.proxyCache != nil {
@@ -572,11 +580,10 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 		if content, err := h.proxyCache.Load(r.Context(), key); err == nil {
 			served := rawprotocol.ServeContent(w, r, path, rawprotocol.Content{Digest: content.Digest, ContentType: content.ContentType, Size: content.Size, Source: content})
 			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditResolved, served.Status, "hit", served.Bytes)
-			return
+			return true
 		} else if errors.Is(err, errRawCacheNegative) {
 			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditNotFound, http.StatusNotFound, "hit", 0)
-			http.NotFound(w, r)
-			return
+			return false
 		}
 	}
 	if r.Method == http.MethodHead {
@@ -584,7 +591,7 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 		if err != nil {
 			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
 			http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
-			return
+			return true
 		}
 		_ = response.Body.Close()
 		if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusGone {
@@ -592,13 +599,12 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 				_ = h.proxyCache.StoreNegative(r.Context(), key, member)
 			}
 			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditNotFound, http.StatusNotFound, "miss", 0)
-			http.NotFound(w, r)
-			return
+			return false
 		}
 		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
 			http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
-			return
+			return true
 		}
 		copyRawHeadHeaders(w.Header(), response.Header)
 		if disposition := rawprotocol.ContentDisposition(path); disposition != "" {
@@ -606,7 +612,7 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 		}
 		w.WriteHeader(http.StatusOK)
 		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditResolved, http.StatusOK, "miss", 0)
-		return
+		return true
 	}
 	workCtx := r.Context()
 	release := func() error { return nil }
@@ -615,24 +621,23 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 		workCtx, release, lockErr = h.proxyCache.AcquireRequestLock(r.Context(), key)
 		if lockErr != nil {
 			http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
-			return
+			return true
 		}
 		if content, loadErr := h.proxyCache.Load(workCtx, key); loadErr == nil {
 			if releaseErr := release(); releaseErr != nil {
 				http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
-				return
+				return true
 			}
 			served := rawprotocol.ServeContent(w, r, path, rawprotocol.Content{Digest: content.Digest, ContentType: content.ContentType, Size: content.Size, Source: content})
 			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditResolved, served.Status, "hit", served.Bytes)
-			return
+			return true
 		} else if errors.Is(loadErr, errRawCacheNegative) {
 			if releaseErr := release(); releaseErr != nil {
 				http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
-				return
+				return true
 			}
 			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditNotFound, http.StatusNotFound, "hit", 0)
-			http.NotFound(w, r)
-			return
+			return false
 		}
 	}
 	releaseSpool := func() {}
@@ -642,7 +647,7 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 		if spoolErr != nil {
 			if releaseErr := release(); releaseErr != nil {
 				http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
-				return
+				return true
 			}
 			w.Header().Set("Retry-After", "1")
 			if h.metrics != nil {
@@ -650,7 +655,7 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 			}
 			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditStorageError, http.StatusServiceUnavailable, "miss", 0)
 			http.Error(w, "Raw cache staging capacity is full", http.StatusServiceUnavailable)
-			return
+			return true
 		}
 	}
 	releaseAll := func() error {
@@ -661,11 +666,11 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 	if err != nil {
 		if releaseErr := releaseAll(); releaseErr != nil {
 			http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
-			return
+			return true
 		}
 		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
 		http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
-		return
+		return true
 	}
 	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusGone {
 		_ = response.Body.Close()
@@ -674,21 +679,20 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 		}
 		if releaseErr := releaseAll(); releaseErr != nil {
 			http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
-			return
+			return true
 		}
 		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditNotFound, http.StatusNotFound, "miss", 0)
-		http.NotFound(w, r)
-		return
+		return false
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		_ = response.Body.Close()
 		if releaseErr := releaseAll(); releaseErr != nil {
 			http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
-			return
+			return true
 		}
 		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
 		http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
-		return
+		return true
 	}
 	limit := defaultRawMaxObjectBytes
 	if h.proxyCache != nil && h.proxyCache.MaxObjectBytes() > 0 {
@@ -700,11 +704,11 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 		content.Cleanup()
 		if releaseErr := releaseAll(); releaseErr != nil {
 			http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
-			return
+			return true
 		}
 		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
 		http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
-		return
+		return true
 	}
 	contentType := response.Header.Get("Content-Type")
 	if contentType == "" {
@@ -715,11 +719,11 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 			content.Cleanup()
 			if releaseErr := releaseAll(); releaseErr != nil {
 				http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
-				return
+				return true
 			}
 			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
 			http.Error(w, "invalid checksum sidecar", http.StatusBadGateway)
-			return
+			return true
 		}
 	}
 	content.ContentType, content.Member, content.Endpoint = contentType, member.Name, member.Endpoint
@@ -729,23 +733,24 @@ func (h nativeRawHandler) proxyRead(w http.ResponseWriter, r *http.Request, repo
 			content.Cleanup()
 			if releaseErr := releaseAll(); releaseErr != nil {
 				http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
-				return
+				return true
 			}
 			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusInternalServerError, "bypass", 0)
 			http.Error(w, "unable to cache Raw content", http.StatusInternalServerError)
-			return
+			return true
 		}
 	}
 	if releaseErr := release(); releaseErr != nil {
 		content.Cleanup()
 		releaseSpool()
 		http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
-		return
+		return true
 	}
 	served := rawprotocol.ServeContent(w, r, path, rawprotocol.Content{Digest: content.Digest, ContentType: content.ContentType, Size: content.Size, Source: content})
 	content.Cleanup()
 	releaseSpool()
 	h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditResolved, served.Status, "miss", served.Bytes)
+	return true
 }
 
 func validRawProxyChecksum(ctx context.Context, path string, content RawContent) bool {
