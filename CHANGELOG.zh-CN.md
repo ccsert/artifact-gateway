@@ -8,6 +8,7 @@
 
 ## Unreleased
 
+- 新增 Maven、Raw Proxy 目录树：直接查询 PostgreSQL 缓存索引，按仓库及当前上游隔离，显示实时缓存证据，区分时间戳 SNAPSHOT，并在深链接中保留文件路径和构建号。目录加载支持原位重试；Raw Proxy 详情不再显示 Hosted 删除操作。
 - 新增 Console 语义主题系统：内置四套主题，文本选择保持中性，强调色按预算使用；主题切换
   以选择器为圆心径向揭幕，并在 reduced motion 下原子生效。管理员无需重建 Gateway 即可
   严格校验、预览、安装、替换、启用和删除 PostgreSQL 托管主题，版本校验、删除保护和审计

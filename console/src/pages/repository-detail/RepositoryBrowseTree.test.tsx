@@ -89,7 +89,12 @@ describe("RepositoryBrowseTree", () => {
     expect(screen.getByText("text/plain")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "在列表中查看" }));
-    expect(onOpenInList).toHaveBeenCalledWith("docs/release%20notes.txt");
+    expect(onOpenInList).toHaveBeenCalledWith(
+      expect.objectContaining({
+        coordinate: "docs/release%20notes.txt",
+        path: "docs/release%20notes.txt",
+      }),
+    );
   });
 
   it("keeps the directory visible when a refresh fails", async () => {
@@ -204,5 +209,181 @@ describe("RepositoryBrowseTree", () => {
         pageToken: "root-next",
       },
     });
+  });
+});
+
+describe("Proxy directory recovery", () => {
+  const root = {
+    id: "root-node",
+    kind: "namespace",
+    name: "org.example",
+    hasChildren: true,
+  };
+  const child = {
+    id: "child-node",
+    kind: "component",
+    name: "widget",
+    hasChildren: true,
+  };
+  const proxy: Repository = {
+    ...repository,
+    format: "maven",
+    type: "proxy",
+    name: "maven-proxy",
+  };
+
+  it("retries a rejected child request at the same parent without discarding the tree", async () => {
+    const user = userEvent.setup();
+    mockBrowseRepository
+      .mockResolvedValueOnce({ data: { items: [root] } } as never)
+      .mockRejectedValueOnce(new Error("child unavailable"))
+      .mockResolvedValueOnce({ data: { items: [child] } } as never);
+    render(
+      <PreferencesProvider>
+        <RepositoryBrowseTree repo={proxy} onOpenInList={vi.fn()} />
+      </PreferencesProvider>,
+    );
+    await user.click(await screen.findByText("org.example"));
+    expect(await screen.findByText("child unavailable")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /重试/ }));
+    expect(await screen.findByText("widget")).toBeInTheDocument();
+    expect(mockBrowseRepository).toHaveBeenNthCalledWith(3, {
+      path: { repositoryId: proxy.id },
+      query: { parent: "root-node", pageSize: 50 },
+    });
+    expect(screen.queryByText("child unavailable")).not.toBeInTheDocument();
+  });
+
+  it("deduplicates rapid page loads and retries the failed page", async () => {
+    const user = userEvent.setup();
+    let finish: ((value: never) => void) | undefined;
+    mockBrowseRepository
+      .mockResolvedValueOnce({
+        data: { items: [root], nextPageToken: "page-two" },
+      } as never)
+      .mockRejectedValueOnce(new Error("page unavailable"))
+      .mockImplementationOnce(
+        () =>
+          new Promise<never>((resolve) => {
+            finish = resolve;
+          }),
+      );
+    render(
+      <PreferencesProvider>
+        <RepositoryBrowseTree repo={proxy} onOpenInList={vi.fn()} />
+      </PreferencesProvider>,
+    );
+    await user.click(await screen.findByText("加载更多"));
+    expect(await screen.findByText("page unavailable")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /重试/ }));
+    await user.dblClick(screen.getByText("加载更多"));
+    expect(mockBrowseRepository).toHaveBeenCalledTimes(3);
+    finish?.({
+      data: { items: [{ ...root, id: "second", name: "org.second" }] },
+    } as never);
+    expect(await screen.findByText("org.second")).toBeInTheDocument();
+    expect(screen.getAllByText("org.second")).toHaveLength(1);
+  });
+
+  it("can expand the same opaque node again after a successful root refresh", async () => {
+    const user = userEvent.setup();
+    mockBrowseRepository
+      .mockResolvedValueOnce({ data: { items: [root] } } as never)
+      .mockResolvedValueOnce({ data: { items: [child] } } as never)
+      .mockResolvedValueOnce({ data: { items: [root] } } as never)
+      .mockResolvedValueOnce({
+        data: { items: [{ ...child, name: "refreshed-widget" }] },
+      } as never);
+    render(
+      <PreferencesProvider>
+        <RepositoryBrowseTree repo={proxy} onOpenInList={vi.fn()} />
+      </PreferencesProvider>,
+    );
+    await user.click(await screen.findByText("org.example"));
+    expect(await screen.findByText("widget")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /刷新/ }));
+    await waitFor(() =>
+      expect(screen.queryByText("widget")).not.toBeInTheDocument(),
+    );
+    await user.click(screen.getByText("org.example"));
+    expect(await screen.findByText("refreshed-widget")).toBeInTheDocument();
+  });
+
+  it("keeps a failed branch retryable when a concurrent sibling finishes", async () => {
+    const user = userEvent.setup();
+    let failFirst: ((error: Error) => void) | undefined;
+    let finishSecond: ((value: never) => void) | undefined;
+    mockBrowseRepository
+      .mockResolvedValueOnce({
+        data: {
+          items: [root, { ...root, id: "other-root", name: "org.other" }],
+        },
+      } as never)
+      .mockImplementationOnce(
+        () =>
+          new Promise<never>((_resolve, reject) => {
+            failFirst = reject;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<never>((resolve) => {
+            finishSecond = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({ data: { items: [child] } } as never);
+    render(
+      <PreferencesProvider>
+        <RepositoryBrowseTree repo={proxy} onOpenInList={vi.fn()} />
+      </PreferencesProvider>,
+    );
+    await user.click(await screen.findByText("org.example"));
+    await user.click(screen.getByText("org.other"));
+    failFirst?.(new Error("first branch unavailable"));
+    expect(
+      await screen.findByText("first branch unavailable"),
+    ).toBeInTheDocument();
+    finishSecond?.({
+      data: { items: [{ ...child, id: "other-child", name: "other-widget" }] },
+    } as never);
+    expect(await screen.findByText("other-widget")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /重试/ }));
+    expect(await screen.findByText("widget")).toBeInTheDocument();
+    expect(mockBrowseRepository).toHaveBeenNthCalledWith(4, {
+      path: { repositoryId: proxy.id },
+      query: { parent: "root-node", pageSize: 50 },
+    });
+  });
+
+  it("keeps the server-issued SNAPSHOT path, build, digest and source when opening the list", async () => {
+    const user = userEvent.setup();
+    const open = vi.fn();
+    const asset = {
+      id: "snapshot-asset",
+      kind: "asset",
+      name: "widget-1.0-20260907.010203-2.jar",
+      hasChildren: false,
+      coordinate: "org.example:widget:1.0-SNAPSHOT",
+      path: "org/example/widget/1.0-SNAPSHOT/widget-1.0-20260907.010203-2.jar",
+      buildNumber: 2,
+      digest: `sha256:${"a".repeat(64)}`,
+      sourceRepositoryName: "maven-proxy",
+      cacheState: "cached",
+      cachedAt: "2026-09-07T01:02:03Z",
+    };
+    mockBrowseRepository.mockResolvedValueOnce({
+      data: { items: [asset] },
+    } as never);
+    render(
+      <PreferencesProvider>
+        <RepositoryBrowseTree repo={proxy} onOpenInList={open} />
+      </PreferencesProvider>,
+    );
+    await user.click(await screen.findByText(asset.name));
+    expect(screen.getByText("maven-proxy")).toBeInTheDocument();
+    expect(screen.getByText("已缓存")).toBeInTheDocument();
+    expect(screen.getByText(asset.path)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "在列表中查看" }));
+    expect(open).toHaveBeenCalledWith(asset);
   });
 });

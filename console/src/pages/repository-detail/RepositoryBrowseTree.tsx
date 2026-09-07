@@ -88,10 +88,13 @@ export function RepositoryBrowseTree({
   onOpenInList,
 }: {
   repo: Repository;
-  onOpenInList: (coordinate: string) => void;
+  onOpenInList: (node: BrowseNode) => void;
 }) {
   const { text } = usePreferences();
   const requestVersion = useRef(0);
+  const pending = useRef(new Map<string, Promise<void>>());
+  const retryAction = useRef<(() => Promise<void>) | null>(null);
+  const [treeEpoch, setTreeEpoch] = useState(0);
   const [treeData, setTreeData] = useState<RepositoryTreeDataNode[]>([]);
   const [selected, setSelected] = useState<BrowseNode | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,13 +146,14 @@ export function RepositoryBrowseTree({
   );
 
   const loadRoot = useCallback(
-    async (preserveTree = false) => {
+    async function loadRootRequest(preserveTree = false) {
       const version = ++requestVersion.current;
       if (!preserveTree) {
         setTreeData([]);
         setLoading(true);
       }
       setError(null);
+      retryAction.current = () => loadRootRequest(preserveTree);
       try {
         const response = await browseRepository({
           path: { repositoryId: repo.id },
@@ -163,6 +167,9 @@ export function RepositoryBrowseTree({
           );
           return;
         }
+        setSelected(null);
+        setTreeEpoch((epoch) => epoch + 1);
+        retryAction.current = null;
         setTreeData(
           toTreeNodes(
             response.data.items,
@@ -187,71 +194,73 @@ export function RepositoryBrowseTree({
     };
   }, [loadRoot]);
 
-  const loadChildren: TreeProps<RepositoryTreeDataNode>["loadData"] = async (
-    treeNode,
-  ) => {
-    const node = treeNode as RepositoryTreeDataNode;
-    if (!node.browseNode?.hasChildren || node.children) return;
+  const loadBranch = (
+    node: RepositoryTreeDataNode,
+    append: boolean,
+  ): Promise<void> => {
     const version = requestVersion.current;
+    const parentId = append ? node.parentId : node.browseNode?.id;
+    const pageToken = append ? node.pageToken : undefined;
+    const key = `${version}:${parentId ?? "root"}:${pageToken ?? "children"}`;
+    const existing = pending.current.get(key);
+    if (existing) return existing;
     setError(null);
-    const response = await browseRepository({
-      path: { repositoryId: repo.id },
-      query: { parent: node.browseNode.id, pageSize: 50 },
-    });
-    if (version !== requestVersion.current) return;
-    if (response.error || !response.data) {
-      const requestError =
-        response.error ??
-        new Error(text("读取子目录失败", "Failed to load child nodes"));
-      setError(requestError);
-      throw requestError;
-    }
-    setTreeData((current) =>
-      replaceNodeChildren(
-        current,
-        node.key,
-        toTreeNodes(
+    const request = (async () => {
+      try {
+        const response = await browseRepository({
+          path: { repositoryId: repo.id },
+          query: {
+            parent: parentId,
+            pageSize: 50,
+            ...(pageToken ? { pageToken } : {}),
+          },
+        });
+        if (version !== requestVersion.current) return;
+        if (response.error || !response.data) {
+          throw (
+            response.error ??
+            new Error(text("读取目录失败", "Failed to load directory"))
+          );
+        }
+        const page = toTreeNodes(
           response.data.items,
-          node.browseNode?.id,
+          parentId,
           response.data.nextPageToken,
-        ),
-      ),
-    );
+        );
+        setTreeData((current) => {
+          if (!append) return replaceNodeChildren(current, node.key, page);
+          if (parentId) return appendNodePage(current, parentId, page);
+          return [...current.filter((item) => !item.loadMore), ...page];
+        });
+        // Another branch may have failed while this request was in flight.
+        // Its visible error must retain the matching retry action.
+      } catch (requestError) {
+        if (version === requestVersion.current) {
+          setError(requestError);
+          retryAction.current = () => loadBranch(node, append);
+        }
+        throw requestError;
+      } finally {
+        pending.current.delete(key);
+      }
+    })();
+    pending.current.set(key, request);
+    return request;
   };
 
-  const loadMore = async (node: RepositoryTreeDataNode) => {
-    const version = requestVersion.current;
-    setError(null);
-    const response = await browseRepository({
-      path: { repositoryId: repo.id },
-      query: {
-        parent: node.parentId,
-        pageSize: 50,
-        pageToken: node.pageToken,
-      },
-    });
-    if (version !== requestVersion.current) return;
-    if (response.error || !response.data) {
-      setError(
-        response.error ??
-          new Error(text("读取下一页失败", "Failed to load next page")),
-      );
-      return;
-    }
-    const page = toTreeNodes(
-      response.data.items,
-      node.parentId,
-      response.data.nextPageToken,
-    );
-    const parentId = node.parentId;
-    if (parentId) {
-      setTreeData((current) => appendNodePage(current, parentId, page));
-    } else {
-      setTreeData((current) => [
-        ...current.filter((item) => !item.loadMore),
-        ...page,
-      ]);
-    }
+  const loadChildren: TreeProps<RepositoryTreeDataNode>["loadData"] = (
+    node,
+  ) => {
+    if (!node.browseNode?.hasChildren || node.children)
+      return Promise.resolve();
+    // The Tree retries rejected loads automatically. Keep the visible failure
+    // stable; the Retry action repeats this exact parent explicitly.
+    return loadBranch(node, false).catch(() => undefined);
+  };
+
+  const retry = () => {
+    const operation = retryAction.current;
+    if (operation) void operation().catch(() => undefined);
   };
 
   const selectNode: TreeProps<RepositoryTreeDataNode>["onSelect"] = (
@@ -260,7 +269,7 @@ export function RepositoryBrowseTree({
   ) => {
     const node = info.node as RepositoryTreeDataNode;
     if (node.loadMore) {
-      void loadMore(node);
+      void loadBranch(node, true).catch(() => undefined);
       return;
     }
     setSelected(node.browseNode ?? null);
@@ -298,7 +307,7 @@ export function RepositoryBrowseTree({
     <div className="ag-repository-browse">
       {error !== null && (
         <div className="ag-repository-browse-error">
-          <ErrorBanner error={error} onRetry={() => loadRoot(true)} />
+          <ErrorBanner error={error} onRetry={retry} />
         </div>
       )}
       <section
@@ -324,6 +333,7 @@ export function RepositoryBrowseTree({
           </Button>
         </div>
         <Tree.DirectoryTree<RepositoryTreeDataNode>
+          key={treeEpoch}
           className="ag-repository-tree"
           aria-label={text("制品目录树", "Artifact directory tree")}
           blockNode
@@ -369,6 +379,41 @@ export function RepositoryBrowseTree({
                 </div>
               </div>
             )}
+            {selected.sourceRepositoryName && (
+              <div className="ag-repository-tree-field">
+                <span>{text("来源仓库", "Source repository")}</span>
+                <strong>{selected.sourceRepositoryName}</strong>
+              </div>
+            )}
+            {selected.cacheState === "cached" && (
+              <div className="ag-repository-tree-field">
+                <span>{text("缓存状态", "Cache state")}</span>
+                <strong>{text("已缓存", "Cached")}</strong>
+              </div>
+            )}
+            {selected.buildNumber !== undefined && (
+              <div className="ag-repository-tree-field">
+                <span>{text("构建号", "Build number")}</span>
+                <strong>{selected.buildNumber}</strong>
+              </div>
+            )}
+            {repo.format === "maven" &&
+              selected.kind === "asset" &&
+              selected.path && (
+                <div className="ag-repository-tree-field">
+                  <span>{text("文件路径", "Asset path")}</span>
+                  <div>
+                    <code>{selected.path}</code>
+                    <CopyButton text={selected.path} />
+                  </div>
+                </div>
+              )}
+            {selected.cachedAt && (
+              <div className="ag-repository-tree-field">
+                <span>{text("缓存更新时间", "Cache updated")}</span>
+                <strong>{formatDate(selected.cachedAt)}</strong>
+              </div>
+            )}
             {selected.digest && (
               <div className="ag-repository-tree-field">
                 <span>{text("摘要", "Digest")}</span>
@@ -401,7 +446,7 @@ export function RepositoryBrowseTree({
             {selected.kind === "asset" && selected.coordinate && (
               <Button
                 onClick={() => {
-                  if (selected.coordinate) onOpenInList(selected.coordinate);
+                  if (selected.coordinate) onOpenInList(selected);
                 }}
               >
                 {text("在列表中查看", "Open in list")}

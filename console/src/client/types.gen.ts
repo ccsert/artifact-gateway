@@ -27,6 +27,23 @@ export type BrowseNode = {
   size?: number;
   contentType?: string;
   createdAt?: string;
+  /**
+   * Last update of the live verified cache index, for Proxy assets only.
+   */
+  cachedAt?: string;
+  /**
+   * Exact Maven SNAPSHOT build; Proxy nodes additionally pin the timestamp in their opaque ID.
+   */
+  buildNumber?: number;
+  /**
+   * Repository owning this publication or cache record.
+   */
+  sourceRepositoryId?: string;
+  sourceRepositoryName?: string;
+  /**
+   * Present only for a Proxy asset backed by a live positive cache index. This is not a lifecycle Artifact Identity.
+   */
+  cacheState?: "cached";
 };
 
 export type BrowseNodePage = {

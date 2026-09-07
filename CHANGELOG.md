@@ -11,6 +11,7 @@ their meaning.
 
 ## Unreleased
 
+- Added PostgreSQL-backed lazy directory browsing for Maven and Raw Proxy caches, with repository/upstream isolation, live cache evidence, exact timestamped SNAPSHOT nodes, and deep links that preserve asset paths and build numbers. Directory failures can be retried in place; Raw Proxy details no longer show Hosted deletion actions.
 - Added a semantic Console theme system with four built-in packages, neutral
   text selection, restrained accent usage, and a reduced-motion-safe radial
   reveal anchored to the theme selector. Administrators can strictly validate,

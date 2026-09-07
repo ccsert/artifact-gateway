@@ -16,13 +16,18 @@ import (
 )
 
 type repositoryBrowseTestNode struct {
-	ID          string `json:"id"`
-	Kind        string `json:"kind"`
-	Name        string `json:"name"`
-	HasChildren bool   `json:"hasChildren"`
-	Path        string `json:"path"`
-	Digest      string `json:"digest"`
-	Size        *int64 `json:"size"`
+	ID                   string `json:"id"`
+	Kind                 string `json:"kind"`
+	Name                 string `json:"name"`
+	HasChildren          bool   `json:"hasChildren"`
+	Path                 string `json:"path"`
+	Digest               string `json:"digest"`
+	Size                 *int64 `json:"size"`
+	BuildNumber          int    `json:"buildNumber"`
+	SourceRepositoryID   string `json:"sourceRepositoryId"`
+	SourceRepositoryName string `json:"sourceRepositoryName"`
+	CacheState           string `json:"cacheState"`
+	CachedAt             string `json:"cachedAt"`
 }
 
 func TestRepositoryBrowseProjectsMavenNamespaceComponentVersionAndAssets(t *testing.T) {

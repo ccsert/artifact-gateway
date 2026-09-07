@@ -382,8 +382,7 @@ Group-only interactions:
 - [x] Add the direct-child Repository browse contract with opaque node IDs and
       cursors.
 - [x] Implement Maven and Raw Hosted adapters.
-- [ ] Add a storage-backed direct-child projection for Proxy caches without
-      scanning every cached entry per page.
+- [x] Query Maven/Raw Proxy direct children in PostgreSQL with repository/upstream/path indexes, bounded response pages, live cache evidence, and exact timestamped SNAPSHOT nodes. Directory requests never scan object storage; old S3-only indexes enter the tree through existing lazy protocol migration. Group provenance remains pending.
 - [ ] Add Group provenance and adapters for additional formats.
 - [x] Add a lazy, keyboard-accessible Console tree while retaining list/search.
 

@@ -559,12 +559,14 @@ export function RawArtifactDetail({
   meta,
   onDeleted,
   canQuarantine = false,
+  canDelete = false,
 }: {
   repositoryId?: string;
   repoName: string;
   meta: ArtifactMeta;
   onDeleted?: () => void;
   canQuarantine?: boolean;
+  canDelete?: boolean;
 }) {
   const { text } = usePreferences();
   const { token } = useAuth();
@@ -603,38 +605,40 @@ export function RawArtifactDetail({
         meta={meta}
         canQuarantine={canQuarantine}
       />
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 px-3 py-2">
-        <div>
-          <div className="text-xs font-medium text-zinc-200">
-            {text("Raw 文件", "Raw file")}
-          </div>
-          {deleteError && (
-            <div className="mt-1 text-xs text-[var(--ag-status-danger)]">
-              {deleteError}
+      {canDelete && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 px-3 py-2">
+          <div>
+            <div className="text-xs font-medium text-zinc-200">
+              {text("Raw 文件", "Raw file")}
             </div>
-          )}
-        </div>
-        <Popconfirm
-          title={text("删除 Raw 文件？", "Delete this Raw file?")}
-          description={text(
-            "删除后该路径将不可见。",
-            "This path will no longer be visible.",
-          )}
-          okText={text("删除", "Delete")}
-          cancelText={text("取消", "Cancel")}
-          okButtonProps={{ danger: true }}
-          onConfirm={() => void deleteCurrent()}
-        >
-          <Button
-            danger
-            size="small"
-            icon={<DeleteOutlined />}
-            loading={deleting}
+            {deleteError && (
+              <div className="mt-1 text-xs text-[var(--ag-status-danger)]">
+                {deleteError}
+              </div>
+            )}
+          </div>
+          <Popconfirm
+            title={text("删除 Raw 文件？", "Delete this Raw file?")}
+            description={text(
+              "删除后该路径将不可见。",
+              "This path will no longer be visible.",
+            )}
+            okText={text("删除", "Delete")}
+            cancelText={text("取消", "Cancel")}
+            okButtonProps={{ danger: true }}
+            onConfirm={() => void deleteCurrent()}
           >
-            {text("删除文件", "Delete file")}
-          </Button>
-        </Popconfirm>
-      </div>
+            <Button
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+              loading={deleting}
+            >
+              {text("删除文件", "Delete file")}
+            </Button>
+          </Popconfirm>
+        </div>
+      )}
     </div>
   );
 }

@@ -221,8 +221,9 @@ repository artifact (including Maven SNAPSHOT build numbers). Repository
 Artifacts tabs provide format-specific version selection and metadata. Checksum
 search, saved queries, popularity sorting, and a richer Group resolution view
 remain future work. The first Nexus-style directory-tree slice is delivered for
-Maven and Raw Hosted repositories. Proxy repositories retain their bounded
-cache-browse surface until a storage-backed direct-child projection is added.
+Maven and Raw Hosted and Proxy repositories. Proxy directories query live PostgreSQL
+cache indexes directly, bind navigation to the current upstream configuration, and
+preserve exact timestamped SNAPSHOT file identities.
 It uses a server-issued, format-aware browse-node contract, opaque parent IDs and cursors,
 so the Console does not infer physical folders or rebuild Artifact Identity
 from display paths. Group provenance and adapters for other formats remain open.

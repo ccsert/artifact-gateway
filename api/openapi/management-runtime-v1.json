@@ -3466,7 +3466,7 @@
       "get": {
         "operationId": "browseRepository",
         "summary": "List direct children in a format-aware Repository browse tree",
-        "description": "Returns server-issued navigation projections. Node IDs and page tokens are opaque and bound to the Repository, format, parent, ordering, authorization context, and expiry. Browse Nodes are not physical object-store directories or client-constructed Artifact Identities. The first supported adapters are hosted Maven and Raw; Proxy repositories continue to use the bounded cache-browse endpoint.",
+        "description": "Returns server-issued navigation projections. Node IDs and page tokens are opaque and bound to the Repository, format, parent, ordering, authorization context, and expiry. Browse Nodes are not physical object-store directories or client-constructed Artifact Identities. Hosted and Proxy Maven and Raw are supported. Proxy trees query only live positive PostgreSQL cache indexes belonging to the exact Repository and its current upstream; they do not discover upstream metadata or scan legacy S3 indexes. Timestamped Maven SNAPSHOT builds have separate version nodes whose IDs pin their exact files. Proxy node IDs and page tokens also bind the Repository configuration revision.",
         "parameters": [
           {
             "name": "parent",
@@ -4699,6 +4699,31 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "cachedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update of the live verified cache index, for Proxy assets only."
+          },
+          "buildNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Exact Maven SNAPSHOT build; Proxy nodes additionally pin the timestamp in their opaque ID."
+          },
+          "sourceRepositoryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Repository owning this publication or cache record."
+          },
+          "sourceRepositoryName": {
+            "type": "string"
+          },
+          "cacheState": {
+            "type": "string",
+            "enum": [
+              "cached"
+            ],
+            "description": "Present only for a Proxy asset backed by a live positive cache index. This is not a lifecycle Artifact Identity."
           }
         }
       },

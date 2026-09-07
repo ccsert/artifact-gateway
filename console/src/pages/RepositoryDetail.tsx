@@ -887,6 +887,7 @@ export function RepositoryDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const artifactTarget = searchParams.get("artifact")?.trim() ?? "";
+  const assetTarget = searchParams.get("asset")?.trim() || undefined;
   const referenceTarget = searchParams.get("reference")?.trim() || undefined;
   const versionTarget = searchParams.get("version")?.trim() || undefined;
   const parsedBuildTarget = Number(searchParams.get("build") ?? "");
@@ -1026,6 +1027,22 @@ export function RepositoryDetailPage() {
               }
               artifactTarget={artifactTarget}
               buildTarget={buildTarget}
+              assetTarget={assetTarget}
+              onBrowseArtifact={(node) =>
+                setSearchParams((current) => {
+                  const next = new URLSearchParams(current);
+                  next.set("artifact", node.coordinate ?? node.path ?? "");
+                  if (node.buildNumber)
+                    next.set("build", String(node.buildNumber));
+                  else next.delete("build");
+                  if (repo.type === "proxy" && node.path)
+                    next.set("asset", node.path);
+                  else next.delete("asset");
+                  next.delete("reference");
+                  next.delete("version");
+                  return next;
+                })
+              }
               referenceTarget={referenceTarget}
               versionTarget={versionTarget}
               onVersionChange={(coordinate, version) =>
