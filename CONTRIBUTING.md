@@ -186,6 +186,11 @@ make integration-test
 The integration suite applies all migrations to a clean PostgreSQL database
 and verifies that a second run is a no-op.
 
+Integration lifecycle commands explicitly use the `artifact-gateway-integration`
+Compose project and `/dev/null` as the environment file. They ignore the checkout
+`.env` and an exported `COMPOSE_PROJECT_NAME`, so test cleanup cannot select the
+normal development stack. Use `make integration-down` to clean that test project.
+
 ## Commit messages
 
 Use an imperative Conventional Commit subject:
