@@ -15,6 +15,7 @@ import {
 } from "../../client";
 import type {
   ArtifactIntelligenceSummary,
+  BrowseNode,
   ProxyCacheAsset,
   Repository,
 } from "../../client";
@@ -761,18 +762,22 @@ export function RepositoryArtifactsTab({
   canQuarantine = false,
   artifactTarget = "",
   buildTarget,
+  assetTarget,
   referenceTarget,
   versionTarget,
   onVersionChange,
+  onBrowseArtifact,
 }: {
   repo: Repository;
   canWrite: boolean;
   canQuarantine?: boolean;
   artifactTarget?: string;
   buildTarget?: number;
+  assetTarget?: string;
   referenceTarget?: string;
   versionTarget?: string;
   onVersionChange?: (coordinate: string, version: string) => void;
+  onBrowseArtifact?: (node: BrowseNode) => void;
 }) {
   const { token } = useAuth();
   const { text } = usePreferences();
@@ -801,7 +806,8 @@ export function RepositoryArtifactsTab({
   const hostedAPT = format === "apt" && repo.type === "hosted";
   const canUploadRaw = format === "raw" && repo.type !== "proxy";
   const supportsDirectory =
-    repo.type === "hosted" && (format === "maven" || format === "raw");
+    (repo.type === "hosted" || repo.type === "proxy") &&
+    (format === "maven" || format === "raw");
 
   useEffect(() => {
     setView("list");
@@ -837,7 +843,7 @@ export function RepositoryArtifactsTab({
                 path: { repositoryId: repo.id },
                 query: {
                   groupBy: "version",
-                  assetFilter: proxyAssetFilter,
+                  assetFilter: assetTarget ? "all" : proxyAssetFilter,
                   q: query || undefined,
                   pageSize: PROXY_MAVEN_PAGE_SIZE,
                   pageToken,
@@ -1006,7 +1012,7 @@ export function RepositoryArtifactsTab({
         const target = items.find(
           (item) =>
             item.coordinate === artifactTarget &&
-            (!buildTarget || item.buildNumber === buildTarget),
+            (proxyMaven || !buildTarget || item.buildNumber === buildTarget),
         );
         setExpandedImage(target?.key ?? null);
       }
@@ -1018,6 +1024,7 @@ export function RepositoryArtifactsTab({
       proxyAssetFilter,
       artifactTarget,
       buildTarget,
+      assetTarget,
       text,
     ],
   );
@@ -1026,10 +1033,12 @@ export function RepositoryArtifactsTab({
     const targetQuery =
       format === "raw"
         ? decodeRawPathForDisplay(artifactTarget)
-        : artifactTarget;
+        : proxyMaven
+          ? (assetTarget ?? artifactTarget)
+          : artifactTarget;
     setQ(targetQuery);
     void load(targetQuery);
-  }, [artifactTarget, format, load]);
+  }, [artifactTarget, assetTarget, format, proxyMaven, load]);
 
   const searchPlaceholder: Record<string, string> = {
     oci: text("按镜像名前缀过滤…", "Filter by image name prefix…"),
@@ -1439,6 +1448,7 @@ export function RepositoryArtifactsTab({
     }
     return (
       <RawArtifactDetail
+        canDelete={canWrite && repo.type === "hosted"}
         repositoryId={repo.id}
         repoName={repo.name}
         canQuarantine={canQuarantine}
@@ -1481,11 +1491,17 @@ export function RepositoryArtifactsTab({
         </div>
         <RepositoryBrowseTree
           repo={repo}
-          onOpenInList={(coordinate) => {
+          onOpenInList={(node) => {
+            const coordinate = node.coordinate ?? node.path ?? "";
+            setView("list");
+            if (onBrowseArtifact) {
+              onBrowseArtifact(node);
+              return;
+            }
             const query =
               format === "raw"
                 ? decodeRawPathForDisplay(coordinate)
-                : coordinate;
+                : (node.path ?? coordinate);
             setView("list");
             setQ(query);
             setExpandedImage(null);

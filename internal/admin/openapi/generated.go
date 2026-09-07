@@ -460,6 +460,21 @@ func (e AuthorizationTemplateGrantScopes) Valid() bool {
 	}
 }
 
+// Defines values for BrowseNodeCacheState.
+const (
+	Cached BrowseNodeCacheState = "cached"
+)
+
+// Valid indicates whether the value is a known member of the BrowseNodeCacheState enum.
+func (e BrowseNodeCacheState) Valid() bool {
+	switch e {
+	case Cached:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BrowseNodeKind.
 const (
 	BrowseNodeKindAsset     BrowseNodeKind = "asset"
@@ -2660,7 +2675,15 @@ type AuthorizationTemplateWritable struct {
 
 // BrowseNode defines model for BrowseNode.
 type BrowseNode struct {
-	ContentType *string `json:"contentType,omitempty"`
+	// BuildNumber Exact Maven SNAPSHOT build; Proxy nodes additionally pin the timestamp in their opaque ID.
+	BuildNumber *int `json:"buildNumber,omitempty"`
+
+	// CacheState Present only for a Proxy asset backed by a live positive cache index. This is not a lifecycle Artifact Identity.
+	CacheState *BrowseNodeCacheState `json:"cacheState,omitempty"`
+
+	// CachedAt Last update of the live verified cache index, for Proxy assets only.
+	CachedAt    *time.Time `json:"cachedAt,omitempty"`
+	ContentType *string    `json:"contentType,omitempty"`
 
 	// Coordinate Protocol-owned canonical coordinate when available.
 	Coordinate  *string    `json:"coordinate,omitempty"`
@@ -2678,7 +2701,14 @@ type BrowseNode struct {
 	// Path Canonical Repository-relative asset path when the node represents a path.
 	Path *string `json:"path,omitempty"`
 	Size *int64  `json:"size,omitempty"`
+
+	// SourceRepositoryId Repository owning this publication or cache record.
+	SourceRepositoryId   *openapi_types.UUID `json:"sourceRepositoryId,omitempty"`
+	SourceRepositoryName *string             `json:"sourceRepositoryName,omitempty"`
 }
+
+// BrowseNodeCacheState Present only for a Proxy asset backed by a live positive cache index. This is not a lifecycle Artifact Identity.
+type BrowseNodeCacheState string
 
 // BrowseNodeKind defines model for BrowseNodeKind.
 type BrowseNodeKind string

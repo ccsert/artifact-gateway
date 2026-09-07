@@ -1,6 +1,8 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/url"
@@ -10,6 +12,7 @@ import (
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 func (h generatedRepositoryAPIAdapter) BrowseRepository(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.BrowseRepositoryParams) {
@@ -18,8 +21,8 @@ func (h generatedRepositoryAPIAdapter) BrowseRepository(w http.ResponseWriter, r
 			writeHostedProblem(w, http.StatusBadRequest, "unsupported_format", "directory browsing is currently available for Maven and Raw repositories")
 			return
 		}
-		if repo.Type == repository.RepositoryTypeProxy {
-			writeHostedProblem(w, http.StatusBadRequest, "unsupported_repository_type", "directory browsing is currently available for hosted Maven and Raw repositories")
+		if repo.Type == repository.RepositoryTypeProxy && h.proxyCache.directoryStore() == nil {
+			writeHostedProblem(w, http.StatusBadRequest, "unsupported_repository_type", "directory browsing is not available for this proxy repository")
 			return
 		}
 		pageSize := 50
@@ -49,7 +52,12 @@ func (h generatedRepositoryAPIAdapter) BrowseRepository(w http.ResponseWriter, r
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
 			return
 		}
-		items, err := h.browse.ListArtifactBrowseNodes(r.Context(), repo.ID, repo.Format, parent, pageSize+1, after)
+		var items []repository.ArtifactBrowseNode
+		if repo.Type == repository.RepositoryTypeProxy {
+			items, err = h.proxyCache.directoryStore().ListProxyBrowseNodes(r.Context(), repo, parent, pageSize+1, after)
+		} else {
+			items, err = h.browse.ListArtifactBrowseNodes(r.Context(), repo.ID, repo.Format, parent, pageSize+1, after)
+		}
 		if errors.Is(err, repository.ErrNotFound) {
 			items, err = []repository.ArtifactBrowseNode{}, nil
 		}
@@ -91,7 +99,7 @@ func (h hostedRepositoryAPIHandler) decodeRepositoryBrowseParent(token string, r
 		return parent, repositoryBrowseParentKey(parent), nil
 	}
 	var cursor repositoryBrowseNodeCursor
-	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "repository-browse-node" || cursor.RepositoryID != repo.ID || cursor.Format != string(repo.Format) || cursor.Principal != principal || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "repository-browse-node" || cursor.RepositoryID != repo.ID || cursor.Format != string(repo.Format) || cursor.Principal != principal || cursor.Revision != repositoryBrowseRevision(repo) || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return repository.ArtifactBrowseParent{}, "", errors.New("invalid parent")
 	}
 	parent := repository.ArtifactBrowseParent{Kind: repository.BrowseNodeKind(cursor.Kind), Namespace: cursor.Namespace, Component: cursor.Component, Version: cursor.Version, BuildNumber: cursor.BuildNumber, Path: cursor.Path}
@@ -123,20 +131,20 @@ func (h hostedRepositoryAPIHandler) decodeRepositoryBrowsePageToken(token string
 		return "", nil
 	}
 	var cursor repositoryBrowsePageCursor
-	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "repository-browse-page" || cursor.RepositoryID != repo.ID || cursor.Format != string(repo.Format) || cursor.Principal != principal || cursor.Parent != parent || cursor.After == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "repository-browse-page" || cursor.RepositoryID != repo.ID || cursor.Format != string(repo.Format) || cursor.Principal != principal || cursor.Revision != repositoryBrowseRevision(repo) || cursor.Parent != parent || cursor.After == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return "", errors.New("invalid page token")
 	}
 	return cursor.After, nil
 }
 
 func (h hostedRepositoryAPIHandler) encodeRepositoryBrowsePageToken(repo repository.HostedRepository, principal, parent, after string) string {
-	return encodeSignedCursor(h.authenticator.AdminToken, repositoryBrowsePageCursor{Endpoint: "repository-browse-page", RepositoryID: repo.ID, Format: string(repo.Format), Principal: principal, Parent: parent, After: after, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
+	return encodeSignedCursor(h.authenticator.AdminToken, repositoryBrowsePageCursor{Endpoint: "repository-browse-page", RepositoryID: repo.ID, Format: string(repo.Format), Principal: principal, Parent: parent, After: after, Revision: repositoryBrowseRevision(repo), ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
 func (h hostedRepositoryAPIHandler) repositoryBrowseNodeResponse(repo repository.HostedRepository, principal string, node repository.ArtifactBrowseNode) adminopenapi.BrowseNode {
 	cursor := repositoryBrowseNodeCursor{
 		Endpoint: "repository-browse-node", RepositoryID: repo.ID, Format: string(repo.Format), Principal: principal,
-		Kind: string(node.Kind), Namespace: node.Namespace, Component: node.Component, Version: node.Coordinate, BuildNumber: node.BuildNumber, Path: node.Path,
+		Revision: repositoryBrowseRevision(repo), Kind: string(node.Kind), Namespace: node.Namespace, Component: node.Component, Version: node.Coordinate, BuildNumber: node.BuildNumber, Path: node.Path,
 		ExpiresAt: time.Now().UTC().Add(time.Hour).Unix(),
 	}
 	name := node.Name
@@ -147,6 +155,13 @@ func (h hostedRepositoryAPIHandler) repositoryBrowseNodeResponse(repo repository
 	}
 	response := adminopenapi.BrowseNode{Id: encodeSignedCursor(h.authenticator.AdminToken, cursor), Kind: adminopenapi.BrowseNodeKind(node.Kind), Name: name, HasChildren: node.HasChildren}
 	response.Path = optionalString(node.Path)
+	if id, err := uuid.Parse(repo.ID); err == nil {
+		response.SourceRepositoryId = &id
+	}
+	response.SourceRepositoryName = &repo.Name
+	if node.BuildNumber > 0 {
+		response.BuildNumber = &node.BuildNumber
+	}
 	response.Coordinate = optionalString(node.Coordinate)
 	response.Digest = optionalString(node.Digest)
 	response.ContentType = optionalString(node.ContentType)
@@ -155,7 +170,25 @@ func (h hostedRepositoryAPIHandler) repositoryBrowseNodeResponse(repo repository
 	}
 	if !node.CreatedAt.IsZero() {
 		createdAt := node.CreatedAt
-		response.CreatedAt = &createdAt
+		if repo.Type == repository.RepositoryTypeProxy {
+			response.CachedAt = &createdAt
+		} else {
+			response.CreatedAt = &createdAt
+		}
+	}
+	if repo.Type == repository.RepositoryTypeProxy && node.Kind == repository.BrowseNodeAsset {
+		cached := adminopenapi.Cached
+		response.CacheState = &cached
 	}
 	return response
+}
+
+// Proxy parents and cursors expire immediately when their upstream/configuration
+// changes. Hosted cursors retain their published grammar.
+func repositoryBrowseRevision(repo repository.HostedRepository) string {
+	if repo.Type != repository.RepositoryTypeProxy {
+		return ""
+	}
+	hash := sha256.Sum256([]byte(repo.Version + "\x1f" + repo.Endpoint))
+	return hex.EncodeToString(hash[:])
 }

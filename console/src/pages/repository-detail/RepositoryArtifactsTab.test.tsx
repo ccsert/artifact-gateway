@@ -122,6 +122,33 @@ describe("RepositoryArtifactsTab APT browse", () => {
 });
 
 describe("RepositoryArtifactsTab Raw browse", () => {
+  it("keeps Hosted Maven deep links on GAV search even when an exact asset path is present", async () => {
+    const coordinate = "com.acme:widget:2.0-SNAPSHOT";
+    mockSearchRepositoryArtifacts.mockResolvedValue({
+      data: { items: [] },
+    } as never);
+    render(
+      <PreferencesProvider>
+        <RepositoryArtifactsTab
+          repo={{ ...repository, format: "maven", type: "hosted" }}
+          canWrite
+          artifactTarget={coordinate}
+          buildTarget={2}
+          assetTarget="com/acme/widget/2.0-SNAPSHOT/widget-2.0-20260907.010203-2.jar"
+        />
+      </PreferencesProvider>,
+    );
+    await waitFor(() =>
+      expect(mockSearchRepositoryArtifacts).toHaveBeenCalledWith({
+        path: { repositoryId: repository.id },
+        query: { q: coordinate, pageSize: 50, pageToken: undefined },
+      }),
+    );
+    expect(screen.getByPlaceholderText("搜索 GAV 坐标…")).toHaveValue(
+      coordinate,
+    );
+  });
+
   it("switches between the existing list and the format-aware directory", async () => {
     const user = userEvent.setup();
     const rawRepository: Repository = {
@@ -269,4 +296,46 @@ describe("RepositoryArtifactsTab Raw browse", () => {
       },
     });
   });
+});
+
+it("opens the directory for Raw Proxy and keeps cached assets read-only", async () => {
+  const user = userEvent.setup();
+  const proxy: Repository = { ...repository, name: "raw-proxy", format: "raw" };
+  const asset = {
+    coordinate: "downloads/readme.txt",
+    digest: `sha256:${"a".repeat(64)}`,
+    size: 12,
+  };
+  mockSearchRepositoryArtifacts.mockResolvedValue({
+    data: { items: [asset] },
+  } as never);
+  mockBrowseRepository.mockResolvedValue({
+    data: {
+      items: [
+        {
+          ...asset,
+          id: "asset",
+          kind: "asset",
+          name: "readme.txt",
+          hasChildren: false,
+        },
+      ],
+    },
+  } as never);
+  render(
+    <PreferencesProvider>
+      <RepositoryArtifactsTab
+        repo={proxy}
+        canWrite
+        artifactTarget={asset.coordinate}
+      />
+    </PreferencesProvider>,
+  );
+  await screen.findByDisplayValue(asset.coordinate);
+  expect(
+    screen.queryByRole("button", { name: "删除文件" }),
+  ).not.toBeInTheDocument();
+  await user.click(screen.getByText("目录"));
+  expect(await screen.findByText("readme.txt")).toBeInTheDocument();
+  expect(screen.getByText("只显示已缓存资产")).toBeInTheDocument();
 });

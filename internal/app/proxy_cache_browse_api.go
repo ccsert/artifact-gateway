@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -593,6 +594,8 @@ func mavenProxyCacheBrowseItems(entries []CacheEntry, query, groupBy, assetFilte
 	return items
 }
 
+var proxySnapshotSuffix = regexp.MustCompile(`^[0-9]{8}\.[0-9]{6}-[1-9][0-9]*[.-]`)
+
 func parseMavenCacheCoordinate(path string) (mavenCacheCoordinate, bool) {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) < 4 {
@@ -602,7 +605,13 @@ func parseMavenCacheCoordinate(path string) (mavenCacheCoordinate, bool) {
 	version := parts[len(parts)-2]
 	artifactID := parts[len(parts)-3]
 	groupParts := parts[:len(parts)-3]
-	if len(groupParts) == 0 || !strings.HasPrefix(fileName, artifactID+"-"+version) {
+	prefix := artifactID + "-" + version
+	valid := strings.HasPrefix(fileName, prefix+".") || strings.HasPrefix(fileName, prefix+"-")
+	if strings.HasSuffix(version, "-SNAPSHOT") {
+		timestampPrefix := artifactID + "-" + strings.TrimSuffix(version, "SNAPSHOT")
+		valid = valid || (strings.HasPrefix(fileName, timestampPrefix) && proxySnapshotSuffix.MatchString(strings.TrimPrefix(fileName, timestampPrefix)))
+	}
+	if len(groupParts) == 0 || !valid {
 		return mavenCacheCoordinate{}, false
 	}
 	return mavenCacheCoordinate{GroupID: strings.Join(groupParts, "."), ArtifactID: artifactID, Version: version, FileName: fileName}, true

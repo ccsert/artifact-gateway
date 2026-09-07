@@ -2166,6 +2166,24 @@ BrowseNode:
     createdAt:
       type: string
       format: date-time
+    cachedAt:
+      type: string
+      format: date-time
+      description: Last update of the live verified cache index, for Proxy assets only.
+    buildNumber:
+      type: integer
+      minimum: 1
+      description: Exact Maven SNAPSHOT build; Proxy nodes additionally pin the timestamp in their opaque ID.
+    sourceRepositoryId:
+      type: string
+      format: uuid
+      description: Repository owning this publication or cache record.
+    sourceRepositoryName:
+      type: string
+    cacheState:
+      type: string
+      enum: [cached]
+      description: Present only for a Proxy asset backed by a live positive cache index. This is not a lifecycle Artifact Identity.
 BrowseNodePage:
   type: object
   additionalProperties: false

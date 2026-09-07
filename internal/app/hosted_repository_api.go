@@ -95,14 +95,14 @@ type artifactSearchPageCursor struct {
 
 type repositoryBrowseNodeCursor struct {
 	Endpoint, RepositoryID, Format, Principal, Kind string
-	Namespace, Component, Version, Path             string
+	Namespace, Component, Version, Path, Revision   string
 	BuildNumber                                     int
 	ExpiresAt                                       int64
 }
 
 type repositoryBrowsePageCursor struct {
-	Endpoint, RepositoryID, Format, Principal, Parent, After string
-	ExpiresAt                                                int64
+	Endpoint, RepositoryID, Format, Principal, Parent, After, Revision string
+	ExpiresAt                                                          int64
 }
 
 type artifactSearchPosition struct {

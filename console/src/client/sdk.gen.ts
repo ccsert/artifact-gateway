@@ -1468,7 +1468,7 @@ export const searchRepositoryArtifacts = <ThrowOnError extends boolean = false>(
 /**
  * List direct children in a format-aware Repository browse tree
  *
- * Returns server-issued navigation projections. Node IDs and page tokens are opaque and bound to the Repository, format, parent, ordering, authorization context, and expiry. Browse Nodes are not physical object-store directories or client-constructed Artifact Identities. The first supported adapters are hosted Maven and Raw; Proxy repositories continue to use the bounded cache-browse endpoint.
+ * Returns server-issued navigation projections. Node IDs and page tokens are opaque and bound to the Repository, format, parent, ordering, authorization context, and expiry. Browse Nodes are not physical object-store directories or client-constructed Artifact Identities. Hosted and Proxy Maven and Raw are supported. Proxy trees query only live positive PostgreSQL cache indexes belonging to the exact Repository and its current upstream; they do not discover upstream metadata or scan legacy S3 indexes. Timestamped Maven SNAPSHOT builds have separate version nodes whose IDs pin their exact files. Proxy node IDs and page tokens also bind the Repository configuration revision.
  */
 export const browseRepository = <ThrowOnError extends boolean = false>(options: Options<BrowseRepositoryData, ThrowOnError>): RequestResult<BrowseRepositoryResponses, BrowseRepositoryErrors, ThrowOnError> => (options.client ?? client).get<BrowseRepositoryResponses, BrowseRepositoryErrors, ThrowOnError>({
     security: [{
