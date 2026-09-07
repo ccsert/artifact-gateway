@@ -43,6 +43,13 @@ Progress update 2026-07-31:
   deletion, and selected Conan package revision tombstones.
 - Group capacity reports member Repository contributions and never represents a
   Group as owning Artifact or cache bytes.
+- The administrator-only Group resolution inspector now uses the protocol
+  resolver's Hosted-first candidate order and shows configured positions
+  separately. It does not query artifacts or upstreams, or decide reader access.
+  Raw Groups fall through between Proxy members on confirmed misses ([#24](https://github.com/ccsert/artifact-gateway/issues/24)).
+  Maven multi-Proxy fallback and aggregate negative-cache scope remain tracked
+  in [#28](https://github.com/ccsert/artifact-gateway/issues/28); per-artifact
+  Group directory provenance remains tracked in [#25](https://github.com/ccsert/artifact-gateway/issues/25).
 - Anonymous read decisions are recorded with the anonymous actor and bounded
   authorization source/reason values across protocol and management browse paths.
 

@@ -11,6 +11,7 @@ their meaning.
 
 ## Unreleased
 
+- Raw Groups now continue to later Proxy members after a 404, 410, or member-scoped negative-cache hit, while preserving terminal authorization, upstream, and checksum errors. Administrators can inspect the server's Hosted-first candidate order in the Groups Console, separately from configured positions and per-artifact resolution results.
 - Added PostgreSQL-backed lazy directory browsing for Maven and Raw Proxy caches, with repository/upstream isolation, live cache evidence, exact timestamped SNAPSHOT nodes, and deep links that preserve asset paths and build numbers. Directory failures can be retried in place; Raw Proxy details no longer show Hosted deletion actions.
 - Added a semantic Console theme system with four built-in packages, neutral
   text selection, restrained accent usage, and a reduced-motion-safe radial

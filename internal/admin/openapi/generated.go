@@ -1108,6 +1108,39 @@ func (e GroupCapacityMemberType) Valid() bool {
 	}
 }
 
+// Defines values for GroupResolutionStrategy.
+const (
+	HostedFirst GroupResolutionStrategy = "hosted_first"
+)
+
+// Valid indicates whether the value is a known member of the GroupResolutionStrategy enum.
+func (e GroupResolutionStrategy) Valid() bool {
+	switch e {
+	case HostedFirst:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GroupResolutionMemberType.
+const (
+	GroupResolutionMemberTypeHosted GroupResolutionMemberType = "hosted"
+	GroupResolutionMemberTypeProxy  GroupResolutionMemberType = "proxy"
+)
+
+// Valid indicates whether the value is a known member of the GroupResolutionMemberType enum.
+func (e GroupResolutionMemberType) Valid() bool {
+	switch e {
+	case GroupResolutionMemberTypeHosted:
+		return true
+	case GroupResolutionMemberTypeProxy:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LifecycleJobKind.
 const (
 	LifecycleJobKindIntelligence LifecycleJobKind = "intelligence"
@@ -3319,6 +3352,31 @@ type GroupPage struct {
 	NextPageToken *string `json:"nextPageToken,omitempty"`
 }
 
+// GroupResolution defines model for GroupResolution.
+type GroupResolution struct {
+	ExcludedMemberCount int                     `json:"excludedMemberCount"`
+	Format              Format                  `json:"format"`
+	GroupId             openapi_types.UUID      `json:"groupId"`
+	GroupVersion        string                  `json:"groupVersion"`
+	Members             []GroupResolutionMember `json:"members"`
+	Strategy            GroupResolutionStrategy `json:"strategy"`
+}
+
+// GroupResolutionStrategy defines model for GroupResolution.Strategy.
+type GroupResolutionStrategy string
+
+// GroupResolutionMember defines model for GroupResolutionMember.
+type GroupResolutionMember struct {
+	ConfiguredPosition int                       `json:"configuredPosition"`
+	RepositoryId       openapi_types.UUID        `json:"repositoryId"`
+	RepositoryName     string                    `json:"repositoryName"`
+	ResolutionOrder    int                       `json:"resolutionOrder"`
+	Type               GroupResolutionMemberType `json:"type"`
+}
+
+// GroupResolutionMemberType defines model for GroupResolutionMember.Type.
+type GroupResolutionMemberType string
+
 // LifecycleJob defines model for LifecycleJob.
 type LifecycleJob struct {
 	Attempts        int                  `json:"attempts"`
@@ -5158,6 +5216,9 @@ type ServerInterface interface {
 
 	// (PUT /groups/{groupId}/members)
 	ReplaceGroupMembers(w http.ResponseWriter, r *http.Request, groupId GroupId, params ReplaceGroupMembersParams)
+	// GetGroupResolution Inspect the server-owned Group member candidate order
+	// (GET /groups/{groupId}/resolution)
+	GetGroupResolution(w http.ResponseWriter, r *http.Request, groupId GroupId)
 	// GetCurrentIdentity Explain the authenticated caller's identity and global role
 	// (GET /identity)
 	GetCurrentIdentity(w http.ResponseWriter, r *http.Request)
@@ -6910,6 +6971,32 @@ func (siw *ServerInterfaceWrapper) ReplaceGroupMembers(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceGroupMembers(w, r, groupId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetGroupResolution operation middleware
+func (siw *ServerInterfaceWrapper) GetGroupResolution(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", r.PathValue("groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetGroupResolution(w, r, groupId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11550,6 +11637,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/capacity", wrapper.GetGroupCapacity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/members", wrapper.ListGroupMembers)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/groups/{groupId}/members", wrapper.ReplaceGroupMembers)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/resolution", wrapper.GetGroupResolution)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/identity", wrapper.GetCurrentIdentity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/lifecycle-jobs", wrapper.ListLifecycleJobs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/publish-sessions/{sessionId}", wrapper.GetPublishSession)
@@ -13728,6 +13816,72 @@ func (response ReplaceGroupMembers412ApplicationProblemPlusJSONResponse) VisitRe
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGroupResolutionRequestObject struct {
+	GroupId GroupId `json:"groupId"`
+}
+
+type GetGroupResolutionResponseObject interface {
+	VisitGetGroupResolutionResponse(w http.ResponseWriter) error
+}
+
+type GetGroupResolution200JSONResponse GroupResolution
+
+func (response GetGroupResolution200JSONResponse) VisitGetGroupResolutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGroupResolution401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetGroupResolution401ApplicationProblemPlusJSONResponse) VisitGetGroupResolutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGroupResolution403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetGroupResolution403ApplicationProblemPlusJSONResponse) VisitGetGroupResolutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGroupResolution404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetGroupResolution404ApplicationProblemPlusJSONResponse) VisitGetGroupResolutionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -20484,6 +20638,9 @@ type StrictServerInterface interface {
 
 	// (PUT /groups/{groupId}/members)
 	ReplaceGroupMembers(ctx context.Context, request ReplaceGroupMembersRequestObject) (ReplaceGroupMembersResponseObject, error)
+	// GetGroupResolution Inspect the server-owned Group member candidate order
+	// (GET /groups/{groupId}/resolution)
+	GetGroupResolution(ctx context.Context, request GetGroupResolutionRequestObject) (GetGroupResolutionResponseObject, error)
 	// GetCurrentIdentity Explain the authenticated caller's identity and global role
 	// (GET /identity)
 	GetCurrentIdentity(ctx context.Context, request GetCurrentIdentityRequestObject) (GetCurrentIdentityResponseObject, error)
@@ -21964,6 +22121,32 @@ func (sh *strictHandler) ReplaceGroupMembers(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceGroupMembersResponseObject); ok {
 		if err := validResponse.VisitReplaceGroupMembersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetGroupResolution operation middleware
+func (sh *strictHandler) GetGroupResolution(w http.ResponseWriter, r *http.Request, groupId GroupId) {
+	var request GetGroupResolutionRequestObject
+
+	request.GroupId = groupId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetGroupResolution(ctx, request.(GetGroupResolutionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetGroupResolution")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetGroupResolutionResponseObject); ok {
+		if err := validResponse.VisitGetGroupResolutionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

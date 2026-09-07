@@ -4,6 +4,12 @@
 
 本文定义 Repository、Hosted、Proxy、Group 在 Console 中的一致体验。目标不是复制 Nexus，而是把 Artifact Gateway 已有的协议、身份、缓存、策略和生命周期语义变成操作员能理解和验证的界面。
 
+当前已提供仅管理员可用的分组解析顺序视图：复用协议解析器的 Hosted 优先候选顺序，
+单独展示配置位置，不查询制品或上游，也不判断读取者权限。Raw Group 在明确未命中后
+继续尝试后续 Proxy（[#24](https://github.com/ccsert/artifact-gateway/issues/24)）。
+Maven 多 Proxy 回退与聚合负缓存范围由 [#28](https://github.com/ccsert/artifact-gateway/issues/28)
+跟踪；逐制品的 Group 目录来源仍由 [#25](https://github.com/ccsert/artifact-gateway/issues/25) 跟踪。
+
 ## 目标
 
 - 从列表进入精确 Repository、Artifact、Version 与不可变 digest 深链接。

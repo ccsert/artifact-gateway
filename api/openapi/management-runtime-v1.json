@@ -3366,6 +3366,39 @@
         }
       }
     },
+    "/groups/{groupId}/resolution": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/GroupId"
+        }
+      ],
+      "get": {
+        "operationId": "getGroupResolution",
+        "summary": "Inspect the server-owned Group member candidate order",
+        "description": "Administrative configuration inspection. Uses the protocol resolver's Hosted-first order with configured positions within each type. Missing, inactive and mismatched repositories are excluded. No artifacts or upstreams are queried; this is not a per-artifact hit result or an authorization decision for a particular reader.",
+        "responses": {
+          "200": {
+            "description": "Current eligible member candidates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupResolution"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/publish-sessions": {
       "parameters": [
         {
@@ -10117,6 +10150,81 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/GroupCapacityMember"
+            }
+          }
+        }
+      },
+      "GroupResolutionMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repositoryId",
+          "repositoryName",
+          "type",
+          "configuredPosition",
+          "resolutionOrder"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryName": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hosted",
+              "proxy"
+            ]
+          },
+          "configuredPosition": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "resolutionOrder": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "GroupResolution": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "groupId",
+          "groupVersion",
+          "format",
+          "strategy",
+          "members",
+          "excludedMemberCount"
+        ],
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupVersion": {
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "hosted_first"
+            ]
+          },
+          "excludedMemberCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupResolutionMember"
             }
           }
         }

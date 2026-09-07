@@ -1931,6 +1931,29 @@ RepositoryCapabilities:
     publicationScanning:
       type: boolean
       description: True when new publications in this repository can automatically enqueue scanner jobs.
+GroupResolution:
+  type: object
+  additionalProperties: false
+  required: [groupId, groupVersion, format, strategy, members, excludedMemberCount]
+  properties:
+    groupId: {type: string, format: uuid}
+    groupVersion: {type: string}
+    format: {"$ref": "#/Format"}
+    strategy: {type: string, enum: [hosted_first]}
+    excludedMemberCount: {type: integer, minimum: 0}
+    members:
+      type: array
+      items: {"$ref": "#/GroupResolutionMember"}
+GroupResolutionMember:
+  type: object
+  additionalProperties: false
+  required: [repositoryId, repositoryName, type, configuredPosition, resolutionOrder]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    repositoryName: {type: string}
+    type: {type: string, enum: [hosted, proxy]}
+    configuredPosition: {type: integer, minimum: 0}
+    resolutionOrder: {type: integer, minimum: 1}
 GroupCapacity:
   type: object
   required: [groupId, format, members]
