@@ -303,8 +303,11 @@ func (h MavenHandler) serveResolvedMembers(w http.ResponseWriter, request *http.
 					h.Cache.RecordUpstreamFailure(request.Context(), member.Endpoint)
 					continue
 				}
-				content := CachedMavenContent{Body: body, ContentType: response.Header.Get("Content-Type"), ETag: response.Header.Get("ETag"), LastModified: response.Header.Get("Last-Modified"), Member: member.Name, Endpoint: member.Endpoint, Repository: groupName}
-				if err := h.Cache.Store(request.Context(), cacheKey, artifactPath, content); err != nil {
+				content := CachedMavenContent{Body: body, ContentType: response.Header.Get("Content-Type"), ETag: response.Header.Get("ETag"), LastModified: response.Header.Get("Last-Modified"), Member: member.Name, Endpoint: member.Endpoint, Repository: groupName, ResolutionScope: h.mavenResolutionScope(members)}
+				// A failed or denied earlier candidate is not evidence that this
+				// member owns the aggregate result. Serve the fallback without
+				// pinning it in the Group cache after the earlier member recovers.
+				if err := h.storeMavenResolution(request.Context(), cacheKey, artifactPath, content, !hadFailure && !hadProxyDenied); err != nil {
 					if errors.Is(err, ErrCacheQuotaExceeded) {
 						h.Metrics.cacheQuotaDenied.Add(1)
 						if err := h.audit(request.Context(), groupName, artifactPath, member.Name, actor, repository.AuditResolved); err != nil {
@@ -361,7 +364,7 @@ func (h MavenHandler) serveResolvedMembers(w http.ResponseWriter, request *http.
 		return
 	}
 	if h.Cache != nil && notFoundProxy.Name != "" && !hadFailure && request.Method == http.MethodGet {
-		_ = h.Cache.StoreNegativeForRepositoryPath(request.Context(), cacheKey, groupName, artifactPath, notFoundProxy)
+		_ = h.Cache.StoreNegativeForResolution(request.Context(), cacheKey, groupName, artifactPath, notFoundProxy, h.mavenResolutionScope(members))
 	}
 	http.NotFound(w, request)
 }
@@ -449,7 +452,15 @@ func (h MavenHandler) serveMavenCache(w http.ResponseWriter, request *http.Reque
 }
 
 func (h MavenHandler) cacheSourceAllowed(content CachedMavenContent, members []repository.Member) bool {
-	return cacheSourceAllowed(content.Member, content.Endpoint, members, h.Cache.ProxyAllowed)
+	if !cacheSourceAllowed(content.Member, content.Endpoint, members, h.Cache.ProxyAllowed) {
+		return false
+	}
+	if content.ResolutionScope == "" {
+		// A legacy source proves a single candidate, never the absence or
+		// precedence of other candidates in a Group.
+		return len(members) == 1
+	}
+	return content.ResolutionScope == h.mavenResolutionScope(members)
 }
 
 func (h MavenHandler) fetchMavenWithRetry(ctx context.Context, method string, member repository.Member, artifactPath string, headers http.Header) (*http.Response, error) {

@@ -11,6 +11,7 @@ their meaning.
 
 ## Unreleased
 
+- Maven Groups now try every eligible Proxy after Hosted misses and bind positive/negative cache results to the ordered authorized candidates and upstream settings. Member, permission, allowlist, or egress changes revalidate the result; legacy multi-member entries are refreshed, and a fallback after an upstream failure is not cached as a complete Group resolution.
 - Isolated integration test, migration-check, and cleanup commands from the development Compose project, preventing a checkout `.env` or exported project name from redirecting test cleanup to running local services.
 - Raw Groups now continue to later Proxy members after a 404, 410, or member-scoped negative-cache hit, while preserving terminal authorization, upstream, and checksum errors. Administrators can inspect the server's Hosted-first candidate order in the Groups Console, separately from configured positions and per-artifact resolution results.
 - Added PostgreSQL-backed lazy directory browsing for Maven and Raw Proxy caches, with repository/upstream isolation, live cache evidence, exact timestamped SNAPSHOT nodes, and deep links that preserve asset paths and build numbers. Directory failures can be retried in place; Raw Proxy details no longer show Hosted deletion actions.

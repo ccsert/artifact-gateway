@@ -67,6 +67,7 @@ func (h v2GroupMavenHandler) serve(w http.ResponseWriter, r *http.Request, resol
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+	var proxies []repository.Member
 	for _, member := range members {
 		if member.Type == repository.MemberHosted {
 			repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
@@ -78,7 +79,10 @@ func (h v2GroupMavenHandler) serve(w http.ResponseWriter, r *http.Request, resol
 			}
 			continue
 		}
-		h.proxy.serveResolvedMembers(w, r, group.Name, assetPath, principal.Actor, []repository.Member{member})
+		proxies = append(proxies, member)
+	}
+	if len(proxies) > 0 {
+		h.proxy.serveResolvedMembers(w, r, group.Name, assetPath, principal.Actor, proxies)
 		return
 	}
 	resolver.auditResolution(r.Context(), group, repository.FormatMaven, assetPath, strings.ToLower(r.Method), principal.Actor, repository.AuditNotFound, http.StatusNotFound)
