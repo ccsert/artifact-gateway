@@ -99,17 +99,33 @@ for (const width of [1440, 390]) {
     });
     const rows = dialog.getByTestId("resolution-member");
     await expect(rows).toHaveCount(12);
-    await expect(dialog).toHaveCSS("transform", "none");
     await expect(rows.first().getByRole("link")).toHaveText(
       members[0].repositoryName,
     );
     await expect(rows.first().getByText("配置位置 7")).toBeVisible();
     const body = dialog.locator(".ag-group-resolution");
-    const explanation = await body.locator(":scope > p").boundingBox();
-    const list = await body.getByRole("list").boundingBox();
-    const gap = list!.y - explanation!.y - explanation!.height;
-    expect(gap).toBeGreaterThanOrEqual(16);
-    expect(gap).toBeLessThanOrEqual(18);
+    // Read both rectangles in one browser frame. A transform can be "none"
+    // before rc-motion starts its enter phase, so a one-off CSS check can race
+    // the modal's scale animation on a busy CI runner.
+    await expect(async () => {
+      const geometry = await body.evaluate((element) => {
+        const dialogElement = element.closest('[role="dialog"]')!;
+        const style = getComputedStyle(dialogElement);
+        const explanation = element.querySelector(":scope > p")!;
+        const list = element.querySelector("ol")!;
+        return {
+          gap:
+            list.getBoundingClientRect().top -
+            explanation.getBoundingClientRect().bottom,
+          transform: style.transform,
+          opacity: style.opacity,
+        };
+      });
+      expect(geometry.transform).toBe("none");
+      expect(geometry.opacity).toBe("1");
+      expect(geometry.gap).toBeGreaterThanOrEqual(16);
+      expect(geometry.gap).toBeLessThanOrEqual(18);
+    }).toPass();
     const rect = await dialog.boundingBox();
     expect(rect!.x).toBeGreaterThanOrEqual(0);
     expect(rect!.x + rect!.width).toBeLessThanOrEqual(width);
