@@ -24,6 +24,36 @@ explicit Hosted and Proxy Repositories, then switch clients after validation.
 
 ## Boundaries
 
+### Maven resolution and cache compatibility
+
+Maven V2 Groups try all Hosted members first, then the eligible Proxy members
+in configured order. A Proxy 404 continues to the next member for GET and HEAD.
+The existing Maven retry and failure policy still applies: an upstream failure
+can fall back to a later member, but a request with unresolved failures does not
+become a cached Group-wide 404.
+
+New positive and negative entries carry a versioned resolution-scope digest for
+the ordered authorized candidates, repository bindings, endpoints, allowlists,
+anonymous eligibility, and egress configuration. Every cache read still checks
+the source member. A changed scope invalidates the index and retries resolution;
+the underlying immutable objects follow normal reclamation. A successful
+fallback after an earlier failure or proxy denial is served without caching an
+aggregate result, so recovery can restore the earlier member's precedence.
+
+Older entries without a scope remain usable for a single authorized Proxy with
+a matching allowed source. They cannot prove a multi-member Group result and
+are refreshed on the first read. PostgreSQL JSON indexes preserve the scope
+without a schema migration; cache keys and management invalidation stay stable.
+Readers with identical eligible candidates can share the result, while changed
+grants or anonymous eligibility trigger resolution against the new candidates.
+
+`make native-maven-e2e` verifies Maven release and Gradle SNAPSHOT reads through
+a two-Proxy Group whose first upstream returns 404, including metadata and
+checksum sidecars. The HTTP and PostgreSQL suites cover cache compatibility,
+candidate changes, Range/conditional reads, failure recovery, and grant isolation.
+
+### Ownership and migration
+
 - A V2 Group is an ordered view and owns no Artifact or cache bytes.
 - Capacity is reported as member contributions, not Group-owned storage.
 - Repository grants apply to explicitly bound V2 members. Unbound Legacy

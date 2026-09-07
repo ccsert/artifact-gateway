@@ -7,8 +7,8 @@
 当前已提供仅管理员可用的分组解析顺序视图：复用协议解析器的 Hosted 优先候选顺序，
 单独展示配置位置，不查询制品或上游，也不判断读取者权限。Raw Group 在明确未命中后
 继续尝试后续 Proxy（[#24](https://github.com/ccsert/artifact-gateway/issues/24)）。
-Maven 多 Proxy 回退与聚合负缓存范围由 [#28](https://github.com/ccsert/artifact-gateway/issues/28)
-跟踪；逐制品的 Group 目录来源仍由 [#25](https://github.com/ccsert/artifact-gateway/issues/25) 跟踪。
+Maven 多 Proxy 回退与正负缓存解析范围校验已在 [#28](https://github.com/ccsert/artifact-gateway/issues/28)
+实现；逐制品的 Group 目录来源仍由 [#25](https://github.com/ccsert/artifact-gateway/issues/25) 跟踪。
 
 ## 目标
 

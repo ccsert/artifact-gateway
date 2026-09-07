@@ -24,18 +24,19 @@ const defaultMavenNegativeCacheTTL = 10 * time.Minute
 const defaultMavenProxyBreakerTTL = 30 * time.Second
 
 type cachedMavenIndex struct {
-	Object       string    `json:"object,omitempty"`
-	Digest       string    `json:"digest,omitempty"`
-	Repository   string    `json:"repository,omitempty"`
-	Path         string    `json:"path,omitempty"`
-	Size         int64     `json:"size,omitempty"`
-	ContentType  string    `json:"content_type,omitempty"`
-	ETag         string    `json:"etag,omitempty"`
-	LastModified string    `json:"last_modified,omitempty"`
-	Member       string    `json:"member,omitempty"`
-	Endpoint     string    `json:"endpoint,omitempty"`
-	ExpiresAt    time.Time `json:"expires_at"`
-	Negative     bool      `json:"negative,omitempty"`
+	Object          string    `json:"object,omitempty"`
+	Digest          string    `json:"digest,omitempty"`
+	Repository      string    `json:"repository,omitempty"`
+	Path            string    `json:"path,omitempty"`
+	Size            int64     `json:"size,omitempty"`
+	ContentType     string    `json:"content_type,omitempty"`
+	ETag            string    `json:"etag,omitempty"`
+	LastModified    string    `json:"last_modified,omitempty"`
+	Member          string    `json:"member,omitempty"`
+	Endpoint        string    `json:"endpoint,omitempty"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	Negative        bool      `json:"negative,omitempty"`
+	ResolutionScope string    `json:"resolution_scope,omitempty"`
 }
 
 type CachedContent struct {
@@ -46,6 +47,9 @@ type CachedContent struct {
 	Member       string
 	Endpoint     string
 	Repository   string
+	// ResolutionScope binds an aggregate hit or miss to the ordered eligible
+	// candidates. Empty identifies a pre-scope or explicitly unscoped entry.
+	ResolutionScope string
 }
 
 // Cache stores complete upstream responses. Maven's metadata has a
@@ -128,7 +132,7 @@ func (c *Cache) Load(ctx context.Context, key string) (CachedContent, error) {
 		return CachedContent{}, ErrCacheMiss
 	}
 	if index.Negative {
-		return CachedContent{Member: index.Member, Endpoint: index.Endpoint}, ErrNegativeCache
+		return CachedContent{Member: index.Member, Endpoint: index.Endpoint, ResolutionScope: index.ResolutionScope}, ErrNegativeCache
 	}
 	body, err := c.store.Get(ctx, index.Object)
 	if err != nil {
@@ -141,7 +145,7 @@ func (c *Cache) Load(ctx context.Context, key string) (CachedContent, error) {
 		_ = c.store.Delete(ctx, index.Object)
 		return CachedContent{}, ErrCacheMiss
 	}
-	return CachedContent{Body: body, ContentType: index.ContentType, ETag: index.ETag, LastModified: index.LastModified, Member: index.Member, Endpoint: index.Endpoint}, nil
+	return CachedContent{Body: body, ContentType: index.ContentType, ETag: index.ETag, LastModified: index.LastModified, Member: index.Member, Endpoint: index.Endpoint, ResolutionScope: index.ResolutionScope}, nil
 }
 
 func (c *Cache) Store(ctx context.Context, key, artifactPath string, content CachedContent) error {
@@ -161,7 +165,7 @@ func (c *Cache) storeAdmitted(ctx context.Context, key, artifactPath string, con
 	if isMavenMetadata(artifactPath) {
 		ttl = c.metadataTTL
 	}
-	encoded, err := json.Marshal(cachedMavenIndex{Object: object, Digest: digest, Repository: content.Repository, Path: artifactPath, Size: int64(len(content.Body)), ContentType: content.ContentType, ETag: content.ETag, LastModified: content.LastModified, Member: content.Member, Endpoint: content.Endpoint, ExpiresAt: time.Now().UTC().Add(ttl)})
+	encoded, err := json.Marshal(cachedMavenIndex{Object: object, Digest: digest, Repository: content.Repository, Path: artifactPath, Size: int64(len(content.Body)), ContentType: content.ContentType, ETag: content.ETag, LastModified: content.LastModified, Member: content.Member, Endpoint: content.Endpoint, ResolutionScope: content.ResolutionScope, ExpiresAt: time.Now().UTC().Add(ttl)})
 	if err != nil {
 		return err
 	}
@@ -177,7 +181,11 @@ func (c *Cache) StoreNegativeForRepository(ctx context.Context, key, repositoryN
 }
 
 func (c *Cache) StoreNegativeForRepositoryPath(ctx context.Context, key, repositoryName, artifactPath string, member repository.Member) error {
-	encoded, err := json.Marshal(cachedMavenIndex{Negative: true, Repository: repositoryName, Path: artifactPath, Member: member.Name, Endpoint: member.Endpoint, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})
+	return c.StoreNegativeForResolution(ctx, key, repositoryName, artifactPath, member, "")
+}
+
+func (c *Cache) StoreNegativeForResolution(ctx context.Context, key, repositoryName, artifactPath string, member repository.Member, scope string) error {
+	encoded, err := json.Marshal(cachedMavenIndex{Negative: true, Repository: repositoryName, Path: artifactPath, Member: member.Name, Endpoint: member.Endpoint, ResolutionScope: scope, ExpiresAt: time.Now().UTC().Add(c.negativeTTL)})
 	if err != nil {
 		return err
 	}

@@ -151,6 +151,7 @@ func (r v2GroupResolver) resolveMembers(ctx context.Context, group repository.Ho
 			Position:     member.Position,
 			RepositoryID: repo.ID,
 			AllowedHosts: repo.AllowedHosts,
+			EgressProxy:  repo.EgressProxy,
 			Anonymous:    repo.AnonymousRead,
 		}
 		switch repo.Type {
