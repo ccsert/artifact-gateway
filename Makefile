@@ -100,6 +100,7 @@ down:
 	@docker compose --env-file .env -f compose.yml down
 
 test:
+	@bash ./scripts/readiness-image-test.sh
 	@./scripts/integration-isolation-test.sh
 	@./scripts/local-dev-test.sh
 	@./scripts/rustfs-only-contract-test.sh

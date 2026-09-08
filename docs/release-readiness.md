@@ -56,6 +56,27 @@ their output, Git revision, operator, UTC start/end, and any deviation in the
 [release record](release-record-template.md). Do not include bearer tokens,
 storage credentials, or unredacted upstream URLs in that record.
 
+## Pinning the Rehearsal Image
+
+`upgrade-readiness` defaults to the previous formal release, `v0.1.0`.
+Set `GATEWAY_UPGRADE_FROM_REF` to its exact commit for a recorded run.
+Source rehearsals build and label both revisions; they do not verify registry
+distribution. To execute an existing candidate, set `GATEWAY_READINESS_IMAGE`,
+`GATEWAY_READINESS_REF`, and `GATEWAY_READINESS_VERSION`; optionally set
+`GATEWAY_UPGRADE_FROM_IMAGE` for the baseline. These image options also work with
+`backup-restore-readiness` (only the candidate is used there).
+
+Image inputs must be registry references ending in `@sha256:<64 lowercase hex>`
+or an already loaded local `sha256:<64 lowercase hex>` image ID. Mutable tags are
+rejected. Before starting the rehearsal, the helper checks image revision/version
+labels and the actual `gateway version` output. The candidate's mounted migration,
+theme, Compose, and startup files must match `GATEWAY_READINESS_REF`.
+
+A local container assembled from checksum-verified distribution binaries is a
+distribution archive rehearsal, not proof of access to the published registry
+image. Record that distinction and retain the archive checksum, local image ID,
+and any registry access failure separately.
+
 ## Controlled Deployment Checklist
 
 - [ ] `make test`, `make integration-test`, `make native-oci-e2e`,
@@ -122,7 +143,7 @@ storage credentials, or unredacted upstream URLs in that record.
       `GATEWAY_PERFORMANCE_REQUESTS`, `GATEWAY_PERFORMANCE_CONCURRENCY`,
       `GATEWAY_PERFORMANCE_P95_MS`, and `GATEWAY_PERFORMANCE_MAX_ERROR_PERCENT`.
 - [ ] `make upgrade-readiness` deploys `GATEWAY_UPGRADE_FROM_REF` (default
-      `324aba95`) into fresh isolated volumes, migrates it to the current
+      `v0.1.0`) into fresh isolated volumes, migrates it to the current
       checkout while retaining the same PostgreSQL and RustFS state, verifies
       persisted Maven object bytes and OCI/Maven Groups, and uses the real Go
       client to resolve a base Go Proxy module after its upstream is made
@@ -204,7 +225,7 @@ storage credentials, or unredacted upstream URLs in that record.
 | Backup target | PostgreSQL metadata plus RustFS object data; 24-hour RPO, 30-minute RTO drill target |
 | OCI performance gate | 50 cached manifest reads, concurrency 10, zero errors, p95 <= 1000 ms |
 | Cache operations gate | Resolver denied; administrator collection increases successful-run count |
-| Upgrade gate | Previous RustFS revision `324aba95`, isolated object-store volumes, current migration, protocol regression, binary rollback |
+| Upgrade gate | Previous RustFS revision `v0.1.0`, isolated object-store volumes, current migration, protocol regression, binary rollback |
 
 ## Architecture
 

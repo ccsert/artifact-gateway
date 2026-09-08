@@ -4,10 +4,26 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 
-base_ref=${GATEWAY_UPGRADE_FROM_REF:-324aba95}
+base_ref=${GATEWAY_UPGRADE_FROM_REF:-v0.1.0}
+current_ref=${GATEWAY_READINESS_REF:-HEAD}
+base_image=${GATEWAY_UPGRADE_FROM_IMAGE:-}
+candidate_image=${GATEWAY_READINESS_IMAGE:-}
+# shellcheck source=readiness-image.sh
+source "$repo_root/scripts/readiness-image.sh"
+[[ -z "$base_image" ]] || readiness_validate_image_ref "$base_image"
+[[ -z "$candidate_image" ]] || readiness_validate_image_ref "$candidate_image"
 environment_file=${GATEWAY_ENV_FILE:-.env}
 test -f "$environment_file" || { printf '%s\n' 'Upgrade readiness requires a configured environment file.' >&2; exit 1; }
-git cat-file -e "$base_ref^{commit}"
+base_revision=$(git rev-parse "$base_ref^{commit}")
+current_revision=$(git rev-parse "$current_ref^{commit}")
+base_version=$(git show "$base_revision:VERSION" | tr -d '[:space:]')
+current_version=${GATEWAY_READINESS_VERSION:-$(tr -d '[:space:]' < VERSION)-main.${current_revision:0:12}}
+# These checkout files are mounted alongside a pinned candidate image.
+if [[ -n "$candidate_image" ]]; then
+  git diff --exit-code "$current_revision" -- migrations themes compose.yml scripts/run-migrations.sh scripts/run-rustfs.sh >/dev/null || {
+    printf '%s\n' 'Mounted readiness files differ from the candidate revision.' >&2; exit 1;
+  }
+fi
 
 free_port() { python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'; }
 project="artifact-gateway-upgrade-${RANDOM}-${RANDOM}"
@@ -130,9 +146,19 @@ enable_anonymous_access() {
 build_gateway() {
   local label=$1
   shift
-  local attempt
+  local attempt image revision version
+  if [[ "$label" == base ]]; then
+    image=$base_image; revision=$base_revision; version=$base_version
+  else
+    image=$candidate_image; revision=$current_revision; version=$current_version
+  fi
+  if [[ -n "$image" ]]; then
+    readiness_load_image "$image" "$revision" "$version" "$gateway_image"
+    return
+  fi
   for attempt in 1 2 3; do
-    if COMPOSE_PROJECT_NAME="$project" "$@" build gateway; then
+    if COMPOSE_PROJECT_NAME="$project" "$@" build --build-arg "VERSION=$version" --build-arg "REVISION=$revision" gateway; then
+      printf 'Built readiness source image: revision=%s version=%s\n' "$revision" "$version"
       return 0
     fi
     if [[ "$attempt" -eq 3 ]]; then

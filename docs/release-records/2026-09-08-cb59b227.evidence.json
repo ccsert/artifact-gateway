@@ -1,0 +1,629 @@
+{
+  "candidate": {
+    "revision": "cb59b227748744de705694ff50a257414a6eb199",
+    "version": "0.1.0-main.cb59b2277487",
+    "mainlineRun": 34181463543
+  },
+  "baseline": {
+    "revision": "cf4635f89d1038b16a491f42393f3ba7997e38a9",
+    "version": "0.1.0",
+    "tag": "v0.1.0",
+    "archive": {
+      "name": "artifact-gateway_0.1.0_linux_arm64.tar.gz",
+      "sha256": "948aa0ca7789088c7628101641cbe93da484032321f40eb55f70191f61185fc1"
+    }
+  },
+  "migrationCount": 116,
+  "migrations": [
+    {
+      "path": "migrations/000001_initial.sql",
+      "sha256": "e8999fa619d02d103459c2efc9f4e9e6601337c7a65bd3bb0b6dc2f48748745e"
+    },
+    {
+      "path": "migrations/000002_oci_groups.sql",
+      "sha256": "8672e6864751eff4be3d52422666f4bc7c6862aece5e40c7d738f39103339cf9"
+    },
+    {
+      "path": "migrations/000003_maven_groups.sql",
+      "sha256": "491b1422b01b8b08000d0808116877dc5261da58c13279ddd2d0d8e5ece8b2b4"
+    },
+    {
+      "path": "migrations/000004_conan_groups.sql",
+      "sha256": "ec52355f9acf038ad69e8210ee290608c98433fa37f3823fc38d9a6639e34272"
+    },
+    {
+      "path": "migrations/000005_anonymous_read_policy.sql",
+      "sha256": "a3c1e6ee482ef405e005184118ff2286793ae2b424ef0fa439d58f5e272a9e2c"
+    },
+    {
+      "path": "migrations/000006_proxy_allowed_hosts.sql",
+      "sha256": "2849d886510bb446cebfdeb2024684225a4dee841061de19cb5e95684e224579"
+    },
+    {
+      "path": "migrations/000007_v2_audit_fields.sql",
+      "sha256": "a57f294fdec6b10024e350f362fa3683bde296fe49c6ed70a5aa3f5d2acc1671"
+    },
+    {
+      "path": "migrations/000008_raw_groups.sql",
+      "sha256": "65cabda046e032e9739cf52a53c819d51d1be3bd4df7fb7dc61d170b9f509b2e"
+    },
+    {
+      "path": "migrations/000009_raw_group_cache_contract.sql",
+      "sha256": "caf0e4477683410cc4dd626b391d637dc9f8e4548e767b543691cbd4df5cc3f4"
+    },
+    {
+      "path": "migrations/000010_raw_audit_correlation.sql",
+      "sha256": "a6f8910441e461aeeea6ee0cc693f5cbeee188b682e866b2ba08a81c497e895c"
+    },
+    {
+      "path": "migrations/000011_conan_cache_contract.sql",
+      "sha256": "20e7d5e747036fc920ce0e49cdc654617739fa362820144915803d355f198bf0"
+    },
+    {
+      "path": "migrations/000012_hosted_repositories.sql",
+      "sha256": "af2afb6ab971adad161205afc098af373e301f763979c3938c55a5e79535d0b8"
+    },
+    {
+      "path": "migrations/000013_hosted_repository_idempotency.sql",
+      "sha256": "d143fa87045b3a295dcad0828c13ebed4877588c21756ee9822f23b1fe9e2849"
+    },
+    {
+      "path": "migrations/000014_native_maven_hosted.sql",
+      "sha256": "d75678a490ca1883dbffd93c75f810bbad574a26cb2e4577d4a4f9c8785881a2"
+    },
+    {
+      "path": "migrations/000015_native_maven_idempotency.sql",
+      "sha256": "3447f0e485f390565322080c628de953198aee3b6da9f54831b1de4bbe896b1f"
+    },
+    {
+      "path": "migrations/000016_native_maven_object_references.sql",
+      "sha256": "f25eb1bddcf2e58c43ebb5564bcc28d488090fe2ce523d6e33fd572521deebfc"
+    },
+    {
+      "path": "migrations/000017_native_maven_open_coordinate.sql",
+      "sha256": "8d01207c46717df44d80f6cd408d0e60f4db07093566dd2769f091f51bc2764c"
+    },
+    {
+      "path": "migrations/000018_native_maven_publisher_sessions.sql",
+      "sha256": "45678bc9b8c28e7c564713aa0fc5e9129bcea243e3103a68268e5cc8bf6c96cc"
+    },
+    {
+      "path": "migrations/000019_native_maven_object_tombstones.sql",
+      "sha256": "5c53c5e289ef713ed5303db7b1487708a8710848610bcef4ad416c6942f11b48"
+    },
+    {
+      "path": "migrations/000020_native_maven_object_claim_tokens.sql",
+      "sha256": "dd15ec8920466386296832711fdf7f52316efa13f9d7a237ea8e7de084b92fa0"
+    },
+    {
+      "path": "migrations/000021_postgres_cache_coordination.sql",
+      "sha256": "f17c796aad0214279666b79b98cfe3663f3c222a5e4138424da36bf246a00ff2"
+    },
+    {
+      "path": "migrations/000022_cache_tasks.sql",
+      "sha256": "5acbf6dcbfb688d1890ece1f71c54c8450c2afdf38163661c501dd04a940e6ec"
+    },
+    {
+      "path": "migrations/000023_native_oci_hosted.sql",
+      "sha256": "0fa39600c12ef3dc1b759670dd414904f6102a4f7c17d3b0e260910e7d608bea"
+    },
+    {
+      "path": "migrations/000024_native_raw_hosted.sql",
+      "sha256": "6a244402bd50ddba039dfd57436930b02fa29fa74cae194d308a0edc4dc64599"
+    },
+    {
+      "path": "migrations/000025_native_oci_object_intents.sql",
+      "sha256": "f0608d899fd271a6a7a07f11f3441bddd37de390ee39cf5bdf731fcd57b17a8a"
+    },
+    {
+      "path": "migrations/000026_hosted_groups.sql",
+      "sha256": "8e44beb87e82c0bd44daa4d285314f0eb2113b082bf8cb17b88c352d468b4f3a"
+    },
+    {
+      "path": "migrations/000027_repository_grants.sql",
+      "sha256": "939458279ecb678e1cc7061cc8f94f26b6220daa564b124f1cf821ba1488e3a5"
+    },
+    {
+      "path": "migrations/000028_repository_retention_policies.sql",
+      "sha256": "4eb3b09f89b195c3519300fef279cff8ecfcb1a131e38eaf91424abbaaf71b87"
+    },
+    {
+      "path": "migrations/000029_conan_member_repositories.sql",
+      "sha256": "67c5b2e80d5199b76284f175c4b4faa158bde6f5ec7a3936bebe9bcd5203093d"
+    },
+    {
+      "path": "migrations/000030_repository_grant_audit.sql",
+      "sha256": "fbeab2b727495fd6ea157f0964b8d1a3826f2ea52f0fd2af96c2ac47469e21d5"
+    },
+    {
+      "path": "migrations/000031_group_member_repositories.sql",
+      "sha256": "f5a7ba75bd5921c9fab5151a6ae81ace5e93e4eaa4d5c50a32f138c677607a14"
+    },
+    {
+      "path": "migrations/000032_artifact_lifecycle.sql",
+      "sha256": "70a17b321dce7a097f2018f22486479c145298680c843f6df353944a3c7cd36b"
+    },
+    {
+      "path": "migrations/000033_lifecycle_jobs_repository_scope.sql",
+      "sha256": "23eb5ce605cbfa46a67cc566ca735a170782554143a1e3bd82bd2905e6159dfd"
+    },
+    {
+      "path": "migrations/000034_native_oci_object_intent_repository_scope.sql",
+      "sha256": "309e5c691237a5e87169ef7413c921acf7244ab67bc77f95403b757f5899084d"
+    },
+    {
+      "path": "migrations/000035_native_raw_object_repository_scope.sql",
+      "sha256": "dc0d44acce9e484bf1194a16df662bf9b104c457fa1af7d1009c6d1c1bb59b84"
+    },
+    {
+      "path": "migrations/000036_native_conan_lifecycle.sql",
+      "sha256": "eb729c4e9f1980478c2d0a86910b4b8d78e29f39d8f7f2a0d112974b0354b529"
+    },
+    {
+      "path": "migrations/000037_native_conan_publish_sessions.sql",
+      "sha256": "e63c17d99e89ace5ecbd2619e2f6954699c806a7b0b8c8bd5b48549e4c0e82e7"
+    },
+    {
+      "path": "migrations/000038_native_conan_object_collection.sql",
+      "sha256": "bd6f96da76a2b8dd37ad0fc6fdc69b0645a76138e0fd863d9e93fc349a16eebd"
+    },
+    {
+      "path": "migrations/000039_native_oci_referrers.sql",
+      "sha256": "5898e62e9fe94e0a27de6857685d76eb045e92d64773357d4ec8bab9a0c04df2"
+    },
+    {
+      "path": "migrations/000040_native_raw_uploads.sql",
+      "sha256": "4fe97d1d77193032db494c4dd0978f8732642e9f0f822decd4b339dbf06a643d"
+    },
+    {
+      "path": "migrations/000041_native_maven_coordinate_projection.sql",
+      "sha256": "9396abc0553b2d1d3371a7e2461313af0bcb4df42ce140dd673f0972ba27ee43"
+    },
+    {
+      "path": "migrations/000042_native_maven_commit_idempotency.sql",
+      "sha256": "ee43c116443f45ebc2417f39cfce26b7fcf211a3c9d6a3599a400d2e8b3e8ecc"
+    },
+    {
+      "path": "migrations/000043_native_conan_reference_projection.sql",
+      "sha256": "5645b2d3d497df9ac5060363f4d2a1409f678f9cef1c2bb083f0656dd1144c64"
+    },
+    {
+      "path": "migrations/000044_replication_checkpoints.sql",
+      "sha256": "bd9dcbb526d22f064c886420eaa7bbe318e9e524f3b08be6aecbe12043e9027f"
+    },
+    {
+      "path": "migrations/000045_replication_checkpoint_source_keys.sql",
+      "sha256": "ad2baf2c8eabe2252bf77121f18cbaf04be02af5d885d5223d6ea8cf1c47eadf"
+    },
+    {
+      "path": "migrations/000045_repository_capacity_quotas.sql",
+      "sha256": "d1dc10e23bc9d653aef4eaca323be6f5cdc0ba0ef641a16b832d784aa34fa96c"
+    },
+    {
+      "path": "migrations/000046_repository_capacity_enforcement.sql",
+      "sha256": "92508fdc3ff49aacdf6be36c45f7323a3efe04158a32dfb2311a540e3954e912"
+    },
+    {
+      "path": "migrations/000047_api_keys.sql",
+      "sha256": "bc26da5d307a06dd7255b1b56d19bc0394dbce0610ebd57453b64fae26b25b0f"
+    },
+    {
+      "path": "migrations/000048_repository_grant_resource_prefixes.sql",
+      "sha256": "8b1bba68c2dba177197ab33d8dd4e02a5931950ae7cbf8a90df9c6b3a1bbf502"
+    },
+    {
+      "path": "migrations/000049_audit_retention.sql",
+      "sha256": "0c3d0c1cbcc844cc1fb0d767a8af478938ee88c2dd41b2e9a1fd8155e22b864c"
+    },
+    {
+      "path": "migrations/000050_audit_cleanup_running_reclaim.sql",
+      "sha256": "611c7bde1e41c4afd1c2719e1ed092bc29d029119c4e3c7401d109c048511f3c"
+    },
+    {
+      "path": "migrations/000051_repository_proxy_type.sql",
+      "sha256": "09ae55cb2837e770fa728b8239fe95e6e6891bac5ec1a44df93376a86e6a562e"
+    },
+    {
+      "path": "migrations/000052_native_maven_snapshot_builds.sql",
+      "sha256": "e2e12e44245809a6ca59469e419b3cecfc4043b4bc450c205bc2bb0ed10277d0"
+    },
+    {
+      "path": "migrations/000053_users.sql",
+      "sha256": "00e10896e4f13c11a41ba5ffb728e7f36ae2c6970a020777d8319ccfedd960c5"
+    },
+    {
+      "path": "migrations/000054_v2_anonymous_read_policy.sql",
+      "sha256": "b43b95c82c40e68b6487b204ed7123110663787836627a6f9af8369c6f645649"
+    },
+    {
+      "path": "migrations/000055_anonymous_access_policy.sql",
+      "sha256": "78bd85ffcca5bcbddf009b38f17428ff1c20ab9543f34c58142aab5a24469435"
+    },
+    {
+      "path": "migrations/000056_native_oci_manifest_restore.sql",
+      "sha256": "060c5869794336c412ab6c034ae22c9e0509a4b3c662e12f7c84d8c8787a616a"
+    },
+    {
+      "path": "migrations/000057_conan_hosted_groups.sql",
+      "sha256": "216136a0333fe9ad26fb93e3ccf5d73d3fb0802987371e6a3aec430776962351"
+    },
+    {
+      "path": "migrations/000058_hosted_group_idempotency_cascade.sql",
+      "sha256": "9d060b781e4ad999634f15739e8c4d971083143ffd2521d13cdc76609de8d659"
+    },
+    {
+      "path": "migrations/000059_richer_repository_retention_policies.sql",
+      "sha256": "ae778ea8400b89ca187cc529f577c5a7d5c8573e69c296a1109ae2b104ef68e0"
+    },
+    {
+      "path": "migrations/000060_raw_asset_tombstones.sql",
+      "sha256": "9689f36463f7bd8476b2fb0992ae26bffa3e1d5c4be7bfcc2b4d18a3f9e9ec2d"
+    },
+    {
+      "path": "migrations/000061_lifecycle_job_reliability.sql",
+      "sha256": "b87276212a18dbf73063f5d0eecdf0546c7d5c0a04540e84784c3fb10fa01ba8"
+    },
+    {
+      "path": "migrations/000062_replication_plan_reliability.sql",
+      "sha256": "bf1f5dcca10ee25fddadc882a45c0478922b112ba05e71f38be3488bfd100843"
+    },
+    {
+      "path": "migrations/000063_api_key_lifecycle.sql",
+      "sha256": "04111af8c9894f27ff2190bdd6486c6d025333e0921874208512aae47aabdf7a"
+    },
+    {
+      "path": "migrations/000064_postgres_observability_indexes.sql",
+      "sha256": "f63bf5acb2bba770895ab4b242a0514bd18b94e313f3c9568285190bd516458d"
+    },
+    {
+      "path": "migrations/000065_artifact_search_projection.sql",
+      "sha256": "ad5b5a5237320c09808802f5774e3c4f8236e3e8180bb05053a4e91cc77cf2ae"
+    },
+    {
+      "path": "migrations/000066_postgres_notification_channels.sql",
+      "sha256": "22ed1871b5504600bb74852728de900b899428f2360d625d02b93f09c129afd6"
+    },
+    {
+      "path": "migrations/000067_notification_trigger_fix.sql",
+      "sha256": "484613175b142debef4c7b882637792f74124898a55929a5001d6db245e1ef67"
+    },
+    {
+      "path": "migrations/000068_notification_trigger_backpressure.sql",
+      "sha256": "4b895a84ec82663263a752bd7ba5681b35012205d8c87705a8ccfe2f07c0521c"
+    },
+    {
+      "path": "migrations/000069_prefix_pattern_indexes.sql",
+      "sha256": "c6516794ff2edf230a2a8e2a70555315f8230f4936715a5d4171d97a5c223e9a"
+    },
+    {
+      "path": "migrations/000070_egress_proxy.sql",
+      "sha256": "651b6b51fbccfa0877cb6d5204857d70fdc4ed50be3c379297ad96a5c885aecd"
+    },
+    {
+      "path": "migrations/000071_runtime_nodes.sql",
+      "sha256": "2c8572dbe4db0c00a355d8152d3a53e8adb9f4947d8471665bafe47e07894d64"
+    },
+    {
+      "path": "migrations/000072_runtime_node_sessions.sql",
+      "sha256": "c8197abd2ff5720cd4e7318e94b491fdc7d50104e80448808fa110df709695f5"
+    },
+    {
+      "path": "migrations/000073_audit_cursor_index.sql",
+      "sha256": "c7926947ee836723f289646450143c77407ab1f45d984cae69b61198c053b78f"
+    },
+    {
+      "path": "migrations/000074_oidc_settings.sql",
+      "sha256": "5efe61c01d8397a9818327e43f972f548cdadac35d4b1e2289ed6472c378dd44"
+    },
+    {
+      "path": "migrations/000075_artifact_digest_search.sql",
+      "sha256": "fb14f90281a7ddc770b8f2cfe8d161f04791af57d03b3dad6bf1109592eb14da"
+    },
+    {
+      "path": "migrations/000076_native_npm_hosted.sql",
+      "sha256": "96512f84ee3e48f9a7fafe9d949b0f59cd3a248010e15ea5648a35c2e6669ecd"
+    },
+    {
+      "path": "migrations/000077_native_npm_proxy.sql",
+      "sha256": "45c9ca6b55fa29429d03842bfd0e34f65520d8d2ad9510b1c9b7a6918547504a"
+    },
+    {
+      "path": "migrations/000078_native_npm_groups.sql",
+      "sha256": "0e550ad09002d86fd6ef8b62b469337803d083df82e323fdb2dac6ae51b88775"
+    },
+    {
+      "path": "migrations/000079_native_npm_lifecycle.sql",
+      "sha256": "483da3f135abbbad49ef30149516c384e9b00587479c45576c5d69fbde6e83d3"
+    },
+    {
+      "path": "migrations/000080_native_pypi.sql",
+      "sha256": "91bdb581eaf640a13924c7ea93564da4d9ce248dd04a719a98c0fe6ea5a8b1df"
+    },
+    {
+      "path": "migrations/000081_native_go_proxy.sql",
+      "sha256": "e37ba120de22fa53a79dc6da49a05c4d79f985d2f6ba559128f780b8eab3d364"
+    },
+    {
+      "path": "migrations/000082_scheduled_tasks.sql",
+      "sha256": "d6c3eb29a08ce5c2184c98e1a96327f53790f36620e6e257b5abd2c51963001e"
+    },
+    {
+      "path": "migrations/000083_authorization_templates.sql",
+      "sha256": "cae027d97946e19bce38474cb9bd874633ce0a82ff616ce2345d0e7062efe78d"
+    },
+    {
+      "path": "migrations/000084_artifact_intelligence.sql",
+      "sha256": "7e76cfec560b9b7e8dad88926c6b4abb6f21eb5fc56f0790c3af6ce91ff1db80"
+    },
+    {
+      "path": "migrations/000085_repository_security_policies.sql",
+      "sha256": "89379a21cadfb23e63c5b392da01836981d0af1b2cae8fdc0769543e467dbbba"
+    },
+    {
+      "path": "migrations/000086_artifact_scan_jobs.sql",
+      "sha256": "d2d89d91a32c7622483ef7f10663e4da73f3c0bcf07a5e09ba309b85be502f08"
+    },
+    {
+      "path": "migrations/000087_user_governance.sql",
+      "sha256": "a5718125a624362ddce1f054b7aee89083a15bf6ce49e89e9f3f111a1902218e"
+    },
+    {
+      "path": "migrations/000088_oidc_user_identities.sql",
+      "sha256": "e14ed397883519e169e109348c46b08770892abf8cf1517156d078a9e1ec24e0"
+    },
+    {
+      "path": "migrations/000089_user_sessions.sql",
+      "sha256": "c80b04ae667c984322881333cb2d72c233f57ce572df68c9d45492ddbcd8e725"
+    },
+    {
+      "path": "migrations/000090_native_apt_proxy.sql",
+      "sha256": "152a9c12038dfdc9874fb4d2c98038668987e855ee9ad2b2f97fa469877babc0"
+    },
+    {
+      "path": "migrations/000091_authorization_roles.sql",
+      "sha256": "255fbd19176eba0ceb82b7f1ae7bc62fe06df21c44ad78a19212d2c79ccfa796"
+    },
+    {
+      "path": "migrations/000092_repository_auto_scan.sql",
+      "sha256": "fa3b48b18a2f8cd3b807e0380914bdd7310a82b9792e80466914d4b285ac9bcd"
+    },
+    {
+      "path": "migrations/000093_artifact_scan_status.sql",
+      "sha256": "af25c888723ec23b8231f73a5e229d6b1731761d22d1145bad0afdf0256a213e"
+    },
+    {
+      "path": "migrations/000094_artifact_quarantine.sql",
+      "sha256": "2d287936541a80e9acaa215a75567c4888eab4d450b972eac8489c5b8530c67f"
+    },
+    {
+      "path": "migrations/000095_replication_artifact_identity.sql",
+      "sha256": "613b3096a6029e8e3602aa5cabb99b9ea08ea485d90eb9cd8b3c50337b4f8ff4"
+    },
+    {
+      "path": "migrations/000096_repository_quarantine_read_policies.sql",
+      "sha256": "e06658bc22201c93c387911a8b9cb2c1ad8696b9ba314e1fe3cea595ff4535b1"
+    },
+    {
+      "path": "migrations/000097_webhook_delivery.sql",
+      "sha256": "d7b5446d95a92eaf1ef3d0913a4c53c98d436f2dec93385e3ca51a08caac2a8b"
+    },
+    {
+      "path": "migrations/000098_native_apt_hosted_foundation.sql",
+      "sha256": "b30d111cf3d12d531a707e432196ac8d530589c5e905d64388a11ad4d03caa80"
+    },
+    {
+      "path": "migrations/000099_native_apt_publication_cleanup.sql",
+      "sha256": "695d38a2831920c45a69df2faa4cf51bc336ece823f4a6e5d9197dafb6e7122f"
+    },
+    {
+      "path": "migrations/000100_native_apt_signed_snapshots.sql",
+      "sha256": "e1e242e1cea21cb4d17a3d8402720bfc9b20d8d0b24fceb2eeae2a5351132522"
+    },
+    {
+      "path": "migrations/000101_native_apt_snapshot_asset_scope.sql",
+      "sha256": "a3ae26a5df5e1879af385c59880a867c543b2c1470fcde7912defb2fd26113ca"
+    },
+    {
+      "path": "migrations/000102_native_apt_snapshot_recovery.sql",
+      "sha256": "4473d98af54192345b190a273c972a5b97c97ceb9984cd5bee71201e1aaed547"
+    },
+    {
+      "path": "migrations/000103_native_apt_snapshot_intent_age.sql",
+      "sha256": "cabe4ca45bfb5d4f7e82407f8b95a9f6b0884943961e02632255830af31b46f1"
+    },
+    {
+      "path": "migrations/000104_native_apt_snapshot_search.sql",
+      "sha256": "474766ef07d3334637ae2ade17a54e4cdee5103cd7cb430eea92d6dbdd9f759a"
+    },
+    {
+      "path": "migrations/000105_audit_evidence.sql",
+      "sha256": "e672bd2e03c495a5514f7c4095813ec9dd92404d462da64d6e545ae648be8297"
+    },
+    {
+      "path": "migrations/000106_service_accounts.sql",
+      "sha256": "dfb126712ba684b12781c0d91f8263f06bac0b887f783c1cab77a9771ca20b93"
+    },
+    {
+      "path": "migrations/000107_site_settings.sql",
+      "sha256": "c2ca3d935b9f1d45d1541aa9499297f2ea164e7c503d31fd1927a69841545bf6"
+    },
+    {
+      "path": "migrations/000108_console_themes.sql",
+      "sha256": "4ddc930aa20258b9c15ad7aa7438f6cf796408e77f01912b869126b656ad153b"
+    },
+    {
+      "path": "migrations/000109_gateway_builtin_themes.sql",
+      "sha256": "d158787ac874e0ad8dc70242fedaeeb1f86d781930164c6c1e2e309cf48dd0d1"
+    },
+    {
+      "path": "migrations/000110_native_go_retention.sql",
+      "sha256": "8ec056c27b11cd5c280530400d2ae5619e754e3e5b130cd908eccb394834925b"
+    },
+    {
+      "path": "migrations/000111_native_go_distribution.sql",
+      "sha256": "5c6f59911a20d647990eede677f9b8430e374ba743c9e7212d57ab6c308f2ac5"
+    },
+    {
+      "path": "migrations/000112_native_raw_upload_cleanup.sql",
+      "sha256": "bad037790cfcf9b7f422ab53ca3f655f31f31f40b8aa49695139bcd2d331044a"
+    },
+    {
+      "path": "migrations/000113_maven_strict_publication.sql",
+      "sha256": "6537540581874952c21aa77779d04678d3bd5fce13366bea6421dc32f0f392ad"
+    },
+    {
+      "path": "migrations/000114_managed_console_themes.sql",
+      "sha256": "9817ce7caa07113e2eccfcd1f24ae1b3c50de7f49e23f458ec911bf7ac72ec7e"
+    },
+    {
+      "path": "migrations/000115_proxy_browse_index.sql",
+      "sha256": "3429ef27e0454224d74a566b91fbcd454a30999144d0be8eae3951677feb6d6e"
+    }
+  ],
+  "archiveChecksums": [
+    {
+      "name": "artifact-gateway-console_0.1.0-main.cb59b2277487_web.tar.gz",
+      "sha256": "c0119f2e1736407744442b6b43d637ea5a5cc304ca396f7d6f20568252518e5c"
+    },
+    {
+      "name": "artifact-gateway-openapi_0.1.0-main.cb59b2277487.tar.gz",
+      "sha256": "dccdff8975c10fefb65d67d4f61e5cb582958e038473a641e05d5fb3789dd3a6"
+    },
+    {
+      "name": "artifact-gateway_0.1.0-main.cb59b2277487_darwin_amd64.tar.gz",
+      "sha256": "bad679f0b8c8bed7dc1a2cd590b52698f125ccc8003f2920874f4bc4191f1e8b"
+    },
+    {
+      "name": "artifact-gateway_0.1.0-main.cb59b2277487_darwin_arm64.tar.gz",
+      "sha256": "00f68105aa2370678e7530686f561810fb51cd0b8797329a1dc822a386a56bde"
+    },
+    {
+      "name": "artifact-gateway_0.1.0-main.cb59b2277487_linux_amd64.tar.gz",
+      "sha256": "7b60de19f7ae7fc5246f077311e42a492604948f0ae9ceec5d31d9987aa40f40"
+    },
+    {
+      "name": "artifact-gateway_0.1.0-main.cb59b2277487_linux_arm64.tar.gz",
+      "sha256": "a73da21ab553dde613fb0de2a604d74548939c4574f549cbd12c04063d5105fd"
+    }
+  ],
+  "localDistributionImages": {
+    "baseline": "sha256:f0bdcc3ad676e674b3dec762bc02c1fd90f6cff6d168984fdc55091c4e85a35f",
+    "candidate": "sha256:4be871aba48007b8dac61b3b75c03a40eb929e4139771ebef858d9f7e2c78685",
+    "console": "sha256:bd957e33ec5ba30071cb44933d91dce885d25a2bb190ef673ab50fe781c1575a"
+  },
+  "registryImages": {
+    "gateway": {
+      "reference": "ghcr.io/ccsert/artifact-gateway@sha256:22f1a0761ab457855ef43c35c35ff5edaca6e97e795e1f1a18bc8819d7e88df0",
+      "evidence": "CI publish output",
+      "localPull": "failed: manifest unknown",
+      "pullLogSha256": "b2ebb8747687ece411999eb9d6df5a60f41798f86d98f6b552fd9984dda48710"
+    },
+    "console": {
+      "reference": "ghcr.io/ccsert/artifact-gateway-console@sha256:38c3b3a6270119d342ce532b9fd4d50fd9f5578c2acc85fed4e4d94c6181d376",
+      "evidence": "CI publish output",
+      "localPull": "failed: manifest unknown",
+      "pullLogSha256": "b2ebb8747687ece411999eb9d6df5a60f41798f86d98f6b552fd9984dda48710"
+    }
+  },
+  "gates": [
+    {
+      "name": "upgrade-source",
+      "result": "pass",
+      "exitCode": 0,
+      "firstOutputUTC": "2026-09-08T02:55:46.633358+00:00",
+      "lastOutputUTC": "2026-09-08T02:59:13.549058+00:00",
+      "logSha256": "669f973c1c26d67be710e3c1f1ad4be84c0d8d3d40c339c48c0ee6dac97e617e"
+    },
+    {
+      "name": "backup-restore-source",
+      "result": "pass",
+      "exitCode": 0,
+      "firstOutputUTC": "2026-09-08T02:55:47.866380+00:00",
+      "lastOutputUTC": "2026-09-08T02:59:04.837033+00:00",
+      "logSha256": "067807ebd7ac51f656791c2e662d2bb205d46261c865c4b0a34a082f56ee8aae"
+    },
+    {
+      "name": "upgrade-distribution",
+      "result": "pass",
+      "exitCode": 0,
+      "firstOutputUTC": "2026-09-08T03:08:02.916452+00:00",
+      "lastOutputUTC": "2026-09-08T03:08:43.882296+00:00",
+      "logSha256": "b22fc93bc2cae25605ae71db1cefd4ef778b108c10704d1eef0163f6daafddd0"
+    },
+    {
+      "name": "backup-restore-distribution",
+      "result": "pass",
+      "exitCode": 0,
+      "firstOutputUTC": "2026-09-08T03:08:04.154496+00:00",
+      "lastOutputUTC": "2026-09-08T03:08:25.414817+00:00",
+      "logSha256": "9948aac66664fc0ab7fbfdea659e36185fc04a7a6bb0be04630d3d3e3c9d0752"
+    },
+    {
+      "name": "backup-restore-groups",
+      "result": "pass",
+      "exitCode": 0,
+      "firstOutputUTC": "2026-09-08T03:13:25.968030+00:00",
+      "lastOutputUTC": "2026-09-08T03:13:47.496166+00:00",
+      "logSha256": "f916e6e343e63d24a6977f1661ec707f936d3269071511fb5181cfb6ba57fc42"
+    },
+    {
+      "name": "runtime-group-recovery",
+      "result": "pass",
+      "exitCode": 0,
+      "firstOutputUTC": "2026-09-08T03:15:35.410119+00:00",
+      "lastOutputUTC": "2026-09-08T03:15:38.753512+00:00",
+      "logSha256": "c34f68bbae4719c793424ba1ff11e21933afd124d8d3d56d2a25bfcc4ad8802a"
+    },
+    {
+      "name": "upgrade-labeled-source",
+      "result": "pass",
+      "exitCode": 0,
+      "firstOutputUTC": "2026-09-08T03:26:04.006023+00:00",
+      "lastOutputUTC": "2026-09-08T03:27:04.916762+00:00",
+      "logSha256": "4f7cde340f560556ae41bfa93e5ed228549075c0063f4cffdf678a5c601ac0ad"
+    }
+  ],
+  "harness": {
+    "scripts/upgrade-readiness.sh": "5e58af20ce946f78722caed1d094c10d623cea6e96030b1ee06c768e9d3138b6",
+    "scripts/backup-restore-readiness.sh": "d9dc42350d1155be1a17f98bfbd6cfa5646ca93f4791eb6bf96771d5e41e3662",
+    "scripts/readiness-image.sh": "504eb724db628237991a8020463d01618b96540bf26b5c9d9747b5da954ac515",
+    "scripts/readiness-image-test.sh": "cecbc302910291a72b8d98fabf6f3410edfa26f519c5a53c074b94c5d9aced4c",
+    "scripts/group-recovery-fixture.py": "78217a3972e0516ec14d9e0c18cac6029e2be8fe7b5c095325acf5aff9b98c07"
+  },
+  "runtimeRecovery": {
+    "startedAt": "2026-09-08T03:15:35.434445+00:00",
+    "completedAt": "2026-09-08T03:15:38.760196+00:00",
+    "result": "pass"
+  },
+  "status": "distribution rehearsals passed; published registry images not locally validated",
+  "recordedAt": "2026-09-08T03:30:06.123229+00:00",
+  "browser": {
+    "artifact": "Console CI distribution archive",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "login": "passed with live identity API",
+    "restoredGroup": "two sources and distinct digest warning visible",
+    "consoleErrors": 0,
+    "consoleWarnings": 0,
+    "gatewayReadyz": 204,
+    "consoleHealthz": 204,
+    "consoleProxiedReadyz": 204
+  },
+  "registryAccess": {
+    "anonymousTokenHTTPStatus": 401,
+    "existingGitHubOAuthPull": "denied",
+    "publishedCandidateDigestPull": "manifest unknown",
+    "requiredFollowup": "Verify package read access, then repeat the pinned published-image rehearsals."
+  },
+  "harnessChecks": [
+    "make test",
+    "make docs-check",
+    "bash scripts/readiness-image-test.sh",
+    "shellcheck -x -P SCRIPTDIR",
+    "black --check scripts/group-recovery-fixture.py",
+    "ruff check scripts/group-recovery-fixture.py",
+    "git diff --check"
+  ]
+}

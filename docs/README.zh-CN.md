@@ -71,6 +71,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [发布就绪](release-readiness.zh-CN.md) — 协议、集成、升级与恢复的可执行门禁。
 - [发布记录模板](release-record-template.zh-CN.md) — 证据、批准与回滚字段。
 - [准备记录：2026-08-11](release-records/2026-08-11-d738d4ed.zh-CN.md) — 历史本地候选证据，不是生产批准。
+- [候选记录：2026-09-08](release-records/2026-09-08-cb59b227.zh-CN.md) — 固定 Group 候选、发行包升级恢复证据与镜像仓库访问待验项。
 - [变更记录](../CHANGELOG.zh-CN.md) — `Unreleased` 下的用户可见变化。
 
 ## 研究、路线图与参考

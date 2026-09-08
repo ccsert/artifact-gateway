@@ -4,6 +4,18 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 
+candidate_image=${GATEWAY_READINESS_IMAGE:-}
+current_ref=${GATEWAY_READINESS_REF:-HEAD}
+# shellcheck source=readiness-image.sh
+source "$repo_root/scripts/readiness-image.sh"
+[[ -z "$candidate_image" ]] || readiness_validate_image_ref "$candidate_image"
+current_revision=$(git rev-parse "$current_ref^{commit}")
+current_version=${GATEWAY_READINESS_VERSION:-$(tr -d '[:space:]' < VERSION)-main.${current_revision:0:12}}
+if [[ -n "$candidate_image" ]]; then
+  git diff --exit-code "$current_revision" -- migrations themes compose.yml scripts/run-migrations.sh scripts/run-rustfs.sh >/dev/null || {
+    printf '%s\n' 'Mounted readiness files differ from the candidate revision.' >&2; exit 1;
+  }
+fi
 environment_file=${GATEWAY_ENV_FILE:-.env}
 test -f "$environment_file" || { printf '%s\n' 'Backup readiness requires a configured environment file.' >&2; exit 1; }
 # shellcheck disable=SC1090
@@ -44,7 +56,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-compose up -d --build --wait
+if [[ -n "$candidate_image" ]]; then
+  readiness_load_image "$candidate_image" "$current_revision" "$current_version" "$project-gateway:latest"
+else
+  compose build --build-arg "VERSION=$current_version" --build-arg "REVISION=$current_revision" gateway
+fi
+compose up -d --no-build --wait
 # shellcheck disable=SC1090
 source "$isolated_environment"
 gateway_url="http://localhost:${GATEWAY_HTTP_PORT}"
@@ -349,7 +366,13 @@ quarantine_response=$(curl --silent --show-error --fail --request PUT \
   --data '{"state":"quarantined","reason":"backup restore verification"}' "$quarantine_url")
 grep -Fq '"state":"quarantined"' <<<"$quarantine_response" || { printf '%s\n' 'Creating quarantine recovery evidence failed.' >&2; exit 1; }
 
+group_recovery_fixture() {
+  GATEWAY_ADMIN_TOKEN="$GATEWAY_ADMIN_TOKEN" GATEWAY_RESOLVER_TOKEN="$GATEWAY_RESOLVER_TOKEN" \
+    python3 "$repo_root/scripts/group-recovery-fixture.py" "$1" "$gateway_url" "$go_workspace/group-recovery.json"
+}
+group_recovery_fixture seed
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$isolated_environment" ./scripts/backup-drill.sh "$backup_dir"
+group_recovery_fixture mutate
 go_mutation_version="v1.1.0"
 go_mutation_archive="$go_workspace/$go_mutation_version.zip"
 write_go_module_zip "$go_mutation_archive" "$go_module_path" "$go_mutation_version" after-backup
@@ -363,6 +386,7 @@ status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}
   --data "$mutation_payload" "$gateway_url/api/v1/raw/groups")
 [[ "$status" == 201 ]] || { printf 'Creating post-backup mutation returned HTTP %s.\n' "$status" >&2; exit 1; }
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$isolated_environment" ./scripts/restore-drill.sh "$backup_dir"
+group_recovery_fixture verify
 
 for format in raw conan; do
   group_var="${format}_group"

@@ -44,6 +44,24 @@ make backup-restore-readiness
 
 `make test` 包含隔离的 `dev/dev-status/dev-down` CLI 边界。把输出、Git revision、operator、UTC 起止和偏差写入[发布记录](release-record-template.zh-CN.md)，不得记录 Bearer、存储凭证或未脱敏上游 URL。
 
+## 固定演练镜像
+
+`upgrade-readiness` 默认使用上一正式版本 `v0.1.0`。记录正式演练时通过
+`GATEWAY_UPGRADE_FROM_REF` 固定其完整提交。源码演练会构建并标记两个版本，
+不代表已验证镜像仓库分发。若要运行已有候选镜像，设置 `GATEWAY_READINESS_IMAGE`、
+`GATEWAY_READINESS_REF` 与 `GATEWAY_READINESS_VERSION`，并可通过
+`GATEWAY_UPGRADE_FROM_IMAGE` 指定基线镜像。`backup-restore-readiness` 也支持这些
+镜像参数，但只使用候选版本。
+
+镜像参数必须是以 `@sha256:<64 位小写十六进制>` 结尾的镜像仓库引用，或已加载的
+本地 `sha256:<64 位小写十六进制>` image ID；可变 tag 会被拒绝。启动演练前同时检查
+镜像的 revision/version 标签和实际 `gateway version` 输出。候选镜像挂载的迁移、
+主题、Compose 与启动文件也必须与 `GATEWAY_READINESS_REF` 一致。
+
+用已校验发行包中的二进制组装本地运行容器，属于发行包演练，不证明已发布的镜像
+可以从镜像仓库拉取。记录中应分别保留发行包校验和、本地 image ID，以及镜像仓库
+访问失败的结果。
+
 ## 受控部署清单
 
 - [ ] 上述 test、integration、各 native E2E、APT signer rotation、Cargo contract 和 Conan E2E 全部通过。
@@ -58,7 +76,7 @@ make backup-restore-readiness
 - [ ] Resolver rotation 在重启后拒绝旧 Token 派生的 OCI bearer，并允许新 Token。
 - [ ] Service Account rotation 证明稳定 Grant 下新旧 credential 重叠、只撤销旧值、禁用账户后拒绝剩余值。
 - [ ] OCI performance 默认 50 次缓存 manifest、并发 10、零错误、p95 ≤1 秒。任何覆盖必须写入已批准发布记录。
-- [ ] Upgrade 从默认 revision `324aba95` 在隔离 volume 部署，迁移到当前版本并保留 PostgreSQL/RustFS、Maven/OCI/Group/Go Proxy；再用旧版本回滚并前滚，证明加法迁移和协议兼容。项目不再提供 legacy object-store 迁移路径。
+- [ ] Upgrade 从默认 revision `v0.1.0` 在隔离 volume 部署，迁移到当前版本并保留 PostgreSQL/RustFS、Maven/OCI/Group/Go Proxy；再用旧版本回滚并前滚，证明加法迁移和协议兼容。项目不再提供 legacy object-store 迁移路径。
 - [ ] 迁移 `000095` 前停止新 replication，drain 所有旧 plan 并停止旧 Worker；迁移后只启动新 Worker，再开放 replication/quarantine。每个当前 plan 必须 coordinate 和 digest 同时存在，旧空身份 plan 由新 Worker 失败关闭。
 - [ ] Backup/restore 使用隔离 volume，通过 HTTP 创建 OCI、Maven、Raw、Conan、Go 源 Artifact，创建/重放晋级和复制，恢复后验证指令与 Audit。Go 前后运行真实下载并校验三表示 digest，证明备份后 mutation 不存在。
 - [ ] 恢复还验证 Raw cache、Quarantine state/reason、Conan Group、Grant version/content 和 Native Raw deny/allow。隔离 rehearsal 通过后才可对发布环境运行 `make backup-drill`。
@@ -94,7 +112,7 @@ max by (kind, format) (
 | 备份 | PostgreSQL + RustFS；演练目标 RPO 24h、RTO 30m |
 | OCI 性能 | 50 请求、并发 10、0 错误、p95 ≤1000ms |
 | Cache 运维 | Resolver 被拒，Admin collection 增加成功计数 |
-| Upgrade | previous RustFS revision `324aba95`，隔离 volume、当前迁移、协议回归与二进制回滚 |
+| Upgrade | previous RustFS revision `v0.1.0`，隔离 volume、当前迁移、协议回归与二进制回滚 |
 
 ## 架构
 
