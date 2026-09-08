@@ -192,11 +192,11 @@ func TestArchiveCLIReportsIntegrityWithoutClaimingSignatureTrust(t *testing.T) {
 	for _, source := range []string{path, "-"} {
 		var stdout, stderr bytes.Buffer
 		code := RunArchiveCLI(context.Background(), []string{"verify", source}, bytes.NewReader(body), &stdout, &stderr)
-		var result struct{ Integrity, Signatures, SnapshotID string }
+		var result struct{ Integrity, Signatures, SnapshotID, ArchiveDigest string }
 		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 			t.Fatal(err)
 		}
-		if code != 0 || result.Integrity != "verified" || result.Signatures != "not_checked" || result.SnapshotID != id || stderr.Len() != 0 {
+		if code != 0 || result.Integrity != "verified" || result.Signatures != "not_checked" || result.SnapshotID != id || result.ArchiveDigest != digestBytes(body) || stderr.Len() != 0 {
 			t.Fatalf("code=%d result=%#v stderr=%s", code, result, stderr.String())
 		}
 	}

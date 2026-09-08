@@ -11,7 +11,9 @@ their meaning.
 
 ## Unreleased
 
-- Added administrator-only deterministic APT signed-snapshot export and an offline archive integrity command, with published/retired snapshot coverage and Debian installation from exported bytes. APT Hosted remains an operator preview; archive import and signature trust are separate gates.
+- Added administrator-only exact APT archive recovery with independently saved backup digests and public-key trust, both signature and canonical package-index checks, atomic metadata visibility, quota reservations, concurrent replay and durable failed-attempt cleanup. Recovery needs no signer service; APT Hosted remains an operator preview.
+
+- Added administrator-only deterministic APT signed-snapshot export and an offline archive integrity command, with published/retired snapshot coverage and Debian installation from exported bytes. APT Hosted remains an operator preview; trusted archive recovery uses independent backup receipts and public-key policy.
 
 - Pin upgrade/restore rehearsals to verified image identities, use v0.1.0 as the upgrade baseline, and verify Group provenance and reader grants after restoration.
 

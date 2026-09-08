@@ -39,6 +39,7 @@ type Dependencies struct {
 	NativePyPIObjectStore         OCIObjectStore
 	NativeGoObjectStore           OCIObjectStore
 	NativeAPTObjectStore          OCIObjectStore
+	APTArchiveTrust               aptpublication.SnapshotArchiveTrustVerifier
 	APTSigner                     aptpublication.Signer
 	APTSigning                    APTSigningRuntime
 	NPMMetadataTTL                time.Duration

@@ -757,6 +757,7 @@ export type Problem = {
     | "security_policy_denied"
     | "artifact_quarantined"
     | "signer_unavailable"
+    | "untrusted_archive"
     | "snapshot_corrupt"
     | "internal_error";
   message: string;
@@ -6920,6 +6921,85 @@ export type PublishAptRepositorySnapshotResponses = {
 
 export type PublishAptRepositorySnapshotResponse =
   PublishAptRepositorySnapshotResponses[keyof PublishAptRepositorySnapshotResponses];
+
+export type RestoreAptRepositorySnapshotData = {
+  body: Blob | File;
+  headers: {
+    /**
+     * SHA-256 receipt saved independently at backup time. Must not be derived from an untrusted upload at restore time.
+     */
+    "X-Artifact-Archive-Digest": string;
+  };
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/apt/snapshots/restore";
+};
+
+export type RestoreAptRepositorySnapshotErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  413: Problem;
+  /**
+   * Problem response
+   */
+  415: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  429: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+  /**
+   * Problem response
+   */
+  507: Problem;
+};
+
+export type RestoreAptRepositorySnapshotError =
+  RestoreAptRepositorySnapshotErrors[keyof RestoreAptRepositorySnapshotErrors];
+
+export type RestoreAptRepositorySnapshotResponses = {
+  /**
+   * Exact signed snapshot restored or replayed
+   */
+  200: AptRepositorySnapshot;
+};
+
+export type RestoreAptRepositorySnapshotResponse =
+  RestoreAptRepositorySnapshotResponses[keyof RestoreAptRepositorySnapshotResponses];
 
 export type ExportAptRepositorySnapshotData = {
   body?: never;

@@ -43,10 +43,13 @@ func isPublicManagementRequest(r *http.Request) bool {
 }
 
 func isManagementObjectUpload(r *http.Request) bool {
+	segments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if r.Method == http.MethodPost && len(segments) == 7 && segments[0] == "api" && segments[1] == "v2" && segments[2] == "repositories" && segments[3] != "" && segments[4] == "apt" && segments[5] == "snapshots" && segments[6] == "restore" {
+		return true
+	}
 	if r.Method != http.MethodPut {
 		return false
 	}
-	segments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(segments) == 8 && segments[0] == "api" && segments[1] == "v2" && segments[2] == "repositories" && segments[3] != "" && segments[4] == "apt" && segments[5] == "publication-sessions" && segments[6] != "" && segments[7] == "package" {
 		return true
 	}
@@ -277,6 +280,10 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	nativeAPT := newNativeAPTHandler(store, nativeAPTObjects, authenticator).withProxy(aptClient)
 	aptPublication := aptpublication.NewManager(store, nativeAPTObjects)
+	var aptSnapshotImporter *aptpublication.SnapshotArchiveImporter
+	if dependencies.APTArchiveTrust != nil {
+		aptSnapshotImporter = aptpublication.NewSnapshotArchiveImporter(store, nativeAPTObjects, dependencies.APTArchiveTrust)
+	}
 	var aptSnapshotPublisher *aptpublication.Publisher
 	if dependencies.APTSigner != nil {
 		aptSnapshotPublisher = aptpublication.NewPublisher(store, nativeAPTObjects, dependencies.APTSigner).WithMetrics(metrics)
@@ -287,7 +294,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if candidate, ok := any(store).(repository.ArtifactSearchStore); ok {
 		searchProjection = candidate
 	}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptSnapshotExporter: aptpublication.SnapshotArchiveExporter{Store: store, Objects: nativeAPTObjects}, aptPublications: store, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemePackages: store, consoleThemes: dependencies.ConsoleThemes, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, serviceAccounts: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, queueStats: store, browse: store, diagnostics: dependencies, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptSnapshotImporter: aptSnapshotImporter, aptSnapshotExporter: aptpublication.SnapshotArchiveExporter{Store: store, Objects: nativeAPTObjects}, aptPublications: store, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemePackages: store, consoleThemes: dependencies.ConsoleThemes, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, serviceAccounts: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, queueStats: store, browse: store, diagnostics: dependencies, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {

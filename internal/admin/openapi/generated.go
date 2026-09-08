@@ -1376,6 +1376,7 @@ const (
 	ProblemCodeSignerUnavailable        ProblemCode = "signer_unavailable"
 	ProblemCodeSnapshotCorrupt          ProblemCode = "snapshot_corrupt"
 	ProblemCodeUnsupportedMediaType     ProblemCode = "unsupported_media_type"
+	ProblemCodeUntrustedArchive         ProblemCode = "untrusted_archive"
 	ProblemCodeVersionConflict          ProblemCode = "version_conflict"
 )
 
@@ -1421,6 +1422,8 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodeSnapshotCorrupt:
 		return true
 	case ProblemCodeUnsupportedMediaType:
+		return true
+	case ProblemCodeUntrustedArchive:
 		return true
 	case ProblemCodeVersionConflict:
 		return true
@@ -4693,6 +4696,12 @@ type PublishAPTRepositorySnapshotParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
+// RestoreAPTRepositorySnapshotParams defines parameters for RestoreAPTRepositorySnapshot.
+type RestoreAPTRepositorySnapshotParams struct {
+	// XArtifactArchiveDigest SHA-256 receipt saved independently at backup time. Must not be derived from an untrusted upload at restore time.
+	XArtifactArchiveDigest string `json:"X-Artifact-Archive-Digest"`
+}
+
 // ListRepositoryArtifactIdentitiesParams defines parameters for ListRepositoryArtifactIdentities.
 type ListRepositoryArtifactIdentitiesParams struct {
 	Purpose ArtifactIdentityPurpose `form:"purpose" json:"purpose"`
@@ -5359,6 +5368,9 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/apt/snapshots)
 	PublishAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params PublishAPTRepositorySnapshotParams)
+
+	// (POST /repositories/{repositoryId}/apt/snapshots/restore)
+	RestoreAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params RestoreAPTRepositorySnapshotParams)
 
 	// (GET /repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive)
 	ExportAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, snapshotId SnapshotId)
@@ -7698,6 +7710,60 @@ func (siw *ServerInterfaceWrapper) PublishAPTRepositorySnapshot(w http.ResponseW
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PublishAPTRepositorySnapshot(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreAPTRepositorySnapshot operation middleware
+func (siw *ServerInterfaceWrapper) RestoreAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RestoreAPTRepositorySnapshotParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Artifact-Archive-Digest" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Artifact-Archive-Digest")]; found {
+		var XArtifactArchiveDigest string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Artifact-Archive-Digest", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Artifact-Archive-Digest", valueList[0], &XArtifactArchiveDigest, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Artifact-Archive-Digest", Err: err})
+			return
+		}
+
+		params.XArtifactArchiveDigest = XArtifactArchiveDigest
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Artifact-Archive-Digest is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Artifact-Archive-Digest", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreAPTRepositorySnapshot(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11855,6 +11921,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package", wrapper.UploadAPTPublicationPackage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/apt/signing-state", wrapper.GetAPTRepositorySigningState)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/snapshots", wrapper.PublishAPTRepositorySnapshot)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/snapshots/restore", wrapper.RestoreAPTRepositorySnapshot)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive", wrapper.ExportAPTRepositorySnapshot)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-identities", wrapper.ListRepositoryArtifactIdentities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.GetArtifactIntelligence)
@@ -15198,6 +15265,200 @@ func (response PublishAPTRepositorySnapshot503ApplicationProblemPlusJSONResponse
 type PublishAPTRepositorySnapshot507ApplicationProblemPlusJSONResponse Problem
 
 func (response PublishAPTRepositorySnapshot507ApplicationProblemPlusJSONResponse) VisitPublishAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(507)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAPTRepositorySnapshotRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       RestoreAPTRepositorySnapshotParams
+	Body         io.Reader
+}
+
+type RestoreAPTRepositorySnapshotResponseObject interface {
+	VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error
+}
+
+type RestoreAPTRepositorySnapshot200JSONResponse APTRepositorySnapshot
+
+func (response RestoreAPTRepositorySnapshot200JSONResponse) VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAPTRepositorySnapshot400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RestoreAPTRepositorySnapshot400ApplicationProblemPlusJSONResponse) VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAPTRepositorySnapshot401ApplicationProblemPlusJSONResponse Problem
+
+func (response RestoreAPTRepositorySnapshot401ApplicationProblemPlusJSONResponse) VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAPTRepositorySnapshot403ApplicationProblemPlusJSONResponse Problem
+
+func (response RestoreAPTRepositorySnapshot403ApplicationProblemPlusJSONResponse) VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAPTRepositorySnapshot404ApplicationProblemPlusJSONResponse Problem
+
+func (response RestoreAPTRepositorySnapshot404ApplicationProblemPlusJSONResponse) VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAPTRepositorySnapshot409ApplicationProblemPlusJSONResponse Problem
+
+func (response RestoreAPTRepositorySnapshot409ApplicationProblemPlusJSONResponse) VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAPTRepositorySnapshot412ApplicationProblemPlusJSONResponse Problem
+
+func (response RestoreAPTRepositorySnapshot412ApplicationProblemPlusJSONResponse) VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAPTRepositorySnapshot413ApplicationProblemPlusJSONResponse Problem
+
+func (response RestoreAPTRepositorySnapshot413ApplicationProblemPlusJSONResponse) VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAPTRepositorySnapshot415ApplicationProblemPlusJSONResponse Problem
+
+func (response RestoreAPTRepositorySnapshot415ApplicationProblemPlusJSONResponse) VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(415)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAPTRepositorySnapshot422ApplicationProblemPlusJSONResponse Problem
+
+func (response RestoreAPTRepositorySnapshot422ApplicationProblemPlusJSONResponse) VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAPTRepositorySnapshot429ApplicationProblemPlusJSONResponse Problem
+
+func (response RestoreAPTRepositorySnapshot429ApplicationProblemPlusJSONResponse) VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAPTRepositorySnapshot500ApplicationProblemPlusJSONResponse Problem
+
+func (response RestoreAPTRepositorySnapshot500ApplicationProblemPlusJSONResponse) VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAPTRepositorySnapshot507ApplicationProblemPlusJSONResponse Problem
+
+func (response RestoreAPTRepositorySnapshot507ApplicationProblemPlusJSONResponse) VisitRestoreAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -21101,6 +21362,9 @@ type StrictServerInterface interface {
 	// (POST /repositories/{repositoryId}/apt/snapshots)
 	PublishAPTRepositorySnapshot(ctx context.Context, request PublishAPTRepositorySnapshotRequestObject) (PublishAPTRepositorySnapshotResponseObject, error)
 
+	// (POST /repositories/{repositoryId}/apt/snapshots/restore)
+	RestoreAPTRepositorySnapshot(ctx context.Context, request RestoreAPTRepositorySnapshotRequestObject) (RestoreAPTRepositorySnapshotResponseObject, error)
+
 	// (GET /repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive)
 	ExportAPTRepositorySnapshot(ctx context.Context, request ExportAPTRepositorySnapshotRequestObject) (ExportAPTRepositorySnapshotResponseObject, error)
 	// ListRepositoryArtifactIdentities List canonical immutable artifact identities
@@ -23017,6 +23281,35 @@ func (sh *strictHandler) PublishAPTRepositorySnapshot(w http.ResponseWriter, r *
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PublishAPTRepositorySnapshotResponseObject); ok {
 		if err := validResponse.VisitPublishAPTRepositorySnapshotResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestoreAPTRepositorySnapshot operation middleware
+func (sh *strictHandler) RestoreAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params RestoreAPTRepositorySnapshotParams) {
+	var request RestoreAPTRepositorySnapshotRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreAPTRepositorySnapshot(ctx, request.(RestoreAPTRepositorySnapshotRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreAPTRepositorySnapshot")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreAPTRepositorySnapshotResponseObject); ok {
+		if err := validResponse.VisitRestoreAPTRepositorySnapshotResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

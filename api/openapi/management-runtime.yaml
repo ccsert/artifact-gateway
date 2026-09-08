@@ -197,6 +197,8 @@ paths:
     "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_publication_sessions_sessionId_package"
   "/repositories/{repositoryId}/apt/snapshots":
     "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_snapshots"
+  "/repositories/{repositoryId}/apt/snapshots/restore":
+    "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_snapshots_restore"
   "/repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive":
     "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_snapshots_snapshotId_archive"
   "/repositories/{repositoryId}/apt/signing-state":

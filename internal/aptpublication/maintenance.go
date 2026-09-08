@@ -33,6 +33,7 @@ type reclaimPayload struct {
 	Format     repository.Format `json:"format"`
 	SessionID  string            `json:"sessionId"`
 	SnapshotID string            `json:"snapshotId"`
+	RestoreID  string            `json:"restoreId"`
 	ObjectKey  string            `json:"objectKey"`
 }
 
@@ -56,6 +57,9 @@ func (m Maintenance) Schedule(ctx context.Context) error {
 		return err
 	}
 	if err := m.Store.ExpireAPTRepositorySnapshots(ctx, now().UTC().Add(-time.Hour), 100); err != nil {
+		return err
+	}
+	if err := m.Store.ExpireAPTArchiveRestores(ctx, now().UTC().Add(-time.Hour), 100); err != nil {
 		return err
 	}
 	items, err := m.Store.ListUnscheduledAPTPublicationObjects(ctx, 100)
@@ -96,6 +100,22 @@ func (m Maintenance) Schedule(ctx context.Context) error {
 			return err
 		}
 	}
+	archiveItems, err := m.Store.ListUnscheduledAPTArchiveObjects(ctx, 100)
+	if err != nil {
+		return err
+	}
+	for _, item := range archiveItems {
+		payload, marshalErr := json.Marshal(reclaimPayload{Format: repository.FormatAPT, RestoreID: item.RestoreID, ObjectKey: item.ObjectKey})
+		if marshalErr != nil {
+			return marshalErr
+		}
+		if _, _, err = m.Store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: item.RepositoryID, Kind: repository.LifecycleJobReclaim, IdempotencyKey: "apt-restore:" + item.RestoreID + ":" + item.ObjectKey, Payload: payload}); err != nil {
+			return err
+		}
+		if err = m.Store.MarkAPTArchiveObjectScheduled(ctx, item.RestoreID, item.ObjectKey); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -106,7 +126,7 @@ func (m Maintenance) RunReclaimJobs(ctx context.Context, limit int) error {
 func (m Maintenance) runReclaimJob(ctx context.Context, job repository.LifecycleJob) error {
 	var payload reclaimPayload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil || payload.Format != repository.FormatAPT ||
-		(payload.SessionID == "") == (payload.SnapshotID == "") || payload.ObjectKey == "" {
+		reclaimTargetCount(payload) != 1 || payload.ObjectKey == "" {
 		return errors.New("invalid APT publication reclaim payload")
 	}
 	objectCtx, release, err := repository.LockObjectKeys(ctx, []string{payload.ObjectKey}, m.Store, repository.FormatAPT, m.Store.LockAPTObject)
@@ -123,7 +143,9 @@ func (m Maintenance) runReclaimJob(ctx context.Context, job repository.Lifecycle
 			return fmt.Errorf("delete abandoned APT publication object: %w", err)
 		}
 	}
-	if payload.SnapshotID != "" {
+	if payload.RestoreID != "" {
+		err = m.Store.MarkAPTArchiveObjectCollected(objectCtx, payload.RestoreID, payload.ObjectKey)
+	} else if payload.SnapshotID != "" {
 		err = m.Store.MarkAPTSnapshotObjectCollected(objectCtx, payload.SnapshotID, payload.ObjectKey)
 	} else {
 		err = m.Store.MarkAPTPublicationObjectCollected(objectCtx, payload.SessionID, payload.ObjectKey)
@@ -163,4 +185,14 @@ func (m Maintenance) StartScheduler(ctx context.Context, interval time.Duration)
 
 func (m Maintenance) StartWorker(ctx context.Context, interval time.Duration) {
 	m.runtime().Start(ctx, interval, 100, m.runReclaimJob)
+}
+
+func reclaimTargetCount(payload reclaimPayload) int {
+	count := 0
+	for _, id := range []string{payload.SessionID, payload.SnapshotID, payload.RestoreID} {
+		if id != "" {
+			count++
+		}
+	}
+	return count
 }

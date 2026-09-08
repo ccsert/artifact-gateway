@@ -187,3 +187,57 @@ repositories_repositoryId_apt_snapshots_snapshotId_archive:
         "$ref": "../components/responses.yaml#/Problem"
       '500':
         "$ref": "../components/responses.yaml#/Problem"
+
+repositories_repositoryId_apt_snapshots_restore:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: restoreAPTRepositorySnapshot
+    description: Requires repository admin permission and independently configured public-key trust. Restores a Gateway v1 archive to its original repository UUID after checking the independently saved backup digest, both OpenPGP signatures, and canonical package indexes. Atomic and replayable; never re-signs or promotes an existing retired snapshot.
+    parameters:
+    - name: X-Artifact-Archive-Digest
+      in: header
+      required: true
+      description: SHA-256 receipt saved independently at backup time. Must not be derived from an untrusted upload at restore time.
+      schema:
+        type: string
+        pattern: '^sha256:[a-f0-9]{64}$'
+    requestBody:
+      required: true
+      content:
+        application/vnd.artifact-gateway.apt-snapshot.v1+tar:
+          schema:
+            type: string
+            format: binary
+            contentEncoding: binary
+    responses:
+      '200':
+        description: Exact signed snapshot restored or replayed
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/APTRepositorySnapshot"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+      '413':
+        "$ref": "../components/responses.yaml#/Problem"
+      '415':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+      '429':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"
+      '507':
+        "$ref": "../components/responses.yaml#/Problem"
