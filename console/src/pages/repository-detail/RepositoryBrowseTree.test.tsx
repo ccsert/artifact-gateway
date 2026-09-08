@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { browseRepository } from "../../client";
+import { browseGroup, browseRepository } from "../../client";
 import type { Repository } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RepositoryBrowseTree } from "./RepositoryBrowseTree";
@@ -9,6 +9,7 @@ import { RepositoryBrowseTree } from "./RepositoryBrowseTree";
 vi.mock("../../client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../client")>()),
   browseRepository: vi.fn(),
+  browseGroup: vi.fn(),
 }));
 
 const mockBrowseRepository = vi.mocked(browseRepository);
@@ -386,4 +387,73 @@ describe("Proxy directory recovery", () => {
     await user.click(screen.getByRole("button", { name: "在列表中查看" }));
     expect(open).toHaveBeenCalledWith(asset);
   });
+});
+
+it("uses Group browse and retains conflicting source identities and scope-aware links", async () => {
+  const user = userEvent.setup();
+  vi.mocked(browseGroup).mockResolvedValue({
+    data: {
+      items: [
+        {
+          id: "asset",
+          kind: "asset",
+          name: "release.zip",
+          hasChildren: false,
+          coordinate: "release.zip",
+          path: "release.zip",
+          sources: [
+            {
+              repositoryId: "hosted-id",
+              repositoryName: "releases",
+              type: "hosted",
+              resolutionOrder: 1,
+              coordinate: "release.zip",
+              path: "release.zip",
+              digest: `sha256:${"a".repeat(64)}`,
+              size: 100,
+            },
+            {
+              repositoryId: "proxy-id",
+              repositoryName: "mirror",
+              type: "proxy",
+              resolutionOrder: 3,
+              coordinate: "release.zip",
+              path: "release.zip",
+              digest: `sha256:${"b".repeat(64)}`,
+              cacheRepositoryName: "group",
+            },
+          ],
+        },
+      ],
+      groupId: "group-id",
+      groupName: "group",
+      format: "raw",
+      candidates: [],
+    },
+  } as never);
+  render(
+    <PreferencesProvider>
+      <RepositoryBrowseTree
+        repo={{ id: "group-id", name: "group", type: "group", format: "raw" }}
+        onOpenInList={vi.fn()}
+      />
+    </PreferencesProvider>,
+  );
+  await user.click(await screen.findByText("release.zip"));
+  expect(browseGroup).toHaveBeenCalledWith({
+    path: { groupId: "group-id" },
+    query: { pageSize: 50 },
+  });
+  expect(screen.getByRole("link", { name: "releases" })).toHaveAttribute(
+    "href",
+    expect.stringContaining("artifact=release.zip"),
+  );
+  expect(screen.getByRole("link", { name: "mirror" })).toHaveAttribute(
+    "href",
+    "/repositories/proxy-id",
+  );
+  expect(screen.getByText("缓存范围 · group")).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "在列表中查看" }),
+  ).not.toBeInTheDocument();
 });

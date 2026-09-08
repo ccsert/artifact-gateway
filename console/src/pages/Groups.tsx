@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   DatabaseOutlined,
+  FolderOpenOutlined,
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
@@ -711,6 +712,15 @@ export function GroupsPage() {
       align: "right",
       render: (_value, group) => (
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {(group.format === "maven" || group.format === "raw") && (
+            <Button
+              size="small"
+              href={`/groups/${group.id}/browse`}
+              icon={<FolderOpenOutlined />}
+            >
+              {text("浏览目录", "Browse directory")}
+            </Button>
+          )}
           <GroupResolutionDialog group={group} />
           <RenameGroupDialog group={group} onSaved={load} />
           <MembersDialog group={group} repos={repos} onSaved={load} />

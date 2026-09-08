@@ -34,22 +34,24 @@ type ArtifactBrowseParent struct {
 // ArtifactBrowseNode is a format-aware navigation projection. Key is an
 // internal stable sort position; it is never exposed as a client-owned ID.
 type ArtifactBrowseNode struct {
-	Key         string
-	Kind        BrowseNodeKind
-	Name        string
-	HasChildren bool
-	Namespace   string
-	Component   string
-	Version     string
-	BuildNumber int
-	Path        string
-	Coordinate  string
-	Digest      string
-	Size        int64
-	ContentType string
-	CreatedAt   time.Time
+	Key                 string
+	Kind                BrowseNodeKind
+	Name                string
+	HasChildren         bool
+	Namespace           string
+	Component           string
+	Version             string
+	BuildNumber         int
+	Path                string
+	Coordinate          string
+	Digest              string
+	Size                int64
+	ContentType         string
+	CacheRepositoryName string
+	CreatedAt           time.Time
 }
 
 type ArtifactBrowseStore interface {
+	ListGroupArtifactBrowseNodes(context.Context, string, Format, ArtifactBrowseParent, int, string) ([]ArtifactBrowseNode, error)
 	ListArtifactBrowseNodes(context.Context, string, Format, ArtifactBrowseParent, int, string) ([]ArtifactBrowseNode, error)
 }

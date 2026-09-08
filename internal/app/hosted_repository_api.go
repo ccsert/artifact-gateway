@@ -186,6 +186,13 @@ func (h hostedRepositoryAPIHandler) authenticateManagementRequest(w http.Respons
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return h.authenticate(w, r)
 	}
+	if parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/v2/groups/"), "/"); strings.HasPrefix(r.URL.Path, "/api/v2/groups/") && len(parts) == 2 && parts[1] == "browse" {
+		group, err := h.groups.GetHostedGroup(r.Context(), parts[0])
+		if err == nil && group.AnonymousRead && anonymousAccessAllowed(r.Context(), h.groups) {
+			return anonymousPrincipal(), true
+		}
+		return h.authenticate(w, r)
+	}
 	repositoryID, browse := managementBrowseRepositoryID(r.URL.Path)
 	if !browse {
 		return h.authenticate(w, r)

@@ -132,11 +132,15 @@ func (s *PostgresStore) listPostgresMavenBrowseNodes(ctx context.Context, reposi
 }
 
 func (s *PostgresStore) listPostgresRawBrowseNodes(ctx context.Context, repositoryID string, parent ArtifactBrowseParent, limit int, after string) ([]ArtifactBrowseNode, error) {
+	return s.listPostgresRawBrowseNodesOrdered(ctx, repositoryID, parent, limit, after, false)
+}
+
+func (s *PostgresStore) listPostgresRawBrowseNodesOrdered(ctx context.Context, repositoryID string, parent ArtifactBrowseParent, limit int, after string, binaryOrder bool) ([]ArtifactBrowseNode, error) {
 	prefix := parent.Path
 	if prefix != "" && !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
 	}
-	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (
+	query := `WITH candidates AS (
 			SELECT a.path,a.digest,o.size,a.content_type,a.updated_at,
 				substring(a.path FROM char_length($2) + 1) AS remainder
 			FROM native_raw_assets a
@@ -154,7 +158,11 @@ func (s *PostgresStore) listPostgresRawBrowseNodes(ctx context.Context, reposito
 			FROM candidates WHERE position('/' IN remainder)=0 AND remainder<>''
 		)
 		SELECT sort_key,name,has_children,path,digest,size,content_type,created_at
-		FROM direct WHERE sort_key>$4 ORDER BY sort_key LIMIT $5`, repositoryID, prefix, escapeLikePrefix(prefix), after, limit)
+		FROM direct WHERE sort_key>$4 ORDER BY sort_key LIMIT $5`
+	if binaryOrder {
+		query = strings.ReplaceAll(query, "sort_key>$4 ORDER BY sort_key", `sort_key COLLATE "C">$4 ORDER BY sort_key COLLATE "C"`)
+	}
+	rows, err := s.db.QueryContext(ctx, query, repositoryID, prefix, escapeLikePrefix(prefix), after, limit)
 	if err != nil {
 		return nil, err
 	}

@@ -108,3 +108,52 @@ groups_groupId_resolution:
         "$ref": "../components/responses.yaml#/Problem"
       '404':
         "$ref": "../components/responses.yaml#/Problem"
+
+groups_groupId_browse:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/GroupId"
+  get:
+    operationId: browseGroup
+    summary: Browse known Maven and Raw Group contributions
+    description: >-
+      Returns a bounded union of visible Hosted publications and live Proxy cache
+      indexes for members the reader can browse. No upstream or object-store scan.
+      Sources are local candidates, never a prediction of the next protocol hit.
+      Missing cache evidence does not prove an upstream miss. Maven cache records
+      fetched only through this Group require the current authorized resolution scope.
+      Navigation binds identity, member order, repository configuration and grants.
+      Groups with more than 64 configured members are not supported by this endpoint.
+    security:
+    - bearerAuth: []
+    - {}
+    parameters:
+    - name: parent
+      in: query
+      schema:
+        type: string
+        maxLength: 16384
+      description: Opaque node ID returned by this Group directory.
+    - "$ref": "../components/parameters.yaml#/PageSize"
+    - name: pageToken
+      in: query
+      schema:
+        type: string
+        maxLength: 16384
+      description: Opaque continuation bound to this Group and parent.
+    responses:
+      '200':
+        description: Direct children and authorized candidate order
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/GroupBrowsePage"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"

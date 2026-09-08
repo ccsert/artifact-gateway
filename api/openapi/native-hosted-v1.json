@@ -1475,6 +1475,74 @@
         }
       }
     },
+    "/groups/{groupId}/browse": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/GroupId"
+        }
+      ],
+      "get": {
+        "operationId": "browseGroup",
+        "summary": "Browse known Maven and Raw Group contributions",
+        "description": "Returns a bounded union of visible Hosted publications and live Proxy cache indexes for members the reader can browse. No upstream or object-store scan. Sources are local candidates, never a prediction of the next protocol hit. Missing cache evidence does not prove an upstream miss. Maven cache records fetched only through this Group require the current authorized resolution scope. Navigation binds identity, member order, repository configuration and grants. Groups with more than 64 configured members are not supported by this endpoint.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "parent",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 16384
+            },
+            "description": "Opaque node ID returned by this Group directory."
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 16384
+            },
+            "description": "Opaque continuation bound to this Group and parent."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Direct children and authorized candidate order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupBrowsePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/groups/{groupId}/members": {
       "parameters": [
         {
@@ -6189,6 +6257,211 @@
           },
           "permissions": {
             "$ref": "#/components/schemas/EffectiveAccessPermissions"
+          }
+        }
+      },
+      "BrowseSource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repositoryId",
+          "repositoryName",
+          "type",
+          "resolutionOrder"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryName": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hosted",
+              "proxy"
+            ]
+          },
+          "resolutionOrder": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Order among members visible to this reader, Hosted first."
+          },
+          "coordinate": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "buildNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "cachedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cacheRepositoryName": {
+            "type": "string"
+          }
+        }
+      },
+      "BrowseNodeKind": {
+        "type": "string",
+        "enum": [
+          "directory",
+          "namespace",
+          "component",
+          "version",
+          "asset"
+        ]
+      },
+      "BrowseNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "hasChildren"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384,
+            "description": "Server-issued opaque node ID. Submit it unchanged as parent."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BrowseNodeKind"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Format-aware display name for this level."
+          },
+          "hasChildren": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Canonical Repository-relative asset path when the node represents a path."
+          },
+          "coordinate": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Protocol-owned canonical coordinate when available."
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "contentType": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cachedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update of the live verified cache index, for Proxy assets only."
+          },
+          "buildNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Exact Maven SNAPSHOT build; Proxy nodes additionally pin the timestamp in their opaque ID."
+          },
+          "sourceRepositoryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Repository providing this publication or cached upstream response; absent on aggregate Group nodes."
+          },
+          "sourceRepositoryName": {
+            "type": "string"
+          },
+          "cacheState": {
+            "type": "string",
+            "enum": [
+              "cached"
+            ],
+            "description": "Present only for a Proxy asset backed by a live positive cache index. This is not a lifecycle Artifact Identity."
+          },
+          "sources": {
+            "type": "array",
+            "maxItems": 64,
+            "description": "Ordered local contributions for a Group node. Does not identify an actual protocol hit.",
+            "items": {
+              "$ref": "#/components/schemas/BrowseSource"
+            }
+          },
+          "cacheRepositoryName": {
+            "type": "string",
+            "description": "Scope owning the cache index, which may be a Group rather than the source Repository."
+          }
+        }
+      },
+      "GroupBrowsePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "groupId",
+          "groupName",
+          "format",
+          "candidates"
+        ],
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupName": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "maven",
+              "raw"
+            ]
+          },
+          "candidates": {
+            "type": "array",
+            "maxItems": 64,
+            "description": "Authorized members, including those without any known local contribution.",
+            "items": {
+              "$ref": "#/components/schemas/BrowseSource"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BrowseNode"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
           }
         }
       },

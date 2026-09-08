@@ -118,13 +118,13 @@ Webhook 订阅与失败在 Operations 可见，但无全局 Toast/job indicator/
 
 已落地：服务端跨 Repository 搜索和深链接；Audit cursor/CSV；Dashboard donut/sparkline；有界 API Key role/expiry/last-used；Replication cancel；Raw upload；本地/Bearer/OIDC Login；集中 Access Control、Role/Template/evaluator；本地 User 管理；Proxy hot edit。
 
-后续补充了自动 Artifact security evidence、Scanner、健康新鲜度、finding、Quarantine 与六类格式默认关闭的 read policy，以及脱敏 system diagnostics。首批格式感知目录树也已落地：服务端签发并按 Repository/principal 绑定 opaque node ID 与分页游标，Maven/Raw Hosted 使用服务端 adapter 投影，Console lazy 加载并保留原列表/搜索。Maven/Raw Proxy 已增加 PostgreSQL 直接子节点查询、按当前上游绑定的游标及精确 SNAPSHOT 浏览；来源仓库和缓存证据来自服务端。Group 来源整合仍待实现。
+后续补充了自动 Artifact security evidence、Scanner、健康新鲜度、finding、Quarantine 与六类格式默认关闭的 read policy，以及脱敏 system diagnostics。首批格式感知目录树也已落地：服务端签发并按 Repository/principal 绑定 opaque node ID 与分页游标，Maven/Raw Hosted 使用服务端 adapter 投影，Console lazy 加载并保留原列表/搜索。Maven/Raw Proxy 已增加 PostgreSQL 直接子节点查询、按当前上游绑定的游标及精确 SNAPSHOT 浏览；来源仓库和缓存证据来自服务端。Maven/Raw Group 来源整合已实现，包含 Group 专属缓存与授权绑定导航。
 
 明确约束：不提供绕过 Tombstone/宽限期/引用复查的 hard purge；API Key 当前 RBAC 已有 role/expiry/revoke/last-used，任意 privilege expression 延期；Hosted lifecycle 已覆盖 Maven、OCI、Raw、Conan、npm、PyPI，Replication 使用 fenced checkpoint。
 
 ## 优先 Backlog
 
-1. 将已交付的 Maven/Raw 目录树扩展到 Group provenance 和其他格式 adapter；继续禁止 Console 猜测物理目录或从展示路径重建 Artifact Identity。
+1. 将已交付的 Maven/Raw Hosted/Proxy/Group 目录树扩展到其他格式 adapter；继续禁止 Console 猜测物理目录或从展示路径重建 Artifact Identity。
 2. 扩展 Grant Template 的 selector 组合，保留 effective-access 预演。
 3. 在现有诊断上增加脱敏可下载日志与有界数据库证据。
 4. 增加服务端时序、throughput、cache hit、storage growth 与 top-N。

@@ -49,7 +49,7 @@ Progress update 2026-07-31:
   Raw Groups fall through between Proxy members on confirmed misses ([#24](https://github.com/ccsert/artifact-gateway/issues/24)).
   Maven multi-Proxy fallback and positive/negative resolution-scope validation
   are implemented in [#28](https://github.com/ccsert/artifact-gateway/issues/28); per-artifact
-  Group directory provenance remains tracked in [#25](https://github.com/ccsert/artifact-gateway/issues/25).
+  Group directory provenance is now implemented ([#25](https://github.com/ccsert/artifact-gateway/issues/25)).
 - Anonymous read decisions are recorded with the anonymous actor and bounded
   authorization source/reason values across protocol and management browse paths.
 
@@ -58,6 +58,35 @@ Progress update 2026-08-08:
 - The audit Console now uses a server-side cursor page endpoint with signed,
   filter-scoped tokens and inclusive time-range filters. The original array
   endpoint remains available for compatibility.
+
+## Group directories and provenance
+
+The Groups Console links to `/groups/{groupId}/browse`; its API is
+`GET /api/v2/groups/{groupId}/browse`. Directories merge readable Hosted
+publications and live positive cache evidence, retaining every member contribution
+and its digest. Sources follow the current reader's visible Hosted-first order.
+The candidate list includes Proxies without known cached data. Neither list is
+an actual protocol hit record or evidence that an uncached upstream path is absent.
+
+Queries use database indexes without upstream or S3 requests. Maven records fetched
+only through the Group participate when their current authorized member/endpoint
+resolution scope matches. Cache scope is displayed separately from the source
+Repository. Hosted and member-local cache links preserve coordinate, asset path,
+build and digest; Group-only cache links open the source Repository without claiming
+that its own cache listing contains the Group index. Groups gain no byte ownership
+or lifecycle actions.
+
+Opaque nodes and cursors expire after 15 minutes and bind Group, parent, principal,
+member order, repository configuration, Grant versions and anonymous-policy version.
+Refresh the root after changes. Pages contain 1–200 items; at most 64 configured
+members are supported, otherwise `unsupported_group_size` is returned. Authenticated
+directory access requires whole-repository read permission; members with only
+path-prefix grants are excluded. Anonymous access requires global, Group and member
+opt-in together.
+
+Maven versions sort by protocol file prefix. Hosted contributes its current visible
+build; Proxy nodes pin exact timestamps. Equal build numbers with different timestamps
+remain separate. Source bytes never become a new Group-owned Artifact Identity.
 
 ## Goals
 
@@ -136,8 +165,7 @@ Proposed contract:
 The first delivered adapters cover Maven and Raw Hosted repositories plus local
 Proxy cache evidence, validating both a semantic hierarchy and a path
 hierarchy. The existing list/search view remains available for
-cross-repository discovery and accessibility. Group provenance and additional
-format adapters remain future work.
+cross-repository discovery and accessibility. Maven/Raw Group provenance is implemented; additional format adapters remain future work.
 
 ## Maven Proxy Browse Experience
 
@@ -389,8 +417,9 @@ Group-only interactions:
 - [x] Add the direct-child Repository browse contract with opaque node IDs and
       cursors.
 - [x] Implement Maven and Raw Hosted adapters.
-- [x] Query Maven/Raw Proxy direct children in PostgreSQL with repository/upstream/path indexes, bounded response pages, live cache evidence, and exact timestamped SNAPSHOT nodes. Directory requests never scan object storage; old S3-only indexes enter the tree through existing lazy protocol migration. Group provenance remains pending.
-- [ ] Add Group provenance and adapters for additional formats.
+- [x] Query Maven/Raw Proxy direct children in PostgreSQL with repository/upstream/path indexes, bounded response pages, live cache evidence, and exact timestamped SNAPSHOT nodes. Directory requests never scan object storage; old S3-only indexes enter the tree through existing lazy protocol migration. Maven/Raw Group provenance is implemented.
+- [x] Add Maven/Raw Group provenance.
+- [ ] Add adapters for additional formats.
 - [x] Add a lazy, keyboard-accessible Console tree while retaining list/search.
 
 ### Phase 3: Capacity And Storage

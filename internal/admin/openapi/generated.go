@@ -502,6 +502,24 @@ func (e BrowseNodeKind) Valid() bool {
 	}
 }
 
+// Defines values for BrowseSourceType.
+const (
+	BrowseSourceTypeHosted BrowseSourceType = "hosted"
+	BrowseSourceTypeProxy  BrowseSourceType = "proxy"
+)
+
+// Valid indicates whether the value is a known member of the BrowseSourceType enum.
+func (e BrowseSourceType) Valid() bool {
+	switch e {
+	case BrowseSourceTypeHosted:
+		return true
+	case BrowseSourceTypeProxy:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConanPackageRevisionState.
 const (
 	ConanPackageRevisionStateDeleted ConanPackageRevisionState = "deleted"
@@ -1084,6 +1102,24 @@ func (e GrantScopes) Valid() bool {
 	case GrantScopesRepositoriesRead:
 		return true
 	case GrantScopesRepositoriesWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GroupBrowsePageFormat.
+const (
+	GroupBrowsePageFormatMaven GroupBrowsePageFormat = "maven"
+	GroupBrowsePageFormatRaw   GroupBrowsePageFormat = "raw"
+)
+
+// Valid indicates whether the value is a known member of the GroupBrowsePageFormat enum.
+func (e GroupBrowsePageFormat) Valid() bool {
+	switch e {
+	case GroupBrowsePageFormatMaven:
+		return true
+	case GroupBrowsePageFormatRaw:
 		return true
 	default:
 		return false
@@ -2711,6 +2747,9 @@ type BrowseNode struct {
 	// BuildNumber Exact Maven SNAPSHOT build; Proxy nodes additionally pin the timestamp in their opaque ID.
 	BuildNumber *int `json:"buildNumber,omitempty"`
 
+	// CacheRepositoryName Scope owning the cache index, which may be a Group rather than the source Repository.
+	CacheRepositoryName *string `json:"cacheRepositoryName,omitempty"`
+
 	// CacheState Present only for a Proxy asset backed by a live positive cache index. This is not a lifecycle Artifact Identity.
 	CacheState *BrowseNodeCacheState `json:"cacheState,omitempty"`
 
@@ -2735,9 +2774,12 @@ type BrowseNode struct {
 	Path *string `json:"path,omitempty"`
 	Size *int64  `json:"size,omitempty"`
 
-	// SourceRepositoryId Repository owning this publication or cache record.
+	// SourceRepositoryId Repository providing this publication or cached upstream response; absent on aggregate Group nodes.
 	SourceRepositoryId   *openapi_types.UUID `json:"sourceRepositoryId,omitempty"`
 	SourceRepositoryName *string             `json:"sourceRepositoryName,omitempty"`
+
+	// Sources Ordered local contributions for a Group node. Does not identify an actual protocol hit.
+	Sources *[]BrowseSource `json:"sources,omitempty"`
 }
 
 // BrowseNodeCacheState Present only for a Proxy asset backed by a live positive cache index. This is not a lifecycle Artifact Identity.
@@ -2751,6 +2793,26 @@ type BrowseNodePage struct {
 	Items         []BrowseNode `json:"items"`
 	NextPageToken *string      `json:"nextPageToken,omitempty"`
 }
+
+// BrowseSource defines model for BrowseSource.
+type BrowseSource struct {
+	BuildNumber         *int               `json:"buildNumber,omitempty"`
+	CacheRepositoryName *string            `json:"cacheRepositoryName,omitempty"`
+	CachedAt            *time.Time         `json:"cachedAt,omitempty"`
+	Coordinate          *string            `json:"coordinate,omitempty"`
+	Digest              *string            `json:"digest,omitempty"`
+	Path                *string            `json:"path,omitempty"`
+	RepositoryId        openapi_types.UUID `json:"repositoryId"`
+	RepositoryName      string             `json:"repositoryName"`
+
+	// ResolutionOrder Order among members visible to this reader, Hosted first.
+	ResolutionOrder int              `json:"resolutionOrder"`
+	Size            *int64           `json:"size,omitempty"`
+	Type            BrowseSourceType `json:"type"`
+}
+
+// BrowseSourceType defines model for BrowseSource.Type.
+type BrowseSourceType string
 
 // ConanPackageIdList defines model for ConanPackageIdList.
 type ConanPackageIdList struct {
@@ -3324,6 +3386,20 @@ type Group struct {
 	Name          string             `json:"name"`
 	Version       string             `json:"version"`
 }
+
+// GroupBrowsePage defines model for GroupBrowsePage.
+type GroupBrowsePage struct {
+	// Candidates Authorized members, including those without any known local contribution.
+	Candidates    []BrowseSource        `json:"candidates"`
+	Format        GroupBrowsePageFormat `json:"format"`
+	GroupId       openapi_types.UUID    `json:"groupId"`
+	GroupName     string                `json:"groupName"`
+	Items         []BrowseNode          `json:"items"`
+	NextPageToken *string               `json:"nextPageToken,omitempty"`
+}
+
+// GroupBrowsePageFormat defines model for GroupBrowsePage.Format.
+type GroupBrowsePageFormat string
 
 // GroupCapacity defines model for GroupCapacity.
 type GroupCapacity struct {
@@ -4565,6 +4641,16 @@ type ReplaceGroupParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// BrowseGroupParams defines parameters for BrowseGroup.
+type BrowseGroupParams struct {
+	// Parent Opaque node ID returned by this Group directory.
+	Parent   *string   `form:"parent,omitempty" json:"parent,omitempty"`
+	PageSize *PageSize `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+
+	// PageToken Opaque continuation bound to this Group and parent.
+	PageToken *string `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // ReplaceGroupMembersParams defines parameters for ReplaceGroupMembers.
 type ReplaceGroupMembersParams struct {
 	IfMatch IfMatch `json:"If-Match"`
@@ -5207,6 +5293,9 @@ type ServerInterface interface {
 
 	// (PUT /groups/{groupId})
 	ReplaceGroup(w http.ResponseWriter, r *http.Request, groupId GroupId, params ReplaceGroupParams)
+	// BrowseGroup Browse known Maven and Raw Group contributions
+	// (GET /groups/{groupId}/browse)
+	BrowseGroup(w http.ResponseWriter, r *http.Request, groupId GroupId, params BrowseGroupParams)
 
 	// (GET /groups/{groupId}/capacity)
 	GetGroupCapacity(w http.ResponseWriter, r *http.Request, groupId GroupId)
@@ -6865,6 +6954,74 @@ func (siw *ServerInterfaceWrapper) ReplaceGroup(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceGroup(w, r, groupId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BrowseGroup operation middleware
+func (siw *ServerInterfaceWrapper) BrowseGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", r.PathValue("groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BrowseGroupParams
+
+	// ------------- Optional query parameter "parent" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "parent", r.URL.Query(), &params.Parent, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "parent"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "parent", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BrowseGroup(w, r, groupId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11634,6 +11791,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/groups/{groupId}", wrapper.DeleteGroup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}", wrapper.GetGroup)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/groups/{groupId}", wrapper.ReplaceGroup)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/browse", wrapper.BrowseGroup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/capacity", wrapper.GetGroupCapacity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/members", wrapper.ListGroupMembers)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/groups/{groupId}/members", wrapper.ReplaceGroupMembers)
@@ -13716,6 +13874,101 @@ func (response ReplaceGroup412ApplicationProblemPlusJSONResponse) VisitReplaceGr
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseGroupRequestObject struct {
+	GroupId GroupId `json:"groupId"`
+	Params  BrowseGroupParams
+}
+
+type BrowseGroupResponseObject interface {
+	VisitBrowseGroupResponse(w http.ResponseWriter) error
+}
+
+type BrowseGroup200JSONResponse GroupBrowsePage
+
+func (response BrowseGroup200JSONResponse) VisitBrowseGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseGroup400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response BrowseGroup400ApplicationProblemPlusJSONResponse) VisitBrowseGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseGroup401ApplicationProblemPlusJSONResponse Problem
+
+func (response BrowseGroup401ApplicationProblemPlusJSONResponse) VisitBrowseGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseGroup403ApplicationProblemPlusJSONResponse Problem
+
+func (response BrowseGroup403ApplicationProblemPlusJSONResponse) VisitBrowseGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseGroup404ApplicationProblemPlusJSONResponse Problem
+
+func (response BrowseGroup404ApplicationProblemPlusJSONResponse) VisitBrowseGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BrowseGroup500ApplicationProblemPlusJSONResponse Problem
+
+func (response BrowseGroup500ApplicationProblemPlusJSONResponse) VisitBrowseGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -20629,6 +20882,9 @@ type StrictServerInterface interface {
 
 	// (PUT /groups/{groupId})
 	ReplaceGroup(ctx context.Context, request ReplaceGroupRequestObject) (ReplaceGroupResponseObject, error)
+	// BrowseGroup Browse known Maven and Raw Group contributions
+	// (GET /groups/{groupId}/browse)
+	BrowseGroup(ctx context.Context, request BrowseGroupRequestObject) (BrowseGroupResponseObject, error)
 
 	// (GET /groups/{groupId}/capacity)
 	GetGroupCapacity(ctx context.Context, request GetGroupCapacityRequestObject) (GetGroupCapacityResponseObject, error)
@@ -22035,6 +22291,33 @@ func (sh *strictHandler) ReplaceGroup(w http.ResponseWriter, r *http.Request, gr
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceGroupResponseObject); ok {
 		if err := validResponse.VisitReplaceGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// BrowseGroup operation middleware
+func (sh *strictHandler) BrowseGroup(w http.ResponseWriter, r *http.Request, groupId GroupId, params BrowseGroupParams) {
+	var request BrowseGroupRequestObject
+
+	request.GroupId = groupId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.BrowseGroup(ctx, request.(BrowseGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "BrowseGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(BrowseGroupResponseObject); ok {
+		if err := validResponse.VisitBrowseGroupResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
