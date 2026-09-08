@@ -2157,7 +2157,7 @@ BrowseNode:
     id:
       type: string
       minLength: 1
-      maxLength: 4096
+      maxLength: 16384
       description: Server-issued opaque node ID. Submit it unchanged as parent.
     kind:
       "$ref": "#/BrowseNodeKind"
@@ -2200,13 +2200,83 @@ BrowseNode:
     sourceRepositoryId:
       type: string
       format: uuid
-      description: Repository owning this publication or cache record.
+      description: Repository providing this publication or cached upstream response; absent on aggregate Group nodes.
     sourceRepositoryName:
       type: string
     cacheState:
       type: string
       enum: [cached]
       description: Present only for a Proxy asset backed by a live positive cache index. This is not a lifecycle Artifact Identity.
+    sources:
+      type: array
+      maxItems: 64
+      description: Ordered local contributions for a Group node. Does not identify an actual protocol hit.
+      items:
+        "$ref": "#/BrowseSource"
+    cacheRepositoryName:
+      type: string
+      description: Scope owning the cache index, which may be a Group rather than the source Repository.
+BrowseSource:
+  type: object
+  additionalProperties: false
+  required: [repositoryId, repositoryName, type, resolutionOrder]
+  properties:
+    repositoryId:
+      type: string
+      format: uuid
+    repositoryName:
+      type: string
+    type:
+      type: string
+      enum: [hosted, proxy]
+    resolutionOrder:
+      type: integer
+      minimum: 1
+      description: Order among members visible to this reader, Hosted first.
+    coordinate:
+      type: string
+    path:
+      type: string
+    digest:
+      type: string
+      pattern: "^sha256:[a-f0-9]{64}$"
+    size:
+      type: integer
+      format: int64
+      minimum: 0
+    buildNumber:
+      type: integer
+      minimum: 1
+    cachedAt:
+      type: string
+      format: date-time
+    cacheRepositoryName:
+      type: string
+GroupBrowsePage:
+  type: object
+  additionalProperties: false
+  required: [items, groupId, groupName, format, candidates]
+  properties:
+    groupId:
+      type: string
+      format: uuid
+    groupName:
+      type: string
+    format:
+      type: string
+      enum: [maven, raw]
+    candidates:
+      type: array
+      maxItems: 64
+      description: Authorized members, including those without any known local contribution.
+      items:
+        "$ref": "#/BrowseSource"
+    items:
+      type: array
+      items:
+        "$ref": "#/BrowseNode"
+    nextPageToken:
+      type: string
 BrowseNodePage:
   type: object
   additionalProperties: false

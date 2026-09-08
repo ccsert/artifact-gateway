@@ -8,7 +8,7 @@
 单独展示配置位置，不查询制品或上游，也不判断读取者权限。Raw Group 在明确未命中后
 继续尝试后续 Proxy（[#24](https://github.com/ccsert/artifact-gateway/issues/24)）。
 Maven 多 Proxy 回退与正负缓存解析范围校验已在 [#28](https://github.com/ccsert/artifact-gateway/issues/28)
-实现；逐制品的 Group 目录来源仍由 [#25](https://github.com/ccsert/artifact-gateway/issues/25) 跟踪。
+实现；逐制品的 Maven/Raw Group 目录来源也已实现（[#25](https://github.com/ccsert/artifact-gateway/issues/25)）。
 
 ## 目标
 
@@ -44,7 +44,27 @@ Console 应补充目录树交互，但不能假装所有格式都存在物理文
 - 节点 ID 与 cursor 不由浏览器重建，并按适用范围签名绑定 Repository、format、parent、principal、过期时间和稳定排序位置。
 - 合成目录不自动拥有删除语义。未来若支持子树清理，必须由服务端解析不可变身份、先展示有界 dry-run，再通过可审计异步 Job 执行。
 
-首批已交付 Maven、Raw Hosted adapter，同时验证语义层级和路径层级。Maven/Raw Proxy 现已直接从 PostgreSQL 查询当前层缓存节点，按仓库名称、当前上游、有效期与正缓存状态过滤。目录查询不访问 S3；旧 S3 索引通过既有协议读取按需迁移后可见。SNAPSHOT 节点固定时间戳和构建号，缓存证据不作为可晋级 Artifact Identity。现有列表/搜索继续保留，用于跨 Repository 发现与无障碍访问；Group provenance 和其他格式 adapter 仍是后续工作。
+首批已交付 Maven、Raw Hosted adapter，同时验证语义层级和路径层级。Maven/Raw Proxy 现已直接从 PostgreSQL 查询当前层缓存节点，按仓库名称、当前上游、有效期与正缓存状态过滤。目录查询不访问 S3；旧 S3 索引通过既有协议读取按需迁移后可见。SNAPSHOT 节点固定时间戳和构建号，缓存证据不作为可晋级 Artifact Identity。现有列表/搜索继续保留，用于跨 Repository 发现与无障碍访问；Maven/Raw Group 来源已接入；其他格式 adapter 仍是后续工作。
+
+## Group 目录与来源
+
+Console 分组列表的“浏览目录”进入 `/groups/{groupId}/browse`；API 为
+`GET /api/v2/groups/{groupId}/browse`。目录合并可读取成员的 Hosted 发布与当前有效正缓存，
+同一节点保留全部来源及各自摘要，按当前读取者可见的 Hosted 优先顺序排列。
+候选成员列表包含尚无本地缓存的 Proxy；它和节点来源都不是协议实际命中记录。
+
+目录使用数据库索引，不请求上游或 S3。仅通过 Group 下载的 Maven 索引会在当前成员、
+端点和授权解析范围匹配时参与；缓存范围与来源仓库分别展示。来源链接对 Hosted 和成员
+自己的缓存保留坐标、路径、构建与摘要；Group 专属缓存链接到来源仓库，而不假装该索引
+也存在于成员自己的缓存列表。Group 不获得制品所有权或管理操作。
+
+导航采用 15 分钟有效的不透明节点与游标，绑定 Group、父节点、身份、成员顺序、配置、
+Grant 版本和匿名策略版本。变更后刷新根目录重新浏览。每页 1–200 项，最多 64 个配置成员；
+超出成员上限返回 `unsupported_group_size`。非匿名读取要求成员整仓读取权限；仅有路径
+前缀 Grant 的成员不进入该目录。匿名访问同时要求全局、Group 和成员 opt-in。
+
+Maven 版本按协议文件前缀稳定排序，Hosted 使用当前可见构建，Proxy 保留精确时间戳。
+同构建号、不同时间戳保持不同节点；来源各自的资产字节不合并成新的 Artifact Identity。
 
 ## Maven Proxy 浏览体验
 
@@ -110,7 +130,7 @@ Operations 显示 circuit、cache hit/miss/negative、最近失败和 collection
 - 跨 Repository 搜索与精确 digest/coordinate lookup。
 - Group owner 与 Proxy cache state 使用同一解析来源。
 - 新增直属子节点 browse contract，使用 opaque node ID/cursor。
-- 已实现 Maven、Raw Hosted/Proxy adapter；Group provenance 待实现。
+- 已实现 Maven、Raw Hosted/Proxy adapter 及 Group 来源整合。
 - Console 增加 lazy、键盘可访问的目录树，同时保留列表/搜索。
 
 ### 阶段 3：容量与存储

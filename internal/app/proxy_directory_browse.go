@@ -13,6 +13,7 @@ import (
 // A directory expansion must query the index in storage. In particular, a
 // generic object Store.List/Get fallback would scan every repository and S3.
 type proxyDirectoryStore interface {
+	ListGroupProxyBrowseNodes(context.Context, repository.HostedRepository, string, string, repository.ArtifactBrowseParent, int, string) ([]repository.ArtifactBrowseNode, error)
 	ListProxyBrowseNodes(context.Context, repository.HostedRepository, repository.ArtifactBrowseParent, int, string) ([]repository.ArtifactBrowseNode, error)
 }
 
@@ -29,6 +30,7 @@ func (h proxyCacheBrowseHandler) directoryStore() proxyDirectoryStore {
 // Legacy records enter this query when the existing protocol read migrates them.
 const proxyBrowseLiveSQL = `WITH live AS (
 	SELECT key, updated_at,
+		COALESCE(value->>'repository',value->>'Repository') AS cache_repository,
 		COALESCE(value->>'path',value->>'Path') AS path,
 		COALESCE(value->>'digest',value->>'Digest') AS digest,
 		COALESCE(value->>'size',value->>'Size','0')::bigint AS size,
@@ -78,6 +80,10 @@ const proxyMavenBrowseSQL = `), paths AS (
 `
 
 func (s *PostgresCacheControlStore) ListProxyBrowseNodes(ctx context.Context, repo repository.HostedRepository, parent repository.ArtifactBrowseParent, limit int, after string) ([]repository.ArtifactBrowseNode, error) {
+	return s.ListGroupProxyBrowseNodes(ctx, repo, "", "", parent, limit, after)
+}
+
+func (s *PostgresCacheControlStore) ListGroupProxyBrowseNodes(ctx context.Context, repo repository.HostedRepository, group, scope string, parent repository.ArtifactBrowseParent, limit int, after string) ([]repository.ArtifactBrowseNode, error) {
 	if repo.Type != repository.RepositoryTypeProxy || (repo.Format != repository.FormatMaven && repo.Format != repository.FormatRaw) {
 		return nil, repository.ErrUnsupportedBrowseFormat
 	}
@@ -134,13 +140,16 @@ func (s *PostgresCacheControlStore) ListProxyBrowseNodes(ctx context.Context, re
 	query := base + proxyMavenBrowseSQL
 	switch parent.Kind {
 	case "":
-		query += `SELECT DISTINCT namespace COLLATE "C", 'namespace', namespace, true, namespace, '', '', '', '', '', 0::bigint, '', NULL::timestamptz, 0 FROM assets WHERE namespace COLLATE "C">$3 ORDER BY 1 LIMIT $4`
+		query += `SELECT DISTINCT namespace COLLATE "C", 'namespace', namespace, true, namespace, '', '', '', '', '', 0::bigint, '', NULL::timestamptz, 0, '' FROM assets WHERE namespace COLLATE "C">$3 ORDER BY 1 LIMIT $4`
 	case repository.BrowseNodeNamespace:
-		query += `SELECT DISTINCT component COLLATE "C", 'component', component, true, namespace, component, '', '', '', '', 0::bigint, '', NULL::timestamptz, 0 FROM assets WHERE ` + predicate + ` AND component COLLATE "C">$4 ORDER BY 1 LIMIT $5`
+		query += `SELECT DISTINCT component COLLATE "C", 'component', component, true, namespace, component, '', '', '', '', 0::bigint, '', NULL::timestamptz, 0, '' FROM assets WHERE ` + predicate + ` AND component COLLATE "C">$4 ORDER BY 1 LIMIT $5`
 	case repository.BrowseNodeComponent:
-		query += `SELECT DISTINCT file_prefix COLLATE "C", 'version', version || CASE WHEN snapshot IS NOT NULL THEN ' · ' || snapshot ELSE '' END, true, namespace, component, version, file_prefix, coordinate, '', 0::bigint, '', NULL::timestamptz, build_number FROM assets WHERE ` + predicate + ` AND file_prefix COLLATE "C">$5 ORDER BY 1 LIMIT $6`
+		query += `SELECT DISTINCT file_prefix COLLATE "C", 'version', version || CASE WHEN snapshot IS NOT NULL THEN ' · ' || snapshot ELSE '' END, true, namespace, component, version, file_prefix, coordinate, '', 0::bigint, '', NULL::timestamptz, build_number, '' FROM assets WHERE ` + predicate + ` AND file_prefix COLLATE "C">$5 ORDER BY 1 LIMIT $6`
 	case repository.BrowseNodeVersion:
-		query += `SELECT path COLLATE "C", 'asset', filename, false, namespace, component, version, path, coordinate, 'sha256:' || digest, size, content_type, updated_at, build_number FROM assets WHERE ` + predicate + ` AND path COLLATE "C">$6 ORDER BY 1 LIMIT $7`
+		query += `SELECT path COLLATE "C", 'asset', filename, false, namespace, component, version, path, coordinate, 'sha256:' || digest, size, content_type, updated_at, build_number, cache_repository FROM assets WHERE ` + predicate + ` AND path COLLATE "C">$6 ORDER BY 1 LIMIT $7`
+	}
+	if group != "" && scope != "" {
+		query, args = groupProxyBrowseQuery(query, args, group, scope, repo.Name)
 	}
 	return s.scanProxyBrowseNodes(ctx, query, args...)
 }
@@ -162,11 +171,11 @@ func (s *PostgresCacheControlStore) listRawProxyBrowse(ctx context.Context, base
 		SELECT DISTINCT split_part(remainder,'/',1) || chr(31) || '0' AS key,
 			'directory' AS kind, split_part(remainder,'/',1) AS name, true AS children,
 			'' AS namespace, '' AS component, '' AS version, $4 || split_part(remainder,'/',1) AS path,
-			'' AS coordinate, '' AS digest, 0::bigint AS size, '' AS content_type, NULL::timestamptz AS created_at, 0 AS build_number
+			'' AS coordinate, '' AS digest, 0::bigint AS size, '' AS content_type, NULL::timestamptz AS created_at, 0 AS build_number, ''::text AS cache_repository
 		FROM descendants WHERE position('/' IN remainder)>0
 		UNION ALL
 		SELECT remainder || chr(31) || '1', 'asset', remainder, false, '', '', '', path, path,
-			'sha256:' || digest, size, content_type, updated_at, 0
+			'sha256:' || digest, size, content_type, updated_at, 0, cache_repository
 		FROM descendants WHERE remainder<>'' AND position('/' IN remainder)=0
 	)
 	SELECT * FROM nodes WHERE key COLLATE "C">$5 ORDER BY key COLLATE "C" LIMIT $6`
@@ -191,7 +200,7 @@ func (s *PostgresCacheControlStore) scanProxyBrowseNodes(ctx context.Context, qu
 	for rows.Next() {
 		var node repository.ArtifactBrowseNode
 		var cachedAt *time.Time
-		if err := rows.Scan(&node.Key, &node.Kind, &node.Name, &node.HasChildren, &node.Namespace, &node.Component, &node.Version, &node.Path, &node.Coordinate, &node.Digest, &node.Size, &node.ContentType, &cachedAt, &node.BuildNumber); err != nil {
+		if err := rows.Scan(&node.Key, &node.Kind, &node.Name, &node.HasChildren, &node.Namespace, &node.Component, &node.Version, &node.Path, &node.Coordinate, &node.Digest, &node.Size, &node.ContentType, &cachedAt, &node.BuildNumber, &node.CacheRepositoryName); err != nil {
 			return nil, err
 		}
 		if cachedAt != nil {
@@ -200,4 +209,18 @@ func (s *PostgresCacheControlStore) scanProxyBrowseNodes(ctx context.Context, qu
 		nodes = append(nodes, node)
 	}
 	return nodes, rows.Err()
+}
+
+// The source repository and the scope owning its index are separate. A Group
+// cache may contribute only while its authorized candidate scope still matches.
+// Prefer the newest live evidence when direct and Group indexes share a path.
+func groupProxyBrowseQuery(query string, args []any, group, scope, member string) (string, []any) {
+	n := len(args)
+	original := "COALESCE(value->>'repository',value->>'Repository')=$1"
+	combined := fmt.Sprintf("(%s OR (COALESCE(value->>'repository',value->>'Repository')=$%d AND COALESCE(value->>'resolution_scope',value->>'ResolutionScope')=$%d AND COALESCE(value->>'member',value->>'Member')=$%d))", original, n+1, n+2, n+3)
+	query = strings.Replace(query, original, combined, 1)
+	query = strings.Replace(query, "AND md5(COALESCE(value->>'repository',value->>'Repository'))=md5($1)", fmt.Sprintf("AND md5(COALESCE(value->>'repository',value->>'Repository')) IN (md5($1),md5($%d))", n+1), 1)
+	query = strings.Replace(query, "), paths AS (", "), deduplicated AS (SELECT DISTINCT ON (path) * FROM live ORDER BY path, updated_at DESC, key), paths AS (", 1)
+	query = strings.Replace(query, "AS parts FROM live", "AS parts FROM deduplicated", 1)
+	return query, append(args, group, scope, member)
 }

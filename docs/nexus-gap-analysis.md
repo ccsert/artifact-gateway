@@ -226,7 +226,7 @@ cache indexes directly, bind navigation to the current upstream configuration, a
 preserve exact timestamped SNAPSHOT file identities.
 It uses a server-issued, format-aware browse-node contract, opaque parent IDs and cursors,
 so the Console does not infer physical folders or rebuild Artifact Identity
-from display paths. Group provenance and adapters for other formats remain open.
+from display paths. Maven/Raw Group provenance is implemented; adapters for other formats remain open.
 
 ### Upload And Publish UI
 

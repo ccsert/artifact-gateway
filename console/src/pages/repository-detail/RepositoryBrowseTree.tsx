@@ -7,16 +7,25 @@ import {
 } from "react";
 import {
   AppstoreOutlined,
+  ShrinkOutlined,
+  ArrowUpOutlined,
+  BranchesOutlined,
   FileOutlined,
   FolderOpenOutlined,
   FolderOutlined,
   ReloadOutlined,
   TagsOutlined,
 } from "@ant-design/icons";
-import { Button, Tree } from "antd";
+import { Button, ConfigProvider, Tree } from "antd";
 import type { TreeDataNode, TreeProps } from "antd";
-import { browseRepository } from "../../client";
-import type { BrowseNode, Repository } from "../../client";
+import { browseGroup, browseRepository } from "../../client";
+import type {
+  BrowseNode,
+  BrowseNodePage,
+  GroupBrowsePage,
+  BrowseSource,
+  Repository,
+} from "../../client";
 import { Badge } from "../../components/Badge";
 import { EmptyState, ErrorBanner, Loading } from "../../components/Feedback";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
@@ -86,8 +95,14 @@ function appendNodePage(
 export function RepositoryBrowseTree({
   repo,
   onOpenInList,
+  initialPage,
+  onGroupRefresh,
 }: {
-  repo: Repository;
+  repo: Pick<Repository, "id" | "name" | "format"> & {
+    type?: Repository["type"] | "group";
+  };
+  initialPage?: BrowseNodePage;
+  onGroupRefresh?: (page: GroupBrowsePage) => void;
   onOpenInList: (node: BrowseNode) => void;
 }) {
   const { text } = usePreferences();
@@ -97,15 +112,47 @@ export function RepositoryBrowseTree({
   const [treeEpoch, setTreeEpoch] = useState(0);
   const [treeData, setTreeData] = useState<RepositoryTreeDataNode[]>([]);
   const [selected, setSelected] = useState<BrowseNode | null>(null);
+  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
 
+  const requestPage = useCallback(
+    async (query: {
+      parent?: string;
+      pageToken?: string;
+      pageSize: number;
+    }) => {
+      if (repo.type === "group") {
+        const response = await browseGroup({
+          path: { groupId: repo.id },
+          query,
+        });
+        return { ...response, groupPage: response.data };
+      }
+      const response = await browseRepository({
+        path: { repositoryId: repo.id },
+        query,
+      });
+      return { ...response, groupPage: undefined };
+    },
+    [repo.id, repo.type],
+  );
+
   const nodeTitle = useCallback(
     (node: BrowseNode) => (
-      <span className="ag-repository-tree-node-title">
+      <span className="ag-repository-tree-node-title" data-kind={node.kind}>
         <span className="ag-repository-tree-node-name" title={node.name}>
           {node.name}
         </span>
+        {node.sources && node.sources.length > 1 && (
+          <span
+            className="ag-repository-tree-node-meta"
+            title={text("多个本地来源", "Multiple local sources")}
+          >
+            <BranchesOutlined aria-hidden /> {node.sources.length}
+          </span>
+        )}
         {node.kind === "asset" && node.size !== undefined && (
           <span className="ag-repository-tree-node-meta">
             {formatBytes(node.size)}
@@ -113,7 +160,7 @@ export function RepositoryBrowseTree({
         )}
       </span>
     ),
-    [],
+    [text],
   );
 
   const toTreeNodes = useCallback(
@@ -152,13 +199,11 @@ export function RepositoryBrowseTree({
         setTreeData([]);
         setLoading(true);
       }
+      setRefreshing(preserveTree);
       setError(null);
       retryAction.current = () => loadRootRequest(preserveTree);
       try {
-        const response = await browseRepository({
-          path: { repositoryId: repo.id },
-          query: { pageSize: 50 },
-        });
+        const response = await requestPage({ pageSize: 50 });
         if (version !== requestVersion.current) return;
         if (response.error || !response.data) {
           setError(
@@ -167,7 +212,9 @@ export function RepositoryBrowseTree({
           );
           return;
         }
+        if (response.groupPage) onGroupRefresh?.(response.groupPage);
         setSelected(null);
+        setExpandedKeys([]);
         setTreeEpoch((epoch) => epoch + 1);
         retryAction.current = null;
         setTreeData(
@@ -180,19 +227,28 @@ export function RepositoryBrowseTree({
       } catch (requestError) {
         if (version === requestVersion.current) setError(requestError);
       } finally {
-        if (version === requestVersion.current) setLoading(false);
+        if (version === requestVersion.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
-    [repo.id, text, toTreeNodes],
+    [onGroupRefresh, requestPage, text, toTreeNodes],
   );
 
   useEffect(() => {
     setSelected(null);
-    void loadRoot(false);
+    if (initialPage) {
+      requestVersion.current += 1;
+      setTreeData(
+        toTreeNodes(initialPage.items, undefined, initialPage.nextPageToken),
+      );
+      setLoading(false);
+    } else void loadRoot(false);
     return () => {
       requestVersion.current += 1;
     };
-  }, [loadRoot]);
+  }, [initialPage, loadRoot, toTreeNodes]);
 
   const loadBranch = (
     node: RepositoryTreeDataNode,
@@ -207,13 +263,10 @@ export function RepositoryBrowseTree({
     setError(null);
     const request = (async () => {
       try {
-        const response = await browseRepository({
-          path: { repositoryId: repo.id },
-          query: {
-            parent: parentId,
-            pageSize: 50,
-            ...(pageToken ? { pageToken } : {}),
-          },
+        const response = await requestPage({
+          parent: parentId,
+          pageSize: 50,
+          ...(pageToken ? { pageToken } : {}),
         });
         if (version !== requestVersion.current) return;
         if (response.error || !response.data) {
@@ -289,15 +342,20 @@ export function RepositoryBrowseTree({
         compact
         title={text("暂无可浏览制品", "No browseable artifacts")}
         hint={
-          repo.type === "proxy"
+          repo.type === "group"
             ? text(
-                "Proxy 目录只展示已经获取并记录的缓存资产。",
-                "Proxy directories show only fetched and recorded cache assets.",
+                "当前可读取的成员尚无已发布制品或有效缓存。",
+                "Readable members have no published artifacts or live cache entries yet.",
               )
-            : text(
-                "发布 Maven 制品或上传 Raw 文件后，目录会按格式语义自动生成。",
-                "Publish Maven artifacts or upload Raw files to populate the format-aware directory.",
-              )
+            : repo.type === "proxy"
+              ? text(
+                  "Proxy 目录只展示已经获取并记录的缓存资产。",
+                  "Proxy directories show only fetched and recorded cache assets.",
+                )
+              : text(
+                  "发布 Maven 制品或上传 Raw 文件后，目录会按格式语义自动生成。",
+                  "Publish Maven artifacts or upload Raw files to populate the format-aware directory.",
+                )
         }
       />
     );
@@ -318,32 +376,70 @@ export function RepositoryBrowseTree({
           <div>
             <h3>{text("制品目录", "Artifact directory")}</h3>
             <p>
-              {repo.type === "proxy"
-                ? text("只显示已缓存资产", "Cached assets only")
-                : text("服务端格式投影", "Server-owned format projection")}
+              {repo.type === "group"
+                ? text(
+                    "成员制品与已知缓存",
+                    "Member publications and known cache",
+                  )
+                : repo.type === "proxy"
+                  ? text("只显示已缓存资产", "Cached assets only")
+                  : text(
+                      "按目录逐层浏览制品",
+                      "Explore artifacts by directory",
+                    )}
             </p>
           </div>
-          <Button
-            type="text"
-            size="small"
-            icon={<ReloadOutlined />}
-            onClick={() => void loadRoot(true)}
-          >
-            {text("刷新", "Refresh")}
-          </Button>
+          <div className="ag-repository-tree-tools">
+            <Button
+              type="text"
+              size="small"
+              icon={<ShrinkOutlined />}
+              disabled={expandedKeys.length === 0}
+              aria-label={text("收起全部目录", "Collapse all directories")}
+              title={text("收起全部目录", "Collapse all directories")}
+              onClick={() => setExpandedKeys([])}
+            />
+            <Button
+              type="text"
+              size="small"
+              icon={<ReloadOutlined aria-hidden />}
+              aria-label={text("刷新", "Refresh")}
+              loading={refreshing}
+              onClick={() => void loadRoot(true)}
+            >
+              {text("刷新", "Refresh")}
+            </Button>
+          </div>
         </div>
-        <Tree.DirectoryTree<RepositoryTreeDataNode>
-          key={treeEpoch}
-          className="ag-repository-tree"
-          aria-label={text("制品目录树", "Artifact directory tree")}
-          blockNode
-          expandAction="click"
-          loadData={loadChildren}
-          onSelect={selectNode}
-          showIcon
-          showLine={{ showLeafIcon: false }}
-          treeData={treeData}
-        />
+        <ConfigProvider
+          theme={{
+            components: {
+              Tree: {
+                titleHeight: 36,
+                indentSize: 20,
+                directoryNodeSelectedBg: "var(--ag-action-primary-soft)",
+                directoryNodeSelectedColor: "var(--ag-content-strong)",
+                nodeHoverBg: "var(--ag-surface-table-header)",
+              },
+            },
+          }}
+        >
+          <Tree.DirectoryTree<RepositoryTreeDataNode>
+            key={treeEpoch}
+            className="ag-repository-tree"
+            aria-label={text("制品目录树", "Artifact directory tree")}
+            blockNode
+            expandAction="click"
+            loadData={loadChildren}
+            onSelect={selectNode}
+            selectedKeys={selected ? [selected.id] : []}
+            expandedKeys={expandedKeys}
+            onExpand={setExpandedKeys}
+            showIcon
+            showLine={false}
+            treeData={treeData}
+          />
+        </ConfigProvider>
       </section>
       <aside
         className="ag-repository-tree-inspector"
@@ -356,12 +452,18 @@ export function RepositoryBrowseTree({
                 {nodeIcon(selected.kind, true)}
                 <strong>{selected.name}</strong>
               </div>
-              <Badge
-                tone={selected.kind === "asset" ? "visualization-1" : "neutral"}
-              >
-                {nodeKindLabel(selected.kind, text)}
-              </Badge>
+              <Badge tone="neutral">{nodeKindLabel(selected.kind, text)}</Badge>
             </div>
+            {selected.kind === "asset" &&
+              selected.coordinate &&
+              repo.type !== "group" && (
+                <Button
+                  className="ag-repository-tree-open"
+                  onClick={() => onOpenInList(selected)}
+                >
+                  {text("在列表中查看", "Open in list")}
+                </Button>
+              )}
             {(selected.coordinate || selected.path) && (
               <div className="ag-repository-tree-field">
                 <span>{text("规范位置", "Canonical location")}</span>
@@ -379,24 +481,89 @@ export function RepositoryBrowseTree({
                 </div>
               </div>
             )}
-            {selected.sourceRepositoryName && (
-              <div className="ag-repository-tree-field">
-                <span>{text("来源仓库", "Source repository")}</span>
-                <strong>{selected.sourceRepositoryName}</strong>
-              </div>
+            {selected.sources && (
+              <section
+                className="ag-repository-tree-sources"
+                aria-label={text("本地来源", "Local sources")}
+              >
+                <h4>
+                  {text("本地来源", "Local sources")}{" "}
+                  <span>{selected.sources.length}</span>
+                </h4>
+                <p>
+                  {text(
+                    "按可见成员的候选顺序排列，不代表本次下载命中。",
+                    "Ordered by visible member priority, not an actual download result.",
+                  )}
+                </p>
+                {selected.kind === "asset" &&
+                  new Set(
+                    selected.sources
+                      .map((source) => source.digest)
+                      .filter(Boolean),
+                  ).size > 1 && (
+                    <p>
+                      <Badge tone="warning">
+                        {text(
+                          "同路径存在不同内容",
+                          "Different content at this path",
+                        )}
+                      </Badge>
+                    </p>
+                  )}
+                <ol>
+                  {selected.sources.map((source) => (
+                    <SourceRow
+                      key={source.repositoryId}
+                      source={source}
+                      groupName={repo.name}
+                    />
+                  ))}
+                </ol>
+              </section>
             )}
-            {selected.cacheState === "cached" && (
-              <div className="ag-repository-tree-field">
-                <span>{text("缓存状态", "Cache state")}</span>
-                <strong>{text("已缓存", "Cached")}</strong>
-              </div>
-            )}
-            {selected.buildNumber !== undefined && (
-              <div className="ag-repository-tree-field">
-                <span>{text("构建号", "Build number")}</span>
-                <strong>{selected.buildNumber}</strong>
-              </div>
-            )}
+            <dl className="ag-repository-tree-evidence">
+              {selected.sourceRepositoryName && (
+                <Evidence
+                  label={text("来源仓库", "Source repository")}
+                  value={selected.sourceRepositoryName}
+                />
+              )}
+              {selected.cacheState === "cached" && (
+                <Evidence
+                  label={text("缓存状态", "Cache state")}
+                  value={text("已缓存", "Cached")}
+                />
+              )}
+              {selected.buildNumber !== undefined && (
+                <Evidence
+                  label={text("构建号", "Build number")}
+                  value={selected.buildNumber}
+                />
+              )}
+              {selected.size !== undefined && (
+                <Evidence
+                  label={text("大小", "Size")}
+                  value={formatBytes(selected.size)}
+                />
+              )}
+              {selected.contentType && (
+                <Evidence
+                  label={text("内容类型", "Content type")}
+                  value={selected.contentType}
+                />
+              )}
+              {(selected.cachedAt || selected.createdAt) && (
+                <Evidence
+                  label={
+                    selected.cachedAt
+                      ? text("缓存更新时间", "Cache updated")
+                      : text("更新时间", "Updated")
+                  }
+                  value={formatDate(selected.cachedAt ?? selected.createdAt!)}
+                />
+              )}
+            </dl>
             {repo.format === "maven" &&
               selected.kind === "asset" &&
               selected.path && (
@@ -408,15 +575,9 @@ export function RepositoryBrowseTree({
                   </div>
                 </div>
               )}
-            {selected.cachedAt && (
-              <div className="ag-repository-tree-field">
-                <span>{text("缓存更新时间", "Cache updated")}</span>
-                <strong>{formatDate(selected.cachedAt)}</strong>
-              </div>
-            )}
             {selected.digest && (
               <div className="ag-repository-tree-field">
-                <span>{text("摘要", "Digest")}</span>
+                <span>SHA-256</span>
                 <div>
                   <code title={selected.digest}>
                     {shortDigest(selected.digest)}
@@ -425,46 +586,94 @@ export function RepositoryBrowseTree({
                 </div>
               </div>
             )}
-            {selected.contentType && (
-              <div className="ag-repository-tree-field">
-                <span>{text("内容类型", "Content type")}</span>
-                <strong>{selected.contentType}</strong>
-              </div>
-            )}
-            {selected.size !== undefined && (
-              <div className="ag-repository-tree-field">
-                <span>{text("大小", "Size")}</span>
-                <strong>{formatBytes(selected.size)}</strong>
-              </div>
-            )}
-            {selected.createdAt && (
-              <div className="ag-repository-tree-field">
-                <span>{text("更新时间", "Updated")}</span>
-                <strong>{formatDate(selected.createdAt)}</strong>
-              </div>
-            )}
-            {selected.kind === "asset" && selected.coordinate && (
-              <Button
-                onClick={() => {
-                  if (selected.coordinate) onOpenInList(selected);
-                }}
-              >
-                {text("在列表中查看", "Open in list")}
-              </Button>
-            )}
           </div>
         ) : (
           <div className="ag-repository-tree-inspector-empty">
-            <FolderOpenOutlined />
+            <FolderOpenOutlined aria-hidden />
+            <strong>
+              {text("从目录中选择一项", "Select an item in the directory")}
+            </strong>
             <p>
               {text(
-                "选择节点查看规范位置和资产证据",
-                "Select a node to inspect its canonical location and asset evidence",
+                "在这里查看完整名称、来源与校验信息。",
+                "Inspect its full name, sources and verification details here.",
               )}
             </p>
+            <span>
+              <ArrowUpOutlined aria-hidden />{" "}
+              {text(
+                "方向键浏览 · Enter 选择",
+                "Arrow keys to browse · Enter to select",
+              )}
+            </span>
           </div>
         )}
       </aside>
     </div>
+  );
+}
+
+function Evidence({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+function browseSourceHref(source: BrowseSource, groupName: string) {
+  const query = new URLSearchParams();
+  // A Group-only cache index is not present in the member's own cache listing.
+  if (source.coordinate && source.cacheRepositoryName !== groupName) {
+    query.set("artifact", source.coordinate);
+    if (source.path) query.set("asset", source.path);
+    if (source.buildNumber) query.set("build", String(source.buildNumber));
+    if (source.digest) query.set("digest", source.digest);
+  }
+  return `/repositories/${source.repositoryId}${query.size ? `?${query}` : ""}`;
+}
+
+function SourceRow({
+  source,
+  groupName,
+}: {
+  source: BrowseSource;
+  groupName: string;
+}) {
+  const { text } = usePreferences();
+  return (
+    <li>
+      <span className="ag-repository-source-order">
+        {source.resolutionOrder}
+      </span>
+      <div className="ag-repository-source-content">
+        <a href={browseSourceHref(source, groupName)}>
+          {source.repositoryName}
+        </a>
+        <div className="ag-repository-source-meta">
+          <Badge>{source.type === "hosted" ? "Hosted" : "Proxy"}</Badge>
+          {source.digest && (
+            <span>
+              {source.type === "proxy"
+                ? text("已缓存", "Cached")
+                : text("已发布", "Published")}
+            </span>
+          )}
+          {source.size !== undefined && <span>{formatBytes(source.size)}</span>}
+        </div>
+        {source.cacheRepositoryName && (
+          <p>
+            {text("缓存范围", "Cache scope")} · {source.cacheRepositoryName}
+          </p>
+        )}
+        {source.digest && (
+          <div className="ag-repository-source-digest">
+            <code title={source.digest}>{shortDigest(source.digest)}</code>
+            <CopyButton text={source.digest} />
+          </div>
+        )}
+      </div>
+    </li>
   );
 }

@@ -70,6 +70,13 @@ export const router = createBrowserRouter([
           Component: (await import("../pages/Groups")).GroupsPage,
         }),
       },
+      {
+        path: "/groups/:groupId/browse",
+        lazy: async () => ({
+          Component: (await import("../pages/groups/GroupBrowsePage"))
+            .GroupBrowsePage,
+        }),
+      },
       { path: "/proxy", element: <Navigate to="/repositories" replace /> },
       {
         path: "/access",

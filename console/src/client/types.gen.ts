@@ -36,7 +36,7 @@ export type BrowseNode = {
    */
   buildNumber?: number;
   /**
-   * Repository owning this publication or cache record.
+   * Repository providing this publication or cached upstream response; absent on aggregate Group nodes.
    */
   sourceRepositoryId?: string;
   sourceRepositoryName?: string;
@@ -44,6 +44,14 @@ export type BrowseNode = {
    * Present only for a Proxy asset backed by a live positive cache index. This is not a lifecycle Artifact Identity.
    */
   cacheState?: "cached";
+  /**
+   * Ordered local contributions for a Group node. Does not identify an actual protocol hit.
+   */
+  sources?: Array<BrowseSource>;
+  /**
+   * Scope owning the cache index, which may be a Group rather than the source Repository.
+   */
+  cacheRepositoryName?: string;
 };
 
 export type BrowseNodePage = {
@@ -1622,6 +1630,38 @@ export type RepositoryEffectiveAccess = {
   permissions: EffectiveAccessPermissions;
 };
 
+export type BrowseSource = {
+  repositoryId: string;
+  repositoryName: string;
+  type: "hosted" | "proxy";
+  /**
+   * Order among members visible to this reader, Hosted first.
+   */
+  resolutionOrder: number;
+  coordinate?: string;
+  path?: string;
+  digest?: string;
+  size?: number;
+  buildNumber?: number;
+  cachedAt?: string;
+  cacheRepositoryName?: string;
+};
+
+export type BrowseNodeKind =
+  "directory" | "namespace" | "component" | "version" | "asset";
+
+export type GroupBrowsePage = {
+  groupId: string;
+  groupName: string;
+  format: "maven" | "raw";
+  /**
+   * Authorized members, including those without any known local contribution.
+   */
+  candidates: Array<BrowseSource>;
+  items: Array<BrowseNode>;
+  nextPageToken?: string;
+};
+
 export type GroupCapacityMember = {
   position: number;
   repositoryId: string;
@@ -1654,9 +1694,6 @@ export type GroupResolution = {
   excludedMemberCount: number;
   members: Array<GroupResolutionMember>;
 };
-
-export type BrowseNodeKind =
-  "directory" | "namespace" | "component" | "version" | "asset";
 
 export type ArtifactIdentityPurpose = "scan" | "distribution";
 
@@ -5918,6 +5955,60 @@ export type ReplaceGroupResponses = {
 
 export type ReplaceGroupResponse =
   ReplaceGroupResponses[keyof ReplaceGroupResponses];
+
+export type BrowseGroupData = {
+  body?: never;
+  path: {
+    groupId: string;
+  };
+  query?: {
+    /**
+     * Opaque node ID returned by this Group directory.
+     */
+    parent?: string;
+    pageSize?: number;
+    /**
+     * Opaque continuation bound to this Group and parent.
+     */
+    pageToken?: string;
+  };
+  url: "/groups/{groupId}/browse";
+};
+
+export type BrowseGroupErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type BrowseGroupError = BrowseGroupErrors[keyof BrowseGroupErrors];
+
+export type BrowseGroupResponses = {
+  /**
+   * Direct children and authorized candidate order
+   */
+  200: GroupBrowsePage;
+};
+
+export type BrowseGroupResponse =
+  BrowseGroupResponses[keyof BrowseGroupResponses];
 
 export type ListGroupMembersData = {
   body?: never;

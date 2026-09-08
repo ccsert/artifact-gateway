@@ -504,7 +504,7 @@ html .bg-zinc-950 {
 
 @media (max-width: 520px) {
   .ag-route-error-page {
-    padding: 20px;
+    padding: 24px;
   }
 
   .ag-route-error-card {
@@ -1089,7 +1089,7 @@ html[data-theme="light"] .ag-public-access-layer {
 
 .ag-repository-browse {
   display: grid;
-  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--ag-border-subtle);
@@ -1105,11 +1105,11 @@ html[data-theme="light"] .ag-public-access-layer {
 .ag-repository-tree-pane,
 .ag-repository-tree-inspector {
   min-width: 0;
-  min-height: 420px;
+  min-height: 360px;
 }
 
 .ag-repository-tree-pane {
-  padding: 12px;
+  padding: 16px;
 }
 
 .ag-repository-tree-heading {
@@ -1117,7 +1117,8 @@ html[data-theme="light"] .ag-public-access-layer {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 4px 12px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--ag-border-subtle);
 }
 
 .ag-repository-tree-heading h3 {
@@ -1134,17 +1135,24 @@ html[data-theme="light"] .ag-public-access-layer {
 }
 
 .ag-repository-tree {
-  max-height: min(58vh, 620px);
+  margin-top: 12px;
+  max-height: min(62vh, 660px);
+  scrollbar-gutter: stable;
   overflow: auto;
   background: transparent;
 }
 
 .ag-repository-tree .ant-tree-treenode {
-  min-width: 100%;
-  padding-block: 2px;
+  width: 100%;
+  min-width: 0;
+  padding-block: 1px;
 }
 
 .ag-repository-tree .ant-tree-node-content-wrapper {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -1157,9 +1165,9 @@ html[data-theme="light"] .ag-public-access-layer {
 }
 
 .ag-repository-tree-node-name {
+  min-width: 0;
   overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 24px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1204,16 +1212,27 @@ html[data-theme="light"] .ag-public-access-layer {
 }
 
 .ag-repository-tree-inspector-heading {
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
 .ag-repository-tree-inspector-title {
-  gap: 8px;
+  align-items: flex-start;
+  gap: 12px;
   color: var(--ag-content-strong);
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.ag-repository-tree-inspector-title > .anticon {
+  flex: none;
+  padding-block: 4px;
+  color: var(--ag-content-secondary);
 }
 
 .ag-repository-tree-inspector-title strong {
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
@@ -1245,7 +1264,7 @@ html[data-theme="light"] .ag-public-access-layer {
 
 .ag-repository-tree-inspector-empty {
   display: grid;
-  min-height: 420px;
+  min-height: 360px;
   place-content: center;
   justify-items: center;
   gap: 12px;
@@ -1263,6 +1282,255 @@ html[data-theme="light"] .ag-public-access-layer {
   max-width: 36ch;
   font-size: 13px;
   line-height: 22px;
+}
+
+.ag-repository-tree-tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+.ag-repository-tree .ant-tree-title {
+  flex: 1;
+  min-width: 0;
+}
+.ag-repository-tree .ant-tree-iconEle {
+  flex: none;
+  color: var(--ag-content-secondary);
+}
+.ag-repository-tree .ant-tree-switcher {
+  align-self: center;
+  color: var(--ag-content-tertiary);
+}
+.ag-repository-tree .ant-tree-indent-unit {
+  position: relative;
+}
+.ag-repository-tree .ant-tree-indent-unit::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 10px;
+  border-left: 1px solid var(--ag-border-subtle);
+}
+.ag-repository-tree .ant-tree-treenode::before {
+  border-radius: var(--ag-radius-control);
+}
+.ag-repository-tree .ant-tree-treenode:focus-within {
+  outline: 2px solid var(--ag-focus-ring);
+  outline-offset: -2px;
+}
+.ag-repository-tree-node-title[data-kind="asset"] .ag-repository-tree-node-name,
+.ag-repository-tree-node-title[data-kind="version"]
+  .ag-repository-tree-node-name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.ag-repository-tree-node-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.ag-repository-tree-open {
+  justify-self: start;
+}
+.ag-repository-tree-evidence {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 24px;
+}
+.ag-repository-tree-evidence:empty {
+  display: none;
+}
+.ag-repository-tree-evidence > div {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+.ag-repository-tree-evidence dt {
+  color: var(--ag-content-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+}
+.ag-repository-tree-evidence dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+  color: var(--ag-content-primary);
+}
+.ag-repository-tree-sources {
+  display: grid;
+  gap: 8px;
+  border-block: 1px solid var(--ag-border-subtle);
+  padding-block: 16px;
+}
+.ag-repository-tree-sources h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ag-content-strong);
+  font-size: 13px;
+  font-weight: 600;
+}
+.ag-repository-tree-sources h4 span {
+  font-weight: 400;
+  color: var(--ag-content-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.ag-repository-tree-sources p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--ag-content-secondary);
+  overflow-wrap: anywhere;
+}
+.ag-repository-tree-sources ol {
+  display: grid;
+  gap: 16px;
+  padding-top: 8px;
+}
+.ag-repository-tree-sources li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+.ag-repository-source-order {
+  flex: none;
+  min-width: 16px;
+  padding-block: 2px;
+  color: var(--ag-content-tertiary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.ag-repository-source-content {
+  flex: 1;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.ag-repository-source-content > a {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+.ag-repository-source-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--ag-content-secondary);
+  font-size: 12px;
+}
+.ag-repository-source-digest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ag-repository-source-digest code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--ag-content-secondary);
+}
+.ag-repository-tree-inspector-empty strong {
+  color: var(--ag-content-secondary);
+  font-weight: 500;
+  font-size: 14px;
+}
+.ag-repository-tree-inspector-empty > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.ag-group-browse-back {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.ag-group-browse-context {
+  display: grid;
+  gap: 8px;
+}
+.ag-group-browse-labels {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ag-content-secondary);
+}
+.ag-group-browse-context p {
+  max-width: 90ch;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--ag-content-secondary);
+}
+.ag-group-browse-candidates {
+  display: grid;
+  gap: 12px;
+  padding-block: 8px;
+}
+.ag-group-browse-candidates h3 {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ag-content-secondary);
+}
+.ag-group-browse-candidates ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+.ag-group-browse-candidates li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+.ag-group-browse-candidates li > span:first-child {
+  color: var(--ag-content-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.ag-group-browse-candidates a {
+  overflow-wrap: anywhere;
+}
+@media (pointer: coarse) {
+  .ag-repository-tree .ant-tree-node-content-wrapper,
+  .ag-repository-tree .ant-tree-switcher {
+    min-height: 44px;
+    line-height: 44px;
+  }
+}
+@media (max-width: 600px) {
+  .ag-repository-tree-pane,
+  .ag-repository-tree-inspector-content {
+    padding: 16px;
+  }
+  .ag-repository-tree-inspector-heading {
+    flex-wrap: wrap;
+  }
+  .ag-repository-tree .ant-tree-indent-unit {
+    width: 12px;
+  }
+  .ag-repository-tree-node-title[data-kind="asset"]
+    .ag-repository-tree-node-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 20px;
+  }
+
+  .ag-repository-tree-inspector-empty > span {
+    display: none;
+  }
 }
 
 /* ========== 指标条 ========== */
@@ -2501,7 +2769,7 @@ html .ag-brand-mark.text-white {
   }
 
   .ag-repository-tree-inspector-empty {
-    min-height: 180px;
+    min-height: 160px;
   }
 
   .ag-login-shell {
