@@ -482,7 +482,7 @@ export type AptRepositorySnapshot = {
   repositoryId: string;
   suite: string;
   sequence: number;
-  state: "visible" | "retired";
+  state: "visible" | "retired" | "pruned";
   releaseDigest: string;
   inReleaseDigest: string;
   signerIdentity: string;
@@ -1850,6 +1850,53 @@ export type OciManifestSummary = {
 export type OciManifestSummaryPage = {
   items: Array<OciManifestSummary>;
   nextPageToken?: string;
+};
+
+export type AptSnapshotHistory = {
+  snapshot: AptRepositorySnapshot;
+  prunableAfter?: string;
+};
+
+export type AptLifecyclePackage = {
+  publicationSessionId: string;
+  component: string;
+  revision: AptPackageRevision;
+};
+
+export type AptPackageDeletion = {
+  id: string;
+  package: AptLifecyclePackage;
+  deletedAt: string;
+  restoreUntil: string;
+  state: "recoverable" | "expired" | "restored" | "purged";
+};
+
+export type AptLifecycleState = {
+  snapshots: Array<AptSnapshotHistory>;
+  packages: Array<AptLifecyclePackage>;
+  deletions: Array<AptPackageDeletion>;
+};
+
+export type AptLifecycleRequest = {
+  suite: string;
+  expectedSnapshotId: string;
+  action: "delete" | "restore" | "retention";
+  publicationSessionIds?: Array<string>;
+  deletionIds?: Array<string>;
+  keepLatest?: number;
+  olderThanDays?: number;
+};
+
+export type AptLifecyclePlan = {
+  expectedSnapshotId: string;
+  removeSessionIds: Array<string>;
+  restoreIds: Array<string>;
+  remainingPackages: number;
+  recoveryDays: number;
+};
+
+export type AptPruneRequest = {
+  snapshotIds: Array<string>;
 };
 
 export type AptRepositorySigningState = {
@@ -6861,6 +6908,239 @@ export type UploadAptPublicationPackageResponses = {
 
 export type UploadAptPublicationPackageResponse =
   UploadAptPublicationPackageResponses[keyof UploadAptPublicationPackageResponses];
+
+export type GetAptLifecycleStateData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query: {
+    suite: string;
+  };
+  url: "/repositories/{repositoryId}/apt/lifecycle";
+};
+
+export type GetAptLifecycleStateErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  507: Problem;
+};
+
+export type GetAptLifecycleStateError =
+  GetAptLifecycleStateErrors[keyof GetAptLifecycleStateErrors];
+
+export type GetAptLifecycleStateResponses = {
+  /**
+   * Operation result
+   */
+  200: AptLifecycleState;
+};
+
+export type GetAptLifecycleStateResponse =
+  GetAptLifecycleStateResponses[keyof GetAptLifecycleStateResponses];
+
+export type ApplyAptLifecycleData = {
+  body: AptLifecycleRequest;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/apt/lifecycle";
+};
+
+export type ApplyAptLifecycleErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  507: Problem;
+};
+
+export type ApplyAptLifecycleError =
+  ApplyAptLifecycleErrors[keyof ApplyAptLifecycleErrors];
+
+export type ApplyAptLifecycleResponses = {
+  /**
+   * Operation result
+   */
+  200: AptRepositorySnapshot;
+};
+
+export type ApplyAptLifecycleResponse =
+  ApplyAptLifecycleResponses[keyof ApplyAptLifecycleResponses];
+
+export type PreviewAptLifecycleData = {
+  body: AptLifecycleRequest;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/apt/lifecycle/preview";
+};
+
+export type PreviewAptLifecycleErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  507: Problem;
+};
+
+export type PreviewAptLifecycleError =
+  PreviewAptLifecycleErrors[keyof PreviewAptLifecycleErrors];
+
+export type PreviewAptLifecycleResponses = {
+  /**
+   * Operation result
+   */
+  200: AptLifecyclePlan;
+};
+
+export type PreviewAptLifecycleResponse =
+  PreviewAptLifecycleResponses[keyof PreviewAptLifecycleResponses];
+
+export type PruneAptSnapshotsData = {
+  body: AptPruneRequest;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/apt/snapshots/prune";
+};
+
+export type PruneAptSnapshotsErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  507: Problem;
+};
+
+export type PruneAptSnapshotsError =
+  PruneAptSnapshotsErrors[keyof PruneAptSnapshotsErrors];
+
+export type PruneAptSnapshotsResponses = {
+  /**
+   * Snapshot references removed and expired deletions queued for reclamation
+   */
+  204: void;
+};
+
+export type PruneAptSnapshotsResponse =
+  PruneAptSnapshotsResponses[keyof PruneAptSnapshotsResponses];
 
 export type PublishAptRepositorySnapshotData = {
   body: PublishAptRepositorySnapshot;
