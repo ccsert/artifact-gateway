@@ -452,6 +452,7 @@ type NativeAPTStore interface {
 // protocol assets; only one atomically visible snapshot may make it readable.
 type NativeAPTPublicationStore interface {
 	NativeAPTArchiveRestoreStore
+	NativeAPTLifecycleStore
 	CreateAPTPublicationSessionWithAuditIdempotently(context.Context, APTPublicationSession, string, string, string, string, AuditRecord) (APTPublicationSession, bool, error)
 	GetAPTPublicationSession(context.Context, string) (APTPublicationSession, error)
 	BeginAPTPackageUpload(context.Context, string, string) error

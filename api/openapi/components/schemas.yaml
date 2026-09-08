@@ -3166,6 +3166,7 @@ APTRepositorySnapshot:
       enum:
       - visible
       - retired
+      - pruned
     releaseDigest:
       type: string
       pattern: "^sha256:[a-f0-9]{64}$"
@@ -3333,3 +3334,132 @@ AuditPage:
         "$ref": "#/AuditRecord"
     nextPageToken:
       type: string
+
+APTLifecycleRequest:
+  type: object
+  additionalProperties: false
+  required: [suite, expectedSnapshotId, action]
+  properties:
+    suite:
+      type: string
+      pattern: "^[a-z0-9][a-z0-9+.-]{0,127}$"
+    expectedSnapshotId:
+      type: string
+      format: uuid
+    action:
+      type: string
+      enum: [delete, restore, retention]
+    publicationSessionIds:
+      type: array
+      maxItems: 10000
+      uniqueItems: true
+      items:
+        type: string
+        format: uuid
+    deletionIds:
+      type: array
+      maxItems: 10000
+      uniqueItems: true
+      items:
+        type: string
+        format: uuid
+    keepLatest:
+      type: integer
+      minimum: 1
+      maximum: 10000
+    olderThanDays:
+      type: integer
+      minimum: 1
+      maximum: 36500
+APTLifecyclePlan:
+  type: object
+  additionalProperties: false
+  required: [expectedSnapshotId, removeSessionIds, restoreIds, remainingPackages, recoveryDays]
+  properties:
+    expectedSnapshotId:
+      type: string
+      format: uuid
+    removeSessionIds:
+      type: array
+      items:
+        type: string
+        format: uuid
+    restoreIds:
+      type: array
+      items:
+        type: string
+        format: uuid
+    remainingPackages:
+      type: integer
+    recoveryDays:
+      type: integer
+APTPruneRequest:
+  type: object
+  additionalProperties: false
+  required: [snapshotIds]
+  properties:
+    snapshotIds:
+      type: array
+      maxItems: 100
+      uniqueItems: true
+      items:
+        type: string
+        format: uuid
+APTLifecyclePackage:
+  type: object
+  additionalProperties: false
+  required: [publicationSessionId, component, revision]
+  properties:
+    publicationSessionId:
+      type: string
+      format: uuid
+    component:
+      type: string
+    revision:
+      "$ref": "#/APTPackageRevision"
+APTPackageDeletion:
+  type: object
+  additionalProperties: false
+  required: [id, package, deletedAt, restoreUntil, state]
+  properties:
+    id:
+      type: string
+      format: uuid
+    package:
+      "$ref": "#/APTLifecyclePackage"
+    deletedAt:
+      type: string
+      format: date-time
+    restoreUntil:
+      type: string
+      format: date-time
+    state:
+      type: string
+      enum: [recoverable, expired, restored, purged]
+APTSnapshotHistory:
+  type: object
+  additionalProperties: false
+  required: [snapshot]
+  properties:
+    snapshot:
+      "$ref": "#/APTRepositorySnapshot"
+    prunableAfter:
+      type: string
+      format: date-time
+APTLifecycleState:
+  type: object
+  additionalProperties: false
+  required: [snapshots, packages, deletions]
+  properties:
+    snapshots:
+      type: array
+      items:
+        "$ref": "#/APTSnapshotHistory"
+    packages:
+      type: array
+      items:
+        "$ref": "#/APTLifecyclePackage"
+    deletions:
+      type: array
+      items:
+        "$ref": "#/APTPackageDeletion"

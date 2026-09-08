@@ -420,7 +420,7 @@ func (s *MemoryStore) APTObjectHasPackageReference(_ context.Context, objectKey 
 func (s *MemoryStore) CreateAPTRepositorySnapshot(_ context.Context, snapshot APTRepositorySnapshot, items []APTSnapshotPackage) (APTRepositorySnapshot, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if snapshot.ID == "" || snapshot.RepositoryID == "" || !ValidAPTPublicationScope(snapshot.Suite) || snapshot.Sequence <= 0 || snapshot.State != APTRepositorySnapshotBuilding || len(items) == 0 {
+	if snapshot.ID == "" || snapshot.RepositoryID == "" || !ValidAPTPublicationScope(snapshot.Suite) || snapshot.Sequence <= 0 || snapshot.State != APTRepositorySnapshotBuilding {
 		return APTRepositorySnapshot{}, ErrDisabled
 	}
 	if err := validateAPTSnapshotMembership(items); err != nil {
@@ -532,7 +532,7 @@ func validAPTSnapshotAssets(snapshot APTRepositorySnapshot, assets []APTSnapshot
 	}
 	paths := make(map[string]struct{}, len(assets))
 	byPath := make(map[string]APTSnapshotAsset, len(assets))
-	poolCount, indexCount := 0, 0
+	indexCount := 0
 	required := map[string]bool{
 		"dists/" + snapshot.Suite + "/Release":     false,
 		"dists/" + snapshot.Suite + "/InRelease":   false,
@@ -541,7 +541,7 @@ func validAPTSnapshotAssets(snapshot APTRepositorySnapshot, assets []APTSnapshot
 	for _, asset := range assets {
 		if asset.SnapshotID != snapshot.ID || asset.RepositoryID != snapshot.RepositoryID || !ValidAPTRepositoryPath(asset.Path) ||
 			!ValidAPTSHA256Digest(asset.Digest) || asset.ObjectKey != "native/apt/sha256/"+strings.TrimPrefix(asset.Digest, "sha256:") ||
-			asset.Size <= 0 || asset.Size > 1<<30 || asset.ContentType == "" || len(asset.ContentType) > 255 ||
+			asset.Size < 0 || (asset.Size == 0 && (asset.Digest != aptEmptyObjectDigest || (!strings.HasSuffix(asset.Path, "/Packages") && !strings.Contains(asset.Path, "/by-hash/SHA256/")))) || asset.Size > 1<<30 || asset.ContentType == "" || len(asset.ContentType) > 255 ||
 			strings.ContainsAny(asset.ContentType, "\x00\r\n") ||
 			(strings.HasPrefix(asset.Path, "dists/") && !strings.HasPrefix(asset.Path, "dists/"+snapshot.Suite+"/")) {
 			return false
@@ -551,9 +551,7 @@ func validAPTSnapshotAssets(snapshot APTRepositorySnapshot, assets []APTSnapshot
 		}
 		paths[asset.Path] = struct{}{}
 		byPath[asset.Path] = asset
-		if strings.HasPrefix(asset.Path, "pool/") {
-			poolCount++
-		}
+
 		if aptDirectIndexPath(snapshot.Suite, asset.Path) {
 			indexCount++
 		}
@@ -566,7 +564,7 @@ func validAPTSnapshotAssets(snapshot APTRepositorySnapshot, assets []APTSnapshot
 			return false
 		}
 	}
-	if poolCount == 0 || indexCount == 0 || assetDigestAtPath(assets, "dists/"+snapshot.Suite+"/Release") != snapshot.ReleaseDigest ||
+	if indexCount == 0 || assetDigestAtPath(assets, "dists/"+snapshot.Suite+"/Release") != snapshot.ReleaseDigest ||
 		assetDigestAtPath(assets, "dists/"+snapshot.Suite+"/InRelease") != snapshot.InReleaseDigest {
 		return false
 	}
@@ -666,7 +664,7 @@ func validAPTReleaseClosure(snapshot APTRepositorySnapshot, assets []APTSnapshot
 
 func validAPTSnapshotObjectIntent(snapshot APTRepositorySnapshot, intent APTSnapshotObjectIntent) bool {
 	return intent.SnapshotID == snapshot.ID && intent.RepositoryID == snapshot.RepositoryID && ValidAPTSHA256Digest(intent.Digest) &&
-		intent.ObjectKey == "native/apt/sha256/"+strings.TrimPrefix(intent.Digest, "sha256:") && intent.Size > 0 && intent.Size <= 1<<30
+		intent.ObjectKey == "native/apt/sha256/"+strings.TrimPrefix(intent.Digest, "sha256:") && (intent.Size > 0 || (intent.Size == 0 && intent.Digest == aptEmptyObjectDigest)) && intent.Size <= 1<<30
 }
 
 func (s *MemoryStore) CreateAPTSnapshotObjectIntents(_ context.Context, snapshotID string, intents []APTSnapshotObjectIntent) error {
@@ -723,6 +721,10 @@ func aptSnapshotGeneratedObjects(assets []APTSnapshotAsset) map[string]int64 {
 func (s *MemoryStore) PublishAPTRepositorySnapshotWithAudit(_ context.Context, snapshot APTRepositorySnapshot, assets []APTSnapshotAsset, release []byte, audit AuditRecord) (APTRepositorySnapshot, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.publishAPTRepositorySnapshotLocked(snapshot, assets, release, audit)
+}
+
+func (s *MemoryStore) publishAPTRepositorySnapshotLocked(snapshot APTRepositorySnapshot, assets []APTSnapshotAsset, release []byte, audit AuditRecord) (APTRepositorySnapshot, error) {
 	existing, ok := s.aptSnapshots[snapshot.ID]
 	if !ok {
 		return APTRepositorySnapshot{}, ErrNotFound
@@ -731,6 +733,13 @@ func (s *MemoryStore) PublishAPTRepositorySnapshotWithAudit(_ context.Context, s
 		existing.Sequence != snapshot.Sequence || !validAPTSnapshotPublication(snapshot, assets, release) ||
 		!s.validAPTSnapshotPoolAssetsLocked(snapshot, assets) {
 		return APTRepositorySnapshot{}, ErrDisabled
+	}
+	for _, m := range s.aptSnapshotPackages[snapshot.ID] {
+		for _, d := range s.aptDeletions {
+			if d.RepositoryID == snapshot.RepositoryID && aptDeletionBlocks(d, snapshot.Suite, m.Component, s.aptPackageRevisions[m.PackageRevisionID].CanonicalIdentity) {
+				return APTRepositorySnapshot{}, ErrVersionConflict
+			}
+		}
 	}
 	baseBytes, _ := s.aptBaseCapacityLocked(snapshot.RepositoryID)
 	if quota := s.capacityQuotas[snapshot.RepositoryID]; quota > 0 {
@@ -758,19 +767,9 @@ func (s *MemoryStore) PublishAPTRepositorySnapshotWithAudit(_ context.Context, s
 			return APTRepositorySnapshot{}, ErrQuotaExceeded
 		}
 	}
-	for existingSnapshotID, existingAssets := range s.aptSnapshotAssets {
-		if s.aptSnapshots[existingSnapshotID].RepositoryID != snapshot.RepositoryID {
-			continue
-		}
-		for _, existingAsset := range existingAssets {
-			if !strings.HasPrefix(existingAsset.Path, "pool/") {
-				continue
-			}
-			for _, asset := range assets {
-				if asset.Path == existingAsset.Path && asset.Digest != existingAsset.Digest {
-					return APTRepositorySnapshot{}, ErrAPTPackageConflict
-				}
-			}
+	for _, a := range assets {
+		if previous, ok := s.aptPoolPaths[snapshot.RepositoryID][a.Path]; ok && (previous.Digest != a.Digest || previous.ObjectKey != a.ObjectKey || previous.Size != a.Size) {
+			return APTRepositorySnapshot{}, ErrAPTPackageConflict
 		}
 	}
 	for id, current := range s.aptSnapshots {
@@ -779,6 +778,7 @@ func (s *MemoryStore) PublishAPTRepositorySnapshotWithAudit(_ context.Context, s
 				return APTRepositorySnapshot{}, ErrVersionConflict
 			}
 			current.State = APTRepositorySnapshotRetired
+			s.aptRetiredAt[id] = time.Now().UTC()
 			s.aptSnapshots[id] = current
 		}
 	}
@@ -788,6 +788,14 @@ func (s *MemoryStore) PublishAPTRepositorySnapshotWithAudit(_ context.Context, s
 	snapshot.CreatedAt = existing.CreatedAt
 	s.aptSnapshots[snapshot.ID] = snapshot
 	s.aptSnapshotAssets[snapshot.ID] = append([]APTSnapshotAsset(nil), assets...)
+	if s.aptPoolPaths[snapshot.RepositoryID] == nil {
+		s.aptPoolPaths[snapshot.RepositoryID] = make(map[string]APTSnapshotAsset)
+	}
+	for _, a := range assets {
+		if strings.HasPrefix(a.Path, "pool/") {
+			s.aptPoolPaths[snapshot.RepositoryID][a.Path] = a
+		}
+	}
 	s.appendAuditLocked(audit)
 	return snapshot, nil
 }
@@ -816,7 +824,7 @@ func (s *MemoryStore) validAPTSnapshotPoolAssetsLocked(snapshot APTRepositorySna
 			return false
 		}
 	}
-	return actual == len(expected) && actual > 0
+	return actual == len(expected)
 }
 
 func (s *MemoryStore) FailAPTRepositorySnapshot(_ context.Context, snapshotID string) error {
@@ -878,7 +886,7 @@ func (s *MemoryStore) ListUnscheduledAPTSnapshotObjects(_ context.Context, limit
 	}
 	result := make([]APTSnapshotObjectIntent, 0)
 	for snapshotID, intents := range s.aptSnapshotObjects {
-		if s.aptSnapshots[snapshotID].State != APTRepositorySnapshotFailed {
+		if !aptSnapshotCollectible(s.aptSnapshots[snapshotID].State) {
 			continue
 		}
 		for _, intent := range intents {
@@ -903,7 +911,7 @@ func (s *MemoryStore) MarkAPTSnapshotObjectScheduled(_ context.Context, snapshot
 	if !ok {
 		return ErrNotFound
 	}
-	if s.aptSnapshots[snapshotID].State != APTRepositorySnapshotFailed || !intent.CollectedAt.IsZero() {
+	if !aptSnapshotCollectible(s.aptSnapshots[snapshotID].State) || !intent.CollectedAt.IsZero() {
 		return ErrVersionConflict
 	}
 	if intent.ScheduledAt.IsZero() {
@@ -920,7 +928,7 @@ func (s *MemoryStore) MarkAPTSnapshotObjectCollected(_ context.Context, snapshot
 	if !ok {
 		return ErrNotFound
 	}
-	if s.aptSnapshots[snapshotID].State != APTRepositorySnapshotFailed {
+	if !aptSnapshotCollectible(s.aptSnapshots[snapshotID].State) {
 		return ErrVersionConflict
 	}
 	if intent.CollectedAt.IsZero() {
@@ -937,7 +945,7 @@ func (s *MemoryStore) APTObjectHasDurableReference(_ context.Context, objectKey 
 		return true, nil
 	}
 	for snapshotID, assets := range s.aptSnapshotAssets {
-		if s.aptSnapshots[snapshotID].State == APTRepositorySnapshotFailed {
+		if aptSnapshotCollectible(s.aptSnapshots[snapshotID].State) {
 			continue
 		}
 		for _, asset := range assets {
@@ -947,7 +955,7 @@ func (s *MemoryStore) APTObjectHasDurableReference(_ context.Context, objectKey 
 		}
 	}
 	for snapshotID, intents := range s.aptSnapshotObjects {
-		if s.aptSnapshots[snapshotID].State == APTRepositorySnapshotFailed {
+		if aptSnapshotCollectible(s.aptSnapshots[snapshotID].State) {
 			continue
 		}
 		if _, ok := intents[objectKey]; ok {
@@ -1005,7 +1013,7 @@ func (s *MemoryStore) GetVisibleAPTSnapshotAsset(_ context.Context, repositoryID
 	var foundSequence int64
 	for snapshotID, assets := range s.aptSnapshotAssets {
 		snapshot := s.aptSnapshots[snapshotID]
-		if snapshot.RepositoryID != repositoryID || snapshot.State != APTRepositorySnapshotVisible || snapshot.Sequence < foundSequence {
+		if snapshot.RepositoryID != repositoryID || (snapshot.State != APTRepositorySnapshotVisible && (snapshot.State != APTRepositorySnapshotRetired || APTAssetMutable(path))) || snapshot.Sequence < foundSequence {
 			continue
 		}
 		if strings.HasPrefix(path, "dists/") && !strings.HasPrefix(path, "dists/"+snapshot.Suite+"/") {

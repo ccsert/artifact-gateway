@@ -46,6 +46,7 @@
         { "id": "apt-proxy", "title": { "en": "APT Proxy and Group", "zh-CN": "APT Proxy 与 Group" }, "en": "docs/apt-proxy.md", "zh-CN": "docs/apt-proxy.zh-CN.md" },
         { "id": "apt-hosted-signing", "title": { "en": "APT Hosted signing", "zh-CN": "APT Hosted 签名" }, "en": "docs/apt-hosted-signing.md", "zh-CN": "docs/apt-hosted-signing.zh-CN.md" },
         { "id": "apt-snapshot-archive", "title": { "en": "APT snapshot archives", "zh-CN": "APT 快照归档" }, "en": "docs/apt-snapshot-archive.md", "zh-CN": "docs/apt-snapshot-archive.zh-CN.md" },
+        { "id": "apt-hosted-lifecycle", "title": { "en": "APT Hosted lifecycle", "zh-CN": "APT Hosted 生命周期" }, "en": "docs/apt-hosted-lifecycle.md", "zh-CN": "docs/apt-hosted-lifecycle.zh-CN.md" },
         { "id": "apt-hosted-roadmap", "title": { "en": "APT Hosted roadmap", "zh-CN": "APT Hosted 路线图" }, "en": "docs/apt-hosted-roadmap.md", "zh-CN": "docs/apt-hosted-roadmap.zh-CN.md" },
         { "id": "cargo-research", "title": { "en": "Cargo repository research", "zh-CN": "Cargo 仓库研究" }, "en": "docs/cargo-repository-research.md", "zh-CN": "docs/cargo-repository-research.zh-CN.md" },
         { "id": "nuget-roadmap", "title": { "en": "NuGet roadmap", "zh-CN": "NuGet 路线图" }, "en": "docs/nuget-roadmap.md", "zh-CN": "docs/nuget-roadmap.zh-CN.md" },

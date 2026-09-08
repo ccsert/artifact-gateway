@@ -195,6 +195,12 @@ paths:
     "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_publication_sessions_sessionId"
   "/repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package":
     "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_publication_sessions_sessionId_package"
+  "/repositories/{repositoryId}/apt/lifecycle":
+    "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_lifecycle"
+  "/repositories/{repositoryId}/apt/lifecycle/preview":
+    "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_lifecycle_preview"
+  "/repositories/{repositoryId}/apt/snapshots/prune":
+    "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_snapshots_prune"
   "/repositories/{repositoryId}/apt/snapshots":
     "$ref": "./management/apt-publication.yaml#/repositories_repositoryId_apt_snapshots"
   "/repositories/{repositoryId}/apt/snapshots/restore":

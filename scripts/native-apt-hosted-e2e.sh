@@ -171,9 +171,10 @@ gateway_network=$(docker inspect --format '{{range $name, $settings := .NetworkS
 [[ -n "$gateway_network" ]] || { printf 'gateway network was not found\n' >&2; exit 1; }
 
 apt_install() {
+  local version=${1:-1.0.0-1}
   docker run --rm \
     --network "$gateway_network" \
-    --env "APT_E2E_RESOLVER_TOKEN=$resolver_token" \
+    --env "APT_E2E_RESOLVER_TOKEN=$resolver_token" --env "APT_E2E_VERSION=$version" \
     --volume "$public_key:/keys/artifact-gateway.asc:ro" \
     "$debian_image" /bin/sh -ec '
       rm -f /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources
@@ -183,7 +184,7 @@ apt_install() {
       chmod 0600 /etc/apt/auth.conf.d/artifact-gateway.conf
       printf "%s\n" "deb [arch=all signed-by=/etc/apt/keyrings/artifact-gateway.asc] http://gateway:8080/apt/apt-hosted-e2e stable main" > /etc/apt/sources.list.d/artifact-gateway.list
       apt-get -o Acquire::Retries=0 update
-      apt-get -o Acquire::Retries=0 install -y --no-install-recommends artifact-gateway-e2e=1.0.0-1
+      apt-get -o Acquire::Retries=0 install -y --no-install-recommends artifact-gateway-e2e="$APT_E2E_VERSION"
       grep -Fxq installed-from-artifact-gateway /usr/share/artifact-gateway-e2e/installed.txt
     '
 }
@@ -416,6 +417,9 @@ export_snapshot_archive "$workdir/restored-offline-archive.tar"
 cmp "$original_archive" "$workdir/restored-offline-archive.tar"
 install_snapshot_archive_offline "$workdir/restored-offline-archive.tar"
 
+# shellcheck source=scripts/native-apt-lifecycle-e2e.inc.sh
+source "$root/scripts/native-apt-lifecycle-e2e.inc.sh"
+
 # Restore ONLY the empty baseline: the source packages, snapshots and objects are gone.
 # Release the shared Gateway network namespace before restarting its owner.
 "${compose[@]}" stop reference-apt-signer >/dev/null
@@ -465,4 +469,4 @@ PYSAME
   cmp "$original_archive" "$workdir/imported-archive.tar"
 done
 apt_install
-printf 'native APT Hosted E2E passed (signed publish, backup recovery, trusted archive-only restore and replay without a signer, deterministic re-export, and real APT installation)\n'
+printf 'native APT Hosted E2E passed (signed publish, lifecycle delete/retention/restore, backup recovery, trusted archive-only restore and replay without a signer, deterministic re-export, and real APT installation)\n'

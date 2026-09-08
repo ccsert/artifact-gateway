@@ -28,6 +28,10 @@ func loadAPTArchiveState(ctx context.Context, tx *sql.Tx, plan APTArchiveRestore
 	if err != nil {
 		return state, err
 	}
+	state.deletions, err = listAPTPackageDeletions(ctx, tx, repoID, plan.Snapshot.Suite)
+	if err != nil {
+		return state, err
+	}
 	identities := make([]string, 0, len(plan.Packages))
 	paths := make([]string, 0, len(plan.Packages))
 	for _, p := range plan.Packages {

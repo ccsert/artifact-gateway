@@ -40,6 +40,51 @@ func (e APIKeyRoles) Valid() bool {
 	}
 }
 
+// Defines values for APTLifecycleRequestAction.
+const (
+	APTLifecycleRequestActionDelete    APTLifecycleRequestAction = "delete"
+	APTLifecycleRequestActionRestore   APTLifecycleRequestAction = "restore"
+	APTLifecycleRequestActionRetention APTLifecycleRequestAction = "retention"
+)
+
+// Valid indicates whether the value is a known member of the APTLifecycleRequestAction enum.
+func (e APTLifecycleRequestAction) Valid() bool {
+	switch e {
+	case APTLifecycleRequestActionDelete:
+		return true
+	case APTLifecycleRequestActionRestore:
+		return true
+	case APTLifecycleRequestActionRetention:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for APTPackageDeletionState.
+const (
+	APTPackageDeletionStateExpired     APTPackageDeletionState = "expired"
+	APTPackageDeletionStatePurged      APTPackageDeletionState = "purged"
+	APTPackageDeletionStateRecoverable APTPackageDeletionState = "recoverable"
+	APTPackageDeletionStateRestored    APTPackageDeletionState = "restored"
+)
+
+// Valid indicates whether the value is a known member of the APTPackageDeletionState enum.
+func (e APTPackageDeletionState) Valid() bool {
+	switch e {
+	case APTPackageDeletionStateExpired:
+		return true
+	case APTPackageDeletionStatePurged:
+		return true
+	case APTPackageDeletionStateRecoverable:
+		return true
+	case APTPackageDeletionStateRestored:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for APTPublicationSessionState.
 const (
 	APTPublicationSessionStateAborted   APTPublicationSessionState = "aborted"
@@ -138,6 +183,7 @@ func (e APTRepositorySigningStateSignerMode) Valid() bool {
 
 // Defines values for APTRepositorySnapshotState.
 const (
+	APTRepositorySnapshotStatePruned  APTRepositorySnapshotState = "pruned"
 	APTRepositorySnapshotStateRetired APTRepositorySnapshotState = "retired"
 	APTRepositorySnapshotStateVisible APTRepositorySnapshotState = "visible"
 )
@@ -145,6 +191,8 @@ const (
 // Valid indicates whether the value is a known member of the APTRepositorySnapshotState enum.
 func (e APTRepositorySnapshotState) Valid() bool {
 	switch e {
+	case APTRepositorySnapshotStatePruned:
+		return true
 	case APTRepositorySnapshotStateRetired:
 		return true
 	case APTRepositorySnapshotStateVisible:
@@ -2277,6 +2325,55 @@ type APIKeyList struct {
 	Items []APIKey `json:"items"`
 }
 
+// APTLifecyclePackage defines model for APTLifecyclePackage.
+type APTLifecyclePackage struct {
+	Component            string             `json:"component"`
+	PublicationSessionId openapi_types.UUID `json:"publicationSessionId"`
+	Revision             APTPackageRevision `json:"revision"`
+}
+
+// APTLifecyclePlan defines model for APTLifecyclePlan.
+type APTLifecyclePlan struct {
+	ExpectedSnapshotId openapi_types.UUID   `json:"expectedSnapshotId"`
+	RecoveryDays       int                  `json:"recoveryDays"`
+	RemainingPackages  int                  `json:"remainingPackages"`
+	RemoveSessionIds   []openapi_types.UUID `json:"removeSessionIds"`
+	RestoreIds         []openapi_types.UUID `json:"restoreIds"`
+}
+
+// APTLifecycleRequest defines model for APTLifecycleRequest.
+type APTLifecycleRequest struct {
+	Action                APTLifecycleRequestAction `json:"action"`
+	DeletionIds           *[]openapi_types.UUID     `json:"deletionIds,omitempty"`
+	ExpectedSnapshotId    openapi_types.UUID        `json:"expectedSnapshotId"`
+	KeepLatest            *int                      `json:"keepLatest,omitempty"`
+	OlderThanDays         *int                      `json:"olderThanDays,omitempty"`
+	PublicationSessionIds *[]openapi_types.UUID     `json:"publicationSessionIds,omitempty"`
+	Suite                 string                    `json:"suite"`
+}
+
+// APTLifecycleRequestAction defines model for APTLifecycleRequest.Action.
+type APTLifecycleRequestAction string
+
+// APTLifecycleState defines model for APTLifecycleState.
+type APTLifecycleState struct {
+	Deletions []APTPackageDeletion  `json:"deletions"`
+	Packages  []APTLifecyclePackage `json:"packages"`
+	Snapshots []APTSnapshotHistory  `json:"snapshots"`
+}
+
+// APTPackageDeletion defines model for APTPackageDeletion.
+type APTPackageDeletion struct {
+	DeletedAt    time.Time               `json:"deletedAt"`
+	Id           openapi_types.UUID      `json:"id"`
+	Package      APTLifecyclePackage     `json:"package"`
+	RestoreUntil time.Time               `json:"restoreUntil"`
+	State        APTPackageDeletionState `json:"state"`
+}
+
+// APTPackageDeletionState defines model for APTPackageDeletion.State.
+type APTPackageDeletionState string
+
 // APTPackageRevision defines model for APTPackageRevision.
 type APTPackageRevision struct {
 	Architecture      string             `json:"architecture"`
@@ -2290,6 +2387,11 @@ type APTPackageRevision struct {
 	RepositoryId      openapi_types.UUID `json:"repositoryId"`
 	Size              int64              `json:"size"`
 	Version           string             `json:"version"`
+}
+
+// APTPruneRequest defines model for APTPruneRequest.
+type APTPruneRequest struct {
+	SnapshotIds []openapi_types.UUID `json:"snapshotIds"`
 }
 
 // APTPublicationSession defines model for APTPublicationSession.
@@ -2349,6 +2451,12 @@ type APTRepositorySnapshot struct {
 
 // APTRepositorySnapshotState defines model for APTRepositorySnapshot.State.
 type APTRepositorySnapshotState string
+
+// APTSnapshotHistory defines model for APTSnapshotHistory.
+type APTSnapshotHistory struct {
+	PrunableAfter *time.Time            `json:"prunableAfter,omitempty"`
+	Snapshot      APTRepositorySnapshot `json:"snapshot"`
+}
 
 // AnonymousAccessPolicy defines model for AnonymousAccessPolicy.
 type AnonymousAccessPolicy struct {
@@ -4686,6 +4794,16 @@ type UpdateRepositoryParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// GetAPTLifecycleStateParams defines parameters for GetAPTLifecycleState.
+type GetAPTLifecycleStateParams struct {
+	Suite string `form:"suite" json:"suite"`
+}
+
+// ApplyAPTLifecycleParams defines parameters for ApplyAPTLifecycle.
+type ApplyAPTLifecycleParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
 // CreateAPTPublicationSessionParams defines parameters for CreateAPTPublicationSession.
 type CreateAPTPublicationSessionParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -5066,11 +5184,20 @@ type CreateRepositoryJSONRequestBody = CreateRepository
 // UpdateRepositoryJSONRequestBody defines body for UpdateRepository for application/json ContentType.
 type UpdateRepositoryJSONRequestBody = UpdateRepository
 
+// ApplyAPTLifecycleJSONRequestBody defines body for ApplyAPTLifecycle for application/json ContentType.
+type ApplyAPTLifecycleJSONRequestBody = APTLifecycleRequest
+
+// PreviewAPTLifecycleJSONRequestBody defines body for PreviewAPTLifecycle for application/json ContentType.
+type PreviewAPTLifecycleJSONRequestBody = APTLifecycleRequest
+
 // CreateAPTPublicationSessionJSONRequestBody defines body for CreateAPTPublicationSession for application/json ContentType.
 type CreateAPTPublicationSessionJSONRequestBody = CreateAPTPublicationSession
 
 // PublishAPTRepositorySnapshotJSONRequestBody defines body for PublishAPTRepositorySnapshot for application/json ContentType.
 type PublishAPTRepositorySnapshotJSONRequestBody = PublishAPTRepositorySnapshot
+
+// PruneAPTSnapshotsJSONRequestBody defines body for PruneAPTSnapshots for application/json ContentType.
+type PruneAPTSnapshotsJSONRequestBody = APTPruneRequest
 
 // ReplaceArtifactIntelligenceJSONRequestBody defines body for ReplaceArtifactIntelligence for application/json ContentType.
 type ReplaceArtifactIntelligenceJSONRequestBody = ArtifactIntelligenceWritable
@@ -5354,6 +5481,15 @@ type ServerInterface interface {
 	// (PATCH /repositories/{repositoryId})
 	UpdateRepository(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params UpdateRepositoryParams)
 
+	// (GET /repositories/{repositoryId}/apt/lifecycle)
+	GetAPTLifecycleState(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params GetAPTLifecycleStateParams)
+
+	// (POST /repositories/{repositoryId}/apt/lifecycle)
+	ApplyAPTLifecycle(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ApplyAPTLifecycleParams)
+
+	// (POST /repositories/{repositoryId}/apt/lifecycle/preview)
+	PreviewAPTLifecycle(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
 	// (POST /repositories/{repositoryId}/apt/publication-sessions)
 	CreateAPTPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateAPTPublicationSessionParams)
 
@@ -5368,6 +5504,9 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/apt/snapshots)
 	PublishAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params PublishAPTRepositorySnapshotParams)
+
+	// (POST /repositories/{repositoryId}/apt/snapshots/prune)
+	PruneAPTSnapshots(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
 	// (POST /repositories/{repositoryId}/apt/snapshots/restore)
 	RestoreAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params RestoreAPTRepositorySnapshotParams)
@@ -7515,6 +7654,128 @@ func (siw *ServerInterfaceWrapper) UpdateRepository(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// GetAPTLifecycleState operation middleware
+func (siw *ServerInterfaceWrapper) GetAPTLifecycleState(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAPTLifecycleStateParams
+
+	// ------------- Required query parameter "suite" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "suite", r.URL.Query(), &params.Suite, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "suite"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "suite", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAPTLifecycleState(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApplyAPTLifecycle operation middleware
+func (siw *ServerInterfaceWrapper) ApplyAPTLifecycle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ApplyAPTLifecycleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApplyAPTLifecycle(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewAPTLifecycle operation middleware
+func (siw *ServerInterfaceWrapper) PreviewAPTLifecycle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewAPTLifecycle(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateAPTPublicationSession operation middleware
 func (siw *ServerInterfaceWrapper) CreateAPTPublicationSession(w http.ResponseWriter, r *http.Request) {
 
@@ -7710,6 +7971,32 @@ func (siw *ServerInterfaceWrapper) PublishAPTRepositorySnapshot(w http.ResponseW
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PublishAPTRepositorySnapshot(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PruneAPTSnapshots operation middleware
+func (siw *ServerInterfaceWrapper) PruneAPTSnapshots(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PruneAPTSnapshots(w, r, repositoryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11916,11 +12203,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.DeleteRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.GetRepository)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/repositories/{repositoryId}", wrapper.UpdateRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/apt/lifecycle", wrapper.GetAPTLifecycleState)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/lifecycle", wrapper.ApplyAPTLifecycle)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/lifecycle/preview", wrapper.PreviewAPTLifecycle)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions", wrapper.CreateAPTPublicationSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions/{sessionId}", wrapper.GetAPTPublicationSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package", wrapper.UploadAPTPublicationPackage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/apt/signing-state", wrapper.GetAPTRepositorySigningState)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/snapshots", wrapper.PublishAPTRepositorySnapshot)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/snapshots/prune", wrapper.PruneAPTSnapshots)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/snapshots/restore", wrapper.RestoreAPTRepositorySnapshot)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive", wrapper.ExportAPTRepositorySnapshot)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-identities", wrapper.ListRepositoryArtifactIdentities)
@@ -14701,6 +14992,418 @@ func (response UpdateRepository412ApplicationProblemPlusJSONResponse) VisitUpdat
 	return err
 }
 
+type GetAPTLifecycleStateRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       GetAPTLifecycleStateParams
+}
+
+type GetAPTLifecycleStateResponseObject interface {
+	VisitGetAPTLifecycleStateResponse(w http.ResponseWriter) error
+}
+
+type GetAPTLifecycleState200JSONResponse APTLifecycleState
+
+func (response GetAPTLifecycleState200JSONResponse) VisitGetAPTLifecycleStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTLifecycleState400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetAPTLifecycleState400ApplicationProblemPlusJSONResponse) VisitGetAPTLifecycleStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTLifecycleState401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAPTLifecycleState401ApplicationProblemPlusJSONResponse) VisitGetAPTLifecycleStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTLifecycleState403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAPTLifecycleState403ApplicationProblemPlusJSONResponse) VisitGetAPTLifecycleStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTLifecycleState404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAPTLifecycleState404ApplicationProblemPlusJSONResponse) VisitGetAPTLifecycleStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTLifecycleState409ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAPTLifecycleState409ApplicationProblemPlusJSONResponse) VisitGetAPTLifecycleStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTLifecycleState500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAPTLifecycleState500ApplicationProblemPlusJSONResponse) VisitGetAPTLifecycleStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTLifecycleState503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAPTLifecycleState503ApplicationProblemPlusJSONResponse) VisitGetAPTLifecycleStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAPTLifecycleState507ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAPTLifecycleState507ApplicationProblemPlusJSONResponse) VisitGetAPTLifecycleStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(507)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAPTLifecycleRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ApplyAPTLifecycleParams
+	Body         *ApplyAPTLifecycleJSONRequestBody
+}
+
+type ApplyAPTLifecycleResponseObject interface {
+	VisitApplyAPTLifecycleResponse(w http.ResponseWriter) error
+}
+
+type ApplyAPTLifecycle200JSONResponse APTRepositorySnapshot
+
+func (response ApplyAPTLifecycle200JSONResponse) VisitApplyAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAPTLifecycle400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ApplyAPTLifecycle400ApplicationProblemPlusJSONResponse) VisitApplyAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAPTLifecycle401ApplicationProblemPlusJSONResponse Problem
+
+func (response ApplyAPTLifecycle401ApplicationProblemPlusJSONResponse) VisitApplyAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAPTLifecycle403ApplicationProblemPlusJSONResponse Problem
+
+func (response ApplyAPTLifecycle403ApplicationProblemPlusJSONResponse) VisitApplyAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAPTLifecycle404ApplicationProblemPlusJSONResponse Problem
+
+func (response ApplyAPTLifecycle404ApplicationProblemPlusJSONResponse) VisitApplyAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAPTLifecycle409ApplicationProblemPlusJSONResponse Problem
+
+func (response ApplyAPTLifecycle409ApplicationProblemPlusJSONResponse) VisitApplyAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAPTLifecycle500ApplicationProblemPlusJSONResponse Problem
+
+func (response ApplyAPTLifecycle500ApplicationProblemPlusJSONResponse) VisitApplyAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAPTLifecycle503ApplicationProblemPlusJSONResponse Problem
+
+func (response ApplyAPTLifecycle503ApplicationProblemPlusJSONResponse) VisitApplyAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAPTLifecycle507ApplicationProblemPlusJSONResponse Problem
+
+func (response ApplyAPTLifecycle507ApplicationProblemPlusJSONResponse) VisitApplyAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(507)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewAPTLifecycleRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Body         *PreviewAPTLifecycleJSONRequestBody
+}
+
+type PreviewAPTLifecycleResponseObject interface {
+	VisitPreviewAPTLifecycleResponse(w http.ResponseWriter) error
+}
+
+type PreviewAPTLifecycle200JSONResponse APTLifecyclePlan
+
+func (response PreviewAPTLifecycle200JSONResponse) VisitPreviewAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewAPTLifecycle400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewAPTLifecycle400ApplicationProblemPlusJSONResponse) VisitPreviewAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewAPTLifecycle401ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewAPTLifecycle401ApplicationProblemPlusJSONResponse) VisitPreviewAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewAPTLifecycle403ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewAPTLifecycle403ApplicationProblemPlusJSONResponse) VisitPreviewAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewAPTLifecycle404ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewAPTLifecycle404ApplicationProblemPlusJSONResponse) VisitPreviewAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewAPTLifecycle409ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewAPTLifecycle409ApplicationProblemPlusJSONResponse) VisitPreviewAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewAPTLifecycle500ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewAPTLifecycle500ApplicationProblemPlusJSONResponse) VisitPreviewAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewAPTLifecycle503ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewAPTLifecycle503ApplicationProblemPlusJSONResponse) VisitPreviewAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewAPTLifecycle507ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewAPTLifecycle507ApplicationProblemPlusJSONResponse) VisitPreviewAPTLifecycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(507)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateAPTPublicationSessionRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       CreateAPTPublicationSessionParams
@@ -15265,6 +15968,137 @@ func (response PublishAPTRepositorySnapshot503ApplicationProblemPlusJSONResponse
 type PublishAPTRepositorySnapshot507ApplicationProblemPlusJSONResponse Problem
 
 func (response PublishAPTRepositorySnapshot507ApplicationProblemPlusJSONResponse) VisitPublishAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(507)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PruneAPTSnapshotsRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Body         *PruneAPTSnapshotsJSONRequestBody
+}
+
+type PruneAPTSnapshotsResponseObject interface {
+	VisitPruneAPTSnapshotsResponse(w http.ResponseWriter) error
+}
+
+type PruneAPTSnapshots204Response struct {
+}
+
+func (response PruneAPTSnapshots204Response) VisitPruneAPTSnapshotsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type PruneAPTSnapshots400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PruneAPTSnapshots400ApplicationProblemPlusJSONResponse) VisitPruneAPTSnapshotsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PruneAPTSnapshots401ApplicationProblemPlusJSONResponse Problem
+
+func (response PruneAPTSnapshots401ApplicationProblemPlusJSONResponse) VisitPruneAPTSnapshotsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PruneAPTSnapshots403ApplicationProblemPlusJSONResponse Problem
+
+func (response PruneAPTSnapshots403ApplicationProblemPlusJSONResponse) VisitPruneAPTSnapshotsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PruneAPTSnapshots404ApplicationProblemPlusJSONResponse Problem
+
+func (response PruneAPTSnapshots404ApplicationProblemPlusJSONResponse) VisitPruneAPTSnapshotsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PruneAPTSnapshots409ApplicationProblemPlusJSONResponse Problem
+
+func (response PruneAPTSnapshots409ApplicationProblemPlusJSONResponse) VisitPruneAPTSnapshotsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PruneAPTSnapshots500ApplicationProblemPlusJSONResponse Problem
+
+func (response PruneAPTSnapshots500ApplicationProblemPlusJSONResponse) VisitPruneAPTSnapshotsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PruneAPTSnapshots503ApplicationProblemPlusJSONResponse Problem
+
+func (response PruneAPTSnapshots503ApplicationProblemPlusJSONResponse) VisitPruneAPTSnapshotsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PruneAPTSnapshots507ApplicationProblemPlusJSONResponse Problem
+
+func (response PruneAPTSnapshots507ApplicationProblemPlusJSONResponse) VisitPruneAPTSnapshotsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -21347,6 +22181,15 @@ type StrictServerInterface interface {
 	// (PATCH /repositories/{repositoryId})
 	UpdateRepository(ctx context.Context, request UpdateRepositoryRequestObject) (UpdateRepositoryResponseObject, error)
 
+	// (GET /repositories/{repositoryId}/apt/lifecycle)
+	GetAPTLifecycleState(ctx context.Context, request GetAPTLifecycleStateRequestObject) (GetAPTLifecycleStateResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/apt/lifecycle)
+	ApplyAPTLifecycle(ctx context.Context, request ApplyAPTLifecycleRequestObject) (ApplyAPTLifecycleResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/apt/lifecycle/preview)
+	PreviewAPTLifecycle(ctx context.Context, request PreviewAPTLifecycleRequestObject) (PreviewAPTLifecycleResponseObject, error)
+
 	// (POST /repositories/{repositoryId}/apt/publication-sessions)
 	CreateAPTPublicationSession(ctx context.Context, request CreateAPTPublicationSessionRequestObject) (CreateAPTPublicationSessionResponseObject, error)
 
@@ -21361,6 +22204,9 @@ type StrictServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/apt/snapshots)
 	PublishAPTRepositorySnapshot(ctx context.Context, request PublishAPTRepositorySnapshotRequestObject) (PublishAPTRepositorySnapshotResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/apt/snapshots/prune)
+	PruneAPTSnapshots(ctx context.Context, request PruneAPTSnapshotsRequestObject) (PruneAPTSnapshotsResponseObject, error)
 
 	// (POST /repositories/{repositoryId}/apt/snapshots/restore)
 	RestoreAPTRepositorySnapshot(ctx context.Context, request RestoreAPTRepositorySnapshotRequestObject) (RestoreAPTRepositorySnapshotResponseObject, error)
@@ -23138,6 +23984,100 @@ func (sh *strictHandler) UpdateRepository(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// GetAPTLifecycleState operation middleware
+func (sh *strictHandler) GetAPTLifecycleState(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params GetAPTLifecycleStateParams) {
+	var request GetAPTLifecycleStateRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAPTLifecycleState(ctx, request.(GetAPTLifecycleStateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAPTLifecycleState")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAPTLifecycleStateResponseObject); ok {
+		if err := validResponse.VisitGetAPTLifecycleStateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ApplyAPTLifecycle operation middleware
+func (sh *strictHandler) ApplyAPTLifecycle(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ApplyAPTLifecycleParams) {
+	var request ApplyAPTLifecycleRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	var body ApplyAPTLifecycleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ApplyAPTLifecycle(ctx, request.(ApplyAPTLifecycleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ApplyAPTLifecycle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ApplyAPTLifecycleResponseObject); ok {
+		if err := validResponse.VisitApplyAPTLifecycleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewAPTLifecycle operation middleware
+func (sh *strictHandler) PreviewAPTLifecycle(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request PreviewAPTLifecycleRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body PreviewAPTLifecycleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewAPTLifecycle(ctx, request.(PreviewAPTLifecycleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewAPTLifecycle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewAPTLifecycleResponseObject); ok {
+		if err := validResponse.VisitPreviewAPTLifecycleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CreateAPTPublicationSession operation middleware
 func (sh *strictHandler) CreateAPTPublicationSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreateAPTPublicationSessionParams) {
 	var request CreateAPTPublicationSessionRequestObject
@@ -23281,6 +24221,39 @@ func (sh *strictHandler) PublishAPTRepositorySnapshot(w http.ResponseWriter, r *
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PublishAPTRepositorySnapshotResponseObject); ok {
 		if err := validResponse.VisitPublishAPTRepositorySnapshotResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PruneAPTSnapshots operation middleware
+func (sh *strictHandler) PruneAPTSnapshots(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request PruneAPTSnapshotsRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body PruneAPTSnapshotsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PruneAPTSnapshots(ctx, request.(PruneAPTSnapshotsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PruneAPTSnapshots")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PruneAPTSnapshotsResponseObject); ok {
+		if err := validResponse.VisitPruneAPTSnapshotsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

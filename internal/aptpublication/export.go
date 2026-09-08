@@ -147,7 +147,7 @@ func (e SnapshotArchiveExporter) Prepare(ctx context.Context, snapshotID string)
 		Packages: make([]SnapshotArchivePackage, 0, len(membership)),
 		Assets:   make([]SnapshotArchiveAsset, 0, len(assets)),
 	}
-	if len(membership) == 0 || len(membership) > maxSnapshotArchivePackages || len(assets) > maxSnapshotArchiveAssets {
+	if len(membership) > maxSnapshotArchivePackages || len(assets) > maxSnapshotArchiveAssets {
 		return nil, ErrSnapshotArchiveCorrupt
 	}
 	objects := make(map[string]archiveObject)

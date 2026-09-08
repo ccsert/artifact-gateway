@@ -52,6 +52,7 @@ type NativeAPTArchiveRestoreStore interface {
 }
 
 type aptArchiveRestoreState struct {
+	deletions                       []APTPackageDeletion
 	repo                            HostedRepository
 	quota, baseBytes, reservedBytes int64
 	packages                        map[string]APTPackageRevision
@@ -74,7 +75,7 @@ func validAPTArchivePlan(plan APTArchiveRestorePlan) bool {
 	if _, err := uuid.Parse(plan.Snapshot.ID); err != nil {
 		return false
 	}
-	if !ValidAPTSHA256Digest(plan.ArchiveDigest) || len(plan.Packages) == 0 || len(plan.Packages) > 10000 || len(plan.Assets) > 50016 || plan.Snapshot.CreatedAt.IsZero() || plan.Snapshot.PublishedAt.IsZero() {
+	if !ValidAPTSHA256Digest(plan.ArchiveDigest) || len(plan.Packages) > 10000 || len(plan.Assets) > 50016 || plan.Snapshot.CreatedAt.IsZero() || plan.Snapshot.PublishedAt.IsZero() {
 		return false
 	}
 	if plan.Snapshot.State != APTRepositorySnapshotVisible && plan.Snapshot.State != APTRepositorySnapshotRetired {
@@ -164,6 +165,13 @@ func checkAPTArchiveRestore(plan APTArchiveRestorePlan, state aptArchiveRestoreS
 			}
 		}
 		return 0, true, nil
+	}
+	for _, p := range plan.Packages {
+		for _, d := range state.deletions {
+			if aptDeletionBlocks(d, plan.Snapshot.Suite, p.Component, p.Revision.CanonicalIdentity) {
+				return 0, false, ErrVersionConflict
+			}
+		}
 	}
 	for _, existing := range state.snapshots {
 		if existing.RepositoryID == plan.Snapshot.RepositoryID && existing.Suite == plan.Snapshot.Suite && (existing.Sequence == plan.Snapshot.Sequence || (existing.State == APTRepositorySnapshotVisible && existing.Sequence >= plan.Snapshot.Sequence)) {
