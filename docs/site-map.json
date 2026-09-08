@@ -81,6 +81,7 @@
         { "id": "release-readiness", "title": { "en": "Release readiness", "zh-CN": "发布准备" }, "en": "docs/release-readiness.md", "zh-CN": "docs/release-readiness.zh-CN.md" },
         { "id": "release-record-template", "title": { "en": "Release record template", "zh-CN": "发布记录模板" }, "en": "docs/release-record-template.md", "zh-CN": "docs/release-record-template.zh-CN.md" },
         { "id": "release-record-2026-08-11", "title": { "en": "Preparation record: 2026-08-11", "zh-CN": "准备记录：2026-08-11" }, "en": "docs/release-records/2026-08-11-d738d4ed.md", "zh-CN": "docs/release-records/2026-08-11-d738d4ed.zh-CN.md" },
+        { "id": "release-record-2026-09-08", "title": { "en": "Candidate record: 2026-09-08", "zh-CN": "候选记录：2026-09-08" }, "en": "docs/release-records/2026-09-08-cb59b227.md", "zh-CN": "docs/release-records/2026-09-08-cb59b227.zh-CN.md" },
         { "id": "changelog", "title": { "en": "Changelog", "zh-CN": "变更记录" }, "en": "CHANGELOG.md", "zh-CN": "CHANGELOG.zh-CN.md" }
       ]
     },

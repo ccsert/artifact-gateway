@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Pin upgrade/restore rehearsals to verified image identities, use v0.1.0 as the upgrade baseline, and verify Group provenance and reader grants after restoration.
+
 - Added Maven/Raw Group directories with per-member provenance, conflict evidence, exact SNAPSHOT builds, and scope-validated Group-only Maven cache entries. Signed navigation expires after configuration, authorization, or ordering changes. Refined the shared directory browser with clearer hierarchy, source links, compact evidence, collapse controls, and responsive file names.
 
 - Maven Groups now try every eligible Proxy after Hosted misses and bind positive/negative cache results to the ordered authorized candidates and upstream settings. Member, permission, allowlist, or egress changes revalidate the result; legacy multi-member entries are refreshed, and a fallback after an upstream failure is not cached as a complete Group resolution.
