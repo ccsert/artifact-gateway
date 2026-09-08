@@ -21,6 +21,19 @@ shift
 [[ "$1" == --env-file && "$2" == /dev/null && "$3" == --project-name && "$4" == artifact-gateway-integration && "$5" == -f && "$6" == *compose.integration.yml ]] || exit 11
 shift 6
 printf '%s\n' "$*" >>"$AG_ISOLATION_LOG"
+# The lifecycle upgrade probe uses a second database within the same isolated
+# project. Its mounted legacy migrations are not the checksum-drift fixture.
+if [[ "$*" == *"--env PGDATABASE=gateway_apt_lifecycle_upgrade_test"* ]]; then
+  exit 0
+fi
+if [[ "$*" == *"psql -X -U gateway -d gateway_apt_lifecycle_upgrade_test"* ]]; then
+  sql=$(cat)
+  if [[ "$sql" == *"APT lifecycle requires backup restoration for downgrade"* ]]; then
+    printf 'APT lifecycle requires backup restoration for downgrade\n' >&2
+    exit 1
+  fi
+  exit 0
+fi
 if [[ "$*" == *--volume* ]]; then
   printf 'Applied migration drift probe has changed\n' >&2
   # Match the real runner's migration filename in the diagnostic.
@@ -41,7 +54,7 @@ AG_ISOLATION_LATEST=$(find "$root/migrations" -maxdepth 1 -name '*.sql' | sort |
 AG_ISOLATION_LATEST=${AG_ISOLATION_LATEST##*/}
 "$root/scripts/integration-test.sh" >/dev/null
 make --no-print-directory -C "$root" integration-down >/dev/null
-for expected in 'down -v --remove-orphans' 'up -d --wait postgres rustfs' 'run --rm --no-deps test'; do
+for expected in 'down -v --remove-orphans' 'up -d --wait postgres rustfs' 'run --rm --no-deps test' 'exec -T postgres createdb -U gateway gateway_apt_lifecycle_upgrade_test' 'exec -T postgres dropdb -U gateway --if-exists gateway_apt_lifecycle_upgrade_test'; do
   grep -Fq -- "$expected" "$AG_ISOLATION_LOG"
 done
 printf 'Integration Compose isolation passed with an unrelated exported project name.\n'

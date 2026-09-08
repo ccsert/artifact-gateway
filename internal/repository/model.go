@@ -488,6 +488,7 @@ const (
 	APTRepositorySnapshotVisible  APTRepositorySnapshotState = "visible"
 	APTRepositorySnapshotRetired  APTRepositorySnapshotState = "retired"
 	APTRepositorySnapshotFailed   APTRepositorySnapshotState = "failed"
+	APTRepositorySnapshotPruned   APTRepositorySnapshotState = "pruned"
 )
 
 // APTRepositorySnapshot is the single visibility switch for one signed suite.

@@ -161,7 +161,7 @@ func validateSnapshotArchiveManifest(manifest SnapshotArchiveManifest) (map[stri
 		len(snapshot.SignerIdentity) > 512 || len(snapshot.KeyFingerprint) > 512 || len(snapshot.SignatureAlgorithm) > 128 ||
 		strings.ContainsAny(snapshot.SignerIdentity+snapshot.KeyFingerprint+snapshot.SignatureAlgorithm, "\x00\r\n") ||
 		!validSnapshotArchiveTime(snapshot.CreatedAt) || !validSnapshotArchiveTime(snapshot.PublishedAt) ||
-		len(manifest.Packages) == 0 || len(manifest.Packages) > maxSnapshotArchivePackages || len(manifest.Assets) == 0 || len(manifest.Assets) > maxSnapshotArchiveAssets {
+		len(manifest.Packages) > maxSnapshotArchivePackages || len(manifest.Assets) == 0 || len(manifest.Assets) > maxSnapshotArchiveAssets {
 		return nil, ErrSnapshotArchiveCorrupt
 	}
 	expected := make(map[string]archiveObject)

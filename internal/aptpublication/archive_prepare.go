@@ -180,7 +180,11 @@ func (a *verifiedArchive) verifyCanonicalPublication(ctx context.Context, assets
 		l, r := packages[i], packages[j]
 		return strings.Join([]string{l.component, l.revision.Architecture, l.revision.Package, l.revision.Version, l.revision.ObjectName}, "\x00") < strings.Join([]string{r.component, r.revision.Architecture, r.revision.Package, r.revision.Version, r.revision.ObjectName}, "\x00")
 	})
-	bundle, err := buildSnapshotBundle(snapshot, packages)
+	scopeAssets := make([]repository.APTSnapshotAsset, 0, len(assets))
+	for _, a := range assets {
+		scopeAssets = append(scopeAssets, repository.APTSnapshotAsset{Path: a.Path})
+	}
+	bundle, err := buildSnapshotBundleWithScopes(snapshot, packages, snapshotIndexScopes(snapshot.Suite, scopeAssets))
 	if err != nil || digestBytes(bundle.release) != snapshot.ReleaseDigest || len(assets) != len(bundle.assets)+3 {
 		return ErrSnapshotArchiveCorrupt
 	}

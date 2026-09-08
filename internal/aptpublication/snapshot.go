@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -70,6 +71,8 @@ type PublishSnapshotInput struct {
 	SessionIDs   []string
 	Actor        string
 	CreatedAt    time.Time
+	indexScopes  []aptIndexScope
+	lifecycle    *repository.APTLifecycleCommit
 }
 
 type snapshotPackage struct {
@@ -139,7 +142,7 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 	releaseObjects := func() {}
 	defer func() { releaseObjects() }()
 
-	bundle, err := buildSnapshotBundle(snapshot, packages)
+	bundle, err := buildSnapshotBundleWithScopes(snapshot, packages, input.indexScopes)
 	if err != nil {
 		return repository.APTRepositorySnapshot{}, err
 	}
@@ -196,13 +199,26 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 	snapshot.SignerIdentity = signature.SignerIdentity
 	snapshot.KeyFingerprint = signature.KeyFingerprint
 	snapshot.SignatureAlgorithm = signature.Algorithm
-	published, err = p.store.PublishAPTRepositorySnapshotWithAudit(objectCtx, snapshot, bundle.assets, bundle.release, repository.AuditRecord{
+	audit := repository.AuditRecord{
 		GroupName: repo.Name, Repository: repo.Name, Actor: input.Actor, Outcome: repository.AuditResolved,
 		OccurredAt: time.Now().UTC(), Format: string(repository.FormatAPT), Resource: input.Suite,
 		Representation: releaseDigest, Operation: "apt.repository_snapshot.publish", Status: 200,
 		CacheDisposition: "bypass", AuthorizationSource: "repository_write", AuthorizationReason: "signed_snapshot_visible",
 		Evidence: signedSnapshotAuditEvidence(signature),
-	})
+	}
+	if input.lifecycle != nil {
+		audit.Operation = "apt.package." + input.lifecycle.Operation
+		audit.AuthorizationSource = "repository_admin"
+		audit.Evidence["baseSnapshotId"] = input.lifecycle.BaseSnapshotID
+		audit.Evidence["commandId"] = input.lifecycle.ID
+		removed, _ := json.Marshal(input.lifecycle.RemoveSessionIDs)
+		restored, _ := json.Marshal(input.lifecycle.RestoreIDs)
+		audit.Evidence["removedSessionIds"] = string(removed)
+		audit.Evidence["restoredDeletionIds"] = string(restored)
+		published, err = p.store.CommitAPTLifecycleSnapshot(objectCtx, *input.lifecycle, snapshot, bundle.assets, bundle.release, audit)
+	} else {
+		published, err = p.store.PublishAPTRepositorySnapshotWithAudit(objectCtx, snapshot, bundle.assets, bundle.release, audit)
+	}
 	if err != nil {
 		return repository.APTRepositorySnapshot{}, err
 	}
@@ -241,7 +257,7 @@ func validPublishSnapshotInput(input PublishSnapshotInput) bool {
 		return false
 	}
 	if input.RepositoryID == "" || !repository.ValidAPTPublicationScope(input.Suite) || input.Sequence <= 0 ||
-		len(input.SessionIDs) == 0 || len(input.SessionIDs) > 10000 || input.Actor == "" || len(input.Actor) > 512 || input.CreatedAt.IsZero() {
+		(len(input.SessionIDs) == 0 && len(input.indexScopes) == 0) || len(input.SessionIDs) > 10000 || input.Actor == "" || len(input.Actor) > 512 || input.CreatedAt.IsZero() {
 		return false
 	}
 	seen := make(map[string]struct{}, len(input.SessionIDs))
@@ -314,10 +330,35 @@ func (p *Publisher) loadPackages(ctx context.Context, input PublishSnapshotInput
 	return packages, memberships, nil
 }
 
+type aptIndexScope struct{ component, architecture string }
+
+func snapshotIndexScopes(suite string, assets []repository.APTSnapshotAsset) []aptIndexScope {
+	scopes := make([]aptIndexScope, 0)
+	for _, a := range assets {
+		parts := strings.Split(a.Path, "/")
+		if len(parts) == 5 && parts[0] == "dists" && parts[1] == suite && parts[4] == "Packages" && strings.HasPrefix(parts[3], "binary-") {
+			scopes = append(scopes, aptIndexScope{parts[2], strings.TrimPrefix(parts[3], "binary-")})
+		}
+	}
+	return scopes
+}
+
 func buildSnapshotBundle(snapshot repository.APTRepositorySnapshot, packages []snapshotPackage) (snapshotBundle, error) {
+	return buildSnapshotBundleWithScopes(snapshot, packages, nil)
+}
+
+func buildSnapshotBundleWithScopes(snapshot repository.APTRepositorySnapshot, packages []snapshotPackage, scopes []aptIndexScope) (snapshotBundle, error) {
 	bundle := snapshotBundle{generated: make(map[string][]byte)}
 	groups := make(map[string][]snapshotPackage)
 	components, architectures := make(map[string]struct{}), make(map[string]struct{})
+	for _, scope := range scopes {
+		if !repository.ValidAPTPublicationScope(scope.component) || !repository.ValidAPTPublicationScope(scope.architecture) {
+			return snapshotBundle{}, ErrInvalidSnapshotInput
+		}
+		groups[scope.component+"\x00"+scope.architecture] = nil
+		components[scope.component] = struct{}{}
+		architectures[scope.architecture] = struct{}{}
+	}
 	for _, pkg := range packages {
 		key := pkg.component + "\x00" + pkg.revision.Architecture
 		groups[key] = append(groups[key], pkg)

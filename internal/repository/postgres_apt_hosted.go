@@ -446,7 +446,7 @@ func (s *PostgresStore) APTObjectHasPackageReference(ctx context.Context, object
 }
 
 func (s *PostgresStore) CreateAPTRepositorySnapshot(ctx context.Context, snapshot APTRepositorySnapshot, items []APTSnapshotPackage) (APTRepositorySnapshot, error) {
-	if snapshot.ID == "" || snapshot.RepositoryID == "" || !ValidAPTPublicationScope(snapshot.Suite) || snapshot.Sequence <= 0 || snapshot.State != APTRepositorySnapshotBuilding || len(items) == 0 {
+	if snapshot.ID == "" || snapshot.RepositoryID == "" || !ValidAPTPublicationScope(snapshot.Suite) || snapshot.Sequence <= 0 || snapshot.State != APTRepositorySnapshotBuilding {
 		return APTRepositorySnapshot{}, ErrDisabled
 	}
 	if err := validateAPTSnapshotMembership(items); err != nil {
@@ -635,6 +635,16 @@ func publishAPTRepositorySnapshotTx(ctx context.Context, tx *sql.Tx, snapshot AP
 	if err == nil && visibleSequence >= snapshot.Sequence {
 		return APTRepositorySnapshot{}, ErrVersionConflict
 	}
+	deletions, err := listAPTPackageDeletions(ctx, tx, snapshot.RepositoryID, snapshot.Suite)
+	if err != nil {
+		return APTRepositorySnapshot{}, err
+	}
+	barriers := make(map[string]bool)
+	for _, d := range deletions {
+		if d.RestoredAt.IsZero() {
+			barriers[d.Component+"\x00"+d.Revision.CanonicalIdentity] = true
+		}
+	}
 	var quota int64
 	if err = tx.QueryRowContext(ctx, `SELECT quota_bytes FROM repository_capacity_quotas WHERE repository_id=$1 FOR UPDATE`, snapshot.RepositoryID).Scan(&quota); errors.Is(err, sql.ErrNoRows) {
 		quota = 0
@@ -681,18 +691,22 @@ func publishAPTRepositorySnapshotTx(ctx context.Context, tx *sql.Tx, snapshot AP
 		}
 	}
 	expectedPool := make(map[string]APTSnapshotAsset)
-	packageRows, queryErr := tx.QueryContext(ctx, `SELECT sp.component,p.package_name,p.object_name,p.digest,p.object_key,p.size
+	packageRows, queryErr := tx.QueryContext(ctx, `SELECT sp.component,p.package_name,p.object_name,p.digest,p.object_key,p.size,p.canonical_identity
 		FROM native_apt_snapshot_packages sp JOIN native_apt_package_revisions p ON p.id=sp.package_revision_id
 		WHERE sp.snapshot_id=$1`, snapshot.ID)
 	if queryErr != nil {
 		return APTRepositorySnapshot{}, queryErr
 	}
 	for packageRows.Next() {
-		var component, packageName, objectName string
+		var component, packageName, objectName, identity string
 		var asset APTSnapshotAsset
-		if err = packageRows.Scan(&component, &packageName, &objectName, &asset.Digest, &asset.ObjectKey, &asset.Size); err != nil {
+		if err = packageRows.Scan(&component, &packageName, &objectName, &asset.Digest, &asset.ObjectKey, &asset.Size, &identity); err != nil {
 			_ = packageRows.Close()
 			return APTRepositorySnapshot{}, err
+		}
+		if barriers[component+"\x00"+identity] {
+			_ = packageRows.Close()
+			return APTRepositorySnapshot{}, ErrVersionConflict
 		}
 		path := APTPoolPath(component, packageName, objectName)
 		if _, duplicate := expectedPool[path]; duplicate {
@@ -717,7 +731,7 @@ func publishAPTRepositorySnapshotTx(ctx context.Context, tx *sql.Tx, snapshot AP
 			return APTRepositorySnapshot{}, ErrDisabled
 		}
 	}
-	if actualPool == 0 || actualPool != len(expectedPool) {
+	if actualPool != len(expectedPool) {
 		return APTRepositorySnapshot{}, ErrDisabled
 	}
 	for _, asset := range assets {
@@ -748,7 +762,7 @@ func publishAPTRepositorySnapshotTx(ctx context.Context, tx *sql.Tx, snapshot AP
 			return APTRepositorySnapshot{}, err
 		}
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE native_apt_repository_snapshots SET state='retired' WHERE repository_id=$1 AND suite=$2 AND state='visible'`, snapshot.RepositoryID, snapshot.Suite); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE native_apt_repository_snapshots SET state='retired',retired_at=clock_timestamp() WHERE repository_id=$1 AND suite=$2 AND state='visible'`, snapshot.RepositoryID, snapshot.Suite); err != nil {
 		return APTRepositorySnapshot{}, err
 	}
 	if err = scanAPTRepositorySnapshot(tx.QueryRowContext(ctx, `UPDATE native_apt_repository_snapshots
@@ -827,7 +841,7 @@ func (s *PostgresStore) ListUnscheduledAPTSnapshotObjects(ctx context.Context, l
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT i.snapshot_id::text,i.repository_id::text,i.object_key,i.digest,i.size,i.created_at,i.reclaim_scheduled_at,i.collected_at
 		FROM native_apt_snapshot_object_intents i JOIN native_apt_repository_snapshots s ON s.id=i.snapshot_id
-		WHERE s.state='failed' AND i.reclaim_scheduled_at IS NULL AND i.collected_at IS NULL
+		WHERE s.state IN ('failed','pruned') AND i.reclaim_scheduled_at IS NULL AND i.collected_at IS NULL
 		ORDER BY i.snapshot_id,i.object_key LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
@@ -853,7 +867,7 @@ func (s *PostgresStore) ListUnscheduledAPTSnapshotObjects(ctx context.Context, l
 
 func (s *PostgresStore) MarkAPTSnapshotObjectScheduled(ctx context.Context, snapshotID, objectKey string) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE native_apt_snapshot_object_intents i SET reclaim_scheduled_at=COALESCE(reclaim_scheduled_at,clock_timestamp())
-		FROM native_apt_repository_snapshots s WHERE i.snapshot_id=$1 AND i.object_key=$2 AND s.id=i.snapshot_id AND s.state='failed' AND i.collected_at IS NULL`, snapshotID, objectKey)
+		FROM native_apt_repository_snapshots s WHERE i.snapshot_id=$1 AND i.object_key=$2 AND s.id=i.snapshot_id AND s.state IN ('failed','pruned') AND i.collected_at IS NULL`, snapshotID, objectKey)
 	if err != nil {
 		return err
 	}
@@ -865,7 +879,7 @@ func (s *PostgresStore) MarkAPTSnapshotObjectScheduled(ctx context.Context, snap
 
 func (s *PostgresStore) MarkAPTSnapshotObjectCollected(ctx context.Context, snapshotID, objectKey string) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE native_apt_snapshot_object_intents i SET collected_at=COALESCE(collected_at,clock_timestamp())
-		FROM native_apt_repository_snapshots s WHERE i.snapshot_id=$1 AND i.object_key=$2 AND s.id=i.snapshot_id AND s.state='failed'`, snapshotID, objectKey)
+		FROM native_apt_repository_snapshots s WHERE i.snapshot_id=$1 AND i.object_key=$2 AND s.id=i.snapshot_id AND s.state IN ('failed','pruned')`, snapshotID, objectKey)
 	if err != nil {
 		return err
 	}
@@ -879,8 +893,8 @@ func (s *PostgresStore) APTObjectHasDurableReference(ctx context.Context, object
 	var referenced bool
 	err := s.db.QueryRowContext(ctx, `SELECT
 		EXISTS (SELECT 1 FROM native_apt_package_revisions WHERE object_key=$1)
-		OR EXISTS (SELECT 1 FROM native_apt_snapshot_assets a JOIN native_apt_repository_snapshots s ON s.id=a.snapshot_id WHERE a.object_key=$1 AND s.state<>'failed')
-		OR EXISTS (SELECT 1 FROM native_apt_snapshot_object_intents i JOIN native_apt_repository_snapshots s ON s.id=i.snapshot_id WHERE i.object_key=$1 AND s.state<>'failed')
+		OR EXISTS (SELECT 1 FROM native_apt_snapshot_assets a JOIN native_apt_repository_snapshots s ON s.id=a.snapshot_id WHERE a.object_key=$1 AND s.state NOT IN ('failed','pruned'))
+		OR EXISTS (SELECT 1 FROM native_apt_snapshot_object_intents i JOIN native_apt_repository_snapshots s ON s.id=i.snapshot_id WHERE i.object_key=$1 AND s.state NOT IN ('failed','pruned'))
  OR EXISTS (SELECT 1 FROM native_apt_archive_object_intents i JOIN native_apt_archive_restores r ON r.id=i.restore_id WHERE i.object_key=$1 AND r.state='preparing')`, objectKey).Scan(&referenced)
 	return referenced, err
 }
@@ -909,8 +923,8 @@ func (s *PostgresStore) GetVisibleAPTSnapshotAsset(ctx context.Context, reposito
 	var asset APTSnapshotAsset
 	err := scanAPTSnapshotAsset(s.db.QueryRowContext(ctx, `SELECT `+aptSnapshotAssetColumns+`
 		FROM native_apt_snapshot_assets a JOIN native_apt_repository_snapshots s ON s.id=a.snapshot_id
-		WHERE a.repository_id::text=$1 AND a.path=$2 AND s.state='visible'
-		ORDER BY s.sequence DESC,s.id DESC LIMIT 1`, repositoryID, path), &asset)
+		WHERE a.repository_id::text=$1 AND a.path=$2 AND (s.state='visible' OR (s.state='retired' AND $3))
+		ORDER BY s.sequence DESC,s.id DESC LIMIT 1`, repositoryID, path, !APTAssetMutable(path)), &asset)
 	if errors.Is(err, sql.ErrNoRows) {
 		return APTSnapshotAsset{}, ErrNotFound
 	}

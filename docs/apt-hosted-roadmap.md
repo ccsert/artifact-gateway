@@ -131,7 +131,7 @@ snapshot, verifies its complete evidence and object digests, and installs from
 it with the signer offline. A second gate now uses independently networked,
 CA-verified HTTPS signers and real Debian clients to prove old-key, overlap,
 new-key, rejection, and retirement behavior. Managed KMS/HSM custody and key
-recovery, dedicated snapshot retention/rebuild tooling, and
+recovery and
 deployment-specific alert installation remain before H3 can pass.
 
 - Harden the H2 signer behind an external service or KMS/HSM-backed adapter;
@@ -142,8 +142,8 @@ deployment-specific alert installation remain before H3 can pass.
   the first release rather than an automatic trust change.
 - Add snapshot retention, rebuild, export, backup/restore, metrics, alerts, and
   disaster-recovery evidence. PostgreSQL/RustFS restore, signing metrics, and
-  exact signature/object checksum verification are complete; dedicated
-  retention, rebuild, and deployment alert installation remain.
+  exact signature/object checksum verification are complete. Dedicated lifecycle APIs
+  now cover retention/rebuild; deployment alert installation remains.
 
 Acceptance gate: Debian client verification passes before, during, and after a
 documented rotation; a restored repository reproduces the same signed snapshot
@@ -152,9 +152,11 @@ HTTPS rotation and client-trust half is complete in
 `make apt-signer-rotation-e2e`. Managed production key custody and recovery
 remain open.
 
-[Signed snapshot export and offline integrity verification](apt-snapshot-archive.md) are available. Trusted same-repository archive restore is also available with independent backup receipts and public-key trust; production custody and lifecycle gates remain open.
+[Signed snapshot export and offline integrity verification](apt-snapshot-archive.md) are available. Trusted same-repository archive restore is also available with independent backup receipts and public-key trust; production custody and the remaining security/distribution gates remain open.
 
 ## APT-H4: lifecycle, scanning, and distribution
+
+Dedicated [deletion, retention, recovery and pruning](apt-hosted-lifecycle.md) operator APIs are available. Generic scheduled policies, Console forms, quarantine and distribution remain future gates.
 
 - Treat removal or retention as a new signed snapshot. Tombstoned packages stay
   restorable during the grace period, and object reclaim remains delayed and

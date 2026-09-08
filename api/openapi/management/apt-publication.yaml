@@ -241,3 +241,142 @@ repositories_repositoryId_apt_snapshots_restore:
         "$ref": "../components/responses.yaml#/Problem"
       '507':
         "$ref": "../components/responses.yaml#/Problem"
+
+repositories_repositoryId_apt_lifecycle:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: getAPTLifecycleState
+    description: Lists published snapshots, current package sessions and deletion recovery records. Repository administrator access is required.
+    parameters:
+    - name: suite
+      in: query
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-z0-9][a-z0-9+.-]{0,127}$"
+    responses:
+      '200':
+        description: Operation result
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/APTLifecycleState"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '507':
+        "$ref": "../components/responses.yaml#/Problem"
+  post:
+    operationId: applyAPTLifecycle
+    description: Rebuilds and signs a complete snapshot before atomically applying deletion, restoration or retention. Requires the reviewed expectedSnapshotId. Retention apply also requires publicationSessionIds copied exactly from preview.removeSessionIds; changed candidates return 409. Empty retention plans return 409; preview before applying. Same-key retries reuse committed results; failed signing may be retried with the same key.
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/APTLifecycleRequest"
+    responses:
+      '200':
+        description: Operation result
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/APTRepositorySnapshot"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '507':
+        "$ref": "../components/responses.yaml#/Problem"
+
+repositories_repositoryId_apt_lifecycle_preview:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: previewAPTLifecycle
+    description: Read-only plan. Retention keeps the most recently uploaded versions per component, package and architecture, not Debian version order. Repository administrator access is required.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/APTLifecycleRequest"
+    responses:
+      '200':
+        description: Operation result
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/APTLifecyclePlan"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '507':
+        "$ref": "../components/responses.yaml#/Problem"
+
+repositories_repositoryId_apt_snapshots_prune:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: pruneAPTSnapshots
+    description: Removes only explicitly selected retired snapshots after at least 24 hours. Also releases expired deletion records after 7 days when no snapshot or recent staging session references their packages. Object reclamation is asynchronous and checks all durable references. Empty snapshotIds only sweeps expired deletions. Repository administrator access is required.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/APTPruneRequest"
+    responses:
+      '204':
+        description: Snapshot references removed and expired deletions queued for reclamation
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '507':
+        "$ref": "../components/responses.yaml#/Problem"

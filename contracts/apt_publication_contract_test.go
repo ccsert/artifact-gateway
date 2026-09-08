@@ -93,3 +93,28 @@ func TestAPTPublicationGeneratedConsoleClientAcceptsBinaryFiles(t *testing.T) {
 		t.Fatalf("generated APT upload must accept Blob | File: %s", types[start:start+end])
 	}
 }
+
+func TestAPTLifecycleManagementContract(t *testing.T) {
+	spec := loadManagementRuntimeSpec(t)
+	apply := operation(t, spec, "/repositories/{repositoryId}/apt/lifecycle", "POST")
+	if !hasParameter(apply.Parameters, "Idempotency-Key", "header") {
+		t.Fatal("APT lifecycle apply requires durable idempotency")
+	}
+	for _, status := range []string{"200", "400", "401", "403", "404", "409", "503", "507"} {
+		requireResponse(t, apply, status)
+	}
+	preview := operation(t, spec, "/repositories/{repositoryId}/apt/lifecycle/preview", "POST")
+	requireResponse(t, preview, "200")
+	state := operation(t, spec, "/repositories/{repositoryId}/apt/lifecycle", "GET")
+	if !hasParameter(state.Parameters, "suite", "query") {
+		t.Fatal("APT lifecycle state requires suite")
+	}
+	prune := operation(t, spec, "/repositories/{repositoryId}/apt/snapshots/prune", "POST")
+	requireResponse(t, prune, "204")
+	requireResponse(t, prune, "409")
+	for _, schema := range []string{"APTLifecycleRequest", "APTLifecyclePlan", "APTLifecycleState", "APTPruneRequest"} {
+		if spec.Components.Schemas[schema] == nil {
+			t.Fatalf("missing %s", schema)
+		}
+	}
+}

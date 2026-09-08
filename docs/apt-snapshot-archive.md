@@ -73,7 +73,7 @@ Object intents and capacity reservations are durable before content writes. Pack
 - Each Gateway instance permits two concurrent restore requests and a 64 GiB tar limit. Provision temporary disk accordingly; spools are removed after success or failure. Object, manifest and signature bounds above also apply; normalized package control metadata is capped at 128 MiB.
 - Errors include 400 for malformed or corrupt archives, 404 for a different repository, 409 for disabled trust or metadata/state conflicts, 412 for receipt mismatch, 413 for size limits, 415 for media type, 422 for untrusted signatures, 429 for restore concurrency, and 507 for quota rejection.
 
-Migration `000116_native_apt_archive_restore.sql` appends restore attempts and object intents; historical migrations are unchanged. Snapshot deletion, retention and promotion through re-signing remain stage #38. APT Hosted remains an operator preview; this does not complete production KMS/HSM custody.
+Migration `000116_native_apt_archive_restore.sql` appends restore attempts and object intents; historical migrations are unchanged. Snapshot deletion, retention and re-signed restoration are described in the [lifecycle guide](apt-hosted-lifecycle.md); promotion/replication remain a later stage. APT Hosted remains an operator preview; this does not complete production KMS/HSM custody.
 
 ## Staged Legacy Migration
 

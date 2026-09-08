@@ -33,6 +33,7 @@ type reclaimPayload struct {
 	Format     repository.Format `json:"format"`
 	SessionID  string            `json:"sessionId"`
 	SnapshotID string            `json:"snapshotId"`
+	DeletionID string            `json:"deletionId"`
 	RestoreID  string            `json:"restoreId"`
 	ObjectKey  string            `json:"objectKey"`
 }
@@ -78,6 +79,22 @@ func (m Maintenance) Schedule(ctx context.Context) error {
 			return err
 		}
 		if err = m.Store.MarkAPTPublicationObjectScheduled(ctx, item.SessionID, item.ObjectKey); err != nil {
+			return err
+		}
+	}
+	deletionItems, err := m.Store.ListUnscheduledAPTDeletionObjects(ctx, 100)
+	if err != nil {
+		return err
+	}
+	for _, d := range deletionItems {
+		payload, marshalErr := json.Marshal(reclaimPayload{Format: repository.FormatAPT, DeletionID: d.ID, ObjectKey: d.Revision.ObjectKey})
+		if marshalErr != nil {
+			return marshalErr
+		}
+		if _, _, err = m.Store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: d.RepositoryID, Kind: repository.LifecycleJobReclaim, IdempotencyKey: "apt-deletion:" + d.ID, Payload: payload}); err != nil {
+			return err
+		}
+		if err = m.Store.MarkAPTDeletionObjectScheduled(ctx, d.ID); err != nil {
 			return err
 		}
 	}
@@ -143,7 +160,9 @@ func (m Maintenance) runReclaimJob(ctx context.Context, job repository.Lifecycle
 			return fmt.Errorf("delete abandoned APT publication object: %w", err)
 		}
 	}
-	if payload.RestoreID != "" {
+	if payload.DeletionID != "" {
+		err = m.Store.MarkAPTDeletionObjectCollected(objectCtx, payload.DeletionID)
+	} else if payload.RestoreID != "" {
 		err = m.Store.MarkAPTArchiveObjectCollected(objectCtx, payload.RestoreID, payload.ObjectKey)
 	} else if payload.SnapshotID != "" {
 		err = m.Store.MarkAPTSnapshotObjectCollected(objectCtx, payload.SnapshotID, payload.ObjectKey)
@@ -189,7 +208,7 @@ func (m Maintenance) StartWorker(ctx context.Context, interval time.Duration) {
 
 func reclaimTargetCount(payload reclaimPayload) int {
 	count := 0
-	for _, id := range []string{payload.SessionID, payload.SnapshotID, payload.RestoreID} {
+	for _, id := range []string{payload.SessionID, payload.SnapshotID, payload.RestoreID, payload.DeletionID} {
 		if id != "" {
 			count++
 		}

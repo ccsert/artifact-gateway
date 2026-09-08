@@ -4152,6 +4152,226 @@
         }
       }
     },
+    "/repositories/{repositoryId}/apt/lifecycle": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "getAPTLifecycleState",
+        "description": "Lists published snapshots, current package sessions and deletion recovery records. Repository administrator access is required.",
+        "parameters": [
+          {
+            "name": "suite",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9+.-]{0,127}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APTLifecycleState"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "507": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "applyAPTLifecycle",
+        "description": "Rebuilds and signs a complete snapshot before atomically applying deletion, restoration or retention. Requires the reviewed expectedSnapshotId. Retention apply also requires publicationSessionIds copied exactly from preview.removeSessionIds; changed candidates return 409. Empty retention plans return 409; preview before applying. Same-key retries reuse committed results; failed signing may be retried with the same key.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/APTLifecycleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APTRepositorySnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "507": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/apt/lifecycle/preview": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "previewAPTLifecycle",
+        "description": "Read-only plan. Retention keeps the most recently uploaded versions per component, package and architecture, not Debian version order. Repository administrator access is required.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/APTLifecycleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APTLifecyclePlan"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "507": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/repositories/{repositoryId}/apt/snapshots/prune": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "pruneAPTSnapshots",
+        "description": "Removes only explicitly selected retired snapshots after at least 24 hours. Also releases expired deletion records after 7 days when no snapshot or recent staging session references their packages. Object reclamation is asynchronous and checks all durable references. Empty snapshotIds only sweeps expired deletions. Repository administrator access is required.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/APTPruneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Snapshot references removed and expired deletions queued for reclamation"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "507": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/apt/snapshots": {
       "parameters": [
         {
@@ -6394,7 +6614,8 @@
             "type": "string",
             "enum": [
               "visible",
-              "retired"
+              "retired",
+              "pruned"
             ]
           },
           "releaseDigest": {
@@ -11159,6 +11380,219 @@
           },
           "nextPageToken": {
             "type": "string"
+          }
+        }
+      },
+      "APTSnapshotHistory": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "snapshot"
+        ],
+        "properties": {
+          "snapshot": {
+            "$ref": "#/components/schemas/APTRepositorySnapshot"
+          },
+          "prunableAfter": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "APTLifecyclePackage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "publicationSessionId",
+          "component",
+          "revision"
+        ],
+        "properties": {
+          "publicationSessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "component": {
+            "type": "string"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/APTPackageRevision"
+          }
+        }
+      },
+      "APTPackageDeletion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "package",
+          "deletedAt",
+          "restoreUntil",
+          "state"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "package": {
+            "$ref": "#/components/schemas/APTLifecyclePackage"
+          },
+          "deletedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "restoreUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "recoverable",
+              "expired",
+              "restored",
+              "purged"
+            ]
+          }
+        }
+      },
+      "APTLifecycleState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "snapshots",
+          "packages",
+          "deletions"
+        ],
+        "properties": {
+          "snapshots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/APTSnapshotHistory"
+            }
+          },
+          "packages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/APTLifecyclePackage"
+            }
+          },
+          "deletions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/APTPackageDeletion"
+            }
+          }
+        }
+      },
+      "APTLifecycleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "suite",
+          "expectedSnapshotId",
+          "action"
+        ],
+        "properties": {
+          "suite": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9+.-]{0,127}$"
+          },
+          "expectedSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "delete",
+              "restore",
+              "retention"
+            ]
+          },
+          "publicationSessionIds": {
+            "type": "array",
+            "maxItems": 10000,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "deletionIds": {
+            "type": "array",
+            "maxItems": 10000,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "keepLatest": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "olderThanDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 36500
+          }
+        }
+      },
+      "APTLifecyclePlan": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedSnapshotId",
+          "removeSessionIds",
+          "restoreIds",
+          "remainingPackages",
+          "recoveryDays"
+        ],
+        "properties": {
+          "expectedSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "removeSessionIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "restoreIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "remainingPackages": {
+            "type": "integer"
+          },
+          "recoveryDays": {
+            "type": "integer"
+          }
+        }
+      },
+      "APTPruneRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "snapshotIds"
+        ],
+        "properties": {
+          "snapshotIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },

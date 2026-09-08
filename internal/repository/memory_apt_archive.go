@@ -11,6 +11,10 @@ import (
 
 func (s *MemoryStore) aptArchiveStateLocked(plan APTArchiveRestorePlan) aptArchiveRestoreState {
 	state := aptArchiveRestoreState{repo: s.hostedRepositories[plan.Snapshot.RepositoryID], quota: s.capacityQuotas[plan.Snapshot.RepositoryID], packages: make(map[string]APTPackageRevision), snapshots: s.aptSnapshots, assets: s.aptSnapshotAssets, pool: make(map[string]APTSnapshotAsset)}
+	for path, a := range s.aptPoolPaths[plan.Snapshot.RepositoryID] {
+		state.pool[path] = a
+	}
+	state.deletions = s.aptDeletionsLocked(plan.Snapshot.RepositoryID, plan.Snapshot.Suite)
 	state.baseBytes, _ = s.aptBaseCapacityLocked(plan.Snapshot.RepositoryID)
 	for _, p := range s.aptPackageRevisions {
 		if p.RepositoryID == plan.Snapshot.RepositoryID {
@@ -107,12 +111,21 @@ func (s *MemoryStore) CommitAPTArchiveRestore(_ context.Context, plan APTArchive
 		for id, old := range s.aptSnapshots {
 			if old.RepositoryID == snapshot.RepositoryID && old.Suite == snapshot.Suite && old.State == APTRepositorySnapshotVisible {
 				old.State = APTRepositorySnapshotRetired
+				s.aptRetiredAt[id] = time.Now().UTC()
 				s.aptSnapshots[id] = old
 			}
 		}
 		s.aptSnapshotPackages[snapshot.ID] = members
 		s.aptSnapshots[snapshot.ID] = snapshot
 		s.aptSnapshotAssets[snapshot.ID] = append([]APTSnapshotAsset(nil), plan.Assets...)
+		if s.aptPoolPaths[snapshot.RepositoryID] == nil {
+			s.aptPoolPaths[snapshot.RepositoryID] = make(map[string]APTSnapshotAsset)
+		}
+		for _, a := range plan.Assets {
+			if strings.HasPrefix(a.Path, "pool/") {
+				s.aptPoolPaths[snapshot.RepositoryID][a.Path] = a
+			}
+		}
 	} else {
 		snapshot = s.aptSnapshots[snapshot.ID]
 	}
