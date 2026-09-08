@@ -4793,6 +4793,7 @@
               "security_policy_denied",
               "artifact_quarantined",
               "signer_unavailable",
+              "snapshot_corrupt",
               "internal_error"
             ]
           },

@@ -4214,6 +4214,62 @@
         }
       }
     },
+    "/repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        },
+        {
+          "$ref": "#/components/parameters/SnapshotId"
+        }
+      ],
+      "get": {
+        "operationId": "exportAPTRepositorySnapshot",
+        "description": "Requires repository admin permission. Streams one visible or retired immutable signed APT snapshot as a deterministic digest-verified archive for recovery. The archive contains public signatures and package bytes, never signer credentials or private-key material.",
+        "responses": {
+          "200": {
+            "description": "Portable signed snapshot archive",
+            "headers": {
+              "Content-Length": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/vnd.artifact-gateway.apt-snapshot.v1+tar": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "contentEncoding": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/apt/signing-state": {
       "parameters": [
         {
@@ -7163,6 +7219,7 @@
               "security_policy_denied",
               "artifact_quarantined",
               "signer_unavailable",
+              "snapshot_corrupt",
               "internal_error"
             ]
           },
@@ -11348,6 +11405,15 @@
       },
       "LifecycleJobId": {
         "name": "lifecycleJobId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "SnapshotId": {
+        "name": "snapshotId",
         "in": "path",
         "required": true,
         "schema": {

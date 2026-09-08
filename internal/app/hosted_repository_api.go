@@ -237,6 +237,7 @@ type generatedRepositoryAPIAdapter struct {
 	sessions               nativeMavenHandler
 	aptPublication         *aptpublication.Manager
 	aptSnapshotPublisher   *aptpublication.Publisher
+	aptSnapshotExporter    aptpublication.SnapshotArchiveExporter
 	aptPublications        repository.NativeAPTPublicationStore
 	groups                 repository.HostedGroupStore
 	grants                 repository.RepositoryGrantStore

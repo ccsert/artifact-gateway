@@ -757,6 +757,7 @@ export type Problem = {
     | "security_policy_denied"
     | "artifact_quarantined"
     | "signer_unavailable"
+    | "snapshot_corrupt"
     | "internal_error";
   message: string;
   requestId: string;
@@ -2097,6 +2098,8 @@ export type ScheduledTaskId = string;
 export type OptionalIfMatch = string;
 
 export type LifecycleJobId = string;
+
+export type SnapshotId = string;
 
 /**
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
@@ -6917,6 +6920,52 @@ export type PublishAptRepositorySnapshotResponses = {
 
 export type PublishAptRepositorySnapshotResponse =
   PublishAptRepositorySnapshotResponses[keyof PublishAptRepositorySnapshotResponses];
+
+export type ExportAptRepositorySnapshotData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    snapshotId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive";
+};
+
+export type ExportAptRepositorySnapshotErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type ExportAptRepositorySnapshotError =
+  ExportAptRepositorySnapshotErrors[keyof ExportAptRepositorySnapshotErrors];
+
+export type ExportAptRepositorySnapshotResponses = {
+  /**
+   * Portable signed snapshot archive
+   */
+  200: Blob | File;
+};
+
+export type ExportAptRepositorySnapshotResponse =
+  ExportAptRepositorySnapshotResponses[keyof ExportAptRepositorySnapshotResponses];
 
 export type GetAptRepositorySigningStateData = {
   body?: never;

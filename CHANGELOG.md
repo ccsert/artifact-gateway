@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Added administrator-only deterministic APT signed-snapshot export and an offline archive integrity command, with published/retired snapshot coverage and Debian installation from exported bytes. APT Hosted remains an operator preview; archive import and signature trust are separate gates.
+
 - Pin upgrade/restore rehearsals to verified image identities, use v0.1.0 as the upgrade baseline, and verify Group provenance and reader grants after restoration.
 
 - Added Maven/Raw Group directories with per-member provenance, conflict evidence, exact SNAPSHOT builds, and scope-validated Group-only Maven cache entries. Signed navigation expires after configuration, authorization, or ordering changes. Refined the shared directory browser with clearer hierarchy, source links, compact evidence, collapse controls, and responsive file names.

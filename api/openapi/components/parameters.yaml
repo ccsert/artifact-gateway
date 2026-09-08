@@ -148,3 +148,10 @@ OptionalIfMatch:
   required: false
   schema:
     type: string
+SnapshotId:
+  name: snapshotId
+  in: path
+  required: true
+  schema:
+    type: string
+    format: uuid

@@ -39,6 +39,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "theme" {
 		os.Exit(consoletheme.RunCLI(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "apt-snapshot" {
+		os.Exit(aptpublication.RunArchiveCLI(context.Background(), os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("invalid configuration", "error", err)

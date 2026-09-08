@@ -476,6 +476,7 @@ type NativeAPTPublicationStore interface {
 	GetLatestVisibleAPTRepositorySnapshot(context.Context, string) (APTRepositorySnapshot, error)
 	GetVisibleAPTSnapshotAsset(context.Context, string, string) (APTSnapshotAsset, error)
 	ListVisibleAPTSnapshotAssets(context.Context, string, string) ([]APTSnapshotAsset, error)
+	ListAPTSnapshotAssets(context.Context, string) ([]APTSnapshotAsset, error)
 }
 
 type Store interface {
