@@ -514,15 +514,63 @@
   "registryImages": {
     "gateway": {
       "reference": "ghcr.io/ccsert/artifact-gateway@sha256:22f1a0761ab457855ef43c35c35ff5edaca6e97e795e1f1a18bc8819d7e88df0",
-      "evidence": "CI publish output",
-      "localPull": "failed: manifest unknown",
-      "pullLogSha256": "b2ebb8747687ece411999eb9d6df5a60f41798f86d98f6b552fd9984dda48710"
+      "imageId": "sha256:8fc473fd051644a9c94643e3307f7beb43792cc10fb59f48249e8a1c367a37c6",
+      "platform": "linux/arm64",
+      "repoDigests": [
+        "ghcr.io/ccsert/artifact-gateway@sha256:22f1a0761ab457855ef43c35c35ff5edaca6e97e795e1f1a18bc8819d7e88df0"
+      ],
+      "labels": {
+        "org.opencontainers.image.revision": "cb59b227748744de705694ff50a257414a6eb199",
+        "org.opencontainers.image.source": "https://github.com/ccsert/artifact-gateway",
+        "org.opencontainers.image.title": "Artifact Gateway",
+        "org.opencontainers.image.version": "0.1.0-main.cb59b2277487"
+      },
+      "binaryVersion": "artifact-gateway 0.1.0-main.cb59b2277487 (revision cb59b227748744de705694ff50a257414a6eb199, go1.26.6)",
+      "evidence": "registry pull, OCI labels, and local runtime inspection",
+      "localPull": "passed",
+      "pullLogSha256": "8b8e35bc7ce7bb03cda06d3a55daf3f1e0165bc28368e9cd96fc40df3ac6438f",
+      "previousFailedPullLogSha256": "b2ebb8747687ece411999eb9d6df5a60f41798f86d98f6b552fd9984dda48710"
     },
     "console": {
       "reference": "ghcr.io/ccsert/artifact-gateway-console@sha256:38c3b3a6270119d342ce532b9fd4d50fd9f5578c2acc85fed4e4d94c6181d376",
-      "evidence": "CI publish output",
-      "localPull": "failed: manifest unknown",
-      "pullLogSha256": "b2ebb8747687ece411999eb9d6df5a60f41798f86d98f6b552fd9984dda48710"
+      "imageId": "sha256:0e33f4bdcee22e17bd718baaf656b74880856f4df540a20fc5a77402de2ee541",
+      "platform": "linux/arm64",
+      "repoDigests": [
+        "ghcr.io/ccsert/artifact-gateway-console@sha256:38c3b3a6270119d342ce532b9fd4d50fd9f5578c2acc85fed4e4d94c6181d376"
+      ],
+      "labels": {
+        "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>",
+        "org.opencontainers.image.created": "2026-05-11T02:30:43.384Z",
+        "org.opencontainers.image.description": "Unprivileged NGINX Dockerfiles",
+        "org.opencontainers.image.licenses": "Apache-2.0",
+        "org.opencontainers.image.revision": "cb59b227748744de705694ff50a257414a6eb199",
+        "org.opencontainers.image.source": "https://github.com/ccsert/artifact-gateway",
+        "org.opencontainers.image.title": "Artifact Gateway Console",
+        "org.opencontainers.image.url": "https://github.com/nginx/docker-nginx-unprivileged",
+        "org.opencontainers.image.version": "0.1.0-main.cb59b2277487"
+      },
+      "evidence": "registry pull, OCI labels, and local runtime inspection",
+      "localPull": "passed",
+      "pullLogSha256": "6780cdc4b97e760421b9b7d8fb9b6bc56ab780a40f9c686eaf878575ee801c26",
+      "previousFailedPullLogSha256": "b2ebb8747687ece411999eb9d6df5a60f41798f86d98f6b552fd9984dda48710"
+    },
+    "baseline": {
+      "reference": "ghcr.io/ccsert/artifact-gateway@sha256:c8155974434e708f1aad5ea683e6b52d45bc3c8b256b4ed5f072f5d4fca5a993",
+      "imageId": "sha256:11a68e5aeef0b633632cf67836abc4f46d29885f7c50717f57224dc779463298",
+      "platform": "linux/arm64",
+      "repoDigests": [
+        "ghcr.io/ccsert/artifact-gateway@sha256:c8155974434e708f1aad5ea683e6b52d45bc3c8b256b4ed5f072f5d4fca5a993"
+      ],
+      "labels": {
+        "org.opencontainers.image.revision": "cf4635f89d1038b16a491f42393f3ba7997e38a9",
+        "org.opencontainers.image.source": "https://github.com/ccsert/artifact-gateway",
+        "org.opencontainers.image.title": "Artifact Gateway",
+        "org.opencontainers.image.version": "0.1.0"
+      },
+      "binaryVersion": "artifact-gateway 0.1.0 (revision cf4635f89d1038b16a491f42393f3ba7997e38a9, go1.26.6)",
+      "evidence": "registry pull, OCI labels, and local runtime inspection",
+      "localPull": "passed",
+      "pullLogSha256": "4fbeb632b2b05264454661d29b70c6674068d2bfc4937e0a562d326d28346970"
     }
   },
   "gates": [
@@ -581,6 +629,30 @@
       "firstOutputUTC": "2026-09-08T03:26:04.006023+00:00",
       "lastOutputUTC": "2026-09-08T03:27:04.916762+00:00",
       "logSha256": "4f7cde340f560556ae41bfa93e5ed228549075c0063f4cffdf678a5c601ac0ad"
+    },
+    {
+      "name": "upgrade-registry",
+      "result": "pass",
+      "exitCode": 0,
+      "startedAt": "2026-09-08T03:53:22.314151+00:00",
+      "completedAt": "2026-09-08T03:54:03.928147+00:00",
+      "logSha256": "6eebbff2835a048e88aa3cc7d425615bbf0c285d9dbbb9bc41c4f7864f276aaa"
+    },
+    {
+      "name": "backup-restore-registry",
+      "result": "pass",
+      "exitCode": 0,
+      "startedAt": "2026-09-08T03:53:23.544518+00:00",
+      "completedAt": "2026-09-08T03:53:46.229814+00:00",
+      "logSha256": "2f9452f76fd1be4af2c9913d69c0fa2fdc8f46316698bd35e36c6c7081ec0525"
+    },
+    {
+      "name": "runtime-registry-group-recovery",
+      "result": "pass",
+      "exitCode": 0,
+      "startedAt": "2026-09-08T03:54:21.959940+00:00",
+      "completedAt": "2026-09-08T03:54:25.374144+00:00",
+      "logSha256": "b89fca7a776905d4a7c3d1f6633cdb8893be01578209b67cdf731b9705e6bb14"
     }
   ],
   "harness": {
@@ -595,8 +667,8 @@
     "completedAt": "2026-09-08T03:15:38.760196+00:00",
     "result": "pass"
   },
-  "status": "distribution rehearsals passed; published registry images not locally validated",
-  "recordedAt": "2026-09-08T03:30:06.123229+00:00",
+  "status": "candidate acceptance passed: source, distributions, and published registry images validated; no formal release or production deployment",
+  "recordedAt": "2026-09-08T03:58:51.722794+00:00",
   "browser": {
     "artifact": "Console CI distribution archive",
     "viewport": {
@@ -612,10 +684,12 @@
     "consoleProxiedReadyz": 204
   },
   "registryAccess": {
-    "anonymousTokenHTTPStatus": 401,
-    "existingGitHubOAuthPull": "denied",
-    "publishedCandidateDigestPull": "manifest unknown",
-    "requiredFollowup": "Verify package read access, then repeat the pinned published-image rehearsals."
+    "historicalFailures": {
+      "anonymousTokenHTTPStatus": 401,
+      "existingGitHubOAuthPull": "denied",
+      "publishedCandidateDigestPull": "manifest unknown"
+    },
+    "status": "resolved: all three published images pulled using workstation GHCR login; pinned-image rehearsals passed"
   },
   "harnessChecks": [
     "make test",
@@ -625,5 +699,78 @@
     "black --check scripts/group-recovery-fixture.py",
     "ruff check scripts/group-recovery-fixture.py",
     "git diff --check"
-  ]
+  ],
+  "publishedImageBrowser": {
+    "artifact": "GHCR Console and Gateway images pinned by manifest digest",
+    "viewports": [
+      {
+        "width": 1440,
+        "height": 1000,
+        "documentScrollWidth": 1429
+      },
+      {
+        "width": 390,
+        "height": 844,
+        "documentScrollWidth": 379
+      }
+    ],
+    "login": "passed through live token verification and auth/session API",
+    "restoredGroup": "two sources and distinct digest warning visible",
+    "consoleErrors": 0,
+    "consoleWarnings": 0,
+    "health": {
+      "gatewayReadyz": {
+        "url": "http://127.0.0.1:18084/readyz",
+        "httpStatus": 204
+      },
+      "consoleHealthz": {
+        "url": "http://127.0.0.1:18085/console-healthz",
+        "httpStatus": 204
+      },
+      "consoleProxiedReadyz": {
+        "url": "http://127.0.0.1:18085/readyz",
+        "httpStatus": 204
+      },
+      "existingDevReadyz": {
+        "url": "http://127.0.0.1:18080/readyz",
+        "httpStatus": 204
+      }
+    },
+    "screenshots": [
+      {
+        "name": "candidate26-registry-restored-group.png",
+        "sha256": "15a301c33f9acf3edec8eb018e9f153b88e025d6a104d7d016794ca388639474"
+      },
+      {
+        "name": "candidate26-registry-restored-group-mobile.png",
+        "sha256": "315763f7160ad01e3d76536f3e07ac1a406c9ecd2be72dbc25fea82f50d95a9d"
+      }
+    ],
+    "evidence": [
+      {
+        "name": "browser-registry-desktop.log",
+        "sha256": "b2b7700cc8b8570e7a0ae36574bd325e41cec2781c79af1d50c9a579538d7874"
+      },
+      {
+        "name": "browser-registry-console.log",
+        "sha256": "d0e5634bb0c1271965327ad2ac18107af18fa7da6d2c9ce13e03eeda6cb603db"
+      },
+      {
+        "name": "browser-registry-network.log",
+        "sha256": "91e7cb258bac7c67ef7d09fb5eb3fa90a950c71ae99e800bb7ba51fa80253338"
+      }
+    ]
+  },
+  "publishedImageRuntime": {
+    "gateway": {
+      "imageId": "sha256:8fc473fd051644a9c94643e3307f7beb43792cc10fb59f48249e8a1c367a37c6",
+      "revision": "cb59b227748744de705694ff50a257414a6eb199",
+      "running": true
+    },
+    "console": {
+      "imageId": "sha256:0e33f4bdcee22e17bd718baaf656b74880856f4df540a20fc5a77402de2ee541",
+      "revision": "cb59b227748744de705694ff50a257414a6eb199",
+      "running": true
+    }
+  }
 }
