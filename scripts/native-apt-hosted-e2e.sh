@@ -248,6 +248,56 @@ PY
     return 1
   }
 }
+export_snapshot_archive() {
+  local destination=$1
+  "${curl_request[@]}" --fail --header "Authorization: Bearer $admin_token" \
+    "$gateway_url/api/v2/repositories/$repository_id/apt/snapshots/$snapshot_id/archive" >"$destination"
+  "${compose[@]}" exec -T gateway /gateway apt-snapshot verify - <"$destination"
+}
+
+install_snapshot_archive_offline() {
+  local archive=$1 directory="$workdir/archive-repository"
+  python3 - "$archive" "$directory" "$public_key" "$workdir/apt-release.gpg" <<'PYARCHIVE'
+import base64
+import hashlib
+import json
+from pathlib import Path, PurePosixPath
+import sys
+import tarfile
+
+archive, target, public_key, binary_key = sys.argv[1:]
+root = Path(target)
+root.mkdir()
+with tarfile.open(archive, "r:") as bundle:
+    manifest = json.load(bundle.extractfile("manifest.json"))
+    for asset in manifest["assets"]:
+        relative = PurePosixPath(asset["path"])
+        if relative.is_absolute() or ".." in relative.parts:
+            raise SystemExit("invalid fixture asset path")
+        body = bundle.extractfile(asset["object"]).read()
+        if len(body) != asset["size"] or "sha256:" + hashlib.sha256(body).hexdigest() != asset["digest"]:
+            raise SystemExit("fixture archive object differs from manifest")
+        path = root.joinpath(*relative.parts)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+armor = Path(public_key).read_text().split("\n\n", 1)[1].split("-----END PGP PUBLIC KEY BLOCK-----", 1)[0]
+payload = "".join(line.strip() for line in armor.splitlines() if line and not line.startswith("="))
+Path(binary_key).write_bytes(base64.b64decode(payload, validate=True))
+PYARCHIVE
+  docker run --rm --network none \
+    --volume "$directory:/archive:ro" \
+    --volume "$public_key:/keys/artifact-gateway.asc:ro" \
+    --volume "$workdir/apt-release.gpg:/keys/artifact-gateway.gpg:ro" \
+    "$debian_image" /bin/sh -ec '
+      gpgv --keyring /keys/artifact-gateway.gpg /archive/dists/stable/InRelease
+      gpgv --keyring /keys/artifact-gateway.gpg /archive/dists/stable/Release.gpg /archive/dists/stable/Release
+      rm -f /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources
+      printf "%s\n" "deb [arch=all signed-by=/keys/artifact-gateway.asc] file:/archive stable main" > /etc/apt/sources.list.d/archive.list
+      apt-get -o Acquire::Retries=0 update
+      apt-get -o Acquire::Retries=0 install -y --no-install-recommends artifact-gateway-e2e=1.0.0-1
+      grep -Fxq installed-from-artifact-gateway /usr/share/artifact-gateway-e2e/installed.txt
+    '
+}
 
 apt_install
 original_state="$workdir/original-signing-state.json"
@@ -264,6 +314,11 @@ if state.get("readiness") != "fixture" or snapshot.get("sequence") != 1 or snaps
     raise SystemExit("initial APT signing state is not the visible fixture snapshot at sequence 1")
 PY
 capture_signed_snapshot "$original_capture" "$original_state"
+snapshot_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$snapshot_response")
+original_archive="$workdir/original-archive.tar"
+export_snapshot_archive "$original_archive"
+export_snapshot_archive "$workdir/repeated-archive.tar"
+cmp "$original_archive" "$workdir/repeated-archive.tar"
 
 backup_dir="$workdir/backup"
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$env_file" \
@@ -298,6 +353,17 @@ if mutated.get("sequence") != 2 or mutated.get("id") == original.get("id") or mu
     raise SystemExit("post-backup APT mutation did not replace the visible signed snapshot")
 PY
 
+export_snapshot_archive "$workdir/retired-archive.tar"
+python3 - "$workdir/retired-archive.tar" <<'PYRETIRED'
+import json
+import sys
+import tarfile
+with tarfile.open(sys.argv[1], "r:") as bundle:
+    manifest = json.load(bundle.extractfile("manifest.json"))
+    assert manifest["snapshot"]["state"] == "retired"
+    assert manifest["snapshot"]["sequence"] == 1
+PYRETIRED
+
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$env_file" \
   "$root/scripts/restore-drill.sh" "$backup_dir"
 wait_gateway_ready
@@ -324,5 +390,8 @@ fi
 
 "${compose[@]}" stop reference-apt-signer >/dev/null
 apt_install
+export_snapshot_archive "$workdir/restored-offline-archive.tar"
+cmp "$original_archive" "$workdir/restored-offline-archive.tar"
+install_snapshot_archive_offline "$workdir/restored-offline-archive.tar"
 
-printf 'native APT Hosted E2E passed (signed publish, exact PostgreSQL/RustFS restore, and offline-signer install)\n'
+printf 'native APT Hosted E2E passed (signed publish, exact restore, deterministic archive export, and offline signature verification/install)\n'

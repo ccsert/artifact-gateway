@@ -35,6 +35,15 @@ func TestAPTPublicationManagementContract(t *testing.T) {
 	for _, status := range []string{"201", "400", "401", "403", "404", "409", "503", "507", "500"} {
 		requireResponse(t, publish, status)
 	}
+
+	archive := operation(t, spec, "/repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive", "GET")
+	for _, status := range []string{"200", "401", "403", "404", "409", "500"} {
+		requireResponse(t, archive, status)
+	}
+	response := archive.Responses.Value("200").Value
+	if response.Content["application/vnd.artifact-gateway.apt-snapshot.v1+tar"] == nil || response.Headers["Content-Length"] == nil || response.Headers["Content-Disposition"] == nil {
+		t.Fatal("APT archive binary response and completion headers are required")
+	}
 	snapshot := spec.Components.Schemas["APTRepositorySnapshot"]
 	if snapshot == nil || snapshot.Value == nil {
 		t.Fatal("APTRepositorySnapshot schema is missing")

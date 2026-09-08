@@ -1016,4 +1016,24 @@ func (s *MemoryStore) ListVisibleAPTSnapshotAssets(_ context.Context, repository
 	return assets, nil
 }
 
+func (s *MemoryStore) ListAPTSnapshotAssets(_ context.Context, snapshotID string) ([]APTSnapshotAsset, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if _, ok := s.aptSnapshots[snapshotID]; !ok {
+		return nil, ErrNotFound
+	}
+	assets := append([]APTSnapshotAsset(nil), s.aptSnapshotAssets[snapshotID]...)
+	if len(assets) == 0 {
+		return nil, ErrNotFound
+	}
+	sort.Slice(assets, func(i, j int) bool { return assets[i].Path < assets[j].Path })
+	return assets, nil
+}
+
 var _ NativeAPTPublicationStore = (*MemoryStore)(nil)
+
+// ValidateAPTSnapshotArchiveClosure checks the publication structure and Release
+// checksum closure. It does not establish trust in the OpenPGP signatures.
+func ValidateAPTSnapshotArchiveClosure(snapshot APTRepositorySnapshot, assets []APTSnapshotAsset, release []byte) bool {
+	return validAPTSnapshotAssets(snapshot, assets) && validAPTReleaseClosure(snapshot, assets, release)
+}

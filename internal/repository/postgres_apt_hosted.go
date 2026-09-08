@@ -944,3 +944,27 @@ func scanAPTRepositorySnapshot(row interface{ Scan(...any) error }, snapshot *AP
 }
 
 var _ NativeAPTPublicationStore = (*PostgresStore)(nil)
+
+func (s *PostgresStore) ListAPTSnapshotAssets(ctx context.Context, snapshotID string) ([]APTSnapshotAsset, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+aptSnapshotAssetColumns+`
+		FROM native_apt_snapshot_assets a WHERE a.snapshot_id::text=$1 ORDER BY a.path`, snapshotID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	assets := make([]APTSnapshotAsset, 0)
+	for rows.Next() {
+		var asset APTSnapshotAsset
+		if err = scanAPTSnapshotAsset(rows, &asset); err != nil {
+			return nil, err
+		}
+		assets = append(assets, asset)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(assets) == 0 {
+		return nil, ErrNotFound
+	}
+	return assets, nil
+}

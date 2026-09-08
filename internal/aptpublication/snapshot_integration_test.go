@@ -102,6 +102,16 @@ func TestPostgresRustFSPublisherExposesOneCompleteSignedSnapshotAcrossInstances(
 	if err != nil || len(assets) < 8 {
 		t.Fatalf("cross-instance assets=%#v err=%v", assets, err)
 	}
+
+	var archive bytes.Buffer
+	exported, err := (SnapshotArchiveExporter{Store: storeB, Objects: objects}).Export(ctx, snapshot.ID, &archive)
+	if err != nil || exported.Snapshot.ID != snapshot.ID {
+		t.Fatalf("cross-instance archive=%#v error=%v", exported, err)
+	}
+	verified, err := VerifySnapshotArchive(ctx, bytes.NewReader(archive.Bytes()))
+	if err != nil || verified.Snapshot.ReleaseDigest != snapshot.ReleaseDigest {
+		t.Fatalf("verified PostgreSQL/RustFS archive=%#v error=%v", verified, err)
+	}
 	search, err := storeB.SearchArtifactProjection(ctx, repo.ID, repository.FormatAPT, repository.ArtifactSearchQuery{
 		Mode: repository.ArtifactSearchByCoordinate, Value: "pool/main/w/widget/",
 	}, 10, repository.ArtifactSearchPosition{})

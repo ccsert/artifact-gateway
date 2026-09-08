@@ -153,3 +153,37 @@ repositories_repositoryId_apt_signing_state:
         "$ref": "../components/responses.yaml#/Problem"
       '500':
         "$ref": "../components/responses.yaml#/Problem"
+repositories_repositoryId_apt_snapshots_snapshotId_archive:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  - "$ref": "../components/parameters.yaml#/SnapshotId"
+  get:
+    operationId: exportAPTRepositorySnapshot
+    description: Requires repository admin permission. Streams one visible or retired immutable signed APT snapshot as a deterministic digest-verified archive for recovery. The archive contains public signatures and package bytes, never signer credentials or private-key material.
+    responses:
+      '200':
+        description: Portable signed snapshot archive
+        headers:
+          Content-Length:
+            schema:
+              type: integer
+              format: int64
+          Content-Disposition:
+            schema:
+              type: string
+        content:
+          application/vnd.artifact-gateway.apt-snapshot.v1+tar:
+            schema:
+              type: string
+              format: binary
+              contentEncoding: binary
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '500':
+        "$ref": "../components/responses.yaml#/Problem"

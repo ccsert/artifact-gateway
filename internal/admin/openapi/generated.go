@@ -1374,6 +1374,7 @@ const (
 	ProblemCodeSecurityPolicyDenied     ProblemCode = "security_policy_denied"
 	ProblemCodeSessionClosed            ProblemCode = "session_closed"
 	ProblemCodeSignerUnavailable        ProblemCode = "signer_unavailable"
+	ProblemCodeSnapshotCorrupt          ProblemCode = "snapshot_corrupt"
 	ProblemCodeUnsupportedMediaType     ProblemCode = "unsupported_media_type"
 	ProblemCodeVersionConflict          ProblemCode = "version_conflict"
 )
@@ -1416,6 +1417,8 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodeSessionClosed:
 		return true
 	case ProblemCodeSignerUnavailable:
+		return true
+	case ProblemCodeSnapshotCorrupt:
 		return true
 	case ProblemCodeUnsupportedMediaType:
 		return true
@@ -4490,6 +4493,9 @@ type ScheduledTaskId = openapi_types.UUID
 // SessionId defines model for SessionId.
 type SessionId = openapi_types.UUID
 
+// SnapshotId defines model for SnapshotId.
+type SnapshotId = openapi_types.UUID
+
 // ArtifactList defines model for ArtifactList.
 type ArtifactList = ArtifactPage
 
@@ -5353,6 +5359,9 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/apt/snapshots)
 	PublishAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params PublishAPTRepositorySnapshotParams)
+
+	// (GET /repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive)
+	ExportAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, snapshotId SnapshotId)
 	// ListRepositoryArtifactIdentities List canonical immutable artifact identities
 	// (GET /repositories/{repositoryId}/artifact-identities)
 	ListRepositoryArtifactIdentities(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryArtifactIdentitiesParams)
@@ -7689,6 +7698,41 @@ func (siw *ServerInterfaceWrapper) PublishAPTRepositorySnapshot(w http.ResponseW
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PublishAPTRepositorySnapshot(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportAPTRepositorySnapshot operation middleware
+func (siw *ServerInterfaceWrapper) ExportAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "snapshotId" -------------
+	var snapshotId SnapshotId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "snapshotId", r.PathValue("snapshotId"), &snapshotId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "snapshotId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportAPTRepositorySnapshot(w, r, repositoryId, snapshotId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11811,6 +11855,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package", wrapper.UploadAPTPublicationPackage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/apt/signing-state", wrapper.GetAPTRepositorySigningState)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/apt/snapshots", wrapper.PublishAPTRepositorySnapshot)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive", wrapper.ExportAPTRepositorySnapshot)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-identities", wrapper.ListRepositoryArtifactIdentities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.GetArtifactIntelligence)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-intelligence", wrapper.ReplaceArtifactIntelligence)
@@ -15160,6 +15205,119 @@ func (response PublishAPTRepositorySnapshot507ApplicationProblemPlusJSONResponse
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(507)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportAPTRepositorySnapshotRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	SnapshotId   SnapshotId   `json:"snapshotId"`
+}
+
+type ExportAPTRepositorySnapshotResponseObject interface {
+	VisitExportAPTRepositorySnapshotResponse(w http.ResponseWriter) error
+}
+
+type ExportAPTRepositorySnapshot200ResponseHeaders struct {
+	ContentDisposition *string
+	ContentLength      *int64
+}
+
+type ExportAPTRepositorySnapshot200ApplicationvndArtifactGatewayAptSnapshotV1TarResponse struct {
+	Body          io.Reader
+	Headers       ExportAPTRepositorySnapshot200ResponseHeaders
+	ContentLength int64
+}
+
+func (response ExportAPTRepositorySnapshot200ApplicationvndArtifactGatewayAptSnapshotV1TarResponse) VisitExportAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/vnd.artifact-gateway.apt-snapshot.v1+tar")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	if response.Headers.ContentLength != nil {
+		w.Header().Set("Content-Length", fmt.Sprint(*response.Headers.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ExportAPTRepositorySnapshot401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ExportAPTRepositorySnapshot401ApplicationProblemPlusJSONResponse) VisitExportAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportAPTRepositorySnapshot403ApplicationProblemPlusJSONResponse Problem
+
+func (response ExportAPTRepositorySnapshot403ApplicationProblemPlusJSONResponse) VisitExportAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportAPTRepositorySnapshot404ApplicationProblemPlusJSONResponse Problem
+
+func (response ExportAPTRepositorySnapshot404ApplicationProblemPlusJSONResponse) VisitExportAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportAPTRepositorySnapshot409ApplicationProblemPlusJSONResponse Problem
+
+func (response ExportAPTRepositorySnapshot409ApplicationProblemPlusJSONResponse) VisitExportAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportAPTRepositorySnapshot500ApplicationProblemPlusJSONResponse Problem
+
+func (response ExportAPTRepositorySnapshot500ApplicationProblemPlusJSONResponse) VisitExportAPTRepositorySnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -20942,6 +21100,9 @@ type StrictServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/apt/snapshots)
 	PublishAPTRepositorySnapshot(ctx context.Context, request PublishAPTRepositorySnapshotRequestObject) (PublishAPTRepositorySnapshotResponseObject, error)
+
+	// (GET /repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive)
+	ExportAPTRepositorySnapshot(ctx context.Context, request ExportAPTRepositorySnapshotRequestObject) (ExportAPTRepositorySnapshotResponseObject, error)
 	// ListRepositoryArtifactIdentities List canonical immutable artifact identities
 	// (GET /repositories/{repositoryId}/artifact-identities)
 	ListRepositoryArtifactIdentities(ctx context.Context, request ListRepositoryArtifactIdentitiesRequestObject) (ListRepositoryArtifactIdentitiesResponseObject, error)
@@ -22856,6 +23017,33 @@ func (sh *strictHandler) PublishAPTRepositorySnapshot(w http.ResponseWriter, r *
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PublishAPTRepositorySnapshotResponseObject); ok {
 		if err := validResponse.VisitPublishAPTRepositorySnapshotResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportAPTRepositorySnapshot operation middleware
+func (sh *strictHandler) ExportAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, snapshotId SnapshotId) {
+	var request ExportAPTRepositorySnapshotRequestObject
+
+	request.RepositoryId = repositoryId
+	request.SnapshotId = snapshotId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportAPTRepositorySnapshot(ctx, request.(ExportAPTRepositorySnapshotRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportAPTRepositorySnapshot")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportAPTRepositorySnapshotResponseObject); ok {
+		if err := validResponse.VisitExportAPTRepositorySnapshotResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
