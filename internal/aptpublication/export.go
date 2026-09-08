@@ -202,7 +202,7 @@ func (e SnapshotArchiveExporter) Prepare(ctx context.Context, snapshotID string)
 	slices.SortFunc(objectList, func(left, right archiveObject) int { return strings.Compare(left.name, right.name) })
 	var release bytes.Buffer
 	for _, object := range objectList {
-		var capture io.Writer = io.Discard
+		capture := io.Discard
 		if object.digest == snapshot.ReleaseDigest {
 			capture = &release
 		}
