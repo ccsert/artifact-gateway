@@ -125,6 +125,15 @@ func TestSnapshotArchiveRejectsInconsistentManifest(t *testing.T) {
 		},
 		"missing membership":   func(m *SnapshotArchiveManifest) { m.Packages = nil },
 		"duplicate membership": func(m *SnapshotArchiveManifest) { m.Packages = append(m.Packages, m.Packages[0]) },
+		"pool package absent from membership": func(m *SnapshotArchiveManifest) {
+			for _, asset := range m.Assets {
+				if strings.HasPrefix(asset.Path, "pool/") {
+					asset.Path = repository.APTPoolPath("main", "ghost", "ghost_1.0-1_amd64.deb")
+					m.Assets = append(m.Assets, asset)
+					return
+				}
+			}
+		},
 		"membership digest differs from pool": func(m *SnapshotArchiveManifest) {
 			m.Packages[0].Digest = "sha256:" + strings.Repeat("f", 64)
 			m.Packages[0].Object = "objects/sha256/" + strings.Repeat("f", 64)

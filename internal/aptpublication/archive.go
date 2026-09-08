@@ -197,10 +197,20 @@ func validateSnapshotArchiveManifest(manifest SnapshotArchiveManifest) (map[stri
 		}
 	}
 
+	memberPoolPaths := make(map[string]struct{}, len(manifest.Packages))
 	for _, item := range manifest.Packages {
-		asset, ok := assetPaths[repository.APTPoolPath(item.Component, item.Package, item.ObjectName)]
+		poolPath := repository.APTPoolPath(item.Component, item.Package, item.ObjectName)
+		asset, ok := assetPaths[poolPath]
 		if !ok || asset.Digest != item.Digest || asset.Size != item.Size {
 			return nil, ErrSnapshotArchiveCorrupt
+		}
+		memberPoolPaths[poolPath] = struct{}{}
+	}
+	for path := range assetPaths {
+		if strings.HasPrefix(path, "pool/") {
+			if _, ok := memberPoolPaths[path]; !ok {
+				return nil, ErrSnapshotArchiveCorrupt
+			}
 		}
 	}
 	for _, path := range []string{"Release", "InRelease", "Release.gpg"} {
