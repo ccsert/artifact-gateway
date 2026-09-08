@@ -176,6 +176,19 @@ func (s *MemoryStore) aptReservedAndStoredBytesLocked(repositoryID string) int64
 			used += session.DeclaredSize
 		}
 	}
+	generated := make(map[string]int64)
+	for id, assets := range s.aptSnapshotAssets {
+		snapshot := s.aptSnapshots[id]
+		if snapshot.RepositoryID == repositoryID && snapshot.State == APTRepositorySnapshotVisible {
+			for key, size := range aptSnapshotGeneratedObjects(assets) {
+				generated[key] = size
+			}
+		}
+	}
+	for _, size := range generated {
+		used += size
+	}
+	used += s.aptArchiveReservedBytesLocked(repositoryID)
 	return used
 }
 
@@ -735,7 +748,13 @@ func (s *MemoryStore) PublishAPTRepositorySnapshotWithAudit(_ context.Context, s
 		for _, size := range generated {
 			generatedBytes += size
 		}
-		if baseBytes+generatedBytes > quota {
+		var activeUploads int64
+		for _, session := range s.aptPublicationSessions {
+			if session.RepositoryID == snapshot.RepositoryID && (session.State == APTPublicationSessionOpen || session.State == APTPublicationSessionUploading) {
+				activeUploads += session.DeclaredSize
+			}
+		}
+		if baseBytes+generatedBytes+s.aptArchiveReservedBytesLocked(snapshot.RepositoryID)+activeUploads > quota {
 			return APTRepositorySnapshot{}, ErrQuotaExceeded
 		}
 	}
@@ -933,6 +952,13 @@ func (s *MemoryStore) APTObjectHasDurableReference(_ context.Context, objectKey 
 		}
 		if _, ok := intents[objectKey]; ok {
 			return true, nil
+		}
+	}
+	for id, items := range s.aptArchiveObjects {
+		if s.aptArchiveRestores[id].State == "preparing" {
+			if _, ok := items[objectKey]; ok {
+				return true, nil
+			}
 		}
 	}
 	return false, nil

@@ -2974,6 +2974,7 @@ Problem:
       - security_policy_denied
       - artifact_quarantined
       - signer_unavailable
+      - untrusted_archive
       - snapshot_corrupt
       - internal_error
     message:

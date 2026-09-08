@@ -2,6 +2,8 @@ package aptpublication
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,19 +27,21 @@ func RunArchiveCLI(ctx context.Context, args []string, stdin io.Reader, stdout, 
 		defer func() { _ = file.Close() }()
 		input = file
 	}
-	manifest, err := VerifySnapshotArchive(ctx, input)
+	hash := sha256.New()
+	manifest, err := VerifySnapshotArchive(ctx, io.TeeReader(input, hash))
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "verify APT snapshot archive: %v\n", err)
 		return 1
 	}
 	result := struct {
-		Integrity    string `json:"integrity"`
-		Signatures   string `json:"signatures"`
-		SnapshotID   string `json:"snapshotId"`
-		RepositoryID string `json:"repositoryId"`
-		Packages     int    `json:"packages"`
-		Assets       int    `json:"assets"`
-	}{"verified", "not_checked", manifest.Snapshot.ID, manifest.Snapshot.RepositoryID, len(manifest.Packages), len(manifest.Assets)}
+		Integrity     string `json:"integrity"`
+		ArchiveDigest string `json:"archiveDigest"`
+		Signatures    string `json:"signatures"`
+		SnapshotID    string `json:"snapshotId"`
+		RepositoryID  string `json:"repositoryId"`
+		Packages      int    `json:"packages"`
+		Assets        int    `json:"assets"`
+	}{"verified", "sha256:" + hex.EncodeToString(hash.Sum(nil)), "not_checked", manifest.Snapshot.ID, manifest.Snapshot.RepositoryID, len(manifest.Packages), len(manifest.Assets)}
 	if err = json.NewEncoder(stdout).Encode(result); err != nil {
 		_, _ = fmt.Fprintf(stderr, "write APT snapshot verification result: %v\n", err)
 		return 1

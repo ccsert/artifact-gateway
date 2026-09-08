@@ -131,7 +131,7 @@ snapshot, verifies its complete evidence and object digests, and installs from
 it with the signer offline. A second gate now uses independently networked,
 CA-verified HTTPS signers and real Debian clients to prove old-key, overlap,
 new-key, rejection, and retirement behavior. Managed KMS/HSM custody and key
-recovery, trusted archive import, dedicated snapshot retention/rebuild tooling, and
+recovery, dedicated snapshot retention/rebuild tooling, and
 deployment-specific alert installation remain before H3 can pass.
 
 - Harden the H2 signer behind an external service or KMS/HSM-backed adapter;
@@ -143,7 +143,7 @@ deployment-specific alert installation remain before H3 can pass.
 - Add snapshot retention, rebuild, export, backup/restore, metrics, alerts, and
   disaster-recovery evidence. PostgreSQL/RustFS restore, signing metrics, and
   exact signature/object checksum verification are complete; dedicated
-  retention, rebuild, trusted archive import, and deployment alert installation remain.
+  retention, rebuild, and deployment alert installation remain.
 
 Acceptance gate: Debian client verification passes before, during, and after a
 documented rotation; a restored repository reproduces the same signed snapshot
@@ -152,7 +152,7 @@ HTTPS rotation and client-trust half is complete in
 `make apt-signer-rotation-e2e`. Managed production key custody and recovery
 remain open.
 
-[Signed snapshot export and offline integrity verification](apt-snapshot-archive.md) are available. Trusted archive import remains a separate stage; production custody and lifecycle gates remain open.
+[Signed snapshot export and offline integrity verification](apt-snapshot-archive.md) are available. Trusted same-repository archive restore is also available with independent backup receipts and public-key trust; production custody and lifecycle gates remain open.
 
 ## APT-H4: lifecycle, scanning, and distribution
 

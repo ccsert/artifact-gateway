@@ -80,7 +80,9 @@ func (s *PostgresStore) createAPTPublicationSessionIdempotently(ctx context.Cont
 		if err = tx.QueryRowContext(ctx, `SELECT
 			COALESCE((SELECT sum(size) FROM native_apt_assets WHERE repository_id=$1),0)+
 			COALESCE((SELECT sum(size) FROM native_apt_package_revisions WHERE repository_id=$1),0)+
-			COALESCE((SELECT sum(declared_size) FROM native_apt_publication_sessions WHERE repository_id=$1 AND state IN ('open','uploading')),0)`, session.RepositoryID).Scan(&used); err != nil {
+			COALESCE((SELECT sum(declared_size) FROM native_apt_publication_sessions WHERE repository_id=$1 AND state IN ('open','uploading')),0)+
+ COALESCE((SELECT SUM(reserved_bytes) FROM native_apt_archive_restores WHERE repository_id=$1 AND state='preparing'),0)+
+ COALESCE((SELECT SUM(size) FROM (SELECT MAX(a.size)::bigint AS size FROM native_apt_snapshot_assets a JOIN native_apt_repository_snapshots s ON s.id=a.snapshot_id WHERE a.repository_id=$1 AND s.state='visible' AND a.path LIKE 'dists/%' GROUP BY a.object_key) generated),0)`, session.RepositoryID).Scan(&used); err != nil {
 			return APTPublicationSession{}, false, err
 		}
 		if used+session.DeclaredSize > quota {
@@ -591,14 +593,26 @@ func (s *PostgresStore) CreateAPTSnapshotObjectIntents(ctx context.Context, snap
 }
 
 func (s *PostgresStore) PublishAPTRepositorySnapshotWithAudit(ctx context.Context, snapshot APTRepositorySnapshot, assets []APTSnapshotAsset, release []byte, audit AuditRecord) (APTRepositorySnapshot, error) {
-	if !validAPTSnapshotPublication(snapshot, assets, release) {
-		return APTRepositorySnapshot{}, ErrDisabled
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return APTRepositorySnapshot{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	result, err := publishAPTRepositorySnapshotTx(ctx, tx, snapshot, assets, release, audit)
+	if err != nil {
+		return APTRepositorySnapshot{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return APTRepositorySnapshot{}, err
+	}
+	return result, nil
+}
+
+func publishAPTRepositorySnapshotTx(ctx context.Context, tx *sql.Tx, snapshot APTRepositorySnapshot, assets []APTSnapshotAsset, release []byte, audit AuditRecord) (APTRepositorySnapshot, error) {
+	if !validAPTSnapshotPublication(snapshot, assets, release) {
+		return APTRepositorySnapshot{}, ErrDisabled
+	}
+	var err error
 	if err = tx.QueryRowContext(ctx, `SELECT id::text FROM hosted_repositories WHERE id=$1 FOR UPDATE`, snapshot.RepositoryID).Scan(new(string)); errors.Is(err, sql.ErrNoRows) {
 		return APTRepositorySnapshot{}, ErrNotFound
 	} else if err != nil {
@@ -631,7 +645,9 @@ func (s *PostgresStore) PublishAPTRepositorySnapshotWithAudit(ctx context.Contex
 		var baseBytes int64
 		if err = tx.QueryRowContext(ctx, `SELECT
 			COALESCE((SELECT SUM(size) FROM native_apt_assets WHERE repository_id=$1),0)+
-			COALESCE((SELECT SUM(size) FROM native_apt_package_revisions WHERE repository_id=$1),0)`, snapshot.RepositoryID).Scan(&baseBytes); err != nil {
+			COALESCE((SELECT SUM(size) FROM native_apt_package_revisions WHERE repository_id=$1),0)+
+ COALESCE((SELECT SUM(reserved_bytes) FROM native_apt_archive_restores WHERE repository_id=$1 AND state='preparing'),0)+
+ COALESCE((SELECT SUM(declared_size) FROM native_apt_publication_sessions WHERE repository_id=$1 AND state IN ('open','uploading')),0)`, snapshot.RepositoryID).Scan(&baseBytes); err != nil {
 			return APTRepositorySnapshot{}, err
 		}
 		generated := aptSnapshotGeneratedObjects(assets)
@@ -742,9 +758,6 @@ func (s *PostgresStore) PublishAPTRepositorySnapshotWithAudit(ctx context.Contex
 		return APTRepositorySnapshot{}, err
 	}
 	if err = insertAudit(ctx, tx, audit); err != nil {
-		return APTRepositorySnapshot{}, err
-	}
-	if err = tx.Commit(); err != nil {
 		return APTRepositorySnapshot{}, err
 	}
 	return snapshot, nil
@@ -867,7 +880,8 @@ func (s *PostgresStore) APTObjectHasDurableReference(ctx context.Context, object
 	err := s.db.QueryRowContext(ctx, `SELECT
 		EXISTS (SELECT 1 FROM native_apt_package_revisions WHERE object_key=$1)
 		OR EXISTS (SELECT 1 FROM native_apt_snapshot_assets a JOIN native_apt_repository_snapshots s ON s.id=a.snapshot_id WHERE a.object_key=$1 AND s.state<>'failed')
-		OR EXISTS (SELECT 1 FROM native_apt_snapshot_object_intents i JOIN native_apt_repository_snapshots s ON s.id=i.snapshot_id WHERE i.object_key=$1 AND s.state<>'failed')`, objectKey).Scan(&referenced)
+		OR EXISTS (SELECT 1 FROM native_apt_snapshot_object_intents i JOIN native_apt_repository_snapshots s ON s.id=i.snapshot_id WHERE i.object_key=$1 AND s.state<>'failed')
+ OR EXISTS (SELECT 1 FROM native_apt_archive_object_intents i JOIN native_apt_archive_restores r ON r.id=i.restore_id WHERE i.object_key=$1 AND r.state='preparing')`, objectKey).Scan(&referenced)
 	return referenced, err
 }
 

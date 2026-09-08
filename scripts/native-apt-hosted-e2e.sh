@@ -35,8 +35,14 @@ chmod 0600 "$env_file"
 compose=(docker compose --env-file "$env_file" -p "$project" --profile apt-signer)
 curl_request=(curl --noproxy '*' --connect-timeout 2 --max-time 45 --silent --show-error)
 cleanup() {
+  local status=$?
+  if [[ "$status" != 0 ]]; then
+    "${compose[@]}" ps -a >&2 || true
+    "${compose[@]}" logs --tail=80 gateway postgres >&2 || true
+  fi
   "${compose[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$workdir"
+  return "$status"
 }
 trap cleanup EXIT
 
@@ -104,6 +110,15 @@ if [[ "$repository_status" != 201 ]]; then
 fi
 repository_id=$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' "$repository_response")
 [[ -n "$repository_id" ]] || { printf 'repository response has no id\n' >&2; exit 1; }
+
+# Preserve an empty original repository and empty object store for the archive-only drill.
+empty_backup_dir="$workdir/empty-backup"
+# Release the shared Gateway network namespace before restarting its owner.
+"${compose[@]}" stop reference-apt-signer >/dev/null
+COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$env_file" \
+  "$root/scripts/backup-drill.sh" "$empty_backup_dir"
+"${compose[@]}" up -d --force-recreate --wait reference-apt-signer >/dev/null
+wait_gateway_ready
 
 session_response="$workdir/session.json"
 session_body=$(printf '{"suite":"stable","component":"main","objectName":"artifact-gateway-e2e_1.0.0-1_all.deb","declaredDigest":"sha256:%s","declaredSize":%s,"expectedIdentity":"artifact-gateway-e2e@1.0.0-1#all"}' "$package_sha256" "$package_size")
@@ -319,8 +334,13 @@ original_archive="$workdir/original-archive.tar"
 export_snapshot_archive "$original_archive"
 export_snapshot_archive "$workdir/repeated-archive.tar"
 cmp "$original_archive" "$workdir/repeated-archive.tar"
+# Save the receipt independently while the original backup is still trusted.
+archive_receipt=$(python3 -c 'import hashlib,sys; print("sha256:"+hashlib.file_digest(open(sys.argv[1],"rb"),"sha256").hexdigest())' "$original_archive")
+printf '%s\n' "$archive_receipt" >"$workdir/original-archive.receipt"
 
 backup_dir="$workdir/backup"
+# Release the shared Gateway network namespace before restarting its owner.
+"${compose[@]}" stop reference-apt-signer >/dev/null
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$env_file" \
   "$root/scripts/backup-drill.sh" "$backup_dir"
 "${compose[@]}" up -d --force-recreate --wait reference-apt-signer >/dev/null
@@ -364,6 +384,8 @@ with tarfile.open(sys.argv[1], "r:") as bundle:
     assert manifest["snapshot"]["sequence"] == 1
 PYRETIRED
 
+# Release the shared Gateway network namespace before restarting its owner.
+"${compose[@]}" stop reference-apt-signer >/dev/null
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$env_file" \
   "$root/scripts/restore-drill.sh" "$backup_dir"
 wait_gateway_ready
@@ -394,4 +416,53 @@ export_snapshot_archive "$workdir/restored-offline-archive.tar"
 cmp "$original_archive" "$workdir/restored-offline-archive.tar"
 install_snapshot_archive_offline "$workdir/restored-offline-archive.tar"
 
-printf 'native APT Hosted E2E passed (signed publish, exact restore, deterministic archive export, and offline signature verification/install)\n'
+# Restore ONLY the empty baseline: the source packages, snapshots and objects are gone.
+# Release the shared Gateway network namespace before restarting its owner.
+"${compose[@]}" stop reference-apt-signer >/dev/null
+COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$env_file" \
+  "$root/scripts/restore-drill.sh" "$empty_backup_dir"
+wait_gateway_ready
+restore_override="$workdir/restore.compose.yml"
+restore_fingerprint=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["keyFingerprint"])' "$snapshot_response")
+python3 - "$restore_override" "$public_key" "$restore_fingerprint" <<'PYRESTORECONFIG'
+import json, sys
+from pathlib import Path
+Path(sys.argv[1]).write_text(json.dumps({"services":{"gateway":{
+    "environment":{
+        "GATEWAY_APT_SIGNER_ENDPOINT":"", "GATEWAY_APT_SIGNER_TOKEN":"", "GATEWAY_APT_SIGNER_TIMEOUT":"",
+        "GATEWAY_APT_RESTORE_TRUSTED_FINGERPRINTS":sys.argv[3],
+        "GATEWAY_APT_RESTORE_TRUSTED_PUBLIC_KEYS_FILE":"/run/apt-restore.asc"},
+    "volumes":[sys.argv[2]+":/run/apt-restore.asc:ro"]}}}))
+PYRESTORECONFIG
+compose+=( -f "$root/compose.yml" -f "$restore_override" )
+"${compose[@]}" up -d --no-deps --force-recreate --wait gateway
+wait_gateway_ready
+empty_state="$workdir/empty-signing-state.json"
+signing_state >"$empty_state"
+python3 - "$empty_state" <<'PYEMPTY'
+import json,sys
+state=json.load(open(sys.argv[1]))
+assert state["signerMode"] == "disabled" and not state.get("currentSnapshot"), state
+PYEMPTY
+restore_response="$workdir/archive-restore.json"
+for attempt in 1 2; do
+  restore_status=$("${curl_request[@]}" --output "$restore_response" --write-out '%{http_code}' \
+    --request POST "$gateway_url/api/v2/repositories/$repository_id/apt/snapshots/restore" \
+    --header "Authorization: Bearer $admin_token" \
+    --header 'Content-Type: application/vnd.artifact-gateway.apt-snapshot.v1+tar' \
+    --header "X-Artifact-Archive-Digest: $(cat "$workdir/original-archive.receipt")" \
+    --data-binary "@$original_archive")
+  if [[ "$restore_status" != 200 ]]; then
+    printf 'trusted archive restore failed: HTTP %s\n' "$restore_status" >&2
+    cat "$restore_response" >&2
+    exit 1
+  fi
+  python3 - "$snapshot_response" "$restore_response" <<'PYSAME'
+import json,sys
+assert json.load(open(sys.argv[1])) == json.load(open(sys.argv[2])), "immutable snapshot changed on restore"
+PYSAME
+  export_snapshot_archive "$workdir/imported-archive.tar"
+  cmp "$original_archive" "$workdir/imported-archive.tar"
+done
+apt_install
+printf 'native APT Hosted E2E passed (signed publish, backup recovery, trusted archive-only restore and replay without a signer, deterministic re-export, and real APT installation)\n'

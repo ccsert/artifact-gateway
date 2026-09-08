@@ -746,3 +746,26 @@ func TestLoadRejectsInvalidCacheTTL(t *testing.T) {
 		t.Setenv(name, "")
 	}
 }
+
+func TestAPTRestoreTrustIsIndependentAndRequiresCompletePublicKeyPolicy(t *testing.T) {
+	setCompleteConfiguration(t)
+	fingerprints, file := writeAPTSignerPublicKeyRing(t, 1)
+	t.Setenv("GATEWAY_APT_SIGNER_ENDPOINT", "")
+	t.Setenv("GATEWAY_APT_RESTORE_TRUSTED_FINGERPRINTS", strings.Join(fingerprints, ","))
+	if _, err := Load(); err == nil {
+		t.Fatal("accepted restore fingerprint without keyring")
+	}
+	t.Setenv("GATEWAY_APT_RESTORE_TRUSTED_PUBLIC_KEYS_FILE", file)
+	cfg, err := Load()
+	if err != nil || cfg.APTSignerEnabled() || len(cfg.APTRestoreTrustedPublicKeys) == 0 || len(cfg.APTRestoreTrustedFingerprints) != 1 {
+		t.Fatalf("restore-only configuration: %#v %v", cfg.APTRestoreTrustedFingerprints, err)
+	}
+	t.Setenv("GATEWAY_APT_RESTORE_TRUSTED_FINGERPRINTS", strings.Repeat("a", 40))
+	if _, err = Load(); err == nil {
+		t.Fatal("accepted mismatched restore trust key")
+	}
+	t.Setenv("GATEWAY_APT_RESTORE_TRUSTED_FINGERPRINTS", "")
+	if _, err = Load(); err == nil {
+		t.Fatal("accepted keyring without fingerprints")
+	}
+}

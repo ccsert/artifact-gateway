@@ -81,6 +81,15 @@ func main() {
 	dependencies.NativePyPIObjectStore = objectStore
 	dependencies.NativeGoObjectStore = objectStore
 	dependencies.NativeAPTObjectStore = objectStore
+
+	if len(cfg.APTRestoreTrustedFingerprints) > 0 {
+		trust, err := aptpublication.NewTrustedSnapshotArchiveVerifier(cfg.APTRestoreTrustedFingerprints, cfg.APTRestoreTrustedPublicKeys)
+		if err != nil {
+			slog.Error("configure APT restore trust", "error", err)
+			os.Exit(1)
+		}
+		dependencies.APTArchiveTrust = trust
+	}
 	if cfg.APTSignerEnabled() {
 		aptSigner, signerErr := aptpublication.NewHTTPSigner(aptpublication.HTTPSignerOptions{
 			Endpoint: cfg.APTSignerEndpoint, Token: cfg.APTSignerToken, Timeout: cfg.APTSignerTimeout,
