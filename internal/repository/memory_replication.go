@@ -19,7 +19,7 @@ func (s *MemoryStore) CreateReplicationPlan(_ context.Context, p ReplicationPlan
 	key := p.TargetRepositoryID + "\x00" + p.IdempotencyKey
 	if id := s.replicationKeys[key]; id != "" {
 		existing := s.replicationPlans[id]
-		samePlan := existing.SourceRepositoryID == p.SourceRepositoryID && existing.TargetRepositoryID == p.TargetRepositoryID && existing.Format == p.Format && existing.Coordinate == p.Coordinate && existing.Digest == p.Digest
+		samePlan := existing.SourceRepositoryID == p.SourceRepositoryID && existing.TargetRepositoryID == p.TargetRepositoryID && existing.Format == p.Format && existing.Coordinate == p.Coordinate && existing.Digest == p.Digest && existing.APTTargetSuite == p.APTTargetSuite
 		replayablePark := existing.State == "failed" && (existing.LastError == ArtifactQuarantinedReason || (existing.Format == FormatPyPI && existing.LastError == ReplicationSnapshotChangedReason)) && existing.NextAttemptAt.IsZero() && existing.Attempts < existing.MaxAttempts
 		refreshablePyPIReplay := samePlan && existing.Format == FormatPyPI && replayablePark
 		if !samePlan || (!refreshablePyPIReplay && !equivalentReplicationCheckpoints(replicationCheckpointValues(s.replicationChecks[id]), checks)) {

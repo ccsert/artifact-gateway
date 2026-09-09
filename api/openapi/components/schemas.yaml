@@ -1835,6 +1835,11 @@ PromotionRequest:
     targetRepositoryId: {type: string, format: uuid}
     coordinate: {type: string}
     digest: {type: string}
+    aptTargetSuite:
+      type: string
+      minLength: 1
+      maxLength: 128
+      description: Required only for APT Hosted operator preview. Appends the immutable pool package to this target suite using the target signer. The pool coordinate preserves its component.
 ReplicationRequest:
   type: object
   required: [targetRepositoryId, coordinate, digest]
@@ -1843,6 +1848,11 @@ ReplicationRequest:
     targetRepositoryId: {type: string, format: uuid}
     coordinate: {type: string, minLength: 1, maxLength: 1024}
     digest: {type: string, pattern: "^sha256:[a-f0-9]{64}$"}
+    aptTargetSuite:
+      type: string
+      minLength: 1
+      maxLength: 128
+      description: Required only for APT Hosted operator preview. Appends the immutable pool package to this target suite using the target signer. The pool coordinate preserves its component.
 ReplicationPlan:
   type: object
   required: [id, sourceRepositoryId, targetRepositoryId, format, state, createdAt]
@@ -1868,6 +1878,11 @@ ReplicationPlan:
       type: string
       maxLength: 1024
       description: Worker failure text. Parked plans use artifact_quarantined or replication_snapshot_changed as stable control reasons.
+    aptTargetSuite:
+      type: string
+      minLength: 1
+      maxLength: 128
+      description: Required only for APT Hosted operator preview. Appends the immutable pool package to this target suite using the target signer. The pool coordinate preserves its component.
 ReplicationPlanDetail:
   allOf:
   - "$ref": "#/ReplicationPlan"

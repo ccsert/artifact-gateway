@@ -152,11 +152,11 @@ HTTPS rotation and client-trust half is complete in
 `make apt-signer-rotation-e2e`. Managed production key custody and recovery
 remain open.
 
-[Signed snapshot export and offline integrity verification](apt-snapshot-archive.md) are available. Trusted same-repository archive restore is also available with independent backup receipts and public-key trust; production custody and the remaining security/distribution gates remain open.
+[Signed snapshot export and offline integrity verification](apt-snapshot-archive.md) are available. Trusted same-repository archive restore is also available with independent backup receipts and public-key trust; production custody remains an independent open gate.
 
 ## APT-H4: lifecycle, scanning, and distribution
 
-Dedicated [deletion, retention, recovery and pruning](apt-hosted-lifecycle.md) operator APIs are available. Generic scheduled policies, Console forms, quarantine and distribution remain future gates.
+Dedicated [deletion, retention, recovery and pruning](apt-hosted-lifecycle.md) operator APIs are available. Package scanning and quarantine are implemented, and [target-signed promotion and replication](apt-hosted-distribution.md) are available for operator preview. Generic scheduled policies and Console lifecycle forms remain future gates.
 
 - Treat removal or retention as a new signed snapshot. Tombstoned packages stay
   restorable during the grace period, and object reclaim remains delayed and

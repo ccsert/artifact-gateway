@@ -43,6 +43,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [APT Hosted 签名](apt-hosted-signing.zh-CN.md) — H2 预览、外部 signer、H3 轮换和生产边界。
 - [APT 快照归档](apt-snapshot-archive.zh-CN.md) — 签名字节导出、离线完整性校验、可信同仓库恢复与遗留实现分阶段迁移。
 - [APT Hosted 生命周期](apt-hosted-lifecycle.zh-CN.md) — 签名删除、保留、恢复窗口与引用安全的快照清理。
+- [APT Hosted 分发](apt-hosted-distribution.zh-CN.md) — 目标签名晋级、验证复制与 Worker 恢复。
 - [APT Hosted 路线图](apt-hosted-roadmap.zh-CN.md) — H1-H4 有序验收门禁。
 - [Cargo 仓库研究](cargo-repository-research.zh-CN.md) — Sparse Registry 建议与 C0-C4 路线图。
 - [NuGet 路线图](nuget-roadmap.zh-CN.md) — 已延期的协议与生命周期计划。

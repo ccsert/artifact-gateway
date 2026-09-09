@@ -27,6 +27,7 @@ var (
 )
 
 type publisherStore interface {
+	repository.APTArtifactStore
 	repository.HostedRepositoryStore
 	repository.NativeAPTStore
 	repository.NativeAPTPublicationStore
@@ -84,6 +85,7 @@ type PublishSnapshotInput struct {
 	CreatedAt    time.Time
 	indexScopes  []aptIndexScope
 	lifecycle    *repository.APTLifecycleCommit
+	distribution *repository.APTDistributionCommit
 }
 
 type snapshotPackage struct {
@@ -163,6 +165,22 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 	if err = p.checkPackageAdmission(snapshotCtx, packages); err != nil {
 		return repository.APTRepositorySnapshot{}, err
 	}
+	if d := input.distribution; d != nil {
+		source, e := p.store.GetAPTScanAsset(snapshotCtx, d.Source.RepositoryID, d.Source.Path, d.Source.Digest)
+		if e != nil {
+			return repository.APTRepositorySnapshot{}, e
+		}
+		if source.ObjectKey != d.Source.ObjectKey || source.Size != d.Source.Size {
+			return repository.APTRepositorySnapshot{}, repository.ErrVersionConflict
+		}
+		allowed, e := repository.ArtifactDistributionAllowed(snapshotCtx, p.store, d.Source.RepositoryID, repository.FormatAPT, d.Source.Path, d.Source.Digest)
+		if e != nil {
+			return repository.APTRepositorySnapshot{}, e
+		}
+		if !allowed {
+			return repository.APTRepositorySnapshot{}, repository.ErrArtifactQuarantined
+		}
+	}
 	releaseDigest := digestBytes(bundle.release)
 	signingStartedAt := time.Now()
 	signature, err := p.signer.SignRelease(snapshotCtx, SignReleaseRequest{
@@ -223,7 +241,17 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 		CacheDisposition: "bypass", AuthorizationSource: "repository_write", AuthorizationReason: "signed_snapshot_visible",
 		Evidence: signedSnapshotAuditEvidence(signature),
 	}
-	if input.lifecycle != nil {
+	if input.distribution != nil {
+		d := input.distribution
+		audit.Operation = "apt.package." + d.Operation
+		audit.AuthorizationSource = "repository_admin"
+		audit.Evidence["commandId"] = d.ID
+		audit.Evidence["sourceRepositoryId"] = d.Source.RepositoryID
+		audit.Evidence["sourceCoordinate"] = d.Source.Path
+		audit.Evidence["sourceDigest"] = d.Source.Digest
+		audit.Evidence["baseSnapshotId"] = d.BaseSnapshotID
+		published, err = p.store.CommitAPTDistributionSnapshot(objectCtx, *d, snapshot, bundle.assets, bundle.release, audit)
+	} else if input.lifecycle != nil {
 		audit.Operation = "apt.package." + input.lifecycle.Operation
 		audit.AuthorizationSource = "repository_admin"
 		audit.Evidence["baseSnapshotId"] = input.lifecycle.BaseSnapshotID

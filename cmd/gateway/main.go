@@ -211,11 +211,16 @@ func main() {
 		PruneInterval: cfg.RuntimeNodePruneInterval,
 	}
 	heartbeatDone := heartbeat.Start(runtimeContext, 10*time.Second)
+	var aptPublisher *aptpublication.Publisher
+	if dependencies.APTSigner != nil {
+		aptPublisher = aptpublication.NewPublisher(store, objectStore, dependencies.APTSigner).WithMetrics(metrics).WithPublicationScanner(app.NewPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics))
+	}
 	(backgroundRuntime{
 		store: store, objects: objectStore, taskQueue: taskQueue, maintenance: maintenance, metrics: metrics,
 		scanner: dependencies.ArtifactScanner, scanResolver: dependencies.ArtifactScanResolver,
 		scannerFormats:  dependencies.ArtifactScannerFormats,
 		workerSessionID: runtimeSessionID,
+		aptPublisher:    aptPublisher,
 	}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {

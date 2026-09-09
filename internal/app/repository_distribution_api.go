@@ -10,6 +10,7 @@ import (
 	"time"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
+	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
 	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
 	npmprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/npm"
@@ -21,12 +22,12 @@ import (
 
 func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.CreateRepositoryPromotionParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, source repository.HostedRepository) {
-		if !repository.FormatSupportsOperation(source.Format, source.Type, repository.RepositoryOperationPromote) {
+		if !supportsAPTDistributionPreview(source, h.aptSnapshotPublisher, repository.RepositoryOperationPromote) {
 			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "promotion is not supported for this repository format")
 			return
 		}
 		var request adminopenapi.PromotionRequest
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatOCI && (request.Coordinate == "" || strings.Contains(request.Coordinate, "@"))) || (source.Format == repository.FormatRaw && strings.Trim(request.Coordinate, "/") == "") || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil || !validAPTDistributionScope(source.Format, request.Coordinate, request.AptTargetSuite) || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatOCI && (request.Coordinate == "" || strings.Contains(request.Coordinate, "@"))) || (source.Format == repository.FormatRaw && strings.Trim(request.Coordinate, "/") == "") || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "targetRepositoryId, immutable artifact coordinate, and digest are required")
 			return
 		}
@@ -61,6 +62,8 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.Response
 			}
 			var job repository.LifecycleJob
 			switch source.Format {
+			case repository.FormatAPT:
+				job, _, err = (aptpublication.Distribution{Store: h.sessions.store}).EnqueuePromotion(r.Context(), target.ID, string(params.IdempotencyKey), aptpublication.PromotionPayload{SourceRepositoryID: source.ID, Coordinate: request.Coordinate, Digest: request.Digest, TargetSuite: *request.AptTargetSuite, Actor: principal.Actor})
 			case repository.FormatMaven:
 				promotionID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("maven-promotion:"+target.ID+":"+string(params.IdempotencyKey))).String()
 				job, _, err = (mavenprotocol.NativePromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), mavenprotocol.PromotionPayload{SourceRepositoryID: source.ID, Coordinate: request.Coordinate, Digest: request.Digest, PromotionID: promotionID})
@@ -100,7 +103,7 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 		var request adminopenapi.ReplicationRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || !repository.FormatSupportsOperation(source.Format, source.Type, repository.RepositoryOperationReplicate) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) {
+		if err := decoder.Decode(&request); err != nil || !validAPTDistributionScope(source.Format, request.Coordinate, request.AptTargetSuite) || !supportsAPTDistributionPreview(source, h.aptSnapshotPublisher, repository.RepositoryOperationReplicate) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "replication requires a visible format-specific coordinate and sha256 digest")
 			return
 		}
@@ -115,7 +118,14 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 			}
 			format := source.Format
 			var checkpoints []repository.ReplicationCheckpoint
-			if format == repository.FormatRaw {
+			if format == repository.FormatAPT {
+				asset, lookupErr := h.sessions.store.GetAPTScanAsset(r.Context(), source.ID, request.Coordinate, request.Digest)
+				if lookupErr != nil {
+					writeAPTSnapshotProblem(w, lookupErr)
+					return
+				}
+				checkpoints = []repository.ReplicationCheckpoint{{SourceObjectKey: asset.ObjectKey, ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: asset.Size}}
+			} else if format == repository.FormatRaw {
 				asset, lookupErr := h.sessions.store.GetRawAsset(r.Context(), source.ID, request.Coordinate)
 				if errors.Is(lookupErr, repository.ErrNotFound) || asset.Digest != request.Digest {
 					writeHostedProblem(w, http.StatusNotFound, "not_found", "source Raw artifact is unavailable")
@@ -234,7 +244,7 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 					return
 				}
 			}
-			plan, _, err := h.replication.CreateReplicationPlan(r.Context(), repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: format, Coordinate: request.Coordinate, Digest: request.Digest, IdempotencyKey: string(params.IdempotencyKey)}, checkpoints)
+			plan, _, err := h.replication.CreateReplicationPlan(r.Context(), repository.ReplicationPlan{ID: uuid.NewString(), SourceRepositoryID: source.ID, TargetRepositoryID: target.ID, Format: format, APTTargetSuite: aptDistributionSuite(request.AptTargetSuite), Coordinate: request.Coordinate, Digest: request.Digest, IdempotencyKey: string(params.IdempotencyKey)}, checkpoints)
 			if errors.Is(err, repository.ErrIdempotencyConflict) {
 				writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing replication plan")
 				return
@@ -383,6 +393,9 @@ func parseOCIRestoreCoordinate(value string) (name, digest string, ok bool) {
 
 func toOpenAPIReplicationPlan(plan repository.ReplicationPlan) adminopenapi.ReplicationPlan {
 	item := adminopenapi.ReplicationPlan{Id: uuid.MustParse(plan.ID), SourceRepositoryId: uuid.MustParse(plan.SourceRepositoryID), TargetRepositoryId: uuid.MustParse(plan.TargetRepositoryID), Format: adminopenapi.Format(plan.Format), State: adminopenapi.ReplicationPlanState(plan.State), CreatedAt: plan.CreatedAt}
+	if plan.APTTargetSuite != "" {
+		item.AptTargetSuite = &plan.APTTargetSuite
+	}
 	if plan.Coordinate != "" && plan.Digest != "" {
 		item.Coordinate = &plan.Coordinate
 		item.Digest = &plan.Digest
@@ -401,6 +414,9 @@ func toOpenAPIReplicationPlan(plan repository.ReplicationPlan) adminopenapi.Repl
 
 func toOpenAPIReplicationPlanDetail(plan repository.ReplicationPlan, checkpoints []repository.ReplicationCheckpoint) adminopenapi.ReplicationPlanDetail {
 	item := adminopenapi.ReplicationPlanDetail{Id: uuid.MustParse(plan.ID), SourceRepositoryId: uuid.MustParse(plan.SourceRepositoryID), TargetRepositoryId: uuid.MustParse(plan.TargetRepositoryID), Format: adminopenapi.Format(plan.Format), State: adminopenapi.ReplicationPlanDetailState(plan.State), CreatedAt: plan.CreatedAt, Checkpoints: make([]adminopenapi.ReplicationCheckpointProgress, 0, len(checkpoints))}
+	if plan.APTTargetSuite != "" {
+		item.AptTargetSuite = &plan.APTTargetSuite
+	}
 	if plan.Coordinate != "" && plan.Digest != "" {
 		item.Coordinate = &plan.Coordinate
 		item.Digest = &plan.Digest
@@ -496,4 +512,20 @@ func (h generatedRepositoryAPIAdapter) restoreConanCoordinate(r *http.Request, r
 	}
 	_, err := h.conan.RestoreConanRecipeRevision(r.Context(), repositoryID, reference, recipeRevision)
 	return err
+}
+
+func supportsAPTDistributionPreview(repo repository.HostedRepository, publisher *aptpublication.Publisher, operation repository.RepositoryOperation) bool {
+	return repository.FormatSupportsOperation(repo.Format, repo.Type, operation) || (repo.Format == repository.FormatAPT && repo.Type == repository.RepositoryTypeHosted && publisher != nil)
+}
+func validAPTDistributionScope(format repository.Format, coordinate string, suite *string) bool {
+	if format != repository.FormatAPT {
+		return suite == nil
+	}
+	return suite != nil && repository.ValidAPTPublicationScope(*suite) && repository.ValidAPTArtifactCoordinate(coordinate)
+}
+func aptDistributionSuite(suite *string) string {
+	if suite == nil {
+		return ""
+	}
+	return *suite
 }

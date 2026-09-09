@@ -46,6 +46,7 @@ agree with executable tests and the
 - [APT Hosted signing](apt-hosted-signing.md) — H2 preview, external signer, H3 rotation, and production boundary.
 - [APT snapshot archives](apt-snapshot-archive.md) — signed-byte export, offline integrity checks, trusted same-repository restore, and staged legacy migration.
 - [APT Hosted lifecycle](apt-hosted-lifecycle.md) — signed deletion, retention, recovery windows and reference-safe pruning.
+- [APT Hosted distribution](apt-hosted-distribution.md) — target-signed promotion, verified replication and Worker recovery.
 - [APT Hosted roadmap](apt-hosted-roadmap.md) — ordered H1-H4 acceptance gates.
 - [Cargo repository research](cargo-repository-research.md) — sparse registry recommendation and C0-C4 roadmap.
 - [NuGet roadmap](nuget-roadmap.md) — deferred protocol and lifecycle plan.

@@ -103,6 +103,7 @@ func (TestAdapter) Available(_ context.Context, member repository.Member, _ stri
 }
 
 type GatewayStore interface {
+	repository.APTArtifactStore
 	repository.Store
 	repository.MavenStore
 	repository.RawStore
@@ -221,7 +222,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		goClient = client
 	}
 	oci := OCIHandler{Resolver: resolver, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Client: upstreamClient, Authenticator: authenticator, Cache: cache}
-	publicationScanner := newPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics)
+	publicationScanner := NewPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics)
 	nativeOCI := newNativeOCIHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(oci).withPublicationScanner(publicationScanner)
 	nativeRaw := newNativeRawHandler(store, dependencies.NativeOCIObjectStore, authenticator).withMetrics(metrics).withProxy(rawClient, rawCache).withPublicationScanner(publicationScanner)
 	mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))

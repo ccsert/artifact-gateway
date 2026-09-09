@@ -171,18 +171,19 @@ gateway_network=$(docker inspect --format '{{range $name, $settings := .NetworkS
 [[ -n "$gateway_network" ]] || { printf 'gateway network was not found\n' >&2; exit 1; }
 
 apt_install() {
-  local version=${1:-1.0.0-1}
+  local version=${1:-1.0.0-1} repo_name=${2:-apt-hosted-e2e} suite=${3:-stable}
   docker run --rm \
     --network "$gateway_network" \
     --env "APT_E2E_RESOLVER_TOKEN=$resolver_token" --env "APT_E2E_VERSION=$version" \
+    --env "APT_E2E_REPOSITORY=$repo_name" --env "APT_E2E_SUITE=$suite" \
     --volume "$public_key:/keys/artifact-gateway.asc:ro" \
     "$debian_image" /bin/sh -ec '
       rm -f /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources
       install -d -m 0755 /etc/apt/keyrings /etc/apt/auth.conf.d
       install -m 0644 /keys/artifact-gateway.asc /etc/apt/keyrings/artifact-gateway.asc
-      printf "machine http://gateway:8080/apt/apt-hosted-e2e\nlogin resolver\npassword %s\n" "$APT_E2E_RESOLVER_TOKEN" > /etc/apt/auth.conf.d/artifact-gateway.conf
+      printf "machine http://gateway:8080/apt/%s\nlogin resolver\npassword %s\n" "$APT_E2E_REPOSITORY" "$APT_E2E_RESOLVER_TOKEN" > /etc/apt/auth.conf.d/artifact-gateway.conf
       chmod 0600 /etc/apt/auth.conf.d/artifact-gateway.conf
-      printf "%s\n" "deb [arch=all signed-by=/etc/apt/keyrings/artifact-gateway.asc] http://gateway:8080/apt/apt-hosted-e2e stable main" > /etc/apt/sources.list.d/artifact-gateway.list
+      printf "%s\n" "deb [arch=all signed-by=/etc/apt/keyrings/artifact-gateway.asc] http://gateway:8080/apt/$APT_E2E_REPOSITORY $APT_E2E_SUITE main" > /etc/apt/sources.list.d/artifact-gateway.list
       apt-get -o Acquire::Retries=0 update
       apt-get -o Acquire::Retries=0 install -y --no-install-recommends artifact-gateway-e2e="$APT_E2E_VERSION"
       grep -Fxq installed-from-artifact-gateway /usr/share/artifact-gateway-e2e/installed.txt
@@ -316,6 +317,7 @@ PYARCHIVE
 }
 
 apt_install
+source "$root/scripts/native-apt-distribution-e2e.inc.sh"
 source "$root/scripts/native-apt-quarantine-e2e.inc.sh"
 original_state="$workdir/original-signing-state.json"
 original_capture="$workdir/original-snapshot"
@@ -470,4 +472,4 @@ PYSAME
   cmp "$original_archive" "$workdir/imported-archive.tar"
 done
 apt_install
-printf 'native APT Hosted E2E passed (signed publish, lifecycle delete/retention/restore, backup recovery, trusted archive-only restore and replay without a signer, deterministic re-export, and real APT installation)\n'
+printf 'native APT Hosted E2E passed (signed publish, target-signed promotion/replication, lifecycle delete/retention/restore, backup recovery, trusted archive-only restore and replay without a signer, deterministic re-export, and real APT installation)\n'

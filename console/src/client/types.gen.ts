@@ -381,6 +381,10 @@ export type ReplicationRequest = {
   targetRepositoryId: string;
   coordinate: string;
   digest: string;
+  /**
+   * Required only for APT Hosted operator preview. Appends the immutable pool package to this target suite using the target signer. The pool coordinate preserves its component.
+   */
+  aptTargetSuite?: string;
 };
 
 export type ReplicationPlan = {
@@ -404,6 +408,10 @@ export type ReplicationPlan = {
    * Worker failure text. Parked plans use artifact_quarantined or replication_snapshot_changed as stable control reasons.
    */
   lastError?: string;
+  /**
+   * Required only for APT Hosted operator preview. Appends the immutable pool package to this target suite using the target signer. The pool coordinate preserves its component.
+   */
+  aptTargetSuite?: string;
 };
 
 export type ReplicationPlanDetail = ReplicationPlan & {
@@ -1566,6 +1574,10 @@ export type PromotionRequest = {
   targetRepositoryId: string;
   coordinate: string;
   digest: string;
+  /**
+   * Required only for APT Hosted operator preview. Appends the immutable pool package to this target suite using the target signer. The pool coordinate preserves its component.
+   */
+  aptTargetSuite?: string;
 };
 
 export type ArtifactScanStatus = {

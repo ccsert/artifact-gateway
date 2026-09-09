@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"reflect"
 	"sort"
 )
 
@@ -23,6 +24,13 @@ func LockNPMProxyWithContext(ctx context.Context, store NativeNPMStore, key stri
 // LockObjectKeys acquires object locks in a stable order and releases any
 // partial acquisition on failure. Stable ordering prevents multi-file formats
 // from deadlocking when two workers coordinate the same object set.
+type objectLockContextKey struct{}
+type objectLockContext struct {
+	store  any
+	format Format
+	keys   map[string]bool
+}
+
 func LockObjectKeys(ctx context.Context, objectKeys []string, store any, format Format, lock func(context.Context, string) (func(), error)) (context.Context, func(), error) {
 	unique := make(map[string]struct{}, len(objectKeys))
 	keys := make([]string, 0, len(objectKeys))
@@ -40,9 +48,22 @@ func LockObjectKeys(ctx context.Context, objectKeys []string, store any, format 
 	if batch, ok := store.(ArtifactObjectKeysLockStore); ok {
 		return batch.LockArtifactObjectKeys(ctx, format, keys)
 	}
+	// A format publisher may stage an object already held by its worker. Carry
+	// ownership through the context just as PostgreSQL's advisory session does;
+	// reacquiring a process mutex would deadlock. Child scopes never release
+	// locks owned by their parent.
+	held := make(map[string]bool)
+	if parent, ok := ctx.Value(objectLockContextKey{}).(objectLockContext); ok && parent.format == format && store != nil && reflect.TypeOf(store).Comparable() && parent.store == store {
+		for key := range parent.keys {
+			held[key] = true
+		}
+	}
 
 	releases := make([]func(), 0, len(keys))
 	for _, key := range keys {
+		if held[key] {
+			continue
+		}
 		release, err := lock(ctx, key)
 		if err != nil {
 			for index := len(releases) - 1; index >= 0; index-- {
@@ -51,8 +72,9 @@ func LockObjectKeys(ctx context.Context, objectKeys []string, store any, format 
 			return ctx, nil, err
 		}
 		releases = append(releases, release)
+		held[key] = true
 	}
-	return ctx, func() {
+	return context.WithValue(ctx, objectLockContextKey{}, objectLockContext{store: store, format: format, keys: held}), func() {
 		for index := len(releases) - 1; index >= 0; index-- {
 			releases[index]()
 		}

@@ -27,7 +27,7 @@ type publicationScanScheduler struct {
 
 const publicationScanAuditTimeout = 2 * time.Second
 
-func newPublicationScanScheduler(store publicationScanStore, scannerAvailable bool, formats []repository.Format, metrics *Metrics) publicationScanScheduler {
+func NewPublicationScanScheduler(store publicationScanStore, scannerAvailable bool, formats []repository.Format, metrics *Metrics) publicationScanScheduler {
 	return publicationScanScheduler{
 		store:            store,
 		scannerAvailable: scannerAvailable,
