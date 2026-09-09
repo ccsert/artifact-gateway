@@ -90,7 +90,13 @@ const RepositorySecurityTab = lazy(async () => ({
     .RepositorySecurityTab,
 }));
 
+const APTOperationsTab = lazy(async () => ({
+  default: (await import("./repository-detail/APTOperationsTab"))
+    .APTOperationsTab,
+}));
+
 type Tab =
+  | "apt-snapshots"
   | "artifacts"
   | "publish"
   | "grants"
@@ -123,6 +129,13 @@ type RepositoryTabDefinition = {
 
 const TABS: RepositoryTabDefinition[] = [
   { key: "artifacts", label: "制品", labelEn: "Artifacts" },
+  {
+    key: "apt-snapshots",
+    label: "签名快照",
+    labelEn: "Signed snapshots",
+    formats: ["apt"],
+    hostedOnly: true,
+  },
   {
     key: "publish",
     label: "发布",
@@ -160,7 +173,7 @@ const TABS: RepositoryTabDefinition[] = [
     key: "jobs",
     label: "生命周期任务",
     labelEn: "Lifecycle jobs",
-    formats: ["maven", "oci", "conan", "raw", "npm", "pypi"],
+    formats: ["maven", "oci", "conan", "raw", "npm", "pypi", "apt"],
   },
   {
     key: "tombstones",
@@ -182,7 +195,8 @@ function repositoryTabAvailable(
   return (
     (!item.formats || item.formats.includes(repo.format)) &&
     (!item.hostedOnly || repo.type === "hosted") &&
-    !(item.key === "publish" && repo.type === "proxy")
+    !(item.key === "publish" && repo.type === "proxy") &&
+    !(repo.format === "apt" && item.key === "jobs" && repo.type !== "hosted")
   );
 }
 
@@ -1079,6 +1093,13 @@ export function RepositoryDetailPage() {
               )}
               <RepositoryGrantsTab repo={repo} />
             </>
+          )}
+          {tab === "apt-snapshots" && (
+            <APTOperationsTab
+              key={repo.id}
+              repo={repo}
+              canAdmin={effectiveAccess?.permissions?.admin.allowed === true}
+            />
           )}
           {tab === "retention" && <RepositoryRetentionTab repo={repo} />}
           {tab === "scanning" && (

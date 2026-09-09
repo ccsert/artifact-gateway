@@ -2327,7 +2327,10 @@ type APIKeyList struct {
 
 // APTLifecyclePackage defines model for APTLifecyclePackage.
 type APTLifecyclePackage struct {
-	Component            string             `json:"component"`
+	Component string `json:"component"`
+
+	// PoolPath Repository-global canonical pool path used for reads, scanning and distribution. Distinct from revision.canonicalIdentity (package@version#architecture).
+	PoolPath             string             `json:"poolPath"`
 	PublicationSessionId openapi_types.UUID `json:"publicationSessionId"`
 	Revision             APTPackageRevision `json:"revision"`
 }

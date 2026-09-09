@@ -886,7 +886,7 @@ test("promotion selects a source artifact and a compatible Hosted target", async
     digest,
   });
   await expect(
-    page.getByText("晋升任务已提交，请在「生命周期任务」查看进度"),
+    page.getByText("晋升任务已提交，请在目标仓库的「生命周期任务」查看进度"),
   ).toBeVisible();
   if (process.env.CAPTURE_REPOSITORY_DETAIL) {
     await page.screenshot({

@@ -2,7 +2,7 @@
 
 [English](apt-hosted-lifecycle.md) | [文档索引](README.zh-CN.md)
 
-APT Hosted 操作员预览提供专用的包删除、恢复、保留预览与快照清理 API。每次删除、恢复或保留操作都重新生成完整 Packages、Release 和两份签名；只有对象持久化、签名验证及数据库事务全部成功，才替换当前快照。当前公开格式能力仍为 Proxy/Group，生产 KMS/HSM 与晋级/复制分发仍是独立门禁。
+APT Hosted 操作员预览提供专用的包删除、恢复、保留预览与快照清理 API。每次删除、恢复或保留操作都重新生成完整 Packages、Release 和两份签名；只有对象持久化、签名验证及数据库事务全部成功，才替换当前快照。当前公开格式能力仍为 Proxy/Group，生产 KMS/HSM 仍是独立门禁；目标仓签名分发见[分发预览](apt-hosted-distribution.zh-CN.md)。
 
 ## 查看与预览
 
@@ -45,7 +45,11 @@ APT Hosted 操作员预览提供专用的包删除、恢复、保留预览与快
 
 已回收包的删除屏障和历史证据继续保留，不能用同身份的重新上传绕过。超过恢复窗口后，应从数据库与对象存储的一致备份恢复到独立验证环境，或发布新的包版本。单个快照归档不包含删除记录或队列状态，不能替代完整生命周期备份。
 
-本阶段使用显式管理 API 执行保留和清理，尚未把 APT 接入通用 retention policy 定时执行器、Console 生命周期表单或晋级/复制流程。
+Console 在 Hosted APT 仓库的「签名快照」页提供这些显式操作。仓库管理员输入完整 suite，查看当前签名指纹和快照历史，选择包预览删除、保留清理或恢复。审阅窗口展示受影响的软件包与固定基础快照；保留清理提交精确的预览候选 ID。冲突后必须刷新并重新预览；失败或结果不确定时，可在当前审阅窗口中使用原幂等键重试。刷新失败保留旧证据，并禁用操作直到刷新成功。
+
+快照历史仅允许确认清理已过宽限期的退役快照，不会将引用清理表述为物理字节回收完成。APT 尚未接入通用 retention policy 定时执行器；Console 不提供首次发布和归档导入/导出表单。
+
+生命周期响应为每个包返回服务端生成的 `poolPath`，用于协议读取与分发。它与 `revision.canonicalIdentity` 的 `package@version#architecture` 身份不同，Console 不从包身份拼接 pool 路径。使用这些操作时应运行匹配版本的 API 与 Console。
 
 ## 升级、备份与兼容边界
 
@@ -67,6 +71,6 @@ APT Hosted 扫描使用当前 visible 快照中的 `.deb`，身份为 `Repositor
 - 释放只恢复现有生命周期引用的读取，不撤销删除，不切换当前快照，也不更改原有签名字节。已删除包还需要在恢复窗口内显式恢复。
 - 发布在解析包时和调用 signer 前检查隔离；最终事务与隔离变更锁定同一仓库记录，再次检查全部 pool 身份。签名期间发生的隔离会使发布返回 `409 artifact_quarantined`，旧可见性保持不变。
 
-扫描需显式配置能分析 `.deb` 的外部服务及 `GATEWAY_SCANNER_FORMATS=apt`。内置参考 Trivy 文件系统扫描器仍拒绝 APT，不能把未分析的压缩包当成零漏洞结论；详见[扫描器契约](artifact-scanner-contract.zh-CN.md)。APT Group 仍仅接受 Proxy 成员，不允许 Hosted 通过 Group 绕过策略。聚合签名、目标签名晋级/复制和 KMS/HSM 不属于本阶段。
+扫描需显式配置能分析 `.deb` 的外部服务及 `GATEWAY_SCANNER_FORMATS=apt`。内置参考 Trivy 文件系统扫描器仍拒绝 APT，不能把未分析的压缩包当成零漏洞结论；详见[扫描器契约](artifact-scanner-contract.zh-CN.md)。APT Group 仍仅接受 Proxy 成员，不允许 Hosted 通过 Group 绕过策略。聚合签名与 KMS/HSM 仍属于后续工作；目标仓签名分发见[分发预览](apt-hosted-distribution.zh-CN.md)。
 
 本变更不增加数据库字段；仍须停止旧二进制节点后整体升级，旧节点不会执行新的 APT 隔离检查。验证包含内存/PostgreSQL/RustFS 的签名期间隔离、旧快照读取和删除/释放/恢复，以及真实 Debian 使用已缓存索引安装时的阻断与释放后安装。

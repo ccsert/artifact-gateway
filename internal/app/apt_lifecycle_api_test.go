@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,6 +62,21 @@ func TestAPTLifecycleManagementAuthorizationAndEmptySnapshot(t *testing.T) {
 			t.Fatalf("authorization: %d %s", w.Code, w.Body.String())
 		}
 	}
+	visible := call(http.MethodGet, "lifecycle?suite=stable", "admin-secret", nil)
+	var visibleState struct {
+		Packages []struct {
+			PoolPath string `json:"poolPath"`
+			Revision struct {
+				CanonicalIdentity string `json:"canonicalIdentity"`
+			} `json:"revision"`
+		} `json:"packages"`
+	}
+	if err := json.Unmarshal(visible.Body.Bytes(), &visibleState); visible.Code != 200 || err != nil || len(visibleState.Packages) != 1 {
+		t.Fatalf("visible state: %d %s %v", visible.Code, visible.Body.String(), err)
+	}
+	if visibleState.Packages[0].PoolPath != "pool/main/w/widget/widget.deb" || visibleState.Packages[0].Revision.CanonicalIdentity != "widget@1.0-1#amd64" {
+		t.Fatalf("lifecycle response lost native package identity: %+v", visibleState.Packages[0])
+	}
 	for _, path := range []string{"lifecycle/preview", "lifecycle", "lifecycle"} {
 		w := call(http.MethodPost, path, "admin-secret", body)
 		if w.Code != 200 {
@@ -85,5 +101,16 @@ func TestAPTLifecycleManagementAuthorizationAndEmptySnapshot(t *testing.T) {
 	w = call(http.MethodPost, "snapshots/prune", "admin-secret", []byte(`{}`))
 	if w.Code != 400 {
 		t.Fatalf("missing prune selection: %d", w.Code)
+	}
+}
+
+func TestAPTLifecyclePackagePoolPathIsDistinctFromPackageIdentity(t *testing.T) {
+	revision := repository.APTPackageRevision{ID: uuid.NewString(), RepositoryID: uuid.NewString(), Package: "libwidget", Version: "1.0-1", Architecture: "amd64", CanonicalIdentity: "libwidget@1.0-1#amd64", ObjectName: "libwidget_1.0-1_amd64.deb", Digest: "sha256:" + strings.Repeat("a", 64), CreatedAt: time.Now().UTC()}
+	response, err := aptLifecyclePackageResponse(uuid.NewString(), "main", revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.PoolPath != "pool/main/libw/libwidget/libwidget_1.0-1_amd64.deb" || response.Revision.CanonicalIdentity != revision.CanonicalIdentity {
+		t.Fatalf("pool path and package identity must remain distinct: %+v", response)
 	}
 }

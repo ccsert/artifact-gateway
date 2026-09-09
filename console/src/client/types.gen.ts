@@ -1872,6 +1872,10 @@ export type AptSnapshotHistory = {
 export type AptLifecyclePackage = {
   publicationSessionId: string;
   component: string;
+  /**
+   * Repository-global canonical pool path used for reads, scanning and distribution. Distinct from revision.canonicalIdentity (package@version#architecture).
+   */
+  poolPath: string;
   revision: AptPackageRevision;
 };
 

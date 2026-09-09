@@ -199,7 +199,9 @@ describe("RepositoryDistributionTab", () => {
       headers: { "Idempotency-Key": expect.any(String) },
     });
     expect(
-      await screen.findByText("晋升任务已提交，请在「生命周期任务」查看进度"),
+      await screen.findByText(
+        "晋升任务已提交，请在目标仓库的「生命周期任务」查看进度",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -300,5 +302,71 @@ describe("RepositoryDistributionTab", () => {
     expect(screen.getByText("缺少已验证签名")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /晋\s*升/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /复\s*制/ })).toBeEnabled();
+  });
+});
+
+it("uses visible APT packages and requires the target suite, preserving an uncertain request key", async () => {
+  const user = userEvent.setup();
+  const apt = { ...source, format: "apt" as const };
+  const poolPath = "pool/main/w/widget/widget_1.0_amd64.deb";
+  mockListRepositories.mockResolvedValue({
+    data: { items: [apt, { ...target, format: "apt" }] },
+  } as never);
+  mockListRepositoryReplications.mockResolvedValue({ data: [] } as never);
+  mockCreatePromotion
+    .mockRejectedValueOnce(new Error("connection lost"))
+    .mockResolvedValueOnce({ data: {} } as never);
+  render(
+    <PreferencesProvider>
+      <RepositoryDistributionTab
+        repo={apt}
+        aptPackages={[
+          {
+            publicationSessionId: "session-a",
+            component: "main",
+            poolPath,
+            revision: {
+              id: "rev-a",
+              repositoryId: apt.id,
+              package: "widget",
+              version: "1.0",
+              architecture: "amd64",
+              canonicalIdentity: "widget@1.0#amd64",
+              digest: digestA,
+              size: 2048,
+              objectName: "native/apt/a",
+              publisher: "operator",
+              createdAt: "2026-01-01T00:00:00Z",
+            },
+          },
+        ]}
+      />
+    </PreferencesProvider>,
+  );
+  await screen.findByText("暂无复制计划");
+  expect(mockListArtifactIdentities).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("combobox", { name: "搜索并选择源制品" }));
+  await user.click(await screen.findByText("widget 1.0 · amd64"));
+  await user.click(screen.getByRole("combobox", { name: "选择目标仓库" }));
+  await user.click(await screen.findByText("releases"));
+  expect(screen.getByRole("button", { name: /晋\s*升/ })).toBeDisabled();
+  await user.type(
+    screen.getByRole("textbox", { name: "目标发行套件" }),
+    "bookworm",
+  );
+  await user.click(screen.getByRole("button", { name: /晋\s*升/ }));
+  await screen.findByText("connection lost");
+  await user.click(screen.getByRole("button", { name: /晋\s*升/ }));
+  await screen.findByText(
+    "晋升任务已提交，请在目标仓库的「生命周期任务」查看进度",
+  );
+  const calls = mockCreatePromotion.mock.calls;
+  expect(calls).toHaveLength(2);
+  expect(calls[0][0]).toEqual(calls[1][0]);
+  expect(calls[0][0]?.body).toEqual({
+    targetRepositoryId: target.id,
+    coordinate: poolPath,
+    digest: digestA,
+    aptTargetSuite: "bookworm",
   });
 });

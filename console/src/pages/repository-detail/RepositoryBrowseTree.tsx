@@ -62,6 +62,14 @@ function nodeIcon(kind: BrowseNode["kind"], expanded: boolean): ReactNode {
   return expanded ? <FolderOpenOutlined /> : <FolderOutlined />;
 }
 
+function loadedNodeCount(nodes: RepositoryTreeDataNode[]): number {
+  return nodes.reduce(
+    (count, node) =>
+      count + (node.loadMore ? 0 : 1) + loadedNodeCount(node.children ?? []),
+    0,
+  );
+}
+
 function replaceNodeChildren(
   nodes: RepositoryTreeDataNode[],
   key: React.Key,
@@ -411,6 +419,11 @@ export function RepositoryBrowseTree({
             </Button>
           </div>
         </div>
+        <div className="ag-repository-tree-root">
+          <FolderOpenOutlined aria-hidden />
+          <span title={repo.name}>{repo.name}</span>
+          <span>{repo.format.toUpperCase()}</span>
+        </div>
         <ConfigProvider
           theme={{
             components: {
@@ -440,6 +453,15 @@ export function RepositoryBrowseTree({
             treeData={treeData}
           />
         </ConfigProvider>
+        <div className="ag-repository-tree-footer">
+          {text(
+            `已加载 ${loadedNodeCount(treeData)} 项`,
+            `${loadedNodeCount(treeData)} entries loaded`,
+          )}
+          <span>
+            {text("展开目录加载更多", "Expand directories to load more")}
+          </span>
+        </div>
       </section>
       <aside
         className="ag-repository-tree-inspector"

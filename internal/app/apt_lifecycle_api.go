@@ -202,5 +202,5 @@ func aptLifecyclePackageResponse(sessionID, component string, r repository.APTPa
 	if component == "" {
 		return adminopenapi.APTLifecyclePackage{}, errors.New("APT package component is missing")
 	}
-	return adminopenapi.APTLifecyclePackage{PublicationSessionId: id, Component: component, Revision: revision}, nil
+	return adminopenapi.APTLifecyclePackage{PublicationSessionId: id, Component: component, PoolPath: repository.APTPoolPath(component, r.Package, r.ObjectName), Revision: revision}, nil
 }

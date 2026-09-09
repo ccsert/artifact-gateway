@@ -11424,6 +11424,7 @@
         "required": [
           "publicationSessionId",
           "component",
+          "poolPath",
           "revision"
         ],
         "properties": {
@@ -11433,6 +11434,10 @@
           },
           "component": {
             "type": "string"
+          },
+          "poolPath": {
+            "type": "string",
+            "description": "Repository-global canonical pool path used for reads, scanning and distribution. Distinct from revision.canonicalIdentity (package@version#architecture)."
           },
           "revision": {
             "$ref": "#/components/schemas/APTPackageRevision"

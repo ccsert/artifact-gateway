@@ -80,3 +80,9 @@ two target repositories, and runs fresh Debian `apt-get update` and installation
 against both target `candidate` suites using explicit public-key trust. It then
 continues the quarantine, signed lifecycle and archive recovery gates. These are
 isolated validation environments, not a production deployment.
+
+## Console workflow
+
+Open the source Hosted APT Repository's **Signed snapshots** tab, enter the source suite and choose **Promote / replicate**. Select a currently visible package from that suite, a different active Hosted APT target and an explicit target suite. The source identity uses the server-returned canonical `poolPath` and SHA-256. Advanced manual input remains subject to the same server admission checks. Both repositories require administrator access, and the API and Workers require signing configuration.
+
+Promotion progress belongs to the target Repository's **Lifecycle jobs** tab. Replication progress appears in the plan list, including its persisted target suite. Failed or uncertain submissions retain the same idempotency key while retrying the unchanged operation in the current form. The Console describes this as an operator preview; public format capabilities and Hosted creation remain unchanged.
