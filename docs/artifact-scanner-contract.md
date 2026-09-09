@@ -354,7 +354,9 @@ Replication without changing scanner-owned evidence. For Conan, the recipe
 revision is the atomic promotion/replication unit and the only valid quarantine
 anchor. Package revision scans and Artifact Intelligence remain independently
 addressable, but a package revision cannot be quarantined on its own. Automatic
-scanner-triggered quarantine and repository-read blocking remain future work.
+scanner-triggered quarantine remains future work. Repository-read enforcement
+is an independent, default-off policy; APT Hosted applies it to package reads
+and complete affected signed metadata views as described above.
 
 ## Durable status and reconciliation
 

@@ -108,7 +108,7 @@ Gateway 本地生成 `checkedAt` 并按最大年龄判断；健康 scanner 配�
 
 外部必须 HTTPS；凭证只能 Bearer；拒绝 userinfo/query/fragment 与 redirect；scanner error body 不进入生命周期或操作员响应。报告不能替换 publisher signature/provenance。
 
-Quarantine 是独立治理工作流。Conan 只能隔离 recipe revision 分发锚点，package revision 仍可扫描。自动隔离和扫描结果驱动的读取阻断不属于当前契约。
+Quarantine 是独立治理工作流。Conan 只能隔离 recipe revision 分发锚点，package revision 仍可扫描。扫描结果不会自动触发隔离。协议读取强制是独立且默认关闭的策略；APT Hosted 启用后会阻断包读取和包含隔离包的完整签名元数据视图，详见上文。
 
 ## 持久状态与补偿
 
