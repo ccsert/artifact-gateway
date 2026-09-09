@@ -15,6 +15,15 @@ func validateArtifact(artifact Artifact, maxBytes int64) error {
 	if !validText(artifact.RepositoryID, 128) || !repository.IsSupportedFormat(artifact.Format) || !validText(artifact.Coordinate, 1024) || !validDigest(artifact.Digest) || len(artifact.Assets) == 0 || len(artifact.Assets) > maxAssets {
 		return ErrInvalidArtifact
 	}
+	if artifact.Format == repository.FormatAPT {
+		if !repository.ValidAPTArtifactCoordinate(artifact.Coordinate) || len(artifact.Assets) != 1 {
+			return ErrInvalidArtifact
+		}
+		asset := artifact.Assets[0]
+		if asset.Path != artifact.Coordinate || asset.Digest != artifact.Digest || asset.Size <= 0 || asset.MediaType != "application/vnd.debian.binary-package" {
+			return ErrInvalidArtifact
+		}
+	}
 	seen := make(map[string]struct{}, len(artifact.Assets))
 	var total int64
 	for _, asset := range artifact.Assets {

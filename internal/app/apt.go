@@ -218,6 +218,11 @@ func (h nativeAPTHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.recordAudit(r, repo, route.path, principal.Actor, repository.AuditNotFound, http.StatusNotFound, disposition)
 		return
 	}
+	if errors.Is(err, repository.ErrArtifactQuarantined) {
+		http.Error(w, "APT artifact quarantined", http.StatusForbidden)
+		h.recordAudit(r, repo, route.path, principal.Actor, repository.AuditAccessDenied, http.StatusForbidden, disposition)
+		return
+	}
 	if errors.Is(err, repository.ErrQuotaExceeded) {
 		http.Error(w, "repository capacity quota exceeded", http.StatusInsufficientStorage)
 		h.recordAudit(r, repo, route.path, principal.Actor, repository.AuditStorageError, http.StatusInsufficientStorage, disposition)
@@ -425,5 +430,10 @@ func (h nativeAPTHandler) recordAudit(r *http.Request, repo repository.HostedRep
 	if len(size) > 0 {
 		bytes = size[0]
 	}
-	_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC(), Format: string(repository.FormatAPT), Resource: path, Operation: strings.ToLower(r.Method), Status: status, Bytes: bytes, CacheDisposition: disposition})
+	record := repository.AuditRecord{Repository: repo.Name, Actor: actor, Outcome: outcome, OccurredAt: time.Now().UTC(), Format: string(repository.FormatAPT), Resource: path, Operation: strings.ToLower(r.Method), Status: status, Bytes: bytes, CacheDisposition: disposition}
+	if outcome == repository.AuditAccessDenied {
+		record.AuthorizationSource = "quarantine_read_policy"
+		record.AuthorizationReason = repository.ArtifactQuarantinedReason
+	}
+	_ = h.audit.RecordAudit(r.Context(), record)
 }

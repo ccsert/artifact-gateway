@@ -17,7 +17,7 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			t.Errorf("format %q group=%t anonymous=%t", profile.Format, profile.GroupSupported, profile.AnonymousRead)
 		}
 		if profile.Format == FormatAPT {
-			if profile.PublicationScanning || FormatSupportsPublicationScanning(profile.Format, RepositoryTypeProxy) {
+			if !profile.PublicationScanning || !FormatSupportsPublicationScanning(profile.Format, RepositoryTypeHosted) || FormatSupportsPublicationScanning(profile.Format, RepositoryTypeProxy) {
 				t.Errorf("protocol-only format advertises publication scanning: %#v", profile)
 			}
 			if len(profile.RepositoryTypes) != 1 || profile.RepositoryTypes[0] != RepositoryTypeProxy || !profile.GroupSupported {

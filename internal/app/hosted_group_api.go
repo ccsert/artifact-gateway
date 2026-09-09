@@ -220,7 +220,8 @@ func (h generatedRepositoryAPIAdapter) validHostedGroup(r *http.Request, group r
 		}
 		seen[member.RepositoryID] = true
 		repo, err := h.store.GetHostedRepository(r.Context(), member.RepositoryID)
-		if err != nil || repo.Format != group.Format || repo.State != repository.RepositoryActive {
+		if err != nil || repo.Format != group.Format || repo.State != repository.RepositoryActive ||
+			(group.Format == repository.FormatAPT && repo.Type != repository.RepositoryTypeProxy) {
 			return false
 		}
 	}

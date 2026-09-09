@@ -67,6 +67,18 @@ func (s *MemoryStore) artifactIdentitiesLocked(repositoryID string, format Forma
 		return &copy
 	}
 	switch format {
+	case FormatAPT:
+		for id, assets := range s.aptSnapshotAssets {
+			snapshot := s.aptSnapshots[id]
+			if snapshot.RepositoryID != repositoryID || snapshot.State != APTRepositorySnapshotVisible {
+				continue
+			}
+			for _, asset := range assets {
+				if ValidAPTArtifactCoordinate(asset.Path) && asset.ContentType == "application/vnd.debian.binary-package" {
+					appendIdentity(asset.Path, asset.Digest, sizeOf(asset.Size), snapshot.PublishedAt)
+				}
+			}
+		}
 	case FormatMaven:
 		for _, artifact := range s.mavenArtifacts {
 			if artifact.RepositoryID == repositoryID && artifact.State == "visible" {

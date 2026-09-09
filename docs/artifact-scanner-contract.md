@@ -170,6 +170,17 @@ already cached. Maven, OCI, Raw, and Conan Proxy repositories still use their
 legacy cache indexes and are rejected at enqueue time until dedicated resolver
 adapters are available. Scans never fetch mutable upstream content.
 
+APT Hosted operator preview resolves only current visible `.deb` packages by
+canonical `pool/.../*.deb` path and exact digest. It sends one binary-package
+asset, including for quarantined packages under investigation; metadata,
+staged and retired-only packages are rejected. Automatic publication scanning
+and reconciliation use the same identity across suites. Configure an external
+APT-capable service in `GATEWAY_SCANNER_FORMATS`; the bundled reference adapter
+continues rejecting APT. Its [Trivy filesystem mode](https://trivy.dev/docs/latest/target/filesystem/)
+does not establish standalone Debian-package vulnerability coverage. Do not
+interpret an unanalyzed archive as a clean result. See [APT governance](apt-hosted-lifecycle.md#scanning-and-quarantine).
+
+
 Artifact intelligence currently uses coordinate and digest as its immutable
 identity. If two Maven SNAPSHOT publishes have the same primary digest, they
 share one intelligence identity; callers cannot select between those builds'

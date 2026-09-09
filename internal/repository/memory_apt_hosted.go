@@ -734,6 +734,9 @@ func (s *MemoryStore) publishAPTRepositorySnapshotLocked(snapshot APTRepositoryS
 		!s.validAPTSnapshotPoolAssetsLocked(snapshot, assets) {
 		return APTRepositorySnapshot{}, ErrDisabled
 	}
+	if s.aptAssetsQuarantinedLocked(snapshot.RepositoryID, assets, "") {
+		return APTRepositorySnapshot{}, ErrArtifactQuarantined
+	}
 	for _, m := range s.aptSnapshotPackages[snapshot.ID] {
 		for _, d := range s.aptDeletions {
 			if d.RepositoryID == snapshot.RepositoryID && aptDeletionBlocks(d, snapshot.Suite, m.Component, s.aptPackageRevisions[m.PackageRevisionID].CanonicalIdentity) {
@@ -1028,6 +1031,9 @@ func (s *MemoryStore) GetVisibleAPTSnapshotAsset(_ context.Context, repositoryID
 	}
 	if found.Path == "" {
 		return APTSnapshotAsset{}, ErrNotFound
+	}
+	if s.quarantineReadPolicies[repositoryID].Enabled && s.aptAssetsQuarantinedLocked(repositoryID, s.aptSnapshotAssets[found.SnapshotID], path) {
+		return APTSnapshotAsset{}, ErrArtifactQuarantined
 	}
 	return found, nil
 }

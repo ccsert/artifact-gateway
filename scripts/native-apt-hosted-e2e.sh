@@ -316,6 +316,7 @@ PYARCHIVE
 }
 
 apt_install
+source "$root/scripts/native-apt-quarantine-e2e.inc.sh"
 original_state="$workdir/original-signing-state.json"
 original_capture="$workdir/original-snapshot"
 signing_state >"$original_state"

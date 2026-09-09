@@ -265,7 +265,7 @@ func TestHandlerAggregatesLicenseSourcesAndRejectsMoreThanOneHundredUniqueLicens
 	}
 }
 
-func TestHandlerBoundsConcurrentScansAndRejectsUnsupportedOCI(t *testing.T) {
+func TestHandlerBoundsConcurrentScansAndRejectsUnsupportedFormats(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
 	var once sync.Once
@@ -301,6 +301,12 @@ func TestHandlerBoundsConcurrentScansAndRejectsUnsupportedOCI(t *testing.T) {
 	if oci.Code != http.StatusBadRequest {
 		t.Fatalf("OCI status=%d body=%s", oci.Code, oci.Body.String())
 	}
+	apt := httptest.NewRecorder()
+	handler.ServeHTTP(apt, multipartScanRequestForFormat(t, "apt", "widget.deb", []byte("archive"), []byte("archive")))
+	if apt.Code != http.StatusBadRequest || !strings.Contains(apt.Body.String(), "invalid_artifact") {
+		t.Fatalf("unsupported APT became a clean report: %d %s", apt.Code, apt.Body.String())
+	}
+
 }
 
 func TestHandlerKeepsExistingSBOMWhenStoreCapacityIsFull(t *testing.T) {

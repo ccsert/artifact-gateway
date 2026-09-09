@@ -101,10 +101,11 @@ var supportedFormatProfiles = []FormatProfile{
 		},
 	},
 	{
-		Format:          FormatAPT,
-		RepositoryTypes: []RepositoryType{RepositoryTypeProxy},
-		GroupSupported:  true,
-		AnonymousRead:   true,
+		Format:              FormatAPT,
+		PublicationScanning: true,
+		RepositoryTypes:     []RepositoryType{RepositoryTypeProxy},
+		GroupSupported:      true,
+		AnonymousRead:       true,
 		ProxyOperations: []RepositoryOperation{
 			RepositoryOperationRead,
 			RepositoryOperationBrowse,

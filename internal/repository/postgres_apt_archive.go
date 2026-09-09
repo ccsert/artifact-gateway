@@ -194,6 +194,11 @@ func (s *PostgresStore) CommitAPTArchiveRestore(ctx context.Context, plan APTArc
 	if err != nil {
 		return APTRepositorySnapshot{}, err
 	}
+	if !replay {
+		if err = checkAPTAssetsAdmissionTx(ctx, tx, snapshot.RepositoryID, plan.Assets); err != nil {
+			return APTRepositorySnapshot{}, err
+		}
+	}
 	// Capacity reservation and metadata become durable in the same transaction.
 	_, err = tx.ExecContext(ctx, `UPDATE native_apt_archive_restores SET state='completed',reserved_bytes=0,finished_at=clock_timestamp() WHERE id=$1`, plan.ID)
 	if err != nil {

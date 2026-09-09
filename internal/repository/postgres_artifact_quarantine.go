@@ -37,6 +37,11 @@ func (s *PostgresStore) ReplaceArtifactQuarantine(ctx context.Context, value Art
 		return ArtifactQuarantine{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if value.Format == FormatAPT {
+		if err = lockAPTLifecycleRepository(ctx, tx, value.RepositoryID); err != nil {
+			return ArtifactQuarantine{}, err
+		}
+	}
 	if expectedVersion == "0" {
 		if value.State != ArtifactQuarantineStateQuarantined {
 			return ArtifactQuarantine{}, ErrInvalidArtifactQuarantine

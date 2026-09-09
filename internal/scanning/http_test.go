@@ -345,3 +345,50 @@ func digestOf(value []byte) string {
 }
 
 var _ Scanner = ScannerFunc(func(context.Context, Artifact) (Report, error) { return Report{}, nil })
+
+func TestHTTPScannerAPTRejectsIdentitySubstitution(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"schemaVersion":"v1","sboms":[],"licenses":[]}`)
+	}))
+	defer server.Close()
+	scanner, err := NewHTTPScanner(HTTPOptions{Name: "deb-service", Endpoint: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("immutable Debian bytes")
+	path := "pool/main/w/widget/widget.deb"
+	artifact := Artifact{RepositoryID: "repo", Format: repository.FormatAPT, Coordinate: path, Digest: digestOf(body), Assets: []Asset{{Path: path, Digest: digestOf(body), Size: int64(len(body)), MediaType: "application/vnd.debian.binary-package", Open: func(context.Context) (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }}}}
+	for _, tc := range []struct {
+		name   string
+		change func(*Artifact)
+	}{
+		{"suite alias", func(a *Artifact) { a.Coordinate = "stable/main/widget@1#amd64" }},
+		{"metadata", func(a *Artifact) { a.Coordinate = "dists/stable/Packages" }},
+		{"different path", func(a *Artifact) { a.Assets[0].Path = "pool/main/w/widget/other.deb" }},
+		{"different digest", func(a *Artifact) { a.Assets[0].Digest = digestOf([]byte("other")) }},
+		{"different media", func(a *Artifact) { a.Assets[0].MediaType = "application/octet-stream" }},
+		{"multiple packages", func(a *Artifact) { a.Assets = append(a.Assets, a.Assets[0]) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := artifact
+			changed.Assets = append([]Asset(nil), artifact.Assets...)
+			tc.change(&changed)
+			if _, err := scanner.Scan(context.Background(), changed); !errors.Is(err, ErrInvalidArtifact) {
+				t.Fatalf("invalid Debian identity was sent: %v", err)
+			}
+		})
+	}
+	if calls.Load() != 0 {
+		t.Fatal("invalid identity reached the scanner")
+	}
+	if _, err = scanner.Scan(context.Background(), artifact); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 1 {
+		t.Fatal("valid Debian identity was not sent")
+	}
+}

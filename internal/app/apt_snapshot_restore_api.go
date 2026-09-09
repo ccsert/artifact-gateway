@@ -66,6 +66,8 @@ func writeAPTSnapshotRestoreProblem(w http.ResponseWriter, err error) {
 		writeHostedProblem(w, 429, "invalid_state", "APT archive restore concurrency limit reached")
 	case errors.Is(err, repository.ErrNotFound):
 		writeHostedProblem(w, 404, "not_found", "APT archive does not belong to this repository")
+	case errors.Is(err, repository.ErrArtifactQuarantined):
+		writeHostedProblem(w, http.StatusConflict, "artifact_quarantined", "APT snapshot contains a quarantined package")
 	case errors.Is(err, repository.ErrQuotaExceeded):
 		writeHostedProblem(w, 507, "quota_exceeded", "repository capacity quota would be exceeded")
 	case errors.Is(err, repository.ErrIdempotencyConflict):

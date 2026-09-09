@@ -4844,7 +4844,9 @@ type ReplaceArtifactIntelligenceParams struct {
 
 // GetArtifactQuarantineParams defines parameters for GetArtifactQuarantine.
 type GetArtifactQuarantineParams struct {
-	// Coordinate Immutable format-specific distribution coordinate. For Conan this must
+	// Coordinate Immutable format-specific distribution coordinate. APT Hosted uses the canonical
+	// pool path of one visible .deb and its exact SHA-256 digest, shared across suites.
+	// Metadata and suite-qualified aliases are not quarantine identities. For Conan this must
 	// be a recipe revision (`reference#recipeRevision`); package revisions are
 	// scanned independently but are distributed with their parent recipe and
 	// cannot be quarantined independently.
@@ -4857,7 +4859,9 @@ type GetArtifactQuarantineParams struct {
 
 // ReplaceArtifactQuarantineParams defines parameters for ReplaceArtifactQuarantine.
 type ReplaceArtifactQuarantineParams struct {
-	// Coordinate Immutable format-specific distribution coordinate. For Conan this must
+	// Coordinate Immutable format-specific distribution coordinate. APT Hosted uses the canonical
+	// pool path of one visible .deb and its exact SHA-256 digest, shared across suites.
+	// Metadata and suite-qualified aliases are not quarantine identities. For Conan this must
 	// be a recipe revision (`reference#recipeRevision`); package revisions are
 	// scanned independently but are distributed with their parent recipe and
 	// cannot be quarantined independently.

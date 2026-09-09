@@ -334,6 +334,12 @@ repositories_repositoryId_security_policy_evaluate:
       '404':
         "$ref": "../components/responses.yaml#/Problem"
 repositories_repositoryId_quarantine_read_policy:
+  description: |
+    Versioned, default-off read enforcement for supported Hosted formats.
+    For APT Hosted, quarantined pool GET/HEAD and complete signed metadata views
+    containing that package return 403, including retired by-hash views.
+    Signed bytes are never filtered or rewritten on read. Release restores access
+    only to existing lifecycle references and never reverses deletion.
   parameters:
   - "$ref": "../components/parameters.yaml#/RepositoryId"
   get:

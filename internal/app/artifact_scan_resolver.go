@@ -26,6 +26,7 @@ type NativeArtifactScanResolver struct {
 	PyPI    repository.NativePyPIStore
 	Go      repository.NativeGoStore
 	Conan   repository.NativeConanStore
+	APT     repository.APTArtifactStore
 	Objects OCIObjectStore
 }
 
@@ -41,6 +42,7 @@ func NewNativeArtifactScanResolver(store any, bytes OCIObjectStore) *NativeArtif
 	resolver.PyPI, _ = store.(repository.NativePyPIStore)
 	resolver.Go, _ = store.(repository.NativeGoStore)
 	resolver.Conan, _ = store.(repository.NativeConanStore)
+	resolver.APT, _ = store.(repository.APTArtifactStore)
 	return resolver
 }
 
@@ -49,6 +51,8 @@ func (r *NativeArtifactScanResolver) ResolveArtifactScan(ctx context.Context, re
 		return scanning.Artifact{}, errors.New("artifact object store is unavailable")
 	}
 	switch payload.Format {
+	case repository.FormatAPT:
+		return r.resolveAPT(ctx, repositoryID, payload)
 	case repository.FormatRaw:
 		return r.resolveRaw(ctx, repositoryID, payload)
 	case repository.FormatOCI:
@@ -358,4 +362,15 @@ func mavenAssetBelongsToBuild(asset repository.MavenAsset, artifact repository.M
 	base := strings.TrimSuffix(parts[2], "-SNAPSHOT")
 	prefix := parts[1] + "-" + base + "-" + artifact.CreatedAt.UTC().Format("20060102.150405") + "-" + strconv.Itoa(artifact.BuildNumber)
 	return strings.Contains(asset.Path, "/"+prefix)
+}
+
+func (r *NativeArtifactScanResolver) resolveAPT(ctx context.Context, repositoryID string, payload repository.ArtifactScanPayload) (scanning.Artifact, error) {
+	if r.APT == nil {
+		return scanning.Artifact{}, errors.New("APT package scan store is unavailable")
+	}
+	asset, err := r.APT.GetAPTScanAsset(ctx, repositoryID, payload.Coordinate, payload.Digest)
+	if err != nil {
+		return scanning.Artifact{}, err
+	}
+	return singleAssetArtifact(repositoryID, payload, r.asset(asset.Path, asset.ObjectKey, asset.Digest, asset.Size, asset.ContentType)), nil
 }

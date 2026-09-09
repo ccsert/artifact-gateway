@@ -30,19 +30,30 @@ type publisherStore interface {
 	repository.HostedRepositoryStore
 	repository.NativeAPTStore
 	repository.NativeAPTPublicationStore
+	repository.ArtifactQuarantineStore
 }
 
 // Publisher builds a complete immutable suite view and performs exactly one
 // database visibility transition after all bytes and signatures are durable.
 type Publisher struct {
-	store   publisherStore
-	objects objectstore.Store
-	signer  Signer
-	metrics SigningMetrics
+	store              publisherStore
+	objects            objectstore.Store
+	signer             Signer
+	metrics            SigningMetrics
+	publicationScanner PublicationScanScheduler
 }
 
 func NewPublisher(store publisherStore, objects objectstore.Store, signer Signer) *Publisher {
 	return &Publisher{store: store, objects: objects, signer: signer}
+}
+
+type PublicationScanScheduler interface {
+	ScheduleRepository(context.Context, string, repository.Format, string, string, string) error
+}
+
+func (p *Publisher) WithPublicationScanner(scanner PublicationScanScheduler) *Publisher {
+	p.publicationScanner = scanner
+	return p
 }
 
 type SigningMetrics interface {
@@ -146,6 +157,12 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 	if err != nil {
 		return repository.APTRepositorySnapshot{}, err
 	}
+	// Recheck immediately before invoking the external signer. The store repeats
+	// admission inside the final visibility transaction, catching a transition
+	// while the signer is in flight without locking governance behind network I/O.
+	if err = p.checkPackageAdmission(snapshotCtx, packages); err != nil {
+		return repository.APTRepositorySnapshot{}, err
+	}
 	releaseDigest := digestBytes(bundle.release)
 	signingStartedAt := time.Now()
 	signature, err := p.signer.SignRelease(snapshotCtx, SignReleaseRequest{
@@ -221,6 +238,11 @@ func (p *Publisher) Publish(ctx context.Context, input PublishSnapshotInput) (pu
 	}
 	if err != nil {
 		return repository.APTRepositorySnapshot{}, err
+	}
+	if p.publicationScanner != nil {
+		for _, pkg := range packages {
+			_ = p.publicationScanner.ScheduleRepository(ctx, input.RepositoryID, repository.FormatAPT, pkg.poolPath, pkg.revision.Digest, input.Actor)
+		}
 	}
 	return published, nil
 }
@@ -314,6 +336,13 @@ func (p *Publisher) loadPackages(ctx context.Context, input PublishSnapshotInput
 		poolPath := repository.APTPoolPath(session.Component, revision.Package, revision.ObjectName)
 		if _, duplicate := poolPaths[poolPath]; duplicate {
 			return nil, nil, repository.ErrNameExists
+		}
+		allowed, err := repository.ArtifactDistributionAllowed(ctx, p.store, input.RepositoryID, repository.FormatAPT, poolPath, revision.Digest)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !allowed {
+			return nil, nil, repository.ErrArtifactQuarantined
 		}
 		poolPaths[poolPath] = struct{}{}
 		packages = append(packages, snapshotPackage{session: session, revision: revision, metadata: metadata, poolPath: poolPath, component: session.Component})
@@ -497,4 +526,17 @@ func mapKeys(values map[string]struct{}) []string {
 		result = append(result, value)
 	}
 	return result
+}
+
+func (p *Publisher) checkPackageAdmission(ctx context.Context, packages []snapshotPackage) error {
+	for _, pkg := range packages {
+		allowed, err := repository.ArtifactDistributionAllowed(ctx, p.store, pkg.session.RepositoryID, repository.FormatAPT, pkg.poolPath, pkg.revision.Digest)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return repository.ErrArtifactQuarantined
+		}
+	}
+	return nil
 }
