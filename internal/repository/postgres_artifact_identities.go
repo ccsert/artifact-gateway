@@ -72,6 +72,11 @@ func postgresArtifactIdentityQuery(format Format, purpose ArtifactIdentityPurpos
 		return "", fmt.Errorf("unsupported artifact identity purpose %q", purpose)
 	}
 	switch format {
+	case FormatAPT:
+		return `SELECT a.path AS coordinate,a.digest,a.size,s.published_at
+ FROM native_apt_snapshot_assets a JOIN native_apt_repository_snapshots s ON s.id=a.snapshot_id
+ WHERE a.repository_id::text=$1 AND s.state='visible' AND a.path LIKE 'pool/%'
+ AND a.content_type='application/vnd.debian.binary-package'`, nil
 	case FormatMaven:
 		return `SELECT coordinate,digest,NULL::bigint AS size,created_at AS published_at
 			FROM native_maven_artifacts WHERE repository_id::text=$1 AND state='visible' AND digest ~ '^sha256:[a-f0-9]{64}$'`, nil

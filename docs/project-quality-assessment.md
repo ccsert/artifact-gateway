@@ -121,9 +121,41 @@ create more risk than it removes.
 
 The repository-wide Go floor is 40%. Stable packages have stronger focused
 floors, but authorization begins at 38%. The Console tracks all hand-written
-code with 40% line/statement, 53% function, and 65% branch floors plus stronger
+code with 50% line, 48.5% statement, 45% function, and 43.5% branch floors plus stronger
 per-module thresholds. These are useful non-regression guards, but they should
 rise as the large modules are split and public-boundary tests become cheaper.
+
+#### Vitest 4 measurement migration
+
+Vitest and its V8 coverage provider were upgraded together from 3.2.7 to 4.1.11
+to resolve [GHSA-82fw-gwwq-j7x9](https://github.com/advisories/GHSA-82fw-gwwq-j7x9)
+without adding an audit exception. This affects development tooling, not the
+Gateway runtime. Vitest 4 makes
+[AST-based V8 remapping](https://v4.vitest.dev/guide/migration#v8-code-coverage-major-changes)
+mandatory; the previous mapper counted source lines and missed executable
+branches/functions, so its percentages cannot be compared directly.
+
+The same Console source and 239 tests at `669b230d` were measured with the
+original lockfile, then with the v3 experimental AST mapper, then with v4. No
+production sources, tests, coverage inclusions, or exclusions changed between
+these measurements. All 239 tests passed in each run. Covered/total counts were:
+
+| Mapper | Lines | Statements | Functions | Branches |
+| --- | --- | --- | --- | --- |
+| v3 default | 17599/30846 (57.05%) | 17599/30846 (57.05%) | 497/873 (56.93%) | 2336/3271 (71.41%) |
+| v3 experimental AST | 3214/6381 (50.36%) | 3378/6912 (48.87%) | 905/1996 (45.34%) | 2729/6218 (43.88%) |
+| v4 AST | 3201/6381 (50.16%) | 3362/6912 (48.64%) | 905/1996 (45.34%) | 2716/6218 (43.67%) |
+
+Both AST runs identify the same executable totals and fail the old 53% function
+and 65% branch floors. The new global floors retain less than one percentage
+point of headroom against the v4 measurement. The small covered-count differences
+between the two AST versions are recorded above rather than treated as identical
+results. The file set remains the whole hand-written Console. Every focused
+module threshold is retained, including Layout's 90% line/statement floors;
+additional tests cover token cancellation/clearing, protected login redirects,
+identity loading, storage failure, and mobile navigation. Future measurement
+changes need a comparable same-source baseline; ordinary coverage regressions
+must be fixed with meaningful tests, not lower floors or new exclusions.
 
 ### 3. Bilingual documentation is now a maintained contract
 

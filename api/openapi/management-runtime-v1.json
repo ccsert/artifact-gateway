@@ -2408,6 +2408,7 @@
       }
     },
     "/repositories/{repositoryId}/quarantine-read-policy": {
+      "description": "Versioned, default-off read enforcement for supported Hosted formats.\nFor APT Hosted, quarantined pool GET/HEAD and complete signed metadata views\ncontaining that package return 403, including retired by-hash views.\nSigned bytes are never filtered or rewritten on read. Release restores access\nonly to existing lifecycle references and never reverses deletion.\n",
       "parameters": [
         {
           "$ref": "#/components/parameters/RepositoryId"
@@ -3801,7 +3802,7 @@
           "name": "coordinate",
           "in": "query",
           "required": true,
-          "description": "Immutable format-specific distribution coordinate. For Conan this must\nbe a recipe revision (`reference#recipeRevision`); package revisions are\nscanned independently but are distributed with their parent recipe and\ncannot be quarantined independently.\n",
+          "description": "Immutable format-specific distribution coordinate. APT Hosted uses the canonical\npool path of one visible .deb and its exact SHA-256 digest, shared across suites.\nMetadata and suite-qualified aliases are not quarantine identities. For Conan this must\nbe a recipe revision (`reference#recipeRevision`); package revisions are\nscanned independently but are distributed with their parent recipe and\ncannot be quarantined independently.\n",
           "schema": {
             "type": "string",
             "minLength": 1,

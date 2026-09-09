@@ -93,6 +93,9 @@ func (s *MemoryStore) CommitAPTArchiveRestore(_ context.Context, plan APTArchive
 	if err != nil {
 		return APTRepositorySnapshot{}, err
 	}
+	if !replay && s.aptAssetsQuarantinedLocked(snapshot.RepositoryID, plan.Assets, "") {
+		return APTRepositorySnapshot{}, ErrArtifactQuarantined
+	}
 	if !replay {
 		members := make([]APTSnapshotPackage, 0, len(plan.Packages))
 		for _, p := range plan.Packages {

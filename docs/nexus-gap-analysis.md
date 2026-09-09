@@ -161,9 +161,10 @@ require that evidence before promotion, and the promotion worker propagates
 immutable evidence to the target without overwriting target-owned records.
 External vulnerability database health and freshness enforcement plus bounded
 per-finding evidence are delivered. Repository-local quarantine now blocks
-promotion and replication at both request and publication boundaries without
-changing ordinary reads. Protocol-read blocking, compliance reports, and
-component popularity/download metadata remain future work.
+promotion and replication at both request and publication boundaries. Its
+independent protocol-read enforcement policy is default-off. Compliance reports,
+component popularity/download metadata, and more automated policy responses
+remain future work.
 
 ### Shared Format Depth
 

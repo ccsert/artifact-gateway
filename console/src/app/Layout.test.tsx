@@ -26,7 +26,10 @@ vi.mock("../lib/auth", () => ({
 }));
 
 function LocationProbe() {
-  return <div data-testid="location">{useLocation().pathname}</div>;
+  const location = useLocation();
+  return (
+    <div data-testid="location">{location.pathname + location.search}</div>
+  );
 }
 
 function renderLayout(pathname: string) {
@@ -66,9 +69,33 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 describe("AppLayout", () => {
+  it("waits for identity before rendering protected navigation", async () => {
+    auth.identityLoading = true;
+
+    renderLayout("/repositories");
+
+    expect(await screen.findByText("正在加载…")).toBeInTheDocument();
+    expect(screen.queryByText("repository catalog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /仓库/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("preserves the protected destination when redirecting to login", async () => {
+    Object.assign(auth, { authenticated: false, token: "", identity: null });
+
+    renderLayout("/repositories?format=apt");
+
+    expect(await screen.findByTestId("location")).toHaveTextContent(
+      "/login?redirect=%2Frepositories%3Fformat%3Dapt",
+    );
+    expect(screen.queryByText("repository catalog")).not.toBeInTheDocument();
+  });
+
   it("redirects an unauthenticated public search to browse", async () => {
     Object.assign(auth, {
       token: "",
@@ -118,7 +145,9 @@ describe("AppLayout", () => {
     const search = screen.getByPlaceholderText("跨仓库搜索制品…");
     await user.type(search, " release/widget ");
     await user.keyboard("{Enter}");
-    expect(await screen.findByTestId("location")).toHaveTextContent("/search");
+    expect(await screen.findByTestId("location")).toHaveTextContent(
+      "/search?q=release%2Fwidget",
+    );
 
     await user.click(screen.getByRole("button", { name: "收起导航" }));
     expect(window.localStorage.getItem("ag:sider-collapsed")).toBe("1");
@@ -135,6 +164,78 @@ describe("AppLayout", () => {
 
     await user.click(screen.getByRole("button", { name: /退出/ }));
     expect(auth.clearToken).toHaveBeenCalledOnce();
+  });
+
+  it("discards token edits on cancel and clears credentials only on request", async () => {
+    const user = userEvent.setup();
+    renderLayout("/repositories");
+
+    await user.click(screen.getByRole("button", { name: "已配置 Token" }));
+    const dialog = await screen.findByRole("dialog", { name: "API 访问令牌" });
+    const input = within(dialog).getByRole("textbox");
+    expect(input).toHaveValue("operator-token");
+
+    await user.clear(input);
+    await user.type(input, "   ");
+    expect(
+      within(dialog).getByRole("button", { name: /^保\s*存$/ }),
+    ).toBeDisabled();
+    await user.type(input, "unsaved-token");
+    expect(
+      within(dialog).getByRole("button", { name: /^保\s*存$/ }),
+    ).toBeEnabled();
+    await user.click(within(dialog).getByRole("button", { name: /^取\s*消$/ }));
+    await waitFor(() => expect(dialog).not.toBeVisible());
+    expect(auth.setToken).not.toHaveBeenCalled();
+    expect(auth.clearToken).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "已配置 Token" }));
+    const reopened = await screen.findByRole("dialog", {
+      name: "API 访问令牌",
+    });
+    expect(within(reopened).getByRole("textbox")).toHaveValue("operator-token");
+    await user.click(
+      within(reopened).getByRole("button", { name: "清除令牌" }),
+    );
+    expect(auth.clearToken).toHaveBeenCalledOnce();
+    expect(auth.setToken).not.toHaveBeenCalled();
+    await waitFor(() => expect(reopened).not.toBeVisible());
+  });
+
+  it("keeps navigation usable when local storage is unavailable", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("Storage disabled", "SecurityError");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Storage disabled", "SecurityError");
+    });
+
+    renderLayout("/repositories");
+
+    expect(await screen.findByText("repository catalog")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "收起导航" }));
+    expect(document.querySelector(".ag-sider-desktop")).toHaveAttribute(
+      "data-collapsed",
+      "true",
+    );
+    await user.click(screen.getByRole("button", { name: "展开导航" }));
+    expect(document.querySelector(".ag-sider-desktop")).toHaveAttribute(
+      "data-collapsed",
+      "false",
+    );
+  });
+
+  it("closes mobile navigation after choosing a destination", async () => {
+    const user = userEvent.setup();
+    renderLayout("/repositories");
+
+    await user.click(screen.getByRole("button", { name: "打开导航" }));
+    const drawer = await screen.findByRole("dialog");
+    await user.click(within(drawer).getByRole("link", { name: /搜索/ }));
+
+    expect(await screen.findByTestId("location")).toHaveTextContent("/search");
+    await waitFor(() => expect(drawer).not.toBeVisible());
   });
 
   it("opens an accessible mobile navigation drawer and closes it with Escape", async () => {

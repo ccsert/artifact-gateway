@@ -77,6 +77,9 @@ Resolver 在打开对象前用 Repository 元数据验证 coordinate/digest。Ma
 
 Hosted 均支持；已缓存的 npm/PyPI/Go Proxy 可扫描。Maven/OCI/Raw/Conan Proxy 使用 legacy cache index，在专用 adapter 完成前 enqueue 时拒绝。扫描从不获取可变上游内容。
 
+APT Hosted 操作员预览只解析当前 visible 快照中的 `.deb`，使用规范 `pool/.../*.deb` 路径与精确 digest；各 suite 共享同一身份。发送单个完整二进制包，允许隔离包复扫，拒绝元数据、staged 包和只剩 retired 引用的包。自动发布扫描和 reconciliation 使用相同身份。需配置能处理 APT 的外部服务及 `GATEWAY_SCANNER_FORMATS`；内置参考 adapter 仍拒绝 APT。其 [Trivy filesystem 模式](https://trivy.dev/docs/latest/target/filesystem/)不能证明独立 Debian 包的漏洞分析覆盖，不能把未分析的压缩包解释成干净结果。详见 [APT 扫描与隔离](apt-hosted-lifecycle.zh-CN.md#扫描与隔离)。
+
+
 当前 intelligence 身份为 coordinate+digest；若两个 Maven SNAPSHOT 主 digest 相同会共享身份，直到模型增加 build number 前无法区分不同 ancillary file。
 
 ## 逻辑 Artifact 输入
@@ -105,7 +108,7 @@ Gateway 本地生成 `checkedAt` 并按最大年龄判断；健康 scanner 配�
 
 外部必须 HTTPS；凭证只能 Bearer；拒绝 userinfo/query/fragment 与 redirect；scanner error body 不进入生命周期或操作员响应。报告不能替换 publisher signature/provenance。
 
-Quarantine 是独立治理工作流。Conan 只能隔离 recipe revision 分发锚点，package revision 仍可扫描。自动隔离和扫描结果驱动的读取阻断不属于当前契约。
+Quarantine 是独立治理工作流。Conan 只能隔离 recipe revision 分发锚点，package revision 仍可扫描。扫描结果不会自动触发隔离。协议读取强制是独立且默认关闭的策略；APT Hosted 启用后会阻断包读取和包含隔离包的完整签名元数据视图，详见上文。
 
 ## 持久状态与补偿
 

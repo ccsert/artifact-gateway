@@ -84,9 +84,11 @@ _Avoid_: Generic upload, visible package
 
 **APT Repository Snapshot**:
 An immutable suite view that owns generated package indices, Release metadata,
-signatures, package paths, and the single visibility switch. Only `visible`
-snapshots participate in APT client reads; `building` and `failed` snapshots do
-not.
+signatures, package paths, and the single visibility switch. Mutable paths use
+only the `visible` snapshot; immutable pool/by-hash paths may use retained
+`retired` snapshots. Quarantine read enforcement takes precedence over that
+availability grace. `building`, `failed`, and `pruned` snapshots are not read
+surfaces.
 _Avoid_: Mutable index, cached upstream Release
 
 **Tombstone**:
@@ -96,9 +98,13 @@ _Avoid_: Hard delete
 
 **Quarantine**:
 A versioned, Repository-local governance decision attached to one immutable
-Artifact identity. Quarantine blocks Promotion and Replication but does not
-change native protocol reads or the Artifact lifecycle state; Release removes
-that distribution block without restoring or republishing the Artifact.
+Artifact identity. Quarantine blocks Promotion and Replication without changing
+the Artifact lifecycle state. Native reads remain compatible by default and
+fail closed when the separate Quarantine Read Policy is enabled. Release
+removes the governance restriction without restoring or republishing the
+Artifact. APT uses the canonical pool path and digest across all suites, also
+rejects quarantined members in new signed snapshots and archive imports, and
+denies complete affected signed metadata views when read enforcement is on.
 For Conan, the distribution identity is the recipe revision and its complete
 visible package closure; package revisions remain separate scanner and
 lifecycle identities but are not independently quarantinable.

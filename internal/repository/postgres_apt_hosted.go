@@ -618,6 +618,9 @@ func publishAPTRepositorySnapshotTx(ctx context.Context, tx *sql.Tx, snapshot AP
 	} else if err != nil {
 		return APTRepositorySnapshot{}, err
 	}
+	if err = checkAPTAssetsAdmissionTx(ctx, tx, snapshot.RepositoryID, assets); err != nil {
+		return APTRepositorySnapshot{}, err
+	}
 	var current APTRepositorySnapshot
 	if err = scanAPTRepositorySnapshot(tx.QueryRowContext(ctx, `SELECT `+aptRepositorySnapshotColumns+` FROM native_apt_repository_snapshots WHERE id=$1 FOR UPDATE`, snapshot.ID), &current); errors.Is(err, sql.ErrNoRows) {
 		return APTRepositorySnapshot{}, ErrNotFound
@@ -921,14 +924,27 @@ func (s *PostgresStore) GetLatestVisibleAPTRepositorySnapshot(ctx context.Contex
 
 func (s *PostgresStore) GetVisibleAPTSnapshotAsset(ctx context.Context, repositoryID, path string) (APTSnapshotAsset, error) {
 	var asset APTSnapshotAsset
-	err := scanAPTSnapshotAsset(s.db.QueryRowContext(ctx, `SELECT `+aptSnapshotAssetColumns+`
-		FROM native_apt_snapshot_assets a JOIN native_apt_repository_snapshots s ON s.id=a.snapshot_id
-		WHERE a.repository_id::text=$1 AND a.path=$2 AND (s.state='visible' OR (s.state='retired' AND $3))
-		ORDER BY s.sequence DESC,s.id DESC LIMIT 1`, repositoryID, path, !APTAssetMutable(path)), &asset)
-	if errors.Is(err, sql.ErrNoRows) {
+	var blocked bool
+	err := s.db.QueryRowContext(ctx, `SELECT `+aptSnapshotAssetColumns+`,
+ EXISTS(SELECT 1 FROM repository_quarantine_read_policies policy
+ WHERE policy.repository_id=a.repository_id AND policy.enabled AND EXISTS(
+ SELECT 1 FROM native_apt_snapshot_assets p JOIN artifact_quarantines q
+ ON q.repository_id=p.repository_id AND q.format='apt' AND q.coordinate=p.path AND q.digest=p.digest AND q.state='quarantined'
+ WHERE p.snapshot_id=a.snapshot_id AND p.path LIKE 'pool/%' AND ($2 NOT LIKE 'pool/%' OR p.path=$2)))
+ FROM native_apt_snapshot_assets a JOIN native_apt_repository_snapshots s ON s.id=a.snapshot_id
+ WHERE a.repository_id::text=$1 AND a.path=$2 AND (s.state='visible' OR (s.state='retired' AND $3))
+ ORDER BY s.sequence DESC,s.id DESC LIMIT 1`, repositoryID, path, !APTAssetMutable(path)).Scan(
+		&asset.SnapshotID, &asset.RepositoryID, &asset.Path, &asset.Digest, &asset.ObjectKey, &asset.Size, &asset.ContentType, &blocked)
+	if err == sql.ErrNoRows {
 		return APTSnapshotAsset{}, ErrNotFound
 	}
-	return asset, err
+	if err != nil {
+		return APTSnapshotAsset{}, err
+	}
+	if blocked {
+		return APTSnapshotAsset{}, ErrArtifactQuarantined
+	}
+	return asset, nil
 }
 
 func (s *PostgresStore) ListVisibleAPTSnapshotAssets(ctx context.Context, repositoryID, suite string) ([]APTSnapshotAsset, error) {

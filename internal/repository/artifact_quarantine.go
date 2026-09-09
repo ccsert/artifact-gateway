@@ -13,6 +13,9 @@ func validArtifactQuarantine(value ArtifactQuarantine) bool {
 	if value.RepositoryID == "" || !IsSupportedFormat(value.Format) || strings.TrimSpace(value.Coordinate) == "" || utf8.RuneCountInString(value.Coordinate) > 1024 || strings.ContainsRune(value.Coordinate, '\x00') {
 		return false
 	}
+	if value.Format == FormatAPT && !ValidAPTArtifactCoordinate(value.Coordinate) {
+		return false
+	}
 	if value.Format == FormatConan && !validConanQuarantineAnchor(value.Coordinate) {
 		return false
 	}

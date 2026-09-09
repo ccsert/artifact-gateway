@@ -1023,6 +1023,14 @@ export const evaluateSecurityPolicy = <ThrowOnError extends boolean = false>(opt
     }
 });
 
+/**
+ * Versioned, default-off read enforcement for supported Hosted formats.
+ * For APT Hosted, quarantined pool GET/HEAD and complete signed metadata views
+ * containing that package return 403, including retired by-hash views.
+ * Signed bytes are never filtered or rewritten on read. Release restores access
+ * only to existing lifecycle references and never reverses deletion.
+ *
+ */
 export const getQuarantineReadPolicy = <ThrowOnError extends boolean = false>(options: Options<GetQuarantineReadPolicyData, ThrowOnError>): RequestResult<GetQuarantineReadPolicyResponses, GetQuarantineReadPolicyErrors, ThrowOnError> => (options.client ?? client).get<GetQuarantineReadPolicyResponses, GetQuarantineReadPolicyErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -1033,6 +1041,14 @@ export const getQuarantineReadPolicy = <ThrowOnError extends boolean = false>(op
     ...options
 });
 
+/**
+ * Versioned, default-off read enforcement for supported Hosted formats.
+ * For APT Hosted, quarantined pool GET/HEAD and complete signed metadata views
+ * containing that package return 403, including retired by-hash views.
+ * Signed bytes are never filtered or rewritten on read. Release restores access
+ * only to existing lifecycle references and never reverses deletion.
+ *
+ */
 export const replaceQuarantineReadPolicy = <ThrowOnError extends boolean = false>(options: Options<ReplaceQuarantineReadPolicyData, ThrowOnError>): RequestResult<ReplaceQuarantineReadPolicyResponses, ReplaceQuarantineReadPolicyErrors, ThrowOnError> => (options.client ?? client).put<ReplaceQuarantineReadPolicyResponses, ReplaceQuarantineReadPolicyErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',

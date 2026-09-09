@@ -288,6 +288,8 @@ func writeAPTSnapshotProblem(w http.ResponseWriter, err error) {
 		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used with a different request")
 	case errors.Is(err, repository.ErrNameExists), errors.Is(err, repository.ErrAPTPackageConflict):
 		writeHostedProblem(w, http.StatusConflict, "coordinate_exists", "APT snapshot sequence or pool path already exists with different content")
+	case errors.Is(err, repository.ErrArtifactQuarantined):
+		writeHostedProblem(w, http.StatusConflict, "artifact_quarantined", "APT snapshot contains a quarantined package")
 	case errors.Is(err, repository.ErrQuotaExceeded):
 		writeHostedProblem(w, http.StatusInsufficientStorage, "quota_exceeded", "repository capacity quota would be exceeded by generated snapshot metadata")
 	case errors.Is(err, repository.ErrDisabled), errors.Is(err, repository.ErrVersionConflict):
