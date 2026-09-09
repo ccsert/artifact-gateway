@@ -17,10 +17,12 @@ export default defineConfig({
         // Track the whole hand-written Console instead of reporting a high
         // percentage for a small allowlist. Raise these non-regression floors
         // as public-boundary tests cover more pages and workflows.
-        lines: 40,
-        functions: 53,
-        statements: 40,
-        branches: 65,
+        // Vitest 4 uses AST coverage; the same-source v3/v4 migration baseline
+        // and its changed denominators are in docs/project-quality-assessment.md.
+        lines: 50,
+        functions: 45,
+        statements: 48.5,
+        branches: 43.5,
         "src/app/Layout.tsx": {
           lines: 90,
           functions: 60,
