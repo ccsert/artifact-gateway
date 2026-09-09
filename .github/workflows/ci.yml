@@ -40,6 +40,8 @@ jobs:
           cache-dependency-path: |
             console/package-lock.json
             tools/openapi/package-lock.json
+      - name: Verify public npm lockfile sources
+        run: node scripts/npm-lockfile-check.mjs
       - name: Install OpenAPI tooling
         run: npm ci --ignore-scripts --no-audit --no-fund --timing --loglevel=http
         timeout-minutes: 10
@@ -97,6 +99,8 @@ jobs:
           cache-dependency-path: |
             console/package-lock.json
             tools/openapi/package-lock.json
+      - name: Verify public npm lockfile sources
+        run: node scripts/npm-lockfile-check.mjs
       - run: npm ci --ignore-scripts --no-audit --no-fund --timing --loglevel=http
         timeout-minutes: 10
         working-directory: console
@@ -124,6 +128,8 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: console/package-lock.json
+      - name: Verify public npm lockfile sources
+        run: node scripts/npm-lockfile-check.mjs
       - run: npm ci --timing --loglevel=http
         timeout-minutes: 10
         working-directory: console
