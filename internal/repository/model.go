@@ -884,6 +884,7 @@ type RepositoryLifecycleJob struct {
 }
 
 type ReplicationPlan struct {
+	APTTargetSuite                             string
 	ID, SourceRepositoryID, TargetRepositoryID string
 	Format                                     Format
 	Coordinate, Digest, IdempotencyKey, State  string

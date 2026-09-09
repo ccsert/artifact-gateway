@@ -25,6 +25,7 @@ type backgroundRuntime struct {
 	scanResolver    app.ArtifactScanResolver
 	scannerFormats  []repository.Format
 	workerSessionID string
+	aptPublisher    *aptpublication.Publisher
 }
 
 func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
@@ -105,6 +106,15 @@ func goReclaimWorkerEnabled(cfg config.Config) bool {
 }
 
 func (r backgroundRuntime) startAPTWorkers(ctx context.Context, cfg config.Config) {
+	if r.aptPublisher != nil {
+		d := aptpublication.Distribution{Store: r.store, Source: r.objects, Destination: r.objects, Publisher: r.aptPublisher, Intelligence: r.store, Metrics: r.metrics}
+		if cfg.WorkerEnabled("apt", "promotion") {
+			d.StartPromotion(ctx, time.Minute)
+		}
+		if cfg.WorkerEnabled("apt", "replication") {
+			d.StartReplication(ctx, time.Minute)
+		}
+	}
 	if aptReclaimWorkerEnabled(cfg) {
 		aptpublication.Maintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
 	}

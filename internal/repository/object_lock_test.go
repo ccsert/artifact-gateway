@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 )
 
 type objectLockTestContextKey struct{}
@@ -31,5 +32,39 @@ func TestLockObjectKeysUsesBatchStoreAndReturnsDerivedContext(t *testing.T) {
 	}
 	if value := lockedCtx.Value(objectLockTestContextKey{}); value != "locked" {
 		t.Fatalf("derived context value=%v", value)
+	}
+}
+
+func TestNestedObjectLocksRetainParentOwnership(t *testing.T) {
+	store := NewMemoryStore()
+	parent, releaseParent, err := LockObjectKeys(context.Background(), []string{"package"}, store, FormatAPT, store.LockAPTObject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	childDone := make(chan struct{})
+	go func() {
+		_, release, err := LockObjectKeys(parent, []string{"package", "metadata"}, store, FormatAPT, store.LockAPTObject)
+		if err == nil {
+			release()
+		}
+		close(childDone)
+	}()
+	select {
+	case <-childDone:
+	case <-time.After(time.Second):
+		t.Fatal("nested publisher deadlocked on worker object")
+	}
+	acquired := make(chan struct{})
+	go func() { release, _ := store.LockAPTObject(context.Background(), "package"); close(acquired); release() }()
+	select {
+	case <-acquired:
+		t.Fatal("child released parent lock")
+	case <-time.After(10 * time.Millisecond):
+	}
+	releaseParent()
+	select {
+	case <-acquired:
+	case <-time.After(time.Second):
+		t.Fatal("parent lock was leaked")
 	}
 }

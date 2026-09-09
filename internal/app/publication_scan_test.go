@@ -93,7 +93,7 @@ func TestPublicationScanSchedulerEnqueuesEachPublishedDigestOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scheduler := newPublicationScanScheduler(store, true, []repository.Format{repository.FormatRaw}, nil)
+	scheduler := NewPublicationScanScheduler(store, true, []repository.Format{repository.FormatRaw}, nil)
 	firstDigest := testScanDigest("first publication")
 	for range 2 {
 		if err = scheduler.Schedule(ctx, repo, "releases/widget.tar.gz", firstDigest, "publisher"); err != nil {
@@ -124,7 +124,7 @@ func TestPublicationScanSchedulerEnqueuesEachPublishedDigestOnce(t *testing.T) {
 func TestPublicationScanSchedulerRecordsRepositoryLookupFailures(t *testing.T) {
 	store := unavailablePublicationRepositoryStore{MemoryStore: repository.NewMemoryStore()}
 	metrics := &Metrics{}
-	scheduler := newPublicationScanScheduler(store, true, []repository.Format{repository.FormatMaven}, metrics)
+	scheduler := NewPublicationScanScheduler(store, true, []repository.Format{repository.FormatMaven}, metrics)
 	err := scheduler.ScheduleRepository(context.Background(), "missing-repository", repository.FormatMaven, "org.example:widget:1.0.0", testScanDigest("widget"), "publisher")
 	if err == nil {
 		t.Fatal("ScheduleRepository() error = nil, want repository lookup failure")
@@ -187,7 +187,7 @@ func TestPublicationScanFailureAuditSurvivesRequestCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	scheduler := newPublicationScanScheduler(store, true, []repository.Format{repository.FormatRaw}, nil)
+	scheduler := NewPublicationScanScheduler(store, true, []repository.Format{repository.FormatRaw}, nil)
 	if err = scheduler.Schedule(ctx, repo, "releases/widget.tar.gz", testScanDigest("widget"), "publisher"); !errors.Is(err, enqueueErr) {
 		t.Fatalf("Schedule() error = %v, want %v", err, enqueueErr)
 	}
@@ -374,7 +374,7 @@ func TestPublicationScanSchedulerSkipsRepositoriesWithoutEnabledCapability(t *te
 				t.Fatal(err)
 			}
 
-			scheduler := newPublicationScanScheduler(store, tt.scannerAvailable, tt.formats, nil)
+			scheduler := NewPublicationScanScheduler(store, tt.scannerAvailable, tt.formats, nil)
 			if err = scheduler.Schedule(ctx, repo, "releases/widget.tar.gz", testScanDigest(tt.name), "publisher"); err != nil {
 				t.Fatal(err)
 			}

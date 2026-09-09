@@ -451,6 +451,7 @@ type NativeAPTStore interface {
 // snapshots. A staged package is deliberately absent from NativeAPTStore
 // protocol assets; only one atomically visible snapshot may make it readable.
 type NativeAPTPublicationStore interface {
+	NativeAPTDistributionStore
 	NativeAPTArchiveRestoreStore
 	NativeAPTLifecycleStore
 	CreateAPTPublicationSessionWithAuditIdempotently(context.Context, APTPublicationSession, string, string, string, string, AuditRecord) (APTPublicationSession, bool, error)

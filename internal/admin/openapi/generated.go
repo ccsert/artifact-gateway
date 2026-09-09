@@ -3794,6 +3794,8 @@ type ProblemCode string
 
 // PromotionRequest defines model for PromotionRequest.
 type PromotionRequest struct {
+	// AptTargetSuite Required only for APT Hosted operator preview. Appends the immutable pool package to this target suite using the target signer. The pool coordinate preserves its component.
+	AptTargetSuite     *string            `json:"aptTargetSuite,omitempty"`
 	Coordinate         string             `json:"coordinate"`
 	Digest             string             `json:"digest"`
 	TargetRepositoryId openapi_types.UUID `json:"targetRepositoryId"`
@@ -3909,7 +3911,9 @@ type ReplicationCheckpointProgressState string
 
 // ReplicationPlan defines model for ReplicationPlan.
 type ReplicationPlan struct {
-	CompletedAt *time.Time `json:"completedAt,omitempty"`
+	// AptTargetSuite Required only for APT Hosted operator preview. Appends the immutable pool package to this target suite using the target signer. The pool coordinate preserves its component.
+	AptTargetSuite *string    `json:"aptTargetSuite,omitempty"`
+	CompletedAt    *time.Time `json:"completedAt,omitempty"`
 
 	// Coordinate Immutable artifact coordinate. Omitted together with digest for legacy plans created before artifact identity was persisted.
 	Coordinate *string   `json:"coordinate,omitempty"`
@@ -3933,8 +3937,10 @@ type ReplicationPlanState string
 
 // ReplicationPlanDetail defines model for ReplicationPlanDetail.
 type ReplicationPlanDetail struct {
-	Checkpoints []ReplicationCheckpointProgress `json:"checkpoints"`
-	CompletedAt *time.Time                      `json:"completedAt,omitempty"`
+	// AptTargetSuite Required only for APT Hosted operator preview. Appends the immutable pool package to this target suite using the target signer. The pool coordinate preserves its component.
+	AptTargetSuite *string                         `json:"aptTargetSuite,omitempty"`
+	Checkpoints    []ReplicationCheckpointProgress `json:"checkpoints"`
+	CompletedAt    *time.Time                      `json:"completedAt,omitempty"`
 
 	// Coordinate Immutable artifact coordinate. Omitted together with digest for legacy plans created before artifact identity was persisted.
 	Coordinate *string   `json:"coordinate,omitempty"`
@@ -3958,6 +3964,8 @@ type ReplicationPlanDetailState string
 
 // ReplicationRequest defines model for ReplicationRequest.
 type ReplicationRequest struct {
+	// AptTargetSuite Required only for APT Hosted operator preview. Appends the immutable pool package to this target suite using the target signer. The pool coordinate preserves its component.
+	AptTargetSuite     *string            `json:"aptTargetSuite,omitempty"`
 	Coordinate         string             `json:"coordinate"`
 	Digest             string             `json:"digest"`
 	TargetRepositoryId openapi_types.UUID `json:"targetRepositoryId"`
