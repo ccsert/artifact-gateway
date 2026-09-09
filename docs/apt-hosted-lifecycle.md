@@ -2,7 +2,7 @@
 
 [简体中文](apt-hosted-lifecycle.zh-CN.md) | [Documentation index](README.md)
 
-The APT Hosted operator preview supports dedicated package deletion, recovery, retention planning and snapshot pruning. Every membership change generates complete Packages indices, Release and both signatures before one transaction switches visibility. APT remains publicly advertised as Proxy/Group; production KMS/HSM custody and promotion/replication remain separate gates.
+The APT Hosted operator preview supports dedicated package deletion, recovery, retention planning and snapshot pruning. Every membership change generates complete Packages indices, Release and both signatures before one transaction switches visibility. APT remains publicly advertised as Proxy/Group; production KMS/HSM custody remains a separate gate. Target-signed distribution is covered by the [distribution preview](apt-hosted-distribution.md).
 
 ## Management workflow
 
@@ -34,7 +34,11 @@ All changes bind `expectedSnapshotId`. The successful snapshot, request digest a
 
 Purged identity barriers and history remain; re-uploading that identity cannot bypass deletion. After recovery expires, restore a consistent database/object backup in a separate validation environment or publish a new package version. A single snapshot archive has no deletion/queue history and is not a full lifecycle backup.
 
-Retention and pruning are explicit operator API actions in this phase. The generic scheduled retention-policy executor, Console lifecycle forms, promotion and replication are not enabled for APT by this work.
+The Console exposes these explicit operations under a Hosted APT Repository's **Signed snapshots** tab. Repository administrators enter an exact suite, inspect the current signing fingerprint and snapshot history, select packages for deletion, preview retention, or recover an eligible deletion. The review lists affected packages and the fixed base snapshot; retention apply sends the exact preview candidate IDs. A conflict requires refresh and a new preview. A failed or uncertain apply can reuse its existing idempotency key while the review remains open. A refresh failure keeps the last evidence visible and disables operations until refresh succeeds.
+
+Snapshot history permits pruning only retired snapshots whose grace deadline has elapsed, with explicit confirmation. It does not claim physical byte reclamation has completed. The generic scheduled retention-policy executor remains unavailable for APT. The Console does not provide first publication or archive import/export forms.
+
+The lifecycle response includes each package's server-generated `poolPath`, used for protocol reads and distribution. It is distinct from `revision.canonicalIdentity`, which is `package@version#architecture`. The Console never derives a pool path from that package identity. Run matching API and Console versions when using these operations.
 
 ## Upgrade and verification
 
@@ -56,6 +60,6 @@ Use `PUT /artifact-quarantine?coordinate=<encoded pool path>&digest=<SHA-256>` w
 - Release only restores reads of existing lifecycle references. It does not undo deletion, switch the current snapshot or change signed bytes. Deleted packages still need an explicit restore within their recovery window.
 - Publication checks governance when loading packages and immediately before invoking the signer. Its final transaction locks the same repository row as quarantine transitions and rechecks all pool identities. A quarantine during signing returns `409 artifact_quarantined` and preserves the old visible snapshot.
 
-Configure an external service capable of analyzing `.deb` and include `apt` in `GATEWAY_SCANNER_FORMATS`. The bundled reference Trivy filesystem scanner still rejects APT; an unanalyzed archive must not become a clean report. See the [scanner contract](artifact-scanner-contract.md). APT Groups still accept only Proxy members, preventing Hosted Group bypass. Aggregate signing, target-signed promotion/replication and KMS/HSM remain separate work.
+Configure an external service capable of analyzing `.deb` and include `apt` in `GATEWAY_SCANNER_FORMATS`. The bundled reference Trivy filesystem scanner still rejects APT; an unanalyzed archive must not become a clean report. See the [scanner contract](artifact-scanner-contract.md). APT Groups still accept only Proxy members, preventing Hosted Group bypass. Aggregate signing and KMS/HSM remain separate work. See the [target-signed distribution preview](apt-hosted-distribution.md).
 
 No new database fields are required. Stop old binaries before upgrading all nodes: they do not enforce this APT governance boundary. Verification covers Memory/PostgreSQL/RustFS admission during signing, retired reads, delete/release/restore, and a real Debian client denied installation using cached indices, then installing after release.

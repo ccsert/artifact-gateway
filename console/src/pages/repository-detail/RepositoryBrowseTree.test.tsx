@@ -1,4 +1,10 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  within,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { browseGroup, browseRepository } from "../../client";
@@ -381,7 +387,11 @@ describe("Proxy directory recovery", () => {
       </PreferencesProvider>,
     );
     await user.click(await screen.findByText(asset.name));
-    expect(screen.getByText("maven-proxy")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("complementary", { name: "节点详情" })).getByText(
+        "maven-proxy",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("已缓存")).toBeInTheDocument();
     expect(screen.getByText(asset.path)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "在列表中查看" }));

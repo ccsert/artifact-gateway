@@ -3423,13 +3423,16 @@ APTPruneRequest:
 APTLifecyclePackage:
   type: object
   additionalProperties: false
-  required: [publicationSessionId, component, revision]
+  required: [publicationSessionId, component, poolPath, revision]
   properties:
     publicationSessionId:
       type: string
       format: uuid
     component:
       type: string
+    poolPath:
+      type: string
+      description: Repository-global canonical pool path used for reads, scanning and distribution. Distinct from revision.canonicalIdentity (package@version#architecture).
     revision:
       "$ref": "#/APTPackageRevision"
 APTPackageDeletion:

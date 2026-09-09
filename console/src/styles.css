@@ -1089,7 +1089,7 @@ html[data-theme="light"] .ag-public-access-layer {
 
 .ag-repository-browse {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--ag-border-subtle);
@@ -1135,7 +1135,7 @@ html[data-theme="light"] .ag-public-access-layer {
 }
 
 .ag-repository-tree {
-  margin-top: 12px;
+  margin-top: 4px;
   max-height: min(62vh, 660px);
   scrollbar-gutter: stable;
   overflow: auto;
@@ -1325,6 +1325,16 @@ html[data-theme="light"] .ag-public-access-layer {
   .ag-repository-tree-node-name {
   font-family: var(--font-mono);
   font-size: 13px;
+}
+.ag-repository-tree-node-title[data-kind="asset"]
+  .ag-repository-tree-node-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 20px;
+  padding-block: 4px;
 }
 .ag-repository-tree-node-meta {
   display: inline-flex;
@@ -2961,4 +2971,128 @@ html .ag-brand-mark.text-white {
     display: flex;
     align-items: center;
   }
+}
+
+/* APT snapshot operations share the repository page's parent-owned rhythm. */
+.ag-apt-operations,
+.ag-apt-current,
+.ag-apt-retention,
+.ag-distribution {
+  min-width: 0;
+}
+.ag-apt-heading,
+.ag-apt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.ag-apt-toolbar {
+  justify-content: flex-start;
+  align-items: flex-end;
+}
+.ag-apt-toolbar > :first-child {
+  max-width: 100%;
+}
+.ag-apt-heading h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.ag-apt-heading p,
+.ag-apt-retention p,
+.ag-apt-secondary {
+  color: var(--ag-content-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+.ag-apt-current,
+.ag-apt-retention {
+  display: grid;
+  gap: 12px;
+  padding-block: 16px;
+  border-block: 1px solid var(--ag-border-subtle);
+}
+.ag-apt-evidence {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 24px;
+}
+.ag-apt-evidence dt {
+  color: var(--ag-content-secondary);
+  font-size: 12px;
+}
+.ag-apt-evidence dd,
+.ag-apt-wrap,
+.ag-apt-identity {
+  overflow-wrap: anywhere;
+}
+.ag-apt-evidence code,
+.ag-apt-identity code,
+.ag-apt-change-list code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.ag-apt-identity {
+  display: grid;
+  gap: 4px;
+}
+.ag-apt-identity code + code {
+  color: var(--ag-content-secondary);
+}
+.ag-apt-change-list {
+  display: grid;
+  gap: 12px;
+  max-height: 280px;
+  overflow: auto;
+}
+.ag-apt-change-list code {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.ag-apt-distribution-scope {
+  padding-top: 16px;
+  max-width: 520px;
+}
+@media (max-width: 600px) {
+  .ag-apt-evidence {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ag-apt-toolbar {
+    align-items: stretch;
+  }
+  .ag-apt-toolbar > * {
+    flex: 1 1 100%;
+  }
+}
+
+.ag-repository-tree-root {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px 8px;
+  color: var(--ag-content-secondary);
+  font-size: 12px;
+}
+.ag-repository-tree-root > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.ag-repository-tree-root > span:last-child {
+  font-size: 12px;
+}
+.ag-repository-tree-footer {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ag-border-subtle);
+  color: var(--ag-content-secondary);
+  font-size: 12px;
+  line-height: 20px;
 }

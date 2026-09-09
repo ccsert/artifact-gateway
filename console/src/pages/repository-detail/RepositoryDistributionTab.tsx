@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Button, Input, Popconfirm, Select, Space, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -11,6 +11,7 @@ import {
   listRepositoryReplications,
 } from "../../client";
 import type {
+  AptLifecyclePackage,
   ReplicationPlan,
   ReplicationPlanDetail,
   Repository,
@@ -75,10 +76,23 @@ function securityReason(
   return label ? text(label[0], label[1]) : reason;
 }
 
-export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
+export function RepositoryDistributionTab({
+  repo,
+  aptPackages,
+  disabled = false,
+}: {
+  repo: Repository;
+  aptPackages?: AptLifecyclePackage[];
+  disabled?: boolean;
+}) {
   const { text } = usePreferences();
   const [repos, setRepos] = useState<Repository[]>([]);
   const [targetId, setTargetId] = useState("");
+  const [aptTargetSuite, setAptTargetSuite] = useState("");
+  const alive = useRef(true);
+  const evaluationVersion = useRef(0);
+  const submission = useRef<{ identity: string; key: string } | null>(null);
+  const submitting = useRef(false);
   const [coordinate, setCoordinate] = useState("");
   const [digest, setDigest] = useState("");
   const [selectedArtifact, setSelectedArtifact] =
@@ -109,46 +123,70 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
     raw: "releases/gateway-widget-1.2.3.zip",
     npm: "@company/gateway-widget@1.2.3",
     pypi: "gateway-widget@1.2.3",
+    apt: "pool/main/g/gateway-widget/gateway-widget_1.2.3_amd64.deb",
   };
 
   const load = useCallback(async () => {
     setError(null);
-    const [allRepos, p] = await Promise.all([
-      listRepositories({ query: { pageSize: 200 } }),
-      listRepositoryReplications({ path: { repositoryId: repo.id } }),
-    ]);
-    setRepos(allRepos.data?.items ?? []);
-    if (p.error) {
-      if (!isNotFound(p.error)) setError(p.error);
-      setPlans([]);
-      return;
+    try {
+      const [allRepos, p] = await Promise.all([
+        listRepositories({ query: { pageSize: 200 } }),
+        listRepositoryReplications({ path: { repositoryId: repo.id } }),
+      ]);
+      if (!alive.current) return;
+      if (allRepos.error) throw allRepos.error;
+      if (p.error && !isNotFound(p.error)) throw p.error;
+      setRepos(allRepos.data?.items ?? []);
+      setPlans(p.data ?? []);
+    } catch (err) {
+      if (alive.current) setError(err);
     }
-    setPlans(p.data ?? []);
   }, [repo.id]);
 
   useEffect(() => {
+    alive.current = true;
     void load();
+    return () => {
+      alive.current = false;
+    };
   }, [load]);
+
+  const invalidateEvaluation = () => {
+    evaluationVersion.current++;
+    setEvaluation(null);
+    setEvaluating(false);
+  };
 
   const cancelPlan = async (planId: string) => {
     setActionError(null);
-    const { error: err } = await deleteRepositoryReplication({
-      path: { repositoryId: repo.id, replicationPlanId: planId },
-    });
-    if (err) {
-      setActionError(err);
-      return;
+    try {
+      const { error: err } = await deleteRepositoryReplication({
+        path: { repositoryId: repo.id, replicationPlanId: planId },
+      });
+      if (err) {
+        setActionError(err);
+        return;
+      }
+      setNotice(
+        text(
+          "已取消复制计划，工作进程不再重试。",
+          "Replication plan canceled. Workers will not retry it.",
+        ),
+      );
+      void load();
+    } catch (err) {
+      if (alive.current) setActionError(err);
     }
-    setNotice(
-      text(
-        "已取消复制计划，工作进程不再重试。",
-        "Replication plan canceled. Workers will not retry it.",
-      ),
-    );
-    void load();
   };
 
   const submit = async (kind: "promote" | "replicate") => {
+    if (
+      submitting.current ||
+      disabled ||
+      (repo.format === "apt" && !aptTargetSuite.trim())
+    )
+      return;
+    submitting.current = true;
     setBusy(kind);
     setActionError(null);
     setNotice("");
@@ -156,74 +194,96 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
       targetRepositoryId: targetId,
       coordinate: coordinate.trim(),
       digest: digest.trim(),
+      ...(repo.format === "apt"
+        ? { aptTargetSuite: aptTargetSuite.trim() }
+        : {}),
     };
-    const headers = { "Idempotency-Key": crypto.randomUUID() };
-    const { error: err } =
-      kind === "promote"
-        ? await createRepositoryPromotion({
-            path: { repositoryId: repo.id },
-            body,
-            headers,
-          })
-        : await createRepositoryReplication({
-            path: { repositoryId: repo.id },
-            body,
-            headers,
-          });
-    setBusy(null);
-    if (err) {
-      setActionError(err);
-      return;
+    const identity = JSON.stringify([kind, body]);
+    try {
+      if (submission.current?.identity !== identity)
+        submission.current = { identity, key: crypto.randomUUID() };
+      const headers = { "Idempotency-Key": submission.current.key };
+      const response =
+        kind === "promote"
+          ? await createRepositoryPromotion({
+              path: { repositoryId: repo.id },
+              body,
+              headers,
+            })
+          : await createRepositoryReplication({
+              path: { repositoryId: repo.id },
+              body,
+              headers,
+            });
+      if (!alive.current) return;
+      if (response.error) throw response.error;
+      submission.current = null;
+      setNotice(
+        kind === "promote"
+          ? text(
+              "晋升任务已提交，请在目标仓库的「生命周期任务」查看进度",
+              "Promotion submitted. Track it on the target repository's Lifecycle jobs tab.",
+            )
+          : text(
+              "复制计划已创建，下方查看进度",
+              "Replication plan created. Track its progress below.",
+            ),
+      );
+      setCoordinate("");
+      setDigest("");
+      setSelectedArtifact(null);
+      setManualIdentity(false);
+      invalidateEvaluation();
+      await load();
+    } catch (err) {
+      if (alive.current) setActionError(err);
+    } finally {
+      submitting.current = false;
+      if (alive.current) setBusy(null);
     }
-    setNotice(
-      kind === "promote"
-        ? text(
-            "晋升任务已提交，请在「生命周期任务」查看进度",
-            "Promotion task submitted. Track it on the Lifecycle jobs tab.",
-          )
-        : text(
-            "复制计划已创建，下方查看进度",
-            "Replication plan created. Track its progress below.",
-          ),
-    );
-    setCoordinate("");
-    setDigest("");
-    setSelectedArtifact(null);
-    setManualIdentity(false);
-    setEvaluation(null);
-    void load();
   };
 
   const evaluate = async () => {
     if (!targetId || !coordinate.trim() || !digest.trim()) return;
+    const version = ++evaluationVersion.current;
     setEvaluating(true);
     setActionError(null);
-    const { data, error: err } = await evaluateSecurityPolicy({
-      path: { repositoryId: targetId },
-      body: {
-        sourceRepositoryId: repo.id,
-        coordinate: coordinate.trim(),
-        digest: digest.trim(),
-      },
-    });
-    setEvaluating(false);
-    if (err) {
-      setActionError(err);
-      setEvaluation(null);
-      return;
+    try {
+      const response = await evaluateSecurityPolicy({
+        path: { repositoryId: targetId },
+        body: {
+          sourceRepositoryId: repo.id,
+          coordinate: coordinate.trim(),
+          digest: digest.trim(),
+        },
+      });
+      if (!alive.current || version !== evaluationVersion.current) return;
+      if (response.error) throw response.error;
+      setEvaluation(response.data ?? null);
+    } catch (err) {
+      if (alive.current && version === evaluationVersion.current) {
+        setActionError(err);
+        setEvaluation(null);
+      }
+    } finally {
+      if (alive.current && version === evaluationVersion.current)
+        setEvaluating(false);
     }
-    setEvaluation(data ?? null);
   };
 
   const showDetail = async (planId: string) => {
-    const { data, error: err } = await getRepositoryReplication({
-      path: { repositoryId: repo.id, replicationPlanId: planId },
-    });
-    if (err) {
-      setActionError(err);
-      return;
+    try {
+      const { data, error: err } = await getRepositoryReplication({
+        path: { repositoryId: repo.id, replicationPlanId: planId },
+      });
+      if (err) {
+        setActionError(err);
+        return;
+      }
+      if (alive.current) setDetail(data ?? null);
+    } catch (err) {
+      if (alive.current) setActionError(err);
     }
-    setDetail(data ?? null);
   };
 
   const repoName = (id: string) =>
@@ -235,7 +295,7 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
   const chooseArtifact = (artifact: RepositoryArtifactIdentity | null) => {
     setSelectedArtifact(artifact);
     setManualIdentity(false);
-    setEvaluation(null);
+    invalidateEvaluation();
     setCoordinate(artifact?.coordinate ?? "");
     setDigest(artifact?.digest ?? "");
   };
@@ -251,14 +311,25 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
         setCoordinate(selectedArtifact.coordinate);
         setDigest(selectedArtifact.digest);
       }
-      setEvaluation(null);
+      invalidateEvaluation();
       return next;
     });
   };
 
-  if (error !== null) return <ErrorBanner error={error} onRetry={load} />;
+  if (error !== null && !plans)
+    return <ErrorBanner error={error} onRetry={load} />;
 
   const planColumns: ColumnsType<ReplicationPlan> = [
+    ...(repo.format === "apt"
+      ? [
+          {
+            title: text("目标套件", "Target suite"),
+            dataIndex: "aptTargetSuite",
+            key: "aptTargetSuite",
+            width: 140,
+          },
+        ]
+      : []),
     {
       title: "ID",
       dataIndex: "id",
@@ -407,7 +478,8 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="ag-page-stack ag-distribution">
+      {error !== null && <ErrorBanner error={error} onRetry={load} />}
       {actionError !== null && <ErrorBanner error={actionError} />}
       {notice && <Alert type="success" showIcon title={notice} />}
 
@@ -424,26 +496,66 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
             )}
           </p>
         </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(280px,1.6fr)_minmax(220px,1fr)]">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-4 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
           <Field
             group
             label={text("源制品", "Source artifact")}
-            hint={text(
-              "最多显示 50 条；输入包名、路径或坐标前缀可缩小范围。",
-              "Up to 50 items are shown. Type a package, path, or coordinate prefix to narrow the results.",
-            )}
+            hint={
+              aptPackages
+                ? text(
+                    "当前套件的可见软件包；输入包名筛选。",
+                    "Visible packages in the current suite; type a package name to filter.",
+                  )
+                : text(
+                    "最多显示 50 条；输入包名、路径或坐标前缀可缩小范围。",
+                    "Up to 50 items are shown. Type a package, path, or coordinate prefix to narrow the results.",
+                  )
+            }
           >
-            <RepositoryArtifactSelect
-              repo={repo}
-              purpose="distribution"
-              value={selectedArtifact}
-              onChange={chooseArtifact}
-              disabled={busy !== null}
-              ariaLabel={text(
-                "搜索并选择源制品",
-                "Search and select a source artifact",
-              )}
-            />
+            {aptPackages ? (
+              <Select
+                aria-label={text(
+                  "搜索并选择源制品",
+                  "Search and select a source artifact",
+                )}
+                className="w-full"
+                showSearch={{ optionFilterProp: "label" }}
+                placeholder={text(
+                  "选择当前套件的软件包",
+                  "Select a package in this suite",
+                )}
+                value={selectedArtifact?.key}
+                disabled={disabled || busy !== null}
+                options={aptPackages.map((item) => ({
+                  value: item.publicationSessionId,
+                  disabled: !item.poolPath,
+                  label: `${item.revision.package} ${item.revision.version} · ${item.revision.architecture}`,
+                }))}
+                onChange={(id) => {
+                  const item = aptPackages.find(
+                    (p) => p.publicationSessionId === id,
+                  );
+                  if (item)
+                    chooseArtifact({
+                      key: id,
+                      coordinate: item.poolPath,
+                      digest: item.revision.digest,
+                    });
+                }}
+              />
+            ) : (
+              <RepositoryArtifactSelect
+                repo={repo}
+                purpose="distribution"
+                value={selectedArtifact}
+                onChange={chooseArtifact}
+                disabled={disabled || busy !== null}
+                ariaLabel={text(
+                  "搜索并选择源制品",
+                  "Search and select a source artifact",
+                )}
+              />
+            )}
           </Field>
           <Field
             group
@@ -463,20 +575,40 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
                 "没有可用的同格式 Hosted 仓库",
                 "No compatible Hosted repository is available",
               )}
-              disabled={busy !== null}
+              disabled={disabled || busy !== null}
               onChange={(value) => {
                 setTargetId(value);
-                setEvaluation(null);
+                invalidateEvaluation();
               }}
             />
           </Field>
         </div>
 
+        {repo.format === "apt" && (
+          <div className="ag-apt-distribution-scope">
+            <Field
+              label={text("目标发行套件", "Target suite")}
+              hint={text(
+                "目标仓库会使用自己的签名服务发布新快照，并保留已有成员。",
+                "The target repository signs a new snapshot with its own signer and preserves existing members.",
+              )}
+            >
+              <Input
+                aria-label={text("目标发行套件", "Target suite")}
+                placeholder="stable"
+                value={aptTargetSuite}
+                disabled={disabled || busy !== null}
+                onChange={(e) => setAptTargetSuite(e.target.value)}
+              />
+            </Field>
+          </div>
+        )}
         <div className="mt-2 flex justify-end">
           <Button
             type="link"
             size="small"
             className="h-auto px-0 py-0 text-xs"
+            disabled={disabled || busy !== null}
             onClick={toggleManualIdentity}
           >
             {manualIdentity
@@ -487,7 +619,7 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
 
         {selectedArtifact && !manualIdentity && (
           <div className="mt-3 rounded-md border border-[var(--ag-status-info-border)] bg-[var(--ag-status-info-soft)] px-3 py-2.5">
-            <p className="truncate font-mono text-xs text-zinc-200">
+            <p className="break-all font-mono text-xs text-zinc-200">
               {selectedArtifact.coordinate}
             </p>
             <p className="mt-0.5 break-all font-mono text-xs text-zinc-500">
@@ -507,26 +639,28 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
             >
               <Input
                 aria-label={text("制品坐标", "Artifact coordinate")}
+                disabled={disabled || busy !== null}
                 className="font-mono"
                 placeholder={coordinatePlaceholder[repo.format] ?? "coordinate"}
                 value={coordinate}
                 onChange={(event) => {
                   setSelectedArtifact(null);
                   setCoordinate(event.target.value);
-                  setEvaluation(null);
+                  invalidateEvaluation();
                 }}
               />
             </Field>
             <Field label={text("摘要 digest", "Digest")}>
               <Input
                 aria-label={text("摘要 digest", "Digest")}
+                disabled={disabled || busy !== null}
                 className="font-mono"
                 placeholder="sha256:…"
                 value={digest}
                 onChange={(event) => {
                   setSelectedArtifact(null);
                   setDigest(event.target.value);
-                  setEvaluation(null);
+                  invalidateEvaluation();
                 }}
               />
             </Field>
@@ -545,6 +679,7 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
               loading={evaluating}
               onClick={() => void evaluate()}
               disabled={
+                disabled ||
                 busy !== null ||
                 evaluating ||
                 !targetId ||
@@ -559,8 +694,11 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
               loading={busy === "promote"}
               onClick={() => submit("promote")}
               disabled={
+                disabled ||
                 busy !== null ||
                 promotionBlocked ||
+                evaluating ||
+                (repo.format === "apt" && !aptTargetSuite.trim()) ||
                 !targetId ||
                 !coordinate.trim() ||
                 !digest.trim()
@@ -572,8 +710,11 @@ export function RepositoryDistributionTab({ repo }: { repo: Repository }) {
               loading={busy === "replicate"}
               onClick={() => submit("replicate")}
               disabled={
+                disabled ||
                 busy !== null ||
                 artifactQuarantined ||
+                evaluating ||
+                (repo.format === "apt" && !aptTargetSuite.trim()) ||
                 !targetId ||
                 !coordinate.trim() ||
                 !digest.trim()
