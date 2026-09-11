@@ -3953,6 +3953,9 @@
           "egressProxy": {
             "$ref": "#/components/schemas/EgressProxy"
           },
+          "upstreamAuth": {
+            "$ref": "#/components/schemas/UpstreamAuth"
+          },
           "state": {
             "type": "string",
             "description": "Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.",
@@ -4013,6 +4016,9 @@
           },
           "egressProxy": {
             "$ref": "#/components/schemas/EgressProxy"
+          },
+          "upstreamAuth": {
+            "$ref": "#/components/schemas/UpstreamAuth"
           }
         }
       },
@@ -5664,6 +5670,39 @@
           }
         }
       },
+      "UpstreamAuth": {
+        "type": "object",
+        "description": "Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.",
+        "required": [
+          "scheme"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "none",
+              "basic",
+              "bearer"
+            ],
+            "description": "none removes any stored credential and reads the upstream anonymously; basic sends an HTTP Basic credential; bearer sends `Authorization - Bearer <secret>`."
+          },
+          "username": {
+            "type": "string",
+            "description": "basic only. Upstream account name. Rejected for bearer."
+          },
+          "secret": {
+            "type": "string",
+            "writeOnly": true,
+            "description": "Upstream password or token. Write-only; stored encrypted. Omit on update to keep the stored secret while the scheme is unchanged. Both schemes require a secret, so clear a stored credential by setting scheme to none rather than sending an empty secret."
+          },
+          "credentialsConfigured": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "True when an encrypted upstream credential is stored."
+          }
+        }
+      },
       "RepositoryGrantRecord": {
         "type": "object",
         "required": [
@@ -5793,6 +5832,9 @@
           },
           "egressProxy": {
             "$ref": "#/components/schemas/EgressProxy"
+          },
+          "upstreamAuth": {
+            "$ref": "#/components/schemas/UpstreamAuth"
           }
         }
       },

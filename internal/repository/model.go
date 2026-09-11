@@ -47,6 +47,7 @@ type HostedRepository struct {
 	Endpoint               string          `json:"endpoint,omitempty"`
 	AllowedHosts           []string        `json:"allowedHosts,omitempty"`
 	EgressProxy            *EgressProxy    `json:"egressProxy,omitempty"`
+	UpstreamAuth           *UpstreamAuth   `json:"upstreamAuth,omitempty"`
 	AnonymousRead          bool            `json:"anonymousRead"`
 	MavenStrictPublication bool            `json:"mavenStrictPublication"`
 	State                  RepositoryState `json:"state"`
@@ -122,6 +123,63 @@ func (p *EgressProxy) Validate() error {
 	default:
 		return errors.New("egress proxy mode must be direct, environment, or custom")
 	}
+}
+
+// UpstreamAuthScheme selects how a Proxy Repository authenticates to its
+// upstream registry. SchemeNone is a request-side sentinel that removes stored
+// credentials; it is normalized away before persistence, so an absent
+// UpstreamAuth remains the only stored representation of anonymous reads.
+type UpstreamAuthScheme string
+
+const (
+	UpstreamAuthSchemeNone   UpstreamAuthScheme = "none"
+	UpstreamAuthSchemeBasic  UpstreamAuthScheme = "basic"
+	UpstreamAuthSchemeBearer UpstreamAuthScheme = "bearer"
+)
+
+// UpstreamAuth is the per-Proxy-Repository credential presented to the
+// upstream registry. Secret holds AES-256-GCM ciphertext (base64) sealed with
+// GATEWAY_SETTINGS_ENCRYPTION_KEY, never plaintext; it is redacted from every
+// management API response, which carries CredentialsConfigured instead.
+type UpstreamAuth struct {
+	Scheme   UpstreamAuthScheme `json:"scheme"`
+	Username string             `json:"username,omitempty"`
+	Secret   string             `json:"secret,omitempty"`
+	// CredentialsConfigured is a response-only marker computed at encode time;
+	// it is never persisted.
+	CredentialsConfigured bool `json:"credentialsConfigured,omitempty"`
+}
+
+// Validate enforces the upstream credential invariants. Bearer credentials
+// carry a secret and nothing else; basic credentials require both a username
+// and a secret. A nil receiver is valid and means anonymous upstream reads.
+func (a *UpstreamAuth) Validate() error {
+	if a == nil {
+		return nil
+	}
+	switch a.Scheme {
+	case UpstreamAuthSchemeNone:
+		if a.Username != "" || a.Secret != "" {
+			return errors.New("upstream authentication scheme none must not carry credentials")
+		}
+	case UpstreamAuthSchemeBasic:
+		if strings.TrimSpace(a.Username) == "" {
+			return errors.New("upstream basic authentication requires a username")
+		}
+		if a.Secret == "" {
+			return errors.New("upstream basic authentication requires a secret")
+		}
+	case UpstreamAuthSchemeBearer:
+		if a.Username != "" {
+			return errors.New("upstream bearer authentication does not accept a username")
+		}
+		if a.Secret == "" {
+			return errors.New("upstream bearer authentication requires a secret")
+		}
+	default:
+		return errors.New("upstream authentication scheme must be basic or bearer")
+	}
+	return nil
 }
 
 func normalizeHostedRepository(repo HostedRepository) HostedRepository {

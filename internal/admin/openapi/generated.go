@@ -2080,6 +2080,27 @@ func (e UpdateUserState) Valid() bool {
 	}
 }
 
+// Defines values for UpstreamAuthScheme.
+const (
+	UpstreamAuthSchemeBasic  UpstreamAuthScheme = "basic"
+	UpstreamAuthSchemeBearer UpstreamAuthScheme = "bearer"
+	UpstreamAuthSchemeNone   UpstreamAuthScheme = "none"
+)
+
+// Valid indicates whether the value is a known member of the UpstreamAuthScheme enum.
+func (e UpstreamAuthScheme) Valid() bool {
+	switch e {
+	case UpstreamAuthSchemeBasic:
+		return true
+	case UpstreamAuthSchemeBearer:
+		return true
+	case UpstreamAuthSchemeNone:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UserRole.
 const (
 	UserRoleAdmin  UserRole = "admin"
@@ -3142,6 +3163,9 @@ type CreateRepository struct {
 
 	// Type APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
 	Type *CreateRepositoryType `json:"type,omitempty"`
+
+	// UpstreamAuth Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+	UpstreamAuth *UpstreamAuth `json:"upstreamAuth,omitempty"`
 }
 
 // CreateRepositoryType APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
@@ -3995,8 +4019,11 @@ type Repository struct {
 	State RepositoryState `json:"state"`
 
 	// Type APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
-	Type    *RepositoryType `json:"type,omitempty"`
-	Version string          `json:"version"`
+	Type *RepositoryType `json:"type,omitempty"`
+
+	// UpstreamAuth Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+	UpstreamAuth *UpstreamAuth `json:"upstreamAuth,omitempty"`
+	Version      string        `json:"version"`
 }
 
 // RepositoryState Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
@@ -4405,6 +4432,9 @@ type UpdateRepository struct {
 
 	// MavenStrictPublication Maven Hosted only. False publishes successful standard PUTs directly; true requires a Gateway coordinate commit before reads can resolve the uploaded coordinate.
 	MavenStrictPublication *bool `json:"mavenStrictPublication,omitempty"`
+
+	// UpstreamAuth Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+	UpstreamAuth *UpstreamAuth `json:"upstreamAuth,omitempty"`
 }
 
 // UpdateScheduledTask defines model for UpdateScheduledTask.
@@ -4442,6 +4472,24 @@ type UpdateWebhookSubscription struct {
 	Name        string             `json:"name"`
 	Secret      *string            `json:"secret,omitempty"`
 }
+
+// UpstreamAuth Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+type UpstreamAuth struct {
+	// CredentialsConfigured True when an encrypted upstream credential is stored.
+	CredentialsConfigured *bool `json:"credentialsConfigured,omitempty"`
+
+	// Scheme none removes any stored credential and reads the upstream anonymously; basic sends an HTTP Basic credential; bearer sends `Authorization - Bearer <secret>`.
+	Scheme UpstreamAuthScheme `json:"scheme"`
+
+	// Secret Upstream password or token. Write-only; stored encrypted. Omit on update to keep the stored secret while the scheme is unchanged. Both schemes require a secret, so clear a stored credential by setting scheme to none rather than sending an empty secret.
+	Secret *string `json:"secret,omitempty"`
+
+	// Username basic only. Upstream account name. Rejected for bearer.
+	Username *string `json:"username,omitempty"`
+}
+
+// UpstreamAuthScheme none removes any stored credential and reads the upstream anonymously; basic sends an HTTP Basic credential; bearer sends `Authorization - Bearer <secret>`.
+type UpstreamAuthScheme string
 
 // User defines model for User.
 type User struct {

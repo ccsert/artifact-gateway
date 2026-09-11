@@ -64,8 +64,9 @@ scanner; external scanners contribute intelligence only through versioned contra
   Go has canonical single-ZIP Hosted publication, recoverable deletion,
   retention, reclaim, promotion, replication, Proxy/Group reads, and a
   default-disabled per-Hosted quarantine-read gate that covers Hosted reads and
-  Group resolution. Authenticated upstream Proxy credentials and checksum
-  database mirroring remain unavailable.
+  Group resolution. Go Proxy Repositories can carry a sealed `none`/`basic`/
+  `bearer` upstream credential; checksum database mirroring remains
+  unavailable.
 - APT has Proxy/Group reads and a management-only signed Hosted snapshot
   preview. The preview is not a stable compatibility commitment, and its
   bundled signer is not production key custody.

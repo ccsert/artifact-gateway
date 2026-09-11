@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- 新增 Go Proxy 仓库的上游认证凭据。Go Proxy 仓库可以保存 `none`、`basic` 或 `bearer` 凭据；密钥以 `repository-upstream-auth` 用途由 `GATEWAY_SETTINGS_ENCRYPTION_KEY` 封装，管理 API 永不返回其明文，且只应用于 Go Proxy 的上游抓取。`basic` 与 `bearer` 必须提供密钥，切换为 `none` 会删除已存凭据，跨主机重定向时凭据被剥离；其他格式或仓库类型会以明确的 `400` 拒绝 `upstreamAuth`，而不是静默忽略。
+
 - 新增 APT 签名快照的 Console 灾备界面。仓库管理员可以把任一 visible 或 retired 快照导出为可携带归档，并在同一步获得 `sha256:` 回执以便独立保存；恢复归档时只接受该独立保存的回执。恢复绝不会根据上传的字节现算回执。APT Hosted 仍是操作员预览。
 
 - Console 现在展示 Gateway 已实现的全部 Go 生命周期界面：Go Hosted 仓库会出现保留策略、安全准入、晋升/复制、生命周期任务与墓碑页签，计划任务接受 Go 目标仓库，保留与晋升表单使用 Go 模块术语，分布式部署与授权指标文档也在接受 Go 的位置列出 Go。

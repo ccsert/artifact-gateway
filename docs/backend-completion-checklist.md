@@ -83,9 +83,12 @@ goal. It intentionally excludes frontend work.
 ## Current Next Slice
 
 1. Close the remaining Go compatibility gaps without weakening the current
-   Hosted guarantees: authenticated upstream Proxy credentials and checksum
-   database mirroring remain. Default-disabled quarantine-read enforcement is
-   complete for Go Hosted and Go Groups.
+   Hosted guarantees: checksum database mirroring remains. Authenticated
+   upstream Proxy credentials are complete for Go Proxy (a `none`/`basic`/
+   `bearer` credential sealed with `GATEWAY_SETTINGS_ENCRYPTION_KEY`, applied
+   only to the Go Proxy upstream fetch, stripped on cross-host redirects, and
+   rejected with an explicit `400` outside Go Proxy), and default-disabled
+   quarantine-read enforcement is complete for Go Hosted and Go Groups.
 2. Finish APT H3 without widening the public format profile: the rotation
    overlap, external HTTPS/client drill, backup/restore verification, metrics,
    operator-visible state, signed-snapshot export with offline verification,

@@ -20,6 +20,7 @@ func (s *MemoryStore) CreateHostedRepository(_ context.Context, repo HostedRepos
 	repo.Version = "1"
 	repo.CreatedAt = time.Now().UTC()
 	repo.EgressProxy = cloneEgressProxy(repo.EgressProxy)
+	repo.UpstreamAuth = cloneUpstreamAuth(repo.UpstreamAuth)
 	s.hostedRepositories[repo.ID] = repo
 	return repo, nil
 }
@@ -158,6 +159,7 @@ func (s *MemoryStore) UpdateHostedRepository(_ context.Context, repo HostedRepos
 	current.AnonymousRead = repo.AnonymousRead
 	current.MavenStrictPublication = repo.MavenStrictPublication
 	current.EgressProxy = cloneEgressProxy(repo.EgressProxy)
+	current.UpstreamAuth = cloneUpstreamAuth(repo.UpstreamAuth)
 	current.Version = nextHostedGroupVersion(current.Version)
 	s.hostedRepositories[repo.ID] = current
 	return current, nil
@@ -171,6 +173,17 @@ func cloneEgressProxy(proxy *EgressProxy) *EgressProxy {
 	}
 	cloned := *proxy
 	cloned.NoProxy = append([]string(nil), proxy.NoProxy...)
+	cloned.CredentialsConfigured = false
+	return &cloned
+}
+
+// cloneUpstreamAuth deep-copies the pointer so stored repositories never share
+// mutable upstream credentials with caller-owned structs.
+func cloneUpstreamAuth(auth *UpstreamAuth) *UpstreamAuth {
+	if auth == nil {
+		return nil
+	}
+	cloned := *auth
 	cloned.CredentialsConfigured = false
 	return &cloned
 }

@@ -217,6 +217,74 @@ describe("RepositoryDetailPage Go lifecycle surfaces", () => {
   });
 });
 
+describe("RepositorySettingsTab upstream authentication", () => {
+  const goProxy = {
+    id: "44444444-4444-4444-8444-444444444444",
+    name: "go-proxy",
+    format: "go",
+    type: "proxy",
+    endpoint: "https://proxy.golang.org",
+    allowedHosts: ["proxy.golang.org"],
+    anonymousRead: false,
+    mavenStrictPublication: false,
+    state: "active",
+    version: "3",
+  } as const;
+
+  it("submits a sealed upstream credential for a Go proxy repository", async () => {
+    const user = userEvent.setup();
+    mockUpdateRepository.mockResolvedValue({ data: goProxy } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositorySettingsTab
+          repo={goProxy}
+          capabilities={null}
+          onUpdated={vi.fn()}
+        />
+      </PreferencesProvider>,
+    );
+
+    expect(screen.getByText("上游认证")).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /Bearer 令牌/ }));
+    await user.type(screen.getByLabelText("上游令牌"), "ghp_upstream_token");
+    await user.click(screen.getByRole("button", { name: "保存更改" }));
+
+    await waitFor(() =>
+      expect(mockUpdateRepository).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: { repositoryId: goProxy.id },
+          headers: { "If-Match": goProxy.version },
+          body: expect.objectContaining({
+            upstreamAuth: { scheme: "bearer", secret: "ghp_upstream_token" },
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("offers upstream authentication only for a Go proxy repository", () => {
+    const mavenProxy = {
+      ...goProxy,
+      format: "maven",
+      name: "maven-proxy",
+      endpoint: "https://repo1.maven.org",
+    } as const;
+
+    render(
+      <PreferencesProvider>
+        <RepositorySettingsTab
+          repo={mavenProxy}
+          capabilities={null}
+          onUpdated={vi.fn()}
+        />
+      </PreferencesProvider>,
+    );
+
+    expect(screen.queryByText("上游认证")).not.toBeInTheDocument();
+  });
+});
+
 describe("RepositorySettingsTab Maven publication policy", () => {
   it("keeps strict publication off by default and persists an explicit opt-in", async () => {
     const user = userEvent.setup();

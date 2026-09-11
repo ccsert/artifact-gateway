@@ -47,8 +47,8 @@ standard. The admitted Go Hosted profile now declares the independently gated
 `read`, `publish`, `browse`, `delete`, `restore`, `retain`, `reclaim`, `promote`,
 and `replicate` operations. Promotion and replication preserve the complete
 `.info`/`.mod`/`.zip` snapshot and publish only to Hosted targets.
-Authenticated upstream Proxy credentials and checksum-database mirroring remain
-separate capabilities and must not be advertised until executable.
+Checksum-database mirroring remains a separate capability and must not be
+advertised until executable.
 
 Update (2026-09-11): quarantine-read enforcement, originally listed above as a
 separate pending capability, is now delivered for Go Hosted and Go Group. A
@@ -56,3 +56,13 @@ default-disabled per-Hosted read policy hides a quarantined `module@version`
 from `@v/list` and `/@latest`, returns `403` for every `info`/`mod`/`zip`
 representation, and prevents Group fallback. See
 [security-admission-policy.md](../security-admission-policy.md).
+
+Update (2026-09-11): authenticated upstream Proxy credentials are delivered for
+Go Proxy Repositories. A Go Proxy Repository may store a `none`, `basic`, or
+`bearer` upstream credential; the secret is sealed with
+`GATEWAY_SETTINGS_ENCRYPTION_KEY` under the `repository-upstream-auth` purpose
+and is never returned by the management API. `basic` and `bearer` are the only
+admitted schemes, switching to `none` removes the stored credential, the
+credential is applied only to the Go Proxy upstream fetch, and it is stripped on
+cross-host redirects. Every other format and Repository type rejects
+`upstreamAuth` with an explicit `400` rather than ignoring it silently.

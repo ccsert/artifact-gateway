@@ -35,10 +35,17 @@ Group 以 Hosted 优先的冲突策略组合 Hosted 与 Proxy 成员，并继续
 `restore`、`retain`、`reclaim`、`promote` 与 `replicate`。
 
 晋升和复制保留完整
-`.info`/`.mod`/`.zip` 快照，并且只能发布到 Hosted 目标。认证上游 Proxy 凭据和校验和
-数据库镜像仍是独立能力，在可执行前不得对外声明。
+`.info`/`.mod`/`.zip` 快照，并且只能发布到 Hosted 目标。校验和数据库镜像仍是独立
+能力，在可执行前不得对外声明。
 
 更新（2026-09-11）：原本在上文列为待办的隔离读取强制执行现已交付，覆盖 Go Hosted
 与 Go Group。默认关闭的 per-Hosted 读取策略会把被隔离的 `module@version` 从
 `@v/list` 与 `/@latest` 隐藏，对 `info`/`mod`/`zip` 每种表示返回 `403`，并阻止
 Group fallback。详见[安全准入策略](../security-admission-policy.zh-CN.md)。
+
+更新（2026-09-11）：Go Proxy 仓库的认证上游凭据现已交付。Go Proxy 仓库可以保存
+`none`、`basic` 或 `bearer` 上游凭据；密钥使用 `GATEWAY_SETTINGS_ENCRYPTION_KEY` 以
+`repository-upstream-auth` 用途封装，管理 API 永不返回其明文。只接受 `basic` 与
+`bearer` 两种方案，切换为 `none` 即删除已存凭据；凭据只应用于 Go Proxy 的上游抓取，
+并在跨主机重定向时被剥离。其他格式与仓库类型会以明确的 `400` 拒绝 `upstreamAuth`，
+而不是静默忽略。

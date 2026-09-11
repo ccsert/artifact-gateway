@@ -117,6 +117,7 @@ export type Repository = {
    */
   mavenStrictPublication: boolean;
   egressProxy?: EgressProxy;
+  upstreamAuth?: UpstreamAuth;
   /**
    * Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
    */
@@ -148,6 +149,7 @@ export type CreateRepository = {
    */
   mavenStrictPublication?: boolean;
   egressProxy?: EgressProxy;
+  upstreamAuth?: UpstreamAuth;
 };
 
 export type Group = {
@@ -1398,6 +1400,24 @@ export type EgressProxy = {
   readonly credentialsConfigured?: boolean;
 };
 
+/**
+ * Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+ */
+export type UpstreamAuth = {
+  /**
+   * none removes any stored credential and reads the upstream anonymously; basic sends an HTTP Basic credential; bearer sends `Authorization - Bearer <secret>`.
+   */
+  scheme: "none" | "basic" | "bearer";
+  /**
+   * basic only. Upstream account name. Rejected for bearer.
+   */
+  username?: string;
+  /**
+   * True when an encrypted upstream credential is stored.
+   */
+  readonly credentialsConfigured?: boolean;
+};
+
 export type RepositoryGrantRecord = {
   repositoryId: string;
   repositoryName: string;
@@ -1520,6 +1540,7 @@ export type UpdateRepository = {
    */
   mavenStrictPublication?: boolean;
   egressProxy?: EgressProxy;
+  upstreamAuth?: UpstreamAuth;
 };
 
 /**
@@ -1976,6 +1997,7 @@ export type RepositoryWritable = {
    */
   mavenStrictPublication: boolean;
   egressProxy?: EgressProxyWritable;
+  upstreamAuth?: UpstreamAuthWritable;
   /**
    * Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
    */
@@ -2007,6 +2029,7 @@ export type CreateRepositoryWritable = {
    */
   mavenStrictPublication?: boolean;
   egressProxy?: EgressProxyWritable;
+  upstreamAuth?: UpstreamAuthWritable;
 };
 
 export type RepositoryPageWritable = {
@@ -2089,6 +2112,24 @@ export type EgressProxyWritable = {
 };
 
 /**
+ * Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
+ */
+export type UpstreamAuthWritable = {
+  /**
+   * none removes any stored credential and reads the upstream anonymously; basic sends an HTTP Basic credential; bearer sends `Authorization - Bearer <secret>`.
+   */
+  scheme: "none" | "basic" | "bearer";
+  /**
+   * basic only. Upstream account name. Rejected for bearer.
+   */
+  username?: string;
+  /**
+   * Upstream password or token. Write-only; stored encrypted. Omit on update to keep the stored secret while the scheme is unchanged. Both schemes require a secret, so clear a stored credential by setting scheme to none rather than sending an empty secret.
+   */
+  secret?: string;
+};
+
+/**
  * Editable repository management policy and proxy configuration. Hosted repositories accept anonymousRead updates and Maven Hosted repositories also accept mavenStrictPublication updates; name, format, and type are immutable after creation.
  */
 export type UpdateRepositoryWritable = {
@@ -2109,6 +2150,7 @@ export type UpdateRepositoryWritable = {
    */
   mavenStrictPublication?: boolean;
   egressProxy?: EgressProxyWritable;
+  upstreamAuth?: UpstreamAuthWritable;
 };
 
 export type RepositoryId = string;

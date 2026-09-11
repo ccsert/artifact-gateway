@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Added upstream authentication credentials for Go Proxy Repositories. A Go Proxy Repository can store a `none`, `basic`, or `bearer` credential; the secret is sealed with `GATEWAY_SETTINGS_ENCRYPTION_KEY` under the `repository-upstream-auth` purpose, is never returned by the management API, and is applied only to the Go Proxy upstream fetch. `basic` and `bearer` require a secret, switching to `none` removes a stored credential, credentials are stripped on cross-host redirects, and every other format or Repository type rejects `upstreamAuth` with an explicit `400` instead of ignoring it.
+
 - Added a Console disaster-recovery surface for APT signed snapshots. A repository administrator can export any visible or retired snapshot as a portable archive, receive its `sha256:` receipt in the same step for independent storage, and restore an archive against that stored receipt. Restore never derives the receipt from the uploaded bytes. APT Hosted remains an operator preview.
 
 - The Console now exposes every Go lifecycle surface the Gateway already implements: Retention, Security admission, Promote/replicate, Lifecycle jobs, and Tombstones appear for Go Hosted Repositories, scheduled retention tasks accept Go targets, retention and promotion forms use Go module terminology, and the distributed-deployment and authorization-metrics documents list Go where it is accepted.
