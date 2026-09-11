@@ -11,9 +11,11 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyAptLifecycle,
+  exportAptRepositorySnapshot,
   getAptLifecycleState,
   previewAptLifecycle,
   pruneAptSnapshots,
+  restoreAptRepositorySnapshot,
 } from "../../client";
 import type {
   AptLifecyclePackage,
@@ -25,9 +27,11 @@ import { APTOperationsTab } from "./APTOperationsTab";
 
 vi.mock("../../client", () => ({
   applyAptLifecycle: vi.fn(),
+  exportAptRepositorySnapshot: vi.fn(),
   getAptLifecycleState: vi.fn(),
   previewAptLifecycle: vi.fn(),
   pruneAptSnapshots: vi.fn(),
+  restoreAptRepositorySnapshot: vi.fn(),
 }));
 vi.mock("./RepositoryDistributionTab", () => ({
   RepositoryDistributionTab: () => <div>Distribution</div>,
@@ -342,4 +346,115 @@ it("does not accept a retired StrictMode mount request after a later refresh", a
     } as never),
   );
   expect(screen.queryByText("当前快照 #99")).not.toBeInTheDocument();
+});
+
+// The Gateway exports a visible or retired snapshot and restores it only
+// against the exact receipt the operator saved at backup time. These tests pin
+// the Console wiring for both halves of that recovery workflow.
+describe("APT disaster-recovery archive", () => {
+  const createObjectURL = vi.fn();
+  const revokeObjectURL = vi.fn();
+  const validReceipt = `sha256:${"b".repeat(64)}`;
+  const archiveBlob = () =>
+    new Blob(["apt-archive"], {
+      type: "application/vnd.artifact-gateway.apt-snapshot.v1+tar",
+    });
+
+  beforeEach(() => {
+    createObjectURL.mockReturnValue("blob:apt-archive");
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURL,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURL,
+    });
+    // jsdom cannot navigate, so the synthetic download anchor click would log
+    // "Not implemented: navigation" without changing the assertions.
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+      () => undefined,
+    );
+    vi.mocked(exportAptRepositorySnapshot).mockResolvedValue({
+      data: archiveBlob(),
+    } as never);
+    vi.mocked(restoreAptRepositorySnapshot).mockResolvedValue({
+      data: { ...snapshot, sequence: 4 },
+    } as never);
+  });
+
+  it("exports every visible and retired snapshot but never a pruned one", async () => {
+    vi.mocked(getAptLifecycleState).mockResolvedValueOnce({
+      data: {
+        ...state,
+        snapshots: [
+          ...state.snapshots,
+          {
+            snapshot: {
+              ...snapshot,
+              id: "snapshot-pruned",
+              sequence: 0,
+              state: "pruned",
+            },
+          },
+        ],
+      },
+    } as never);
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("当前快照 #2");
+    await user.click(screen.getByRole("tab", { name: "灾备归档" }));
+    const exportButtons = await screen.findAllByRole("button", {
+      name: "导出归档",
+    });
+    expect(exportButtons).toHaveLength(2);
+    await user.click(exportButtons[0]);
+    expect(exportAptRepositorySnapshot).toHaveBeenCalledWith({
+      path: { repositoryId: repo.id, snapshotId: "snapshot-current" },
+    });
+    await screen.findByText(/apt-stable-2\.tar/);
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores only with an archive file and a well-formed independent receipt", async () => {
+    const user = userEvent.setup();
+    const { container } = mount();
+    await screen.findByText("当前快照 #2");
+    await user.click(screen.getByRole("tab", { name: "灾备归档" }));
+    const receiptField = screen.getByRole("textbox", {
+      name: "备份回执 (sha256)",
+    });
+    expect(screen.getByRole("button", { name: "恢复归档" })).toBeDisabled();
+
+    await user.type(receiptField, "sha256:nothex");
+    expect(screen.getByRole("button", { name: "恢复归档" })).toBeDisabled();
+
+    await user.clear(receiptField);
+    await user.type(receiptField, validReceipt);
+    const input = container.querySelector('input[type="file"]');
+    expect(input).not.toBeNull();
+    await user.upload(
+      input as HTMLInputElement,
+      new File(["apt-archive"], "apt-stable-2.tar", {
+        type: "application/vnd.artifact-gateway.apt-snapshot.v1+tar",
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "恢复归档" })).toBeEnabled(),
+    );
+
+    await user.click(screen.getByRole("button", { name: "恢复归档" }));
+    await user.click(
+      screen.getAllByRole("button", { name: "恢复归档" }).at(-1)!,
+    );
+    await screen.findByText("已从归档恢复 stable 快照 #4");
+    const call = vi.mocked(restoreAptRepositorySnapshot).mock.calls[0]?.[0];
+    expect(call?.path).toEqual({ repositoryId: repo.id });
+    expect(call?.headers).toEqual({
+      "X-Artifact-Archive-Digest": validReceipt,
+    });
+    expect((call?.body as File).name).toBe("apt-stable-2.tar");
+    expect(exportAptRepositorySnapshot).not.toHaveBeenCalled();
+  });
 });

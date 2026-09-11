@@ -156,7 +156,7 @@ remain open.
 
 ## APT-H4: lifecycle, scanning, and distribution
 
-Dedicated [deletion, retention, recovery and pruning](apt-hosted-lifecycle.md) operator APIs are available. Package scanning and quarantine are implemented, and [target-signed promotion and replication](apt-hosted-distribution.md) are available for operator preview. Generic scheduled policies and Console lifecycle forms remain future gates.
+Dedicated [deletion, retention, recovery and pruning](apt-hosted-lifecycle.md) operator APIs are available, together with their Console forms and the Console disaster-recovery export/restore forms. Package scanning and quarantine are implemented, and [target-signed promotion and replication](apt-hosted-distribution.md) are available for operator preview. Generic scheduled policies and Console first-publication forms remain future gates.
 
 - Treat removal or retention as a new signed snapshot. Tombstoned packages stay
   restorable during the grace period, and object reclaim remains delayed and

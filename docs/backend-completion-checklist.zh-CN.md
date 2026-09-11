@@ -54,7 +54,7 @@
 ## 当前下一阶段
 
 1. 在不削弱 Hosted 保证的前提下关闭 Go 兼容缺口：认证 Proxy 上游和校验和数据库镜像。默认关闭的隔离读取强制已完成，覆盖 Go Hosted 与 Go Group。
-2. 不扩大公开格式档案地完成 APT H3。轮换重叠、外部 HTTPS/client 演练、备份恢复验证、指标和操作员状态已完成；托管 KMS/HSM、恢复、快照导出和部署告警仍待完成。
+2. 不扩大公开格式档案地完成 APT H3。轮换重叠、外部 HTTPS/client 演练、备份恢复验证、指标、操作员状态、带离线校验的签名快照导出、Console 归档导出/恢复与受信任恢复路径已完成；托管 KMS/HSM 密钥保管与恢复、部署告警仍待完成。
 3. APT H3 生产签名门禁之后继续 Cargo C0。发布 framing、`.crate`/manifest 身份、稀疏索引转换、fuzz 边界和官方客户端契约测试已完成；C1 或格式枚举前仍需非公开持久碰撞预留与 Memory/PostgreSQL 一致性。
 4. 只有当网络策略、持久 SBOM、资源限制和真实扫描 smoke test 同步进入一个切片时，才向 Kubernetes overlay 增加可选扫描 Workload。H3 替换前，本地 APT 参考 signer 继续限制在 loopback sidecar 和专用 key volume。
 5. NuGet 保持延期；维持有界解析器测试，但在 Cargo C0-C1 完成或客户需求改变优先级前不实现发布持久化。

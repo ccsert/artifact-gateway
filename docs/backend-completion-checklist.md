@@ -88,8 +88,9 @@ goal. It intentionally excludes frontend work.
    complete for Go Hosted and Go Groups.
 2. Finish APT H3 without widening the public format profile: the rotation
    overlap, external HTTPS/client drill, backup/restore verification, metrics,
-   and operator-visible state are complete; managed KMS/HSM key custody and
-   recovery, snapshot export tooling, and deployment alerts remain.
+   operator-visible state, signed-snapshot export with offline verification,
+   Console archive export/restore, and the trusted restore path are complete;
+   managed KMS/HSM key custody and recovery and deployment alerts remain.
 3. Continue Cargo C0 after the APT H3 production-signing gate. Bounded publish
    framing, `.crate`/manifest identity, sparse-index translation, fuzz seams,
    and official `cargo package`/`cargo publish` contract tests are complete.

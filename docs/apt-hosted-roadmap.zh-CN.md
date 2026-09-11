@@ -47,7 +47,7 @@ Hosted 支持 GET、HEAD、条件响应和 Range。故障注入覆盖签名失�
 
 ## APT-H4：生命周期、扫描与分发
 
-专用[删除、保留、恢复与快照清理](apt-hosted-lifecycle.zh-CN.md)已提供操作员 API；包扫描与隔离已实现，[使用目标签名的晋级与复制](apt-hosted-distribution.zh-CN.md)已提供操作员预览；通用定时策略和 Console 生命周期表单仍需后续验收。
+专用[删除、保留、恢复与快照清理](apt-hosted-lifecycle.zh-CN.md)已提供操作员 API 与配套 Console 表单，Console 的灾备归档导出/恢复表单也已提供；包扫描与隔离已实现，[使用目标签名的晋级与复制](apt-hosted-distribution.zh-CN.md)已提供操作员预览；通用定时策略和 Console 首次发布表单仍需后续验收。
 
 - 删除或保留必须生成新签名快照；墓碑包在宽限期内可恢复，物理回收延迟且重查引用。
 - 在公开手动或发布扫描前实现 `.deb` resolver 与 scanner adapter；当前参考扫描器不宣称覆盖 APT。

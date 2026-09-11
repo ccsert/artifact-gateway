@@ -24,6 +24,8 @@ gateway apt-snapshot verify - < snapshot.tar
 
 The command runs before server configuration is loaded. It does not connect to a database, object store, or signer, or extract filesystem paths. Success exits 0 and writes JSON containing `integrity: verified`, `signatures: not_checked`, `archiveDigest: sha256:<hex>`, snapshot/repository IDs, and package/asset counts. Archive errors exit 1; invalid command usage exits 2.
 
+The Console offers the same workflow without curl. A repository administrator opens the Hosted APT Repository's **Signed snapshots** tab and then the **Disaster recovery** tab, exports any visible or retired snapshot, and receives the archive plus its `sha256:` receipt in the same step. That tab also restores an archive, and it accepts only the receipt the operator stored independently at backup time; it never derives a receipt from the uploaded bytes. Command-line export and `gateway apt-snapshot verify` remain the reference path for scripted recovery and for browsers without `crypto.subtle`, such as a plain-HTTP origin.
+
 `integrity: verified` establishes complete bytes, Debian package identity, manifest references, and Release index closure. It does not establish signer trust. Separately verify InRelease and Release.gpg using an operator-owned public-only keyring and a trusted fingerprint policy. A fingerprint supplied by the archive is not a trust root.
 
 ## HTTP and Archive Contract

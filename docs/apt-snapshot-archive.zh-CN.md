@@ -24,6 +24,8 @@ gateway apt-snapshot verify - < snapshot.tar
 
 命令在加载服务器配置之前执行，不连接数据库、对象存储或 signer，也不解包到文件系统。成功时退出码为 0，输出 JSON：`integrity: verified`、`signatures: not_checked`、`archiveDigest: sha256:<hex>`、快照/仓库 ID 和包/资产数量。归档错误返回 1，命令用法错误返回 2。
 
+Console 提供与 curl 等价的完整流程：仓库管理员打开 Hosted APT 仓库的**签名快照**页签，再进入**灾备归档**页签，即可导出任一 visible 或 retired 快照，并在同一步拿到归档文件与其 `sha256:` 回执。该页签也能恢复归档，但只接受管理员在备份时独立保存的那份回执，绝不从本次上传字节现算摘要。脚本化恢复，以及没有 `crypto.subtle` 的场景（例如纯 HTTP 源站），仍以命令行导出与 `gateway apt-snapshot verify` 为准。
+
 `integrity: verified` 表示完整字节、Debian 包身份、清单引用和 Release 索引闭合性通过检查；它不证明签名者可信。签名信任需另外使用操作员拥有的纯公钥 keyring 验证 InRelease 与 Release.gpg，并应用受信 fingerprint 策略。归档自带的 fingerprint 不能充当信任根。
 
 ## HTTP 与归档契约
