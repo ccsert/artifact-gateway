@@ -79,6 +79,7 @@ describe("RepositoryDistributionTab", () => {
   it.each([
     ["oci", "library/nginx"],
     ["conan", "zlib/1.3.1@company/stable#recipe-revision"],
+    ["go", "example.com/team/gateway-widget@v1.2.3"],
   ] as const)(
     "shows a valid %s canonical-coordinate example in advanced input",
     async (format, placeholder) => {
