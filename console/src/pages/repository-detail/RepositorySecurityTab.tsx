@@ -264,6 +264,7 @@ export function RepositorySecurityTab({
     "conan",
     "npm",
     "pypi",
+    "go",
   ].includes(repo.format)
     ? text("未配置可用扫描器", "No scanner configured")
     : text("当前格式不可用", "Unavailable for this format");
@@ -617,6 +618,17 @@ function quarantineReadScope(
         metadata: text(
           "从 revision 元数据隐藏",
           "Hidden from revision metadata",
+        ),
+      };
+    case "go":
+      return {
+        boundary: text(
+          "module@version 全部表示",
+          "Every module@version representation",
+        ),
+        metadata: text(
+          "从 @v/list 与 @latest 隐藏",
+          "Hidden from @v/list and @latest",
         ),
       };
     default:

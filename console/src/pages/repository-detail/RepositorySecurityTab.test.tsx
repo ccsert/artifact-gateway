@@ -298,6 +298,27 @@ describe("RepositorySecurityTab", () => {
     expect(readSaveButton).toBeDisabled();
   });
 
+  it("names the Go module version scope instead of the generic fallback", async () => {
+    mockGetSecurityPolicy.mockResolvedValue({
+      data: { version: "1", enabled: false },
+    } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositorySecurityTab
+          repo={{ ...repo, format: "go", name: "go-releases" }}
+          publicationScanning={false}
+        />
+      </PreferencesProvider>,
+    );
+
+    expect(
+      await screen.findByText("module@version 全部表示"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("从 @v/list 与 @latest 隐藏")).toBeInTheDocument();
+    expect(screen.queryByText("制品身份")).not.toBeInTheDocument();
+  });
+
   it("keeps the security policy usable when the read policy request fails", async () => {
     mockGetSecurityPolicy.mockResolvedValue({
       data: { version: "3", enabled: false },
