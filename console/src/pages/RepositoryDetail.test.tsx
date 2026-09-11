@@ -10,6 +10,7 @@ import {
   updateRepository,
 } from "../client";
 import { PreferencesProvider } from "../lib/preferences";
+import type { Repository } from "../client";
 import {
   RepositoryDetailPage,
   RepositorySettingsTab,
@@ -218,7 +219,7 @@ describe("RepositoryDetailPage Go lifecycle surfaces", () => {
 });
 
 describe("RepositorySettingsTab upstream authentication", () => {
-  const goProxy = {
+  const goProxy: Repository = {
     id: "44444444-4444-4444-8444-444444444444",
     name: "go-proxy",
     format: "go",
@@ -229,7 +230,7 @@ describe("RepositorySettingsTab upstream authentication", () => {
     mavenStrictPublication: false,
     state: "active",
     version: "3",
-  } as const;
+  };
 
   it("submits a sealed upstream credential for a Go proxy repository", async () => {
     const user = userEvent.setup();
