@@ -338,7 +338,7 @@ func supportsQuarantineReadPolicy(repo repository.HostedRepository) bool {
 		return false
 	}
 	switch repo.Format {
-	case repository.FormatRaw, repository.FormatMaven, repository.FormatOCI, repository.FormatNPM, repository.FormatPyPI, repository.FormatConan, repository.FormatAPT:
+	case repository.FormatRaw, repository.FormatMaven, repository.FormatOCI, repository.FormatNPM, repository.FormatPyPI, repository.FormatConan, repository.FormatAPT, repository.FormatGo:
 		return true
 	default:
 		return false

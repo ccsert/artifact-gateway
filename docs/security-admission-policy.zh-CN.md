@@ -76,11 +76,11 @@ PUT /api/v2/repositories/{repositoryId}/quarantine-read-policy
 If-Match: <policy version>
 ```
 
-开启后，Raw、Maven、npm、PyPI、Conan 的隔离 Artifact 对协议 GET/HEAD 返回 `403 artifact_quarantined`；OCI 返回 Registry V2 `DENIED`。列表与元数据会隐藏隔离身份。
+开启后，Raw、Maven、npm、PyPI、Conan、Go 以及 APT Hosted 的隔离 Artifact 对协议 GET/HEAD 返回 `403 artifact_quarantined`；OCI 返回 Registry V2 `DENIED`。Raw 列表、Maven 元数据、OCI tag、npm packument、PyPI Simple 元数据、Conan revision 元数据，以及 Go 的 `@v/list`/`@latest` 都会隐藏隔离身份。
 
-npm/PyPI 按完整 package/project version 执行，Conan 按 recipe revision closure，OCI 阻止 manifest 及其引用的 config/layer/index blob。Group 发现更高优先级隔离身份时不得 fall through。
+npm/PyPI/Go 按完整 package/project/module version 执行，单一隔离 digest 会阻止该版本的每个分发与表示；Conan 按 recipe revision closure；OCI 阻止 manifest 及其引用的 config/layer/index blob。APT 强制范围限于未对外声明的 Hosted 签名快照预览，并优先于 pool/by-hash 的可用性宽限。Group 发现更高优先级隔离身份时不得 fall through。
 
-Release 立即恢复读取；关闭 read policy 恢复旧行为但不删除隔离记录。Go 与 APT 不属于首批读取强制范围。
+Release 立即恢复读取；关闭 read policy 恢复旧行为但不删除隔离记录。
 
 建议先保持关闭，让扫描器写入 intelligence，在 CI 使用 evaluate 验证覆盖，再逐 Repository 开启。扫描由管理 API 持久排队，发布后 `autoScanOnPublish` 可异步触发；调度失败会审计但不回滚成功发布。
 

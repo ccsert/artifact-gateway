@@ -57,7 +57,7 @@ image names. See the exact paths and evidence in
 | User and role admin pages | Full Security section | Profile-aware user lifecycle, lockout and session controls, API Keys, Access Control, reusable authorization roles and repository Grants pages; LDAP/SAML and soft deletion remain future work | Medium |
 | Task scheduler | User-created scheduled and manual tasks | Administrator-defined fixed-interval repository/audit retention schedules, manual dispatch, enable/disable controls, and dispatch history; cron and broader task types remain future work | Low |
 | Storage backend management | Multiple blob stores (file/S3/Azure), groups, compaction | Single RustFS/S3 store; no compaction UI | Medium |
-| Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | Configurable external multi-asset scanner with durable manual and scan-on-publication jobs, bounded transport, persisted per-finding evidence, searchable Console details, optimistic intelligence merge, versioned admission policies, promotion-time evidence propagation, sanitized health probes, Gateway-enforced vulnerability database freshness, versioned quarantine that blocks promotion/replication, and a default-disabled per-Hosted policy that blocks quarantined reads across six native formats | Medium |
+| Security and vulnerability scanning | Repository Health Check, Firewall, IQ integration | Configurable external multi-asset scanner with durable manual and scan-on-publication jobs, bounded transport, persisted per-finding evidence, searchable Console details, optimistic intelligence merge, versioned admission policies, promotion-time evidence propagation, sanitized health probes, Gateway-enforced vulnerability database freshness, versioned quarantine that blocks promotion/replication, and a default-disabled per-Hosted policy that blocks quarantined reads across every native Hosted format | Medium |
 | Dashboard visualization | Trends, throughput, top-N charts | Capacity-by-format visualization and locally sampled repository/storage trends; server-side time series, throughput, and top-N analytics remain future work | Low |
 | Distribution job controls | Pause, retry, cancel, delete | Replication cancel/retry/run-now controls, lifecycle Jobs view, and repository-level intelligence reconciliation; general scheduler remains future work | Low |
 | Notifications | Webhooks, email/SMTP | Durable HMAC-signed quarantine/release Webhooks with retry, dead-letter replay, and Console visibility; email/SMTP and broader event types remain future work | Low |
@@ -440,7 +440,7 @@ independently deliverable.
    scan reconciliation, automatic scanner execution, sanitized scanner health,
    Gateway-enforced vulnerability database freshness, and bounded
    per-finding vulnerability detail, versioned distribution quarantine, and a
-   default-disabled quarantine-read policy across six native formats are
+   default-disabled quarantine-read policy across every native Hosted format is
    delivered.
 2. **P1 Privilege/content-selector management.** Extend the delivered reusable
    grant templates with selector composition beyond the current repository

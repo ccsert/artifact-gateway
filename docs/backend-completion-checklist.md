@@ -71,6 +71,10 @@ goal. It intentionally excludes frontend work.
 - [x] Transactional operational events and durable HMAC-signed Webhook
   delivery for Artifact quarantine and release, including lease recovery,
   bounded retry, dead-letter replay, and administrator visibility.
+- [x] Default-disabled repository Read Policy enforcement for every supported
+  Hosted format, including Go Hosted version lists, `/@latest`, and every
+  `info`/`mod`/`zip` representation, with ordered Groups refusing to fall
+  through past a quarantined higher-priority coordinate.
 - [x] Backup/restore coverage for promotion and replication state.
 - [x] Release preflight and evidence coverage for lifecycle operations.
 - [x] Black-box protocol tests for publish, resolve, delete, retain, and
@@ -79,8 +83,9 @@ goal. It intentionally excludes frontend work.
 ## Current Next Slice
 
 1. Close the remaining Go compatibility gaps without weakening the current
-   Hosted guarantees: default-disabled quarantine-read enforcement, authenticated
-   upstream Proxy credentials, and checksum database mirroring remain.
+   Hosted guarantees: authenticated upstream Proxy credentials and checksum
+   database mirroring remain. Default-disabled quarantine-read enforcement is
+   complete for Go Hosted and Go Groups.
 2. Finish APT H3 without widening the public format profile: the rotation
    overlap, external HTTPS/client drill, backup/restore verification, metrics,
    and operator-visible state are complete; managed KMS/HSM key custody and

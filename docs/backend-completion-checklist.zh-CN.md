@@ -47,12 +47,13 @@
 - [x] 持久扫描任务、不可变身份状态、发布幂等和缺失扫描补偿。
 - [x] 脱敏扫描器健康信息及 Gateway 强制的漏洞库新鲜度诊断。
 - [x] 事务运维事件与 HMAC 签名 Webhook，覆盖隔离/释放、租约恢复、有界重试、死信重放和管理可见性。
+- [x] 所有受支持 Hosted 格式的默认关闭隔离读策略强制，含 Go Hosted 的版本列表、`/@latest` 与 `info`/`mod`/`zip` 全部表示；有序 Group 不会越过更高优先级成员中已隔离的坐标向下回落。
 - [x] 晋级复制状态的备份恢复，生命周期发布预检和证据覆盖。
 - [x] OCI、Maven、Raw、Conan 发布、解析、删除、保留和恢复黑盒测试。
 
 ## 当前下一阶段
 
-1. 在不削弱 Hosted 保证的前提下关闭 Go 兼容缺口：默认关闭的隔离读取强制、认证 Proxy 上游和校验和数据库镜像。
+1. 在不削弱 Hosted 保证的前提下关闭 Go 兼容缺口：认证 Proxy 上游和校验和数据库镜像。默认关闭的隔离读取强制已完成，覆盖 Go Hosted 与 Go Group。
 2. 不扩大公开格式档案地完成 APT H3。轮换重叠、外部 HTTPS/client 演练、备份恢复验证、指标和操作员状态已完成；托管 KMS/HSM、恢复、快照导出和部署告警仍待完成。
 3. APT H3 生产签名门禁之后继续 Cargo C0。发布 framing、`.crate`/manifest 身份、稀疏索引转换、fuzz 边界和官方客户端契约测试已完成；C1 或格式枚举前仍需非公开持久碰撞预留与 Memory/PostgreSQL 一致性。
 4. 只有当网络策略、持久 SBOM、资源限制和真实扫描 smoke test 同步进入一个切片时，才向 Kubernetes overlay 增加可选扫描 Workload。H3 替换前，本地 APT 参考 signer 继续限制在 loopback sidecar 和专用 key volume。

@@ -46,7 +46,13 @@ This decision satisfies the separate-contract requirement in
 standard. The admitted Go Hosted profile now declares the independently gated
 `read`, `publish`, `browse`, `delete`, `restore`, `retain`, `reclaim`, `promote`,
 and `replicate` operations. Promotion and replication preserve the complete
-`.info`/`.mod`/`.zip` snapshot and publish only to Hosted targets. Quarantine-read
-enforcement, authenticated upstream Proxy credentials, and checksum-database
-mirroring remain separate capabilities and must not be advertised until
-executable.
+`.info`/`.mod`/`.zip` snapshot and publish only to Hosted targets.
+Authenticated upstream Proxy credentials and checksum-database mirroring remain
+separate capabilities and must not be advertised until executable.
+
+Update (2026-09-11): quarantine-read enforcement, originally listed above as a
+separate pending capability, is now delivered for Go Hosted and Go Group. A
+default-disabled per-Hosted read policy hides a quarantined `module@version`
+from `@v/list` and `/@latest`, returns `403` for every `info`/`mod`/`zip`
+representation, and prevents Group fallback. See
+[security-admission-policy.md](../security-admission-policy.md).

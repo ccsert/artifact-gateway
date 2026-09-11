@@ -63,7 +63,12 @@ func TestRepositoryQuarantineReadPolicyAPIUsesAdminCASAndAudits(t *testing.T) {
 		t.Fatalf("audits=%#v", audits)
 	}
 
-	unsupported, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "quarantine-read-policy-go", Format: repository.FormatGo})
+	// The policy is a Hosted-only admission control. A Proxy repository of the
+	// same format must still report the policy as inapplicable.
+	unsupported, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
+		ID: uuid.NewString(), Name: "quarantine-read-policy-proxy", Format: repository.FormatGo,
+		Type: repository.RepositoryTypeProxy, Endpoint: "https://proxy.golang.org",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

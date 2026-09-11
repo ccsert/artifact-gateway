@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
+	protocolidentity "github.com/artifact-gateway/artifact-gateway/internal/protocol/identity"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 	"golang.org/x/mod/modfile"
@@ -43,6 +44,8 @@ type nativeGoHandler struct {
 	audit              repository.Store
 	metrics            *Metrics
 	proxy              GoClient
+	readPolicies       repository.RepositoryQuarantineReadPolicyStore
+	quarantine         repository.ArtifactQuarantineStore
 	publicationScanner *publicationScanScheduler
 }
 
@@ -66,6 +69,7 @@ func newNativeGoHandler(store GatewayStore, objects OCIObjectStore, auth Authent
 	}
 	return nativeGoHandler{
 		store: store, repos: store, objects: objects, auth: auth, audit: store, proxy: UpstreamClient{},
+		readPolicies: store, quarantine: store,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth},
 	}
 }
@@ -317,6 +321,17 @@ func (h nativeGoHandler) serveList(w http.ResponseWriter, r *http.Request, repo 
 		h.recordAudit(r, repo, modulePath, "list", actor, outcome, status, 0, disposition)
 		return
 	}
+	versions, _, err = h.filterQuarantinedGoVersions(r.Context(), repo, versions)
+	if err != nil {
+		http.Error(w, "Go module list unavailable", http.StatusServiceUnavailable)
+		h.recordAudit(r, repo, modulePath, "list", actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, disposition)
+		return
+	}
+	if len(versions) == 0 {
+		http.NotFound(w, r)
+		h.recordAudit(r, repo, modulePath, "list", actor, repository.AuditNotFound, http.StatusNotFound, 0, disposition)
+		return
+	}
 	sort.Slice(versions, func(i, j int) bool { return semver.Compare(versions[i].Version, versions[j].Version) < 0 })
 	var body strings.Builder
 	for _, version := range versions {
@@ -389,7 +404,18 @@ func (h nativeGoHandler) resolveList(r *http.Request, repo repository.HostedRepo
 
 func (h nativeGoHandler) serveLatest(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, modulePath, actor string) {
 	versions, disposition, err := h.resolveList(r, repo, modulePath)
-	if err != nil || len(versions) == 0 {
+	if err != nil {
+		http.NotFound(w, r)
+		h.recordAudit(r, repo, modulePath, "latest", actor, repository.AuditNotFound, http.StatusNotFound, 0, disposition)
+		return
+	}
+	versions, _, err = h.filterQuarantinedGoVersions(r.Context(), repo, versions)
+	if err != nil {
+		http.Error(w, "Go module version unavailable", http.StatusServiceUnavailable)
+		h.recordAudit(r, repo, modulePath, "latest", actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, disposition)
+		return
+	}
+	if len(versions) == 0 {
 		http.NotFound(w, r)
 		h.recordAudit(r, repo, modulePath, "latest", actor, repository.AuditNotFound, http.StatusNotFound, 0, disposition)
 		return
@@ -399,6 +425,16 @@ func (h nativeGoHandler) serveLatest(w http.ResponseWriter, r *http.Request, rep
 }
 
 func (h nativeGoHandler) serveAsset(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, route goRoute, actor string) {
+	blocked, err := h.goVersionReadBlocked(r.Context(), repo, route.module, route.version)
+	if err != nil {
+		http.Error(w, "Go module version unavailable", http.StatusServiceUnavailable)
+		h.recordAudit(r, repo, route.module+"@"+route.version, route.kind, actor, repository.AuditStorageError, http.StatusServiceUnavailable, 0, "")
+		return
+	}
+	if blocked {
+		h.writeGoQuarantineDenied(w, r, repo, route, actor, "bypass")
+		return
+	}
 	asset, disposition, err := h.loadAsset(r, repo, route)
 	if repository.IsQuotaExceeded(err) {
 		http.Error(w, "repository capacity quota exceeded", http.StatusInsufficientStorage)
@@ -434,6 +470,88 @@ func (h nativeGoHandler) loadAsset(r *http.Request, repo repository.HostedReposi
 		asset, err = h.cacheAsset(r, repo, route)
 	}
 	return asset, disposition, err
+}
+
+// goVersionDigests returns every representation digest owned by one module
+// version. Go binds one distribution unit per version, so a quarantine recorded
+// against any representation blocks the whole version.
+func (h nativeGoHandler) goVersionDigests(ctx context.Context, repo repository.HostedRepository, modulePath, version string) ([]string, error) {
+	digests := make([]string, 0, 3)
+	for _, kind := range []string{"info", "mod", "zip"} {
+		asset, err := h.store.GetGoModuleAsset(ctx, repo.ID, modulePath, version, kind)
+		if errors.Is(err, repository.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if asset.Digest != "" {
+			digests = append(digests, asset.Digest)
+		}
+	}
+	return digests, nil
+}
+
+func (h nativeGoHandler) goVersionReadBlocked(ctx context.Context, repo repository.HostedRepository, modulePath, version string) (bool, error) {
+	if repo.Type != repository.RepositoryTypeHosted {
+		return false, nil
+	}
+	digests, err := h.goVersionDigests(ctx, repo, modulePath, version)
+	if err != nil {
+		return false, err
+	}
+	if len(digests) == 0 {
+		return false, nil
+	}
+	return repository.QuarantinedArtifactReadBlocked(
+		ctx, h.readPolicies, h.quarantine, repo.ID, repository.FormatGo,
+		protocolidentity.GoVersion(modulePath, version), digests...,
+	)
+}
+
+// filterQuarantinedGoVersions removes every module version whose distribution
+// unit is quarantined while the repository read policy is enabled. The blocked
+// set is returned so an ordered Group can consume those coordinates and stop a
+// lower-priority member from reintroducing them.
+func (h nativeGoHandler) filterQuarantinedGoVersions(ctx context.Context, repo repository.HostedRepository, versions []repository.GoModuleVersion) ([]repository.GoModuleVersion, map[string]bool, error) {
+	if repo.Type != repository.RepositoryTypeHosted {
+		return versions, nil, nil
+	}
+	blockedVersions := make(map[string]bool)
+	visible := make([]repository.GoModuleVersion, 0, len(versions))
+	for _, version := range versions {
+		blocked, err := h.goVersionReadBlocked(ctx, repo, version.Module, version.Version)
+		if err != nil {
+			return nil, nil, err
+		}
+		if blocked {
+			blockedVersions[version.Version] = true
+			continue
+		}
+		visible = append(visible, version)
+	}
+	return visible, blockedVersions, nil
+}
+
+func (h nativeGoHandler) writeGoQuarantineDenied(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, route goRoute, actor, disposition string) {
+	http.Error(w, repository.ArtifactQuarantinedReason, http.StatusForbidden)
+	h.recordQuarantineAudit(r, repo, route.module+"@"+route.version, route.kind, actor, disposition)
+}
+
+func (h nativeGoHandler) recordQuarantineAudit(r *http.Request, repo repository.HostedRepository, resource, representation, actor, disposition string) {
+	if h.audit == nil {
+		return
+	}
+	if actor == "" {
+		actor = anonymousActor
+	}
+	_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{
+		GroupName: repo.Name, Repository: repo.Name, Actor: actor, Outcome: repository.AuditAccessDenied,
+		OccurredAt: time.Now().UTC(), Format: string(repository.FormatGo), Resource: resource,
+		Representation: representation, MemberType: string(repo.Type), Operation: strings.ToLower(r.Method),
+		Status: http.StatusForbidden, CacheDisposition: disposition,
+		AuthorizationSource: "quarantine_read_policy", AuthorizationReason: repository.ArtifactQuarantinedReason,
+	})
 }
 
 func (h nativeGoHandler) publish(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, route goRoute, publisher string) {

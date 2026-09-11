@@ -35,5 +35,10 @@ Group 以 Hosted 优先的冲突策略组合 Hosted 与 Proxy 成员，并继续
 `restore`、`retain`、`reclaim`、`promote` 与 `replicate`。
 
 晋升和复制保留完整
-`.info`/`.mod`/`.zip` 快照，并且只能发布到 Hosted 目标。隔离读取强制执行、认证上游
-Proxy 凭据和校验和数据库镜像仍是独立能力，在可执行前不得对外声明。
+`.info`/`.mod`/`.zip` 快照，并且只能发布到 Hosted 目标。认证上游 Proxy 凭据和校验和
+数据库镜像仍是独立能力，在可执行前不得对外声明。
+
+更新（2026-09-11）：原本在上文列为待办的隔离读取强制执行现已交付，覆盖 Go Hosted
+与 Go Group。默认关闭的 per-Hosted 读取策略会把被隔离的 `module@version` 从
+`@v/list` 与 `/@latest` 隐藏，对 `info`/`mod`/`zip` 每种表示返回 `403`，并阻止
+Group fallback。详见[安全准入策略](../security-admission-policy.zh-CN.md)。

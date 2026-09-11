@@ -181,23 +181,24 @@ If-Match: <policy version>
 }
 ```
 
-When enabled, quarantined Raw, Maven, npm, PyPI, and Conan artifacts return
-`403 artifact_quarantined` for protocol `GET` and `HEAD`. OCI uses the Registry
-V2 `DENIED` error code with the same stable reason. Raw listings, Maven
-metadata, OCI tags, npm packuments, PyPI Simple metadata, and Conan revision
-metadata omit blocked identities.
+When enabled, quarantined Raw, Maven, npm, PyPI, Conan, Go, and APT Hosted
+artifacts return `403 artifact_quarantined` for protocol `GET` and `HEAD`. OCI
+uses the Registry V2 `DENIED` error code with the same stable reason. Raw
+listings, Maven metadata, OCI tags, npm packuments, PyPI Simple metadata,
+Conan revision metadata, and Go `@v/list`/`@latest` omit blocked identities.
 
-npm and PyPI enforce the whole `package@version` or `project@version`; a single
-quarantined digest blocks every distribution in that version. Conan enforces
-the recipe revision anchor and its package closure. OCI blocks a manifest and
-the config/layer/index blobs referenced by that manifest. Group resolution
-treats a higher-priority quarantined identity as policy-owned and does not fall
-through to a lower-priority Hosted or Proxy member for the same identity.
+npm, PyPI, and Go enforce the whole `package@version`, `project@version`, or
+`module@version`; a single quarantined digest blocks every distribution and
+representation in that version. Conan enforces the recipe revision anchor and
+its package closure. OCI blocks a manifest and the config/layer/index blobs
+referenced by that manifest. APT enforcement is scoped to the non-advertised
+Hosted signed-snapshot preview and takes precedence over the pool/by-hash
+availability grace. Group resolution treats a higher-priority quarantined
+identity as policy-owned and does not fall through to a lower-priority Hosted
+or Proxy member for the same identity.
 
 Releasing the quarantine restores reads immediately. Disabling the read policy
-restores the legacy behavior without changing quarantine records. Go and APT
-remain outside this first read-enforcement slice because their current native
-surfaces do not yet expose the same quarantine workflow.
+restores the legacy behavior without changing quarantine records.
 
 For a gradual rollout, keep the policy disabled while scanners begin writing
 artifact intelligence, use the evaluation endpoint from CI, then enable the

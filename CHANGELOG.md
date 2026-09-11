@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Go Hosted Repositories now enforce the default-disabled Quarantine Read Policy. When an administrator enables the policy, a quarantined module version disappears from `@v/list`, cannot be selected by `/@latest`, and returns `403` for every `info`, `mod`, and `zip` representation; ordered Go Groups refuse to fall through past a quarantined higher-priority coordinate. Hosted reads stay compatible by default, administrators can now manage the Go policy through the same versioned management API and Console surface as other formats, and each denial records the standard `quarantine_read_policy` audit evidence.
+
 - Added administrator-only exact APT archive recovery with independently saved backup digests and public-key trust, both signature and canonical package-index checks, atomic metadata visibility, quota reservations, concurrent replay and durable failed-attempt cleanup. Recovery needs no signer service; APT Hosted remains an operator preview.
 
 - Added administrator-only deterministic APT signed-snapshot export and an offline archive integrity command, with published/retired snapshot coverage and Debian installation from exported bytes. APT Hosted remains an operator preview; trusted archive recovery uses independent backup receipts and public-key policy.

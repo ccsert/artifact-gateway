@@ -66,8 +66,9 @@ func (h v2GroupGoHandler) serve(w http.ResponseWriter, r *http.Request, resolver
 	}
 }
 
-func (h v2GroupGoHandler) versions(r *http.Request, resolver v2GroupResolver, members []repository.Member, modulePath string) ([]repository.GoModuleVersion, bool) {
+func (h v2GroupGoHandler) versions(r *http.Request, resolver v2GroupResolver, members []repository.Member, modulePath string) ([]repository.GoModuleVersion, bool, map[string]bool) {
 	seen := make(map[string]repository.GoModuleVersion)
+	blockedVersions := make(map[string]bool)
 	stale := false
 	for _, member := range members {
 		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
@@ -79,10 +80,22 @@ func (h v2GroupGoHandler) versions(r *http.Request, resolver v2GroupResolver, me
 			continue
 		}
 		stale = stale || disposition == "stale"
-		for _, version := range versions {
-			if _, exists := seen[version.Version]; !exists {
-				seen[version.Version] = version
+		// A version quarantined in a higher-priority member claims its
+		// coordinate: a lower-priority member must not reintroduce it.
+		versions, memberBlocked, err := h.native.filterQuarantinedGoVersions(r.Context(), repo, versions)
+		if err != nil {
+			continue
+		}
+		for version := range memberBlocked {
+			if _, claimed := seen[version]; !claimed {
+				blockedVersions[version] = true
 			}
+		}
+		for _, version := range versions {
+			if _, exists := seen[version.Version]; exists || blockedVersions[version.Version] {
+				continue
+			}
+			seen[version.Version] = version
 		}
 	}
 	versions := make([]repository.GoModuleVersion, 0, len(seen))
@@ -90,11 +103,11 @@ func (h v2GroupGoHandler) versions(r *http.Request, resolver v2GroupResolver, me
 		versions = append(versions, version)
 	}
 	sort.Slice(versions, func(i, j int) bool { return semver.Compare(versions[i].Version, versions[j].Version) < 0 })
-	return versions, stale
+	return versions, stale, blockedVersions
 }
 
 func (h v2GroupGoHandler) serveList(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, modulePath, actor string) {
-	versions, stale := h.versions(r, resolver, members, modulePath)
+	versions, stale, _ := h.versions(r, resolver, members, modulePath)
 	if len(versions) == 0 {
 		http.NotFound(w, r)
 		resolver.auditResolution(r.Context(), group, repository.FormatGo, modulePath, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
@@ -113,7 +126,7 @@ func (h v2GroupGoHandler) serveList(w http.ResponseWriter, r *http.Request, reso
 }
 
 func (h v2GroupGoHandler) serveLatest(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, modulePath, actor string) {
-	versions, _ := h.versions(r, resolver, members, modulePath)
+	versions, _, _ := h.versions(r, resolver, members, modulePath)
 	if len(versions) == 0 {
 		http.NotFound(w, r)
 		return
@@ -128,6 +141,15 @@ func (h v2GroupGoHandler) serveAsset(w http.ResponseWriter, r *http.Request, res
 		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
 		if err != nil {
 			continue
+		}
+		blocked, err := h.native.goVersionReadBlocked(r.Context(), repo, route.module, route.version)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if blocked {
+			h.native.writeGoQuarantineDenied(w, r, repo, route, actor, "bypass")
+			return
 		}
 		asset, _, err := h.native.loadAsset(r, repo, route)
 		if errors.Is(err, repository.ErrNotFound) {
