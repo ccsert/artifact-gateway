@@ -138,6 +138,85 @@ describe("RepositoryDetailPage scanning deep link", () => {
   });
 });
 
+describe("RepositoryDetailPage Go lifecycle surfaces", () => {
+  it("exposes retention, security, promotion, jobs, and tombstones for a Go hosted repository", async () => {
+    const repositoryId = "33333333-3333-4333-8333-333333333333";
+    const repository = {
+      id: repositoryId,
+      name: "go-modules",
+      format: "go",
+      type: "hosted",
+      anonymousRead: false,
+      mavenStrictPublication: false,
+      state: "active",
+      version: "1",
+    } as const;
+    mockGetRepository.mockResolvedValue({ data: repository } as never);
+    mockGetCapabilities.mockResolvedValue({
+      data: {
+        format: "go",
+        type: "hosted",
+        operations: ["read", "publish", "retain", "promote", "replicate"],
+        artifactScanning: true,
+        publicationScanning: true,
+      },
+    } as never);
+    mockGetCapacity.mockResolvedValue({
+      data: {
+        repositoryId,
+        format: "go",
+        usedBytes: 0,
+        objectCount: 0,
+        quotaBytes: 0,
+        quotaExceeded: false,
+        usageRatio: 0,
+        reclaimableBytes: 0,
+      },
+    } as never);
+    mockGetEffectiveAccess.mockResolvedValue({
+      data: {
+        actor: "admin",
+        resource: "",
+        simulated: false,
+        repository,
+        identity: { kind: "static", subject: "admin", displayName: "admin" },
+        anonymousRead: { allowed: false, source: "repository", reason: "off" },
+        permissions: {
+          read: { allowed: true, source: "admin", reason: "admin" },
+          write: { allowed: true, source: "admin", reason: "admin" },
+          admin: { allowed: true, source: "admin", reason: "admin" },
+          intelligence: { allowed: true, source: "admin", reason: "admin" },
+        },
+      },
+    } as never);
+
+    render(
+      <PreferencesProvider>
+        <MemoryRouter initialEntries={[`/repositories/${repositoryId}`]}>
+          <Routes>
+            <Route
+              path="/repositories/:repositoryId"
+              element={<RepositoryDetailPage />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </PreferencesProvider>,
+    );
+
+    expect(
+      await screen.findByRole("tab", { name: "保留策略" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "安全准入" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: "晋升 / 复制" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: "生命周期任务" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "墓碑" })).toBeInTheDocument();
+  });
+});
+
 describe("RepositorySettingsTab Maven publication policy", () => {
   it("keeps strict publication off by default and persists an explicit opt-in", async () => {
     const user = userEvent.setup();

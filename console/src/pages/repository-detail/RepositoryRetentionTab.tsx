@@ -310,6 +310,56 @@ function retentionFormatCopy(format: Repository["format"], text: Localize) {
         candidateName: text("PyPI 项目版本", "PyPI project versions"),
         candidateType: text("PyPI 项目版本", "PyPI project version"),
       };
+    case "go":
+      return {
+        ageLabel: text(
+          "Go 模块版本保留天数",
+          "Go module version retention days",
+        ),
+        ageHint: text(
+          "模块版本发布超过此天数后，才会进入清理候选。",
+          "A module version becomes eligible after this many days.",
+        ),
+        minimumLabel: text(
+          "每个 Go 模块最少保留版本",
+          "Minimum versions per Go module",
+        ),
+        minimumHint: text(
+          "按模块路径分组，始终保护按发布时间最新的这些版本。",
+          "Group by module path and always protect these most recently published versions.",
+        ),
+        maximumLabel: text(
+          "每个 Go 模块最多保留版本",
+          "Maximum versions per Go module",
+        ),
+        maximumHint: text(
+          "0 表示不限制；超过上限的较早发布版本会进入候选。",
+          "Use 0 for no limit. Earlier publications beyond the limit become eligible.",
+        ),
+        matchLabel: text(
+          "只清理匹配 Go 模块",
+          "Only clean matching Go modules",
+        ),
+        matchHint: text(
+          "可匹配模块路径或 module@version；留空表示全部 Go 模块。",
+          "Matches a module path or module@version. Leave empty for all Go modules.",
+        ),
+        protectLabel: text("保护 Go 模块版本", "Protect Go module versions"),
+        protectHint: text(
+          "匹配模块路径可保护全部版本，匹配 module@version 可保护一个版本。",
+          "Match a module path to protect every version, or module@version for one version.",
+        ),
+        matchPlaceholder: text(
+          "如 ^example\\.com/team/",
+          "e.g. ^example\\.com/team/",
+        ),
+        protectPlaceholder: text(
+          "如 ^example\\.com/team/widget(@|$)",
+          "e.g. ^example\\.com/team/widget(@|$)",
+        ),
+        candidateName: text("Go 模块版本", "Go module versions"),
+        candidateType: text("Go 模块版本", "Go module version"),
+      };
     default:
       return {
         ageLabel: text("制品保留天数", "Artifact retention days"),
@@ -582,7 +632,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
 
   if (
     repo.type !== "hosted" ||
-    !["maven", "oci", "conan", "raw", "npm", "pypi"].includes(repo.format)
+    !["maven", "oci", "conan", "raw", "npm", "pypi", "go"].includes(repo.format)
   ) {
     return (
       <RepositoryFeatureUnavailable

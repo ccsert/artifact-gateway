@@ -149,7 +149,7 @@ legacy `/api/v1/audits` response remains unchanged for V1 consumers.
 decisions produced by an explicitly managed Repository grant set. It has only
 these bounded labels:
 
-- `format`: `management`, `maven`, `oci`, `raw`, or `conan`;
+- `format`: `management`, `maven`, `oci`, `raw`, `conan`, `npm`, `pypi`, `go`, or `apt`;
 - `authorization_source`: currently the fixed value `repository_grants`;
 - `authorization_reason`: `scope_not_granted` or `grant_lookup_failed`.
 

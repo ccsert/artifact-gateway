@@ -28,7 +28,7 @@ GATEWAY_WORKER_FORMATS=oci
 GATEWAY_WORKER_KINDS=reclaim,replication
 ```
 
-`GATEWAY_WORKER_FORMATS` 支持 `maven`、`oci`、`raw`、`conan`、`npm`、`pypi`、`apt`；
+`GATEWAY_WORKER_FORMATS` 支持 `maven`、`oci`、`raw`、`conan`、`npm`、`pypi`、`go`、`apt`；
 其中 `apt` 当前只执行管理预览上传的 `reclaim`，不代表 Hosted 协议已可用。任务类型支持
 `promotion`、`replication`、`retention`、`reclaim`、`intelligence`、`deletion`、
 `scan`、`recovery`、`cache`、`audit`、`webhook`。`intelligence` 负责处理晋升成功后被延迟的

@@ -61,6 +61,12 @@ describe("RepositoryRetentionTab", () => {
       match: "只清理匹配路径",
       protect: "保护路径",
     },
+    {
+      format: "go" as const,
+      age: "Go 模块版本保留天数",
+      match: "只清理匹配 Go 模块",
+      protect: "保护 Go 模块版本",
+    },
   ])("uses $format cleanup-unit terminology", async (expected) => {
     mockGetRetentionPolicy.mockResolvedValue({
       data: {

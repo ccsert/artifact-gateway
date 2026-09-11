@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- The Console now exposes every Go lifecycle surface the Gateway already implements: Retention, Security admission, Promote/replicate, Lifecycle jobs, and Tombstones appear for Go Hosted Repositories, scheduled retention tasks accept Go targets, retention and promotion forms use Go module terminology, and the distributed-deployment and authorization-metrics documents list Go where it is accepted.
+
 - Go Hosted Repositories now enforce the default-disabled Quarantine Read Policy. When an administrator enables the policy, a quarantined module version disappears from `@v/list`, cannot be selected by `/@latest`, and returns `403` for every `info`, `mod`, and `zip` representation; ordered Go Groups refuse to fall through past a quarantined higher-priority coordinate. Hosted reads stay compatible by default, administrators can now manage the Go policy through the same versioned management API and Console surface as other formats, and each denial records the standard `quarantine_read_policy` audit evidence.
 
 - Added administrator-only exact APT archive recovery with independently saved backup digests and public-key trust, both signature and canonical package-index checks, atomic metadata visibility, quota reservations, concurrent replay and durable failed-attempt cleanup. Recovery needs no signer service; APT Hosted remains an operator preview.

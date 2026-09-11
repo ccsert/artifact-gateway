@@ -58,6 +58,7 @@ const RETENTION_FORMATS = new Set([
   "raw",
   "npm",
   "pypi",
+  "go",
 ]);
 
 export function ScheduledTasksPanel() {

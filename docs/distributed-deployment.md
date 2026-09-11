@@ -28,8 +28,8 @@ GATEWAY_WORKER_KINDS=reclaim,replication
 ```
 
 `GATEWAY_WORKER_FORMATS` accepts `maven`, `oci`, `raw`, `conan`, `npm`, `pypi`,
-and `apt`. APT currently runs only reclaim for management-preview uploads; this
-does not make Hosted APT public. Job kinds include `promotion`, `replication`,
+`go`, and `apt`. APT currently runs only reclaim for management-preview uploads;
+this does not make Hosted APT public. Job kinds include `promotion`, `replication`,
 `retention`, `reclaim`, `intelligence`, `deletion`, `scan`, `recovery`, `cache`,
 `audit`, and `webhook`.
 

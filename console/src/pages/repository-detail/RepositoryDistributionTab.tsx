@@ -123,6 +123,7 @@ export function RepositoryDistributionTab({
     raw: "releases/gateway-widget-1.2.3.zip",
     npm: "@company/gateway-widget@1.2.3",
     pypi: "gateway-widget@1.2.3",
+    go: "example.com/team/gateway-widget@v1.2.3",
     apt: "pool/main/g/gateway-widget/gateway-widget_1.2.3_amd64.deb",
   };
 

@@ -104,4 +104,36 @@ describe("ScheduledTasksPanel", () => {
       screen.getByRole("button", { name: /新建计划/ }),
     ).toBeInTheDocument();
   });
+
+  it("offers Go hosted repositories as retention targets", async () => {
+    const user = userEvent.setup();
+    mockListTasks.mockResolvedValue({ data: [] } as never);
+    mockListRepositories.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            name: "go-modules",
+            format: "go",
+            type: "hosted",
+            anonymousRead: false,
+            mavenStrictPublication: false,
+            state: "active",
+            version: "1",
+          },
+        ],
+        nextPageToken: undefined,
+      },
+    } as never);
+
+    renderPanel();
+    await user.click(await screen.findByRole("button", { name: /新建计划/ }));
+
+    expect(await screen.findByText("目标仓库")).toBeInTheDocument();
+    // The kind selector precedes the target repository selector.
+    const [kindSelect, targetSelect] = screen.getAllByRole("combobox");
+    expect(kindSelect).toBeInTheDocument();
+    await user.click(targetSelect);
+    expect(await screen.findByTitle("go-modules")).toBeInTheDocument();
+  });
 });
