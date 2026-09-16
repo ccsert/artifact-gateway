@@ -11,10 +11,8 @@ import {
 } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import type { Repository } from "../../client";
-import {
-  RepositoryDetailPage,
-  RepositorySettingsTab,
-} from "./RepositoryDetail";
+import { RepositoryDetailPage } from "./RepositoryDetail";
+import { RepositorySettingsTab } from "./RepositorySettingsTab";
 
 const scanningTab = vi.hoisted(() => ({
   render: vi.fn((props: unknown) => {
