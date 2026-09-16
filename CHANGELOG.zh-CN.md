@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- 新增 Go Proxy 校验和数据库镜像，关闭最后一个已知 Go 兼容缺口。在 egress 允许列表中列出校验和数据库主机的 Go Proxy 仓库，现在可以应答 go 命令的 `/go/<repository>/sumdb/<name>/supported` 探测，并转发 `/latest`、`/lookup/` 与 `/tile/` 请求。签名字节、状态码与内容类型原样透传且永不缓存；不附带上游凭据；镜像请求遵循仓库读取策略，因此 go 命令可以针对只能经由 Gateway 到达的校验和数据库验证模块下载。原生 Go E2E 门禁现在会证明真实 go 客户端能通过镜像完成模块校验。
+
 - 新增 npm Registry 身份端点。`GET /npm/<repository>/-/whoami`（Hosted、Proxy 与 Group）向已认证调用方返回 `{"username": <Gateway 主体标识>}`，对匿名请求返回 `401` 质询；它不经过仓库授权，因此 `npm whoami` 和 CI 凭据预检在客户端可达的任意 npm 仓库上都可用。原生 npm E2E 门禁现在会通过 Nexus 兼容根驱动真实 npm CLI 的 `whoami` 与匿名拒绝断言。
 
 - 新增 Go Proxy 仓库的上游认证凭据。Go Proxy 仓库可以保存 `none`、`basic` 或 `bearer` 凭据；密钥以 `repository-upstream-auth` 用途由 `GATEWAY_SETTINGS_ENCRYPTION_KEY` 封装，管理 API 永不返回其明文，且只应用于 Go Proxy 的上游抓取。`basic` 与 `bearer` 必须提供密钥，切换为 `none` 会删除已存凭据，跨主机重定向时凭据被剥离；其他格式或仓库类型会以明确的 `400` 拒绝 `upstreamAuth`，而不是静默忽略。

@@ -60,6 +60,8 @@ type goRoute struct {
 	repository string
 	module     string
 	version    string
+	sumdbName  string
+	sumdbPath  string
 	kind       string
 }
 
@@ -143,6 +145,8 @@ func (h nativeGoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveLatest(w, r, repo, route.module, principal.Actor)
 	case "info", "mod", "zip":
 		h.serveAsset(w, r, repo, route, principal.Actor)
+	case "sumdb":
+		h.serveSumDB(w, r, repo, route)
 	default:
 		http.NotFound(w, r)
 	}
@@ -203,6 +207,19 @@ func parseGoProxyPath(escapedPath string) (goRoute, bool) {
 		return goRoute{}, false
 	}
 	marker := "/@v/"
+	if rest, ok := strings.CutPrefix(resource, "sumdb/"); ok {
+		// The go command probes <proxyURL>/sumdb/<sumdb-name>/supported and,
+		// on 200, routes every checksum database request through the proxy
+		// without falling back to a direct connection.
+		name, operation, found := strings.Cut(rest, "/")
+		decodedName, nameErr := url.PathUnescape(name)
+		decodedOperation, operationErr := url.PathUnescape(operation)
+		if !found || nameErr != nil || operationErr != nil || decodedName == "" || decodedOperation == "" ||
+			strings.ContainsAny(decodedName+decodedOperation, "\\\x00?#") {
+			return goRoute{}, false
+		}
+		return goRoute{repository: repositoryName, sumdbName: decodedName, sumdbPath: decodedOperation, kind: "sumdb"}, true
+	}
 	if strings.HasSuffix(resource, "/@latest") {
 		escapedModule := strings.TrimSuffix(resource, "/@latest")
 		modulePath, ok := unescapeGoModulePath(escapedModule)

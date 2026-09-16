@@ -16,6 +16,7 @@ const goProxyUserAgent = "Go-http-client/2.0 Artifact-Gateway/1.0"
 
 type GoClient interface {
 	FetchGo(context.Context, string, repository.HostedRepository, string, http.Header) (*http.Response, error)
+	FetchGoSumDB(context.Context, repository.HostedRepository, *url.URL) (*http.Response, error)
 }
 
 func (c UpstreamClient) FetchGo(ctx context.Context, method string, repo repository.HostedRepository, target string, headers http.Header) (*http.Response, error) {
