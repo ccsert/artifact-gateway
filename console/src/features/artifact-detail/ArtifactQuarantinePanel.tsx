@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SafetyCertificateOutlined, UnlockOutlined } from "@ant-design/icons";
 import { Alert, Button, Input, Modal } from "antd";
-import { getArtifactQuarantine, replaceArtifactQuarantine } from "../client";
-import type { ArtifactQuarantine } from "../client";
-import { formatDate } from "../lib/format";
-import { usePreferences } from "../lib/preferences";
-import { ErrorBanner, isNotFound } from "./Feedback";
+import { getArtifactQuarantine, replaceArtifactQuarantine } from "../../client";
+import type { ArtifactQuarantine } from "../../client";
+import { formatDate } from "../../lib/format";
+import { usePreferences } from "../../lib/preferences";
+import { ErrorBanner, isNotFound } from "../../components/Feedback";
 
 type QuarantineState = ArtifactQuarantine["state"];
 

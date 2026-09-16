@@ -4,11 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createRepositoryArtifactScan,
   getRepositoryArtifactScanStatus,
-} from "../client";
-import { PreferencesProvider } from "../lib/preferences";
+} from "../../client";
+import { PreferencesProvider } from "../../lib/preferences";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 
-vi.mock("../client", () => ({
+vi.mock("../../client", () => ({
   createRepositoryArtifactScan: vi.fn(),
   getRepositoryArtifactScanStatus: vi.fn(),
 }));

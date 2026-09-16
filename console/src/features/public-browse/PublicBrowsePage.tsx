@@ -53,10 +53,10 @@ import {
   SearchableVersionSelect,
   UsageSnippetBlock,
 } from "../../components/ui/PublicBrowsePrimitives";
-import { NpmPackageDetail } from "../../components/NpmPackageDetail";
-import { PyPIProjectDetail } from "../../components/PyPIProjectDetail";
-import { GoModuleDetail } from "../../components/GoModuleDetail";
-import { APTAssetDetail } from "../../components/APTAssetDetail";
+import { NpmPackageDetail } from "../artifact-detail/NpmPackageDetail";
+import { PyPIProjectDetail } from "../artifact-detail/PyPIProjectDetail";
+import { GoModuleDetail } from "../artifact-detail/GoModuleDetail";
+import { APTAssetDetail } from "../artifact-detail/APTAssetDetail";
 import { useClipboardAction } from "../../components/ConsolePrimitives";
 import { SiteBrandMark, SiteName } from "../../components/SiteBrand";
 import { useAuth } from "../../lib/auth";

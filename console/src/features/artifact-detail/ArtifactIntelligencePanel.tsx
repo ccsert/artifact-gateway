@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Alert, Card, Tag } from "antd";
-import { getArtifactIntelligence } from "../client";
-import type { ArtifactIntelligence } from "../client";
-import { formatDate } from "../lib/format";
-import { usePreferences } from "../lib/preferences";
-import { isNotFound } from "./Feedback";
+import { getArtifactIntelligence } from "../../client";
+import type { ArtifactIntelligence } from "../../client";
+import { formatDate } from "../../lib/format";
+import { usePreferences } from "../../lib/preferences";
+import { isNotFound } from "../../components/Feedback";
 import { ArtifactVulnerabilityFindings } from "./ArtifactVulnerabilityFindings";
 
 export function ArtifactIntelligencePanel({

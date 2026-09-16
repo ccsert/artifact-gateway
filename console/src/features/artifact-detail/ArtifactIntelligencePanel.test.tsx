@@ -1,11 +1,11 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getArtifactIntelligence } from "../client";
-import type { ArtifactIntelligence } from "../client";
-import { PreferencesProvider } from "../lib/preferences";
+import { getArtifactIntelligence } from "../../client";
+import type { ArtifactIntelligence } from "../../client";
+import { PreferencesProvider } from "../../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 
-vi.mock("../client", () => ({ getArtifactIntelligence: vi.fn() }));
+vi.mock("../../client", () => ({ getArtifactIntelligence: vi.fn() }));
 
 const mockGetArtifactIntelligence = vi.mocked(getArtifactIntelligence);
 const digest = `sha256:${"a".repeat(64)}`;

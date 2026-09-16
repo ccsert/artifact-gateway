@@ -2,8 +2,8 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NpmPackageDetail } from "./NpmPackageDetail";
-import { AuthProvider } from "../lib/auth";
-import { PreferencesProvider } from "../lib/preferences";
+import { AuthProvider } from "../../lib/auth";
+import { PreferencesProvider } from "../../lib/preferences";
 
 afterEach(() => {
   cleanup();

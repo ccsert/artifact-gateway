@@ -4,11 +4,11 @@ import { Alert, Button, Space } from "antd";
 import {
   createRepositoryArtifactScan,
   getRepositoryArtifactScanStatus,
-} from "../client";
-import type { ArtifactScanStatus as ScanStatus } from "../client";
-import { StateBadge } from "./Badge";
-import { formatDate } from "../lib/format";
-import { usePreferences } from "../lib/preferences";
+} from "../../client";
+import type { ArtifactScanStatus as ScanStatus } from "../../client";
+import { StateBadge } from "../../components/Badge";
+import { formatDate } from "../../lib/format";
+import { usePreferences } from "../../lib/preferences";
 
 const activeStates = new Set(["pending", "running", "retrying"]);
 

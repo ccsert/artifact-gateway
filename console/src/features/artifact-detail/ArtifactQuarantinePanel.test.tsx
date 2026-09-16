@@ -1,12 +1,12 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getArtifactQuarantine, replaceArtifactQuarantine } from "../client";
-import type { ArtifactQuarantine } from "../client";
-import { PreferencesProvider } from "../lib/preferences";
+import { getArtifactQuarantine, replaceArtifactQuarantine } from "../../client";
+import type { ArtifactQuarantine } from "../../client";
+import { PreferencesProvider } from "../../lib/preferences";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
 
-vi.mock("../client", () => ({
+vi.mock("../../client", () => ({
   getArtifactQuarantine: vi.fn(),
   replaceArtifactQuarantine: vi.fn(),
 }));

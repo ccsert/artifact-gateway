@@ -1,8 +1,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PyPIProjectDetail } from "./PyPIProjectDetail";
-import { AuthProvider } from "../lib/auth";
-import { PreferencesProvider } from "../lib/preferences";
+import { AuthProvider } from "../../lib/auth";
+import { PreferencesProvider } from "../../lib/preferences";
 
 vi.mock("./ArtifactScanStatus", () => ({
   ArtifactScanStatus: () => null,

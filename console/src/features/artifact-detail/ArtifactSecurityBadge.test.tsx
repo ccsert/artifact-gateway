@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { ArtifactIntelligenceSummary } from "../client";
-import { PreferencesProvider } from "../lib/preferences";
+import type { ArtifactIntelligenceSummary } from "../../client";
+import { PreferencesProvider } from "../../lib/preferences";
 import { ArtifactSecurityBadge } from "./ArtifactSecurityBadge";
 
 const text = (zh: string, en: string) => zh || en;

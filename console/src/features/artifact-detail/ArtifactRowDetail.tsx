@@ -9,14 +9,14 @@ import {
   listConanPackageRevisions,
   listConanRecipeRevisions,
   listMavenCoordinates,
-} from "../client";
+} from "../../client";
 import { ArtifactDetailView, VersionList } from "./ArtifactDetail";
 import type { ArtifactMeta } from "./ArtifactDetail";
-import { useAuth } from "../lib/auth";
-import { mavenGA, mavenVersion } from "../lib/usage";
-import { formatDate } from "../lib/format";
-import { usePreferences } from "../lib/preferences";
-import { rawResourceURL } from "../lib/rawPath";
+import { useAuth } from "../../lib/auth";
+import { mavenGA, mavenVersion } from "../../lib/usage";
+import { formatDate } from "../../lib/format";
+import { usePreferences } from "../../lib/preferences";
+import { rawResourceURL } from "../../lib/rawPath";
 
 // Maven 制品详情：使用方法 + 按发布版本、快照构建分开的版本列表。
 // meta.coordinate 可以是完整 GAV（com.example:hello:1.0.0）或 GA（com.example:hello）。

@@ -1,7 +1,7 @@
 import { ArtifactDetailView } from "./ArtifactDetail";
 import type { ArtifactMeta } from "./ArtifactDetail";
-import { usePreferences } from "../lib/preferences";
-import { formatDate } from "../lib/format";
+import { usePreferences } from "../../lib/preferences";
+import { formatDate } from "../../lib/format";
 
 export function APTAssetDetail({
   repositoryId,

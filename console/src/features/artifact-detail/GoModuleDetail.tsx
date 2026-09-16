@@ -1,20 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button } from "antd";
 import { CopyOutlined, DownloadOutlined } from "@ant-design/icons";
-import { useAuth } from "../lib/auth";
-import { formatBytes, formatDate } from "../lib/format";
-import { usePreferences } from "../lib/preferences";
-import { goUsage } from "../lib/usage";
+import { useAuth } from "../../lib/auth";
+import { formatBytes, formatDate } from "../../lib/format";
+import { usePreferences } from "../../lib/preferences";
+import { goUsage } from "../../lib/usage";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
-import { useClipboardAction } from "./ConsolePrimitives";
-import { Loading } from "./Feedback";
+import { useClipboardAction } from "../../components/ConsolePrimitives";
+import { Loading } from "../../components/Feedback";
 import {
   MetadataItem,
   SearchableVersionSelect,
   UsageSnippetBlock,
-} from "./ui/PublicBrowsePrimitives";
+} from "../../components/ui/PublicBrowsePrimitives";
 
 interface GoModuleInfo {
   Version: string;

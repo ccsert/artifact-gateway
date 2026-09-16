@@ -8,18 +8,18 @@ import type { GlobalArtifactSearchHit } from "../client";
 import { PageHeader } from "../components/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
 import { Badge, FormatBadge } from "../components/Badge";
-import { ArtifactSecurityBadge } from "../components/ArtifactSecurityBadge";
+import { ArtifactSecurityBadge } from "../features/artifact-detail/ArtifactSecurityBadge";
 import { formatBytes, formatDate } from "../lib/format";
 import { mavenGA, mavenVersion } from "../lib/usage";
 import {
   MavenArtifactDetail,
   ConanArtifactDetail,
   RawArtifactDetail,
-} from "../components/ArtifactRowDetail";
-import { OciImageDetail } from "../components/OciImageDetail";
-import { NpmPackageDetail } from "../components/NpmPackageDetail";
-import { PyPIProjectDetail } from "../components/PyPIProjectDetail";
-import { GoModuleDetail } from "../components/GoModuleDetail";
+} from "../features/artifact-detail/ArtifactRowDetail";
+import { OciImageDetail } from "../features/artifact-detail/OciImageDetail";
+import { NpmPackageDetail } from "../features/artifact-detail/NpmPackageDetail";
+import { PyPIProjectDetail } from "../features/artifact-detail/PyPIProjectDetail";
+import { GoModuleDetail } from "../features/artifact-detail/GoModuleDetail";
 import { CopyableValue, MetricStrip } from "../components/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 import { artifactCoordinateForDisplay } from "../lib/rawPath";

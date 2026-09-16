@@ -1,20 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Tag } from "antd";
-import { Badge } from "./Badge";
-import { Loading } from "./Feedback";
+import { Badge } from "../../components/Badge";
+import { Loading } from "../../components/Feedback";
 import {
   MetadataItem,
   SearchableVersionSelect,
   UsageSnippetBlock,
-} from "./ui/PublicBrowsePrimitives";
-import { usePreferences } from "../lib/preferences";
-import { useAuth } from "../lib/auth";
-import { formatBytes, formatDate, shortDigest } from "../lib/format";
-import { npmUsage } from "../lib/usage";
+} from "../../components/ui/PublicBrowsePrimitives";
+import { usePreferences } from "../../lib/preferences";
+import { useAuth } from "../../lib/auth";
+import { formatBytes, formatDate, shortDigest } from "../../lib/format";
+import { npmUsage } from "../../lib/usage";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
-import { useClipboardAction } from "./ConsolePrimitives";
+import { useClipboardAction } from "../../components/ConsolePrimitives";
 
 interface NpmVersionManifest {
   name: string;

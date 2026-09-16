@@ -1,8 +1,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GoModuleDetail } from "./GoModuleDetail";
-import { AuthProvider } from "../lib/auth";
-import { PreferencesProvider } from "../lib/preferences";
+import { AuthProvider } from "../../lib/auth";
+import { PreferencesProvider } from "../../lib/preferences";
 
 afterEach(() => {
   cleanup();
