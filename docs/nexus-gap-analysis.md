@@ -264,11 +264,11 @@ credentials; downloadable log/database bundles remain future work.
 ### Artifact-Level Operations
 
 Single-artifact deletion is only surfaced for OCI tags
-(`console/src/components/OciImageDetail.tsx:151`); Maven, Conan, and Raw
+(`console/src/features/artifact-detail/OciImageDetail.tsx:151`); Maven, Conan, and Raw
 artifact rows have no delete button. There is no UI download button, no
 component tagging or starring, no favorites, and no rich asset-attribute view
 (checksum, size, downloads). Tombstones can be restored
-(`console/src/pages/RepositoryDetail.tsx` Tombstones tab) but cannot be
+(`console/src/features/repository/RepositoryDetail.tsx` Tombstones tab) but cannot be
 hard-purged through the UI despite a `reclaim` capability.
 
 ### Distribution Job Controls
@@ -285,18 +285,18 @@ are not exposed, while cron scheduling remains a future capability.
 There is no toast system, no global job-status indicator, or email
 configuration. Webhook subscriptions and recent delivery failures are managed
 from Operations, but do not yet surface in-page job completion. The Jobs tab auto-refreshes only while open, every ten
-seconds (`console/src/pages/RepositoryDetail.tsx` Jobs tab), so job completion
+seconds (`console/src/features/repository/RepositoryDetail.tsx` Jobs tab), so job completion
 is invisible once the user navigates away.
 
 ### Audit Experience
 
-The audit page (`console/src/pages/Audits.tsx:9`) is view-only with filters by
+The audit page (`console/src/features/audit/Audits.tsx:9`) is view-only with filters by
 repository, group, outcome, format, actor, operation, and an inclusive time
 range. It exports the current server page as CSV and uses the signed
 `/api/v2/audits/page` cursor endpoint, so the browser does not load the entire
 audit table into memory. Saved searches and filter presets remain future work.
 Audit-log retention is configurable and executable
-(`console/src/pages/AuditRetention.tsx:14`), which is a point of parity.
+(`console/src/features/audit/AuditRetention.tsx:14`), which is a point of parity.
 
 ### Internationalization And Desktop Scope
 
