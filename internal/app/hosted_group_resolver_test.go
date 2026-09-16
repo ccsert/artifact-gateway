@@ -184,6 +184,43 @@ func TestV2GroupNPMMergesHostedAndProxyVersions(t *testing.T) {
 	}
 }
 
+func TestV2GroupNPMWhoamiAnswersWithoutMemberResolution(t *testing.T) {
+	store := repository.NewMemoryStore()
+	member, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: "npm-hosted", Name: "npm-hosted", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createV2Group(t, store, "npm-group", repository.FormatNPM,
+		repository.GroupMember{RepositoryID: member.ID, Position: 0},
+	)
+	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+
+	anonymous := httptest.NewRecorder()
+	handler.ServeHTTP(anonymous, httptest.NewRequest(http.MethodGet, "/npm/npm-group/-/whoami", nil))
+	if anonymous.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous=%d %s", anonymous.Code, anonymous.Body.String())
+	}
+
+	whoami := httptest.NewRecorder()
+	whoamiRequest := httptest.NewRequest(http.MethodGet, "/npm/npm-group/-/whoami", nil)
+	authorize(whoamiRequest, "admin-secret")
+	handler.ServeHTTP(whoami, whoamiRequest)
+	if whoami.Code != http.StatusOK {
+		t.Fatalf("whoami=%d %s", whoami.Code, whoami.Body.String())
+	}
+	var identity struct {
+		Username string `json:"username"`
+	}
+	if err = json.NewDecoder(whoami.Body).Decode(&identity); err != nil {
+		t.Fatal(err)
+	}
+	if identity.Username != "alice" {
+		t.Fatalf("username=%q", identity.Username)
+	}
+}
+
 func TestV2GroupNPMColdVersionMetadataResolvesForCorepack(t *testing.T) {
 	store := repository.NewMemoryStore()
 	objects := NewMemoryOCIObjectStore()

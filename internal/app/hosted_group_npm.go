@@ -36,6 +36,22 @@ func (h v2GroupNPMHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 		h.native.metrics.recordNPMRequest(r.Method)
 	}
 
+	// `npm whoami` is an identity check on the auth layer; Groups answer it
+	// without member resolution or repository authorization.
+	if route.Kind == npmprotocol.RouteWhoami {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		principal, authenticated := h.native.protocolPrincipal(r)
+		if !authenticated || isAnonymous(principal) {
+			h.native.challenge(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
+		h.native.writeJSON(w, r, http.StatusOK, map[string]string{"username": principal.Actor})
+		return
+	}
+
 	principal, authenticated := h.native.protocolPrincipal(r)
 	if !authenticated {
 		anonymousMethod := r.Method

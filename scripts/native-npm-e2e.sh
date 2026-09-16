@@ -52,6 +52,21 @@ anonymous_config="$workdir/anonymous.npmrc"
 touch "$anonymous_config"
 npm_config_userconfig="$auth_config" npm config set "//127.0.0.1:${upstream_port}/repository/packages/:_authToken" fixture-secret
 
+# `npm whoami` proves the CLI's auth preflight resolves the token for a
+# path-scoped registry and that the Gateway answers the identity endpoint with
+# the Gateway principal subject. The anonymous variant must stay rejected.
+whoami_identity="$(npm_config_userconfig="$auth_config" npm whoami --registry="$registry_url")"
+if [[ "$whoami_identity" != "npm-fixture" ]]; then
+  printf 'npm whoami returned %q\n' "$whoami_identity" >&2
+  exit 1
+fi
+whoami_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  --noproxy '*' "$upstream_url/repository/packages/-/whoami")"
+if [[ "$whoami_status" != "401" ]]; then
+  printf 'anonymous npm whoami status=%s\n' "$whoami_status" >&2
+  exit 1
+fi
+
 unscoped="$workdir/unscoped"
 mkdir "$unscoped"
 (

@@ -948,6 +948,67 @@ func TestNativeNPMProxyRevalidatesExpiredMetadata(t *testing.T) {
 	}
 }
 
+func TestNativeNPMWhoamiReportsCallerPrincipalWithoutRepositoryAuthorization(t *testing.T) {
+	store := repository.NewMemoryStore()
+	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "npm-releases", Format: repository.FormatNPM,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(publicationScanDependencies(Dependencies{}, repository.FormatNPM), store, TestAdapter{}, testAuthenticator())
+
+	anonymous := httptest.NewRecorder()
+	handler.ServeHTTP(anonymous, httptest.NewRequest(http.MethodGet, "/npm/npm-releases/-/whoami", nil))
+	if anonymous.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous=%d %s", anonymous.Code, anonymous.Body.String())
+	}
+	if anonymous.Header().Get("WWW-Authenticate") == "" {
+		t.Fatal("unauthenticated whoami did not challenge")
+	}
+
+	admin := httptest.NewRecorder()
+	adminRequest := httptest.NewRequest(http.MethodGet, "/npm/npm-releases/-/whoami", nil)
+	adminRequest.Header.Set("Authorization", "Bearer admin-secret")
+	handler.ServeHTTP(admin, adminRequest)
+	if admin.Code != http.StatusOK {
+		t.Fatalf("admin=%d %s", admin.Code, admin.Body.String())
+	}
+	var adminIdentity struct {
+		Username string `json:"username"`
+	}
+	if err := json.Unmarshal(admin.Body.Bytes(), &adminIdentity); err != nil {
+		t.Fatal(err)
+	}
+	if adminIdentity.Username != "alice" {
+		t.Fatalf("admin username=%q", adminIdentity.Username)
+	}
+
+	resolver := httptest.NewRecorder()
+	resolverRequest := httptest.NewRequest(http.MethodGet, "/npm/npm-releases/-/whoami", nil)
+	resolverRequest.Header.Set("Authorization", "Bearer resolver-secret")
+	handler.ServeHTTP(resolver, resolverRequest)
+	if resolver.Code != http.StatusOK {
+		t.Fatalf("resolver=%d %s", resolver.Code, resolver.Body.String())
+	}
+	var resolverIdentity struct {
+		Username string `json:"username"`
+	}
+	if err := json.Unmarshal(resolver.Body.Bytes(), &resolverIdentity); err != nil {
+		t.Fatal(err)
+	}
+	if resolverIdentity.Username != "build-agent" {
+		t.Fatalf("resolver username=%q", resolverIdentity.Username)
+	}
+
+	method := httptest.NewRecorder()
+	methodRequest := httptest.NewRequest(http.MethodPost, "/npm/npm-releases/-/whoami", nil)
+	methodRequest.Header.Set("Authorization", "Bearer admin-secret")
+	handler.ServeHTTP(method, methodRequest)
+	if method.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("post=%d", method.Code)
+	}
+}
+
 func TestNativeNPMProxyDoesNotCacheIntegrityMismatch(t *testing.T) {
 	const packageName = "integrity-widget"
 	const version = "1.0.0"

@@ -150,6 +150,23 @@ func (h nativeNPMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		h.metrics.recordNPMRequest(r.Method)
 	}
 
+	// `npm whoami` validates credentials before any repository access, so it
+	// only reports the caller's own Gateway principal subject and never
+	// consults repository authorization or anonymous-read policy.
+	if route.Kind == npmprotocol.RouteWhoami {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return true
+		}
+		principal, authenticated := h.protocolPrincipal(r)
+		if !authenticated || isAnonymous(principal) {
+			h.challenge(w, http.StatusUnauthorized, "authentication required")
+			return true
+		}
+		h.writeJSON(w, r, http.StatusOK, map[string]string{"username": principal.Actor})
+		return true
+	}
+
 	operation := RepositoryRead
 	if r.Method == http.MethodPut || route.Kind == npmprotocol.RoutePing && r.URL.Query().Get("write") == "true" {
 		operation = RepositoryWrite

@@ -21,6 +21,17 @@ func TestParsePathSupportsScopedPackagesAndTarballs(t *testing.T) {
 	}
 }
 
+func TestParsePathRoutesRegistryWellKnownEndpoints(t *testing.T) {
+	ping, ok := ParsePath("/npm/releases/-/ping")
+	if !ok || ping.Repository != "releases" || ping.Kind != RoutePing {
+		t.Fatalf("ping=%#v ok=%t", ping, ok)
+	}
+	whoami, ok := ParsePath("/npm/releases/-/whoami")
+	if !ok || whoami.Repository != "releases" || whoami.Kind != RouteWhoami {
+		t.Fatalf("whoami=%#v ok=%t", whoami, ok)
+	}
+}
+
 func TestParsePathSupportsPackageVersionMetadata(t *testing.T) {
 	version, ok := ParsePath("/npm/releases/pnpm/10.7.1")
 	if !ok || version.Repository != "releases" || version.Package != "pnpm" || version.Version != "10.7.1" || version.Kind != RouteVersion {

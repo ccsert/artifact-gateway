@@ -22,6 +22,7 @@ const (
 	RoutePing
 	RouteAuditBulk
 	RouteAuditQuick
+	RouteWhoami
 )
 
 type Route struct {
@@ -53,6 +54,8 @@ func ParsePath(escapedPath string) (Route, bool) {
 	switch resource {
 	case "-/ping":
 		return Route{Repository: repositoryName, Kind: RoutePing}, true
+	case "-/whoami":
+		return Route{Repository: repositoryName, Kind: RouteWhoami}, true
 	case "-/npm/v1/security/advisories/bulk":
 		return Route{Repository: repositoryName, Kind: RouteAuditBulk}, true
 	case "-/npm/v1/security/audits/quick":

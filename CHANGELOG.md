@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Added the npm registry identity endpoint. `GET /npm/<repository>/-/whoami` (Hosted, Proxy, and Group) answers an authenticated caller with `{"username": <Gateway principal subject>}` and challenges anonymous requests with `401`; it never consults repository authorization, so `npm whoami` and CI credential preflights work against any npm repository the client can reach. The native npm E2E gate now drives the real npm CLI `whoami` plus the anonymous rejection through the Nexus-compatible roots.
+
 - Added upstream authentication credentials for Go Proxy Repositories. A Go Proxy Repository can store a `none`, `basic`, or `bearer` credential; the secret is sealed with `GATEWAY_SETTINGS_ENCRYPTION_KEY` under the `repository-upstream-auth` purpose, is never returned by the management API, and is applied only to the Go Proxy upstream fetch. `basic` and `bearer` require a secret, switching to `none` removes a stored credential, credentials are stripped on cross-host redirects, and every other format or Repository type rejects `upstreamAuth` with an explicit `400` instead of ignoring it.
 
 - Added a Console disaster-recovery surface for APT signed snapshots. A repository administrator can export any visible or retired snapshot as a portable archive, receive its `sha256:` receipt in the same step for independent storage, and restore an archive against that stored receipt. Restore never derives the receipt from the uploaded bytes. APT Hosted remains an operator preview.
