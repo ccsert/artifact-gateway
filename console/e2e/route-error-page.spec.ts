@@ -73,7 +73,7 @@ async function openInjectedRuntimeError(page: Page, theme: "dark" | "light") {
       },
     }),
   );
-  await page.route("**/src/pages/Dashboard.tsx*", (route) =>
+  await page.route("**/src/features/dashboard/Dashboard.tsx*", (route) =>
     route.fulfill({
       body: `export function DashboardPage() { throw new TypeError("Injected route failure"); }`,
       contentType: "application/javascript",

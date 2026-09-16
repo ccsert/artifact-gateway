@@ -17,7 +17,7 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorPage />,
     hydrateFallbackElement: <RouteFallback />,
     lazy: async () => ({
-      Component: (await import("../pages/Login")).LoginPage,
+      Component: (await import("../features/auth/Login")).LoginPage,
     }),
   },
   {
@@ -25,7 +25,8 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorPage />,
     hydrateFallbackElement: <RouteFallback />,
     lazy: async () => ({
-      Component: (await import("../features/public-browse/PublicBrowsePage")).PublicBrowsePage,
+      Component: (await import("../features/public-browse/PublicBrowsePage"))
+        .PublicBrowsePage,
     }),
   },
   {
@@ -36,44 +37,47 @@ export const router = createBrowserRouter([
       {
         path: "/",
         lazy: async () => ({
-          Component: (await import("../pages/Dashboard")).DashboardPage,
+          Component: (await import("../features/dashboard/Dashboard"))
+            .DashboardPage,
         }),
       },
       {
         path: "/search",
         lazy: async () => ({
-          Component: (await import("../pages/Search")).SearchPage,
+          Component: (await import("../features/search/Search")).SearchPage,
         }),
       },
       {
         path: "/operations",
         lazy: async () => ({
-          Component: (await import("../pages/Operations")).OperationsPage,
+          Component: (await import("../features/operations/Operations"))
+            .OperationsPage,
         }),
       },
       {
         path: "/repositories",
         lazy: async () => ({
-          Component: (await import("../pages/Repositories")).RepositoriesPage,
+          Component: (await import("../features/repository/Repositories"))
+            .RepositoriesPage,
         }),
       },
       {
         path: "/repositories/:repositoryId",
         lazy: async () => ({
-          Component: (await import("../pages/RepositoryDetail"))
+          Component: (await import("../features/repository/RepositoryDetail"))
             .RepositoryDetailPage,
         }),
       },
       {
         path: "/groups",
         lazy: async () => ({
-          Component: (await import("../pages/Groups")).GroupsPage,
+          Component: (await import("../features/groups/Groups")).GroupsPage,
         }),
       },
       {
         path: "/groups/:groupId/browse",
         lazy: async () => ({
-          Component: (await import("../pages/groups/GroupBrowsePage"))
+          Component: (await import("../features/groups/pages/GroupBrowsePage"))
             .GroupBrowsePage,
         }),
       },
@@ -81,51 +85,53 @@ export const router = createBrowserRouter([
       {
         path: "/access",
         lazy: async () => ({
-          Component: (await import("../pages/AccessControl")).AccessControlPage,
+          Component: (await import("../features/access-control/AccessControl"))
+            .AccessControlPage,
         }),
       },
       {
         path: "/audits",
         lazy: async () => ({
-          Component: (await import("../pages/Audits")).AuditsPage,
+          Component: (await import("../features/audit/Audits")).AuditsPage,
         }),
       },
       {
         path: "/identity-providers",
         lazy: async () => ({
-          Component: (await import("../pages/Authentication"))
+          Component: (await import("../features/settings/Authentication"))
             .AuthenticationPage,
         }),
       },
       {
         path: "/site-settings",
         lazy: async () => ({
-          Component: (await import("../pages/SiteSettings")).SiteSettingsPage,
+          Component: (await import("../features/settings/SiteSettings"))
+            .SiteSettingsPage,
         }),
       },
       {
         path: "/keys",
         lazy: async () => ({
-          Component: (await import("../pages/ApiKeys")).ApiKeysPage,
+          Component: (await import("../features/identity/ApiKeys")).ApiKeysPage,
         }),
       },
       {
         path: "/service-accounts",
         lazy: async () => ({
-          Component: (await import("../pages/ServiceAccounts"))
+          Component: (await import("../features/identity/ServiceAccounts"))
             .ServiceAccountsPage,
         }),
       },
       {
         path: "/users",
         lazy: async () => ({
-          Component: (await import("../pages/Users")).UsersPage,
+          Component: (await import("../features/identity/Users")).UsersPage,
         }),
       },
       {
         path: "/audit-retention",
         lazy: async () => ({
-          Component: (await import("../pages/AuditRetention"))
+          Component: (await import("../features/audit/AuditRetention"))
             .AuditRetentionPage,
         }),
       },
