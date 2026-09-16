@@ -6,7 +6,7 @@ import {
   MetadataItem,
   SearchableVersionSelect,
   UsageSnippetBlock,
-} from "./PublicBrowsePrimitives";
+} from "./ui/PublicBrowsePrimitives";
 import { usePreferences } from "../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";

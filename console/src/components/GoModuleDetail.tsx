@@ -14,7 +14,7 @@ import {
   MetadataItem,
   SearchableVersionSelect,
   UsageSnippetBlock,
-} from "./PublicBrowsePrimitives";
+} from "./ui/PublicBrowsePrimitives";
 
 interface GoModuleInfo {
   Version: string;

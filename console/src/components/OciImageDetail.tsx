@@ -8,7 +8,7 @@ import { useAuth } from "../lib/auth";
 import { Loading, ErrorBanner } from "./Feedback";
 import { Badge } from "./Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
-import { UsageSnippetBlock } from "./PublicBrowsePrimitives";
+import { UsageSnippetBlock } from "./ui/PublicBrowsePrimitives";
 import { ociUsage, type UsageSnippet } from "../lib/usage";
 import { usePreferences } from "../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";

@@ -25,7 +25,7 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorPage />,
     hydrateFallbackElement: <RouteFallback />,
     lazy: async () => ({
-      Component: (await import("../pages/PublicBrowse")).PublicBrowsePage,
+      Component: (await import("../features/public-browse/PublicBrowsePage")).PublicBrowsePage,
     }),
   },
   {

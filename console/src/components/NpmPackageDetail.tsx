@@ -6,7 +6,7 @@ import {
   MetadataItem,
   SearchableVersionSelect,
   UsageSnippetBlock,
-} from "./PublicBrowsePrimitives";
+} from "./ui/PublicBrowsePrimitives";
 import { usePreferences } from "../lib/preferences";
 import { useAuth } from "../lib/auth";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";

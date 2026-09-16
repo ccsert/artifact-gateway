@@ -1,7 +1,7 @@
 import { CheckOutlined, CopyOutlined } from "@ant-design/icons";
 import { Button, Select, Tooltip } from "antd";
-import type { UsageSnippet } from "../lib/usage";
-import { usePreferences } from "../lib/preferences";
+import type { UsageSnippet } from "../../lib/usage";
+import { usePreferences } from "../../lib/preferences";
 
 export type VersionSelectOption = { value: string; label: string };
 

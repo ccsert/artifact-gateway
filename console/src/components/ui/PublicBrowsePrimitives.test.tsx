@@ -6,7 +6,7 @@ import {
   SearchableVersionSelect,
   UsageSnippetBlock,
 } from "./PublicBrowsePrimitives";
-import { PreferencesProvider } from "../lib/preferences";
+import { PreferencesProvider } from "../../lib/preferences";
 
 afterEach(async () => {
   cleanup();

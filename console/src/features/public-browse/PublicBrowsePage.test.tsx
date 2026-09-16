@@ -1,12 +1,12 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { searchRepositoryArtifacts } from "../client";
-import { PreferencesProvider } from "../lib/preferences";
-import { PublicBrowsePage } from "./PublicBrowse";
+import { searchRepositoryArtifacts } from "../../client";
+import { PreferencesProvider } from "../../lib/preferences";
+import { PublicBrowsePage } from "./PublicBrowsePage";
 
-vi.mock("../client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../client")>()),
+vi.mock("../../client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../client")>()),
   searchRepositoryArtifacts: vi.fn(),
 }));
 
@@ -15,7 +15,7 @@ const auth = vi.hoisted(() => ({
   identityLoading: false,
 }));
 
-vi.mock("../lib/auth", () => ({
+vi.mock("../../lib/auth", () => ({
   useAuth: () => auth,
 }));
 
