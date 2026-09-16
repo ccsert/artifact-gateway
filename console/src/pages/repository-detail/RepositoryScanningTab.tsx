@@ -16,9 +16,9 @@ import type {
   Repository,
   RepositoryCapabilities,
 } from "../../client";
-import { StateBadge } from "../../components/Badge";
-import { EmptyState, ErrorBanner, Loading } from "../../components/Feedback";
-import { Card, CardHeader } from "../../components/Layout";
+import { StateBadge } from "../../components/ui/Badge";
+import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
+import { Card, CardHeader } from "../../components/ui/Layout";
 import {
   RepositoryArtifactSelect,
   type RepositoryArtifactIdentity,

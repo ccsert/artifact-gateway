@@ -3,9 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { browseGroup } from "../../client";
 import type { GroupBrowsePage as GroupBrowseResponse } from "../../client";
-import { PageHeader } from "../../components/Layout";
-import { Badge, FormatBadge } from "../../components/Badge";
-import { ErrorBanner, Loading } from "../../components/Feedback";
+import { PageHeader } from "../../components/ui/Layout";
+import { Badge, FormatBadge } from "../../components/ui/Badge";
+import { ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { usePreferences } from "../../lib/preferences";
 import { RepositoryBrowseTree } from "../repository-detail/RepositoryBrowseTree";
 

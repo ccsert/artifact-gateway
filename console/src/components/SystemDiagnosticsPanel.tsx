@@ -17,10 +17,10 @@ import type {
 } from "../client";
 import { formatDate } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
-import { FormatBadge, StateBadge } from "./Badge";
-import { MetricStrip, useClipboardAction } from "./ConsolePrimitives";
-import { ErrorBanner, Loading } from "./Feedback";
-import { Card, CardHeader } from "./Layout";
+import { FormatBadge, StateBadge } from "./ui/Badge";
+import { MetricStrip, useClipboardAction } from "./ui/ConsolePrimitives";
+import { ErrorBanner, Loading } from "./ui/Feedback";
+import { Card, CardHeader } from "./ui/Layout";
 
 const dependencyLabels: Record<string, [string, string]> = {
   postgresql: ["PostgreSQL", "PostgreSQL"],

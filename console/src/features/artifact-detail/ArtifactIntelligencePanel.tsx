@@ -4,7 +4,7 @@ import { getArtifactIntelligence } from "../../client";
 import type { ArtifactIntelligence } from "../../client";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-import { isNotFound } from "../../components/Feedback";
+import { isNotFound } from "../../components/ui/Feedback";
 import { ArtifactVulnerabilityFindings } from "./ArtifactVulnerabilityFindings";
 
 export function ArtifactIntelligencePanel({

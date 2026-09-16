@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from "react";
-import type { SiteSettings } from "../client";
-import { useSiteSettings } from "../lib/siteSettings";
+import type { SiteSettings } from "../../client";
+import { useSiteSettings } from "../../lib/siteSettings";
 
 function SiteBrandImage({ src }: { src: string }) {
   const [failed, setFailed] = useState(false);

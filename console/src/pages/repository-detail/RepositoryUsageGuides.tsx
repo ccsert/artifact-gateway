@@ -1,5 +1,5 @@
 import { Button } from "antd";
-import { useClipboardAction } from "../../components/ConsolePrimitives";
+import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 
 export function CopyButton({ text }: { text: string }) {

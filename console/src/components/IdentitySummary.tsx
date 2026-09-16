@@ -1,6 +1,6 @@
 import { Descriptions } from "antd";
 import type { CurrentIdentity } from "../client";
-import { Badge } from "./Badge";
+import { Badge } from "./ui/Badge";
 import { usePreferences } from "../lib/preferences";
 
 export function authenticationKindLabel(kind: CurrentIdentity["kind"]): string {

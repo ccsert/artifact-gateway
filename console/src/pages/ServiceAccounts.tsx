@@ -23,11 +23,11 @@ import type {
   ServiceAccount,
   ServiceAccountCredential,
 } from "../client";
-import { Badge, StateBadge } from "../components/Badge";
-import { CopyableValue, MetricStrip } from "../components/ConsolePrimitives";
-import { EmptyState, ErrorBanner, Loading } from "../components/Feedback";
-import { Card, CardHeader, Field, PageHeader } from "../components/Layout";
-import { ConfirmDialog, Modal, useDisclosure } from "../components/Modal";
+import { Badge, StateBadge } from "../components/ui/Badge";
+import { CopyableValue, MetricStrip } from "../components/ui/ConsolePrimitives";
+import { EmptyState, ErrorBanner, Loading } from "../components/ui/Feedback";
+import { Card, CardHeader, Field, PageHeader } from "../components/ui/Layout";
+import { ConfirmDialog, Modal, useDisclosure } from "../components/ui/Modal";
 import { formatDate } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
 

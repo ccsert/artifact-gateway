@@ -1,4 +1,4 @@
-import { EmptyState } from "../../components/Feedback";
+import { EmptyState } from "../../components/ui/Feedback";
 import { usePreferences } from "../../lib/preferences";
 
 export function RepositoryFeatureUnavailable({ feature }: { feature: string }) {

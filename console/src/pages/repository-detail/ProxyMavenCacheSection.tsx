@@ -6,7 +6,7 @@ import {
   invalidateProxyCache,
   refreshProxyCache,
 } from "../../client";
-import { Badge } from "../../components/Badge";
+import { Badge } from "../../components/ui/Badge";
 import { formatBytes, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { mavenUsage } from "../../lib/usage";

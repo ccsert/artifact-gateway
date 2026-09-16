@@ -2,13 +2,13 @@ import { CheckOutlined, CopyOutlined } from "@ant-design/icons";
 import { Button, Collapse, Select, Tooltip } from "antd";
 import { usageFor } from "../../lib/usage";
 import type { UsageSnippet } from "../../lib/usage";
-import { Badge } from "../../components/Badge";
+import { Badge } from "../../components/ui/Badge";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
-import { useClipboardAction } from "../../components/ConsolePrimitives";
+import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 
 function CopyButton({ text }: { text: string }) {
   const { text: localizedText } = usePreferences();

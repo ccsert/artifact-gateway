@@ -4,9 +4,9 @@ import { OrderedListOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Space } from "antd";
 import { getGroupResolution } from "../../client";
 import type { Group, GroupResolution } from "../../client";
-import { Badge } from "../../components/Badge";
-import { EmptyState, ErrorBanner, Loading } from "../../components/Feedback";
-import { Modal } from "../../components/Modal";
+import { Badge } from "../../components/ui/Badge";
+import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
+import { Modal } from "../../components/ui/Modal";
 import { usePreferences } from "../../lib/preferences";
 
 export function GroupResolutionDialog({ group }: { group: Group }) {

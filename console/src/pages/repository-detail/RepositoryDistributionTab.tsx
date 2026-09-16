@@ -17,15 +17,15 @@ import type {
   Repository,
   SecurityPolicyEvaluation,
 } from "../../client";
-import { StateBadge } from "../../components/Badge";
+import { StateBadge } from "../../components/ui/Badge";
 import {
   EmptyState,
   ErrorBanner,
   Loading,
   isNotFound,
-} from "../../components/Feedback";
-import { Field } from "../../components/Layout";
-import { Modal } from "../../components/Modal";
+} from "../../components/ui/Feedback";
+import { Field } from "../../components/ui/Layout";
+import { Modal } from "../../components/ui/Modal";
 import {
   RepositoryArtifactSelect,
   type RepositoryArtifactIdentity,

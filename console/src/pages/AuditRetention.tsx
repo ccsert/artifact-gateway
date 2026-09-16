@@ -18,11 +18,11 @@ import {
   listAuditRetentionJobs,
 } from "../client";
 import type { AuditRetentionPolicy, AuditCleanupJob } from "../client";
-import { PageHeader, Card, CardHeader } from "../components/Layout";
-import { Loading, ErrorBanner } from "../components/Feedback";
-import { StateBadge } from "../components/Badge";
+import { PageHeader, Card, CardHeader } from "../components/ui/Layout";
+import { Loading, ErrorBanner } from "../components/ui/Feedback";
+import { StateBadge } from "../components/ui/Badge";
 import { formatDate, formatNumber } from "../lib/format";
-import { MetricStrip } from "../components/ConsolePrimitives";
+import { MetricStrip } from "../components/ui/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 
 export function AuditRetentionPage() {

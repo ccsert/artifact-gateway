@@ -18,14 +18,14 @@ import type {
   ServiceAccount,
   User,
 } from "../../client";
-import { Badge, type BadgeTone } from "../../components/Badge";
+import { Badge, type BadgeTone } from "../../components/ui/Badge";
 import {
   EmptyState,
   ErrorBanner,
   Loading,
   isNotFound,
-} from "../../components/Feedback";
-import { Modal, useDisclosure } from "../../components/Modal";
+} from "../../components/ui/Feedback";
+import { Modal, useDisclosure } from "../../components/ui/Modal";
 import { usePreferences } from "../../lib/preferences";
 import {
   isActiveApiKeyPrincipal,

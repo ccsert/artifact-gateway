@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Table, Tag } from "antd";
 import type { TableProps } from "antd";
-import { Loading } from "../../components/Feedback";
+import { Loading } from "../../components/ui/Feedback";
 import {
   MetadataItem,
   SearchableVersionSelect,
@@ -14,7 +14,7 @@ import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { useAuth } from "../../lib/auth";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { pypiUsage } from "../../lib/usage";
-import { useClipboardAction } from "../../components/ConsolePrimitives";
+import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 
 interface PyPIFile {
   filename: string;

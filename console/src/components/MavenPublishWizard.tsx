@@ -23,9 +23,9 @@ import {
 } from "../client";
 import type { PublishSession, DeclaredObject } from "../client";
 import { useAuth } from "../lib/auth";
-import { Card, Field } from "./Layout";
-import { ErrorBanner } from "./Feedback";
-import { StateBadge, Badge } from "./Badge";
+import { Card, Field } from "./ui/Layout";
+import { ErrorBanner } from "./ui/Feedback";
+import { StateBadge, Badge } from "./ui/Badge";
 import { formatBytes, formatDate, shortDigest } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
 

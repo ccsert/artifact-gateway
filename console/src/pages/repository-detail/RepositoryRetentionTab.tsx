@@ -28,8 +28,8 @@ import {
   ErrorBanner,
   Loading,
   isNotFound,
-} from "../../components/Feedback";
-import { Card, CardHeader, Field } from "../../components/Layout";
+} from "../../components/ui/Feedback";
+import { Card, CardHeader, Field } from "../../components/ui/Layout";
 import { useAuth } from "../../lib/auth";
 import { downloadCsv } from "../../lib/csv";
 import { formatDate, shortDigest } from "../../lib/format";

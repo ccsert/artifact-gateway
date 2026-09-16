@@ -28,10 +28,10 @@ import type {
   OidcSettings,
   OidcSettingsUpdateWritable,
 } from "../client";
-import { Card, PageHeader } from "../components/Layout";
-import { ErrorBanner, Loading } from "../components/Feedback";
-import { CopyableValue, MetricStrip } from "../components/ConsolePrimitives";
-import { Badge } from "../components/Badge";
+import { Card, PageHeader } from "../components/ui/Layout";
+import { ErrorBanner, Loading } from "../components/ui/Feedback";
+import { CopyableValue, MetricStrip } from "../components/ui/ConsolePrimitives";
+import { Badge } from "../components/ui/Badge";
 import { formatDate } from "../lib/format";
 import { usePreferences } from "../lib/preferences";
 

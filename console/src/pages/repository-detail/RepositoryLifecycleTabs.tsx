@@ -10,15 +10,15 @@ import {
   restoreRepositoryArtifact,
 } from "../../client";
 import type { ArtifactTombstone, LifecycleJob, Repository } from "../../client";
-import { Badge, StateBadge } from "../../components/Badge";
+import { Badge, StateBadge } from "../../components/ui/Badge";
 import { LifecycleJobDetails } from "../../components/LifecycleJobDetails";
 import {
   EmptyState,
   ErrorBanner,
   Loading,
   isNotFound,
-} from "../../components/Feedback";
-import { Pagination } from "../../components/Layout";
+} from "../../components/ui/Feedback";
+import { Pagination } from "../../components/ui/Layout";
 import { formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";

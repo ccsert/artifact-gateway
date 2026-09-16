@@ -28,9 +28,9 @@ import type {
   AptSnapshotHistory,
   Repository,
 } from "../../client";
-import { Badge, StateBadge } from "../../components/Badge";
-import { EmptyState, ErrorBanner, Loading } from "../../components/Feedback";
-import { Field } from "../../components/Layout";
+import { Badge, StateBadge } from "../../components/ui/Badge";
+import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
+import { Field } from "../../components/ui/Layout";
 import { downloadBlob, sha256Receipt } from "../../lib/download";
 import { formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";

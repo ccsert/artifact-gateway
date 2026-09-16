@@ -28,12 +28,12 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { Modal, useDisclosure } from "../components/Modal";
-import { Field } from "../components/Layout";
-import { Loading } from "../components/Feedback";
-import { PreferenceControls } from "../components/PreferenceControls";
+import { Modal, useDisclosure } from "../components/ui/Modal";
+import { Field } from "../components/ui/Layout";
+import { Loading } from "../components/ui/Feedback";
+import { PreferenceControls } from "../components/ui/PreferenceControls";
 import { usePreferences } from "../lib/preferences";
-import { SiteBrandMark, SiteName } from "../components/SiteBrand";
+import { SiteBrandMark, SiteName } from "../components/ui/SiteBrand";
 
 const navItems = [
   {

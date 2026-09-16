@@ -26,8 +26,8 @@ import type {
   BrowseSource,
   Repository,
 } from "../../client";
-import { Badge } from "../../components/Badge";
-import { EmptyState, ErrorBanner, Loading } from "../../components/Feedback";
+import { Badge } from "../../components/ui/Badge";
+import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { decodeRawPathForDisplay } from "../../lib/rawPath";

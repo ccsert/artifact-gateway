@@ -5,7 +5,7 @@ import { getArtifactQuarantine, replaceArtifactQuarantine } from "../../client";
 import type { ArtifactQuarantine } from "../../client";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-import { ErrorBanner, isNotFound } from "../../components/Feedback";
+import { ErrorBanner, isNotFound } from "../../components/ui/Feedback";
 
 type QuarantineState = ArtifactQuarantine["state"];
 

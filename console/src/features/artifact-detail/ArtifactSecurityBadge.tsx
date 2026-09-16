@@ -1,5 +1,5 @@
 import type { ArtifactIntelligenceSummary } from "../../client";
-import { Badge } from "../../components/Badge";
+import { Badge } from "../../components/ui/Badge";
 
 type Localize = (zh: string, en: string) => string;
 

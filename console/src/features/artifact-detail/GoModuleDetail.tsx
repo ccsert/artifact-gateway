@@ -8,8 +8,8 @@ import { goUsage } from "../../lib/usage";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
-import { useClipboardAction } from "../../components/ConsolePrimitives";
-import { Loading } from "../../components/Feedback";
+import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
+import { Loading } from "../../components/ui/Feedback";
 import {
   MetadataItem,
   SearchableVersionSelect,

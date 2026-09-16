@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Tag } from "antd";
-import { Badge } from "../../components/Badge";
-import { Loading } from "../../components/Feedback";
+import { Badge } from "../../components/ui/Badge";
+import { Loading } from "../../components/ui/Feedback";
 import {
   MetadataItem,
   SearchableVersionSelect,
@@ -14,7 +14,7 @@ import { npmUsage } from "../../lib/usage";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
-import { useClipboardAction } from "../../components/ConsolePrimitives";
+import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 
 interface NpmVersionManifest {
   name: string;

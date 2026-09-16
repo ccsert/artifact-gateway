@@ -11,10 +11,10 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { client } from "../client/client.gen";
 import { getCurrentIdentity } from "../client";
-import { Field } from "../components/Layout";
-import { LoginBeamsBackground } from "../components/kokonutui/LoginBeamsBackground";
-import { PreferenceControls } from "../components/PreferenceControls";
-import { SiteBrandMark, SiteName } from "../components/SiteBrand";
+import { Field } from "../components/ui/Layout";
+import { LoginBeamsBackground } from "../components/ui/kokonutui/LoginBeamsBackground";
+import { PreferenceControls } from "../components/ui/PreferenceControls";
+import { SiteBrandMark, SiteName } from "../components/ui/SiteBrand";
 import { usePreferences } from "../lib/preferences";
 import {
   localPasswordFitsBcrypt,

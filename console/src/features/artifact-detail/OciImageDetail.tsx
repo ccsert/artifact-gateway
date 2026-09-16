@@ -5,8 +5,8 @@ import type { ColumnsType } from "antd/es/table";
 import { listOciManifests } from "../../client";
 import type { OciManifestSummary } from "../../client";
 import { useAuth } from "../../lib/auth";
-import { Loading, ErrorBanner } from "../../components/Feedback";
-import { Badge } from "../../components/Badge";
+import { Loading, ErrorBanner } from "../../components/ui/Feedback";
+import { Badge } from "../../components/ui/Badge";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { UsageSnippetBlock } from "../../components/ui/PublicBrowsePrimitives";
 import { ociUsage, type UsageSnippet } from "../../lib/usage";
@@ -14,7 +14,7 @@ import { usePreferences } from "../../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
-import { useClipboardAction } from "../../components/ConsolePrimitives";
+import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 
 interface OciDescriptor {
   mediaType: string;

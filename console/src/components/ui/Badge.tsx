@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { artifactFormatVisualizationTone } from "../lib/artifactFormatVisuals";
-import { usePreferences } from "../lib/preferences";
+import { artifactFormatVisualizationTone } from "../../lib/artifactFormatVisuals";
+import { usePreferences } from "../../lib/preferences";
 
 const toneClasses = {
   success:

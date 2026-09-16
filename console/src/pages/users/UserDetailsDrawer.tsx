@@ -29,8 +29,8 @@ import {
   updateUser,
 } from "../../client";
 import type { ResetUserPassword, UpdateUser, User } from "../../client";
-import { Badge, StateBadge } from "../../components/Badge";
-import { ErrorBanner } from "../../components/Feedback";
+import { Badge, StateBadge } from "../../components/ui/Badge";
+import { ErrorBanner } from "../../components/ui/Feedback";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import {

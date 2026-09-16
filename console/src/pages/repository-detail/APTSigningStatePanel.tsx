@@ -1,6 +1,6 @@
 import { Alert, Tag } from "antd";
 import type { AptRepositorySigningState } from "../../client";
-import { Badge } from "../../components/Badge";
+import { Badge } from "../../components/ui/Badge";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import {

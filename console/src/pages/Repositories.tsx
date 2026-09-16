@@ -16,17 +16,17 @@ import {
   listRepositoryCapacities,
 } from "../client";
 import type { Repository, Format, FormatProfile } from "../client";
-import { PageHeader, Card, Pagination, Field } from "../components/Layout";
-import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
-import { FormatBadge, StateBadge, Badge } from "../components/Badge";
-import { Modal, ConfirmDialog, useDisclosure } from "../components/Modal";
+import { PageHeader, Card, Pagination, Field } from "../components/ui/Layout";
+import { Loading, ErrorBanner, EmptyState } from "../components/ui/Feedback";
+import { FormatBadge, StateBadge, Badge } from "../components/ui/Badge";
+import { Modal, ConfirmDialog, useDisclosure } from "../components/ui/Modal";
 import { formatBytes, formatNumber } from "../lib/format";
 import {
   CopyableValue,
   FilterBar,
   FilterField,
   MetricStrip,
-} from "../components/ConsolePrimitives";
+} from "../components/ui/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 import {
   loadFormatProfiles,

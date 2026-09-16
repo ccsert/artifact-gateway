@@ -22,12 +22,12 @@ import {
   searchRepositoryArtifacts,
 } from "../../client";
 import type { ArtifactSummary } from "../../client";
-import { Card } from "../../components/Layout";
-import { Loading, ErrorBanner, EmptyState } from "../../components/Feedback";
-import { FormatBadge, Badge } from "../../components/Badge";
+import { Card } from "../../components/ui/Layout";
+import { Loading, ErrorBanner, EmptyState } from "../../components/ui/Feedback";
+import { FormatBadge, Badge } from "../../components/ui/Badge";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usageFor, type UsageSnippet } from "../../lib/usage";
-import { PreferenceControls } from "../../components/PreferenceControls";
+import { PreferenceControls } from "../../components/ui/PreferenceControls";
 import { usePreferences } from "../../lib/preferences";
 import { artifactFormatVisualizationClass } from "../../lib/artifactFormatVisuals";
 import {
@@ -57,8 +57,8 @@ import { NpmPackageDetail } from "../artifact-detail/NpmPackageDetail";
 import { PyPIProjectDetail } from "../artifact-detail/PyPIProjectDetail";
 import { GoModuleDetail } from "../artifact-detail/GoModuleDetail";
 import { APTAssetDetail } from "../artifact-detail/APTAssetDetail";
-import { useClipboardAction } from "../../components/ConsolePrimitives";
-import { SiteBrandMark, SiteName } from "../../components/SiteBrand";
+import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
+import { SiteBrandMark, SiteName } from "../../components/ui/SiteBrand";
 import { useAuth } from "../../lib/auth";
 import {
   artifactCoordinateForDisplay,

@@ -25,8 +25,8 @@ import {
   listUserIdentities,
 } from "../../client";
 import type { CreateUserIdentity, UserIdentity } from "../../client";
-import { Badge } from "../../components/Badge";
-import { ErrorBanner } from "../../components/Feedback";
+import { Badge } from "../../components/ui/Badge";
+import { ErrorBanner } from "../../components/ui/Feedback";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 

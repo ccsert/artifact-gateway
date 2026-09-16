@@ -1,5 +1,5 @@
 import type { User } from "../../client";
-import type { BadgeTone } from "../../components/Badge";
+import type { BadgeTone } from "../../components/ui/Badge";
 
 export function isUserLocked(user: User, now = Date.now()): boolean {
   if (!user.lockedUntil) return false;

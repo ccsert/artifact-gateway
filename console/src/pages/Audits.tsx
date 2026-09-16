@@ -10,21 +10,21 @@ import {
 } from "@ant-design/icons";
 import { listAuditPage, listRepositories, listGroups } from "../client";
 import type { AuditRecord } from "../client";
-import { PageHeader, Card } from "../components/Layout";
+import { PageHeader, Card } from "../components/ui/Layout";
 import {
   Loading,
   ErrorBanner,
   EmptyState,
   isNotFound,
-} from "../components/Feedback";
-import { StateBadge, FormatBadge } from "../components/Badge";
+} from "../components/ui/Feedback";
+import { StateBadge, FormatBadge } from "../components/ui/Badge";
 import { formatBytes, formatDate } from "../lib/format";
 import { toCsv, downloadCsv } from "../lib/csv";
 import {
   FilterBar,
   FilterField,
   MetricStrip,
-} from "../components/ConsolePrimitives";
+} from "../components/ui/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 
 const AUDIT_CSV_COLUMNS_ZH = [

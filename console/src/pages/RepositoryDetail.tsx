@@ -41,10 +41,10 @@ import type {
   UpstreamAuthWritable,
 } from "../client";
 import { AccessDecisionSummary } from "../components/AccessDecisionSummary";
-import { Badge, FormatBadge, StateBadge } from "../components/Badge";
-import { ErrorBanner, Loading } from "../components/Feedback";
+import { Badge, FormatBadge, StateBadge } from "../components/ui/Badge";
+import { ErrorBanner, Loading } from "../components/ui/Feedback";
 import { IdentitySummary } from "../components/IdentitySummary";
-import { Card, Field, PageHeader } from "../components/Layout";
+import { Card, Field, PageHeader } from "../components/ui/Layout";
 import { MavenPublishWizard } from "../components/MavenPublishWizard";
 import { formatBytes, formatNumber } from "../lib/format";
 import { usePreferences } from "../lib/preferences";

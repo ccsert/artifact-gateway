@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { PreferencesProvider } from "../lib/preferences";
+import { PreferencesProvider } from "../../lib/preferences";
 import { SearchOutlined } from "@ant-design/icons";
 import { EmptyState, ErrorBanner, Loading } from "./Feedback";
 

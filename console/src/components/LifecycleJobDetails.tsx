@@ -1,6 +1,6 @@
 import type { LifecycleJobDetails as LifecycleJobDetailsData } from "../client";
 import { usePreferences } from "../lib/preferences";
-import { CopyableValue } from "./ConsolePrimitives";
+import { CopyableValue } from "./ui/ConsolePrimitives";
 
 export function LifecycleJobDetails({
   details,

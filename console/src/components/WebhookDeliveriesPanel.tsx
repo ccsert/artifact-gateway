@@ -24,10 +24,10 @@ import type {
 } from "../client";
 import { usePreferences } from "../lib/preferences";
 import { formatDate } from "../lib/format";
-import { Badge, StateBadge } from "./Badge";
-import { EmptyState, ErrorBanner, Loading } from "./Feedback";
-import { Card, CardHeader, Field } from "./Layout";
-import { Modal, useDisclosure } from "./Modal";
+import { Badge, StateBadge } from "./ui/Badge";
+import { EmptyState, ErrorBanner, Loading } from "./ui/Feedback";
+import { Card, CardHeader, Field } from "./ui/Layout";
+import { Modal, useDisclosure } from "./ui/Modal";
 
 type SubscriptionForm = {
   name: string;

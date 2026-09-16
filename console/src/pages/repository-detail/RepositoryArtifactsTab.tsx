@@ -10,15 +10,15 @@ import {
   searchRepositoryArtifacts,
 } from "../../client";
 import type { BrowseNode, Repository } from "../../client";
-import { Badge } from "../../components/Badge";
+import { Badge } from "../../components/ui/Badge";
 import { ArtifactSecurityBadge } from "../../features/artifact-detail/ArtifactSecurityBadge";
 import {
   EmptyState,
   ErrorBanner,
   Loading,
   isNotFound,
-} from "../../components/Feedback";
-import { Pagination } from "../../components/Layout";
+} from "../../components/ui/Feedback";
+import { Pagination } from "../../components/ui/Layout";
 import { OciImageDetail } from "../../features/artifact-detail/OciImageDetail";
 import {
   ConanArtifactDetail,

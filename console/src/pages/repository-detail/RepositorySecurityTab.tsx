@@ -19,8 +19,8 @@ import type {
   Repository,
   SecurityPolicy,
 } from "../../client";
-import { ErrorBanner, Loading, isNotFound } from "../../components/Feedback";
-import { Field } from "../../components/Layout";
+import { ErrorBanner, Loading, isNotFound } from "../../components/ui/Feedback";
+import { Field } from "../../components/ui/Layout";
 import { usePreferences } from "../../lib/preferences";
 import { APTSigningStatePanel } from "./APTSigningStatePanel";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";

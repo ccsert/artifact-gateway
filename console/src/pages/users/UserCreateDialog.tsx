@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { App, Form, Input, Modal, Select, Switch } from "antd";
 import { createUser } from "../../client";
 import type { CreateUser, User } from "../../client";
-import { ErrorBanner } from "../../components/Feedback";
+import { ErrorBanner } from "../../components/ui/Feedback";
 import { usePreferences } from "../../lib/preferences";
 import {
   localPasswordFitsBcrypt,

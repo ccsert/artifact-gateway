@@ -17,20 +17,20 @@ import {
   listRepositoryCapacities,
 } from "../client";
 import type { Repository, Group, AuditRecord } from "../client";
-import { PageHeader, Card, CardHeader } from "../components/Layout";
-import { Loading, ErrorBanner, isNotFound } from "../components/Feedback";
-import { FormatBadge, StateBadge } from "../components/Badge";
+import { PageHeader, Card, CardHeader } from "../components/ui/Layout";
+import { Loading, ErrorBanner, isNotFound } from "../components/ui/Feedback";
+import { FormatBadge, StateBadge } from "../components/ui/Badge";
 import { formatBytes, formatDate, formatNumber } from "../lib/format";
 import {
   loadDashboardHistory,
   recordDashboardSample,
   type DashboardSample,
 } from "../lib/history";
-import { MetricStrip } from "../components/ConsolePrimitives";
+import { MetricStrip } from "../components/ui/ConsolePrimitives";
 import {
   DashboardTrendCharts,
   StorageByFormatChart,
-} from "../components/DashboardCharts";
+} from "../components/ui/DashboardCharts";
 import { usePreferences } from "../lib/preferences";
 
 export function DashboardPage() {

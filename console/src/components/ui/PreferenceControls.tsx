@@ -7,7 +7,7 @@ import {
 import { Button, Dropdown, Space } from "antd";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { usePreferences, type AppLocale } from "../lib/preferences";
+import { usePreferences, type AppLocale } from "../../lib/preferences";
 
 export function PreferenceControls({ compact = false }: { compact?: boolean }) {
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);

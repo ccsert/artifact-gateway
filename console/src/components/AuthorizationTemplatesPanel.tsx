@@ -37,8 +37,8 @@ import type {
   AuthorizationRole,
   Repository,
 } from "../client";
-import { EmptyState, ErrorBanner, Loading } from "./Feedback";
-import { Card, CardHeader } from "./Layout";
+import { EmptyState, ErrorBanner, Loading } from "./ui/Feedback";
+import { Card, CardHeader } from "./ui/Layout";
 import { usePreferences } from "../lib/preferences";
 import {
   inferResourcePrefixFormat,

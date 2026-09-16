@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Card } from "../../components/Layout";
+import { Card } from "../../components/ui/Layout";
 
 export function PolicyCard({
   eyebrow,

@@ -28,22 +28,22 @@ import type {
   Repository,
   GroupCapacityMember,
 } from "../client";
-import { PageHeader, Card, Pagination, Field } from "../components/Layout";
+import { PageHeader, Card, Pagination, Field } from "../components/ui/Layout";
 import {
   Loading,
   ErrorBanner,
   EmptyState,
   isNotFound,
-} from "../components/Feedback";
-import { Badge, FormatBadge } from "../components/Badge";
-import { Modal, ConfirmDialog, useDisclosure } from "../components/Modal";
+} from "../components/ui/Feedback";
+import { Badge, FormatBadge } from "../components/ui/Badge";
+import { Modal, ConfirmDialog, useDisclosure } from "../components/ui/Modal";
 import { MemberOrderPicker } from "../components/MemberOrderPicker";
 import {
   FilterBar,
   FilterField,
   MetricStrip,
   CopyableValue,
-} from "../components/ConsolePrimitives";
+} from "../components/ui/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 import { groupFormats, loadFormatProfiles } from "../lib/formatProfiles";
 import { goProxyURL, npmRegistryURL, pypiIndexURL } from "../lib/usage";

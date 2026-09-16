@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { usePreferences } from "../lib/preferences";
+import { usePreferences } from "../../lib/preferences";
 
 export interface MetricItem {
   label: string;

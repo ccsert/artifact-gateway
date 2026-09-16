@@ -19,7 +19,7 @@ import {
   type SiteSettings,
 } from "../client";
 import { AntdProvider } from "../app/AntdProvider";
-import { SiteName } from "../components/SiteBrand";
+import { SiteName } from "../components/ui/SiteBrand";
 import { defaultConsoleThemes } from "../lib/consoleTheme";
 import { PreferencesProvider } from "../lib/preferences";
 import { SiteSettingsProvider } from "../lib/siteSettings";

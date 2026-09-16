@@ -4,17 +4,17 @@ import { Alert, Button, Input, Select, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { listApiKeys, createApiKey, revokeApiKey } from "../client";
 import type { ApiKey, CreatedApiKey } from "../client";
-import { PageHeader, Card, Field } from "../components/Layout";
-import { Loading, ErrorBanner, EmptyState } from "../components/Feedback";
-import { StateBadge, Badge } from "../components/Badge";
-import { Modal, ConfirmDialog, useDisclosure } from "../components/Modal";
+import { PageHeader, Card, Field } from "../components/ui/Layout";
+import { Loading, ErrorBanner, EmptyState } from "../components/ui/Feedback";
+import { StateBadge, Badge } from "../components/ui/Badge";
+import { Modal, ConfirmDialog, useDisclosure } from "../components/ui/Modal";
 import { formatDate } from "../lib/format";
 import {
   CopyableValue,
   FilterBar,
   FilterField,
   MetricStrip,
-} from "../components/ConsolePrimitives";
+} from "../components/ui/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 
 function CreateKeyDialog({

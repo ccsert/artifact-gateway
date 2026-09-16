@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { InboxOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Empty, Spin } from "antd";
-import type { Problem } from "../client";
-import { usePreferences } from "../lib/preferences";
+import type { Problem } from "../../client";
+import { usePreferences } from "../../lib/preferences";
 
 export function Spinner({ className = "" }: { className?: string }) {
   return <Spin className={className} size="small" />;

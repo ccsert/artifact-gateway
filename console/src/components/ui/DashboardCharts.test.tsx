@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PreferencesProvider } from "../lib/preferences";
+import { PreferencesProvider } from "../../lib/preferences";
 import {
   buildStorageChartData,
   DashboardTrendCharts,

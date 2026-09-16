@@ -39,14 +39,14 @@ import type {
   ServiceAccount,
   User,
 } from "../client";
-import { PageHeader, Card, CardHeader } from "../components/Layout";
+import { PageHeader, Card, CardHeader } from "../components/ui/Layout";
 import {
   Loading,
   ErrorBanner,
   EmptyState,
   Spinner,
-} from "../components/Feedback";
-import { FormatBadge, Badge, type BadgeTone } from "../components/Badge";
+} from "../components/ui/Feedback";
+import { FormatBadge, Badge, type BadgeTone } from "../components/ui/Badge";
 import { AccessDecisionSummary } from "../components/AccessDecisionSummary";
 import { useAuth } from "../lib/auth";
 import {
@@ -54,7 +54,7 @@ import {
   FilterBar,
   FilterField,
   MetricStrip,
-} from "../components/ConsolePrimitives";
+} from "../components/ui/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 import {
   isActiveApiKeyPrincipal,

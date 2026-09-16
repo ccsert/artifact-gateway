@@ -35,9 +35,9 @@ import {
   type ConsoleThemePackageValidation,
   type SiteSettings,
 } from "../client";
-import { Card, PageHeader } from "../components/Layout";
-import { ErrorBanner, Loading } from "../components/Feedback";
-import { SiteBrandMark } from "../components/SiteBrand";
+import { Card, PageHeader } from "../components/ui/Layout";
+import { ErrorBanner, Loading } from "../components/ui/Feedback";
+import { SiteBrandMark } from "../components/ui/SiteBrand";
 import { defaultSiteSettings, useSiteSettings } from "../lib/siteSettings";
 import { usePreferences } from "../lib/preferences";
 import { resolveConsoleTheme } from "../lib/consoleTheme";

@@ -27,9 +27,9 @@ import {
   runRepositoryLifecycleJobNow,
 } from "../client";
 import type { LifecycleJob } from "../client";
-import { Card, PageHeader } from "../components/Layout";
-import { EmptyState, ErrorBanner, Loading } from "../components/Feedback";
-import { StateBadge } from "../components/Badge";
+import { Card, PageHeader } from "../components/ui/Layout";
+import { EmptyState, ErrorBanner, Loading } from "../components/ui/Feedback";
+import { StateBadge } from "../components/ui/Badge";
 import { formatDate } from "../lib/format";
 import { RuntimeNodesPanel } from "../components/RuntimeNodesPanel";
 import { ScheduledTasksPanel } from "../components/ScheduledTasksPanel";
@@ -40,7 +40,7 @@ import {
   FilterBar,
   FilterField,
   MetricStrip,
-} from "../components/ConsolePrimitives";
+} from "../components/ui/ConsolePrimitives";
 import { usePreferences } from "../lib/preferences";
 
 type OperationRow = {

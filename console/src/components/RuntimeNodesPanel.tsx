@@ -5,9 +5,9 @@ import type { ColumnsType } from "antd/es/table";
 import { listRuntimeNodes } from "../client";
 import type { RuntimeNode, RuntimeNodeList } from "../client";
 import { formatDate } from "../lib/format";
-import { FormatBadge, StateBadge } from "./Badge";
-import { EmptyState, ErrorBanner, Loading } from "./Feedback";
-import { Card, CardHeader } from "./Layout";
+import { FormatBadge, StateBadge } from "./ui/Badge";
+import { EmptyState, ErrorBanner, Loading } from "./ui/Feedback";
+import { Card, CardHeader } from "./ui/Layout";
 import { usePreferences } from "../lib/preferences";
 
 function runtimeNodeColumns(

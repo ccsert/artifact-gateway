@@ -7,10 +7,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { formatBytes } from "../lib/format";
-import { artifactFormatVisualizationSlot } from "../lib/artifactFormatVisuals";
-import type { DashboardSample } from "../lib/history";
-import { usePreferences } from "../lib/preferences";
+import { formatBytes } from "../../lib/format";
+import { artifactFormatVisualizationSlot } from "../../lib/artifactFormatVisuals";
+import type { DashboardSample } from "../../lib/history";
+import { usePreferences } from "../../lib/preferences";
 
 const DashboardPiePlot = lazy(
   () => import("./dashboard-charts/DashboardPiePlot"),

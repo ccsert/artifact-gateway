@@ -2,9 +2,9 @@ import { useState } from "react";
 import { UploadOutlined } from "@ant-design/icons";
 import { Button, Input, Space, Upload } from "antd";
 import { useAuth } from "../lib/auth";
-import { Modal, useDisclosure } from "./Modal";
-import { Field } from "./Layout";
-import { ErrorBanner } from "./Feedback";
+import { Modal, useDisclosure } from "./ui/Modal";
+import { Field } from "./ui/Layout";
+import { ErrorBanner } from "./ui/Feedback";
 import type { Repository } from "../client";
 import { usePreferences } from "../lib/preferences";
 import {
