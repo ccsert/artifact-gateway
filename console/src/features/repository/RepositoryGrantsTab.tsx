@@ -10,15 +10,8 @@ import {
   listUsers,
   replaceGrants,
 } from "../../client";
-import type {
-  ApiKey,
-  AuthorizationRole,
-  Grant,
-  Repository,
-  ServiceAccount,
-  User,
-} from "../../client";
-import { Badge, type BadgeTone } from "../../components/ui/Badge";
+import type { AuthorizationRole, Grant, Repository } from "../../client";
+import { Badge } from "../../components/ui/Badge";
 import {
   EmptyState,
   ErrorBanner,
@@ -27,122 +20,26 @@ import {
 } from "../../components/ui/Feedback";
 import { Modal, useDisclosure } from "../../components/ui/Modal";
 import { usePreferences } from "../../lib/preferences";
-import {
-  isActiveApiKeyPrincipal,
-  isActiveUserPrincipal,
-} from "../../lib/accessPrincipals";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 import { ResourcePrefixEditor } from "../access-control/ResourcePrefixEditor";
-
-type Localize = (chinese: string, english: string) => string;
-
-type GrantLevel = "read" | "write" | "admin" | "intelligence";
-const CUSTOM_PRINCIPAL = "__custom__";
-const BUILTIN_PERMISSION_PREFIX = "builtin:";
-const CUSTOM_ROLE_PREFIX = "role:";
-const SNAPSHOT_PERMISSION = "snapshot";
-
-type DraftGrant = Grant & { roleId?: string };
-
-interface PrincipalOption {
-  value: string;
-  label: string;
-  detail: string;
-}
-
-type PrincipalKind = "user" | "api-key" | "service-account" | "custom";
-
-function principalKind(principal: string): PrincipalKind {
-  if (principal.startsWith("user:")) return "user";
-  if (principal.startsWith("api-key:")) return "api-key";
-  if (principal.startsWith("service-account:")) return "service-account";
-  return "custom";
-}
-
-function principalEditorKind(principal: string): PrincipalKind | "" {
-  if (principal === CUSTOM_PRINCIPAL) return "custom";
-  return principal ? principalKind(principal) : "";
-}
-
-function grantTone(level: GrantLevel): BadgeTone {
-  if (level === "intelligence") return "visualization-1";
-  if (level === "admin") return "visualization-3";
-  if (level === "write") return "visualization-5";
-  return "visualization-4";
-}
-
-function grantLevel(scopes: Grant["scopes"]): GrantLevel {
-  if (scopes.includes("repositories:intelligence")) return "intelligence";
-  if (scopes.includes("repositories:admin")) return "admin";
-  if (scopes.includes("repositories:write")) return "write";
-  return "read";
-}
-
-function scopesForLevel(level: GrantLevel): Grant["scopes"] {
-  return [`repositories:${level}`] as Grant["scopes"];
-}
-
-function permissionSelection(
-  grant: DraftGrant,
-  roles: AuthorizationRole[],
-): string {
-  if (grant.roleId && roles.some((role) => role.id === grant.roleId))
-    return `${CUSTOM_ROLE_PREFIX}${grant.roleId}`;
-  return grant.scopes.length === 1
-    ? `${BUILTIN_PERMISSION_PREFIX}${grantLevel(grant.scopes)}`
-    : SNAPSHOT_PERMISSION;
-}
-
-function grantedCapabilitiesLabel(
-  scopes: Grant["scopes"],
-  text: Localize,
-): string {
-  if (scopes.includes("repositories:admin"))
-    return text(
-      "读取 + 写入 + 管理 + 制品情报",
-      "Read + write + admin + intelligence",
-    );
-  const capabilities: string[] = scopes.includes("repositories:write")
-    ? [text("读取 + 写入", "Read + write")]
-    : scopes.includes("repositories:read")
-      ? [text("读取", "Read")]
-      : [];
-  if (scopes.includes("repositories:intelligence"))
-    capabilities.push(text("制品情报", "Artifact intelligence"));
-  return capabilities.join(" + ");
-}
-
-function principalOptions(
-  users: User[],
-  apiKeys: ApiKey[],
-  serviceAccounts: ServiceAccount[],
-  text: Localize,
-): PrincipalOption[] {
-  return [
-    ...users.filter(isActiveUserPrincipal).map((user) => ({
-      value: `user:${user.name}`,
-      label: `${text("用户", "User")} · ${user.name}`,
-      detail: `${text("全局角色", "Global role")} ${user.role}`,
-    })),
-    ...apiKeys
-      .filter((key) => isActiveApiKeyPrincipal(key))
-      .map((key) => ({
-        value: `api-key:${key.id}`,
-        label: `API Key · ${key.name}`,
-        detail: `${text("全局角色", "Global role")} ${key.roles.join(", ")}`,
-      })),
-    ...serviceAccounts
-      .filter((account) => account.state === "active")
-      .map((account) => ({
-        value: `service-account:${account.id}`,
-        label: `${text("服务账号", "Service account")} · ${account.name}`,
-        detail: text(
-          "无全局角色，由仓库授权决定",
-          "No global role; repository grants decide access",
-        ),
-      })),
-  ];
-}
+import {
+  BUILTIN_PERMISSION_PREFIX,
+  CUSTOM_PRINCIPAL,
+  CUSTOM_ROLE_PREFIX,
+  SNAPSHOT_PERMISSION,
+  emptyGrant,
+  grantedCapabilitiesLabel,
+  grantLevel,
+  grantTone,
+  permissionSelection,
+  principalEditorKind,
+  principalOptions,
+  scopesForLevel,
+  scopesForRole,
+  type DraftGrant,
+  type GrantLevel,
+  type PrincipalOption,
+} from "../access-control/grantDraft";
 
 export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
   const { text } = usePreferences();
@@ -596,7 +493,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
                               )
                             : undefined;
                           const nextScopes = role
-                            ? ([...role.scopes] as Grant["scopes"])
+                            ? scopesForRole(role)
                             : scopesForLevel(
                                 value.slice(
                                   BUILTIN_PERMISSION_PREFIX.length,
@@ -659,12 +556,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
             block
             type="dashed"
             icon={<PlusOutlined />}
-            onClick={() =>
-              setDraft((d) => [
-                ...d,
-                { principal: "", scopes: ["repositories:read"] },
-              ])
-            }
+            onClick={() => setDraft((d) => [...d, emptyGrant()])}
           >
             {text("添加授权规则", "Add access grant")}
           </Button>

@@ -44,15 +44,7 @@ import {
   inferResourcePrefixFormat,
   ResourcePrefixEditor,
 } from "./ResourcePrefixEditor";
-
-type DraftGrant = {
-  key: string;
-  principal: string;
-  scopes: AuthorizationTemplateGrant["scopes"];
-  resourcePrefix?: string;
-  roleId?: string;
-  selectorFormat?: Repository["format"];
-};
+import { emptyGrant, scopesForRole, type DraftGrant } from "./grantDraft";
 
 export type PrincipalOption = { value: string; label: string };
 
@@ -102,14 +94,6 @@ export const AUTHORIZATION_TEMPLATE_PRESETS: TemplatePreset[] = [
     grants: [{ principal: "", scopes: ["repositories:admin"] }],
   },
 ];
-
-function emptyGrant(): DraftGrant {
-  return {
-    key: `${Date.now()}-${Math.random()}`,
-    principal: "",
-    scopes: ["repositories:read"],
-  };
-}
 
 const CUSTOM_ROLE = "__custom__";
 
@@ -597,7 +581,7 @@ export function AuthorizationTemplatesPanel({
                               ? {
                                   ...item,
                                   roleId: selected.id,
-                                  scopes: [...selected.scopes],
+                                  scopes: scopesForRole(selected),
                                 }
                               : item;
                           }),
