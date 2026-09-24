@@ -112,7 +112,7 @@ describe("AppLayout", () => {
   it("shows a reader the repository catalog without administrator navigation", async () => {
     Object.assign(auth, {
       role: "reader",
-      identity: { administrator: false },
+      identity: { administrator: false, role: "reader" },
     });
 
     renderLayout("/repositories");
@@ -127,7 +127,7 @@ describe("AppLayout", () => {
   it("keeps Service Account credential management away from a reader", async () => {
     Object.assign(auth, {
       role: "reader",
-      identity: { administrator: false },
+      identity: { administrator: false, role: "reader" },
     });
 
     renderLayout("/service-accounts");

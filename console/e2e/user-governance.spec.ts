@@ -85,7 +85,7 @@ test("mandatory password change keeps the restricted session in memory", async (
   ]);
   expect(passwordResponse.status()).toBe(204);
 
-  await expect(page).toHaveURL("/search");
+  await expect(page).toHaveURL("/repositories");
   const storedToken = await page.evaluate(() =>
     localStorage.getItem("ag.console.token"),
   );

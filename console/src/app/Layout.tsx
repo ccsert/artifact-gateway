@@ -318,6 +318,11 @@ export function AppLayout() {
     );
   }
 
+  const canBrowseRepositories =
+    identity?.administrator === true ||
+    identity?.role === "reader" ||
+    identity?.role === "writer";
+
   const adminOnlyPath = [
     "/",
     "/operations",
@@ -348,11 +353,18 @@ export function AppLayout() {
     !identity.administrator &&
     (adminOnlyPath || adminOnlySection)
   ) {
-    return <Navigate to="/repositories" replace />;
+    return (
+      <Navigate
+        to={canBrowseRepositories ? "/repositories" : "/search"}
+        replace
+      />
+    );
   }
 
   const visibleNavItems = navItems.filter(
-    (item) => !("admin" in item) || identity?.administrator,
+    (item) =>
+      (!("admin" in item) || identity?.administrator) &&
+      (item.to !== "/repositories" || canBrowseRepositories),
   );
   const selectedItem = visibleNavItems.find((item) =>
     "exact" in item
