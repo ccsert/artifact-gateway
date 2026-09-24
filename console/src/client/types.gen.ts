@@ -4036,6 +4036,10 @@ export type ListRepositoriesErrors = {
    * Problem response
    */
   401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
 };
 
 export type ListRepositoriesError =

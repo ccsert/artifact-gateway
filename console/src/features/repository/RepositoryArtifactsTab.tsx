@@ -131,7 +131,7 @@ export function RepositoryArtifactsTab({
   const proxyGo = format === "go" && repo.type === "proxy";
   const proxyAPT = format === "apt" && repo.type === "proxy";
   const hostedAPT = format === "apt" && repo.type === "hosted";
-  const canUploadRaw = format === "raw" && repo.type !== "proxy";
+  const canUploadRaw = canWrite && format === "raw" && repo.type !== "proxy";
   const supportsDirectory =
     (repo.type === "hosted" || repo.type === "proxy") &&
     (format === "maven" || format === "raw");

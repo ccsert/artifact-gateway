@@ -2,6 +2,7 @@
 repositories:
   get:
     operationId: listRepositories
+    description: Returns repositories for which the authenticated principal has read access. Administrators see the full catalog; a pending account has no access.
     parameters:
     - "$ref": "../components/parameters.yaml#/PageSize"
     - "$ref": "../components/parameters.yaml#/PageToken"
@@ -9,6 +10,8 @@ repositories:
       '200':
         "$ref": "../components/responses.yaml#/RepositoryList"
       '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
         "$ref": "../components/responses.yaml#/Problem"
   post:
     operationId: createRepository

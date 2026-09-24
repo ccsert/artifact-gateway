@@ -11,6 +11,10 @@ their meaning.
 
 ## Unreleased
 
+## 0.3.1 - 2026-09-24
+
+- Authorized `reader` and `writer` users can now browse repositories and artifacts in the Console. A `writer` can use Raw upload, the Maven publish wizard, and OCI/npm/PyPI publish guides where effective repository write access applies. OCI Docker/Podman publishing uses an administrator-issued service-account credential with a repository write grant. A `reader` has no upload or publish controls. The server filters repository discovery by read permission. Pending users remain blocked, while repository configuration, access grants, and user management remain administrator-only.
+
 ## 0.3.0 - 2026-09-24
 
 - OIDC JIT provisioning can now register a user with the explicit `none` role. A first sign-in creates a passwordless local account and stable issuer/subject binding that appears as Pending in the Console Users page; it grants no repository access, including through legacy read defaults or managed grants. Administrators can assign or revoke global reader, writer, and admin roles there. Pending users see an authorization waiting page with a check-again action. Later sign-ins update safe SSO profile fields without overwriting the Gateway role; disabling an account or revoking its linked session still takes effect on the next request. The default JIT role remains reader for compatibility, so operators must choose `none` when enabling this onboarding policy.

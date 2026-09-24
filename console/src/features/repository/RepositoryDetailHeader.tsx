@@ -137,7 +137,7 @@ export function RepositorySummary({
 }: {
   repo: Repository;
   capacity: RepositoryCapacity | null;
-  onOpenCapacity: () => void;
+  onOpenCapacity?: () => void;
 }) {
   const { text } = usePreferences();
   const protocolPath = `${window.location.origin}/${repo.format}/${repo.name}`;
@@ -194,19 +194,21 @@ export function RepositorySummary({
             {text("打开公开浏览", "Open public browser")}
           </Link>
         )}
-        <Button
-          type="link"
-          size="small"
-          className="h-auto p-0 text-xs text-zinc-400"
-          onClick={onOpenCapacity}
-        >
-          {capacity
-            ? text(
-                `${formatBytes(capacity.usedBytes)} · ${formatNumber(capacity.objectCount)} 个对象`,
-                `${formatBytes(capacity.usedBytes)} · ${formatNumber(capacity.objectCount)} objects`,
-              )
-            : text("查看容量", "View capacity")}
-        </Button>
+        {onOpenCapacity && (
+          <Button
+            type="link"
+            size="small"
+            className="h-auto p-0 text-xs text-zinc-400"
+            onClick={onOpenCapacity}
+          >
+            {capacity
+              ? text(
+                  `${formatBytes(capacity.usedBytes)} · ${formatNumber(capacity.objectCount)} 个对象`,
+                  `${formatBytes(capacity.usedBytes)} · ${formatNumber(capacity.objectCount)} objects`,
+                )
+              : text("查看容量", "View capacity")}
+          </Button>
+        )}
       </div>
     </div>
   );

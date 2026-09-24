@@ -293,9 +293,74 @@ type userManagementStore interface {
 var _ adminopenapi.ServerInterface = generatedRepositoryAPIAdapter{}
 
 func (h generatedRepositoryAPIAdapter) ListRepositories(w http.ResponseWriter, r *http.Request, params adminopenapi.ListRepositoriesParams) {
-	if _, ok := h.authorize(w, r); ok {
-		h.listBound(w, r, params)
+	principal, ok := h.authenticate(w, r)
+	if !ok {
+		return
 	}
+	if principal.MustChangePassword || principal.Role == RoleNone {
+		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository read permission is required")
+		return
+	}
+	if principal.Admin {
+		h.listBound(w, r, params)
+		return
+	}
+	h.listReadableRepositories(w, r, params, principal)
+}
+
+// listReadableRepositories keeps discovery consistent with per-repository reads.
+// A page may span multiple store batches when some repositories are not readable.
+func (h generatedRepositoryAPIAdapter) listReadableRepositories(w http.ResponseWriter, r *http.Request, params adminopenapi.ListRepositoriesParams, principal Principal) {
+	pageSize := 50
+	if params.PageSize != nil {
+		pageSize = int(*params.PageSize)
+		if pageSize < 1 || pageSize > 200 {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
+			return
+		}
+	}
+	pageToken := ""
+	if params.PageToken != nil {
+		pageToken = string(*params.PageToken)
+	}
+	after, err := h.decodeCursor(pageToken)
+	if err != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
+		return
+	}
+	items := make([]repository.HostedRepository, 0, pageSize)
+	scanned := after
+	hasMore := false
+	for len(items) < pageSize {
+		batch, next, listErr := h.store.ListHostedRepositories(r.Context(), 200, scanned)
+		if errors.Is(listErr, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid")
+			return
+		}
+		if listErr != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list repositories failed")
+			return
+		}
+		for index, candidate := range batch {
+			scanned = candidate.ID
+			if h.authorizer.Authorize(r.Context(), principal, candidate, RepositoryRead).Allowed {
+				items = append(items, redactRepositorySecrets(candidate))
+			}
+			if len(items) == pageSize {
+				hasMore = index < len(batch)-1 || next != ""
+				break
+			}
+		}
+		if len(items) == pageSize || next == "" {
+			break
+		}
+	}
+	nextToken := ""
+	if hasMore {
+		nextToken = h.encodeCursor(scanned)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(repositoryPage{Items: items, NextPageToken: nextToken})
 }
 
 func (h generatedRepositoryAPIAdapter) CreateRepository(w http.ResponseWriter, r *http.Request, params adminopenapi.CreateRepositoryParams) {

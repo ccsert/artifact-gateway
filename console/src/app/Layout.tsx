@@ -50,7 +50,6 @@ const navItems = [
     label: "nav.repositories",
     icon: <InboxOutlined />,
     group: "runtime",
-    admin: true,
   },
   {
     to: "/search",
@@ -321,7 +320,6 @@ export function AppLayout() {
 
   const adminOnlyPath = [
     "/",
-    "/repositories",
     "/operations",
     "/groups",
     "/access",
@@ -333,8 +331,24 @@ export function AppLayout() {
     "/service-accounts",
     "/users",
   ].includes(location.pathname);
-  if (identity && !identity.administrator && adminOnlyPath) {
-    return <Navigate to="/search" replace />;
+  const adminOnlySection = [
+    "/operations",
+    "/groups",
+    "/access",
+    "/audits",
+    "/audit-retention",
+    "/identity-providers",
+    "/site-settings",
+    "/keys",
+    "/service-accounts",
+    "/users",
+  ].some((prefix) => location.pathname.startsWith(prefix + "/"));
+  if (
+    identity &&
+    !identity.administrator &&
+    (adminOnlyPath || adminOnlySection)
+  ) {
+    return <Navigate to="/repositories" replace />;
   }
 
   const visibleNavItems = navItems.filter(

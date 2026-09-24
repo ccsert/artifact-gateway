@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Artifact Gateway Native Hosted Management API",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "description": "Resolved management and native protocol contract for Artifact Gateway 0.2."
   },
   "servers": [
@@ -466,6 +466,7 @@
     "/repositories": {
       "get": {
         "operationId": "listRepositories",
+        "description": "Returns repositories for which the authenticated principal has read access. Administrators see the full catalog; a pending account has no access.",
         "parameters": [
           {
             "$ref": "#/components/parameters/PageSize"
@@ -479,6 +480,9 @@
             "$ref": "#/components/responses/RepositoryList"
           },
           "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
             "$ref": "#/components/responses/Problem"
           }
         }

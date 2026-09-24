@@ -619,6 +619,9 @@ export const listAuditRetentionJobs = <ThrowOnError extends boolean = false>(opt
     ...options
 });
 
+/**
+ * Returns repositories for which the authenticated principal has read access. Administrators see the full catalog; a pending account has no access.
+ */
 export const listRepositories = <ThrowOnError extends boolean = false>(options?: Options<ListRepositoriesData, ThrowOnError>): RequestResult<ListRepositoriesResponses, ListRepositoriesErrors, ThrowOnError> => (options?.client ?? client).get<ListRepositoriesResponses, ListRepositoriesErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
