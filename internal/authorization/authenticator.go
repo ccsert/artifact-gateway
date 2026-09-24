@@ -69,6 +69,11 @@ type Authenticator struct {
 	// RepositoryReaders maps an actor to exact repository names or prefix
 	// patterns ending in /*. A nil map keeps the local-development default.
 	RepositoryReaders map[string][]string
+	// LegacyReadDefaultDeny makes a deployment that configured no reader
+	// patterns deny an unmatched caller instead of admitting it. The next
+	// release flips this default; until then it is an explicit opt-in so an
+	// upgrade never takes reads away from running clients unannounced.
+	LegacyReadDefaultDeny bool
 	// RepositoryWriters is intentionally separate from readers: Maven deploy
 	// must never turn a download grant into publication authority.
 	RepositoryWriters map[string][]string
@@ -251,11 +256,30 @@ func (p Principal) RepositoryAccessBlocked() bool {
 	return p.AccountStateReason() != ""
 }
 
-func (p Principal) CanReadRepository(repositoryName string, policyConfigured bool) bool {
+// CanReadRepository reports whether the principal may read the named legacy
+// repository. An administrator, a global read role, or a matching reader
+// pattern qualifies. A deployment that configured no reader patterns at all
+// admits an otherwise-unmatched caller, because that is the documented
+// production posture; GATEWAY_LEGACY_READ_DEFAULT=deny opts into the stricter
+// posture early and the next release makes it the default. A pending or
+// password-change account is never admitted, whatever the posture.
+func (a Authenticator) CanReadRepository(principal Principal, repositoryName string) bool {
+	if principal.CanReadRepository(repositoryName) {
+		return true
+	}
+	return !principal.RepositoryAccessBlocked() && a.RepositoryReaders == nil && !a.LegacyReadDefaultDeny
+}
+
+// CanReadRepository reports whether the principal's own authority - account
+// state, administrator identity, global read role, or reader pattern - allows
+// reading the named legacy repository. It knows nothing about deployment
+// configuration; callers that need the documented fallback use the
+// Authenticator method above.
+func (p Principal) CanReadRepository(repositoryName string) bool {
 	if p.RepositoryAccessBlocked() {
 		return false
 	}
-	if p.Admin || RoleAllows(p.Role, RepositoryRead) || !policyConfigured {
+	if p.Admin || RoleAllows(p.Role, RepositoryRead) {
 		return true
 	}
 	for _, pattern := range p.RepositoryPatterns {
@@ -264,10 +288,6 @@ func (p Principal) CanReadRepository(repositoryName string, policyConfigured boo
 		}
 	}
 	return false
-}
-
-func (a Authenticator) CanReadRepository(principal Principal, repositoryName string) bool {
-	return principal.CanReadRepository(repositoryName, a.RepositoryReaders != nil)
 }
 
 // CanReadMavenRepository treats a Maven Group as its repository boundary.

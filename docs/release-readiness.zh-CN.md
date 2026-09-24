@@ -106,7 +106,7 @@ max by (kind, format) (
 | Hosted 来源 | PostgreSQL 权威 metadata + RustFS S3-compatible byte |
 | 外部 Proxy | 精确上游 host 未进入 allowlist 时禁用 |
 | 认证 | CI/app 使用可轮换 Service Account；生产人类身份用 HTTPS RS256 OIDC；静态 Token 只作本地 break-glass |
-| 授权 | 配置 reader policy 后拒绝未匹配 principal |
+| 授权 | 配置了 `GATEWAY_REPOSITORY_READERS` 时拒绝未匹配的 principal；未配置策略时可用 `GATEWAY_LEGACY_READ_DEFAULT=deny` 提前启用拒绝。未配置且未启用的部署仍会放行未匹配的已认证调用方，启动时打印告警，下一版本将翻转该默认值；升级动作见 [legacy group migration](legacy-group-migration.zh-CN.md) |
 | OCI cache | 按内容 read-through，TTL 宽限后每五分钟清理 |
 | Maven cache | component 15m，metadata 与 negative 1m |
 | 备份 | PostgreSQL + RustFS；演练目标 RPO 24h、RTO 30m |

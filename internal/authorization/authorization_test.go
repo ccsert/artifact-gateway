@@ -654,8 +654,54 @@ func TestAuthenticatorMavenPoliciesKeepReadAndWriteSeparate(t *testing.T) {
 	if authenticator.CanWriteMavenRepository(principal, "team/app") {
 		t.Fatal("read pattern unexpectedly granted Maven publication")
 	}
-	if !(Principal{Role: RoleWriter}).CanReadRepository("anything", true) {
+	if !(Principal{Role: RoleWriter}).CanReadRepository("anything") {
 		t.Fatal("global writer role could not read")
+	}
+}
+
+func TestLegacyReadDefaultPosture(t *testing.T) {
+	// A configured deployment puts the actor's patterns on the principal, so a
+	// pattern-less principal models a caller nothing grants access to.
+	unmatched := Principal{Actor: "build-agent"}
+	configured := Authenticator{RepositoryReaders: map[string][]string{"build-agent": {"releases"}}}
+
+	// An unconfigured deployment keeps admitting unmatched readers until the
+	// default flips; the opt-in refuses them now, as does any configured policy.
+	if !(Authenticator{}).CanReadRepository(unmatched, "releases") {
+		t.Fatal("the documented unconfigured posture must keep admitting readers")
+	}
+	if (Authenticator{LegacyReadDefaultDeny: true}).CanReadRepository(unmatched, "releases") {
+		t.Fatal("the deny posture must refuse an unmatched reader")
+	}
+	if configured.CanReadRepository(unmatched, "releases") {
+		t.Fatal("configuring any reader policy must stop the unrestricted fallback")
+	}
+
+	// Patterns decide on their own, whichever posture is in force.
+	for _, authenticator := range []Authenticator{
+		{RepositoryReaders: configured.RepositoryReaders},
+		{RepositoryReaders: configured.RepositoryReaders, LegacyReadDefaultDeny: true},
+	} {
+		granted := unmatched
+		granted.RepositoryPatterns = []string{"releases"}
+		if !authenticator.CanReadRepository(granted, "releases") {
+			t.Fatal("a matching reader pattern was denied")
+		}
+		if authenticator.CanReadRepository(granted, "other") {
+			t.Fatal("a non-matching reader pattern was admitted")
+		}
+	}
+
+	// The permissive fallback must never override account state, or it would
+	// undo the password-change and pending blocks.
+	permissive := Authenticator{}
+	for _, principal := range []Principal{
+		{Actor: "user:reset", MustChangePassword: true},
+		{Actor: "user:pending", Role: RoleNone},
+	} {
+		if permissive.CanReadRepository(principal, "releases") {
+			t.Fatalf("account state must survive the permissive fallback: %+v", principal)
+		}
 	}
 }
 
