@@ -17,6 +17,18 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 )
 
+func TestOCIChallengeUsesForwardedHTTPSScheme(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://artifact-gateway.example.com/v2/", nil)
+	request.Header.Set("X-Forwarded-Proto", "https")
+	response := httptest.NewRecorder()
+
+	writeOCIChallenge(response, request)
+
+	if got := response.Header().Get("WWW-Authenticate"); !strings.Contains(got, `realm="https://artifact-gateway.example.com/auth/token"`) {
+		t.Fatalf("HTTPS proxy challenge = %q", got)
+	}
+}
+
 func TestOCILegacyGroupServesManifestAndRange(t *testing.T) {
 	manifest := []byte(`{"schemaVersion":2,"config":{"digest":"sha256:config"}}`)
 	digest := digestOf(manifest)
