@@ -693,7 +693,7 @@ func parseOCIByte(value string) (int64, error) {
 
 func writeOCIChallenge(w http.ResponseWriter, request *http.Request) {
 	realm := "http://" + request.Host + "/auth/token"
-	if request.TLS != nil {
+	if request.TLS != nil || strings.EqualFold(request.Header.Get("X-Forwarded-Proto"), "https") {
 		realm = "https://" + request.Host + "/auth/token"
 	}
 	w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")

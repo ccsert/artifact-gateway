@@ -431,7 +431,7 @@ describe("APT disaster-recovery archive", () => {
     expect(screen.getByRole("button", { name: "恢复归档" })).toBeDisabled();
 
     await user.clear(receiptField);
-    await user.type(receiptField, validReceipt);
+    await user.paste(validReceipt);
     const input = container.querySelector('input[type="file"]');
     expect(input).not.toBeNull();
     await user.upload(

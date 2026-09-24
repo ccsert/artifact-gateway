@@ -50,7 +50,6 @@ const navItems = [
     label: "nav.repositories",
     icon: <InboxOutlined />,
     group: "runtime",
-    admin: true,
   },
   {
     to: "/search",
@@ -319,9 +318,13 @@ export function AppLayout() {
     );
   }
 
+  const canBrowseRepositories =
+    identity?.administrator === true ||
+    identity?.role === "reader" ||
+    identity?.role === "writer";
+
   const adminOnlyPath = [
     "/",
-    "/repositories",
     "/operations",
     "/groups",
     "/access",
@@ -333,12 +336,35 @@ export function AppLayout() {
     "/service-accounts",
     "/users",
   ].includes(location.pathname);
-  if (identity && !identity.administrator && adminOnlyPath) {
-    return <Navigate to="/search" replace />;
+  const adminOnlySection = [
+    "/operations",
+    "/groups",
+    "/access",
+    "/audits",
+    "/audit-retention",
+    "/identity-providers",
+    "/site-settings",
+    "/keys",
+    "/service-accounts",
+    "/users",
+  ].some((prefix) => location.pathname.startsWith(prefix + "/"));
+  if (
+    identity &&
+    !identity.administrator &&
+    (adminOnlyPath || adminOnlySection)
+  ) {
+    return (
+      <Navigate
+        to={canBrowseRepositories ? "/repositories" : "/search"}
+        replace
+      />
+    );
   }
 
   const visibleNavItems = navItems.filter(
-    (item) => !("admin" in item) || identity?.administrator,
+    (item) =>
+      (!("admin" in item) || identity?.administrator) &&
+      (item.to !== "/repositories" || canBrowseRepositories),
   );
   const selectedItem = visibleNavItems.find((item) =>
     "exact" in item

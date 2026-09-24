@@ -37,7 +37,7 @@ export const TABS: RepositoryTabDefinition[] = [
     key: "publish",
     label: "发布",
     labelEn: "Publish",
-    formats: ["maven", "npm", "pypi"],
+    formats: ["maven", "npm", "pypi", "oci"],
   },
   { key: "grants", label: "访问授权", labelEn: "Access grants" },
   {

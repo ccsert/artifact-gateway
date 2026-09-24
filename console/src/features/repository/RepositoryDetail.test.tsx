@@ -14,10 +14,24 @@ import type { Repository } from "../../client";
 import { RepositoryDetailPage } from "./RepositoryDetail";
 import { RepositorySettingsTab } from "./RepositorySettingsTab";
 
+const auth = vi.hoisted(() => ({
+  identity: { administrator: true, role: "admin" },
+}));
+
+vi.mock("../../lib/auth", () => ({
+  useAuth: () => auth,
+}));
+
 const scanningTab = vi.hoisted(() => ({
   render: vi.fn((props: unknown) => {
     void props;
     return "扫描工作区已加载";
+  }),
+}));
+const artifactsTab = vi.hoisted(() => ({
+  render: vi.fn((props: unknown) => {
+    void props;
+    return "制品视图已加载";
   }),
 }));
 
@@ -37,6 +51,9 @@ vi.mock("../../client", async () => {
 vi.mock("./RepositoryScanningTab", () => ({
   RepositoryScanningTab: scanningTab.render,
 }));
+vi.mock("./RepositoryArtifactsTab", () => ({
+  RepositoryArtifactsTab: artifactsTab.render,
+}));
 
 const mockGetRepository = vi.mocked(getRepository);
 const mockGetCapabilities = vi.mocked(getRepositoryCapabilities);
@@ -47,6 +64,7 @@ const mockUpdateRepository = vi.mocked(updateRepository);
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  auth.identity = { administrator: true, role: "admin" };
 });
 
 describe("RepositoryDetailPage scanning deep link", () => {
@@ -135,6 +153,97 @@ describe("RepositoryDetailPage scanning deep link", () => {
       canManage: true,
       canViewJobs: true,
     });
+  });
+});
+
+describe("RepositoryDetailPage role-scoped tabs", () => {
+  const repositoryId = "22222222-2222-4222-8222-222222222222";
+  const repository = {
+    id: repositoryId,
+    name: "maven-hosted",
+    format: "maven",
+    type: "hosted",
+    anonymousRead: false,
+    mavenStrictPublication: false,
+    state: "active",
+    version: "1",
+  } as const;
+
+  function renderRole(
+    canWrite: boolean,
+    format: "maven" | "oci" = "maven",
+    initialTab = "settings",
+  ) {
+    mockGetRepository.mockResolvedValue({
+      data: { ...repository, format },
+    } as never);
+    mockGetCapabilities.mockResolvedValue({
+      data: {
+        format,
+        type: "hosted",
+        operations: ["read", "publish"],
+      },
+    } as never);
+    mockGetCapacity.mockResolvedValue({ data: undefined } as never);
+    mockGetEffectiveAccess.mockResolvedValue({
+      data: {
+        permissions: {
+          read: { allowed: true },
+          write: { allowed: canWrite },
+          admin: { allowed: false },
+          intelligence: { allowed: false },
+        },
+      },
+    } as never);
+    return render(
+      <PreferencesProvider>
+        <MemoryRouter
+          initialEntries={[`/repositories/${repositoryId}?tab=${initialTab}`]}
+        >
+          <Routes>
+            <Route
+              path="/repositories/:repositoryId"
+              element={<RepositoryDetailPage />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </PreferencesProvider>,
+    );
+  }
+
+  it("lets a writer browse and publish without exposing configuration tabs", async () => {
+    auth.identity = { administrator: false, role: "writer" };
+    renderRole(true);
+    expect(await screen.findByText("制品视图已加载")).toBeInTheDocument();
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    expect(screen.getByRole("tab", { name: "发布" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "设置" })).not.toBeInTheDocument();
+    expect(artifactsTab.render.mock.calls.at(-1)?.[0]).toMatchObject({
+      canWrite: true,
+    });
+  });
+
+  it("keeps a reader on the artifact view without upload or publish", async () => {
+    auth.identity = { administrator: false, role: "reader" };
+    renderRole(false);
+    expect(await screen.findByText("制品视图已加载")).toBeInTheDocument();
+    expect(screen.getAllByRole("tab")).toHaveLength(1);
+    expect(screen.queryByRole("tab", { name: "发布" })).not.toBeInTheDocument();
+    expect(artifactsTab.render.mock.calls.at(-1)?.[0]).toMatchObject({
+      canWrite: false,
+    });
+  });
+
+  it("shows OCI Docker publication instructions on a writer deep link", async () => {
+    auth.identity = { administrator: false, role: "writer" };
+    renderRole(true, "oci", "publish");
+    expect(
+      await screen.findByRole("tab", { name: "发布", selected: true }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("通过 Docker 或 Podman 发布"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/docker push/)).toBeInTheDocument();
   });
 });
 

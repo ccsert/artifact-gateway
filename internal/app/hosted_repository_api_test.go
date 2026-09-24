@@ -49,6 +49,78 @@ func TestHostedRepositoryManagementLifecycle(t *testing.T) {
 	}
 }
 
+func TestRepositoryCatalogFollowsReadScopeWithoutGrantingManagement(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	for index, name := range []string{"first", "hidden", "third"} {
+		id := fmt.Sprintf("00000000-0000-0000-0000-%012d", index+1)
+		created, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
+			ID: id, Name: name, Format: repository.FormatRaw,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if name != "hidden" {
+			if _, err := store.ReplaceRepositoryGrants(ctx, created.ID,
+				[]repository.RepositoryGrant{{Principal: "catalog-reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	auth := testAuthenticator()
+	auth.RepositoryReaders = map[string][]string{}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, auth)
+	request := func(token, path string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		authorize(req, token)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+	readerToken := auth.IssueToken("catalog-reader")
+	first := request(readerToken, "/api/v2/repositories?pageSize=1")
+	if first.Code != http.StatusOK {
+		t.Fatalf("first page=%d %s", first.Code, first.Body.String())
+	}
+	var firstPage repositoryPage
+	if err := json.Unmarshal(first.Body.Bytes(), &firstPage); err != nil {
+		t.Fatal(err)
+	}
+	if len(firstPage.Items) != 1 || firstPage.Items[0].Name != "first" || firstPage.NextPageToken == "" {
+		t.Fatalf("first page=%+v", firstPage)
+	}
+	second := request(readerToken, "/api/v2/repositories?pageSize=1&pageToken="+firstPage.NextPageToken)
+	var secondPage repositoryPage
+	if err := json.Unmarshal(second.Body.Bytes(), &secondPage); err != nil {
+		t.Fatal(err)
+	}
+	if second.Code != http.StatusOK || len(secondPage.Items) != 1 || secondPage.Items[0].Name != "third" || secondPage.NextPageToken != "" {
+		t.Fatalf("second page=%d %+v", second.Code, secondPage)
+	}
+	writerToken := auth.IssuePrincipalToken(Principal{Actor: "writer", Role: RoleWriter})
+	writerPage := request(writerToken, "/api/v2/repositories")
+	var writerRepositories repositoryPage
+	if err := json.Unmarshal(writerPage.Body.Bytes(), &writerRepositories); err != nil {
+		t.Fatal(err)
+	}
+	if writerPage.Code != http.StatusOK || len(writerRepositories.Items) != 3 {
+		t.Fatalf("writer list=%d %+v", writerPage.Code, writerRepositories)
+	}
+	pending := request(auth.IssuePrincipalToken(Principal{Actor: "pending", Role: RoleNone}), "/api/v2/repositories")
+	if pending.Code != http.StatusForbidden {
+		t.Fatalf("pending list=%d %s", pending.Code, pending.Body.String())
+	}
+	create := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(`{"name":"denied","format":"raw"}`))
+	create.Header.Set("Idempotency-Key", "writer-create")
+	authorize(create, writerToken)
+	createResponse := httptest.NewRecorder()
+	handler.ServeHTTP(createResponse, create)
+	if createResponse.Code != http.StatusUnauthorized && createResponse.Code != http.StatusForbidden {
+		t.Fatalf("writer created repository=%d %s", createResponse.Code, createResponse.Body.String())
+	}
+}
+
 func TestMavenStrictPublicationIsAnOptInRepositorySetting(t *testing.T) {
 	store := repository.NewMemoryStore()
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())

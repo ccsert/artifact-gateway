@@ -40,6 +40,37 @@ export function RepositorySnippetBlock({
   );
 }
 
+export function OCIPublishGuide({ repoName }: { repoName: string }) {
+  const { text } = usePreferences();
+  const registry = window.location.host;
+  const image = `${registry}/${repoName}/<image>:<tag>`;
+  return (
+    <div className="grid max-w-5xl gap-4 lg:grid-cols-2">
+      <div>
+        <h3 className="text-sm font-medium text-zinc-100">
+          {text("通过 Docker 或 Podman 发布", "Publish with Docker or Podman")}
+        </h3>
+        <p className="mt-1 text-xs leading-5 text-zinc-500">
+          {text(
+            "请管理员签发具有此仓库写入授权的服务账号凭据，并通过安全渠道提供给发布者。SSO 浏览器会话不能直接作为 Docker 凭据。",
+            "Ask an administrator for a service-account credential with write access to this repository, delivered through a secure channel. The SSO browser session is not a Docker credential.",
+          )}
+        </p>
+      </div>
+      <div className="space-y-3">
+        <RepositorySnippetBlock
+          label={text("登录 Registry", "Sign in to registry")}
+          code={`printf '%s' "$ARTIFACT_GATEWAY_TOKEN" | docker login ${registry} --username publisher --password-stdin`}
+        />
+        <RepositorySnippetBlock
+          label={text("标记与推送", "Tag and push")}
+          code={`docker tag <local-image>:<tag> ${image}\ndocker push ${image}`}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function NpmPublishGuide({ repoName }: { repoName: string }) {
   const { text } = usePreferences();
   const registry = `${window.location.origin}/npm/${repoName}/`;
