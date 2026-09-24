@@ -620,7 +620,7 @@ export const listAuditRetentionJobs = <ThrowOnError extends boolean = false>(opt
 });
 
 /**
- * Lists the repositories the caller may read. An administrator sees every repository. Any other authenticated principal sees only the repositories its global role or its repository grants allow it to read, so the result never reveals the existence of a repository the caller cannot read.
+ * Returns repositories for which the authenticated principal has read access. Administrators see the full catalog; a pending or password-change account receives `403` instead. The filter runs on the server, so the result never reveals the existence of a repository the caller cannot read.
  */
 export const listRepositories = <ThrowOnError extends boolean = false>(options?: Options<ListRepositoriesData, ThrowOnError>): RequestResult<ListRepositoriesResponses, ListRepositoriesErrors, ThrowOnError> => (options?.client ?? client).get<ListRepositoriesResponses, ListRepositoriesErrors, ThrowOnError>({
     security: [{

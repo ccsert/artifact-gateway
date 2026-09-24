@@ -102,6 +102,17 @@ opposite: it approves the account while granting no repository capability, so
 its reach comes entirely from per-repository grants. Collapsing the remaining
 global roles into per-repository grants is a separate design.
 
+After approval, `reader` and `writer` can use the Console **Repositories**
+page to browse repositories and artifacts for which they have read access.
+`writer` can also use Raw file upload, the Maven publish wizard, and
+OCI/npm/PyPI publish guides where repository write access applies. OCI,
+Conan, Go, and APT publishing continues through their native protocol clients.
+Docker/Podman publishing to OCI requires an administrator-issued
+service-account credential with repository write access, delivered through a
+secure channel; the SSO browser session is not a Docker credential. `reader` has no
+upload or publish controls. Creating repositories, changing configuration,
+managing grants, and managing users remain administrator operations.
+
 ## Keycloak
 
 Create an OpenID Connect client, enable Standard Flow, and register the exact

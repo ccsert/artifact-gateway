@@ -29,7 +29,6 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { consolePermissions } from "../lib/permissions";
 import { Modal, useDisclosure } from "../components/ui/Modal";
 import { Field } from "../components/ui/Layout";
 import { Loading } from "../components/ui/Feedback";
@@ -44,14 +43,13 @@ const navItems = [
     exact: true,
     icon: <DashboardOutlined />,
     group: "runtime",
-    requires: "administrator",
+    admin: true,
   },
   {
     to: "/repositories",
     label: "nav.repositories",
     icon: <InboxOutlined />,
     group: "runtime",
-    requires: "repositories",
   },
   {
     to: "/search",
@@ -64,94 +62,72 @@ const navItems = [
     label: "nav.operations",
     icon: <SyncOutlined />,
     group: "runtime",
-    requires: "administrator",
+    admin: true,
   },
   {
     to: "/groups",
     label: "nav.groups",
     icon: <TeamOutlined />,
     group: "governance",
-    requires: "administrator",
+    admin: true,
   },
   {
     to: "/access",
     label: "nav.access",
     icon: <SafetyCertificateOutlined />,
     group: "governance",
-    requires: "administrator",
+    admin: true,
   },
   {
     to: "/audits",
     label: "nav.audits",
     icon: <FileSearchOutlined />,
     group: "governance",
-    requires: "administrator",
+    admin: true,
   },
   {
     to: "/audit-retention",
     label: "nav.auditRetention",
     icon: <ClockCircleOutlined />,
     group: "governance",
-    requires: "administrator",
+    admin: true,
   },
   {
     to: "/identity-providers",
     label: "nav.authentication",
     icon: <LoginOutlined />,
     group: "management",
-    requires: "administrator",
+    admin: true,
   },
   {
     to: "/site-settings",
     label: "nav.siteSettings",
     icon: <SettingOutlined />,
     group: "management",
-    requires: "administrator",
+    admin: true,
   },
   {
     to: "/keys",
     label: "nav.apiKeys",
     icon: <KeyOutlined />,
     group: "management",
-    requires: "administrator",
+    admin: true,
   },
   {
     to: "/service-accounts",
     label: "nav.serviceAccounts",
     icon: <RobotOutlined />,
     group: "management",
-    requires: "administrator",
+    admin: true,
   },
   {
     to: "/users",
     label: "nav.users",
     icon: <UserOutlined />,
     group: "management",
-    requires: "administrator",
+    admin: true,
   },
 ] as const;
-
-const administratorOnlyPaths = [
-  "/operations",
-  "/groups",
-  "/access",
-  "/audits",
-  "/audit-retention",
-  "/identity-providers",
-  "/site-settings",
-  "/keys",
-  "/service-accounts",
-  "/users",
-] as const;
-
-function normalizePathname(pathname: string): string {
-  const trimmed = pathname.replace(/\/+$/, "");
-  return trimmed === "" ? "/" : trimmed;
-}
-
-function matchesPathPrefix(pathname: string, base: string): boolean {
-  return pathname === base || pathname.startsWith(`${base}/`);
-}
 
 function BrandLockup({ collapsed = false }: { collapsed?: boolean }) {
   return (
@@ -272,7 +248,6 @@ function TokenDialog() {
 
 export function AppLayout() {
   const { authenticated, identity, identityLoading, clearToken } = useAuth();
-  const permissions = consolePermissions(identity);
   const { colorMode, t } = usePreferences();
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -343,27 +318,65 @@ export function AppLayout() {
     );
   }
 
-  const pathname = normalizePathname(location.pathname);
-  const administratorPath =
-    pathname === "/" ||
-    administratorOnlyPaths.some((base) => matchesPathPrefix(pathname, base));
-  if (identity && !permissions.isAdministrator && administratorPath) {
-    return <Navigate to="/search" replace />;
-  }
+  const canBrowseRepositories =
+    identity?.administrator === true ||
+    identity?.role === "member" ||
+    identity?.role === "reader" ||
+    identity?.role === "writer";
+
+  const adminOnlyPath = [
+    "/",
+    "/operations",
+    "/groups",
+    "/access",
+    "/audits",
+    "/audit-retention",
+    "/identity-providers",
+    "/site-settings",
+    "/keys",
+    "/service-accounts",
+    "/users",
+  ].includes(location.pathname);
+  const adminOnlySection = [
+    "/operations",
+    "/groups",
+    "/access",
+    "/audits",
+    "/audit-retention",
+    "/identity-providers",
+    "/site-settings",
+    "/keys",
+    "/service-accounts",
+    "/users",
+  ].some((prefix) => location.pathname.startsWith(prefix + "/"));
   if (
     identity &&
-    !permissions.canBrowseRepositories &&
-    matchesPathPrefix(pathname, "/repositories")
+    !identity.administrator &&
+    (adminOnlyPath || adminOnlySection)
   ) {
+    return (
+      <Navigate
+        to={canBrowseRepositories ? "/repositories" : "/search"}
+        replace
+      />
+    );
+  }
+
+  // The catalog is no longer administrator-only, so it needs its own gate: an
+  // identity that cannot read any repository must not reach it by URL, and the
+  // trailing-slash form must not slip past an exact-path comparison.
+  const repositoryCatalogPath =
+    location.pathname === "/repositories" ||
+    location.pathname.startsWith("/repositories/");
+  if (identity && !canBrowseRepositories && repositoryCatalogPath) {
     return <Navigate to="/search" replace />;
   }
 
-  const visibleNavItems = navItems.filter((item) => {
-    if (!("requires" in item)) return true;
-    return item.requires === "administrator"
-      ? permissions.isAdministrator
-      : permissions.canBrowseRepositories;
-  });
+  const visibleNavItems = navItems.filter(
+    (item) =>
+      (!("admin" in item) || identity?.administrator) &&
+      (item.to !== "/repositories" || canBrowseRepositories),
+  );
   const selectedItem = visibleNavItems.find((item) =>
     "exact" in item
       ? location.pathname === item.to

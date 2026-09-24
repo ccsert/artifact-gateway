@@ -17,7 +17,12 @@ import { ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { PageHeader } from "../../components/ui/Layout";
 import { MavenPublishWizard } from "./MavenPublishWizard";
 import { usePreferences } from "../../lib/preferences";
-import { NpmPublishGuide, PyPIPublishGuide } from "./RepositoryUsageGuides";
+import { useAuth } from "../../lib/auth";
+import {
+  NpmPublishGuide,
+  OCIPublishGuide,
+  PyPIPublishGuide,
+} from "./RepositoryUsageGuides";
 const RepositoryArtifactsTab = lazy(async () => ({
   default: (await import("./RepositoryArtifactsTab")).RepositoryArtifactsTab,
 }));
@@ -69,6 +74,8 @@ import { RepositorySettingsTab } from "./RepositorySettingsTab";
 
 export function RepositoryDetailPage() {
   const { text } = usePreferences();
+  const { identity } = useAuth();
+  const isAdmin = identity?.administrator === true;
   const { repositoryId = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
@@ -89,6 +96,7 @@ export function RepositoryDetailPage() {
   const [effectiveAccess, setEffectiveAccess] =
     useState<RepositoryEffectiveAccess | null>(null);
   const [accessResolved, setAccessResolved] = useState(false);
+  const canWrite = effectiveAccess?.permissions?.write.allowed === true;
   const [error, setError] = useState<unknown>(null);
   const [tab, setTab] = useState<Tab>(() =>
     repositoryTabFromQuery(requestedTab),
@@ -133,8 +141,8 @@ export function RepositoryDetailPage() {
     else setCaps(capsRes.data ?? null);
     setCapsLoading(false);
     if (!accessRes.error) setEffectiveAccess(accessRes.data ?? null);
-    if (!capacityRes.error) setCapacity(capacityRes.data ?? null);
     setAccessResolved(true);
+    if (!capacityRes.error) setCapacity(capacityRes.data ?? null);
   }, [repositoryId]);
 
   useEffect(() => {
@@ -146,14 +154,17 @@ export function RepositoryDetailPage() {
   }, [requestedTab]);
 
   useEffect(() => {
-    if (!repo || !accessResolved) return;
+    if (!repo || (!isAdmin && !accessResolved)) return;
     const available = TABS.some(
       (item) =>
         item.key === tab &&
-        repositoryTabAvailable(item, repo, effectiveAccess?.permissions),
+        repositoryTabAvailable(item, repo) &&
+        (isAdmin ||
+          item.key === "artifacts" ||
+          (item.key === "publish" && canWrite)),
     );
     if (!available) selectTab("artifacts");
-  }, [accessResolved, effectiveAccess, repo, selectTab, tab]);
+  }, [repo, selectTab, tab, isAdmin, canWrite, accessResolved]);
 
   if (error !== null) {
     return (
@@ -163,11 +174,18 @@ export function RepositoryDetailPage() {
       </div>
     );
   }
-  if (!repo || !accessResolved) return <Loading />;
+  if (!repo) return <Loading />;
 
-  const availableTabs = TABS.filter((item) =>
-    repositoryTabAvailable(item, repo, effectiveAccess?.permissions),
+  const availableTabs = TABS.filter(
+    (item) =>
+      repositoryTabAvailable(item, repo) &&
+      (isAdmin ||
+        item.key === "artifacts" ||
+        (item.key === "publish" && canWrite)),
   );
+  const activeTab = availableTabs.some((item) => item.key === tab)
+    ? tab
+    : "artifacts";
 
   return (
     <div className="ag-page-stack">
@@ -185,7 +203,7 @@ export function RepositoryDetailPage() {
         <RepositorySummary
           repo={repo}
           capacity={capacity}
-          onOpenCapacity={() => selectTab("capacity")}
+          onOpenCapacity={isAdmin ? () => selectTab("capacity") : undefined}
         />
       </div>
       <nav
@@ -197,7 +215,7 @@ export function RepositoryDetailPage() {
           size="small"
           animated={false}
           tabBarGutter={12}
-          activeKey={tab}
+          activeKey={activeTab}
           onChange={(key) => selectTab(key as Tab)}
           items={availableTabs.map((item) => ({
             key: item.key,
@@ -206,13 +224,13 @@ export function RepositoryDetailPage() {
         />
       </nav>
       <RepositoryTabSurface
-        standalone={tab === "scanning" || tab === "security"}
+        standalone={activeTab === "scanning" || activeTab === "security"}
       >
         <Suspense fallback={<Loading />}>
-          {tab === "artifacts" && (
+          {activeTab === "artifacts" && (
             <RepositoryArtifactsTab
               repo={repo}
-              canWrite={effectiveAccess?.permissions?.write.allowed === true}
+              canWrite={canWrite}
               canQuarantine={
                 effectiveAccess?.permissions?.admin.allowed === true
               }
@@ -249,7 +267,7 @@ export function RepositoryDetailPage() {
               }
             />
           )}
-          {tab === "publish" &&
+          {activeTab === "publish" &&
             repo.format === "maven" &&
             repo.type !== "proxy" && (
               <MavenPublishWizard
@@ -257,13 +275,16 @@ export function RepositoryDetailPage() {
                 onPublished={() => selectTab("artifacts")}
               />
             )}
-          {tab === "publish" &&
+          {activeTab === "publish" &&
             repo.format === "npm" &&
             repo.type !== "proxy" && <NpmPublishGuide repoName={repo.name} />}
-          {tab === "publish" &&
+          {activeTab === "publish" &&
+            repo.format === "oci" &&
+            repo.type !== "proxy" && <OCIPublishGuide repoName={repo.name} />}
+          {activeTab === "publish" &&
             repo.format === "pypi" &&
             repo.type !== "proxy" && <PyPIPublishGuide repoName={repo.name} />}
-          {tab === "grants" && (
+          {activeTab === "grants" && (
             <>
               {effectiveAccess && (
                 <EffectiveAccessPanel effectiveAccess={effectiveAccess} />
@@ -271,15 +292,15 @@ export function RepositoryDetailPage() {
               <RepositoryGrantsTab repo={repo} />
             </>
           )}
-          {tab === "apt-snapshots" && (
+          {activeTab === "apt-snapshots" && (
             <APTOperationsTab
               key={repo.id}
               repo={repo}
               canAdmin={effectiveAccess?.permissions?.admin.allowed === true}
             />
           )}
-          {tab === "retention" && <RepositoryRetentionTab repo={repo} />}
-          {tab === "scanning" && (
+          {activeTab === "retention" && <RepositoryRetentionTab repo={repo} />}
+          {activeTab === "scanning" && (
             <RepositoryScanningTab
               repo={repo}
               capabilities={caps}
@@ -291,18 +312,22 @@ export function RepositoryDetailPage() {
               canViewJobs={effectiveAccess?.permissions?.admin.allowed === true}
             />
           )}
-          {tab === "security" && (
+          {activeTab === "security" && (
             <RepositorySecurityTab
               repo={repo}
               publicationScanning={caps?.publicationScanning ?? false}
             />
           )}
-          {tab === "capacity" && <RepositoryCapacityTab repo={repo} />}
-          {tab === "usage" && <RepositoryUsageTab repo={repo} />}
-          {tab === "distribute" && <RepositoryDistributionTab repo={repo} />}
-          {tab === "jobs" && <RepositoryJobsTab repo={repo} />}
-          {tab === "tombstones" && <RepositoryTombstonesTab repo={repo} />}
-          {tab === "settings" && (
+          {activeTab === "capacity" && <RepositoryCapacityTab repo={repo} />}
+          {activeTab === "usage" && <RepositoryUsageTab repo={repo} />}
+          {activeTab === "distribute" && (
+            <RepositoryDistributionTab repo={repo} />
+          )}
+          {activeTab === "jobs" && <RepositoryJobsTab repo={repo} />}
+          {activeTab === "tombstones" && (
+            <RepositoryTombstonesTab repo={repo} />
+          )}
+          {activeTab === "settings" && (
             <RepositorySettingsTab
               repo={repo}
               capabilities={caps}

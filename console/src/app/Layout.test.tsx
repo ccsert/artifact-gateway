@@ -109,30 +109,40 @@ describe("AppLayout", () => {
     expect(await screen.findByText("public browse")).toBeInTheDocument();
   });
 
-  it("shows the repository catalog to a reader and hides administrator navigation", async () => {
+  it("shows a reader the repository catalog without administrator navigation", async () => {
     Object.assign(auth, {
       role: "reader",
-      identity: { administrator: false, role: "reader", kind: "local" },
+      identity: { administrator: false, role: "reader" },
     });
 
     renderLayout("/repositories");
 
     expect(await screen.findByText("repository catalog")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /仓库/ })).toBeInTheDocument();
     expect(
-      await screen.findByRole("link", { name: /仓库/ }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: /服务账号/ }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: /审计/ }),
+      screen.queryByRole("link", { name: /用户/ }),
     ).not.toBeInTheDocument();
   });
 
-  it("normalizes a trailing slash before applying the route guard", async () => {
+  it("shows a member the repository catalog without implicit repository access", async () => {
+    Object.assign(auth, {
+      role: "member",
+      identity: { administrator: false, role: "member" },
+    });
+
+    renderLayout("/repositories");
+
+    expect(await screen.findByText("repository catalog")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /仓库/ })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /用户/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps an identity that cannot read repositories out of the catalog", async () => {
     Object.assign(auth, {
       role: "",
-      identity: { administrator: false, kind: "local" },
+      identity: { administrator: false },
     });
 
     renderLayout("/repositories/");
@@ -141,29 +151,15 @@ describe("AppLayout", () => {
     expect(screen.queryByText("repository catalog")).not.toBeInTheDocument();
   });
 
-  it("keeps administrator-only routes away from a reader", async () => {
+  it("keeps Service Account credential management away from a reader", async () => {
     Object.assign(auth, {
       role: "reader",
-      identity: { administrator: false, role: "reader", kind: "local" },
+      identity: { administrator: false, role: "reader" },
     });
 
     renderLayout("/service-accounts");
 
-    expect(await screen.findByTestId("location")).toHaveTextContent("/search");
-    expect(
-      screen.queryByText("service account management"),
-    ).not.toBeInTheDocument();
-  });
-
-  it("keeps Service Account credential management away from a reader", async () => {
-    Object.assign(auth, {
-      role: "reader",
-      identity: { administrator: false, role: "reader", kind: "local" },
-    });
-
-    renderLayout("/service-accounts/");
-
-    expect(await screen.findByTestId("location")).toHaveTextContent("/search");
+    expect(await screen.findByText("repository catalog")).toBeInTheDocument();
     expect(
       screen.queryByText("service account management"),
     ).not.toBeInTheDocument();

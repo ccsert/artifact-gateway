@@ -44,6 +44,8 @@ API Bearer 使用 `GATEWAY_OIDC_AUDIENCE`，浏览器 ID token 独立使用 `GAT
 
 `reader`、`writer`、`admin` 都是 **全局角色**，授予后会作用于所有仓库。`member` 相反：它批准账户但不附带任何仓库能力，可访问范围完全来自按仓库授权。将其余全局角色收敛为按仓库授权属于另一项设计。
 
+授权后，`reader` 和 `writer` 可在 Console 的“仓库”页面查看其有读取权限的仓库及制品。`writer` 还可在有写入权限的托管仓库使用 Raw 文件上传、Maven 发布向导，以及 OCI、npm、PyPI 发布指引；OCI、Conan、Go、APT 等格式继续使用各自的原生协议客户端发布。当前 OCI 仓库的 Docker/Podman 发布需要管理员签发具备仓库写入授权的服务账号凭据，通过安全渠道交给发布者；浏览器 SSO 会话不能用作 Docker 凭据。`reader` 看不到上传或发布入口。创建仓库、修改配置、访问授权、用户管理等治理操作仍需 `admin`。
+
 ## Keycloak
 
 创建 OIDC client，启用 Standard Flow 并注册准确 callback URL。浏览器 ID token 的 `aud` 必须包含 client ID；API Bearer 可使用独立 API audience。

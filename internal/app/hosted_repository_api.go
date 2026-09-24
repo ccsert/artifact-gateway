@@ -312,9 +312,62 @@ func (h generatedRepositoryAPIAdapter) ListRepositories(w http.ResponseWriter, r
 		h.listBound(w, r, params)
 		return
 	}
-	h.listBoundFiltered(w, r, params, func(repo repository.HostedRepository) bool {
-		return h.authorizer.Authorize(r.Context(), principal, repo, RepositoryRead).Allowed
-	})
+	h.listReadableRepositories(w, r, params, principal)
+}
+
+// listReadableRepositories keeps discovery consistent with per-repository reads.
+// A page may span multiple store batches when some repositories are not readable.
+func (h generatedRepositoryAPIAdapter) listReadableRepositories(w http.ResponseWriter, r *http.Request, params adminopenapi.ListRepositoriesParams, principal Principal) {
+	pageSize := 50
+	if params.PageSize != nil {
+		pageSize = int(*params.PageSize)
+		if pageSize < 1 || pageSize > 200 {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200")
+			return
+		}
+	}
+	pageToken := ""
+	if params.PageToken != nil {
+		pageToken = string(*params.PageToken)
+	}
+	after, err := h.decodeCursor(pageToken)
+	if err != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
+		return
+	}
+	items := make([]repository.HostedRepository, 0, pageSize)
+	scanned := after
+	hasMore := false
+	for len(items) < pageSize {
+		batch, next, listErr := h.store.ListHostedRepositories(r.Context(), 200, scanned)
+		if errors.Is(listErr, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid")
+			return
+		}
+		if listErr != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list repositories failed")
+			return
+		}
+		for index, candidate := range batch {
+			scanned = candidate.ID
+			if h.authorizer.Authorize(r.Context(), principal, candidate, RepositoryRead).Allowed {
+				items = append(items, redactRepositorySecrets(candidate))
+			}
+			if len(items) == pageSize {
+				hasMore = index < len(batch)-1 || next != ""
+				break
+			}
+		}
+		if len(items) == pageSize || next == "" {
+			break
+		}
+	}
+	nextToken := ""
+	if hasMore {
+		nextToken = h.encodeCursor(scanned)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(repositoryPage{Items: items, NextPageToken: nextToken})
 }
 
 func (h generatedRepositoryAPIAdapter) CreateRepository(w http.ResponseWriter, r *http.Request, params adminopenapi.CreateRepositoryParams) {
@@ -577,10 +630,6 @@ func (h hostedRepositoryAPIHandler) list(w http.ResponseWriter, r *http.Request)
 }
 
 func (h hostedRepositoryAPIHandler) listBound(w http.ResponseWriter, r *http.Request, params adminopenapi.ListRepositoriesParams) {
-	h.listBoundFiltered(w, r, params, nil)
-}
-
-func (h hostedRepositoryAPIHandler) listBoundFiltered(w http.ResponseWriter, r *http.Request, params adminopenapi.ListRepositoriesParams, readable func(repository.HostedRepository) bool) {
 	pageSize := 50
 	if params.PageSize != nil {
 		pageSize = int(*params.PageSize)
@@ -606,15 +655,6 @@ func (h hostedRepositoryAPIHandler) listBoundFiltered(w http.ResponseWriter, r *
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list repositories failed")
 		return
-	}
-	if readable != nil {
-		visible := items[:0]
-		for _, item := range items {
-			if readable(item) {
-				visible = append(visible, item)
-			}
-		}
-		items = visible
 	}
 	w.Header().Set("Content-Type", "application/json")
 	nextToken := ""

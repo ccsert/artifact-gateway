@@ -195,6 +195,28 @@ describe("RepositoryArtifactsTab Raw browse", () => {
     expect(screen.getByPlaceholderText("搜索路径…")).toBeInTheDocument();
   });
 
+  it("does not offer Raw upload without repository write access", async () => {
+    const rawRepository: Repository = {
+      ...repository,
+      id: "66666666-6666-4666-8666-666666666666",
+      name: "raw-read-only",
+      format: "raw",
+      type: "hosted",
+    };
+    mockSearchRepositoryArtifacts.mockResolvedValue({
+      data: { items: [] },
+    } as never);
+    render(
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={rawRepository} canWrite={false} />
+      </PreferencesProvider>,
+    );
+    expect(await screen.findByPlaceholderText("搜索路径…")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "上传" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows a readable file path while preserving the canonical coordinate", async () => {
     const user = userEvent.setup();
     const encodedPath =

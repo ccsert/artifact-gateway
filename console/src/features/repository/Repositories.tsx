@@ -34,7 +34,6 @@ import {
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 import { useAuth } from "../../lib/auth";
-import { consolePermissions } from "../../lib/permissions";
 import {
   loadFormatProfiles,
   repositoryFormats,
@@ -288,7 +287,7 @@ function CreateRepositoryDialog({
 export function RepositoriesPage() {
   const { locale, text } = usePreferences();
   const { identity } = useAuth();
-  const { isAdministrator } = consolePermissions(identity);
+  const isAdmin = identity?.administrator === true;
   const [items, setItems] = useState<Repository[]>([]);
   const [formatProfiles, setFormatProfiles] = useState<FormatProfile[]>([]);
   const [nextToken, setNextToken] = useState<string | undefined>();
@@ -315,10 +314,8 @@ export function RepositoriesPage() {
     try {
       const [repositoryResult, capacityResult, profiles] = await Promise.all([
         listRepositories({ query: { pageSize: 100 } }),
-        isAdministrator
-          ? listRepositoryCapacities()
-          : Promise.resolve(undefined),
-        isAdministrator ? loadFormatProfiles() : Promise.resolve([]),
+        isAdmin ? listRepositoryCapacities() : Promise.resolve({ data: [] }),
+        isAdmin ? loadFormatProfiles() : Promise.resolve([]),
       ]);
       const { data, error: err } = repositoryResult;
       if (err) {
@@ -331,7 +328,7 @@ export function RepositoriesPage() {
       setFormatProfiles(profiles);
       setCapacities(
         Object.fromEntries(
-          (capacityResult?.data ?? []).map((capacity) => [
+          (capacityResult.data ?? []).map((capacity) => [
             capacity.repositoryId,
             capacity,
           ]),
@@ -342,7 +339,7 @@ export function RepositoriesPage() {
     } finally {
       setLoading(false);
     }
-  }, [isAdministrator]);
+  }, [isAdmin]);
 
   useEffect(() => {
     void load();
@@ -538,12 +535,17 @@ export function RepositoriesPage() {
         ),
     },
   ];
-
-  const visibleColumns = isAdministrator
+  const visibleColumns = isAdmin
     ? columns
     : columns.filter(
-        (column) => column.key !== "capacity" && column.key !== "actions",
+        (column) =>
+          column.key !== "capacity" &&
+          column.key !== "configuration" &&
+          column.key !== "actions",
       );
+  const formatOptions = isAdmin
+    ? repositoryFormats(formatProfiles)
+    : [...new Set(items.map((item) => item.format))];
 
   return (
     <div>
@@ -554,7 +556,7 @@ export function RepositoriesPage() {
           "A unified view of hosted and proxy repositories",
         )}
         actions={
-          isAdministrator ? (
+          isAdmin ? (
             <CreateRepositoryDialog
               profiles={formatProfiles}
               onCreated={load}
@@ -577,28 +579,32 @@ export function RepositoriesPage() {
             value: proxyCount,
             hint: text("上游缓存与镜像", "Upstream caches and mirrors"),
           },
-          {
-            label: text("当前占用", "Storage used"),
-            value: totalUsedBytes ? formatBytes(totalUsedBytes) : "—",
-            hint: Object.keys(capacities).length
-              ? text(
-                  `${formatNumber(
-                    Object.values(capacities).reduce(
-                      (sum, value) => sum + value.objectCount,
-                      0,
-                    ),
-                    locale,
-                  )} 个对象`,
-                  `${formatNumber(
-                    Object.values(capacities).reduce(
-                      (sum, value) => sum + value.objectCount,
-                      0,
-                    ),
-                    locale,
-                  )} objects`,
-                )
-              : text("容量未启用", "Capacity unavailable"),
-          },
+          ...(isAdmin
+            ? [
+                {
+                  label: text("当前占用", "Storage used"),
+                  value: totalUsedBytes ? formatBytes(totalUsedBytes) : "—",
+                  hint: Object.keys(capacities).length
+                    ? text(
+                        `${formatNumber(
+                          Object.values(capacities).reduce(
+                            (sum, value) => sum + value.objectCount,
+                            0,
+                          ),
+                          locale,
+                        )} 个对象`,
+                        `${formatNumber(
+                          Object.values(capacities).reduce(
+                            (sum, value) => sum + value.objectCount,
+                            0,
+                          ),
+                          locale,
+                        )} objects`,
+                      )
+                    : text("容量未启用", "Capacity unavailable"),
+                },
+              ]
+            : []),
         ]}
       />
       <FilterBar
@@ -638,7 +644,7 @@ export function RepositoriesPage() {
             onChange={setFormatFilter}
             options={[
               { value: "all", label: text("全部格式", "All formats") },
-              ...repositoryFormats(formatProfiles).map((format) => ({
+              ...formatOptions.map((format) => ({
                 value: format,
                 label: format,
               })),
@@ -680,15 +686,10 @@ export function RepositoriesPage() {
             }
             hint={
               items.length === 0
-                ? isAdministrator
-                  ? text(
-                      "仓库是制品格式与策略的边界；创建后即可发布、代理和治理制品。",
-                      "A repository defines a format and policy boundary for publishing, proxying, and governing artifacts.",
-                    )
-                  : text(
-                      "你当前没有可读取的仓库。请联系管理员为你的账号授予仓库访问权限。",
-                      "You cannot read any repository yet. Ask an administrator to grant your account repository access.",
-                    )
+                ? text(
+                    "仓库是制品格式与策略的边界；创建后即可发布、代理和治理制品。",
+                    "A repository defines a format and policy boundary for publishing, proxying, and governing artifacts.",
+                  )
                 : deletedCount > 0 && stateFilter === "operational"
                   ? text(
                       "已删除仓库已归档，可在状态筛选中查看",
@@ -700,7 +701,7 @@ export function RepositoriesPage() {
                     )
             }
             action={
-              items.length === 0 && isAdministrator ? (
+              isAdmin && items.length === 0 ? (
                 <CreateRepositoryDialog
                   profiles={formatProfiles}
                   onCreated={load}
