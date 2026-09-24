@@ -70,6 +70,17 @@ CI、隔离协议 fixture、本地运行时检查和发布验收属于不同证�
 
 ## 必需检查
 
+推送前先在本地跑完矩阵，这样一次推送只花一次 CI，而不是每轮迭代都花一次：
+
+```sh
+make ci-local                        # 快速集，数分钟
+make ci-local-full                   # PR 上的全部 job，含原生 E2E 套件
+./scripts/ci-local.sh --job console  # 只跑某一个 CI job
+./scripts/ci-local.sh --list         # 查看每种选择包含什么
+```
+
+`scripts/ci-local.sh` 调用的是工作流本身调用的同一批目标与脚本，而不是另写一套实现；输出按 CI job 分组，并打印每项检查的耗时。默认遇错即停，加 `--keep-going` 可一次收齐所有失败。`mainline-assets` 与 `mainline-images` 仅在推送到 main 时运行，会标注为不在范围内。CI 仍是最终权威。
+
 后端变更：
 
 ```sh

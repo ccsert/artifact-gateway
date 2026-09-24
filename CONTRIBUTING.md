@@ -80,6 +80,22 @@ ready; track upgrade, restore, and deployment acceptance explicitly.
 
 ## Required checks
 
+Run the matrix locally before pushing, so a push spends CI once instead of once
+per iteration:
+
+```sh
+make ci-local                        # the fast set, a few minutes
+make ci-local-full                   # every pull-request job, including the native E2E suites
+./scripts/ci-local.sh --job console  # one CI job
+./scripts/ci-local.sh --list         # what each selection runs
+```
+
+`scripts/ci-local.sh` calls the same targets and scripts the workflow calls
+rather than reimplementing them, groups its output by CI job, and prints each
+check with its duration. It fails fast by default; pass `--keep-going` to collect
+every failure in one run. `mainline-assets` and `mainline-images` are push-to-main
+only and are reported as out of scope. CI remains the source of truth.
+
 For a backend-only change:
 
 ```sh
