@@ -619,6 +619,9 @@ export const listAuditRetentionJobs = <ThrowOnError extends boolean = false>(opt
     ...options
 });
 
+/**
+ * Lists the repositories the caller may read. An administrator sees every repository. Any other authenticated principal sees only the repositories its global role or its repository grants allow it to read, so the result never reveals the existence of a repository the caller cannot read.
+ */
 export const listRepositories = <ThrowOnError extends boolean = false>(options?: Options<ListRepositoriesData, ThrowOnError>): RequestResult<ListRepositoriesResponses, ListRepositoriesErrors, ThrowOnError> => (options?.client ?? client).get<ListRepositoriesResponses, ListRepositoriesErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -890,6 +893,9 @@ export const listScheduledTaskRuns = <ThrowOnError extends boolean = false>(opti
     ...options
 });
 
+/**
+ * Disables the repository. Requires repository `admin` scope, because stopping reads and writes for every client is a repository-administration action rather than a content mutation; a `write` scope is not sufficient.
+ */
 export const deleteRepository = <ThrowOnError extends boolean = false>(options: Options<DeleteRepositoryData, ThrowOnError>): RequestResult<DeleteRepositoryResponses, DeleteRepositoryErrors, ThrowOnError> => (options.client ?? client).delete<DeleteRepositoryResponses, DeleteRepositoryErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -910,6 +916,9 @@ export const getRepository = <ThrowOnError extends boolean = false>(options: Opt
     ...options
 });
 
+/**
+ * Updates repository configuration. Requires repository `admin` scope, because endpoint, allowlist, egress, upstream credential, anonymous-read, and strict-publication settings change how the repository behaves for every client; a `write` scope is not sufficient.
+ */
 export const updateRepository = <ThrowOnError extends boolean = false>(options: Options<UpdateRepositoryData, ThrowOnError>): RequestResult<UpdateRepositoryResponses, UpdateRepositoryErrors, ThrowOnError> => (options.client ?? client).patch<UpdateRepositoryResponses, UpdateRepositoryErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',

@@ -53,7 +53,7 @@ interface AuthenticationFormValues {
   adminRoles: string[];
   provisioningMode: "disabled" | "jit";
   emailLinkingEnabled: boolean;
-  jitDefaultRole: "none" | "admin" | "writer" | "reader";
+  jitDefaultRole: "none" | "member" | "admin" | "writer" | "reader";
 }
 
 export function AuthenticationPage() {
@@ -587,8 +587,8 @@ export function AuthenticationPage() {
                   name="jitDefaultRole"
                   label={text("JIT 默认角色", "JIT default role")}
                   extra={text(
-                    "仅当声明没有匹配角色映射时使用；选择 none 后新用户会进入待授权状态。",
-                    "Used only when no external role mapping matches; none registers new users without access.",
+                    "仅当声明没有匹配角色映射时使用；选择 none 后新用户会进入待授权状态，选择 member 则不附带任何仓库权限、需按仓库授权。",
+                    "Used only when no external role mapping matches; none registers new users without access, member registers them with no repository access until granted.",
                   )}
                 >
                   <Select
@@ -600,8 +600,27 @@ export function AuthenticationPage() {
                           "none · awaiting approval",
                         ),
                       },
-                      { value: "reader", label: "reader" },
-                      { value: "writer", label: "writer" },
+                      {
+                        value: "member",
+                        label: text(
+                          "member · 无仓库权限",
+                          "member · no repository access",
+                        ),
+                      },
+                      {
+                        value: "reader",
+                        label: text(
+                          "reader · 全部仓库只读",
+                          "reader · read-only, all repositories",
+                        ),
+                      },
+                      {
+                        value: "writer",
+                        label: text(
+                          "writer · 全部仓库读写",
+                          "writer · read/write, all repositories",
+                        ),
+                      },
                       { value: "admin", label: "admin" },
                     ]}
                   />

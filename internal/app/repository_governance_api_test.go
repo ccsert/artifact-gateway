@@ -49,7 +49,7 @@ func TestV2AuditAPIExposesOptionalGrantDecisionFields(t *testing.T) {
 	authorize(nonAdmin, "resolver-secret")
 	denied := httptest.NewRecorder()
 	handler.ServeHTTP(denied, nonAdmin)
-	if denied.Code != http.StatusUnauthorized {
+	if denied.Code != http.StatusForbidden {
 		t.Fatalf("non-admin status=%d body=%s", denied.Code, denied.Body.String())
 	}
 }
@@ -291,8 +291,39 @@ func TestRepositoryManagementUsesScopedGrants(t *testing.T) {
 	if !strings.Contains(metrics.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="management",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 2`) {
 		t.Fatalf("management authorization metric=%s", metrics.Body.String())
 	}
-	if response := request(http.MethodDelete, "/api/v2/repositories/"+repo.ID, "writer", ""); response.Code != http.StatusAccepted {
+	if response := request(http.MethodDelete, "/api/v2/repositories/"+repo.ID, "writer", ""); response.Code != http.StatusForbidden {
 		t.Fatalf("writer delete=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(http.MethodDelete, "/api/v2/repositories/"+repo.ID, "manager", ""); response.Code != http.StatusAccepted {
+		t.Fatalf("repository admin delete=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestRepositoryGrantReplacementWritesAudit(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "audited-grants", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/grants",
+		strings.NewReader(`[{"principal":"user:alice","scopes":["repositories:read"],"resourcePrefix":"stable"}]`))
+	request.Header.Set("If-Match", "1")
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("replace grants=%d body=%s", response.Code, response.Body.String())
+	}
+	if len(store.Audits) != 1 {
+		t.Fatalf("audits=%#v", store.Audits)
+	}
+	audit := store.Audits[0]
+	if audit.Operation != "repository.grants.replace" || audit.Actor != "alice" ||
+		audit.Repository != repo.Name || audit.GroupName != repo.Name ||
+		audit.Resource != "repositories/"+repo.ID+"/grants" || audit.Status != http.StatusOK ||
+		audit.Outcome != repository.AuditResolved || audit.Format != "management" {
+		t.Fatalf("audit=%#v", audit)
 	}
 }
 
@@ -575,12 +606,18 @@ func TestAPIKeyRolesEnforceScopedManagementAccess(t *testing.T) {
 		t.Fatalf("reader patch=%d want 403", code)
 	}
 
-	// Writer: read and write allowed by role.
+	// Writer: read allowed by role; changing the repository configuration is a
+	// repository-administration action, so a write role alone is not enough.
 	if code := get(writerToken); code != http.StatusOK {
 		t.Fatalf("writer get=%d", code)
 	}
-	if code := patch(writerToken); code != http.StatusOK {
-		t.Fatalf("writer patch=%d want 200", code)
+	if code := patch(writerToken); code != http.StatusForbidden {
+		t.Fatalf("writer patch=%d want 403", code)
+	}
+
+	// A platform administrator still reaches repository configuration.
+	if code := patch(createKey(t, "admin")); code != http.StatusOK {
+		t.Fatalf("administrator patch=%d want 200", code)
 	}
 
 	// Neither reader nor writer may mint new keys (administrator-only).
@@ -589,8 +626,8 @@ func TestAPIKeyRolesEnforceScopedManagementAccess(t *testing.T) {
 		authorize(req, token)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
-		if rec.Code != http.StatusUnauthorized {
-			t.Fatalf("%s role minted key=%d want 401", token, rec.Code)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("%s role minted key=%d want 403", token, rec.Code)
 		}
 	}
 }

@@ -1,4 +1,9 @@
 import type { Repository } from "../../client";
+import {
+  repositoryPermissionAllowed,
+  type RepositoryPermissionRequirement,
+  type RepositoryPermissions,
+} from "../../lib/permissions";
 
 export type Tab =
   | "apt-snapshots"
@@ -21,6 +26,7 @@ export type RepositoryTabDefinition = {
   labelEn: string;
   formats?: string[];
   hostedOnly?: boolean;
+  requires?: RepositoryPermissionRequirement;
 };
 
 export const TABS: RepositoryTabDefinition[] = [
@@ -32,25 +38,34 @@ export const TABS: RepositoryTabDefinition[] = [
     labelEn: "Signed snapshots",
     formats: ["apt"],
     hostedOnly: true,
+    requires: "admin",
   },
   {
     key: "publish",
     label: "发布",
     labelEn: "Publish",
     formats: ["maven", "npm", "pypi"],
+    requires: "write",
   },
-  { key: "grants", label: "访问授权", labelEn: "Access grants" },
+  {
+    key: "grants",
+    label: "访问授权",
+    labelEn: "Access grants",
+    requires: "admin",
+  },
   {
     key: "retention",
     label: "保留策略",
     labelEn: "Retention",
     formats: ["maven", "oci", "conan", "raw", "npm", "pypi", "go"],
     hostedOnly: true,
+    requires: "admin",
   },
   {
     key: "scanning",
     label: "制品扫描",
     labelEn: "Scanning",
+    requires: "intelligence",
   },
   {
     key: "security",
@@ -58,27 +73,41 @@ export const TABS: RepositoryTabDefinition[] = [
     labelEn: "Security admission",
     formats: ["maven", "oci", "conan", "raw", "npm", "pypi", "go", "apt"],
     hostedOnly: true,
+    requires: "admin",
   },
-  { key: "capacity", label: "容量", labelEn: "Capacity" },
+  {
+    key: "capacity",
+    label: "容量",
+    labelEn: "Capacity",
+    requires: "admin",
+  },
   {
     key: "distribute",
     label: "晋升 / 复制",
     labelEn: "Promote / replicate",
     formats: ["maven", "oci", "conan", "raw", "npm", "pypi", "go"],
+    requires: "admin",
   },
   {
     key: "jobs",
     label: "生命周期任务",
     labelEn: "Lifecycle jobs",
     formats: ["maven", "oci", "conan", "raw", "npm", "pypi", "go", "apt"],
+    requires: "admin",
   },
   {
     key: "tombstones",
     label: "墓碑",
     labelEn: "Tombstones",
     formats: ["maven", "oci", "conan", "raw", "npm", "pypi", "go"],
+    requires: "admin",
   },
-  { key: "settings", label: "设置", labelEn: "Settings" },
+  {
+    key: "settings",
+    label: "设置",
+    labelEn: "Settings",
+    requires: "admin",
+  },
 ];
 
 export function repositoryTabFromQuery(value: string | null): Tab {
@@ -88,11 +117,13 @@ export function repositoryTabFromQuery(value: string | null): Tab {
 export function repositoryTabAvailable(
   item: RepositoryTabDefinition,
   repo: Repository,
+  permissions?: RepositoryPermissions,
 ) {
   return (
     (!item.formats || item.formats.includes(repo.format)) &&
     (!item.hostedOnly || repo.type === "hosted") &&
     !(item.key === "publish" && repo.type === "proxy") &&
-    !(repo.format === "apt" && item.key === "jobs" && repo.type !== "hosted")
+    !(repo.format === "apt" && item.key === "jobs" && repo.type !== "hosted") &&
+    repositoryPermissionAllowed(permissions, item.requires ?? "read")
   );
 }

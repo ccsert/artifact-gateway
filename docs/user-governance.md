@@ -107,8 +107,13 @@ Operators should verify the following after changing authentication policy:
 ## Current Limitations
 
 Deletion is permanent rather than a recoverable tombstone. A local account has
-one global role; custom roles and multiple role assignments are not yet part of
-the model. Password expiry and configurable complexity rules are not enforced.
+one role, chosen from Pending, Member, and Platform administrator. The `member`
+role carries no repository capability at all, so a member reaches only the
+repositories it is granted. The legacy `reader` and `writer` roles still cover
+every repository, are retained for compatibility, and are being phased out in
+favour of per-repository grants. Custom roles composed from arbitrary
+privileges, and multiple simultaneous role assignments, are not yet part of the
+model. Password expiry and configurable complexity rules are not enforced.
 OIDC back-channel logout and identity-provider-initiated logout are not yet
 supported. Unlinked external OIDC principals retain stateless browser sessions
 and therefore do not appear in a local account's session inventory. Signed

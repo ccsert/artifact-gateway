@@ -33,6 +33,8 @@ import {
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
+import { useAuth } from "../../lib/auth";
+import { consolePermissions } from "../../lib/permissions";
 import {
   loadFormatProfiles,
   repositoryFormats,
@@ -285,6 +287,8 @@ function CreateRepositoryDialog({
 
 export function RepositoriesPage() {
   const { locale, text } = usePreferences();
+  const { identity } = useAuth();
+  const { isAdministrator } = consolePermissions(identity);
   const [items, setItems] = useState<Repository[]>([]);
   const [formatProfiles, setFormatProfiles] = useState<FormatProfile[]>([]);
   const [nextToken, setNextToken] = useState<string | undefined>();
@@ -311,8 +315,10 @@ export function RepositoriesPage() {
     try {
       const [repositoryResult, capacityResult, profiles] = await Promise.all([
         listRepositories({ query: { pageSize: 100 } }),
-        listRepositoryCapacities(),
-        loadFormatProfiles(),
+        isAdministrator
+          ? listRepositoryCapacities()
+          : Promise.resolve(undefined),
+        isAdministrator ? loadFormatProfiles() : Promise.resolve([]),
       ]);
       const { data, error: err } = repositoryResult;
       if (err) {
@@ -325,7 +331,7 @@ export function RepositoriesPage() {
       setFormatProfiles(profiles);
       setCapacities(
         Object.fromEntries(
-          (capacityResult.data ?? []).map((capacity) => [
+          (capacityResult?.data ?? []).map((capacity) => [
             capacity.repositoryId,
             capacity,
           ]),
@@ -336,7 +342,7 @@ export function RepositoriesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAdministrator]);
 
   useEffect(() => {
     void load();
@@ -533,6 +539,12 @@ export function RepositoriesPage() {
     },
   ];
 
+  const visibleColumns = isAdministrator
+    ? columns
+    : columns.filter(
+        (column) => column.key !== "capacity" && column.key !== "actions",
+      );
+
   return (
     <div>
       <PageHeader
@@ -542,7 +554,12 @@ export function RepositoriesPage() {
           "A unified view of hosted and proxy repositories",
         )}
         actions={
-          <CreateRepositoryDialog profiles={formatProfiles} onCreated={load} />
+          isAdministrator ? (
+            <CreateRepositoryDialog
+              profiles={formatProfiles}
+              onCreated={load}
+            />
+          ) : undefined
         }
       />
       <MetricStrip
@@ -663,10 +680,15 @@ export function RepositoriesPage() {
             }
             hint={
               items.length === 0
-                ? text(
-                    "仓库是制品格式与策略的边界；创建后即可发布、代理和治理制品。",
-                    "A repository defines a format and policy boundary for publishing, proxying, and governing artifacts.",
-                  )
+                ? isAdministrator
+                  ? text(
+                      "仓库是制品格式与策略的边界；创建后即可发布、代理和治理制品。",
+                      "A repository defines a format and policy boundary for publishing, proxying, and governing artifacts.",
+                    )
+                  : text(
+                      "你当前没有可读取的仓库。请联系管理员为你的账号授予仓库访问权限。",
+                      "You cannot read any repository yet. Ask an administrator to grant your account repository access.",
+                    )
                 : deletedCount > 0 && stateFilter === "operational"
                   ? text(
                       "已删除仓库已归档，可在状态筛选中查看",
@@ -678,7 +700,7 @@ export function RepositoriesPage() {
                     )
             }
             action={
-              items.length === 0 ? (
+              items.length === 0 && isAdministrator ? (
                 <CreateRepositoryDialog
                   profiles={formatProfiles}
                   onCreated={load}
@@ -705,7 +727,7 @@ export function RepositoriesPage() {
               rowClassName={() => "group"}
               size="middle"
               dataSource={visible}
-              columns={columns}
+              columns={visibleColumns}
               pagination={false}
               scroll={{ x: 1100 }}
             />

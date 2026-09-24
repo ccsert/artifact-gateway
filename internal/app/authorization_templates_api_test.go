@@ -56,4 +56,35 @@ func TestAuthorizationTemplatesManagementHTTP(t *testing.T) {
 	if bad.Code != http.StatusBadRequest {
 		t.Fatalf("bad template = %d %s", bad.Code, bad.Body.String())
 	}
+	audits := map[string]repository.AuditRecord{}
+	for _, record := range store.Audits {
+		audits[record.Operation] = record
+	}
+	createdAudit, ok := audits["authorization_template.create"]
+	if !ok || createdAudit.Actor != "alice" || createdAudit.Resource != "authorization-templates/"+template.ID ||
+		createdAudit.Status != http.StatusCreated || createdAudit.Format != "management" {
+		t.Fatalf("create audit = %#v", createdAudit)
+	}
+	appliedAudit, ok := audits["repository.grants.apply_template"]
+	if !ok || appliedAudit.Actor != "alice" || appliedAudit.Repository != repo.Name || appliedAudit.GroupName != repo.Name ||
+		appliedAudit.Resource != "repositories/"+repo.ID+"/grants" || appliedAudit.Status != http.StatusOK {
+		t.Fatalf("apply audit = %#v", appliedAudit)
+	}
+	if len(store.Audits) != 2 {
+		t.Fatalf("rejected requests must not be audited as mutations: %#v", store.Audits)
+	}
+	updated := request(http.MethodPut, "/api/v2/authorization-templates/"+template.ID, `{"name":"release-readers","description":"updated","grants":[{"principal":"user:bob","scopes":["repositories:read"]}]}`, "admin-secret", "1")
+	if updated.Code != http.StatusOK || updated.Header().Get("ETag") != "2" {
+		t.Fatalf("update = %d etag=%q %s", updated.Code, updated.Header().Get("ETag"), updated.Body.String())
+	}
+	deleted := request(http.MethodDelete, "/api/v2/authorization-templates/"+template.ID, "", "admin-secret", "")
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("delete = %d %s", deleted.Code, deleted.Body.String())
+	}
+	if record := store.Audits[len(store.Audits)-1]; record.Operation != "authorization_template.delete" || record.Status != http.StatusNoContent || record.Resource != "authorization-templates/"+template.ID {
+		t.Fatalf("delete audit = %#v", record)
+	}
+	if record := store.Audits[len(store.Audits)-2]; record.Operation != "authorization_template.update" || record.Status != http.StatusOK || record.Resource != "authorization-templates/"+template.ID {
+		t.Fatalf("update audit = %#v", record)
+	}
 }

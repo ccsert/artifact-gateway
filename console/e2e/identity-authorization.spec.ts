@@ -19,6 +19,45 @@ test("server identity overrides a stale administrator role", async ({
   await expect(page.getByRole("link", { name: "API 密钥" })).toHaveCount(0);
 });
 
+test("a reader sees the repository catalog without administrator navigation", async ({
+  page,
+}) => {
+  await authenticateWithIdentity(page, {
+    actor: "user:reader",
+    kind: "local_session",
+    role: "reader",
+    administrator: false,
+  });
+  await page.route("**/api/v2/repositories?**", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: "11111111-1111-1111-1111-111111111111",
+            name: "readable-releases",
+            format: "raw",
+            type: "hosted",
+            anonymousRead: false,
+            mavenStrictPublication: false,
+            state: "active",
+            version: "1",
+          },
+        ],
+      },
+    }),
+  );
+
+  await page.goto("/repositories");
+
+  await expect(page).toHaveURL(/\/repositories$/);
+  await expect(
+    page.getByRole("link", { name: "readable-releases" }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "访问控制" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "API 密钥" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /新建仓库/ })).toHaveCount(0);
+});
+
 test("a scoped token signs in through identity without repository discovery", async ({
   page,
 }) => {

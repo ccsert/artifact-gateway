@@ -70,11 +70,19 @@ V2 separates global discovery from known-resource operations. A principal with
 an applicable `read` grant (including `write` and `admin`) may read the known
 Repository's detail, retention policy, artifacts, and publish sessions. A
 `write` grant may perform Repository-scoped mutations; `admin` manages grants.
-The Repository list, audit list, Repository/Group lifecycle, and other global
-management discovery routes remain administrator-only. A scoped grant is not a
-discovery grant: it never enumerates Repository metadata, groups, audit events,
-or pagination state. This preserves V1 management behavior and avoids turning
-an empty filtered list into an existence oracle.
+
+`GET /api/v2/repositories` is permission-scoped rather than administrator-only:
+an administrator sees every Repository, and any other authenticated principal
+sees only the Repositories its global role or its grants allow it to read. A
+Pending (`none`) account is refused. Filtering runs on the server over the
+caller's own effective read permission, so the list never contains a Repository
+the caller cannot read. The audit list, Repository/Group lifecycle, and the
+remaining global management discovery routes stay administrator-only.
+
+`GET /api/v2/repositories/{id}` still answers `404` for an absent Repository and
+`403` for one that exists but is not readable, so a caller that already knows an
+identifier can still confirm it exists. Bringing that response in line with the
+list is tracked with the effective-access work; this plan does not claim it yet.
 
 ## Groups and Proxies
 

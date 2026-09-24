@@ -82,10 +82,12 @@ repository access:
 2. Ask each user to sign in again. Gateway creates one local account and OIDC
    binding keyed by the provider's issuer and stable subject. The account has
    no local password and appears in **Users** as **Pending**.
-3. Open the user in **Users** and change the role to `reader`, `writer`, or
-   `admin`. The user can choose **Check access** on the waiting screen to
-   refresh their session view. Change the role back to **Pending** to revoke
-   repository access, or disable the account to block sign-in.
+3. Open the user in **Users** and change the role to `member`, `reader`,
+   `writer`, or `admin`. Choose `member` to approve the account without giving
+   it any repository access, then grant repository access per repository. The
+   user can choose **Check access** on the waiting screen to refresh their
+   session view. Change the role back to **Pending** to revoke repository
+   access, or disable the account to block sign-in.
 
 The pending `none` role denies repository reads, writes, administration, and
 intelligence even when legacy read defaults or repository grants would
@@ -95,8 +97,10 @@ refresh identity metadata but do not overwrite an administrator-assigned
 Gateway role. Existing linked accounts retain their role and state.
 
 `reader`, `writer`, and `admin` are **global** Gateway roles; assigning
-one gives its corresponding capability across repositories. Repository-scoped
-grant design is separate from this onboarding flow.
+one gives its corresponding capability across repositories. `member` is the
+opposite: it approves the account while granting no repository capability, so
+its reach comes entirely from per-repository grants. Collapsing the remaining
+global roles into per-repository grants is a separate design.
 
 ## Keycloak
 

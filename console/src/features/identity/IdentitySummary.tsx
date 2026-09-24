@@ -31,9 +31,10 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
   };
   const roleLabels = {
     none: text("待授权", "Awaiting approval"),
+    member: text("成员", "Member"),
     admin: text("管理员", "Administrator"),
-    writer: text("写入者", "Writer"),
-    reader: text("只读者", "Reader"),
+    writer: text("写入者 · 全仓库", "Writer · all repositories"),
+    reader: text("只读者 · 全仓库", "Reader · all repositories"),
   };
   return (
     <div className="min-w-0">

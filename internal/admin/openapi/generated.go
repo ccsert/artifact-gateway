@@ -22,6 +22,7 @@ import (
 // Defines values for APIKeyRoles.
 const (
 	APIKeyRolesAdmin  APIKeyRoles = "admin"
+	APIKeyRolesMember APIKeyRoles = "member"
 	APIKeyRolesReader APIKeyRoles = "reader"
 	APIKeyRolesWriter APIKeyRoles = "writer"
 )
@@ -30,6 +31,8 @@ const (
 func (e APIKeyRoles) Valid() bool {
 	switch e {
 	case APIKeyRolesAdmin:
+		return true
+	case APIKeyRolesMember:
 		return true
 	case APIKeyRolesReader:
 		return true
@@ -736,6 +739,7 @@ func (e ConsoleThemePackageValidationStatus) Valid() bool {
 // Defines values for CreateAPIKeyRoles.
 const (
 	CreateAPIKeyRolesAdmin  CreateAPIKeyRoles = "admin"
+	CreateAPIKeyRolesMember CreateAPIKeyRoles = "member"
 	CreateAPIKeyRolesReader CreateAPIKeyRoles = "reader"
 	CreateAPIKeyRolesWriter CreateAPIKeyRoles = "writer"
 )
@@ -744,6 +748,8 @@ const (
 func (e CreateAPIKeyRoles) Valid() bool {
 	switch e {
 	case CreateAPIKeyRolesAdmin:
+		return true
+	case CreateAPIKeyRolesMember:
 		return true
 	case CreateAPIKeyRolesReader:
 		return true
@@ -808,6 +814,7 @@ func (e CreateScheduledTaskKind) Valid() bool {
 // Defines values for CreateUserRole.
 const (
 	CreateUserRoleAdmin  CreateUserRole = "admin"
+	CreateUserRoleMember CreateUserRole = "member"
 	CreateUserRoleNone   CreateUserRole = "none"
 	CreateUserRoleReader CreateUserRole = "reader"
 	CreateUserRoleWriter CreateUserRole = "writer"
@@ -817,6 +824,8 @@ const (
 func (e CreateUserRole) Valid() bool {
 	switch e {
 	case CreateUserRoleAdmin:
+		return true
+	case CreateUserRoleMember:
 		return true
 	case CreateUserRoleNone:
 		return true
@@ -832,6 +841,7 @@ func (e CreateUserRole) Valid() bool {
 // Defines values for CreatedAPIKeyRoles.
 const (
 	CreatedAPIKeyRolesAdmin  CreatedAPIKeyRoles = "admin"
+	CreatedAPIKeyRolesMember CreatedAPIKeyRoles = "member"
 	CreatedAPIKeyRolesReader CreatedAPIKeyRoles = "reader"
 	CreatedAPIKeyRolesWriter CreatedAPIKeyRoles = "writer"
 )
@@ -840,6 +850,8 @@ const (
 func (e CreatedAPIKeyRoles) Valid() bool {
 	switch e {
 	case CreatedAPIKeyRolesAdmin:
+		return true
+	case CreatedAPIKeyRolesMember:
 		return true
 	case CreatedAPIKeyRolesReader:
 		return true
@@ -853,6 +865,7 @@ func (e CreatedAPIKeyRoles) Valid() bool {
 // Defines values for CurrentIdentityRole.
 const (
 	CurrentIdentityRoleAdmin  CurrentIdentityRole = "admin"
+	CurrentIdentityRoleMember CurrentIdentityRole = "member"
 	CurrentIdentityRoleNone   CurrentIdentityRole = "none"
 	CurrentIdentityRoleReader CurrentIdentityRole = "reader"
 	CurrentIdentityRoleWriter CurrentIdentityRole = "writer"
@@ -862,6 +875,8 @@ const (
 func (e CurrentIdentityRole) Valid() bool {
 	switch e {
 	case CurrentIdentityRoleAdmin:
+		return true
+	case CurrentIdentityRoleMember:
 		return true
 	case CurrentIdentityRoleNone:
 		return true
@@ -1294,6 +1309,7 @@ func (e LifecycleJobState) Valid() bool {
 // Defines values for OIDCRoleMappingMatchGatewayRole.
 const (
 	OIDCRoleMappingMatchGatewayRoleAdmin  OIDCRoleMappingMatchGatewayRole = "admin"
+	OIDCRoleMappingMatchGatewayRoleMember OIDCRoleMappingMatchGatewayRole = "member"
 	OIDCRoleMappingMatchGatewayRoleReader OIDCRoleMappingMatchGatewayRole = "reader"
 	OIDCRoleMappingMatchGatewayRoleWriter OIDCRoleMappingMatchGatewayRole = "writer"
 )
@@ -1302,6 +1318,8 @@ const (
 func (e OIDCRoleMappingMatchGatewayRole) Valid() bool {
 	switch e {
 	case OIDCRoleMappingMatchGatewayRoleAdmin:
+		return true
+	case OIDCRoleMappingMatchGatewayRoleMember:
 		return true
 	case OIDCRoleMappingMatchGatewayRoleReader:
 		return true
@@ -1315,6 +1333,7 @@ func (e OIDCRoleMappingMatchGatewayRole) Valid() bool {
 // Defines values for OIDCSettingsJitDefaultRole.
 const (
 	OIDCSettingsJitDefaultRoleAdmin  OIDCSettingsJitDefaultRole = "admin"
+	OIDCSettingsJitDefaultRoleMember OIDCSettingsJitDefaultRole = "member"
 	OIDCSettingsJitDefaultRoleNone   OIDCSettingsJitDefaultRole = "none"
 	OIDCSettingsJitDefaultRoleReader OIDCSettingsJitDefaultRole = "reader"
 	OIDCSettingsJitDefaultRoleWriter OIDCSettingsJitDefaultRole = "writer"
@@ -1324,6 +1343,8 @@ const (
 func (e OIDCSettingsJitDefaultRole) Valid() bool {
 	switch e {
 	case OIDCSettingsJitDefaultRoleAdmin:
+		return true
+	case OIDCSettingsJitDefaultRoleMember:
 		return true
 	case OIDCSettingsJitDefaultRoleNone:
 		return true
@@ -1375,6 +1396,7 @@ func (e OIDCSettingsSource) Valid() bool {
 // Defines values for OIDCSettingsUpdateJitDefaultRole.
 const (
 	OIDCSettingsUpdateJitDefaultRoleAdmin  OIDCSettingsUpdateJitDefaultRole = "admin"
+	OIDCSettingsUpdateJitDefaultRoleMember OIDCSettingsUpdateJitDefaultRole = "member"
 	OIDCSettingsUpdateJitDefaultRoleNone   OIDCSettingsUpdateJitDefaultRole = "none"
 	OIDCSettingsUpdateJitDefaultRoleReader OIDCSettingsUpdateJitDefaultRole = "reader"
 	OIDCSettingsUpdateJitDefaultRoleWriter OIDCSettingsUpdateJitDefaultRole = "writer"
@@ -1384,6 +1406,8 @@ const (
 func (e OIDCSettingsUpdateJitDefaultRole) Valid() bool {
 	switch e {
 	case OIDCSettingsUpdateJitDefaultRoleAdmin:
+		return true
+	case OIDCSettingsUpdateJitDefaultRoleMember:
 		return true
 	case OIDCSettingsUpdateJitDefaultRoleNone:
 		return true
@@ -2056,6 +2080,7 @@ func (e UpdateServiceAccountState) Valid() bool {
 // Defines values for UpdateUserRole.
 const (
 	UpdateUserRoleAdmin  UpdateUserRole = "admin"
+	UpdateUserRoleMember UpdateUserRole = "member"
 	UpdateUserRoleNone   UpdateUserRole = "none"
 	UpdateUserRoleReader UpdateUserRole = "reader"
 	UpdateUserRoleWriter UpdateUserRole = "writer"
@@ -2065,6 +2090,8 @@ const (
 func (e UpdateUserRole) Valid() bool {
 	switch e {
 	case UpdateUserRoleAdmin:
+		return true
+	case UpdateUserRoleMember:
 		return true
 	case UpdateUserRoleNone:
 		return true
@@ -2119,6 +2146,7 @@ func (e UpstreamAuthScheme) Valid() bool {
 // Defines values for UserRole.
 const (
 	UserRoleAdmin  UserRole = "admin"
+	UserRoleMember UserRole = "member"
 	UserRoleNone   UserRole = "none"
 	UserRoleReader UserRole = "reader"
 	UserRoleWriter UserRole = "writer"
@@ -2128,6 +2156,8 @@ const (
 func (e UserRole) Valid() bool {
 	switch e {
 	case UserRoleAdmin:
+		return true
+	case UserRoleMember:
 		return true
 	case UserRoleNone:
 		return true
@@ -2284,6 +2314,7 @@ func (e ListProxyCacheEntriesParamsAssetFilter) Valid() bool {
 // Defines values for GetRepositoryEffectiveAccessParamsRole.
 const (
 	GetRepositoryEffectiveAccessParamsRoleAdmin  GetRepositoryEffectiveAccessParamsRole = "admin"
+	GetRepositoryEffectiveAccessParamsRoleMember GetRepositoryEffectiveAccessParamsRole = "member"
 	GetRepositoryEffectiveAccessParamsRoleReader GetRepositoryEffectiveAccessParamsRole = "reader"
 	GetRepositoryEffectiveAccessParamsRoleWriter GetRepositoryEffectiveAccessParamsRole = "writer"
 )
@@ -2292,6 +2323,8 @@ const (
 func (e GetRepositoryEffectiveAccessParamsRole) Valid() bool {
 	switch e {
 	case GetRepositoryEffectiveAccessParamsRoleAdmin:
+		return true
+	case GetRepositoryEffectiveAccessParamsRoleMember:
 		return true
 	case GetRepositoryEffectiveAccessParamsRoleReader:
 		return true
@@ -2305,6 +2338,7 @@ func (e GetRepositoryEffectiveAccessParamsRole) Valid() bool {
 // Defines values for ListUsersParamsRole.
 const (
 	ListUsersParamsRoleAdmin  ListUsersParamsRole = "admin"
+	ListUsersParamsRoleMember ListUsersParamsRole = "member"
 	ListUsersParamsRoleNone   ListUsersParamsRole = "none"
 	ListUsersParamsRoleReader ListUsersParamsRole = "reader"
 	ListUsersParamsRoleWriter ListUsersParamsRole = "writer"
@@ -2314,6 +2348,8 @@ const (
 func (e ListUsersParamsRole) Valid() bool {
 	switch e {
 	case ListUsersParamsRoleAdmin:
+		return true
+	case ListUsersParamsRoleMember:
 		return true
 	case ListUsersParamsRoleNone:
 		return true
@@ -14977,6 +15013,20 @@ func (response ListRepositories401ApplicationProblemPlusJSONResponse) VisitListR
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositories403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositories403ApplicationProblemPlusJSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }

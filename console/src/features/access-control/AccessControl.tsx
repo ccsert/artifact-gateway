@@ -75,7 +75,7 @@ interface GrantRow {
   resourcePrefix: string;
 }
 
-type EvaluatorRole = "none" | "reader" | "writer" | "admin";
+type EvaluatorRole = "none" | "member" | "reader" | "writer" | "admin";
 export type AccessControlTab = "grants" | "evaluate" | "policies";
 
 export function accessControlTabFromQuery(
@@ -100,6 +100,7 @@ function strongestRole(roles: ApiKey["roles"]): EvaluatorRole {
   if (roles.includes("admin")) return "admin";
   if (roles.includes("writer")) return "writer";
   if (roles.includes("reader")) return "reader";
+  if (roles.includes("member")) return "member";
   return "none";
 }
 

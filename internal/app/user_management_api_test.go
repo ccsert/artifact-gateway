@@ -79,8 +79,8 @@ func TestUserManagementProfilePasswordSessionsAndLastAdminProtection(t *testing.
 	forcedRequest.Header.Set("Authorization", "Bearer "+login.Token)
 	forcedResponse := httptest.NewRecorder()
 	handler.ServeHTTP(forcedResponse, forcedRequest)
-	if forcedResponse.Code != http.StatusUnauthorized {
-		t.Fatalf("must-change session management access=%d want=401", forcedResponse.Code)
+	if forcedResponse.Code != http.StatusForbidden || !strings.Contains(forcedResponse.Body.String(), `"code":"password_change_required"`) {
+		t.Fatalf("must-change session management access=%d want=403 password_change_required", forcedResponse.Code)
 	}
 
 	changeRequest := httptest.NewRequest(http.MethodPost, "/auth/change-password", strings.NewReader(`{"currentPassword":"reset-password","newPassword":"final-password"}`))

@@ -34,7 +34,9 @@ Service Account 没有全局角色，只通过显式 Grant 访问，凭证轮换
 
 V2 将全局发现和已知资源操作分离。有 read Grant 的 principal 可读取已知 Repository detail、retention、artifact 和 publish session；write 可执行 Repository 内 mutation；admin 管 Grant。
 
-Repository list、Audit list、Repository/Group lifecycle 和全局管理发现仍只允许管理员。Scoped Grant 不是 discovery Grant，不能枚举 Repository、Group、Audit 或分页状态，避免空过滤列表成为存在性 oracle。
+`GET /api/v2/repositories` 现在按权限过滤而非仅限管理员：管理员可见全部 Repository，其他已认证主体只能看到其全局角色或 Grant 允许读取的 Repository，待审批（`none`）账号被拒绝。过滤在服务端按调用方自身的有效读权限执行，列表不会包含调用方无权读取的 Repository。Audit list、Repository/Group lifecycle 及其余全局管理发现路由仍只允许管理员。
+
+`GET /api/v2/repositories/{id}` 对不存在的 Repository 仍返回 `404`、对存在但不可读的返回 `403`，因此已知标识符的调用方仍可确认其存在。使该响应与列表保持一致由 effective-access 相关工作跟进，本计划暂不声称已实现。
 
 ## Group 与 Proxy
 

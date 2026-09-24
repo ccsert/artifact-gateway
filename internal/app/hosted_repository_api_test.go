@@ -292,6 +292,138 @@ func TestHostedRepositoryManagementRejectsInvalidProxyShapes(t *testing.T) {
 	}
 }
 
+func TestRepositoryListIsScopedToReadableRepositories(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	granted, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "granted", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hidden, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "hidden", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(ctx, granted.ID, []repository.RepositoryGrant{{Principal: "scoped-reader", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(ctx, hidden.ID, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	listNames := func(token string) []string {
+		request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories", nil)
+		authorize(request, token)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		var page repositoryPage
+		if err := json.NewDecoder(response.Body).Decode(&page); err != nil {
+			t.Fatal(err)
+		}
+		names := make([]string, 0, len(page.Items))
+		for _, item := range page.Items {
+			names = append(names, item.Name)
+		}
+		return names
+	}
+	scoped := authenticator.IssuePrincipalToken(Principal{Actor: "scoped-reader"})
+	if names := listNames(scoped); len(names) != 1 || names[0] != "granted" {
+		t.Fatalf("scoped principal sees %v", names)
+	}
+	reader := authenticator.IssuePrincipalToken(Principal{Actor: "global-reader", Role: RoleReader})
+	if names := listNames(reader); len(names) != 2 {
+		t.Fatalf("reader sees %v", names)
+	}
+	if names := listNames("admin-secret"); len(names) != 2 {
+		t.Fatalf("administrator sees %v", names)
+	}
+	pending := authenticator.IssuePrincipalToken(Principal{Actor: "pending-user", Role: RoleNone})
+	pendingRequest := httptest.NewRequest(http.MethodGet, "/api/v2/repositories", nil)
+	authorize(pendingRequest, pending)
+	pendingResponse := httptest.NewRecorder()
+	handler.ServeHTTP(pendingResponse, pendingRequest)
+	if pendingResponse.Code != http.StatusForbidden || !strings.Contains(pendingResponse.Body.String(), `"code":"authorization_pending"`) {
+		t.Fatalf("pending=%d body=%s", pendingResponse.Code, pendingResponse.Body.String())
+	}
+}
+
+func TestMemberRoleCarriesNoImplicitRepositoryAccess(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	granted, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "member-granted", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ungranted, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "member-ungranted", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(ctx, granted.ID, []repository.RepositoryGrant{
+		{Principal: "user:member", Scopes: []string{"repositories:read"}},
+	}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplaceRepositoryGrants(ctx, ungranted.ID, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, user := range []repository.User{
+		{ID: uuid.NewString(), Name: "member", Role: string(RoleMember), SecretHash: "hash"},
+		{ID: uuid.NewString(), Name: "reader", Role: string(RoleReader), SecretHash: "hash"},
+	} {
+		if _, err := store.CreateUser(ctx, user); err != nil {
+			t.Fatal(err)
+		}
+	}
+	authenticator := testAuthenticatorWithUsers(store)
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	status := func(token, path string) int {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		authorize(request, token)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response.Code
+	}
+	listNames := func(token string) []string {
+		request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories", nil)
+		authorize(request, token)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("list=%d body=%s", response.Code, response.Body.String())
+		}
+		var page repositoryPage
+		if err := json.NewDecoder(response.Body).Decode(&page); err != nil {
+			t.Fatal(err)
+		}
+		names := make([]string, 0, len(page.Items))
+		for _, item := range page.Items {
+			names = append(names, item.Name)
+		}
+		return names
+	}
+
+	// A member reaches only the repositories it was granted, never every one.
+	member := authenticator.IssueToken("user:member")
+	if names := listNames(member); len(names) != 1 || names[0] != "member-granted" {
+		t.Fatalf("member catalog=%v", names)
+	}
+	if code := status(member, "/api/v2/repositories/"+granted.ID); code != http.StatusOK {
+		t.Fatalf("member reads granted repository=%d", code)
+	}
+	if code := status(member, "/api/v2/repositories/"+ungranted.ID); code != http.StatusForbidden {
+		t.Fatalf("member reads ungranted repository=%d want 403", code)
+	}
+
+	// The global reader role keeps its existing all-repository reach, so this
+	// change is scoped to the new level rather than a silent tightening.
+	if names := listNames(authenticator.IssueToken("user:reader")); len(names) != 2 {
+		t.Fatalf("reader catalog=%v", names)
+	}
+}
+
 func TestHostedRepositoryManagementRejectsAnonymousAndInvalidRequests(t *testing.T) {
 	handler := NewGatewayHandler(Dependencies{}, repository.NewMemoryStore(), TestAdapter{}, testAuthenticator())
 	denied := httptest.NewRecorder()
@@ -687,8 +819,8 @@ func TestUserManagementLoginAndSessionAuth(t *testing.T) {
 	authorize(readerReq, readerToken)
 	readerRec := httptest.NewRecorder()
 	handler.ServeHTTP(readerRec, readerReq)
-	if readerRec.Code != http.StatusUnauthorized {
-		t.Fatalf("reader session list users=%d want 401", readerRec.Code)
+	if readerRec.Code != http.StatusForbidden {
+		t.Fatalf("reader session list users=%d want 403", readerRec.Code)
 	}
 
 	// Disabling a user blocks both new logins and the existing session.

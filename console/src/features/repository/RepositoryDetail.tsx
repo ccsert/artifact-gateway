@@ -88,6 +88,7 @@ export function RepositoryDetailPage() {
   const [capacity, setCapacity] = useState<RepositoryCapacity | null>(null);
   const [effectiveAccess, setEffectiveAccess] =
     useState<RepositoryEffectiveAccess | null>(null);
+  const [accessResolved, setAccessResolved] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [tab, setTab] = useState<Tab>(() =>
     repositoryTabFromQuery(requestedTab),
@@ -113,6 +114,7 @@ export function RepositoryDetailPage() {
     setError(null);
     setCapsLoading(true);
     setCapsError(null);
+    setAccessResolved(false);
     const { data, error: err } = await getRepository({
       path: { repositoryId },
     });
@@ -132,6 +134,7 @@ export function RepositoryDetailPage() {
     setCapsLoading(false);
     if (!accessRes.error) setEffectiveAccess(accessRes.data ?? null);
     if (!capacityRes.error) setCapacity(capacityRes.data ?? null);
+    setAccessResolved(true);
   }, [repositoryId]);
 
   useEffect(() => {
@@ -143,12 +146,14 @@ export function RepositoryDetailPage() {
   }, [requestedTab]);
 
   useEffect(() => {
-    if (!repo) return;
+    if (!repo || !accessResolved) return;
     const available = TABS.some(
-      (item) => item.key === tab && repositoryTabAvailable(item, repo),
+      (item) =>
+        item.key === tab &&
+        repositoryTabAvailable(item, repo, effectiveAccess?.permissions),
     );
     if (!available) selectTab("artifacts");
-  }, [repo, selectTab, tab]);
+  }, [accessResolved, effectiveAccess, repo, selectTab, tab]);
 
   if (error !== null) {
     return (
@@ -158,10 +163,10 @@ export function RepositoryDetailPage() {
       </div>
     );
   }
-  if (!repo) return <Loading />;
+  if (!repo || !accessResolved) return <Loading />;
 
   const availableTabs = TABS.filter((item) =>
-    repositoryTabAvailable(item, repo),
+    repositoryTabAvailable(item, repo, effectiveAccess?.permissions),
   );
 
   return (

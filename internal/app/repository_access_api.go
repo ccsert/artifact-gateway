@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
@@ -18,8 +19,8 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.Respo
 	if !ok {
 		return
 	}
-	if principal.Role == RoleNone {
-		writeHostedProblem(w, http.StatusForbidden, "authorization_pending", "administrator approval is required")
+	if code, message, blocked := accountStateProblem(principal.AccountStateReason()); blocked {
+		writeHostedProblem(w, http.StatusForbidden, code, message)
 		return
 	}
 	simulated := false
@@ -344,6 +345,7 @@ func (h generatedRepositoryAPIAdapter) CreateAuthorizationRole(w http.ResponseWr
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create authorization role failed")
 		return
 	}
+	h.recordAuthorizationAudit(r, "", "authorization-roles/"+role.ID, "authorization_role.create", http.StatusCreated)
 	writeNativeMavenJSON(w, http.StatusCreated, authorizationRoleResponse(role))
 }
 
@@ -401,6 +403,7 @@ func (h generatedRepositoryAPIAdapter) UpdateAuthorizationRole(w http.ResponseWr
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "update authorization role failed")
 		return
 	}
+	h.recordAuthorizationAudit(r, "", "authorization-roles/"+role.ID, "authorization_role.update", http.StatusOK)
 	w.Header().Set("ETag", role.Version)
 	writeNativeMavenJSON(w, http.StatusOK, authorizationRoleResponse(role))
 }
@@ -418,6 +421,7 @@ func (h generatedRepositoryAPIAdapter) DeleteAuthorizationRole(w http.ResponseWr
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "delete authorization role failed")
 		return
 	}
+	h.recordAuthorizationAudit(r, "", "authorization-roles/"+roleID.String(), "authorization_role.delete", http.StatusNoContent)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -466,6 +470,7 @@ func (h generatedRepositoryAPIAdapter) CreateAuthorizationTemplate(w http.Respon
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create authorization template failed")
 		return
 	}
+	h.recordAuthorizationAudit(r, "", "authorization-templates/"+template.ID, "authorization_template.create", http.StatusCreated)
 	writeNativeMavenJSON(w, http.StatusCreated, authorizationTemplateResponse(template))
 }
 
@@ -523,6 +528,7 @@ func (h generatedRepositoryAPIAdapter) UpdateAuthorizationTemplate(w http.Respon
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "update authorization template failed")
 		return
 	}
+	h.recordAuthorizationAudit(r, "", "authorization-templates/"+template.ID, "authorization_template.update", http.StatusOK)
 	w.Header().Set("ETag", template.Version)
 	writeNativeMavenJSON(w, http.StatusOK, authorizationTemplateResponse(template))
 }
@@ -540,6 +546,7 @@ func (h generatedRepositoryAPIAdapter) DeleteAuthorizationTemplate(w http.Respon
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "delete authorization template failed")
 		return
 	}
+	h.recordAuthorizationAudit(r, "", "authorization-templates/"+templateID.String(), "authorization_template.delete", http.StatusNoContent)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -589,6 +596,7 @@ func (h generatedRepositoryAPIAdapter) ApplyAuthorizationTemplate(w http.Respons
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "apply authorization template failed")
 		return
 	}
+	h.recordAuthorizationAudit(r, repo.Name, "repositories/"+repo.ID+"/grants", "repository.grants.apply_template", http.StatusOK)
 	w.Header().Set("ETag", set.Version)
 	writeNativeMavenJSON(w, http.StatusOK, set.Grants)
 }
@@ -615,8 +623,20 @@ func (h generatedRepositoryAPIAdapter) ReplaceGrants(w http.ResponseWriter, r *h
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "replace grants failed")
 			return
 		}
+		h.recordAuthorizationAudit(r, repo.Name, "repositories/"+repo.ID+"/grants", "repository.grants.replace", http.StatusOK)
 		w.Header().Set("ETag", set.Version)
 		writeNativeMavenJSON(w, http.StatusOK, set.Grants)
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) recordAuthorizationAudit(r *http.Request, repositoryName, resource, operation string, status int) {
+	if h.audit == nil {
+		return
+	}
+	_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{
+		GroupName: repositoryName, Repository: repositoryName,
+		Actor: h.auditActor(r), Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(),
+		Format: "management", Resource: resource, Operation: operation, Status: status, CacheDisposition: "bypass",
 	})
 }
 

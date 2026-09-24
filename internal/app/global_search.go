@@ -25,8 +25,8 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 	if !ok {
 		return
 	}
-	if principal.Role == RoleNone {
-		writeHostedProblem(w, http.StatusForbidden, "authorization_pending", "administrator approval is required")
+	if code, message, blocked := accountStateProblem(principal.AccountStateReason()); blocked {
+		writeHostedProblem(w, http.StatusForbidden, code, message)
 		return
 	}
 	query := strings.TrimSpace(params.Q)

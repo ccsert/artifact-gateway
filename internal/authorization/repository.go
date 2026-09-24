@@ -22,18 +22,24 @@ const (
 // an API key or OIDC identity. It is evaluated before per-repository grants so
 // an administrator can issue a bounded credential without enumerating every
 // repository. The empty value means no role-derived capability, which keeps
-// existing static-token and grant behavior unchanged.
+// existing static-token and grant behavior unchanged. RoleMember means the same
+// thing for a named account: no role-derived capability at all, so its
+// repository authority comes only from per-repository grants and assigning it
+// never implies access to every repository.
 type Role string
 
 const (
 	RoleNone   Role = "none"
+	RoleMember Role = "member"
 	RoleAdmin  Role = "admin"
 	RoleWriter Role = "writer"
 	RoleReader Role = "reader"
 )
 
 // RoleAllows reports whether a role grants the operation. Admin grants all,
-// writer grants read and write, reader grants read only.
+// writer grants read and write, reader grants read only. Member grants nothing
+// here on purpose: per-repository grants decide, which is what stops a single
+// global role from covering every repository.
 func RoleAllows(role Role, operation RepositoryOperation) bool {
 	switch role {
 	case RoleAdmin:
@@ -51,20 +57,28 @@ func RoleAllows(role Role, operation RepositoryOperation) bool {
 func RoleFromRoles(roles []string) Role {
 	best := Role("")
 	for _, r := range roles {
-		switch Role(r) {
-		case RoleAdmin:
-			return RoleAdmin
-		case RoleWriter:
-			if best != RoleAdmin {
-				best = RoleWriter
-			}
-		case RoleReader:
-			if best == "" {
-				best = RoleReader
-			}
+		candidate := Role(r)
+		if roleRank(candidate) > roleRank(best) {
+			best = candidate
 		}
 	}
 	return best
+}
+
+// roleRank orders recognized roles by capability. An unrecognized role ranks
+// below every recognized one, so it is never selected.
+func roleRank(role Role) int {
+	switch role {
+	case RoleAdmin:
+		return 4
+	case RoleWriter:
+		return 3
+	case RoleReader:
+		return 2
+	case RoleMember:
+		return 1
+	}
+	return 0
 }
 
 // AuthorizationDecision explains an authorization result without tying policy
@@ -89,8 +103,8 @@ func (a RepositoryAuthorizer) Authorize(ctx context.Context, principal Principal
 }
 
 func (a RepositoryAuthorizer) AuthorizeResource(ctx context.Context, principal Principal, target repository.HostedRepository, operation RepositoryOperation, resource string) AuthorizationDecision {
-	if principal.Role == RoleNone {
-		return AuthorizationDecision{Source: "role", Reason: "authorization_pending"}
+	if decision, blocked := accountStateDecision(principal); blocked {
+		return decision
 	}
 	if principal.Admin {
 		return AuthorizationDecision{Allowed: true, Source: "administrator", Reason: "administrator"}
@@ -104,16 +118,28 @@ func (a RepositoryAuthorizer) AuthorizeResource(ctx context.Context, principal P
 	return a.authorizeLegacyForTarget(principal, target, operation)
 }
 
-// ManagedDecision evaluates only an explicitly managed grant set. Callers
-// serving legacy Groups use this to distinguish an unbound member from an
-// explicit grant denial without weakening their existing static policy.
+// accountStateDecision reports a principal-wide block that must be evaluated
+// before any repository authority, so every repository path - management,
+// browse, search, protocol, and Group members - agrees on it.
+func accountStateDecision(principal Principal) (AuthorizationDecision, bool) {
+	reason := principal.AccountStateReason()
+	if reason == "" {
+		return AuthorizationDecision{}, false
+	}
+	return AuthorizationDecision{Source: "role", Reason: reason}, true
+}
+
+// ManagedDecision evaluates the per-principal grant entries for a target and
+// reports whether they decided. Callers serving legacy Groups use this to
+// distinguish an unbound member from an explicit grant denial without weakening
+// their existing static policy.
 func (a RepositoryAuthorizer) ManagedDecision(ctx context.Context, principal Principal, target repository.HostedRepository, operation RepositoryOperation) (AuthorizationDecision, bool) {
 	return a.ManagedResourceDecision(ctx, principal, target, operation, "")
 }
 
 func (a RepositoryAuthorizer) ManagedResourceDecision(ctx context.Context, principal Principal, target repository.HostedRepository, operation RepositoryOperation, resource string) (AuthorizationDecision, bool) {
-	if principal.Role == RoleNone {
-		return AuthorizationDecision{Source: "role", Reason: "authorization_pending"}, true
+	if decision, blocked := accountStateDecision(principal); blocked {
+		return decision, true
 	}
 	if principal.Admin {
 		return AuthorizationDecision{Allowed: true, Source: "administrator", Reason: "administrator"}, true
@@ -128,13 +154,24 @@ func (a RepositoryAuthorizer) ManagedResourceDecision(ctx context.Context, princ
 	if err != nil {
 		return AuthorizationDecision{Source: "repository_grants", Reason: "grant_lookup_failed"}, true
 	}
-	if !isManagedRepositoryGrantSet(set.Version) {
-		return AuthorizationDecision{}, false
-	}
+	managed := isManagedRepositoryGrantSet(set.Version)
+	attributed := false
 	for _, grant := range set.Grants {
-		if grant.Principal == principal.Actor && grantAllows(grant.Scopes, operation) && grantMatchesResource(grant.ResourcePrefix, resource) {
+		if grant.Principal != principal.Actor {
+			continue
+		}
+		attributed = true
+		if grantAllows(grant.Scopes, operation) && grantMatchesResource(grant.ResourcePrefix, resource) {
 			return AuthorizationDecision{Allowed: true, Source: "repository_grants", Reason: "scope_granted"}, true
 		}
+	}
+	// A grant set that names this principal decides for it, so an explicit
+	// per-principal entry never needs the set to be marked managed. Anything
+	// else in an unmanaged set stays invisible and legacy static policy keeps
+	// deciding, which is what lets grants be materialized without switching a
+	// repository away from its legacy readers.
+	if !managed && !attributed {
+		return AuthorizationDecision{}, false
 	}
 	return AuthorizationDecision{Source: "repository_grants", Reason: "scope_not_granted"}, true
 }

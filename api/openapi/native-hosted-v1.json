@@ -466,6 +466,7 @@
     "/repositories": {
       "get": {
         "operationId": "listRepositories",
+        "description": "Lists the repositories the caller may read. An administrator sees every repository. Any other authenticated principal sees only the repositories its global role or its repository grants allow it to read, so the result never reveals the existence of a repository the caller cannot read.",
         "parameters": [
           {
             "$ref": "#/components/parameters/PageSize"
@@ -479,6 +480,9 @@
             "$ref": "#/components/responses/RepositoryList"
           },
           "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -586,6 +590,7 @@
       },
       "delete": {
         "operationId": "deleteRepository",
+        "description": "Disables the repository. Requires repository `admin` scope, because stopping reads and writes for every client is a repository-administration action rather than a content mutation; a `write` scope is not sufficient.",
         "responses": {
           "202": {
             "$ref": "#/components/responses/Deletion"
@@ -597,6 +602,7 @@
       },
       "patch": {
         "operationId": "updateRepository",
+        "description": "Updates repository configuration. Requires repository `admin` scope, because endpoint, allowlist, egress, upstream credential, anonymous-read, and strict-publication settings change how the repository behaves for every client; a `write` scope is not sufficient.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IfMatch"
@@ -1352,6 +1358,7 @@
             "schema": {
               "type": "string",
               "enum": [
+                "member",
                 "reader",
                 "writer",
                 "admin"
@@ -5252,6 +5259,7 @@
             "type": "string",
             "enum": [
               "none",
+              "member",
               "admin",
               "writer",
               "reader"
@@ -5355,6 +5363,7 @@
             "type": "string",
             "enum": [
               "none",
+              "member",
               "admin",
               "writer",
               "reader"
@@ -6174,6 +6183,7 @@
           "gatewayRole": {
             "type": "string",
             "enum": [
+              "member",
               "admin",
               "writer",
               "reader"
@@ -6220,6 +6230,7 @@
             "type": "string",
             "enum": [
               "none",
+              "member",
               "admin",
               "writer",
               "reader"

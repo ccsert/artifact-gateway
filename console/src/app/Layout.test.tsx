@@ -109,25 +109,59 @@ describe("AppLayout", () => {
     expect(await screen.findByText("public browse")).toBeInTheDocument();
   });
 
-  it("keeps administrator-only routes away from a reader", async () => {
+  it("shows the repository catalog to a reader and hides administrator navigation", async () => {
     Object.assign(auth, {
       role: "reader",
-      identity: { administrator: false },
+      identity: { administrator: false, role: "reader", kind: "local" },
     });
 
     renderLayout("/repositories");
+
+    expect(await screen.findByText("repository catalog")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("link", { name: /仓库/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /服务账号/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /审计/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("normalizes a trailing slash before applying the route guard", async () => {
+    Object.assign(auth, {
+      role: "",
+      identity: { administrator: false, kind: "local" },
+    });
+
+    renderLayout("/repositories/");
 
     expect(await screen.findByTestId("location")).toHaveTextContent("/search");
     expect(screen.queryByText("repository catalog")).not.toBeInTheDocument();
   });
 
-  it("keeps Service Account credential management away from a reader", async () => {
+  it("keeps administrator-only routes away from a reader", async () => {
     Object.assign(auth, {
       role: "reader",
-      identity: { administrator: false },
+      identity: { administrator: false, role: "reader", kind: "local" },
     });
 
     renderLayout("/service-accounts");
+
+    expect(await screen.findByTestId("location")).toHaveTextContent("/search");
+    expect(
+      screen.queryByText("service account management"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps Service Account credential management away from a reader", async () => {
+    Object.assign(auth, {
+      role: "reader",
+      identity: { administrator: false, role: "reader", kind: "local" },
+    });
+
+    renderLayout("/service-accounts/");
 
     expect(await screen.findByTestId("location")).toHaveTextContent("/search");
     expect(
