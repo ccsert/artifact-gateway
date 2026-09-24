@@ -69,7 +69,7 @@ Gateway 已有管理员 task catalog，覆盖 Repository/Audit retention、固�
 
 Gateway 以独立 `repositories:intelligence` 保存 signature、SBOM、provenance、license、vulnerability，准入策略在晋级前评估并向目标传播不可变证据，不覆盖目标自有记录。
 
-外部 scanner、数据库新鲜度、finding、Quarantine 和默认关闭的协议读取强制已交付。剩余差距为合规报告、组件热度/下载统计及更自动化处置。
+外部 scanner、数据库新鲜度、finding、Quarantine 和默认关闭的协议读取强制已交付。制品生命周期下载统计也已交付：审计流把每次成功下载折叠进 `artifact_usage_stats` 聚合（下载次数、累计流量、首末下载时间、最近使用者），通过 `GET /api/v2/repositories/{id}/artifact-usage` 与 Console 仓库“使用统计”Tab 读取，不受审计保留期影响；组下载计入组地址。清理策略已把它作为参考依据：retention 候选在 dry-run 与 CSV 导出中携带下载次数与最近下载时间，新增 `keepDownloadedDays`（默认 0 关闭）使窗口内被下载的制品豁免本轮清理，覆盖全部支持 retention 的格式。剩余差距为合规报告及更自动化处置。
 
 ### 共同格式深度
 
@@ -97,7 +97,7 @@ Repository 可创建、查看、编辑可变 Proxy 字段和删除，使用 `If-
 
 Operations 提供固定调度、后台任务和脱敏诊断 JSON；缺少 Blob Store、Routing Rule、Email/SMTP、HTTP/SSL、Capability、Feature Flag 与可下载 support bundle。
 
-单 Artifact 删除 UI 主要在 OCI tag；其他格式行缺少统一 delete/download/tag/star/favorite 和丰富 checksum/size/download 属性。Tombstone 可恢复但不会提供违背生命周期契约的“立即 hard purge”。
+单 Artifact 删除 UI 主要在 OCI tag；其他格式行缺少统一 delete/download/tag/star/favorite 和逐行的 checksum/size 属性。生命周期下载次数不再缺失（见仓库“使用统计”Tab），但尚未并入每行。Tombstone 可恢复但不会提供违背生命周期契约的“立即 hard purge”。
 
 Replication 可 create/inspect/cancel pending/retry/run-now，checkpoint 受 lease fence；Promotion/Retention 为 lifecycle job。缺少 promotion/replication schedule、cron 和任意 Nexus task。
 

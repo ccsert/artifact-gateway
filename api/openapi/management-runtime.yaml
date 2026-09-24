@@ -1,8 +1,8 @@
 ---
 info:
   title: Artifact Gateway Native Hosted Management API
-  version: 0.1.0
-  description: Runtime management contract for Artifact Gateway 0.1.
+  version: 0.2.0
+  description: Runtime management contract for Artifact Gateway 0.2.
 servers:
 - url: https://gateway.example.com/api/v2
 security:
@@ -171,6 +171,8 @@ paths:
     "$ref": "./management/sessions.yaml#/repositories_repositoryId_publish_sessions"
   "/repositories/{repositoryId}/artifacts":
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts"
+  "/repositories/{repositoryId}/artifact-usage":
+    "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifact_usage"
   "/repositories/{repositoryId}/artifact-search":
     "$ref": "./management/search.yaml#/repositories_repositoryId_artifact_search"
   "/repositories/{repositoryId}/browse":

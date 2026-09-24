@@ -146,6 +146,7 @@ type GatewayStore interface {
 	repository.WebhookStore
 	repository.BackgroundOperationQueueStore
 	repository.ArtifactBrowseStore
+	repository.ArtifactUsageStore
 }
 
 func NewGatewayHandler(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, ociClients ...OCIClient) http.Handler {

@@ -18,6 +18,7 @@ type repositoryRetentionStore interface {
 	repository.HostedRepositoryStore
 	repository.RepositoryRetentionPolicyStore
 	repository.LifecycleJobStore
+	repository.ArtifactUsageStore
 	repository.NativeMavenStore
 	repository.NativeOCIStore
 	repository.NativeRawStore
@@ -37,25 +38,30 @@ type NativeRepositoryRetention struct {
 }
 
 type RepositoryRetentionCandidate struct {
-	Format        repository.Format
-	Coordinate    string
-	Digest        string
-	CreatedAt     time.Time
-	Reasons       []string
-	AgeDays       int
-	VersionType   string
-	CursorID      string
-	mavenID       string
-	ociName       string
-	conanRef      string
-	conanRevision string
-	rawPath       string
-	npmPackage    string
-	npmVersion    string
-	pypiProject   string
-	pypiVersion   string
-	goModule      string
-	goVersion     string
+	Format      repository.Format
+	Coordinate  string
+	Digest      string
+	CreatedAt   time.Time
+	Reasons     []string
+	AgeDays     int
+	VersionType string
+	CursorID    string
+	// DownloadCount and LastDownloadedAt carry the matched lifecycle download
+	// evidence for this cleanup unit. A zero LastDownloadedAt means the unit
+	// was never downloaded through the Gateway.
+	DownloadCount    int64
+	LastDownloadedAt time.Time
+	mavenID          string
+	ociName          string
+	conanRef         string
+	conanRevision    string
+	rawPath          string
+	npmPackage       string
+	npmVersion       string
+	pypiProject      string
+	pypiVersion      string
+	goModule         string
+	goVersion        string
 }
 
 type repositoryRetentionPayload struct {
@@ -278,6 +284,30 @@ func (m NativeRepositoryRetention) PlanRepositoryDetailed(ctx context.Context, r
 	}
 	if err != nil {
 		return nil, err
+	}
+	// Download usage is both cleanup evidence and, when
+	// KeepDownloadedDays is set, protection: a unit downloaded inside the
+	// window is exempt from this cleanup round regardless of the reason that
+	// selected it.
+	index, err := m.loadRetentionUsageIndex(ctx, repo.Name, candidates)
+	if err != nil {
+		return nil, fmt.Errorf("load artifact usage for retention: %w", err)
+	}
+	for i := range candidates {
+		evidence := index.match(&candidates[i])
+		candidates[i].DownloadCount = evidence.DownloadCount
+		candidates[i].LastDownloadedAt = evidence.LastDownloadedAt
+	}
+	if policy.KeepDownloadedDays > 0 {
+		now := m.now()
+		kept := candidates[:0]
+		for _, candidate := range candidates {
+			if (usageEvidence{DownloadCount: candidate.DownloadCount, LastDownloadedAt: candidate.LastDownloadedAt}).downloadedWithin(policy.KeepDownloadedDays, now) {
+				continue
+			}
+			kept = append(kept, candidate)
+		}
+		candidates = kept
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
 		if candidates[i].Coordinate == candidates[j].Coordinate {

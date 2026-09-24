@@ -34,6 +34,9 @@ func normalizeAndValidateRetentionPolicy(policy *repository.RepositoryRetentionP
 	if policy.MaximumVersions > 0 && policy.MaximumVersions < policy.MinimumVersions {
 		return errors.New("maximumVersions must be zero or greater than or equal to minimumVersions")
 	}
+	if policy.KeepDownloadedDays < 0 || policy.KeepDownloadedDays > 36500 {
+		return errors.New("keepDownloadedDays must be between 0 and 36500")
+	}
 	var err error
 	policy.CoordinatePatterns, err = normalizeRetentionPatterns(policy.CoordinatePatterns)
 	if err != nil {

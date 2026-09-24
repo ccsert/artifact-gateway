@@ -558,3 +558,9 @@ AuditList:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/AuditList"
+RepositoryArtifactUsage:
+  description: Lifecycle download usage aggregates for one repository
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/RepositoryArtifactUsage"

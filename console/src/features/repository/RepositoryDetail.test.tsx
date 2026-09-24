@@ -122,7 +122,7 @@ describe("RepositoryDetailPage scanning deep link", () => {
     expect(
       screen.getByRole("navigation", { name: "仓库任务" }),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(11);
+    expect(screen.getAllByRole("tab")).toHaveLength(12);
     expect(
       screen.queryByRole("tab", { name: "策略与安全" }),
     ).not.toBeInTheDocument();

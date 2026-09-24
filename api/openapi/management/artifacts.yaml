@@ -10,6 +10,27 @@ repositories_repositoryId_artifacts:
     responses:
       '200':
         "$ref": "../components/responses.yaml#/ArtifactList"
+repositories_repositoryId_artifact_usage:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  get:
+    operationId: listRepositoryArtifactUsage
+    summary: Get lifecycle download usage aggregated per artifact address
+    parameters:
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 100
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RepositoryArtifactUsage"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
 repositories_repositoryId_artifacts_artifactId:
   parameters:
   - "$ref": "../components/parameters.yaml#/RepositoryId"

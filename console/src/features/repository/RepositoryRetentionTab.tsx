@@ -416,6 +416,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
   const [snapshotKeepDays, setSnapshotKeepDays] = useState(0);
   const [minimumVersions, setMinimumVersions] = useState(0);
   const [maximumVersions, setMaximumVersions] = useState(0);
+  const [keepDownloadedDays, setKeepDownloadedDays] = useState(0);
   const [coordinatePatterns, setCoordinatePatterns] = useState<string[]>([]);
   const [protectedPatterns, setProtectedPatterns] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -446,6 +447,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
       setSnapshotKeepDays(data.snapshotKeepDays ?? data.keepDays);
       setMinimumVersions(data.minimumVersions);
       setMaximumVersions(data.maximumVersions ?? 0);
+      setKeepDownloadedDays(data.keepDownloadedDays ?? 0);
       setCoordinatePatterns(data.coordinatePatterns ?? []);
       setProtectedPatterns(data.protectedPatterns ?? []);
     }
@@ -484,6 +486,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
         maximumVersions: isRaw
           ? (policy.maximumVersions ?? 0)
           : maximumVersions,
+        keepDownloadedDays,
         coordinatePatterns,
         protectedPatterns,
       },
@@ -713,6 +716,24 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
       ),
     },
     {
+      title: text("下载依据", "Download evidence"),
+      key: "downloadEvidence",
+      width: 220,
+      render: (_, candidate) =>
+        candidate.downloadCount && candidate.downloadCount > 0 ? (
+          <span className="text-xs text-zinc-400">
+            {text(
+              `${candidate.downloadCount} 次 · 最近 ${formatDate(candidate.lastDownloadedAt)}`,
+              `${candidate.downloadCount} · last ${formatDate(candidate.lastDownloadedAt)}`,
+            )}
+          </span>
+        ) : (
+          <span className="text-xs text-zinc-600">
+            {text("无下载记录", "Never downloaded")}
+          </span>
+        ),
+    },
+    {
       title: isRaw
         ? text("最后更新时间", "Last updated")
         : text("创建时间", "Created"),
@@ -828,6 +849,25 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
             </Space.Compact>
           </Field>
         )}
+        <Field
+          label={text("下载保护天数", "Download protection days")}
+          hint={text(
+            "窗口内被下载过的制品即使到期也跳过清理；0 表示关闭。依据生命周期下载统计。",
+            "Artifacts downloaded within the window skip cleanup even when expired; 0 disables it. Based on lifecycle download usage.",
+          )}
+        >
+          <Space.Compact block>
+            <InputNumber
+              min={0}
+              max={36500}
+              precision={0}
+              className="w-full"
+              value={keepDownloadedDays}
+              onChange={(value) => setKeepDownloadedDays(value ?? 0)}
+            />
+            <Space.Addon>{text("天", "days")}</Space.Addon>
+          </Space.Compact>
+        </Field>
       </div>
       <div className="grid max-w-5xl grid-cols-2 gap-4 border-t border-zinc-800 pt-4">
         <Field label={copy.matchLabel} hint={copy.matchHint}>

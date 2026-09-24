@@ -24,6 +24,9 @@ const RepositoryArtifactsTab = lazy(async () => ({
 const RepositoryCapacityTab = lazy(async () => ({
   default: (await import("./RepositoryCapacityTab")).RepositoryCapacityTab,
 }));
+const RepositoryUsageTab = lazy(async () => ({
+  default: (await import("./RepositoryUsageTab")).RepositoryUsageTab,
+}));
 const RepositoryDistributionTab = lazy(async () => ({
   default: (await import("./RepositoryDistributionTab"))
     .RepositoryDistributionTab,
@@ -290,6 +293,7 @@ export function RepositoryDetailPage() {
             />
           )}
           {tab === "capacity" && <RepositoryCapacityTab repo={repo} />}
+          {tab === "usage" && <RepositoryUsageTab repo={repo} />}
           {tab === "distribute" && <RepositoryDistributionTab repo={repo} />}
           {tab === "jobs" && <RepositoryJobsTab repo={repo} />}
           {tab === "tombstones" && <RepositoryTombstonesTab repo={repo} />}

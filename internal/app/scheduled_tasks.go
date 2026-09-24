@@ -14,6 +14,7 @@ type scheduledTaskExecutionStore interface {
 	repository.HostedRepositoryStore
 	repository.RepositoryRetentionPolicyStore
 	repository.LifecycleJobStore
+	repository.ArtifactUsageStore
 	repository.NativeMavenStore
 	repository.NativeOCIStore
 	repository.NativeRawStore

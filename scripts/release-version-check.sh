@@ -29,8 +29,9 @@ for contract in api/openapi/native-hosted.yaml api/openapi/management-runtime.ya
   check_value "$contract" "$contract_version"
 done
 
-grep -Fxq "## $version - 2026-08-24" CHANGELOG.md
-grep -Fxq "## $version - 2026-08-24" CHANGELOG.zh-CN.md
+release_heading=$(grep -E "^## $version - [0-9]{4}-[0-9]{2}-[0-9]{2}$" CHANGELOG.md | head -n 1)
+test -n "$release_heading"
+grep -Fxq "$release_heading" CHANGELOG.zh-CN.md
 test -s ".github/release-notes/v$version.md"
 grep -Fq "# Artifact Gateway v$version" ".github/release-notes/v$version.md"
 

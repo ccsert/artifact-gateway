@@ -13,6 +13,7 @@ type MemoryStore struct {
 	rawGroups              map[string]Group
 	conanGroups            map[string]Group
 	Audits                 []AuditRecord
+	artifactUsage          map[string]ArtifactUsageStat
 	auditRetentionPolicy   AuditRetentionPolicy
 	anonymousAccessPolicy  AnonymousAccessPolicy
 	siteSettings           SiteSettings

@@ -2715,6 +2715,24 @@ type ArtifactTombstonePage struct {
 	NextPageToken *string             `json:"nextPageToken,omitempty"`
 }
 
+// ArtifactUsageStat defines model for ArtifactUsageStat.
+type ArtifactUsageStat struct {
+	DownloadCount     int64     `json:"downloadCount"`
+	FirstDownloadedAt time.Time `json:"firstDownloadedAt"`
+	Format            string    `json:"format"`
+	LastActor         *string   `json:"lastActor,omitempty"`
+	LastDownloadedAt  time.Time `json:"lastDownloadedAt"`
+	Resource          string    `json:"resource"`
+	TotalBytes        int64     `json:"totalBytes"`
+}
+
+// ArtifactUsageTotals defines model for ArtifactUsageTotals.
+type ArtifactUsageTotals struct {
+	DownloadCount int64 `json:"downloadCount"`
+	Resources     int64 `json:"resources"`
+	TotalBytes    int64 `json:"totalBytes"`
+}
+
 // ArtifactVulnerabilityFinding One affected component and remediation hint. Single-line identity fields cannot contain NUL, CR, or LF. Optional text may be omitted or empty.
 type ArtifactVulnerabilityFinding struct {
 	Component  string   `json:"component"`
@@ -4032,6 +4050,14 @@ type RepositoryState string
 // RepositoryType APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
 type RepositoryType string
 
+// RepositoryArtifactUsage defines model for RepositoryArtifactUsage.
+type RepositoryArtifactUsage struct {
+	GeneratedAt  time.Time           `json:"generatedAt"`
+	Items        []ArtifactUsageStat `json:"items"`
+	RepositoryId openapi_types.UUID  `json:"repositoryId"`
+	Totals       ArtifactUsageTotals `json:"totals"`
+}
+
 // RepositoryCapabilities defines model for RepositoryCapabilities.
 type RepositoryCapabilities struct {
 	// ArtifactScanning True when a scanner is configured for this repository format and its assets can be resolved.
@@ -4156,13 +4182,19 @@ type RestoreArtifact struct {
 // RetentionDryRun defines model for RetentionDryRun.
 type RetentionDryRun struct {
 	Candidates []struct {
-		AgeDays     int                                  `json:"ageDays"`
-		Coordinate  string                               `json:"coordinate"`
-		CreatedAt   time.Time                            `json:"createdAt"`
-		Digest      string                               `json:"digest"`
-		Format      Format                               `json:"format"`
-		Reasons     []RetentionDryRunCandidatesReasons   `json:"reasons"`
-		VersionType RetentionDryRunCandidatesVersionType `json:"versionType"`
+		AgeDays    int       `json:"ageDays"`
+		Coordinate string    `json:"coordinate"`
+		CreatedAt  time.Time `json:"createdAt"`
+		Digest     string    `json:"digest"`
+
+		// DownloadCount Lifecycle downloads recorded for this cleanup unit. Absent when usage is not matched.
+		DownloadCount *int64 `json:"downloadCount,omitempty"`
+		Format        Format `json:"format"`
+
+		// LastDownloadedAt Most recent lifecycle download of this cleanup unit. Absent when never downloaded.
+		LastDownloadedAt *time.Time                           `json:"lastDownloadedAt,omitempty"`
+		Reasons          []RetentionDryRunCandidatesReasons   `json:"reasons"`
+		VersionType      RetentionDryRunCandidatesVersionType `json:"versionType"`
 	} `json:"candidates"`
 	NextPageToken   *string                `json:"nextPageToken,omitempty"`
 	PolicyVersion   string                 `json:"policyVersion"`
@@ -4193,6 +4225,9 @@ type RetentionPolicy struct {
 
 	// KeepDays Days to retain artifacts or versions before cleanup eligibility.
 	KeepDays int `json:"keepDays"`
+
+	// KeepDownloadedDays Cleanup units downloaded within this many days are protected from cleanup regardless of age or version-count rules, using the lifecycle download usage aggregate. Zero disables download-based protection.
+	KeepDownloadedDays *int `json:"keepDownloadedDays,omitempty"`
 
 	// MaximumVersions Maximum versions retained per Maven module, OCI image, Conan reference, npm package, normalized PyPI project, or Go module path. Zero disables the count cap; Raw paths do not use it.
 	MaximumVersions *int `json:"maximumVersions,omitempty"`
@@ -4956,6 +4991,11 @@ type SearchRepositoryArtifactsParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ListRepositoryArtifactUsageParams defines parameters for ListRepositoryArtifactUsage.
+type ListRepositoryArtifactUsageParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListArtifactsParams defines parameters for ListArtifacts.
 type ListArtifactsParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
@@ -5603,6 +5643,9 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/artifact-search)
 	SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params SearchRepositoryArtifactsParams)
+	// ListRepositoryArtifactUsage Get lifecycle download usage aggregated per artifact address
+	// (GET /repositories/{repositoryId}/artifact-usage)
+	ListRepositoryArtifactUsage(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryArtifactUsageParams)
 
 	// (GET /repositories/{repositoryId}/artifacts)
 	ListArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListArtifactsParams)
@@ -8702,6 +8745,48 @@ func (siw *ServerInterfaceWrapper) SearchRepositoryArtifacts(w http.ResponseWrit
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SearchRepositoryArtifacts(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRepositoryArtifactUsage operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryArtifactUsage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRepositoryArtifactUsageParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryArtifactUsage(w, r, repositoryId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12286,6 +12371,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-scans", wrapper.CreateRepositoryArtifactScan)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-scans:reconcile", wrapper.ReconcileRepositoryArtifactScans)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-search", wrapper.SearchRepositoryArtifacts)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifact-usage", wrapper.ListRepositoryArtifactUsage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts", wrapper.ListArtifacts)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.DeleteArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/artifacts/{artifactId}", wrapper.GetArtifact)
@@ -12499,6 +12585,8 @@ type QuarantineReadPolicyJSONResponse struct {
 }
 
 type RepositoryJSONResponse Repository
+
+type RepositoryArtifactUsageJSONResponse RepositoryArtifactUsage
 
 type RepositoryCapabilitiesJSONResponse RepositoryCapabilities
 
@@ -17288,6 +17376,61 @@ func (response SearchRepositoryArtifacts400ApplicationProblemPlusJSONResponse) V
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryArtifactUsageRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       ListRepositoryArtifactUsageParams
+}
+
+type ListRepositoryArtifactUsageResponseObject interface {
+	VisitListRepositoryArtifactUsageResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryArtifactUsage200JSONResponse struct {
+	RepositoryArtifactUsageJSONResponse
+}
+
+func (response ListRepositoryArtifactUsage200JSONResponse) VisitListRepositoryArtifactUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryArtifactUsage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositoryArtifactUsage401ApplicationProblemPlusJSONResponse) VisitListRepositoryArtifactUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryArtifactUsage403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryArtifactUsage403ApplicationProblemPlusJSONResponse) VisitListRepositoryArtifactUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -22303,6 +22446,9 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/artifact-search)
 	SearchRepositoryArtifacts(ctx context.Context, request SearchRepositoryArtifactsRequestObject) (SearchRepositoryArtifactsResponseObject, error)
+	// ListRepositoryArtifactUsage Get lifecycle download usage aggregated per artifact address
+	// (GET /repositories/{repositoryId}/artifact-usage)
+	ListRepositoryArtifactUsage(ctx context.Context, request ListRepositoryArtifactUsageRequestObject) (ListRepositoryArtifactUsageResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/artifacts)
 	ListArtifacts(ctx context.Context, request ListArtifactsRequestObject) (ListArtifactsResponseObject, error)
@@ -24637,6 +24783,33 @@ func (sh *strictHandler) SearchRepositoryArtifacts(w http.ResponseWriter, r *htt
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SearchRepositoryArtifactsResponseObject); ok {
 		if err := validResponse.VisitSearchRepositoryArtifactsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryArtifactUsage operation middleware
+func (sh *strictHandler) ListRepositoryArtifactUsage(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryArtifactUsageParams) {
+	var request ListRepositoryArtifactUsageRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryArtifactUsage(ctx, request.(ListRepositoryArtifactUsageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryArtifactUsage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryArtifactUsageResponseObject); ok {
+		if err := validResponse.VisitListRepositoryArtifactUsageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

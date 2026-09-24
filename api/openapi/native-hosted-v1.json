@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Artifact Gateway Native Hosted Management API",
-    "version": "0.1.0",
-    "description": "Resolved management and native protocol contract for Artifact Gateway 0.1."
+    "version": "0.2.0",
+    "description": "Resolved management and native protocol contract for Artifact Gateway 0.2."
   },
   "servers": [
     {
@@ -4175,6 +4175,12 @@
             "default": 0,
             "description": "Maximum versions retained per Maven module, OCI image, Conan reference, npm package, normalized PyPI project, or Go module path. Zero disables the count cap; Raw paths do not use it."
           },
+          "keepDownloadedDays": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Cleanup units downloaded within this many days are protected from cleanup regardless of age or version-count rules, using the lifecycle download usage aggregate. Zero disables download-based protection."
+          },
           "coordinatePatterns": {
             "type": "array",
             "maxItems": 20,
@@ -4345,6 +4351,17 @@
                     "version",
                     "asset"
                   ]
+                },
+                "downloadCount": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 0,
+                  "description": "Lifecycle downloads recorded for this cleanup unit. Absent when usage is not matched."
+                },
+                "lastDownloadedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Most recent lifecycle download of this cleanup unit. Absent when never downloaded."
                 }
               }
             }

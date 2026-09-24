@@ -3,6 +3,7 @@ import type { Repository } from "../../client";
 export type Tab =
   | "apt-snapshots"
   | "artifacts"
+  | "usage"
   | "publish"
   | "grants"
   | "retention"
@@ -24,6 +25,7 @@ export type RepositoryTabDefinition = {
 
 export const TABS: RepositoryTabDefinition[] = [
   { key: "artifacts", label: "制品", labelEn: "Artifacts" },
+  { key: "usage", label: "使用统计", labelEn: "Usage" },
   {
     key: "apt-snapshots",
     label: "签名快照",

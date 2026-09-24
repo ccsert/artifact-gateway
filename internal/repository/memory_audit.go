@@ -22,6 +22,9 @@ func (s *MemoryStore) appendAuditLocked(record AuditRecord) {
 	}
 	record.Evidence = cloneAuditEvidence(record.Evidence)
 	s.Audits = append(s.Audits, record)
+	if record.IsArtifactDownload() {
+		s.recordArtifactUsageLocked(record.UsageIncrement())
+	}
 }
 
 func cloneAuditEvidence(evidence map[string]string) map[string]string {

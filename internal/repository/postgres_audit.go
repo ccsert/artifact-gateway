@@ -8,7 +8,18 @@ import (
 )
 
 func (s *PostgresStore) RecordAudit(ctx context.Context, audit AuditRecord) error {
-	return insertAudit(ctx, s.db, audit)
+	if !audit.IsArtifactDownload() {
+		return insertAudit(ctx, s.db, audit)
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := insertAudit(ctx, tx, audit); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 type auditExecer interface {
@@ -28,7 +39,21 @@ func insertAudit(ctx context.Context, execer auditExecer, audit AuditRecord) err
 		evidence = encoded
 	}
 	_, err := execer.ExecContext(ctx, `INSERT INTO resolver_audit_log (group_name, repository, member_name, outcome, actor, occurred_at, format, resource, representation, member_type, upstream_host, operation, http_status, cache_disposition, bytes, authorization_source, authorization_reason, request_id, trace_id, evidence) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb)`, audit.GroupName, audit.Repository, audit.MemberName, audit.Outcome, audit.Actor, audit.OccurredAt, audit.Format, audit.Resource, audit.Representation, audit.MemberType, audit.UpstreamHost, audit.Operation, audit.Status, audit.CacheDisposition, audit.Bytes, audit.AuthorizationSource, audit.AuthorizationReason, audit.RequestID, audit.TraceID, evidence)
-	return err
+	if err != nil {
+		return err
+	}
+	if audit.IsArtifactDownload() {
+		// Keep the aggregate and audit in the caller's transaction so a
+		// download cannot leave a durable audit but missing retention evidence.
+		increment := audit.UsageIncrement()
+		_, err = execer.ExecContext(ctx, artifactUsageUpsertSQL,
+			increment.Repository, increment.Format, increment.Resource,
+			increment.TotalBytes, increment.LastDownloadedAt, increment.LastActor)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *PostgresStore) ListAudits(ctx context.Context, query AuditQuery) ([]AuditRecord, error) {

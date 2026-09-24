@@ -1142,6 +1142,11 @@ RetentionPolicy:
       minimum: 0
       default: 0
       description: Maximum versions retained per Maven module, OCI image, Conan reference, npm package, normalized PyPI project, or Go module path. Zero disables the count cap; Raw paths do not use it.
+    keepDownloadedDays:
+      type: integer
+      minimum: 0
+      default: 0
+      description: Cleanup units downloaded within this many days are protected from cleanup regardless of age or version-count rules, using the lifecycle download usage aggregate. Zero disables download-based protection.
     coordinatePatterns:
       type: array
       maxItems: 20
@@ -1327,6 +1332,8 @@ RetentionDryRun:
             items: {type: string, enum: [age, maximum_versions]}
           ageDays: {type: integer, minimum: 0}
           versionType: {type: string, enum: [release, snapshot, version, asset]}
+          downloadCount: {type: integer, format: int64, minimum: 0, description: Lifecycle downloads recorded for this cleanup unit. Absent when usage is not matched.}
+          lastDownloadedAt: {type: string, format: date-time, description: Most recent lifecycle download of this cleanup unit. Absent when never downloaded.}
     nextPageToken: {type: string}
 RetentionDryRunSummary:
   type: object
@@ -3522,3 +3529,36 @@ APTLifecycleState:
       type: array
       items:
         "$ref": "#/APTPackageDeletion"
+ArtifactUsageStat:
+  type: object
+  additionalProperties: false
+  required: [format, resource, downloadCount, totalBytes, firstDownloadedAt, lastDownloadedAt]
+  properties:
+    format: {type: string}
+    resource: {type: string, maxLength: 1024}
+    downloadCount: {type: integer, format: int64, minimum: 0}
+    totalBytes: {type: integer, format: int64, minimum: 0}
+    firstDownloadedAt: {type: string, format: date-time}
+    lastDownloadedAt: {type: string, format: date-time}
+    lastActor: {type: string}
+ArtifactUsageTotals:
+  type: object
+  additionalProperties: false
+  required: [downloadCount, totalBytes, resources]
+  properties:
+    downloadCount: {type: integer, format: int64, minimum: 0}
+    totalBytes: {type: integer, format: int64, minimum: 0}
+    resources: {type: integer, format: int64, minimum: 0}
+RepositoryArtifactUsage:
+  type: object
+  additionalProperties: false
+  required: [repositoryId, totals, items, generatedAt]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    totals:
+      "$ref": "#/ArtifactUsageTotals"
+    items:
+      type: array
+      items:
+        "$ref": "#/ArtifactUsageStat"
+    generatedAt: {type: string, format: date-time}

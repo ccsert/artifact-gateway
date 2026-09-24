@@ -284,6 +284,7 @@ type RepositoryRetentionPolicy struct {
 	SnapshotKeepDays   int      `json:"snapshotKeepDays"`
 	MinimumVersions    int      `json:"minimumVersions"`
 	MaximumVersions    int      `json:"maximumVersions"`
+	KeepDownloadedDays int      `json:"keepDownloadedDays"`
 	CoordinatePatterns []string `json:"coordinatePatterns"`
 	ProtectedPatterns  []string `json:"protectedPatterns"`
 }

@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Artifact Gateway Native Hosted Management API",
-    "version": "0.1.0",
-    "description": "Runtime management contract for Artifact Gateway 0.1."
+    "version": "0.2.0",
+    "description": "Runtime management contract for Artifact Gateway 0.2."
   },
   "servers": [
     {
@@ -3524,6 +3524,40 @@
         }
       }
     },
+    "/repositories/{repositoryId}/artifact-usage": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "get": {
+        "operationId": "listRepositoryArtifactUsage",
+        "summary": "Get lifecycle download usage aggregated per artifact address",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RepositoryArtifactUsage"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/artifact-search": {
       "parameters": [
         {
@@ -5623,6 +5657,12 @@
             "default": 0,
             "description": "Maximum versions retained per Maven module, OCI image, Conan reference, npm package, normalized PyPI project, or Go module path. Zero disables the count cap; Raw paths do not use it."
           },
+          "keepDownloadedDays": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Cleanup units downloaded within this many days are protected from cleanup regardless of age or version-count rules, using the lifecycle download usage aggregate. Zero disables download-based protection."
+          },
           "coordinatePatterns": {
             "type": "array",
             "maxItems": 20,
@@ -5915,6 +5955,17 @@
                     "version",
                     "asset"
                   ]
+                },
+                "downloadCount": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 0,
+                  "description": "Lifecycle downloads recorded for this cleanup unit. Absent when usage is not matched."
+                },
+                "lastDownloadedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Most recent lifecycle download of this cleanup unit. Absent when never downloaded."
                 }
               }
             }
@@ -10843,6 +10894,103 @@
           }
         }
       },
+      "ArtifactUsageTotals": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "downloadCount",
+          "totalBytes",
+          "resources"
+        ],
+        "properties": {
+          "downloadCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "resources": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "ArtifactUsageStat": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "format",
+          "resource",
+          "downloadCount",
+          "totalBytes",
+          "firstDownloadedAt",
+          "lastDownloadedAt"
+        ],
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "downloadCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "firstDownloadedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastDownloadedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastActor": {
+            "type": "string"
+          }
+        }
+      },
+      "RepositoryArtifactUsage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repositoryId",
+          "totals",
+          "items",
+          "generatedAt"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/ArtifactUsageTotals"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactUsageStat"
+            }
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "ArtifactIdentityPurpose": {
         "type": "string",
         "enum": [
@@ -12905,6 +13053,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/GroupCapacity"
+            }
+          }
+        }
+      },
+      "RepositoryArtifactUsage": {
+        "description": "Lifecycle download usage aggregates for one repository",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RepositoryArtifactUsage"
             }
           }
         }

@@ -220,6 +220,10 @@ export type RetentionPolicy = {
    */
   maximumVersions?: number;
   /**
+   * Cleanup units downloaded within this many days are protected from cleanup regardless of age or version-count rules, using the lifecycle download usage aggregate. Zero disables download-based protection.
+   */
+  keepDownloadedDays?: number;
+  /**
    * Optional RE2 regular expressions selecting cleanup units. They match Maven coordinates, OCI names or references, Conan references or revisions, Raw paths, npm package names or package versions, PyPI project names or project versions, and Go module paths or module versions.
    */
   coordinatePatterns?: Array<string>;
@@ -310,6 +314,14 @@ export type RetentionDryRun = {
     reasons: Array<"age" | "maximum_versions">;
     ageDays: number;
     versionType: "release" | "snapshot" | "version" | "asset";
+    /**
+     * Lifecycle downloads recorded for this cleanup unit. Absent when usage is not matched.
+     */
+    downloadCount?: number;
+    /**
+     * Most recent lifecycle download of this cleanup unit. Absent when never downloaded.
+     */
+    lastDownloadedAt?: string;
   }>;
   nextPageToken?: string;
 };
@@ -1728,6 +1740,29 @@ export type GroupResolution = {
   strategy: "hosted_first";
   excludedMemberCount: number;
   members: Array<GroupResolutionMember>;
+};
+
+export type ArtifactUsageTotals = {
+  downloadCount: number;
+  totalBytes: number;
+  resources: number;
+};
+
+export type ArtifactUsageStat = {
+  format: string;
+  resource: string;
+  downloadCount: number;
+  totalBytes: number;
+  firstDownloadedAt: string;
+  lastDownloadedAt: string;
+  lastActor?: string;
+};
+
+export type RepositoryArtifactUsage = {
+  repositoryId: string;
+  totals: ArtifactUsageTotals;
+  items: Array<ArtifactUsageStat>;
+  generatedAt: string;
 };
 
 export type ArtifactIdentityPurpose = "scan" | "distribution";
@@ -6289,6 +6324,41 @@ export type ListArtifactsResponses = {
 
 export type ListArtifactsResponse =
   ListArtifactsResponses[keyof ListArtifactsResponses];
+
+export type ListRepositoryArtifactUsageData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: {
+    limit?: number;
+  };
+  url: "/repositories/{repositoryId}/artifact-usage";
+};
+
+export type ListRepositoryArtifactUsageErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+};
+
+export type ListRepositoryArtifactUsageError =
+  ListRepositoryArtifactUsageErrors[keyof ListRepositoryArtifactUsageErrors];
+
+export type ListRepositoryArtifactUsageResponses = {
+  /**
+   * Lifecycle download usage aggregates for one repository
+   */
+  200: RepositoryArtifactUsage;
+};
+
+export type ListRepositoryArtifactUsageResponse =
+  ListRepositoryArtifactUsageResponses[keyof ListRepositoryArtifactUsageResponses];
 
 export type SearchRepositoryArtifactsData = {
   body?: never;

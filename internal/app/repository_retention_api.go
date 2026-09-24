@@ -79,24 +79,40 @@ func (h generatedRepositoryAPIAdapter) DryRunRepositoryRetention(w http.Response
 		}
 		page := candidates[start:end]
 		response := adminopenapi.RetentionDryRun{PolicyVersion: policy.Version, TotalCandidates: len(candidates), Summary: retentionDryRunSummary(candidates), Candidates: make([]struct {
-			AgeDays     int                                               `json:"ageDays"`
-			Coordinate  string                                            `json:"coordinate"`
-			CreatedAt   time.Time                                         `json:"createdAt"`
-			Digest      string                                            `json:"digest"`
-			Format      adminopenapi.Format                               `json:"format"`
-			Reasons     []adminopenapi.RetentionDryRunCandidatesReasons   `json:"reasons"`
-			VersionType adminopenapi.RetentionDryRunCandidatesVersionType `json:"versionType"`
+			AgeDays       int       `json:"ageDays"`
+			Coordinate    string    `json:"coordinate"`
+			CreatedAt     time.Time `json:"createdAt"`
+			Digest        string    `json:"digest"`
+			DownloadCount *int64    `json:"downloadCount,omitempty"`
+
+			Format adminopenapi.Format `json:"format"`
+
+			// LastDownloadedAt Most recent lifecycle download of this cleanup unit. Absent when never downloaded.
+			LastDownloadedAt *time.Time                                        `json:"lastDownloadedAt,omitempty"`
+			Reasons          []adminopenapi.RetentionDryRunCandidatesReasons   `json:"reasons"`
+			VersionType      adminopenapi.RetentionDryRunCandidatesVersionType `json:"versionType"`
 		}, 0, len(page))}
 		for _, candidate := range page {
-			response.Candidates = append(response.Candidates, struct {
-				AgeDays     int                                               `json:"ageDays"`
-				Coordinate  string                                            `json:"coordinate"`
-				CreatedAt   time.Time                                         `json:"createdAt"`
-				Digest      string                                            `json:"digest"`
-				Format      adminopenapi.Format                               `json:"format"`
-				Reasons     []adminopenapi.RetentionDryRunCandidatesReasons   `json:"reasons"`
-				VersionType adminopenapi.RetentionDryRunCandidatesVersionType `json:"versionType"`
-			}{Format: adminopenapi.Format(candidate.Format), AgeDays: candidate.AgeDays, Coordinate: candidate.Coordinate, CreatedAt: candidate.CreatedAt, Digest: candidate.Digest, Reasons: mapRetentionReasons(candidate.Reasons), VersionType: adminopenapi.RetentionDryRunCandidatesVersionType(candidate.VersionType)})
+			entry := struct {
+				AgeDays          int                                               `json:"ageDays"`
+				Coordinate       string                                            `json:"coordinate"`
+				CreatedAt        time.Time                                         `json:"createdAt"`
+				Digest           string                                            `json:"digest"`
+				DownloadCount    *int64                                            `json:"downloadCount,omitempty"`
+				Format           adminopenapi.Format                               `json:"format"`
+				LastDownloadedAt *time.Time                                        `json:"lastDownloadedAt,omitempty"`
+				Reasons          []adminopenapi.RetentionDryRunCandidatesReasons   `json:"reasons"`
+				VersionType      adminopenapi.RetentionDryRunCandidatesVersionType `json:"versionType"`
+			}{Format: adminopenapi.Format(candidate.Format), AgeDays: candidate.AgeDays, Coordinate: candidate.Coordinate, CreatedAt: candidate.CreatedAt, Digest: candidate.Digest, Reasons: mapRetentionReasons(candidate.Reasons), VersionType: adminopenapi.RetentionDryRunCandidatesVersionType(candidate.VersionType)}
+			if candidate.DownloadCount > 0 {
+				downloadCount := candidate.DownloadCount
+				entry.DownloadCount = &downloadCount
+			}
+			if !candidate.LastDownloadedAt.IsZero() {
+				lastDownloadedAt := candidate.LastDownloadedAt
+				entry.LastDownloadedAt = &lastDownloadedAt
+			}
+			response.Candidates = append(response.Candidates, entry)
 		}
 		if end < len(candidates) {
 			last := page[len(page)-1]
@@ -139,9 +155,17 @@ func retentionDryRunSummary(candidates []RepositoryRetentionCandidate) adminopen
 func writeRetentionDryRunCSV(w http.ResponseWriter, repositoryName string, candidates []RepositoryRetentionCandidate) {
 	var output strings.Builder
 	writer := csv.NewWriter(&output)
-	_ = writer.Write([]string{"format", "coordinate", "digest", "createdAt", "ageDays", "versionType", "reasons"})
+	_ = writer.Write([]string{"format", "coordinate", "digest", "createdAt", "ageDays", "versionType", "reasons", "downloadCount", "lastDownloadedAt"})
 	for _, candidate := range candidates {
-		_ = writer.Write([]string{string(candidate.Format), csvSpreadsheetSafe(candidate.Coordinate), candidate.Digest, candidate.CreatedAt.UTC().Format(time.RFC3339Nano), strconv.Itoa(candidate.AgeDays), candidate.VersionType, strings.Join(candidate.Reasons, "|")})
+		downloadCount := ""
+		lastDownloadedAt := ""
+		if candidate.DownloadCount > 0 {
+			downloadCount = strconv.FormatInt(candidate.DownloadCount, 10)
+		}
+		if !candidate.LastDownloadedAt.IsZero() {
+			lastDownloadedAt = candidate.LastDownloadedAt.UTC().Format(time.RFC3339Nano)
+		}
+		_ = writer.Write([]string{string(candidate.Format), csvSpreadsheetSafe(candidate.Coordinate), candidate.Digest, candidate.CreatedAt.UTC().Format(time.RFC3339Nano), strconv.Itoa(candidate.AgeDays), candidate.VersionType, strings.Join(candidate.Reasons, "|"), downloadCount, lastDownloadedAt})
 	}
 	writer.Flush()
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")

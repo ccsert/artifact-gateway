@@ -241,7 +241,7 @@ func TestRepositoryRetentionDryRunPaginatesAndBindsPolicyVersion(t *testing.T) {
 		t.Fatalf("export=%d content-type=%q body=%s", exported.Code, exported.Header().Get("Content-Type"), exported.Body.String())
 	}
 	lines := strings.Split(strings.TrimSpace(exported.Body.String()), "\n")
-	if len(lines) != 3 || lines[0] != "format,coordinate,digest,createdAt,ageDays,versionType,reasons" || !strings.Contains(lines[1]+lines[2], "maximum_versions") {
+	if len(lines) != 3 || lines[0] != "format,coordinate,digest,createdAt,ageDays,versionType,reasons,downloadCount,lastDownloadedAt" || !strings.Contains(lines[1]+lines[2], "maximum_versions") {
 		t.Fatalf("export lines=%#v", lines)
 	}
 	foreign := request("/api/v2/repositories/" + otherRepo.ID + "/retention:dry-run?pageSize=1&pageToken=" + url.QueryEscape(*firstPage.NextPageToken))

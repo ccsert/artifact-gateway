@@ -162,9 +162,18 @@ immutable evidence to the target without overwriting target-owned records.
 External vulnerability database health and freshness enforcement plus bounded
 per-finding evidence are delivered. Repository-local quarantine now blocks
 promotion and replication at both request and publication boundaries. Its
-independent protocol-read enforcement policy is default-off. Compliance reports,
-component popularity/download metadata, and more automated policy responses
-remain future work.
+independent protocol-read enforcement policy is default-off. Lifecycle download
+usage is also delivered: the audit stream folds every successful download into
+an `artifact_usage_stats` aggregate (download count, total bytes, first/last
+download, last actor) that survives audit retention, served by
+`GET /api/v2/repositories/{id}/artifact-usage` and the repository Console
+Usage tab; group downloads count for the group address. Cleanup policies
+consume it as evidence: retention dry-run and CSV export carry each
+candidate's download count and last download time, and a new
+`keepDownloadedDays` policy (default 0, disabled) exempts units downloaded
+within the window from that cleanup round across every retention-capable
+format. Compliance reports and more automated policy responses remain future
+work.
 
 ### Shared Format Depth
 
@@ -266,8 +275,9 @@ credentials; downloadable log/database bundles remain future work.
 Single-artifact deletion is only surfaced for OCI tags
 (`console/src/features/artifact-detail/OciImageDetail.tsx:151`); Maven, Conan, and Raw
 artifact rows have no delete button. There is no UI download button, no
-component tagging or starring, no favorites, and no rich asset-attribute view
-(checksum, size, downloads). Tombstones can be restored
+component tagging or starring, no favorites, and no per-row rich
+asset-attribute view (checksum, size). Lifecycle download counts are no longer
+missing (repository Usage tab), but they are not yet merged into artifact rows. Tombstones can be restored
 (`console/src/features/repository/RepositoryDetail.tsx` Tombstones tab) but cannot be
 hard-purged through the UI despite a `reclaim` capability.
 

@@ -8,6 +8,11 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-09-24
+
+- 新增制品生命周期下载统计。经由 Gateway 解析的每次成功内容下载——Hosted、Proxy 或 Group，覆盖 Maven、OCI、Raw、Conan、npm、PyPI、Go 与 APT——都会在唯一审计写入点折叠进耐久的按制品聚合（`artifact_usage_stats`），计数在制品整个生命周期内持续累计且不受审计日志保留期影响：下载次数、累计流量、首末下载时间与最近使用者，按客户端解析的制品地址记账（Group 下载计入 Group 地址）。管理 API 提供 `GET /api/v2/repositories/{repositoryId}/artifact-usage`，每个仓库的 Console 新增“使用统计”Tab，展示生命周期累计与逐制品明细。HEAD 探测、304 重验证、发布与管理操作不计入。仓库清理策略现在消费同一聚合作为清理依据：dry-run JSON 与 CSV 导出会附带每个候选的下载次数与最近下载时间；新增 `keepDownloadedDays` 策略字段（默认 0，保持现有行为），窗口内被下载过的清理单位无论命中期限还是版本数原因都豁免本轮清理，npm、PyPI、Go、Maven、Raw、OCI manifest 拉取与 Conan v2 revision 均有按格式匹配。
+
+
 - 新增 Go Proxy 校验和数据库镜像，关闭最后一个已知 Go 兼容缺口。在 egress 允许列表中列出校验和数据库主机的 Go Proxy 仓库，现在可以应答 go 命令的 `/go/<repository>/sumdb/<name>/supported` 探测，并转发 `/latest`、`/lookup/` 与 `/tile/` 请求。签名字节、状态码与内容类型原样透传且永不缓存；不附带上游凭据；镜像请求遵循仓库读取策略，因此 go 命令可以针对只能经由 Gateway 到达的校验和数据库验证模块下载。原生 Go E2E 门禁现在会证明真实 go 客户端能通过镜像完成模块校验。
 
 - 新增 npm Registry 身份端点。`GET /npm/<repository>/-/whoami`（Hosted、Proxy 与 Group）向已认证调用方返回 `{"username": <Gateway 主体标识>}`，对匿名请求返回 `401` 质询；它不经过仓库授权，因此 `npm whoami` 和 CI 凭据预检在客户端可达的任意 npm 仓库上都可用。原生 npm E2E 门禁现在会通过 Nexus 兼容根驱动真实 npm CLI 的 `whoami` 与匿名拒绝断言。
