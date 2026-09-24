@@ -369,12 +369,29 @@ func TestRepositoryEffectiveAccessReportsPermissionsAndAnonymousPolicy(t *testin
 		t.Fatalf("effective access body=%#v", body)
 	}
 
+	problem := func(response *httptest.ResponseRecorder) string {
+		var body struct{ Code, Message string }
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body.Code + " " + body.Message
+	}
 	denied := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access", nil)
 	authorize(denied, authenticator.IssueToken("stranger"))
 	deniedResponse := httptest.NewRecorder()
 	handler.ServeHTTP(deniedResponse, denied)
-	if deniedResponse.Code != http.StatusOK || !strings.Contains(deniedResponse.Body.String(), `"actor":"stranger"`) || !strings.Contains(deniedResponse.Body.String(), `"read":{"allowed":false`) {
+	missing := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+uuid.NewString()+"/effective-access", nil)
+	authorize(missing, authenticator.IssueToken("stranger"))
+	missingResponse := httptest.NewRecorder()
+	handler.ServeHTTP(missingResponse, missing)
+	if deniedResponse.Code != http.StatusNotFound || !strings.Contains(deniedResponse.Body.String(), `"code":"not_found"`) {
 		t.Fatalf("denied effective access = %d %s", deniedResponse.Code, deniedResponse.Body.String())
+	}
+	// A caller with no authority over the repository must not be able to tell it
+	// apart from one that does not exist.
+	if deniedResponse.Code != missingResponse.Code || problem(deniedResponse) != problem(missingResponse) {
+		t.Fatalf("absent and unreadable repositories must answer identically: %d %q vs %d %q",
+			deniedResponse.Code, problem(deniedResponse), missingResponse.Code, problem(missingResponse))
 	}
 
 	if _, err := store.DisableHostedRepository(context.Background(), repo.ID); err != nil {
@@ -389,6 +406,30 @@ func TestRepositoryEffectiveAccessReportsPermissionsAndAnonymousPolicy(t *testin
 	handler.ServeHTTP(deletedResponse, deleted)
 	if deletedResponse.Code != http.StatusOK || !strings.Contains(deletedResponse.Body.String(), `"anonymousRead":{"allowed":false,"reason":"repository_not_active"`) {
 		t.Fatalf("deleted effective access = %d %s", deletedResponse.Code, deletedResponse.Body.String())
+	}
+}
+
+func TestRepositoryEffectiveAccessRevealsRepositoriesToIntelligenceCredentials(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "scanner-raw", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A scanning credential manages intelligence without read access, so hiding
+	// the repository from it would break its own access explanation.
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{
+		{Principal: "scanner", Scopes: []string{"repositories:intelligence"}},
+	}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access", nil)
+	authorize(request, authenticator.IssueToken("scanner"))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"intelligence":{"allowed":true`) || !strings.Contains(response.Body.String(), `"read":{"allowed":false`) {
+		t.Fatalf("intelligence credential effective access = %d %s", response.Code, response.Body.String())
 	}
 }
 

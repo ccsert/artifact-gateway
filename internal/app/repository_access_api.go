@@ -24,6 +24,7 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.Respo
 		return
 	}
 	simulated := false
+	callerAdmin := principal.Admin
 	if params.Actor == nil && params.Role != nil {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "role requires an actor to simulate")
 		return
@@ -61,7 +62,25 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.Respo
 	if params.Resource != nil {
 		resource = strings.TrimSpace(*params.Resource)
 	}
+	// A caller that holds no authority over the repository must not be able to
+	// tell it apart from one that does not exist, or this endpoint becomes an
+	// existence oracle for every repository identifier.
+	if !callerAdmin && !h.canRevealRepository(r.Context(), principal, repo, resource) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return
+	}
 	writeNativeMavenJSON(w, http.StatusOK, h.repositoryEffectiveAccess(r.Context(), principal, repo, resource, simulated))
+}
+
+// canRevealRepository reports whether the principal holds any authority over the
+// repository at the requested resource. Intelligence is checked alongside read
+// because a scanning credential manages intelligence without read access, and
+// hiding the repository from it would break its own access explanation.
+func (h generatedRepositoryAPIAdapter) canRevealRepository(ctx context.Context, principal Principal, repo repository.HostedRepository, resource string) bool {
+	if h.authorizer.AuthorizeResource(ctx, principal, repo, RepositoryRead, resource).Allowed {
+		return true
+	}
+	return h.authorizer.AuthorizeResource(ctx, principal, repo, RepositoryIntelligence, resource).Allowed
 }
 
 func simulatedAuthenticationKind(actor string) authorization.AuthenticationKind {

@@ -96,10 +96,11 @@ atomically revoke every session for an account.
 
 Repository grants add read/write/admin permissions for users, API keys, or
 external actors and may be narrowed by a canonical resource prefix. The
-administrator-only effective-access endpoint evaluates a concrete actor,
-global role, repository, and resource through the same authorization chain
-used by protocol requests, then explains the source and reason for every
-decision.
+effective-access endpoint evaluates a concrete actor, global role, repository,
+and resource through the same authorization chain used by protocol requests,
+then explains the source and reason for every decision. A caller may evaluate
+its own identity; simulating another actor, and evaluating a repository the
+caller holds no authority over, both require an administrator.
 
 Authorization roles now provide reusable named permission sets. Selecting a
 role in a grant or template copies its scopes as an explicit snapshot, so later

@@ -255,7 +255,7 @@ repositories_repositoryId_effective_access:
   get:
     operationId: getRepositoryEffectiveAccess
     summary: Explain effective repository access, including denied decisions
-    description: Without actor, explains the authenticated caller. Administrators may provide actor and an optional simulated global role. Resource evaluates prefix-scoped grants against a concrete artifact coordinate or path.
+    description: Explain effective repository access. Without actor, explains the authenticated caller; administrators may provide actor and an optional simulated global role. Resource evaluates prefix-scoped grants against a concrete artifact coordinate or path. A non-administrator only receives a decision for a repository it holds read or intelligence authority over at that resource; any other repository answers exactly like one that does not exist.
     parameters:
     - name: actor
       in: query

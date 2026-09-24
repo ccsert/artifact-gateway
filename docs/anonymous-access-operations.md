@@ -20,10 +20,12 @@ itself. Disabling it immediately denies all anonymous reads, including targets
 whose local policy remains enabled.
 
 An authenticated operator or scoped user can review its own effective decision
-through `GET /api/v2/repositories/{repositoryId}/effective-access`. The
-diagnostic endpoint itself is not anonymous: it accepts a known Repository ID,
-does not permit actor impersonation, and returns the caller's read, write,
-admin, and anonymous-read decisions even when Repository read is denied.
+through `GET /api/v2/repositories/{repositoryId}/effective-access`, and an
+administrator can also simulate another actor. The endpoint is not anonymous and
+answers only for a repository the caller already holds authority over at the
+requested resource: read or intelligence authority reveals the repository, and
+anything less answers exactly like a repository that does not exist, so the
+endpoint cannot be used to discover identifiers.
 
 Use `GET /api/v2/identity` to confirm which authenticated identity, credential
 source, and global role the Gateway is evaluating. OIDC diagnostics expose only

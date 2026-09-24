@@ -1352,7 +1352,7 @@ export const getRepositoryCapabilities = <ThrowOnError extends boolean = false>(
 /**
  * Explain effective repository access, including denied decisions
  *
- * Without actor, explains the authenticated caller. Administrators may provide actor and an optional simulated global role. Resource evaluates prefix-scoped grants against a concrete artifact coordinate or path.
+ * Explain effective repository access. Without actor, explains the authenticated caller; administrators may provide actor and an optional simulated global role. Resource evaluates prefix-scoped grants against a concrete artifact coordinate or path. A non-administrator only receives a decision for a repository it holds read or intelligence authority over at that resource; any other repository answers exactly like one that does not exist.
  */
 export const getRepositoryEffectiveAccess = <ThrowOnError extends boolean = false>(options: Options<GetRepositoryEffectiveAccessData, ThrowOnError>): RequestResult<GetRepositoryEffectiveAccessResponses, GetRepositoryEffectiveAccessErrors, ThrowOnError> => (options.client ?? client).get<GetRepositoryEffectiveAccessResponses, GetRepositoryEffectiveAccessErrors, ThrowOnError>({
     security: [{
