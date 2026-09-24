@@ -28,18 +28,41 @@ The evaluator has these inputs:
 An administrator is always allowed. This preserves the bootstrap and recovery
 path provided by `GATEWAY_ADMIN_TOKEN` and OIDC administrator subjects.
 
-For non-administrators, a managed grant set is authoritative for its target
-repository. `repositories:admin` includes write, read, and intelligence writes;
-`repositories:write` includes read; `repositories:read` permits only read; and
-`repositories:intelligence` is an independent metadata-writing capability that
-does not imply any repository read, publish, delete, or administration access.
+For any principal the evaluator applies one fixed order: a `none` account state
+is denied, the administrator identity is allowed, a role allowed by
+`RoleAllows(principal.Role, operation)` is allowed, then the principal's
+per-repository grants are consulted, and the legacy static policy decides last.
+Consequently a managed grant set is not authoritative over a global role: for a
+non-administrator, a global `reader` or `writer` role still reaches every
+repository, and per-repository grants do not narrow it. `repositories:admin`
+includes write, read, and intelligence writes; `repositories:write` includes
+read; `repositories:read` permits only read; and `repositories:intelligence` is
+an independent metadata-writing capability that does not imply any repository
+read, publish, delete, or administration access.
+
 Service Accounts intentionally have no global role and authenticate only
 through explicit Repository Grants, which is the recommended shape for CI,
 scanner, and third-party application credentials. Their credentials rotate
 without changing the stable `service-account:<id>` principal. Standalone API
 Keys retain their own global roles and are not interchangeable with Service
 Account credentials. Grants are exact principal matches. A grant never grants
-access to another repository.
+access to another repository. A grant may also carry an optional resource
+prefix (`migrations/000048_repository_grant_resource_prefixes.sql`) that bounds
+it to resources whose identity begins with the prefix; `grantMatchesResource`
+implements this rule and an empty prefix matches every resource of the
+repository.
+
+Authorization Roles and Authorization Templates are reusable management
+objects over grants. A role
+(`migrations/000091_authorization_roles.sql`) is a named bundle of
+`repositories:*` scopes: selecting one in a grant editor copies its scopes into
+the grant as an explicit snapshot, so a later role edit cannot silently change
+an already-persisted decision. A template
+(`migrations/000083_authorization_templates.sql`) is a reusable grant bundle:
+applying it to one repository replaces that repository's grant set with the
+template's rules, after those rules are validated against the target
+repository's format, and advances the stored version that marks a set managed.
+Role and template management is administrator-only.
 
 Until a repository has a managed grant set, legacy patterns remain in force:
 
@@ -53,7 +76,9 @@ Until a repository has a managed grant set, legacy patterns remain in force:
 The repository store exposes an unmodified default grant set as version `1`.
 A successful `ReplaceRepositoryGrants`, including replacement with `[]`, moves
 the version above `1`; that is the durable marker that grants are managed. An
-explicit empty managed set denies every non-administrator. This makes a new
+explicit empty managed set denies every principal that reaches the grant stage,
+but it cannot revoke a global role: a non-administrator whose role covers the
+operation is already allowed before grants are read. This makes a new
 deployment backward compatible while still making revocation possible without
 deleting policy state.
 
@@ -70,11 +95,19 @@ V2 separates global discovery from known-resource operations. A principal with
 an applicable `read` grant (including `write` and `admin`) may read the known
 Repository's detail, retention policy, artifacts, and publish sessions. A
 `write` grant may perform Repository-scoped mutations; `admin` manages grants.
-The Repository list, audit list, Repository/Group lifecycle, and other global
-management discovery routes remain administrator-only. A scoped grant is not a
-discovery grant: it never enumerates Repository metadata, groups, audit events,
-or pagination state. This preserves V1 management behavior and avoids turning
-an empty filtered list into an existence oracle.
+
+`GET /api/v2/repositories` is permission-scoped rather than administrator-only:
+an administrator sees every Repository, and any other authenticated principal
+sees only the Repositories its global role or its grants allow it to read. A
+Pending (`none`) account is refused. Filtering runs on the server over the
+caller's own effective read permission, so the list never contains a Repository
+the caller cannot read. The audit list, Repository/Group lifecycle, and the
+remaining global management discovery routes stay administrator-only.
+
+`GET /api/v2/repositories/{id}` still answers `404` for an absent Repository and
+`403` for one that exists but is not readable, so a caller that already knows an
+identifier can still confirm it exists. Bringing that response in line with the
+list is tracked with the effective-access work; this plan does not claim it yet.
 
 ## Groups and Proxies
 

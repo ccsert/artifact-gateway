@@ -620,7 +620,7 @@ export const listAuditRetentionJobs = <ThrowOnError extends boolean = false>(opt
 });
 
 /**
- * Returns repositories for which the authenticated principal has read access. Administrators see the full catalog; a pending account has no access.
+ * Returns repositories for which the authenticated principal has read access. Administrators see the full catalog; a pending or password-change account receives `403` instead. The filter runs on the server, so the result never reveals the existence of a repository the caller cannot read.
  */
 export const listRepositories = <ThrowOnError extends boolean = false>(options?: Options<ListRepositoriesData, ThrowOnError>): RequestResult<ListRepositoriesResponses, ListRepositoriesErrors, ThrowOnError> => (options?.client ?? client).get<ListRepositoriesResponses, ListRepositoriesErrors, ThrowOnError>({
     security: [{
@@ -893,6 +893,9 @@ export const listScheduledTaskRuns = <ThrowOnError extends boolean = false>(opti
     ...options
 });
 
+/**
+ * Disables the repository. Requires repository `admin` scope, because stopping reads and writes for every client is a repository-administration action rather than a content mutation; a `write` scope is not sufficient.
+ */
 export const deleteRepository = <ThrowOnError extends boolean = false>(options: Options<DeleteRepositoryData, ThrowOnError>): RequestResult<DeleteRepositoryResponses, DeleteRepositoryErrors, ThrowOnError> => (options.client ?? client).delete<DeleteRepositoryResponses, DeleteRepositoryErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -913,6 +916,9 @@ export const getRepository = <ThrowOnError extends boolean = false>(options: Opt
     ...options
 });
 
+/**
+ * Updates repository configuration. Requires repository `admin` scope, because endpoint, allowlist, egress, upstream credential, anonymous-read, and strict-publication settings change how the repository behaves for every client; a `write` scope is not sufficient.
+ */
 export const updateRepository = <ThrowOnError extends boolean = false>(options: Options<UpdateRepositoryData, ThrowOnError>): RequestResult<UpdateRepositoryResponses, UpdateRepositoryErrors, ThrowOnError> => (options.client ?? client).patch<UpdateRepositoryResponses, UpdateRepositoryErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -1346,7 +1352,7 @@ export const getRepositoryCapabilities = <ThrowOnError extends boolean = false>(
 /**
  * Explain effective repository access, including denied decisions
  *
- * Without actor, explains the authenticated caller. Administrators may provide actor and an optional simulated global role. Resource evaluates prefix-scoped grants against a concrete artifact coordinate or path.
+ * Explain effective repository access. Without actor, explains the authenticated caller; administrators may provide actor and an optional simulated global role. Resource evaluates prefix-scoped grants against a concrete artifact coordinate or path. A non-administrator only receives a decision for a repository it holds read or intelligence authority over at that resource; any other repository answers exactly like one that does not exist.
  */
 export const getRepositoryEffectiveAccess = <ThrowOnError extends boolean = false>(options: Options<GetRepositoryEffectiveAccessData, ThrowOnError>): RequestResult<GetRepositoryEffectiveAccessResponses, GetRepositoryEffectiveAccessErrors, ThrowOnError> => (options.client ?? client).get<GetRepositoryEffectiveAccessResponses, GetRepositoryEffectiveAccessErrors, ThrowOnError>({
     security: [{

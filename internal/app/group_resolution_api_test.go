@@ -38,10 +38,11 @@ func TestGroupResolutionUsesRuntimeOrderAndExcludesUnavailableMembers(t *testing
 		handler.ServeHTTP(w, r)
 		return w
 	}
-	for _, token := range []string{"", "resolver-secret"} {
-		if w := request(token); w.Code != http.StatusUnauthorized {
-			t.Fatalf("non-admin status=%d body=%s", w.Code, w.Body.String())
-		}
+	if w := request(""); w.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated status=%d body=%s", w.Code, w.Body.String())
+	}
+	if w := request("resolver-secret"); w.Code != http.StatusForbidden {
+		t.Fatalf("non-admin status=%d body=%s", w.Code, w.Body.String())
 	}
 	w := request(testAuthenticator().AdminToken)
 	var plan adminopenapi.GroupResolution

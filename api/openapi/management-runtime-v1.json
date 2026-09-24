@@ -973,6 +973,7 @@
               "type": "string",
               "enum": [
                 "none",
+                "member",
                 "admin",
                 "writer",
                 "reader"
@@ -1605,7 +1606,7 @@
     "/repositories": {
       "get": {
         "operationId": "listRepositories",
-        "description": "Returns repositories for which the authenticated principal has read access. Administrators see the full catalog; a pending account has no access.",
+        "description": "Returns repositories for which the authenticated principal has read access. Administrators see the full catalog; a pending or password-change account receives `403` instead. The filter runs on the server, so the result never reveals the existence of a repository the caller cannot read.",
         "parameters": [
           {
             "$ref": "#/components/parameters/PageSize"
@@ -2191,6 +2192,7 @@
       },
       "delete": {
         "operationId": "deleteRepository",
+        "description": "Disables the repository. Requires repository `admin` scope, because stopping reads and writes for every client is a repository-administration action rather than a content mutation; a `write` scope is not sufficient.",
         "responses": {
           "202": {
             "$ref": "#/components/responses/Deletion"
@@ -2202,6 +2204,7 @@
       },
       "patch": {
         "operationId": "updateRepository",
+        "description": "Updates repository configuration. Requires repository `admin` scope, because endpoint, allowlist, egress, upstream credential, anonymous-read, and strict-publication settings change how the repository behaves for every client; a `write` scope is not sufficient.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IfMatch"
@@ -3167,7 +3170,7 @@
       "get": {
         "operationId": "getRepositoryEffectiveAccess",
         "summary": "Explain effective repository access, including denied decisions",
-        "description": "Without actor, explains the authenticated caller. Administrators may provide actor and an optional simulated global role. Resource evaluates prefix-scoped grants against a concrete artifact coordinate or path.",
+        "description": "Explain effective repository access. Without actor, explains the authenticated caller; administrators may provide actor and an optional simulated global role. Resource evaluates prefix-scoped grants against a concrete artifact coordinate or path. A non-administrator only receives a decision for a repository it holds read or intelligence authority over at that resource; any other repository answers exactly like one that does not exist.",
         "parameters": [
           {
             "name": "actor",
@@ -3184,6 +3187,7 @@
             "schema": {
               "type": "string",
               "enum": [
+                "member",
                 "reader",
                 "writer",
                 "admin"
@@ -6781,6 +6785,7 @@
             "items": {
               "type": "string",
               "enum": [
+                "member",
                 "admin",
                 "writer",
                 "reader"
@@ -6840,6 +6845,7 @@
             "items": {
               "type": "string",
               "enum": [
+                "member",
                 "admin",
                 "writer",
                 "reader"
@@ -7100,6 +7106,7 @@
             "type": "string",
             "enum": [
               "none",
+              "member",
               "admin",
               "writer",
               "reader"
@@ -7196,6 +7203,7 @@
             "type": "string",
             "enum": [
               "none",
+              "member",
               "admin",
               "writer",
               "reader"
@@ -7246,6 +7254,7 @@
             "type": "string",
             "enum": [
               "none",
+              "member",
               "admin",
               "writer",
               "reader"
@@ -7278,6 +7287,7 @@
             "type": "string",
             "enum": [
               "none",
+              "member",
               "admin",
               "writer",
               "reader"
@@ -8603,6 +8613,7 @@
             "type": "string",
             "enum": [
               "none",
+              "member",
               "admin",
               "writer",
               "reader"
@@ -8706,6 +8717,7 @@
             "type": "string",
             "enum": [
               "none",
+              "member",
               "admin",
               "writer",
               "reader"
@@ -8837,6 +8849,7 @@
           "gatewayRole": {
             "type": "string",
             "enum": [
+              "member",
               "admin",
               "writer",
               "reader"

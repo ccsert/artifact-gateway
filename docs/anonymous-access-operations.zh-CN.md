@@ -14,7 +14,7 @@
 
 仅开启全局策略不会自动公开已有 Repository 或 Group。关闭全局策略会立即拒绝所有匿名读取，即使目标自身的策略仍为开启状态。
 
-已认证的操作员或具备相应范围的用户可调用 `GET /api/v2/repositories/{repositoryId}/effective-access` 查看自身的实际权限。该诊断接口本身不允许匿名访问，不支持模拟其他用户；即使 Repository 读取被拒绝，它仍会返回当前调用者的读取、写入、管理和匿名读取判定。
+已认证的操作员或具备相应范围的用户可调用 `GET /api/v2/repositories/{repositoryId}/effective-access` 查看自身的实际权限，管理员还可模拟其他主体。该诊断接口不允许匿名访问，且只对调用者在所请求资源上已具备权限的 Repository 作出响应：读或 intelligence 权限会显示该 Repository，低于此则返回与“Repository 不存在”完全一致的响应，因此该接口无法用于探测标识符。
 
 使用 `GET /api/v2/identity` 可确认 Gateway 当前评估的身份、凭证来源和全局角色。OIDC 诊断只暴露已配置且与验证后令牌匹配的角色映射，不会返回任意上游声明或令牌内容。
 

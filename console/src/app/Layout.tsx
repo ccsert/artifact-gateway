@@ -320,6 +320,7 @@ export function AppLayout() {
 
   const canBrowseRepositories =
     identity?.administrator === true ||
+    identity?.role === "member" ||
     identity?.role === "reader" ||
     identity?.role === "writer";
 
@@ -359,6 +360,16 @@ export function AppLayout() {
         replace
       />
     );
+  }
+
+  // The catalog is no longer administrator-only, so it needs its own gate: an
+  // identity that cannot read any repository must not reach it by URL, and the
+  // trailing-slash form must not slip past an exact-path comparison.
+  const repositoryCatalogPath =
+    location.pathname === "/repositories" ||
+    location.pathname.startsWith("/repositories/");
+  if (identity && !canBrowseRepositories && repositoryCatalogPath) {
+    return <Navigate to="/search" replace />;
   }
 
   const visibleNavItems = navItems.filter(

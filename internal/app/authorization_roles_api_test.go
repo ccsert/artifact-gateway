@@ -60,4 +60,25 @@ func TestAuthorizationRolesManagementHTTP(t *testing.T) {
 	if deleted.Code != http.StatusNoContent {
 		t.Fatalf("delete = %d %s", deleted.Code, deleted.Body.String())
 	}
+	audits := map[string]repository.AuditRecord{}
+	for _, record := range store.Audits {
+		audits[record.Operation] = record
+	}
+	for operation, wantStatus := range map[string]int{
+		"authorization_role.create": http.StatusCreated,
+		"authorization_role.update": http.StatusOK,
+		"authorization_role.delete": http.StatusNoContent,
+	} {
+		record, ok := audits[operation]
+		if !ok {
+			t.Fatalf("missing %s audit in %#v", operation, audits)
+		}
+		if record.Actor != "alice" || record.Resource != "authorization-roles/"+role.ID || record.Status != wantStatus ||
+			record.Format != "management" || record.Outcome != repository.AuditResolved {
+			t.Fatalf("%s audit = %#v", operation, record)
+		}
+	}
+	if len(store.Audits) != 3 {
+		t.Fatalf("rejected requests must not be audited as mutations: %#v", store.Audits)
+	}
 }

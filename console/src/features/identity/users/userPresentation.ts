@@ -13,6 +13,7 @@ export function roleTone(role: User["role"]): BadgeTone {
   if (role === "admin") return "visualization-3";
   if (role === "writer") return "visualization-5";
   if (role === "reader") return "visualization-4";
+  if (role === "member") return "visualization-1";
   return "neutral";
 }
 

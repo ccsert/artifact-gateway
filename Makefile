@@ -110,6 +110,12 @@ test:
 	@./scripts/docs-capability-check.sh
 	@python3 -m unittest scripts/maven_proxy_fixture_test.py
 
+ci-local:
+	@./scripts/ci-local.sh
+
+ci-local-full:
+	@./scripts/ci-local.sh --job all --keep-going
+
 docs-check:
 	@./scripts/docs-capability-check.sh
 	@docker run --rm -v "$(CURDIR):/src" -w /src $(GO_IMAGE) sh -ec 'go list ./... | grep -v "/console/node_modules/" | xargs go test'

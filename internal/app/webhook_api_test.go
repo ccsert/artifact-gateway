@@ -31,7 +31,7 @@ func TestWebhookManagementAPIEncryptsSecretsUsesCASAndReplaysDeadDelivery(t *tes
 
 	path := "/api/v2/webhook-subscriptions"
 	body := `{"name":"security-events","endpointUrl":"https://events.example.test/hooks/artifacts","secret":"0123456789abcdef0123456789abcdef","eventTypes":["artifact.quarantined","artifact.released"],"enabled":true}`
-	if denied := request(http.MethodPost, path, "resolver-secret", body, ""); denied.Code != http.StatusUnauthorized {
+	if denied := request(http.MethodPost, path, "resolver-secret", body, ""); denied.Code != http.StatusForbidden {
 		t.Fatalf("reader create=%d body=%q", denied.Code, denied.Body.String())
 	}
 	created := request(http.MethodPost, path, "admin-secret", body, "")

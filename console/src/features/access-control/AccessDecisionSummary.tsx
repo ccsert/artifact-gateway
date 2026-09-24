@@ -42,6 +42,10 @@ export function accessReasonLabel(reason: string, text: Localize): string {
       "全局 reader 角色允许读取",
       "Read allowed by the global reader role",
     ),
+    role_member: text(
+      "成员等级不含隐式权限，由仓库授权决定",
+      "A member level carries no implicit capability; repository grants decide",
+    ),
     scope_granted: text(
       "主体、权限级别和资源范围均匹配",
       "Principal, permission, and resource scope all match",

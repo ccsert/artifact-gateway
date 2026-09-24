@@ -531,7 +531,7 @@ export type RepositoryCapabilities = {
 export type ApiKey = {
   id: string;
   name: string;
-  roles: Array<"admin" | "writer" | "reader">;
+  roles: Array<"member" | "admin" | "writer" | "reader">;
   createdAt: string;
   /**
    * Time after which the key can no longer authenticate.
@@ -550,7 +550,7 @@ export type ApiKeyList = {
 
 export type CreateApiKey = {
   name: string;
-  roles?: Array<"admin" | "writer" | "reader">;
+  roles?: Array<"member" | "admin" | "writer" | "reader">;
   /**
    * Optional expiry. Defaults to 90 days and cannot exceed 365 days.
    */
@@ -619,7 +619,7 @@ export type User = {
   displayName: string;
   email: string;
   description: string;
-  role: "none" | "admin" | "writer" | "reader";
+  role: "none" | "member" | "admin" | "writer" | "reader";
   state: "active" | "disabled";
   lastLoginAt?: string;
   passwordChangedAt?: string;
@@ -642,7 +642,7 @@ export type UserList = {
 export type CurrentIdentity = {
   actor: string;
   kind: AuthenticationKind;
-  role?: "none" | "admin" | "writer" | "reader";
+  role?: "none" | "member" | "admin" | "writer" | "reader";
   administrator: boolean;
   oidc?: OidcIdentityDetails;
 };
@@ -653,7 +653,7 @@ export type CreateUser = {
   email?: string;
   description?: string;
   password: string;
-  role: "none" | "admin" | "writer" | "reader";
+  role: "none" | "member" | "admin" | "writer" | "reader";
   mustChangePassword?: boolean;
 };
 
@@ -661,7 +661,7 @@ export type UpdateUser = {
   displayName?: string;
   email?: string;
   description?: string;
-  role?: "none" | "admin" | "writer" | "reader";
+  role?: "none" | "member" | "admin" | "writer" | "reader";
   state?: "active" | "disabled";
 };
 
@@ -1074,7 +1074,7 @@ export type OidcSettings = {
   adminRoles: Array<string>;
   provisioningMode: "disabled" | "jit";
   emailLinkingEnabled: boolean;
-  jitDefaultRole: "none" | "admin" | "writer" | "reader";
+  jitDefaultRole: "none" | "member" | "admin" | "writer" | "reader";
   updatedAt?: string;
 };
 
@@ -1093,7 +1093,7 @@ export type OidcSettingsUpdate = {
   adminRoles: Array<string>;
   provisioningMode: "disabled" | "jit";
   emailLinkingEnabled: boolean;
-  jitDefaultRole: "none" | "admin" | "writer" | "reader";
+  jitDefaultRole: "none" | "member" | "admin" | "writer" | "reader";
 };
 
 export type OidcConnectionTest = {
@@ -1129,7 +1129,7 @@ export type AuthenticationKind =
 
 export type OidcRoleMappingMatch = {
   externalRole: string;
-  gatewayRole: "admin" | "writer" | "reader";
+  gatewayRole: "member" | "admin" | "writer" | "reader";
 };
 
 export type OidcIdentityDetails = {
@@ -2088,7 +2088,7 @@ export type OidcSettingsUpdateWritable = {
   adminRoles: Array<string>;
   provisioningMode: "disabled" | "jit";
   emailLinkingEnabled: boolean;
-  jitDefaultRole: "none" | "admin" | "writer" | "reader";
+  jitDefaultRole: "none" | "member" | "admin" | "writer" | "reader";
 };
 
 export type CreateWebhookSubscriptionWritable = {
@@ -3395,7 +3395,7 @@ export type ListUsersData = {
   path?: never;
   query?: {
     search?: string;
-    role?: "none" | "admin" | "writer" | "reader";
+    role?: "none" | "member" | "admin" | "writer" | "reader";
     state?: "active" | "disabled";
     limit?: number;
     offset?: number;
@@ -5954,7 +5954,7 @@ export type GetRepositoryEffectiveAccessData = {
   };
   query?: {
     actor?: string;
-    role?: "reader" | "writer" | "admin";
+    role?: "member" | "reader" | "writer" | "admin";
     resource?: string;
   };
   url: "/repositories/{repositoryId}/effective-access";

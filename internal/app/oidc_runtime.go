@@ -364,8 +364,8 @@ func normalizeOIDCSettingsUpdate(update OIDCSettingsUpdate) (OIDCSettingsUpdate,
 	if update.ProvisioningMode != "disabled" && update.ProvisioningMode != "jit" {
 		return update, errors.New("provisioningMode must be disabled or jit")
 	}
-	if update.JITDefaultRole != "admin" && update.JITDefaultRole != "writer" && update.JITDefaultRole != "reader" && update.JITDefaultRole != "none" {
-		return update, errors.New("jitDefaultRole must be admin, writer, reader, or none")
+	if update.JITDefaultRole != "admin" && update.JITDefaultRole != "writer" && update.JITDefaultRole != "reader" && update.JITDefaultRole != "member" && update.JITDefaultRole != "none" {
+		return update, errors.New("jitDefaultRole must be admin, writer, reader, member, or none")
 	}
 	if !update.Enabled {
 		return update, nil

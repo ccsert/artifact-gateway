@@ -77,7 +77,7 @@ Raw 已有 PUT/DELETE、prefix list、checksum、resumable upload、GET/HEAD/单
 
 ## Console 与体验差距
 
-Console 是桌面优先的 React 19 + Ant Design 6 SPA，支持分组可折叠导航、全局搜索、公开浏览、双语与明暗主题。剩余重点是 intelligence 与运维工具，不是基本导航。
+Console 是桌面优先的 React 19 + Ant Design 6 SPA，支持分组可折叠导航、全局搜索、公开浏览、双语与明暗主题。Repository 相关界面已不再仅限管理员：Console 现在向非管理员提供经服务端权限过滤的 Repository 目录，Repository 管理界面按 effective permission 显示，并可在用户界面直接分配 Repository Grant。剩余重点是 intelligence 与运维工具，不是基本导航。
 
 ### 登录、导航与 Dashboard
 

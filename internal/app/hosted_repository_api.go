@@ -166,8 +166,15 @@ func (h hostedRepositoryAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 
 func (h hostedRepositoryAPIHandler) authorize(w http.ResponseWriter, r *http.Request) (Principal, bool) {
 	principal, ok := h.authenticate(w, r)
-	if !ok || !principal.Admin || principal.MustChangePassword {
-		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "administrator authentication is required")
+	if !ok {
+		return Principal{}, false
+	}
+	if principal.MustChangePassword {
+		writeHostedProblem(w, http.StatusForbidden, "password_change_required", "password change is required")
+		return Principal{}, false
+	}
+	if !principal.Admin {
+		writeHostedProblem(w, http.StatusForbidden, "access_denied", "administrator permission is required")
 		return Principal{}, false
 	}
 	return principal, true
@@ -297,8 +304,8 @@ func (h generatedRepositoryAPIAdapter) ListRepositories(w http.ResponseWriter, r
 	if !ok {
 		return
 	}
-	if principal.MustChangePassword || principal.Role == RoleNone {
-		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository read permission is required")
+	if code, message, blocked := accountStateProblem(principal.AccountStateReason()); blocked {
+		writeHostedProblem(w, http.StatusForbidden, code, message)
 		return
 	}
 	if principal.Admin {
@@ -378,7 +385,7 @@ func (h generatedRepositoryAPIAdapter) GetCurrentIdentity(w http.ResponseWriter,
 }
 
 func (h generatedRepositoryAPIAdapter) DeleteRepository(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
-	h.withRepositoryScope(w, r, id.String(), RepositoryWrite, func(Principal, repository.HostedRepository) {
+	h.withRepositoryScope(w, r, id.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
 		h.disable(w, r, id.String())
 	})
 }
@@ -390,7 +397,7 @@ func (h generatedRepositoryAPIAdapter) GetRepository(w http.ResponseWriter, r *h
 }
 
 func (h generatedRepositoryAPIAdapter) UpdateRepository(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId, params adminopenapi.UpdateRepositoryParams) {
-	h.withRepositoryScope(w, r, id.String(), RepositoryWrite, func(_ Principal, repo repository.HostedRepository) {
+	h.withRepositoryScope(w, r, id.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
 		h.update(w, r, repo, string(params.IfMatch))
 	})
 }
@@ -415,6 +422,19 @@ func (h generatedRepositoryAPIAdapter) ListFormatProfiles(w http.ResponseWriter,
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.FormatProfileList{Items: items})
 }
 
+// writeRepositoryDenial answers a denied repository authorization decision. A
+// principal-wide block reports its own problem code so a pending or
+// password-change account is distinguishable from a plain scope denial; every
+// repository entry point must route denials through here to stay in lockstep.
+func (h generatedRepositoryAPIAdapter) writeRepositoryDenial(w http.ResponseWriter, r *http.Request, principal Principal, repo repository.HostedRepository, operation RepositoryOperation, decision AuthorizationDecision) {
+	h.recordAuthorizationDenial(r, principal, repo, operation, decision)
+	if code, message, blocked := accountStateProblem(decision.Reason); blocked {
+		writeHostedProblem(w, http.StatusForbidden, code, message)
+		return
+	}
+	writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository scope is required")
+}
+
 func (h generatedRepositoryAPIAdapter) withRepositoryScope(w http.ResponseWriter, r *http.Request, repositoryID string, operation RepositoryOperation, handler func(Principal, repository.HostedRepository)) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
@@ -430,8 +450,7 @@ func (h generatedRepositoryAPIAdapter) withRepositoryScope(w http.ResponseWriter
 		return
 	}
 	if decision := h.authorizer.Authorize(r.Context(), principal, repo, operation); !decision.Allowed {
-		h.recordAuthorizationDenial(r, principal, repo, operation, decision)
-		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository scope is required")
+		h.writeRepositoryDenial(w, r, principal, repo, operation, decision)
 		return
 	}
 	handler(principal, repo)
@@ -457,8 +476,7 @@ func (h generatedRepositoryAPIAdapter) withRepositoryBrowseScope(w http.Response
 		return
 	}
 	if decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryRead); !decision.Allowed {
-		h.recordAuthorizationDenial(r, principal, repo, RepositoryRead, decision)
-		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository scope is required")
+		h.writeRepositoryDenial(w, r, principal, repo, RepositoryRead, decision)
 		return
 	}
 	handler(principal, repo)
@@ -492,11 +510,24 @@ func (h generatedRepositoryAPIAdapter) withRepositoryScopeForPrincipal(w http.Re
 		return
 	}
 	if decision := h.authorizer.Authorize(r.Context(), principal, repo, operation); !decision.Allowed {
-		h.recordAuthorizationDenial(r, principal, repo, operation, decision)
-		writeHostedProblem(w, http.StatusForbidden, "access_denied", "repository scope is required")
+		h.writeRepositoryDenial(w, r, principal, repo, operation, decision)
 		return
 	}
 	handler(principal)
+}
+
+// accountStateProblem maps a principal-wide block reported by the repository
+// authorizer to a problem code, so every repository-facing entry point answers
+// a pending or password-change account identically instead of falling back to a
+// generic access denial.
+func accountStateProblem(reason string) (string, string, bool) {
+	switch reason {
+	case "authorization_pending":
+		return "authorization_pending", "administrator approval is required", true
+	case "password_change_required":
+		return "password_change_required", "password change is required", true
+	}
+	return "", "", false
 }
 
 func (h generatedRepositoryAPIAdapter) recordAuthorizationDenial(r *http.Request, principal Principal, repo repository.HostedRepository, operation RepositoryOperation, decision AuthorizationDecision) {
@@ -839,6 +870,12 @@ func proxyAllowedHostsRequired(format repository.Format) bool {
 
 func writeHostedProblem(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/problem+json")
+	// A 401 has to name the scheme the caller should use. Protocol handlers
+	// publish their own challenge (OCI and Raw a protocol realm, Conan Basic), so
+	// never overwrite one that is already set.
+	if status == http.StatusUnauthorized && w.Header().Get("WWW-Authenticate") == "" {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="Artifact Gateway"`)
+	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": http.StatusText(status), "status": status, "code": code, "message": message, "requestId": ""})
 }

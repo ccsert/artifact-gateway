@@ -475,6 +475,15 @@ func TestRepositoryReadersParsesActorRepositoryPatterns(t *testing.T) {
 	}
 }
 
+func TestLegacyReadDefaultOptsIntoDenyingUnconfiguredReaders(t *testing.T) {
+	if legacyReadDefaultDeny("") || legacyReadDefaultDeny("allow") || legacyReadDefaultDeny("ALLOW") {
+		t.Fatal("the unconfigured default must stay permissive until the next release")
+	}
+	if !legacyReadDefaultDeny("deny") || !legacyReadDefaultDeny(" DENY ") {
+		t.Fatal("deny must opt into refusing unmatched readers")
+	}
+}
+
 func TestRepositoryCacheQuotasParsesPositiveByteLimits(t *testing.T) {
 	quotas := repositoryCacheQuotas("team/app=1024; engineering=2048; broken=no; zero=0")
 	if quotas["team/app"] != 1024 || quotas["engineering"] != 2048 || len(quotas) != 2 {

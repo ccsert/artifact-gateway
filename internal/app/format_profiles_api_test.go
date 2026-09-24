@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
@@ -25,7 +26,7 @@ func TestFormatProfilesAPIRequiresAdministratorAndReturnsCapabilities(t *testing
 	authorize(nonAdminRequest, authenticator.IssueToken("reader"))
 	nonAdmin := httptest.NewRecorder()
 	handler.ServeHTTP(nonAdmin, nonAdminRequest)
-	if nonAdmin.Code != http.StatusUnauthorized {
+	if nonAdmin.Code != http.StatusForbidden || !strings.Contains(nonAdmin.Body.String(), `"code":"access_denied"`) {
 		t.Fatalf("non-admin=%d %s", nonAdmin.Code, nonAdmin.Body.String())
 	}
 

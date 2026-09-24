@@ -152,10 +152,10 @@ func (s *PostgresStore) ResolveOIDCIdentity(ctx context.Context, provision OIDCI
 	created := false
 	if user.ID == "" {
 		role := provision.Role
-		if role != "admin" && role != "writer" && role != "reader" {
+		if role != "admin" && role != "writer" && role != "reader" && role != "member" {
 			role = provision.DefaultRole
 		}
-		if role != "admin" && role != "writer" && role != "reader" && role != "none" {
+		if role != "admin" && role != "writer" && role != "reader" && role != "member" && role != "none" {
 			role = "reader"
 		}
 		name, err := postgresProvisionedUsername(ctx, tx, provision)

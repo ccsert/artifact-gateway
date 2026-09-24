@@ -49,7 +49,7 @@ func TestV2AuditAPIExposesOptionalGrantDecisionFields(t *testing.T) {
 	authorize(nonAdmin, "resolver-secret")
 	denied := httptest.NewRecorder()
 	handler.ServeHTTP(denied, nonAdmin)
-	if denied.Code != http.StatusUnauthorized {
+	if denied.Code != http.StatusForbidden {
 		t.Fatalf("non-admin status=%d body=%s", denied.Code, denied.Body.String())
 	}
 }
@@ -291,8 +291,39 @@ func TestRepositoryManagementUsesScopedGrants(t *testing.T) {
 	if !strings.Contains(metrics.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="management",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 2`) {
 		t.Fatalf("management authorization metric=%s", metrics.Body.String())
 	}
-	if response := request(http.MethodDelete, "/api/v2/repositories/"+repo.ID, "writer", ""); response.Code != http.StatusAccepted {
+	if response := request(http.MethodDelete, "/api/v2/repositories/"+repo.ID, "writer", ""); response.Code != http.StatusForbidden {
 		t.Fatalf("writer delete=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(http.MethodDelete, "/api/v2/repositories/"+repo.ID, "manager", ""); response.Code != http.StatusAccepted {
+		t.Fatalf("repository admin delete=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestRepositoryGrantReplacementWritesAudit(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "audited-grants", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := httptest.NewRequest(http.MethodPut, "/api/v2/repositories/"+repo.ID+"/grants",
+		strings.NewReader(`[{"principal":"user:alice","scopes":["repositories:read"],"resourcePrefix":"stable"}]`))
+	request.Header.Set("If-Match", "1")
+	authorize(request, "admin-secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("replace grants=%d body=%s", response.Code, response.Body.String())
+	}
+	if len(store.Audits) != 1 {
+		t.Fatalf("audits=%#v", store.Audits)
+	}
+	audit := store.Audits[0]
+	if audit.Operation != "repository.grants.replace" || audit.Actor != "alice" ||
+		audit.Repository != repo.Name || audit.GroupName != repo.Name ||
+		audit.Resource != "repositories/"+repo.ID+"/grants" || audit.Status != http.StatusOK ||
+		audit.Outcome != repository.AuditResolved || audit.Format != "management" {
+		t.Fatalf("audit=%#v", audit)
 	}
 }
 
@@ -338,12 +369,29 @@ func TestRepositoryEffectiveAccessReportsPermissionsAndAnonymousPolicy(t *testin
 		t.Fatalf("effective access body=%#v", body)
 	}
 
+	problem := func(response *httptest.ResponseRecorder) string {
+		var body struct{ Code, Message string }
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body.Code + " " + body.Message
+	}
 	denied := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access", nil)
 	authorize(denied, authenticator.IssueToken("stranger"))
 	deniedResponse := httptest.NewRecorder()
 	handler.ServeHTTP(deniedResponse, denied)
-	if deniedResponse.Code != http.StatusOK || !strings.Contains(deniedResponse.Body.String(), `"actor":"stranger"`) || !strings.Contains(deniedResponse.Body.String(), `"read":{"allowed":false`) {
+	missing := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+uuid.NewString()+"/effective-access", nil)
+	authorize(missing, authenticator.IssueToken("stranger"))
+	missingResponse := httptest.NewRecorder()
+	handler.ServeHTTP(missingResponse, missing)
+	if deniedResponse.Code != http.StatusNotFound || !strings.Contains(deniedResponse.Body.String(), `"code":"not_found"`) {
 		t.Fatalf("denied effective access = %d %s", deniedResponse.Code, deniedResponse.Body.String())
+	}
+	// A caller with no authority over the repository must not be able to tell it
+	// apart from one that does not exist.
+	if deniedResponse.Code != missingResponse.Code || problem(deniedResponse) != problem(missingResponse) {
+		t.Fatalf("absent and unreadable repositories must answer identically: %d %q vs %d %q",
+			deniedResponse.Code, problem(deniedResponse), missingResponse.Code, problem(missingResponse))
 	}
 
 	if _, err := store.DisableHostedRepository(context.Background(), repo.ID); err != nil {
@@ -358,6 +406,30 @@ func TestRepositoryEffectiveAccessReportsPermissionsAndAnonymousPolicy(t *testin
 	handler.ServeHTTP(deletedResponse, deleted)
 	if deletedResponse.Code != http.StatusOK || !strings.Contains(deletedResponse.Body.String(), `"anonymousRead":{"allowed":false,"reason":"repository_not_active"`) {
 		t.Fatalf("deleted effective access = %d %s", deletedResponse.Code, deletedResponse.Body.String())
+	}
+}
+
+func TestRepositoryEffectiveAccessRevealsRepositoriesToIntelligenceCredentials(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "scanner-raw", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A scanning credential manages intelligence without read access, so hiding
+	// the repository from it would break its own access explanation.
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{
+		{Principal: "scanner", Scopes: []string{"repositories:intelligence"}},
+	}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access", nil)
+	authorize(request, authenticator.IssueToken("scanner"))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"intelligence":{"allowed":true`) || !strings.Contains(response.Body.String(), `"read":{"allowed":false`) {
+		t.Fatalf("intelligence credential effective access = %d %s", response.Code, response.Body.String())
 	}
 }
 
@@ -575,12 +647,18 @@ func TestAPIKeyRolesEnforceScopedManagementAccess(t *testing.T) {
 		t.Fatalf("reader patch=%d want 403", code)
 	}
 
-	// Writer: read and write allowed by role.
+	// Writer: read allowed by role; changing the repository configuration is a
+	// repository-administration action, so a write role alone is not enough.
 	if code := get(writerToken); code != http.StatusOK {
 		t.Fatalf("writer get=%d", code)
 	}
-	if code := patch(writerToken); code != http.StatusOK {
-		t.Fatalf("writer patch=%d want 200", code)
+	if code := patch(writerToken); code != http.StatusForbidden {
+		t.Fatalf("writer patch=%d want 403", code)
+	}
+
+	// A platform administrator still reaches repository configuration.
+	if code := patch(createKey(t, "admin")); code != http.StatusOK {
+		t.Fatalf("administrator patch=%d want 200", code)
 	}
 
 	// Neither reader nor writer may mint new keys (administrator-only).
@@ -589,8 +667,8 @@ func TestAPIKeyRolesEnforceScopedManagementAccess(t *testing.T) {
 		authorize(req, token)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
-		if rec.Code != http.StatusUnauthorized {
-			t.Fatalf("%s role minted key=%d want 401", token, rec.Code)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("%s role minted key=%d want 403", token, rec.Code)
 		}
 	}
 }

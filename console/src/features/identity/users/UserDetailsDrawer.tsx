@@ -38,6 +38,7 @@ import {
   localPasswordMeetsMinimum,
 } from "./passwordPolicy";
 import { UserIdentitiesPanel } from "./UserIdentitiesPanel";
+import { UserRepositoryAccessPanel } from "./UserRepositoryAccessPanel";
 import { UserSessionsPanel } from "./UserSessionsPanel";
 import { isUserLocked, roleTone, userInitials } from "./userPresentation";
 
@@ -314,16 +315,29 @@ export function UserDetailsDrawer({
               <Select
                 options={[
                   {
+                    value: "member",
+                    label: text(
+                      "member · 成员（无仓库权限，按仓库授权）",
+                      "member · no repository access until granted",
+                    ),
+                  },
+                  {
                     value: "none",
                     label: text("none · 待授权", "none · awaiting approval"),
                   },
                   {
                     value: "reader",
-                    label: text("reader · 只读", "reader · read-only"),
+                    label: text(
+                      "reader · 只读（全部仓库）",
+                      "reader · read-only (all repositories)",
+                    ),
                   },
                   {
                     value: "writer",
-                    label: text("writer · 读写", "writer · read/write"),
+                    label: text(
+                      "writer · 读写（全部仓库）",
+                      "writer · read/write (all repositories)",
+                    ),
                   },
                   {
                     value: "admin",
@@ -421,6 +435,10 @@ export function UserDetailsDrawer({
         <Divider />
 
         <UserIdentitiesPanel userId={user.id} />
+
+        <Divider />
+
+        <UserRepositoryAccessPanel userId={user.id} username={user.name} />
 
         <Divider />
 

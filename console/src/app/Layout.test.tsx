@@ -124,6 +124,33 @@ describe("AppLayout", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows a member the repository catalog without implicit repository access", async () => {
+    Object.assign(auth, {
+      role: "member",
+      identity: { administrator: false, role: "member" },
+    });
+
+    renderLayout("/repositories");
+
+    expect(await screen.findByText("repository catalog")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /仓库/ })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /用户/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps an identity that cannot read repositories out of the catalog", async () => {
+    Object.assign(auth, {
+      role: "",
+      identity: { administrator: false },
+    });
+
+    renderLayout("/repositories/");
+
+    expect(await screen.findByTestId("location")).toHaveTextContent("/search");
+    expect(screen.queryByText("repository catalog")).not.toBeInTheDocument();
+  });
+
   it("keeps Service Account credential management away from a reader", async () => {
     Object.assign(auth, {
       role: "reader",

@@ -224,6 +224,89 @@ func TestPendingRoleDeniesLegacyDefaultsPatternsAndManagedGrants(t *testing.T) {
 	}
 }
 
+func TestPasswordChangeRequiredBlocksEveryRepositoryPath(t *testing.T) {
+	// The most permissive legacy configuration still must not admit an account
+	// that has to change its password.
+	principal := Principal{
+		Actor:              "user:reset",
+		Role:               RoleWriter,
+		MustChangePassword: true,
+		RepositoryPatterns: []string{"team/*"},
+	}
+	legacy := Authenticator{
+		RepositoryReaders: nil,
+		RepositoryWriters: map[string][]string{principal.Actor: {"team/releases"}},
+	}
+	if legacy.CanReadRepository(principal, "team/releases") ||
+		legacy.CanReadMavenRepository(principal, "team") ||
+		legacy.CanWriteMavenRepository(principal, "team/releases") {
+		t.Fatal("must-change account reached a legacy repository path")
+	}
+	target := repository.HostedRepository{ID: "repo-id", Name: "team/releases"}
+	authorizer := RepositoryAuthorizer{
+		Legacy: legacy,
+		Grants: grantStoreStub{set: repository.RepositoryGrantSet{
+			Version: "2",
+			Grants: []repository.RepositoryGrant{{
+				Principal: principal.Actor, Scopes: []string{"repositories:admin"},
+			}},
+		}},
+	}
+	for _, operation := range []RepositoryOperation{RepositoryRead, RepositoryWrite, RepositoryAdmin, RepositoryIntelligence} {
+		decision := authorizer.Authorize(context.Background(), principal, target, operation)
+		if decision.Allowed || decision.Source != "role" || decision.Reason != "password_change_required" {
+			t.Fatalf("operation=%s decision=%+v", operation, decision)
+		}
+		decision, managed := authorizer.ManagedResourceDecision(context.Background(), principal, target, operation, "")
+		if !managed || decision.Allowed || decision.Reason != "password_change_required" {
+			t.Fatalf("managed operation=%s decision=%+v managed=%t", operation, decision, managed)
+		}
+	}
+}
+
+func TestMemberRoleGrantsNoImplicitOperation(t *testing.T) {
+	for _, operation := range []RepositoryOperation{RepositoryRead, RepositoryWrite, RepositoryAdmin, RepositoryIntelligence} {
+		if RoleAllows(RoleMember, operation) {
+			t.Fatalf("member implicitly allows %s", operation)
+		}
+	}
+	if got := RoleFromRoles([]string{"member"}); got != RoleMember {
+		t.Fatalf("RoleFromRoles(member)=%q", got)
+	}
+	// A more capable role still wins, so an existing multi-role credential keeps
+	// its previous reach.
+	if got := RoleFromRoles([]string{"member", "reader"}); got != RoleReader {
+		t.Fatalf("RoleFromRoles(member,reader)=%q", got)
+	}
+	if got := RoleFromRoles([]string{"member", "writer"}); got != RoleWriter {
+		t.Fatalf("RoleFromRoles(member,writer)=%q", got)
+	}
+}
+
+func TestUnmanagedGrantSetDecidesOnlyForNamedPrincipals(t *testing.T) {
+	target := repository.HostedRepository{ID: "repo-id", Name: "releases"}
+	authorizer := RepositoryAuthorizer{
+		Grants: grantStoreStub{set: repository.RepositoryGrantSet{Version: "1", Grants: []repository.RepositoryGrant{
+			{Principal: "named-reader", Scopes: []string{"repositories:read"}},
+		}}},
+		Legacy: Authenticator{RepositoryReaders: nil},
+	}
+	named := authorizer.Authorize(context.Background(), Principal{Actor: "named-reader"}, target, RepositoryRead)
+	if !named.Allowed || named.Source != "repository_grants" || named.Reason != "scope_granted" {
+		t.Fatalf("named read=%+v", named)
+	}
+	// The set names this principal but grants no write, so it decides against the
+	// write instead of falling back to the permissive legacy default.
+	if decision := authorizer.Authorize(context.Background(), Principal{Actor: "named-reader"}, target, RepositoryWrite); decision.Allowed || decision.Reason != "scope_not_granted" {
+		t.Fatalf("named write=%+v", decision)
+	}
+	// A principal the set does not name leaves the set unmanaged, so legacy
+	// static policy keeps deciding for it.
+	if _, managed := authorizer.ManagedResourceDecision(context.Background(), Principal{Actor: "stranger", Role: RoleMember}, target, RepositoryRead, ""); managed {
+		t.Fatal("an unmanaged set must stay unmanaged for principals it does not name")
+	}
+}
+
 func TestManagedResourceDecisionHonorsGlobalRole(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
@@ -571,8 +654,54 @@ func TestAuthenticatorMavenPoliciesKeepReadAndWriteSeparate(t *testing.T) {
 	if authenticator.CanWriteMavenRepository(principal, "team/app") {
 		t.Fatal("read pattern unexpectedly granted Maven publication")
 	}
-	if !(Principal{Role: RoleWriter}).CanReadRepository("anything", true) {
+	if !(Principal{Role: RoleWriter}).CanReadRepository("anything") {
 		t.Fatal("global writer role could not read")
+	}
+}
+
+func TestLegacyReadDefaultPosture(t *testing.T) {
+	// A configured deployment puts the actor's patterns on the principal, so a
+	// pattern-less principal models a caller nothing grants access to.
+	unmatched := Principal{Actor: "build-agent"}
+	configured := Authenticator{RepositoryReaders: map[string][]string{"build-agent": {"releases"}}}
+
+	// An unconfigured deployment keeps admitting unmatched readers until the
+	// default flips; the opt-in refuses them now, as does any configured policy.
+	if !(Authenticator{}).CanReadRepository(unmatched, "releases") {
+		t.Fatal("the documented unconfigured posture must keep admitting readers")
+	}
+	if (Authenticator{LegacyReadDefaultDeny: true}).CanReadRepository(unmatched, "releases") {
+		t.Fatal("the deny posture must refuse an unmatched reader")
+	}
+	if configured.CanReadRepository(unmatched, "releases") {
+		t.Fatal("configuring any reader policy must stop the unrestricted fallback")
+	}
+
+	// Patterns decide on their own, whichever posture is in force.
+	for _, authenticator := range []Authenticator{
+		{RepositoryReaders: configured.RepositoryReaders},
+		{RepositoryReaders: configured.RepositoryReaders, LegacyReadDefaultDeny: true},
+	} {
+		granted := unmatched
+		granted.RepositoryPatterns = []string{"releases"}
+		if !authenticator.CanReadRepository(granted, "releases") {
+			t.Fatal("a matching reader pattern was denied")
+		}
+		if authenticator.CanReadRepository(granted, "other") {
+			t.Fatal("a non-matching reader pattern was admitted")
+		}
+	}
+
+	// The permissive fallback must never override account state, or it would
+	// undo the password-change and pending blocks.
+	permissive := Authenticator{}
+	for _, principal := range []Principal{
+		{Actor: "user:reset", MustChangePassword: true},
+		{Actor: "user:pending", Role: RoleNone},
+	} {
+		if permissive.CanReadRepository(principal, "releases") {
+			t.Fatalf("account state must survive the permissive fallback: %+v", principal)
+		}
 	}
 }
 

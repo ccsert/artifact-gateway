@@ -12,16 +12,18 @@ Repository Grant 原本是版本化持久管理数据，本文将其提升为 Ho
 
 输入包括 principal 与 administrator 标记、目标 Repository ID/name/format、`read|write|intelligence|admin` 操作，以及 Grant set 和 legacy reader/writer pattern。
 
-管理员始终允许，保留 `GATEWAY_ADMIN_TOKEN` 和 OIDC admin 的 bootstrap/recovery 路径。非管理员的已管理 Grant 对目标 Repository 具有权威性：
+管理员始终允许，保留 `GATEWAY_ADMIN_TOKEN` 和 OIDC admin 的 bootstrap/recovery 路径。任何主体都走同一条固定顺序：`none` 账号状态先被拒绝，管理员身份放行，覆盖该操作的全局角色（`RoleAllows(principal.Role, operation)`）放行，之后才查询该主体的 Repository Grant，最后由旧静态策略兜底。因此已管理 Grant 并不凌驾于全局角色：非管理员的全局 `reader`/`writer` 仍可达所有 Repository，Repository Grant 不会收窄它：
 
 - `repositories:admin` 包含 write、read、intelligence；
 - `repositories:write` 包含 read；
 - `repositories:read` 只允许读取；
 - `repositories:intelligence` 只允许写签名、SBOM、provenance、license、vulnerability 等元数据，不隐含读取、发布、删除或管理。
 
-Service Account 没有全局角色，只通过显式 Grant 访问，凭证轮换不改变稳定 `service-account:<id>`。独立 API Key 保留自己的全局角色，不能与 Service Account credential 混同。Grant 是精确 principal 匹配且不跨 Repository。
+Service Account 没有全局角色，只通过显式 Grant 访问，凭证轮换不改变稳定 `service-account:<id>`。独立 API Key 保留自己的全局角色，不能与 Service Account credential 混同。Grant 是精确 principal 匹配且不跨 Repository。Grant 还可携带可选 resource prefix（`migrations/000048_repository_grant_resource_prefixes.sql`），把授权限定在 identity 以该前缀开头的 resource 上；匹配由 `grantMatchesResource` 实现，空前缀匹配该 Repository 的所有 resource。
 
-未管理时保留旧协议静态行为与已有 wildcard 语义；缺少 reader map 时保留本地开发的 unrestricted-read。默认 Grant set 版本为 1；任何成功 `ReplaceRepositoryGrants`（包括空数组）把版本提升到 1 以上，作为“已管理”标记。显式空集拒绝所有非管理员。
+Authorization Role 与 Authorization Template 是基于 Grant 的可复用管理对象。Role（`migrations/000091_authorization_roles.sql`）是命名的 `repositories:*` scope 集合：在 Grant 编辑器中选择一个 Role 会把它的 scope 复制成显式快照，之后编辑 Role 不会静默改变已持久化的判定。Template（`migrations/000083_authorization_templates.sql`）是可复用的 Grant 集合：把它应用到某个 Repository 会用模板规则替换该 Repository 的 Grant set，替换前按目标 Repository 格式校验规则，并推进标记“已管理”的存储版本。Role 与 Template 的管理仅限管理员。
+
+未管理时保留旧协议静态行为与已有 wildcard 语义；缺少 reader map 时保留本地开发的 unrestricted-read。默认 Grant set 版本为 1；任何成功 `ReplaceRepositoryGrants`（包括空数组）把版本提升到 1 以上，作为“已管理”标记。显式空集拒绝所有走到 Grant 判定步骤的主体，但无法撤销全局角色：角色覆盖该操作的非管理员在读取 Grant 之前就已放行。
 
 ## 操作映射
 
@@ -34,7 +36,9 @@ Service Account 没有全局角色，只通过显式 Grant 访问，凭证轮换
 
 V2 将全局发现和已知资源操作分离。有 read Grant 的 principal 可读取已知 Repository detail、retention、artifact 和 publish session；write 可执行 Repository 内 mutation；admin 管 Grant。
 
-Repository list、Audit list、Repository/Group lifecycle 和全局管理发现仍只允许管理员。Scoped Grant 不是 discovery Grant，不能枚举 Repository、Group、Audit 或分页状态，避免空过滤列表成为存在性 oracle。
+`GET /api/v2/repositories` 现在按权限过滤而非仅限管理员：管理员可见全部 Repository，其他已认证主体只能看到其全局角色或 Grant 允许读取的 Repository，待审批（`none`）账号被拒绝。过滤在服务端按调用方自身的有效读权限执行，列表不会包含调用方无权读取的 Repository。Audit list、Repository/Group lifecycle 及其余全局管理发现路由仍只允许管理员。
+
+`GET /api/v2/repositories/{id}` 对不存在的 Repository 仍返回 `404`、对存在但不可读的返回 `403`，因此已知标识符的调用方仍可确认其存在。使该响应与列表保持一致由 effective-access 相关工作跟进，本计划暂不声称已实现。
 
 ## Group 与 Proxy
 

@@ -60,7 +60,7 @@ func (h generatedRepositoryAPIAdapter) CreateApiKey(w http.ResponseWriter, r *ht
 	}
 	for _, role := range valueOrEmptyRoles(request.Roles) {
 		switch role {
-		case adminopenapi.CreateAPIKeyRolesAdmin, adminopenapi.CreateAPIKeyRolesWriter, adminopenapi.CreateAPIKeyRolesReader:
+		case adminopenapi.CreateAPIKeyRolesAdmin, adminopenapi.CreateAPIKeyRolesWriter, adminopenapi.CreateAPIKeyRolesReader, adminopenapi.CreateAPIKeyRolesMember:
 		default:
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "unsupported API key role")
 			return
@@ -160,7 +160,7 @@ func userSessionResponse(session repository.UserSession, current bool) adminopen
 }
 
 func validUserRole(role string) bool {
-	return role == string(authorization.RoleNone) || role == string(authorization.RoleAdmin) || role == string(authorization.RoleWriter) || role == string(authorization.RoleReader)
+	return role == string(authorization.RoleNone) || role == string(authorization.RoleMember) || role == string(authorization.RoleAdmin) || role == string(authorization.RoleWriter) || role == string(authorization.RoleReader)
 }
 
 const maxLocalPasswordBytes = 72 // bcrypt's maximum effective password length.

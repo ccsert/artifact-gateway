@@ -69,6 +69,11 @@ type Authenticator struct {
 	// RepositoryReaders maps an actor to exact repository names or prefix
 	// patterns ending in /*. A nil map keeps the local-development default.
 	RepositoryReaders map[string][]string
+	// LegacyReadDefaultDeny makes a deployment that configured no reader
+	// patterns deny an unmatched caller instead of admitting it. The next
+	// release flips this default; until then it is an explicit opt-in so an
+	// upgrade never takes reads away from running clients unannounced.
+	LegacyReadDefaultDeny bool
 	// RepositoryWriters is intentionally separate from readers: Maven deploy
 	// must never turn a download grant into publication authority.
 	RepositoryWriters map[string][]string
@@ -231,11 +236,50 @@ func (a Authenticator) PrincipalForActor(actor string) Principal {
 	return Principal{Actor: actor, RepositoryPatterns: a.RepositoryReaders[actor], AuthenticationKind: AuthenticationStaticResolver}
 }
 
-func (p Principal) CanReadRepository(repositoryName string, policyConfigured bool) bool {
+// AccountStateReason names the principal-wide condition that blocks every
+// repository path before any repository authority is considered, so the managed
+// authorizer, the legacy static-policy paths, and the management API all agree.
+// A pending account has no approval yet; an account whose password must change
+// cannot exercise repository permissions until it does. Changing the password is
+// authenticated separately, so it stays reachable. Empty means no block.
+func (p Principal) AccountStateReason() string {
 	if p.Role == RoleNone {
+		return "authorization_pending"
+	}
+	if p.MustChangePassword {
+		return "password_change_required"
+	}
+	return ""
+}
+
+func (p Principal) RepositoryAccessBlocked() bool {
+	return p.AccountStateReason() != ""
+}
+
+// CanReadRepository reports whether the principal may read the named legacy
+// repository. An administrator, a global read role, or a matching reader
+// pattern qualifies. A deployment that configured no reader patterns at all
+// admits an otherwise-unmatched caller, because that is the documented
+// production posture; GATEWAY_LEGACY_READ_DEFAULT=deny opts into the stricter
+// posture early and the next release makes it the default. A pending or
+// password-change account is never admitted, whatever the posture.
+func (a Authenticator) CanReadRepository(principal Principal, repositoryName string) bool {
+	if principal.CanReadRepository(repositoryName) {
+		return true
+	}
+	return !principal.RepositoryAccessBlocked() && a.RepositoryReaders == nil && !a.LegacyReadDefaultDeny
+}
+
+// CanReadRepository reports whether the principal's own authority - account
+// state, administrator identity, global read role, or reader pattern - allows
+// reading the named legacy repository. It knows nothing about deployment
+// configuration; callers that need the documented fallback use the
+// Authenticator method above.
+func (p Principal) CanReadRepository(repositoryName string) bool {
+	if p.RepositoryAccessBlocked() {
 		return false
 	}
-	if p.Admin || RoleAllows(p.Role, RepositoryRead) || !policyConfigured {
+	if p.Admin || RoleAllows(p.Role, RepositoryRead) {
 		return true
 	}
 	for _, pattern := range p.RepositoryPatterns {
@@ -246,15 +290,11 @@ func (p Principal) CanReadRepository(repositoryName string, policyConfigured boo
 	return false
 }
 
-func (a Authenticator) CanReadRepository(principal Principal, repositoryName string) bool {
-	return principal.CanReadRepository(repositoryName, a.RepositoryReaders != nil)
-}
-
 // CanReadMavenRepository treats a Maven Group as its repository boundary.
 // `group/*` is accepted for compatibility with path-shaped grant policies,
 // without broadening OCI's wildcard semantics.
 func (a Authenticator) CanReadMavenRepository(principal Principal, groupName string) bool {
-	if principal.Role == RoleNone {
+	if principal.RepositoryAccessBlocked() {
 		return false
 	}
 	if a.CanReadRepository(principal, groupName) {
@@ -269,7 +309,7 @@ func (a Authenticator) CanReadMavenRepository(principal Principal, groupName str
 }
 
 func (a Authenticator) CanWriteMavenRepository(principal Principal, repositoryName string) bool {
-	if principal.Role == RoleNone {
+	if principal.RepositoryAccessBlocked() {
 		return false
 	}
 	if principal.Admin || RoleAllows(principal.Role, RepositoryWrite) {
@@ -419,7 +459,7 @@ func (a Authenticator) webSessionPrincipal(token string) (Principal, bool) {
 		SessionVersion   int64                  `json:"v"`
 		SessionID        string                 `json:"i"`
 	}
-	if json.Unmarshal(raw, &claims) != nil || claims.Actor == "" || claims.Authentication != AuthenticationOIDC || claims.Role != "" && claims.Role != RoleNone && claims.Role != RoleReader && claims.Role != RoleWriter && claims.Role != RoleAdmin || !validOIDCMetadata(claims.Authentication, claims.OIDCAdminSubject, claims.OIDCRoleMappings) {
+	if json.Unmarshal(raw, &claims) != nil || claims.Actor == "" || claims.Authentication != AuthenticationOIDC || claims.Role != "" && !validGatewayRole(claims.Role) || !validOIDCMetadata(claims.Authentication, claims.OIDCAdminSubject, claims.OIDCRoleMappings) {
 		return Principal{}, false
 	}
 	if strings.HasPrefix(claims.Actor, "user:") {
@@ -561,7 +601,7 @@ func (a Authenticator) principalToken(token string) (Principal, bool) {
 	if strings.HasPrefix(claims.Actor, "user:") {
 		return a.principalForTokenActor(claims.Actor)
 	}
-	if claims.Role != "" && claims.Role != RoleNone && claims.Role != RoleReader && claims.Role != RoleWriter && claims.Role != RoleAdmin {
+	if claims.Role != "" && !validGatewayRole(claims.Role) {
 		return Principal{}, false
 	}
 	if claims.Authentication == "" {
@@ -592,6 +632,17 @@ func (a Authenticator) principalToken(token string) (Principal, bool) {
 	}, true
 }
 
+// validGatewayRole reports whether a credential or session role claim names a
+// role the Gateway recognises. Every accept-list must route through here, or a
+// newly added role silently fails to authenticate the sessions that carry it.
+func validGatewayRole(role Role) bool {
+	switch role {
+	case RoleNone, RoleMember, RoleReader, RoleWriter, RoleAdmin:
+		return true
+	}
+	return false
+}
+
 func validAuthenticationKind(kind AuthenticationKind) bool {
 	switch kind {
 	case "", AuthenticationStaticAdmin, AuthenticationStaticResolver, AuthenticationLocalSession, AuthenticationAPIKey, AuthenticationServiceAccountCredential, AuthenticationOIDC:
@@ -606,7 +657,7 @@ func validOIDCMetadata(kind AuthenticationKind, adminSubject bool, mappings []OI
 		return false
 	}
 	for _, mapping := range mappings {
-		if mapping.ExternalRole == "" || mapping.GatewayRole != RoleReader && mapping.GatewayRole != RoleWriter && mapping.GatewayRole != RoleAdmin {
+		if mapping.ExternalRole == "" || mapping.GatewayRole != RoleMember && mapping.GatewayRole != RoleReader && mapping.GatewayRole != RoleWriter && mapping.GatewayRole != RoleAdmin {
 			return false
 		}
 	}

@@ -469,6 +469,7 @@ APIKey:
       items:
         type: string
         enum:
+        - member
         - admin
         - writer
         - reader
@@ -512,6 +513,7 @@ CreateAPIKey:
       items:
         type: string
         enum:
+        - member
         - admin
         - writer
         - reader
@@ -634,6 +636,7 @@ User:
       type: string
       enum:
       - none
+      - member
       - admin
       - writer
       - reader
@@ -718,6 +721,7 @@ CreateUser:
       type: string
       enum:
       - none
+      - member
       - admin
       - writer
       - reader
@@ -742,6 +746,7 @@ UpdateUser:
       type: string
       enum:
       - none
+      - member
       - admin
       - writer
       - reader
@@ -1263,7 +1268,7 @@ OIDCRoleMappingMatch:
     externalRole: {type: string, minLength: 1}
     gatewayRole:
       type: string
-      enum: [admin, writer, reader]
+      enum: [member, admin, writer, reader]
 OIDCIdentityDetails:
   type: object
   required: [adminSubject, roleMappings]
@@ -1282,7 +1287,7 @@ CurrentIdentity:
     kind: {"$ref": "#/AuthenticationKind"}
     role:
       type: string
-      enum: [none, admin, writer, reader]
+      enum: [none, member, admin, writer, reader]
     administrator: {type: boolean}
     oidc: {"$ref": "#/OIDCIdentityDetails"}
 RepositoryEffectiveAccess:
@@ -1763,7 +1768,7 @@ OIDCSettings:
       items: {type: string}
     provisioningMode: {type: string, enum: [disabled, jit]}
     emailLinkingEnabled: {type: boolean}
-    jitDefaultRole: {type: string, enum: [none, admin, writer, reader]}
+    jitDefaultRole: {type: string, enum: [none, member, admin, writer, reader]}
     updatedAt: {type: string, format: date-time}
 OIDCSettingsUpdate:
   type: object
@@ -1797,7 +1802,7 @@ OIDCSettingsUpdate:
       items: {type: string}
     provisioningMode: {type: string, enum: [disabled, jit]}
     emailLinkingEnabled: {type: boolean}
-    jitDefaultRole: {type: string, enum: [none, admin, writer, reader]}
+    jitDefaultRole: {type: string, enum: [none, member, admin, writer, reader]}
 OIDCConnectionTest:
   type: object
   required: [reachable, issuer, latencyMs, checkedAt]

@@ -21,9 +21,9 @@ shift
 [[ "$1" == --env-file && "$2" == /dev/null && "$3" == --project-name && "$4" == artifact-gateway-integration && "$5" == -f && "$6" == *compose.integration.yml ]] || exit 11
 shift 6
 printf '%s\n' "$*" >>"$AG_ISOLATION_LOG"
-# The lifecycle upgrade probe uses a second database within the same isolated
-# project. Its mounted legacy migrations are not the checksum-drift fixture.
-if [[ "$*" == *"--env PGDATABASE=gateway_apt_lifecycle_upgrade_test"* ]]; then
+# Upgrade probes use a second database within the same isolated project. Their
+# mounted legacy migrations are not the checksum-drift fixture.
+if [[ "$*" == *"--env PGDATABASE=gateway_"*"_upgrade_test"* ]]; then
   exit 0
 fi
 if [[ "$*" == *"psql -X -U gateway -d gateway_apt_lifecycle_upgrade_test"* ]]; then
@@ -54,7 +54,7 @@ AG_ISOLATION_LATEST=$(find "$root/migrations" -maxdepth 1 -name '*.sql' | sort |
 AG_ISOLATION_LATEST=${AG_ISOLATION_LATEST##*/}
 "$root/scripts/integration-test.sh" >/dev/null
 make --no-print-directory -C "$root" integration-down >/dev/null
-for expected in 'down -v --remove-orphans' 'up -d --wait postgres rustfs' 'run --rm --no-deps test' 'exec -T postgres createdb -U gateway gateway_apt_lifecycle_upgrade_test' 'exec -T postgres dropdb -U gateway --if-exists gateway_apt_lifecycle_upgrade_test'; do
+for expected in 'down -v --remove-orphans' 'up -d --wait postgres rustfs' 'run --rm --no-deps test' 'exec -T postgres createdb -U gateway gateway_apt_lifecycle_upgrade_test' 'exec -T postgres dropdb -U gateway --if-exists gateway_apt_lifecycle_upgrade_test' 'exec -T postgres createdb -U gateway gateway_member_role_upgrade_test' 'exec -T postgres dropdb -U gateway --if-exists gateway_member_role_upgrade_test'; do
   grep -Fq -- "$expected" "$AG_ISOLATION_LOG"
 done
 printf 'Integration Compose isolation passed with an unrelated exported project name.\n'

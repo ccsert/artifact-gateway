@@ -61,3 +61,26 @@ candidate changes, Range/conditional reads, failure recovery, and grant isolatio
 - Do not migrate by copying cache objects or altering a Legacy Group's rows.
   Proxy cache warms naturally from client reads and orphan collection reclaims
   unreferenced bytes on its normal schedule.
+
+## Unconfigured reader policy
+
+A deployment that configures no reader patterns admits an unmatched authenticated
+caller to a legacy repository. That has been the documented posture and it is
+changing: the next release denies unmatched readers when no policy is
+configured.
+
+Upgrade action, to be completed before that release:
+
+1. Inventory the actors that read legacy repositories without a grant. Those are
+   the ones relying on the unconfigured default.
+2. Give each one an exact repository name or a `prefix/*` pattern in
+   `GATEWAY_REPOSITORY_READERS`, or a per-repository grant. There is no
+   catch-all pattern, so every repository an actor needs has to be listed.
+3. Set `GATEWAY_LEGACY_READ_DEFAULT=deny` and restart. Reads that still work are
+   covered by an explicit policy, and the startup warning is gone.
+4. Leave `deny` in place. The next release makes it the default, so nothing is
+   left relying on the permissive fallback when that happens.
+
+An administrator, a global read role, and this repository's own grants are
+unaffected because they never used the fallback. A pending or password-change
+account is refused under every posture.

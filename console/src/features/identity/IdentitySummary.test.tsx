@@ -44,7 +44,7 @@ describe("IdentitySummary", () => {
 
     expect(screen.getByText("ci-user")).toBeInTheDocument();
     expect(screen.getByText("OIDC")).toBeInTheDocument();
-    expect(screen.getByText("写入者")).toBeInTheDocument();
+    expect(screen.getByText("写入者 · 全仓库")).toBeInTheDocument();
     expect(screen.getByText("gateway-reader → reader")).toBeInTheDocument();
     expect(screen.getByText("gateway-writer → writer")).toBeInTheDocument();
   });

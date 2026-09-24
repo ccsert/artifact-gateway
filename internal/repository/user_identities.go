@@ -186,10 +186,10 @@ func refreshUserIdentity(identity UserIdentity, provision OIDCIdentityProvision,
 
 func newOIDCProvisionedUser(provision OIDCIdentityProvision, existing map[string]User, now time.Time) User {
 	role := provision.Role
-	if role != "admin" && role != "writer" && role != "reader" {
+	if role != "admin" && role != "writer" && role != "reader" && role != "member" {
 		role = provision.DefaultRole
 	}
-	if role != "admin" && role != "writer" && role != "reader" && role != "none" {
+	if role != "admin" && role != "writer" && role != "reader" && role != "member" && role != "none" {
 		role = "reader"
 	}
 	name := provisionedUsername(provision.PreferredUsername, provision.Email, provision.Issuer, provision.Subject, existing)
