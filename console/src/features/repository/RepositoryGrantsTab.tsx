@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Input, Select, Space, Table, Tooltip } from "antd";
+import { Alert, Button, Space, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
+import { EditOutlined, PlusOutlined } from "@ant-design/icons";
 import {
   listAuthorizationRoles,
   listApiKeys,
@@ -21,23 +21,15 @@ import {
 import { Modal, useDisclosure } from "../../components/ui/Modal";
 import { usePreferences } from "../../lib/preferences";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
-import { ResourcePrefixEditor } from "../access-control/ResourcePrefixEditor";
+import { GrantRowEditor } from "../access-control/GrantRowEditor";
 import {
-  BUILTIN_PERMISSION_PREFIX,
   CUSTOM_PRINCIPAL,
-  CUSTOM_ROLE_PREFIX,
-  SNAPSHOT_PERMISSION,
   emptyGrant,
   grantedCapabilitiesLabel,
   grantLevel,
   grantTone,
-  permissionSelection,
-  principalEditorKind,
   principalOptions,
-  scopesForLevel,
-  scopesForRole,
   type DraftGrant,
-  type GrantLevel,
   type PrincipalOption,
 } from "../access-control/grantDraft";
 
@@ -301,250 +293,19 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
               <span />
             </div>
             <div className="border-b border-zinc-800/70">
-              {draft.map((g, i) => {
-                const kind = principalEditorKind(g.principal);
-                const selectedChoice = principalChoices.find(
-                  (choice) => choice.value === g.principal,
-                );
-                const level = grantLevel(g.scopes);
-                const selectedPermission = permissionSelection(
-                  g,
-                  authorizationRoles,
-                );
-                return (
-                  <div
-                    key={i}
-                    className="grid grid-cols-[minmax(300px,1.35fr)_170px_minmax(360px,1.5fr)_170px_40px] items-start gap-3 border-t border-zinc-800/70 px-2 py-3"
-                  >
-                    <div className="min-w-0">
-                      <Select
-                        className="w-full"
-                        aria-label={text("授权主体", "Principal")}
-                        showSearch={{ optionFilterProp: "label" }}
-                        value={
-                          kind === "custom"
-                            ? CUSTOM_PRINCIPAL
-                            : g.principal || undefined
-                        }
-                        placeholder={text(
-                          "选择用户、API Key、服务账号或外部身份",
-                          "Select a user, API key, service account, or external identity",
-                        )}
-                        options={[
-                          {
-                            label: text("用户", "Users"),
-                            options: principalChoices
-                              .filter((choice) =>
-                                choice.value.startsWith("user:"),
-                              )
-                              .map((choice) => ({
-                                value: choice.value,
-                                label: `${choice.label} · ${choice.detail}`,
-                              })),
-                          },
-                          {
-                            label: "API Keys",
-                            options: principalChoices
-                              .filter((choice) =>
-                                choice.value.startsWith("api-key:"),
-                              )
-                              .map((choice) => ({
-                                value: choice.value,
-                                label: `${choice.label} · ${choice.detail}`,
-                              })),
-                          },
-                          {
-                            label: text("服务账号", "Service accounts"),
-                            options: principalChoices
-                              .filter((choice) =>
-                                choice.value.startsWith("service-account:"),
-                              )
-                              .map((choice) => ({
-                                value: choice.value,
-                                label: `${choice.label} · ${choice.detail}`,
-                              })),
-                          },
-                          {
-                            label: text("外部身份", "External identities"),
-                            options: [
-                              {
-                                value: CUSTOM_PRINCIPAL,
-                                label: text(
-                                  "OIDC / 自定义 actor",
-                                  "OIDC / custom actor",
-                                ),
-                              },
-                            ],
-                          },
-                        ]}
-                        onChange={(value) =>
-                          setDraft((d) =>
-                            d.map((x, j) =>
-                              j === i
-                                ? {
-                                    ...x,
-                                    principal:
-                                      value === CUSTOM_PRINCIPAL
-                                        ? principalEditorKind(x.principal) ===
-                                          "custom"
-                                          ? x.principal
-                                          : CUSTOM_PRINCIPAL
-                                        : value,
-                                  }
-                                : x,
-                            ),
-                          )
-                        }
-                      />
-                      {kind === "custom" && (
-                        <Input
-                          className="mt-2 font-mono"
-                          placeholder={text(
-                            "完整 actor，例如 oidc:gitlab:team/release",
-                            "Complete actor, for example oidc:gitlab:team/release",
-                          )}
-                          value={
-                            g.principal === CUSTOM_PRINCIPAL ? "" : g.principal
-                          }
-                          onChange={(event) =>
-                            setDraft((d) =>
-                              d.map((x, j) =>
-                                j === i
-                                  ? { ...x, principal: event.target.value }
-                                  : x,
-                              ),
-                            )
-                          }
-                        />
-                      )}
-                      <div className="mt-1 min-h-4 text-xs leading-4 text-zinc-600">
-                        {kind === "custom"
-                          ? text(
-                              "必须与认证完成后产生的 actor 完全一致",
-                              "Must exactly match the authenticated actor",
-                            )
-                          : selectedChoice?.detail}
-                      </div>
-                    </div>
-                    <div className="min-w-0">
-                      <Select
-                        className="w-full"
-                        value={selectedPermission}
-                        options={[
-                          ...(selectedPermission === SNAPSHOT_PERMISSION
-                            ? [
-                                {
-                                  value: SNAPSHOT_PERMISSION,
-                                  label: text(
-                                    "已保存的权限快照",
-                                    "Saved permission snapshot",
-                                  ),
-                                },
-                              ]
-                            : []),
-                          {
-                            label: text("内置权限", "Built-in permissions"),
-                            options: [
-                              {
-                                value: `${BUILTIN_PERMISSION_PREFIX}read`,
-                                label: text(
-                                  "读取 · 浏览 / 拉取",
-                                  "Read · browse / pull",
-                                ),
-                              },
-                              {
-                                value: `${BUILTIN_PERMISSION_PREFIX}write`,
-                                label: text(
-                                  "写入 · 发布 / 编辑",
-                                  "Write · publish / edit",
-                                ),
-                              },
-                              {
-                                value: `${BUILTIN_PERMISSION_PREFIX}admin`,
-                                label: text(
-                                  "管理 · 授权 / 删除",
-                                  "Admin · grant / delete",
-                                ),
-                              },
-                              {
-                                value: `${BUILTIN_PERMISSION_PREFIX}intelligence`,
-                                label: text(
-                                  "制品情报 · 安全元数据",
-                                  "Artifact intelligence · security metadata",
-                                ),
-                              },
-                            ],
-                          },
-                          {
-                            label: text("自定义角色", "Custom roles"),
-                            options: authorizationRoles.map((role) => ({
-                              value: `${CUSTOM_ROLE_PREFIX}${role.id}`,
-                              label: role.name,
-                            })),
-                          },
-                        ]}
-                        onChange={(value) => {
-                          if (value === SNAPSHOT_PERMISSION) return;
-                          const role = value.startsWith(CUSTOM_ROLE_PREFIX)
-                            ? authorizationRoles.find(
-                                (item) =>
-                                  item.id ===
-                                  value.slice(CUSTOM_ROLE_PREFIX.length),
-                              )
-                            : undefined;
-                          const nextScopes = role
-                            ? scopesForRole(role)
-                            : scopesForLevel(
-                                value.slice(
-                                  BUILTIN_PERMISSION_PREFIX.length,
-                                ) as GrantLevel,
-                              );
-                          setDraft((d) =>
-                            d.map((x, j) =>
-                              j === i
-                                ? {
-                                    ...x,
-                                    scopes: nextScopes,
-                                    roleId: role?.id,
-                                  }
-                                : x,
-                            ),
-                          );
-                        }}
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <ResourcePrefixEditor
-                        format={repo.format}
-                        value={g.resourcePrefix ?? ""}
-                        onChange={(value) =>
-                          setDraft((d) =>
-                            d.map((x, j) =>
-                              j === i ? { ...x, resourcePrefix: value } : x,
-                            ),
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="flex min-h-10 items-center">
-                      <Badge tone={grantTone(level)}>
-                        {grantedCapabilitiesLabel(g.scopes, text)}
-                      </Badge>
-                    </div>
-                    <Tooltip title={text("移除规则", "Remove rule")}>
-                      <Button
-                        type="text"
-                        danger
-                        aria-label={text("移除规则", "Remove rule")}
-                        icon={<DeleteOutlined />}
-                        onClick={() =>
-                          setDraft((d) => d.filter((_, j) => j !== i))
-                        }
-                      />
-                    </Tooltip>
-                  </div>
-                );
-              })}
+              {draft.map((g, i) => (
+                <GrantRowEditor
+                  key={i}
+                  grant={g}
+                  principalOptions={principalChoices}
+                  authorizationRoles={authorizationRoles}
+                  format={repo.format}
+                  onChange={(next) =>
+                    setDraft((d) => d.map((x, j) => (j === i ? next : x)))
+                  }
+                  onRemove={() => setDraft((d) => d.filter((_, j) => j !== i))}
+                />
+              ))}
               {draft.length === 0 && (
                 <div className="border-t border-zinc-800/70 px-3 py-8 text-center text-xs text-zinc-600">
                   {text("尚未添加授权规则", "No access grants added")}
