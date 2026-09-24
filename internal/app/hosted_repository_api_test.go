@@ -503,6 +503,14 @@ func TestHostedRepositoryManagementRejectsAnonymousAndInvalidRequests(t *testing
 	if denied.Code != http.StatusUnauthorized {
 		t.Fatalf("anonymous status=%d", denied.Code)
 	}
+	if challenge := denied.Header().Get("WWW-Authenticate"); !strings.Contains(challenge, "Bearer") {
+		t.Fatalf("anonymous 401 challenge=%q", challenge)
+	}
+	adminOnly := httptest.NewRecorder()
+	handler.ServeHTTP(adminOnly, httptest.NewRequest(http.MethodGet, "/api/v2/users", nil))
+	if adminOnly.Code != http.StatusUnauthorized || !strings.Contains(adminOnly.Header().Get("WWW-Authenticate"), "Bearer") {
+		t.Fatalf("anonymous administrator route=%d challenge=%q", adminOnly.Code, adminOnly.Header().Get("WWW-Authenticate"))
+	}
 	anonymousInvalidSession := httptest.NewRecorder()
 	handler.ServeHTTP(anonymousInvalidSession, httptest.NewRequest(http.MethodPost, "/api/v2/publish-sessions/not-a-uuid:commit", nil))
 	if anonymousInvalidSession.Code != http.StatusUnauthorized || !strings.Contains(anonymousInvalidSession.Body.String(), `"code":"access_denied"`) {

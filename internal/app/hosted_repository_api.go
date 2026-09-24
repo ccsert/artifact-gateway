@@ -870,6 +870,12 @@ func proxyAllowedHostsRequired(format repository.Format) bool {
 
 func writeHostedProblem(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/problem+json")
+	// A 401 has to name the scheme the caller should use. Protocol handlers
+	// publish their own challenge (OCI and Raw a protocol realm, Conan Basic), so
+	// never overwrite one that is already set.
+	if status == http.StatusUnauthorized && w.Header().Get("WWW-Authenticate") == "" {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="Artifact Gateway"`)
+	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": http.StatusText(status), "status": status, "code": code, "message": message, "requestId": ""})
 }
