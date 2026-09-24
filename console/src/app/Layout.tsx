@@ -9,6 +9,7 @@ import {
   MenuOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  ReloadOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
@@ -289,6 +290,33 @@ export function AppLayout() {
     }
     const target = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?redirect=${target}`} replace />;
+  }
+
+  if (identity?.role === "none") {
+    return (
+      <div className="ag-app-fallback flex min-h-screen items-center justify-center px-6">
+        <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center">
+          <SiteBrandMark className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl text-lg font-bold text-white" />
+          <h1 className="mt-5 text-xl font-semibold text-zinc-100">
+            {t("auth.awaitingAuthorization")}
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-zinc-400">
+            {t("auth.awaitingAuthorizationDescription")}
+          </p>
+          <Space className="mt-6">
+            <Button
+              type="primary"
+              icon={<ReloadOutlined />}
+              aria-label={t("auth.checkAuthorization")}
+              onClick={() => window.location.reload()}
+            >
+              {t("auth.checkAuthorization")}
+            </Button>
+            <Button onClick={clearToken}>{t("auth.logout")}</Button>
+          </Space>
+        </div>
+      </div>
+    );
   }
 
   const adminOnlyPath = [

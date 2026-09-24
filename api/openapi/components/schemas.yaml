@@ -633,6 +633,7 @@ User:
     role:
       type: string
       enum:
+      - none
       - admin
       - writer
       - reader
@@ -716,6 +717,7 @@ CreateUser:
     role:
       type: string
       enum:
+      - none
       - admin
       - writer
       - reader
@@ -739,6 +741,7 @@ UpdateUser:
     role:
       type: string
       enum:
+      - none
       - admin
       - writer
       - reader
@@ -1279,7 +1282,7 @@ CurrentIdentity:
     kind: {"$ref": "#/AuthenticationKind"}
     role:
       type: string
-      enum: [admin, writer, reader]
+      enum: [none, admin, writer, reader]
     administrator: {type: boolean}
     oidc: {"$ref": "#/OIDCIdentityDetails"}
 RepositoryEffectiveAccess:
@@ -1760,7 +1763,7 @@ OIDCSettings:
       items: {type: string}
     provisioningMode: {type: string, enum: [disabled, jit]}
     emailLinkingEnabled: {type: boolean}
-    jitDefaultRole: {type: string, enum: [admin, writer, reader]}
+    jitDefaultRole: {type: string, enum: [none, admin, writer, reader]}
     updatedAt: {type: string, format: date-time}
 OIDCSettingsUpdate:
   type: object
@@ -1794,7 +1797,7 @@ OIDCSettingsUpdate:
       items: {type: string}
     provisioningMode: {type: string, enum: [disabled, jit]}
     emailLinkingEnabled: {type: boolean}
-    jitDefaultRole: {type: string, enum: [admin, writer, reader]}
+    jitDefaultRole: {type: string, enum: [none, admin, writer, reader]}
 OIDCConnectionTest:
   type: object
   required: [reachable, issuer, latencyMs, checkedAt]

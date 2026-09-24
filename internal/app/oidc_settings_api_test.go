@@ -61,6 +61,13 @@ func TestOIDCSettingsRequireCompleteBrowserConfiguration(t *testing.T) {
 	if err != nil || !settings.Enabled {
 		t.Fatalf("bearer-only settings=%#v err=%v", settings, err)
 	}
+	pending, err := normalizeOIDCSettingsUpdate(OIDCSettingsUpdate{
+		Enabled: true, Issuer: "https://identity.example.test", Audience: "artifact-gateway-api",
+		ProvisioningMode: "jit", JITDefaultRole: "none",
+	})
+	if err != nil || pending.ProvisioningMode != "jit" || pending.JITDefaultRole != "none" {
+		t.Fatalf("pending JIT settings=%#v err=%v", pending, err)
+	}
 }
 
 func TestOIDCSettingsCanMoveFromEnvironmentToRuntimeStorage(t *testing.T) {

@@ -196,4 +196,29 @@ func TestPostgresUserIdentityBindingAndJITProvisioning(t *testing.T) {
 		t.Fatalf("JIT user=%+v identity=%+v created=%v err=%v", jitUser, jitIdentity, created, err)
 	}
 	defer func() { _ = store.DeleteUser(ctx, jitUser.ID) }()
+
+	pending, pendingIdentity, created, err := store.ResolveOIDCIdentity(ctx, OIDCIdentityProvision{
+		Issuer: issuer, Subject: "pending-subject", Email: "pending-" + suffix + "@example.test",
+		DisplayName: "Pending Identity", PreferredUsername: "pending-" + suffix,
+		EmailVerified: true, Provision: true, DefaultRole: "none", OccurredAt: occurredAt,
+	})
+	if err != nil || !created || pending.Role != "none" || pending.SecretHash != "" || pendingIdentity.UserID != pending.ID {
+		t.Fatalf("pending JIT user=%+v identity=%+v created=%v err=%v", pending, pendingIdentity, created, err)
+	}
+	defer func() { _ = store.DeleteUser(ctx, pending.ID) }()
+	page, err := store.ListUsers(ctx, UserListQuery{Search: pending.Name, Role: "none", Limit: 10})
+	if err != nil || page.Total != 1 || page.Items[0].ID != pending.ID {
+		t.Fatalf("pending list=%+v err=%v", page, err)
+	}
+	reader := "reader"
+	approved, err := store.UpdateUser(ctx, UserUpdate{ID: pending.ID, Role: &reader}, pending.Version)
+	if err != nil || approved.Role != "reader" {
+		t.Fatalf("approved user=%+v err=%v", approved, err)
+	}
+	again, _, created, err := store.ResolveOIDCIdentity(ctx, OIDCIdentityProvision{
+		Issuer: issuer, Subject: "pending-subject", Provision: true, DefaultRole: "none", OccurredAt: time.Now().UTC(),
+	})
+	if err != nil || created || again.ID != pending.ID || again.Role != "reader" {
+		t.Fatalf("repeat sign-in user=%+v created=%v err=%v", again, created, err)
+	}
 }

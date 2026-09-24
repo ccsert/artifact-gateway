@@ -17,7 +17,7 @@
 
 <p align="center">
   <a href="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/ccsert/artifact-gateway/releases/tag/v0.2.0"><img alt="Release 0.2.0" src="https://img.shields.io/badge/release-0.2.0-2563EB"></a>
+  <a href="https://github.com/ccsert/artifact-gateway/releases/tag/v0.3.0"><img alt="Release 0.3.0" src="https://img.shields.io/badge/release-0.3.0-2563EB"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-22C55E"></a>
   <img alt="Go 1.26.6" src="https://img.shields.io/badge/Go-1.26.6-00ADD8?logo=go&logoColor=white">
   <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white">
@@ -94,9 +94,9 @@ search and browse, retention, recoverable deletion, promotion, replication,
 webhooks, scanner integration, quarantine, diagnostics, metrics, and backup /
 restore workflows. Each area is tracked from the [documentation index](docs/README.md).
 
-## Install 0.2.0
+## Install 0.3.0
 
-The [0.2.0 Release](https://github.com/ccsert/artifact-gateway/releases/tag/v0.2.0)
+The [0.3.0 Release](https://github.com/ccsert/artifact-gateway/releases/tag/v0.3.0)
 contains Linux and macOS archives for amd64/arm64, the static Console bundle,
 resolved OpenAPI contracts, and `SHA256SUMS`. Every Gateway archive includes
 the server and healthcheck binaries, PostgreSQL migrations, a portable
@@ -117,14 +117,14 @@ MIGRATION_DIR=./migrations ./run-migrations.sh
 Container images are published to GHCR for both release and development use:
 
 ```text
-ghcr.io/ccsert/artifact-gateway:0.2.0
-ghcr.io/ccsert/artifact-gateway-console:0.2.0
+ghcr.io/ccsert/artifact-gateway:0.3.0
+ghcr.io/ccsert/artifact-gateway-console:0.3.0
 ghcr.io/ccsert/artifact-gateway:main
 ghcr.io/ccsert/artifact-gateway-console:main
 ```
 
 `main` is a moving, CI-qualified development snapshot. Release deployments
-should pin `0.2.0` or the reported image digest. Package visibility follows
+should pin `0.3.0` or the reported image digest. Package visibility follows
 the GitHub repository and GHCR package visibility.
 
 ## Quick local start

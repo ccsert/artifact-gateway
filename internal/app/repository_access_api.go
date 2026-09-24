@@ -18,6 +18,10 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.Respo
 	if !ok {
 		return
 	}
+	if principal.Role == RoleNone {
+		writeHostedProblem(w, http.StatusForbidden, "authorization_pending", "administrator approval is required")
+		return
+	}
 	simulated := false
 	if params.Actor == nil && params.Role != nil {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "role requires an actor to simulate")

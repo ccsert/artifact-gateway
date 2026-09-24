@@ -26,6 +26,7 @@ const (
 type Role string
 
 const (
+	RoleNone   Role = "none"
 	RoleAdmin  Role = "admin"
 	RoleWriter Role = "writer"
 	RoleReader Role = "reader"
@@ -88,6 +89,9 @@ func (a RepositoryAuthorizer) Authorize(ctx context.Context, principal Principal
 }
 
 func (a RepositoryAuthorizer) AuthorizeResource(ctx context.Context, principal Principal, target repository.HostedRepository, operation RepositoryOperation, resource string) AuthorizationDecision {
+	if principal.Role == RoleNone {
+		return AuthorizationDecision{Source: "role", Reason: "authorization_pending"}
+	}
 	if principal.Admin {
 		return AuthorizationDecision{Allowed: true, Source: "administrator", Reason: "administrator"}
 	}
@@ -108,6 +112,9 @@ func (a RepositoryAuthorizer) ManagedDecision(ctx context.Context, principal Pri
 }
 
 func (a RepositoryAuthorizer) ManagedResourceDecision(ctx context.Context, principal Principal, target repository.HostedRepository, operation RepositoryOperation, resource string) (AuthorizationDecision, bool) {
+	if principal.Role == RoleNone {
+		return AuthorizationDecision{Source: "role", Reason: "authorization_pending"}, true
+	}
 	if principal.Admin {
 		return AuthorizationDecision{Allowed: true, Source: "administrator", Reason: "administrator"}, true
 	}

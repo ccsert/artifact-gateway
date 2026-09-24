@@ -25,6 +25,10 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 	if !ok {
 		return
 	}
+	if principal.Role == RoleNone {
+		writeHostedProblem(w, http.StatusForbidden, "authorization_pending", "administrator approval is required")
+		return
+	}
 	query := strings.TrimSpace(params.Q)
 	if query == "" || len(query) > 255 || strings.ContainsRune(query, '\x00') {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q must contain between 1 and 255 characters")

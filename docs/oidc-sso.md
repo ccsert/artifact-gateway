@@ -71,6 +71,33 @@ active, unexpired server-side session record. An unlinked identity continues to
 use the external-principal behavior and a stateless browser session when JIT
 provisioning is disabled.
 
+### Register users before granting access
+
+To manage all sign-ins from the Gateway Users page without granting automatic
+repository access:
+
+1. In **Authentication**, set **Unlinked identities** to **Provision on first sign-in**
+   and **JIT default role** to **none · awaiting approval**. Leave verified-email
+   linking off unless existing-account merging is explicitly required.
+2. Ask each user to sign in again. Gateway creates one local account and OIDC
+   binding keyed by the provider's issuer and stable subject. The account has
+   no local password and appears in **Users** as **Pending**.
+3. Open the user in **Users** and change the role to `reader`, `writer`, or
+   `admin`. The user can choose **Check access** on the waiting screen to
+   refresh their session view. Change the role back to **Pending** to revoke
+   repository access, or disable the account to block sign-in.
+
+The pending `none` role denies repository reads, writes, administration, and
+intelligence even when legacy read defaults or repository grants would
+otherwise allow them. An administrator subject or an explicitly mapped OIDC
+role can bootstrap a higher role on first registration. Subsequent sign-ins
+refresh identity metadata but do not overwrite an administrator-assigned
+Gateway role. Existing linked accounts retain their role and state.
+
+`reader`, `writer`, and `admin` are **global** Gateway roles; assigning
+one gives its corresponding capability across repositories. Repository-scoped
+grant design is separate from this onboarding flow.
+
 ## Keycloak
 
 Create an OpenID Connect client, enable Standard Flow, and register the exact

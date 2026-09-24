@@ -9,6 +9,20 @@ const renderWithPreferences = (ui: React.ReactNode) =>
 afterEach(cleanup);
 
 describe("IdentitySummary", () => {
+  it("labels a registered unprivileged identity as pending", () => {
+    renderWithPreferences(
+      <IdentitySummary
+        identity={{
+          actor: "user:pending",
+          kind: "oidc",
+          role: "none",
+          administrator: false,
+        }}
+      />,
+    );
+    expect(screen.getByText("待授权")).toBeInTheDocument();
+  });
+
   it("explains an OIDC role mapping without exposing unrelated claims", () => {
     renderWithPreferences(
       <IdentitySummary

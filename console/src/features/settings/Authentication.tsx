@@ -53,7 +53,7 @@ interface AuthenticationFormValues {
   adminRoles: string[];
   provisioningMode: "disabled" | "jit";
   emailLinkingEnabled: boolean;
-  jitDefaultRole: "admin" | "writer" | "reader";
+  jitDefaultRole: "none" | "admin" | "writer" | "reader";
 }
 
 export function AuthenticationPage() {
@@ -587,12 +587,19 @@ export function AuthenticationPage() {
                   name="jitDefaultRole"
                   label={text("JIT 默认角色", "JIT default role")}
                   extra={text(
-                    "仅当声明没有匹配角色映射时使用。",
-                    "Used only when no external role mapping matches.",
+                    "仅当声明没有匹配角色映射时使用；选择 none 后新用户会进入待授权状态。",
+                    "Used only when no external role mapping matches; none registers new users without access.",
                   )}
                 >
                   <Select
                     options={[
+                      {
+                        value: "none",
+                        label: text(
+                          "none · 待授权",
+                          "none · awaiting approval",
+                        ),
+                      },
                       { value: "reader", label: "reader" },
                       { value: "writer", label: "writer" },
                       { value: "admin", label: "admin" },

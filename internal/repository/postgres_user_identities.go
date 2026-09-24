@@ -155,7 +155,7 @@ func (s *PostgresStore) ResolveOIDCIdentity(ctx context.Context, provision OIDCI
 		if role != "admin" && role != "writer" && role != "reader" {
 			role = provision.DefaultRole
 		}
-		if role != "admin" && role != "writer" && role != "reader" {
+		if role != "admin" && role != "writer" && role != "reader" && role != "none" {
 			role = "reader"
 		}
 		name, err := postgresProvisionedUsername(ctx, tx, provision)
@@ -216,7 +216,11 @@ func updateOIDCLogin(ctx context.Context, tx *sql.Tx, identity UserIdentity, pro
 		return User{}, err
 	}
 	var user User
-	err := scanUser(tx.QueryRowContext(ctx, `UPDATE users SET last_login_at=$2,updated_at=$2,version=version+1 WHERE id=$1 RETURNING `+userColumns, identity.UserID, now), &user)
+	err := scanUser(tx.QueryRowContext(ctx, `UPDATE users SET last_login_at=$2,
+		display_name=CASE WHEN secret_hash='' AND $3<>'' THEN $3 ELSE display_name END,
+		email=CASE WHEN secret_hash='' AND $4 AND $5<>'' THEN $5 ELSE email END,
+		updated_at=$2,version=version+1 WHERE id=$1 RETURNING `+userColumns,
+		identity.UserID, now, identity.DisplayName, identity.EmailVerified, identity.Email), &user)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
