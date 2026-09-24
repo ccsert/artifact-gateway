@@ -160,7 +160,7 @@ func userSessionResponse(session repository.UserSession, current bool) adminopen
 }
 
 func validUserRole(role string) bool {
-	return role == string(authorization.RoleAdmin) || role == string(authorization.RoleWriter) || role == string(authorization.RoleReader)
+	return role == string(authorization.RoleNone) || role == string(authorization.RoleAdmin) || role == string(authorization.RoleWriter) || role == string(authorization.RoleReader)
 }
 
 const maxLocalPasswordBytes = 72 // bcrypt's maximum effective password length.

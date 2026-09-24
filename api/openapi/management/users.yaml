@@ -12,7 +12,7 @@ users:
       in: query
       schema:
         type: string
-        enum: [admin, writer, reader]
+        enum: [none, admin, writer, reader]
     - name: state
       in: query
       schema:

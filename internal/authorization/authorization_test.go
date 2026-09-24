@@ -172,6 +172,9 @@ func TestRoleAllowsGrantsBoundedOperations(t *testing.T) {
 		op   RepositoryOperation
 		want bool
 	}{
+		{RoleNone, RepositoryRead, false},
+		{RoleNone, RepositoryWrite, false},
+		{RoleNone, RepositoryAdmin, false},
 		{RoleReader, RepositoryRead, true},
 		{RoleReader, RepositoryWrite, false},
 		{RoleReader, RepositoryAdmin, false},
@@ -184,6 +187,39 @@ func TestRoleAllowsGrantsBoundedOperations(t *testing.T) {
 	} {
 		if got := RoleAllows(tc.role, tc.op); got != tc.want {
 			t.Errorf("RoleAllows(%q,%q)=%v want=%v", tc.role, tc.op, got, tc.want)
+		}
+	}
+}
+
+func TestPendingRoleDeniesLegacyDefaultsPatternsAndManagedGrants(t *testing.T) {
+	principal := Principal{Actor: "user:pending", Role: RoleNone, RepositoryPatterns: []string{"team/*"}}
+	legacy := Authenticator{
+		RepositoryReaders: nil,
+		RepositoryWriters: map[string][]string{principal.Actor: {"team/releases"}},
+	}
+	if legacy.CanReadRepository(principal, "team/releases") ||
+		legacy.CanReadMavenRepository(principal, "team") ||
+		legacy.CanWriteMavenRepository(principal, "team/releases") {
+		t.Fatal("pending account reached a legacy repository path")
+	}
+	target := repository.HostedRepository{ID: "repo-id", Name: "team/releases"}
+	authorizer := RepositoryAuthorizer{
+		Legacy: legacy,
+		Grants: grantStoreStub{set: repository.RepositoryGrantSet{
+			Version: "2",
+			Grants: []repository.RepositoryGrant{{
+				Principal: principal.Actor, Scopes: []string{"repositories:admin"},
+			}},
+		}},
+	}
+	for _, operation := range []RepositoryOperation{RepositoryRead, RepositoryWrite, RepositoryAdmin, RepositoryIntelligence} {
+		decision := authorizer.Authorize(context.Background(), principal, target, operation)
+		if decision.Allowed || decision.Reason != "authorization_pending" {
+			t.Fatalf("operation=%s decision=%+v", operation, decision)
+		}
+		decision, managed := authorizer.ManagedResourceDecision(context.Background(), principal, target, operation, "")
+		if !managed || decision.Allowed || decision.Reason != "authorization_pending" {
+			t.Fatalf("managed operation=%s decision=%+v managed=%t", operation, decision, managed)
 		}
 	}
 }

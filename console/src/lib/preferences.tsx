@@ -110,6 +110,10 @@ const zhCN = {
   "auth.ssoFailed": "企业登录未完成，请重试。",
   "auth.ssoUnavailable": "身份提供方暂时不可用。",
   "auth.logout": "退出",
+  "auth.awaitingAuthorization": "等待管理员授权",
+  "auth.awaitingAuthorizationDescription":
+    "你已完成登录，账号也已登记。管理员分配权限后，点击下方按钮查看最新状态。",
+  "auth.checkAuthorization": "检查授权状态",
   "auth.tokenConfigured": "已配置 Token",
   "auth.setToken": "设置 Token",
   "auth.tokenDialog": "API 访问令牌",
@@ -199,6 +203,10 @@ const enUS: Record<MessageKey, string> = {
   "auth.ssoFailed": "Enterprise sign in did not complete. Try again.",
   "auth.ssoUnavailable": "The identity provider is temporarily unavailable.",
   "auth.logout": "Sign out",
+  "auth.awaitingAuthorization": "Awaiting administrator approval",
+  "auth.awaitingAuthorizationDescription":
+    "You are signed in and your account is registered. Ask an administrator to assign access, then check again.",
+  "auth.checkAuthorization": "Check access",
   "auth.tokenConfigured": "Token configured",
   "auth.setToken": "Set token",
   "auth.tokenDialog": "API access token",

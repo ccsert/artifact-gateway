@@ -218,7 +218,9 @@ export function UserDetailsDrawer({
         }
         extra={
           <Space size={8}>
-            <Badge tone={roleTone(user.role)}>{user.role}</Badge>
+            <Badge tone={roleTone(user.role)}>
+              {user.role === "none" ? text("待授权", "Pending") : user.role}
+            </Badge>
             {locked ? (
               <Badge tone="warning">{text("已锁定", "Locked")}</Badge>
             ) : (
@@ -311,6 +313,10 @@ export function UserDetailsDrawer({
             <Form.Item name="role" label={text("角色", "Role")}>
               <Select
                 options={[
+                  {
+                    value: "none",
+                    label: text("none · 待授权", "none · awaiting approval"),
+                  },
                   {
                     value: "reader",
                     label: text("reader · 只读", "reader · read-only"),

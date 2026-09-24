@@ -619,7 +619,7 @@ export type User = {
   displayName: string;
   email: string;
   description: string;
-  role: "admin" | "writer" | "reader";
+  role: "none" | "admin" | "writer" | "reader";
   state: "active" | "disabled";
   lastLoginAt?: string;
   passwordChangedAt?: string;
@@ -642,7 +642,7 @@ export type UserList = {
 export type CurrentIdentity = {
   actor: string;
   kind: AuthenticationKind;
-  role?: "admin" | "writer" | "reader";
+  role?: "none" | "admin" | "writer" | "reader";
   administrator: boolean;
   oidc?: OidcIdentityDetails;
 };
@@ -653,7 +653,7 @@ export type CreateUser = {
   email?: string;
   description?: string;
   password: string;
-  role: "admin" | "writer" | "reader";
+  role: "none" | "admin" | "writer" | "reader";
   mustChangePassword?: boolean;
 };
 
@@ -661,7 +661,7 @@ export type UpdateUser = {
   displayName?: string;
   email?: string;
   description?: string;
-  role?: "admin" | "writer" | "reader";
+  role?: "none" | "admin" | "writer" | "reader";
   state?: "active" | "disabled";
 };
 
@@ -1074,7 +1074,7 @@ export type OidcSettings = {
   adminRoles: Array<string>;
   provisioningMode: "disabled" | "jit";
   emailLinkingEnabled: boolean;
-  jitDefaultRole: "admin" | "writer" | "reader";
+  jitDefaultRole: "none" | "admin" | "writer" | "reader";
   updatedAt?: string;
 };
 
@@ -1093,7 +1093,7 @@ export type OidcSettingsUpdate = {
   adminRoles: Array<string>;
   provisioningMode: "disabled" | "jit";
   emailLinkingEnabled: boolean;
-  jitDefaultRole: "admin" | "writer" | "reader";
+  jitDefaultRole: "none" | "admin" | "writer" | "reader";
 };
 
 export type OidcConnectionTest = {
@@ -2088,7 +2088,7 @@ export type OidcSettingsUpdateWritable = {
   adminRoles: Array<string>;
   provisioningMode: "disabled" | "jit";
   emailLinkingEnabled: boolean;
-  jitDefaultRole: "admin" | "writer" | "reader";
+  jitDefaultRole: "none" | "admin" | "writer" | "reader";
 };
 
 export type CreateWebhookSubscriptionWritable = {
@@ -2325,6 +2325,10 @@ export type SearchArtifactsErrors = {
    * Problem response
    */
   401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
 };
 
 export type SearchArtifactsError =
@@ -3391,7 +3395,7 @@ export type ListUsersData = {
   path?: never;
   query?: {
     search?: string;
-    role?: "admin" | "writer" | "reader";
+    role?: "none" | "admin" | "writer" | "reader";
     state?: "active" | "disabled";
     limit?: number;
     offset?: number;

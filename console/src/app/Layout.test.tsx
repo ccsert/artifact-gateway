@@ -135,6 +135,26 @@ describe("AppLayout", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows pending SSO users an approval screen without repository navigation", async () => {
+    Object.assign(auth, {
+      role: "none",
+      identity: { administrator: false, role: "none", kind: "oidc" },
+    });
+
+    renderLayout("/repositories");
+
+    expect(
+      await screen.findByRole("heading", { name: "等待管理员授权" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "检查授权状态" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("repository catalog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /仓库/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it("provides global search, persistent navigation collapse, and logout", async () => {
     const user = userEvent.setup();
     renderLayout("/repositories");

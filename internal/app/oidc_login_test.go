@@ -12,7 +12,161 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/secrets"
 )
+
+func TestOIDCBrowserJITRegistersPendingUserWithoutRepositoryAccess(t *testing.T) {
+	t.Setenv(secrets.KeyEnv, "0123456789abcdef0123456789abcdef")
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const keyID = "pending-login-key"
+	var expectedNonce string
+	var provider *httptest.Server
+	provider = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/openid-configuration":
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"issuer": provider.URL, "authorization_endpoint": provider.URL + "/authorize",
+				"token_endpoint": provider.URL + "/token", "jwks_uri": provider.URL + "/jwks",
+			})
+		case "/jwks":
+			_, _ = w.Write(oidcJWKS(t, keyID, &key.PublicKey))
+		case "/token":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id_token": signedOIDCTokenWithClaims(
+					t, key, keyID, provider.URL, "artifact-gateway-console", "pending-subject",
+					time.Now().Add(time.Minute), nil, expectedNonce,
+				),
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer provider.Close()
+
+	store := repository.NewMemoryStore()
+	runtime := NewOIDCRuntime(store, OIDCRuntimeConfig{})
+	_, err = runtime.Replace(t.Context(), OIDCSettingsUpdate{
+		Enabled: true, Issuer: provider.URL, Audience: "artifact-gateway-api",
+		ClientID: "artifact-gateway-console", RedirectURL: "http://localhost:4173/auth/oidc/callback",
+		ProvisioningMode: "jit", JITDefaultRole: "none",
+	}, "0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{OIDCRuntime: runtime}, store, TestAdapter{}, testAuthenticator())
+	signIn := func() *http.Cookie {
+		t.Helper()
+		start := httptest.NewRecorder()
+		handler.ServeHTTP(start, httptest.NewRequest(http.MethodGet, "/auth/oidc/login", nil))
+		if start.Code != http.StatusFound {
+			t.Fatalf("start=%d body=%s", start.Code, start.Body.String())
+		}
+		target, err := url.Parse(start.Header().Get("Location"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		expectedNonce = target.Query().Get("nonce")
+		var flow *http.Cookie
+		for _, cookie := range start.Result().Cookies() {
+			if cookie.Name == oidcStateCookieName {
+				flow = cookie
+			}
+		}
+		if flow == nil || expectedNonce == "" {
+			t.Fatal("OIDC flow state was not issued")
+		}
+		callback := httptest.NewRequest(http.MethodGet, "/auth/oidc/callback?code=code&state="+url.QueryEscape(target.Query().Get("state")), nil)
+		callback.AddCookie(flow)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, callback)
+		if response.Code != http.StatusFound {
+			t.Fatalf("callback=%d body=%s", response.Code, response.Body.String())
+		}
+		for _, cookie := range response.Result().Cookies() {
+			if cookie.Name == webSessionCookieName && cookie.MaxAge > 0 {
+				return cookie
+			}
+		}
+		t.Fatal("browser session was not issued")
+		return nil
+	}
+	cookie := signIn()
+	page, err := store.ListUsers(t.Context(), repository.UserListQuery{Role: "none", Limit: 10})
+	if err != nil || page.Total != 1 || page.Items[0].SecretHash != "" {
+		t.Fatalf("pending users=%+v err=%v", page, err)
+	}
+	user := page.Items[0]
+	identityRequest := httptest.NewRequest(http.MethodGet, "/api/v2/identity", nil)
+	identityRequest.AddCookie(cookie)
+	identityResponse := httptest.NewRecorder()
+	handler.ServeHTTP(identityResponse, identityRequest)
+	if identityResponse.Code != http.StatusOK || !strings.Contains(identityResponse.Body.String(), `"role":"none"`) {
+		t.Fatalf("pending identity=%d body=%s", identityResponse.Code, identityResponse.Body.String())
+	}
+	denied := httptest.NewRequest(http.MethodGet, "/api/v2/users", nil)
+	denied.AddCookie(cookie)
+	deniedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deniedResponse, denied)
+	if deniedResponse.Code == http.StatusOK {
+		t.Fatal("pending user reached administrator API")
+	}
+	reader := "reader"
+	user, err = store.UpdateUser(t.Context(), repository.UserUpdate{ID: user.ID, Role: &reader}, user.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(approvedResponse, identityRequest)
+	if approvedResponse.Code != http.StatusOK || !strings.Contains(approvedResponse.Body.String(), `"role":"reader"`) {
+		t.Fatalf("approved identity=%d body=%s", approvedResponse.Code, approvedResponse.Body.String())
+	}
+	_ = signIn()
+	all, err := store.ListUsers(t.Context(), repository.UserListQuery{Limit: 10})
+	if err != nil || all.Total != 1 || all.Items[0].Role != "reader" {
+		t.Fatalf("repeat sign-in users=%+v err=%v", all, err)
+	}
+	none := "none"
+	_, err = store.UpdateUser(t.Context(), repository.UserUpdate{ID: user.ID, Role: &none}, all.Items[0].Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(revokedResponse, identityRequest)
+	if revokedResponse.Code != http.StatusOK || !strings.Contains(revokedResponse.Body.String(), `"role":"none"`) {
+		t.Fatalf("revoked identity=%d body=%s", revokedResponse.Code, revokedResponse.Body.String())
+	}
+	current, err := store.GetUser(t.Context(), user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.RevokeUserSessions(t.Context(), user.ID, current.Version); err != nil {
+		t.Fatal(err)
+	}
+	sessionRevokedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(sessionRevokedResponse, identityRequest)
+	if sessionRevokedResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked session identity=%d", sessionRevokedResponse.Code)
+	}
+	newCookie := signIn()
+	current, err = store.GetUser(t.Context(), user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabled := repository.UserDisabled
+	if _, err = store.UpdateUser(t.Context(), repository.UserUpdate{ID: user.ID, State: &disabled}, current.Version); err != nil {
+		t.Fatal(err)
+	}
+	disabledRequest := httptest.NewRequest(http.MethodGet, "/api/v2/identity", nil)
+	disabledRequest.AddCookie(newCookie)
+	disabledResponse := httptest.NewRecorder()
+	handler.ServeHTTP(disabledResponse, disabledRequest)
+	if disabledResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("disabled account identity=%d", disabledResponse.Code)
+	}
+}
 
 func TestOIDCBrowserLoginMapsBoundUserAndRevokesCookieSession(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)

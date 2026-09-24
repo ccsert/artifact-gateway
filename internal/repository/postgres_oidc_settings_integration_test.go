@@ -44,8 +44,10 @@ func TestPostgresOIDCSettingsVersionedReplacement(t *testing.T) {
 	}
 
 	loaded.Enabled = false
+	loaded.ProvisioningMode = "jit"
+	loaded.JITDefaultRole = "none"
 	updated, err := store.ReplaceOIDCSettings(ctx, loaded, "1")
-	if err != nil || updated.Version != "2" || updated.Enabled {
+	if err != nil || updated.Version != "2" || updated.Enabled || updated.ProvisioningMode != "jit" || updated.JITDefaultRole != "none" {
 		t.Fatalf("updated=%#v err=%v", updated, err)
 	}
 	if _, err := store.ReplaceOIDCSettings(ctx, loaded, "1"); err != ErrVersionConflict {

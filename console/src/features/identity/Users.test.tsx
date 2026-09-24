@@ -66,6 +66,31 @@ afterEach(() => {
 });
 
 describe("UsersPage", () => {
+  it("shows newly registered SSO users as pending without a local password", async () => {
+    mockListUsers.mockResolvedValue({
+      data: {
+        items: [
+          {
+            ...alice,
+            id: "00000000-0000-0000-0000-000000000002",
+            name: "pending-user",
+            displayName: "Pending User",
+            role: "none",
+            localPasswordEnabled: false,
+            passwordChangedAt: undefined,
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    } as never);
+    renderPage();
+    expect(await screen.findByText("Pending User")).toBeInTheDocument();
+    expect(screen.getByText("待授权")).toBeInTheDocument();
+    expect(screen.getByText("仅 SSO")).toBeInTheDocument();
+  });
+
   it("loads a server-paginated user list and opens the selected account", async () => {
     mockListUsers.mockResolvedValue({
       data: { items: [alice], total: 1, limit: 20, offset: 0 },

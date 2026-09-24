@@ -122,6 +122,10 @@ export function UserCreateDialog({
             <Select
               options={[
                 {
+                  value: "none",
+                  label: text("none · 待授权", "none · awaiting approval"),
+                },
+                {
                   value: "reader",
                   label: text("reader · 只读", "reader · read-only"),
                 },

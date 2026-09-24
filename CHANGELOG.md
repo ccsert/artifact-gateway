@@ -11,6 +11,10 @@ their meaning.
 
 ## Unreleased
 
+## 0.3.0 - 2026-09-24
+
+- OIDC JIT provisioning can now register a user with the explicit `none` role. A first sign-in creates a passwordless local account and stable issuer/subject binding that appears as Pending in the Console Users page; it grants no repository access, including through legacy read defaults or managed grants. Administrators can assign or revoke global reader, writer, and admin roles there. Pending users see an authorization waiting page with a check-again action. Later sign-ins update safe SSO profile fields without overwriting the Gateway role; disabling an account or revoking its linked session still takes effect on the next request. The default JIT role remains reader for compatibility, so operators must choose `none` when enabling this onboarding policy.
+
 ## 0.2.0 - 2026-09-24
 
 - Updated the indirect gRPC dependency to v1.83.1 to address GO-2026-6348.

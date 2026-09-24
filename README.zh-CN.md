@@ -17,7 +17,7 @@
 
 <p align="center">
   <a href="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/ccsert/artifact-gateway/releases/tag/v0.2.0"><img alt="Release 0.2.0" src="https://img.shields.io/badge/release-0.2.0-2563EB"></a>
+  <a href="https://github.com/ccsert/artifact-gateway/releases/tag/v0.3.0"><img alt="Release 0.3.0" src="https://img.shields.io/badge/release-0.3.0-2563EB"></a>
   <a href="LICENSE"><img alt="开源许可：MIT" src="https://img.shields.io/badge/license-MIT-22C55E"></a>
   <img alt="Go 1.26.6" src="https://img.shields.io/badge/Go-1.26.6-00ADD8?logo=go&logoColor=white">
   <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white">
@@ -83,9 +83,9 @@ Nexus 风格根路径 `/repository/<name>/...`。兼容入口仍复用原协议�
 策略、审计、搜索与浏览、保留策略、可恢复删除、晋升、复制、Webhook、扫描器集成、
 隔离、诊断、指标以及备份恢复流程。各领域入口统一收录在[文档索引](docs/README.zh-CN.md)。
 
-## 安装 0.2.0
+## 安装 0.3.0
 
-[0.2.0 Release](https://github.com/ccsert/artifact-gateway/releases/tag/v0.2.0)
+[0.3.0 Release](https://github.com/ccsert/artifact-gateway/releases/tag/v0.3.0)
 提供 Linux/macOS 的 amd64/arm64 归档、Console 静态包、已解析 OpenAPI 契约和
 `SHA256SUMS`。每个 Gateway 归档同时包含服务端、健康检查二进制、PostgreSQL
 Migrations、可移植迁移脚本和环境模板，可通过以下命令确认版本身份：
@@ -104,13 +104,13 @@ MIGRATION_DIR=./migrations ./run-migrations.sh
 Gateway 与 Console 的发布镜像和主线镜像都会推送到 GHCR：
 
 ```text
-ghcr.io/ccsert/artifact-gateway:0.2.0
-ghcr.io/ccsert/artifact-gateway-console:0.2.0
+ghcr.io/ccsert/artifact-gateway:0.3.0
+ghcr.io/ccsert/artifact-gateway-console:0.3.0
 ghcr.io/ccsert/artifact-gateway:main
 ghcr.io/ccsert/artifact-gateway-console:main
 ```
 
-`main` 是持续移动、通过 CI 的开发快照；Release 部署应固定 `0.2.0` 或镜像 digest。
+`main` 是持续移动、通过 CI 的开发快照；Release 部署应固定 `0.3.0` 或镜像 digest。
 制品可见性跟随 GitHub Repository 与 GHCR Package 的可见性设置。
 
 ## 快速本地启动

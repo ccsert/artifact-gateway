@@ -107,6 +107,14 @@ func (s *MemoryStore) ResolveOIDCIdentity(_ context.Context, provision OIDCIdent
 			return User{}, UserIdentity{}, false, ErrNotFound
 		}
 		identity = refreshUserIdentity(identity, provision, now)
+		if user.SecretHash == "" {
+			if identity.DisplayName != "" {
+				user.DisplayName = identity.DisplayName
+			}
+			if identity.EmailVerified && identity.Email != "" {
+				user.Email = identity.Email
+			}
+		}
 		user.LastLoginAt = timePointer(now)
 		user.UpdatedAt = now
 		user.Version = nextHostedGroupVersion(user.Version)
@@ -181,7 +189,7 @@ func newOIDCProvisionedUser(provision OIDCIdentityProvision, existing map[string
 	if role != "admin" && role != "writer" && role != "reader" {
 		role = provision.DefaultRole
 	}
-	if role != "admin" && role != "writer" && role != "reader" {
+	if role != "admin" && role != "writer" && role != "reader" && role != "none" {
 		role = "reader"
 	}
 	name := provisionedUsername(provision.PreferredUsername, provision.Email, provision.Issuer, provision.Subject, existing)

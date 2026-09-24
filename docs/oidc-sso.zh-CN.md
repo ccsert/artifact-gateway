@@ -32,6 +32,18 @@ API Bearer 使用 `GATEWAY_OIDC_AUDIENCE`，浏览器 ID token 独立使用 `GAT
 
 链接后，Bearer 和浏览器 session 使用本地账户当前角色和安全状态；禁用账户、要求改密或提升 session version 会在下一请求生效。浏览器还要求服务器端 session 活跃且未过期。JIT 关闭时，未链接身份保持外部 principal 与无状态浏览器 session。
 
+### 先登记，再授权
+
+若要让 SSO 登录的同事出现在 Gateway“用户”页面，同时避免登录即获得仓库权限：
+
+1. 在“认证设置”中将“未绑定身份”设为“首次登录自动创建”，将“JIT 默认角色”设为“none · 待授权”。除非明确需要合并已有账户，否则保持“已验证邮箱自动关联”关闭。
+2. 请同事重新登录。Gateway 按身份提供方的 issuer 和稳定 subject 创建一条本地用户及 OIDC 绑定；该账户没有本地密码，在“用户”页面显示为“待授权”。
+3. 管理员在“用户”页面将其角色改为 `reader`、`writer` 或 `admin`。同事可在等待页面点击“检查授权状态”。需要撤销权限时将角色改回“待授权”；停用账户则会阻止其继续登录。
+
+`none` 角色会明确拒绝仓库读取、写入、管理和智能分析，即使旧的默认读取规则或仓库授权记录原本允许访问。管理员 subject 白名单或明确配置的 OIDC 角色映射可以在首次登记时授予更高角色。后续登录只更新身份资料，不会覆盖管理员在 Gateway 分配的角色；已有绑定账户的角色和状态保持不变。
+
+`reader`、`writer`、`admin` 都是 **全局角色**，授予后会作用于所有仓库。按仓库细分授权属于另一项设计。
+
 ## Keycloak
 
 创建 OIDC client，启用 Standard Flow 并注册准确 callback URL。浏览器 ID token 的 `aud` 必须包含 client ID；API Bearer 可使用独立 API audience。

@@ -122,7 +122,11 @@ export function UsersPage() {
       dataIndex: "role",
       key: "role",
       width: 110,
-      render: (value: Role) => <Badge tone={roleTone(value)}>{value}</Badge>,
+      render: (value: Role) => (
+        <Badge tone={roleTone(value)}>
+          {value === "none" ? text("待授权", "Pending") : value}
+        </Badge>
+      ),
     },
     {
       title: text("访问状态", "Access"),
@@ -159,14 +163,18 @@ export function UsersPage() {
       render: (_value, user) => (
         <div className="text-xs">
           <div className="text-zinc-400">
-            {user.mustChangePassword
-              ? text("等待用户修改", "Change required")
-              : text("可正常使用", "Ready")}
+            {!user.localPasswordEnabled
+              ? text("仅 SSO", "SSO only")
+              : user.mustChangePassword
+                ? text("等待用户修改", "Change required")
+                : text("可正常使用", "Ready")}
           </div>
-          <div className="mt-0.5 text-zinc-600">
-            {text("更新于", "Changed")}{" "}
-            {formatDate(user.passwordChangedAt, locale)}
-          </div>
+          {user.localPasswordEnabled && user.passwordChangedAt ? (
+            <div className="mt-0.5 text-zinc-600">
+              {text("更新于", "Changed")}{" "}
+              {formatDate(user.passwordChangedAt, locale)}
+            </div>
+          ) : null}
         </div>
       ),
     },
@@ -241,8 +249,8 @@ export function UsersPage() {
       <PageHeader
         title={text("用户", "Users")}
         description={text(
-          "管理本地账户、登录状态、密码生命周期和有效会话。",
-          "Manage local accounts, sign-in status, password lifecycle, and active sessions.",
+          "管理本地及 SSO 账户、登录状态、角色和有效会话。",
+          "Manage local and SSO accounts, sign-in status, roles, and active sessions.",
         )}
         actions={
           <Button
@@ -291,6 +299,7 @@ export function UsersPage() {
                 setPage(1);
               }}
               options={[
+                { value: "none", label: text("待授权", "Awaiting approval") },
                 { value: "reader", label: "reader" },
                 { value: "writer", label: "writer" },
                 { value: "admin", label: "admin" },

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Artifact Gateway Native Hosted Management API",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Runtime management contract for Artifact Gateway 0.2."
   },
   "servers": [
@@ -89,6 +89,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -969,6 +972,7 @@
             "schema": {
               "type": "string",
               "enum": [
+                "none",
                 "admin",
                 "writer",
                 "reader"
@@ -7091,6 +7095,7 @@
           "role": {
             "type": "string",
             "enum": [
+              "none",
               "admin",
               "writer",
               "reader"
@@ -7186,6 +7191,7 @@
           "role": {
             "type": "string",
             "enum": [
+              "none",
               "admin",
               "writer",
               "reader"
@@ -7235,6 +7241,7 @@
           "role": {
             "type": "string",
             "enum": [
+              "none",
               "admin",
               "writer",
               "reader"
@@ -7266,6 +7273,7 @@
           "role": {
             "type": "string",
             "enum": [
+              "none",
               "admin",
               "writer",
               "reader"
@@ -8590,6 +8598,7 @@
           "jitDefaultRole": {
             "type": "string",
             "enum": [
+              "none",
               "admin",
               "writer",
               "reader"
@@ -8692,6 +8701,7 @@
           "jitDefaultRole": {
             "type": "string",
             "enum": [
+              "none",
               "admin",
               "writer",
               "reader"

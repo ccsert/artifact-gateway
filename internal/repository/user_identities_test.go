@@ -98,7 +98,7 @@ func TestMemoryUserIdentityJITProvisioningAndEmailSafety(t *testing.T) {
 		DisplayName: "Changed", EmailVerified: true, Provision: true,
 		OccurredAt: time.Now().UTC(),
 	})
-	if err != nil || wasCreated || second.ID != created.ID || refreshed.Email != "changed@example.test" {
+	if err != nil || wasCreated || second.ID != created.ID || second.DisplayName != "Changed" || second.Email != "changed@example.test" || refreshed.Email != "changed@example.test" {
 		t.Fatalf("repeat JIT result user=%+v identity=%+v created=%v err=%v", second, refreshed, wasCreated, err)
 	}
 
@@ -116,5 +116,47 @@ func TestMemoryUserIdentityJITProvisioningAndEmailSafety(t *testing.T) {
 		EmailVerified: true, Provision: true, MatchEmail: true,
 	}); !errors.Is(err, ErrIdentityAmbiguous) {
 		t.Fatalf("ambiguous email error=%v want=%v", err, ErrIdentityAmbiguous)
+	}
+}
+
+func TestMemoryUserIdentityJITPendingRoleCanBeApprovedAndRevoked(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	provision := OIDCIdentityProvision{
+		Issuer: "https://issuer.example.test", Subject: "pending-subject",
+		Email: "pending@example.test", DisplayName: "Pending User",
+		PreferredUsername: "pending", EmailVerified: true,
+		Provision: true, DefaultRole: "none", OccurredAt: time.Now().UTC(),
+	}
+	user, identity, created, err := store.ResolveOIDCIdentity(ctx, provision)
+	if err != nil || !created || user.Role != "none" || user.SecretHash != "" || identity.UserID != user.ID {
+		t.Fatalf("pending JIT user=%+v identity=%+v created=%v err=%v", user, identity, created, err)
+	}
+	page, err := store.ListUsers(ctx, UserListQuery{Role: "none", Limit: 10})
+	if err != nil || page.Total != 1 || page.Items[0].ID != user.ID {
+		t.Fatalf("pending user list=%+v err=%v", page, err)
+	}
+	reader := "reader"
+	user, err = store.UpdateUser(ctx, UserUpdate{ID: user.ID, Role: &reader}, user.Version)
+	if err != nil || user.Role != "reader" {
+		t.Fatalf("approve user=%+v err=%v", user, err)
+	}
+	provision.Email = "new@example.test"
+	same, refreshed, created, err := store.ResolveOIDCIdentity(ctx, provision)
+	if err != nil || created || same.ID != user.ID || same.Role != "reader" || same.Email != provision.Email || refreshed.Email != provision.Email {
+		t.Fatalf("repeat login user=%+v identity=%+v created=%v err=%v", same, refreshed, created, err)
+	}
+	none := "none"
+	revoked, err := store.UpdateUser(ctx, UserUpdate{ID: user.ID, Role: &none}, same.Version)
+	if err != nil || revoked.Role != "none" {
+		t.Fatalf("revoke user=%+v err=%v", revoked, err)
+	}
+	adminProvision := provision
+	adminProvision.Subject = "admin-subject"
+	adminProvision.PreferredUsername = "admin"
+	adminProvision.Role = "admin"
+	admin, _, created, err := store.ResolveOIDCIdentity(ctx, adminProvision)
+	if err != nil || !created || admin.Role != "admin" {
+		t.Fatalf("admin subject bootstrap user=%+v created=%v err=%v", admin, created, err)
 	}
 }

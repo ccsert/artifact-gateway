@@ -29,6 +29,8 @@ artifact_search:
         "$ref": "../components/responses.yaml#/Problem"
       '401':
         "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
 
 repositories_repositoryId_artifact_search:
   parameters:

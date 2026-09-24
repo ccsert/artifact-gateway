@@ -30,6 +30,7 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
     oidc: "OIDC",
   };
   const roleLabels = {
+    none: text("待授权", "Awaiting approval"),
     admin: text("管理员", "Administrator"),
     writer: text("写入者", "Writer"),
     reader: text("只读者", "Reader"),
@@ -68,7 +69,9 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
                     ? "visualization-3"
                     : role === "writer"
                       ? "visualization-5"
-                      : "visualization-4"
+                      : role === "reader"
+                        ? "visualization-4"
+                        : "neutral"
                 }
               >
                 {roleLabels[role]}

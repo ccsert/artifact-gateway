@@ -19,6 +19,7 @@ type RepositoryAuthorizer = authorization.RepositoryAuthorizer
 
 const (
 	RoleReader             = authorization.RoleReader
+	RoleNone               = authorization.RoleNone
 	RoleWriter             = authorization.RoleWriter
 	RoleAdmin              = authorization.RoleAdmin
 	RepositoryRead         = authorization.RepositoryRead

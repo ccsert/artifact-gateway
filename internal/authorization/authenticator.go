@@ -232,6 +232,9 @@ func (a Authenticator) PrincipalForActor(actor string) Principal {
 }
 
 func (p Principal) CanReadRepository(repositoryName string, policyConfigured bool) bool {
+	if p.Role == RoleNone {
+		return false
+	}
 	if p.Admin || RoleAllows(p.Role, RepositoryRead) || !policyConfigured {
 		return true
 	}
@@ -251,6 +254,9 @@ func (a Authenticator) CanReadRepository(principal Principal, repositoryName str
 // `group/*` is accepted for compatibility with path-shaped grant policies,
 // without broadening OCI's wildcard semantics.
 func (a Authenticator) CanReadMavenRepository(principal Principal, groupName string) bool {
+	if principal.Role == RoleNone {
+		return false
+	}
 	if a.CanReadRepository(principal, groupName) {
 		return true
 	}
@@ -263,6 +269,9 @@ func (a Authenticator) CanReadMavenRepository(principal Principal, groupName str
 }
 
 func (a Authenticator) CanWriteMavenRepository(principal Principal, repositoryName string) bool {
+	if principal.Role == RoleNone {
+		return false
+	}
 	if principal.Admin || RoleAllows(principal.Role, RepositoryWrite) {
 		return true
 	}
@@ -410,7 +419,7 @@ func (a Authenticator) webSessionPrincipal(token string) (Principal, bool) {
 		SessionVersion   int64                  `json:"v"`
 		SessionID        string                 `json:"i"`
 	}
-	if json.Unmarshal(raw, &claims) != nil || claims.Actor == "" || claims.Authentication != AuthenticationOIDC || claims.Role != "" && claims.Role != RoleReader && claims.Role != RoleWriter && claims.Role != RoleAdmin || !validOIDCMetadata(claims.Authentication, claims.OIDCAdminSubject, claims.OIDCRoleMappings) {
+	if json.Unmarshal(raw, &claims) != nil || claims.Actor == "" || claims.Authentication != AuthenticationOIDC || claims.Role != "" && claims.Role != RoleNone && claims.Role != RoleReader && claims.Role != RoleWriter && claims.Role != RoleAdmin || !validOIDCMetadata(claims.Authentication, claims.OIDCAdminSubject, claims.OIDCRoleMappings) {
 		return Principal{}, false
 	}
 	if strings.HasPrefix(claims.Actor, "user:") {
@@ -552,7 +561,7 @@ func (a Authenticator) principalToken(token string) (Principal, bool) {
 	if strings.HasPrefix(claims.Actor, "user:") {
 		return a.principalForTokenActor(claims.Actor)
 	}
-	if claims.Role != "" && claims.Role != RoleReader && claims.Role != RoleWriter && claims.Role != RoleAdmin {
+	if claims.Role != "" && claims.Role != RoleNone && claims.Role != RoleReader && claims.Role != RoleWriter && claims.Role != RoleAdmin {
 		return Principal{}, false
 	}
 	if claims.Authentication == "" {
