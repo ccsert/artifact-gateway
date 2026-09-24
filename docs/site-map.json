@@ -34,7 +34,8 @@
         { "id": "adr-promotion-snapshots", "title": { "en": "ADR 0002: promotion snapshots", "zh-CN": "ADR 0002：晋升快照" }, "en": "docs/adr/0002-promotion-snapshots.md", "zh-CN": "docs/adr/0002-promotion-snapshots.zh-CN.md" },
         { "id": "adr-protocol-only", "title": { "en": "ADR 0003: protocol-only formats", "zh-CN": "ADR 0003：仅协议格式" }, "en": "docs/adr/0003-protocol-only-formats.md", "zh-CN": "docs/adr/0003-protocol-only-formats.zh-CN.md" },
         { "id": "adr-go-hosted", "title": { "en": "ADR 0004: Go Hosted publication", "zh-CN": "ADR 0004：Go Hosted 发布" }, "en": "docs/adr/0004-go-hosted-publication.md", "zh-CN": "docs/adr/0004-go-hosted-publication.zh-CN.md" },
-        { "id": "adr-console-theme-system", "title": { "en": "ADR 0005: Console semantic theme system", "zh-CN": "ADR 0005：Console 语义主题系统" }, "en": "docs/adr/0005-console-semantic-theme-system.md", "zh-CN": "docs/adr/0005-console-semantic-theme-system.zh-CN.md" }
+        { "id": "adr-console-theme-system", "title": { "en": "ADR 0005: Console semantic theme system", "zh-CN": "ADR 0005：Console 语义主题系统" }, "en": "docs/adr/0005-console-semantic-theme-system.md", "zh-CN": "docs/adr/0005-console-semantic-theme-system.zh-CN.md" },
+        { "id": "adr-account-levels", "title": { "en": "ADR 0006: account levels and per-repository authority", "zh-CN": "ADR 0006：账号等级与按仓库授权" }, "en": "docs/adr/0006-account-levels-and-repository-grants.md", "zh-CN": "docs/adr/0006-account-levels-and-repository-grants.zh-CN.md" }
       ]
     },
     {
