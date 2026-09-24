@@ -79,6 +79,7 @@ printf '%s\n' \
   '      NO_PROXY: postgres,rustfs,127.0.0.1,localhost' \
   '    volumes:' \
   '      - "${GATEWAY_UPGRADE_CA_FILE}:/etc/ssl/certs/ca-certificates.crt:ro"' >"$compose_override"
+suffix="upgrade-${RANDOM}"
 awk -F= '$1 != "GATEWAY_HTTP_PORT" && $1 != "GATEWAY_POSTGRES_PORT" && $1 != "RUSTFS_API_PORT" && $1 != "RUSTFS_CONSOLE_PORT" && $1 != "RUSTFS_ACCESS_KEY" && $1 != "RUSTFS_SECRET_KEY" && $1 != "RUSTFS_RPC_SECRET" && $1 != "GATEWAY_MAVEN_PROXY_ALLOWED_HOSTS" && $1 != "GATEWAY_EGRESS_PROXY" && $1 != "GATEWAY_REPOSITORY_READERS" && $1 != "COMPOSE_PROFILES" { print }' "$environment_file" >"$isolated_environment"
 rustfs_access_key=${RUSTFS_ACCESS_KEY:-$(awk -F= '$1 == "RUSTFS_ACCESS_KEY" { print substr($0, index($0, "=") + 1) }' "$environment_file")}
 rustfs_secret_key=${RUSTFS_SECRET_KEY:-$(awk -F= '$1 == "RUSTFS_SECRET_KEY" { print substr($0, index($0, "=") + 1) }' "$environment_file")}
@@ -86,9 +87,9 @@ rustfs_rpc_secret=${RUSTFS_RPC_SECRET:-$(awk -F= '$1 == "RUSTFS_RPC_SECRET" { pr
 test -n "$rustfs_access_key"
 test -n "$rustfs_secret_key"
 test -n "$rustfs_rpc_secret"
-printf 'GATEWAY_HTTP_PORT=%s\nGATEWAY_POSTGRES_PORT=%s\nRUSTFS_API_PORT=%s\nRUSTFS_CONSOLE_PORT=%s\nRUSTFS_ACCESS_KEY=%s\nRUSTFS_SECRET_KEY=%s\nRUSTFS_RPC_SECRET=%s\nGATEWAY_MAVEN_PROXY_ALLOWED_HOSTS=host.docker.internal:%s\nGATEWAY_EGRESS_PROXY=http://host.docker.internal:%s\nGATEWAY_UPGRADE_CA_FILE=%s\n' \
+printf 'GATEWAY_HTTP_PORT=%s\nGATEWAY_POSTGRES_PORT=%s\nRUSTFS_API_PORT=%s\nRUSTFS_CONSOLE_PORT=%s\nRUSTFS_ACCESS_KEY=%s\nRUSTFS_SECRET_KEY=%s\nRUSTFS_RPC_SECRET=%s\nGATEWAY_MAVEN_PROXY_ALLOWED_HOSTS=host.docker.internal:%s\nGATEWAY_EGRESS_PROXY=http://host.docker.internal:%s\nGATEWAY_UPGRADE_CA_FILE=%s\nGATEWAY_REPOSITORY_READERS=upgrade-readiness=maven-object-%s\n' \
   "$gateway_port" "$(free_port)" "$rustfs_api_port" "$rustfs_console_port" \
-  "$rustfs_access_key" "$rustfs_secret_key" "$rustfs_rpc_secret" "$upstream_port" "$proxy_port" "$upstream_cert" >>"$isolated_environment"
+  "$rustfs_access_key" "$rustfs_secret_key" "$rustfs_rpc_secret" "$upstream_port" "$proxy_port" "$upstream_cert" "$suffix" >>"$isolated_environment"
 gateway_url="http://127.0.0.1:${gateway_port}"
 
 old_compose=(docker compose --env-file "$isolated_environment" -f "$old_tree/compose.yml" -f "$compose_override")
@@ -173,7 +174,6 @@ build_gateway() {
 build_gateway base "${old_compose[@]}"
 COMPOSE_PROJECT_NAME="$project" "${old_compose[@]}" up -d --no-build --wait
 docker image tag "$gateway_image" "$rollback_image"
-suffix="upgrade-${RANDOM}"
 go_proxy_repository="go-proxy-$suffix"
 go_proxy_module="example.com/upgrade/proxy"
 go_proxy_version="v1.0.0"

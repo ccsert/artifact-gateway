@@ -219,7 +219,7 @@ and any registry access failure separately.
 | Hosted source | Native PostgreSQL metadata and RustFS S3-compatible object bytes |
 | External Proxy | Disabled unless the exact upstream host is in the protocol allowlist |
 | Authentication | Service Accounts with rotating credentials for CI/applications; HTTPS RS256 OIDC for human production identity; static resolver/admin tokens only for local break-glass |
-| Authorization | Deny unmatched repository readers when `GATEWAY_REPOSITORY_READERS` is configured, or when `GATEWAY_LEGACY_READ_DEFAULT=deny` opts into refusing them without a configured policy. An unconfigured deployment still admits an unmatched authenticated caller, logs a startup warning, and the next release flips that default; see [legacy group migration](legacy-group-migration.md) for the upgrade action |
+| Authorization | Deny unmatched repository readers. A deployment that configures no `GATEWAY_REPOSITORY_READERS` patterns refuses an authenticated caller with no grant instead of admitting it; `GATEWAY_LEGACY_READ_DEFAULT=allow` restores the pre-0.4 posture and logs a startup warning while it is set. See [legacy group migration](legacy-group-migration.md) for the upgrade and rollback procedure |
 | OCI cache | Read-through, content-addressed S3 storage; cleanup every five minutes after TTL grace period |
 | Maven cache | Component files: 15 minutes; metadata and negative results: one minute |
 | Backup target | PostgreSQL metadata plus RustFS object data; 24-hour RPO, 30-minute RTO drill target |

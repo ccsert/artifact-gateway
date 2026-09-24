@@ -665,13 +665,13 @@ func TestLegacyReadDefaultPosture(t *testing.T) {
 	unmatched := Principal{Actor: "build-agent"}
 	configured := Authenticator{RepositoryReaders: map[string][]string{"build-agent": {"releases"}}}
 
-	// An unconfigured deployment keeps admitting unmatched readers until the
-	// default flips; the opt-in refuses them now, as does any configured policy.
-	if !(Authenticator{}).CanReadRepository(unmatched, "releases") {
-		t.Fatal("the documented unconfigured posture must keep admitting readers")
+	// An unconfigured deployment denies an unmatched reader; the explicit opt-out
+	// restores the pre-0.4 posture, and any configured policy stops the fallback.
+	if (Authenticator{}).CanReadRepository(unmatched, "releases") {
+		t.Fatal("the unconfigured posture must refuse an unmatched reader")
 	}
-	if (Authenticator{LegacyReadDefaultDeny: true}).CanReadRepository(unmatched, "releases") {
-		t.Fatal("the deny posture must refuse an unmatched reader")
+	if !(Authenticator{LegacyReadPermissive: true}).CanReadRepository(unmatched, "releases") {
+		t.Fatal("the explicit permissive posture must keep admitting readers")
 	}
 	if configured.CanReadRepository(unmatched, "releases") {
 		t.Fatal("configuring any reader policy must stop the unrestricted fallback")
@@ -680,7 +680,7 @@ func TestLegacyReadDefaultPosture(t *testing.T) {
 	// Patterns decide on their own, whichever posture is in force.
 	for _, authenticator := range []Authenticator{
 		{RepositoryReaders: configured.RepositoryReaders},
-		{RepositoryReaders: configured.RepositoryReaders, LegacyReadDefaultDeny: true},
+		{RepositoryReaders: configured.RepositoryReaders, LegacyReadPermissive: true},
 	} {
 		granted := unmatched
 		granted.RepositoryPatterns = []string{"releases"}
@@ -694,7 +694,7 @@ func TestLegacyReadDefaultPosture(t *testing.T) {
 
 	// The permissive fallback must never override account state, or it would
 	// undo the password-change and pending blocks.
-	permissive := Authenticator{}
+	permissive := Authenticator{LegacyReadPermissive: true}
 	for _, principal := range []Principal{
 		{Actor: "user:reset", MustChangePassword: true},
 		{Actor: "user:pending", Role: RoleNone},

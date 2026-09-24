@@ -77,11 +77,12 @@ scope rather than `write`, which only governs publish and delete-artifact.
 equivalent grants on the repositories that exist at upgrade time, and no grant
 set is marked managed, so legacy static readers and writers keep working.
 
-**The legacy read default becomes explicit.** An unconfigured deployment still
-admits an unmatched authenticated caller, now with a startup warning, and
-`GATEWAY_LEGACY_READ_DEFAULT=deny` opts into refusing such callers. The next
-release flips the default, so the stricter posture arrives with an upgrade note
-instead of breaking running clients unannounced.
+**The legacy read default is deny.** An unconfigured deployment refuses an
+unmatched authenticated caller, which is what 0.3.1 and earlier admitted
+silently. `GATEWAY_LEGACY_READ_DEFAULT=allow` restores the earlier posture as a
+migration aid and logs a startup warning while it is set, so an operator can
+stage an upgrade that has to inventory the actors reading without a grant rather
+than have reads break unannounced. An unrecognized value fails closed.
 
 ## Consequences
 

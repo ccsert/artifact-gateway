@@ -120,7 +120,7 @@ func configurationResult(cfg config.Config) Result {
 			"maven_proxy_allowed_host_count":           len(cfg.MavenProxyAllowedHosts),
 			"raw_proxy_allowed_host_count":             len(cfg.RawProxyAllowedHosts),
 			"repository_grant_actor_count":             len(cfg.RepositoryReaders),
-			"legacy_read_default_denies_unconfigured":   cfg.LegacyReadDefaultDeny,
+			"legacy_read_default_permits_unconfigured": cfg.LegacyReadPermissive,
 			"repository_cache_quota_count":             len(cfg.RepositoryCacheQuotas),
 			"oidc_admin_subject_count":                 len(cfg.OIDCAdminSubjects),
 			"settings_encryption_key_configured":       strings.TrimSpace(os.Getenv(secrets.KeyEnv)) != "",

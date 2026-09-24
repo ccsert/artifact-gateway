@@ -5,8 +5,8 @@ env_file=${GATEWAY_ENV_FILE:-.env}; test -f "$env_file"
 port() { python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()'; }
 project="artifact-gateway-rotate-${RANDOM}-${RANDOM}"; isolated=$(mktemp)
 gateway_port=$(port); rustfs_api=$(port); rustfs_console=$(port)
-awk -F= '$1 != "GATEWAY_HTTP_PORT" && $1 != "GATEWAY_POSTGRES_PORT" && $1 != "RUSTFS_API_PORT" && $1 != "RUSTFS_CONSOLE_PORT" && $1 != "GATEWAY_RESOLVER_TOKEN" {print}' "$env_file" > "$isolated"
-printf 'GATEWAY_HTTP_PORT=%s\nGATEWAY_POSTGRES_PORT=%s\nRUSTFS_API_PORT=%s\nRUSTFS_CONSOLE_PORT=%s\nGATEWAY_RESOLVER_TOKEN=resolver-before-rotation\n' "$gateway_port" "$(port)" "$rustfs_api" "$rustfs_console" >> "$isolated"
+awk -F= '$1 != "GATEWAY_HTTP_PORT" && $1 != "GATEWAY_POSTGRES_PORT" && $1 != "RUSTFS_API_PORT" && $1 != "RUSTFS_CONSOLE_PORT" && $1 != "GATEWAY_RESOLVER_TOKEN" && $1 != "GATEWAY_REPOSITORY_READERS" {print}' "$env_file" > "$isolated"
+printf 'GATEWAY_HTTP_PORT=%s\nGATEWAY_POSTGRES_PORT=%s\nRUSTFS_API_PORT=%s\nRUSTFS_CONSOLE_PORT=%s\nGATEWAY_RESOLVER_TOKEN=resolver-before-rotation\nGATEWAY_REPOSITORY_READERS=fixture=rotation-missing\n' "$gateway_port" "$(port)" "$rustfs_api" "$rustfs_console" >> "$isolated"
 compose() { COMPOSE_PROJECT_NAME="$project" docker compose --env-file "$isolated" -f compose.yml "$@"; }
 trap 'compose down -v --remove-orphans >/dev/null 2>&1 || true; rm -f "$isolated"' EXIT
 base="http://127.0.0.1:${gateway_port}"

@@ -224,22 +224,22 @@ func main() {
 	}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {
-		if len(cfg.RepositoryReaders) == 0 && !cfg.LegacyReadDefaultDeny {
+		if len(cfg.RepositoryReaders) == 0 && cfg.LegacyReadPermissive {
 			slog.Warn("legacy repository reads are unrestricted without reader patterns",
-				"detail", "GATEWAY_REPOSITORY_READERS is empty, so any authenticated caller may read a legacy repository with no grant; configure reader patterns, or set GATEWAY_LEGACY_READ_DEFAULT=deny to refuse unmatched callers",
-				"change", "the unconfigured default becomes deny in the next release")
+				"detail", "GATEWAY_REPOSITORY_READERS is empty and GATEWAY_LEGACY_READ_DEFAULT=allow, so any authenticated caller may read a legacy repository with no grant",
+				"change", "unset GATEWAY_LEGACY_READ_DEFAULT to deny unmatched readers once every reading actor has a reader pattern or a per-repository grant")
 		}
 		handler = app.NewGatewayHandlerWithFormatCachesAndMetrics(dependencies, store, app.TestAdapter{}, app.Authenticator{
-			AdminToken:            cfg.AdminToken,
-			ResolverToken:         cfg.ResolverToken,
-			AdminActor:            cfg.AdminActor,
-			ResolverActor:         cfg.ResolverActor,
-			LocalAuthMaxAttempts:  cfg.LocalAuthMaxFailedAttempts,
-			LocalAuthLockout:      cfg.LocalAuthLockoutDuration,
-			RepositoryReaders:     cfg.RepositoryReaders,
-			LegacyReadDefaultDeny: cfg.LegacyReadDefaultDeny,
-			OIDCSource:            oidcRuntime,
-			APIKeys:               store,
+			AdminToken:           cfg.AdminToken,
+			ResolverToken:        cfg.ResolverToken,
+			AdminActor:           cfg.AdminActor,
+			ResolverActor:        cfg.ResolverActor,
+			LocalAuthMaxAttempts: cfg.LocalAuthMaxFailedAttempts,
+			LocalAuthLockout:     cfg.LocalAuthLockoutDuration,
+			RepositoryReaders:    cfg.RepositoryReaders,
+			LegacyReadPermissive: cfg.LegacyReadPermissive,
+			OIDCSource:           oidcRuntime,
+			APIKeys:              store,
 		}, ociCache, app.NewDefaultMavenCache(cacheStore, cfg.MavenProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota).WithTTLs(cfg.MavenCacheTTL, cfg.MavenMetadataCacheTTL, cfg.MavenNegativeCacheTTL), rawCache, conanCache, maintenance, metrics, app.UpstreamClient{})
 	}
 	server := &http.Server{

@@ -34,6 +34,11 @@ func main() {
 	auth := app.Authenticator{
 		ResolverToken:     "fixture-secret",
 		RepositoryWriters: map[string][]string{"fixture": {"deploys", "strict-deploys"}},
+		// Deploys and Maven Groups do authorize reads, but this harness models no
+		// policy and the group's proxy members carry per-run generated names, so
+		// it opts into the legacy posture rather than restating patterns the E2E
+		// script would have to keep in sync.
+		LegacyReadPermissive: true,
 	}
 	// Exercise real client -> Group -> first miss -> second upstream traffic.
 	// The second HTTP server exposes the same published bytes as the Hosted

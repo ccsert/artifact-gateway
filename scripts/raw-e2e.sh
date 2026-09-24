@@ -67,9 +67,13 @@ expect_status() {
   [[ "$actual" == "$expected" ]] || { printf '%s: expected HTTP %s, got %s\n' "$description" "$expected" "$actual" >&2; exit 1; }
 }
 
-authenticated_status() {
+# The Group names carry a per-run suffix, so they cannot be named in
+# GATEWAY_REPOSITORY_READERS. These probes assert path, cache, and allowlist
+# behaviour rather than read authority, so they authenticate as the
+# administrator and stay independent of the reader policy in force.
+admin_status() {
   curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-    -H "Authorization: Bearer $GATEWAY_RESOLVER_TOKEN" "$1"
+    -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$1"
 }
 
 enable_anonymous_access() {
@@ -95,8 +99,8 @@ expect_status 200 "$(curl --silent --show-error --head --output /dev/null --writ
 range=$(curl --silent --show-error -H 'Range: bytes=4-10' "$gateway_url/raw/$group/release/app.txt")
 [[ "$range" == 'release' ]] || { printf 'Raw range returned %q\n' "$range" >&2; exit 1; }
 expect_status 401 "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$gateway_url/raw/$private_group/release/app.txt")" 'Raw anonymous denial'
-expect_status 400 "$(authenticated_status "$gateway_url/raw/$group/release/%2Funsafe")" 'Raw encoded slash rejection'
-expect_status 404 "$(authenticated_status "$gateway_url/raw/$group/release/missing.txt")" 'Raw first missing request'
+expect_status 400 "$(admin_status "$gateway_url/raw/$group/release/%2Funsafe")" 'Raw encoded slash rejection'
+expect_status 404 "$(admin_status "$gateway_url/raw/$group/release/missing.txt")" 'Raw first missing request'
 
 # Removing the source after the first 404 proves the next 404 is a negative
 # cache hit. The same outage also proves the earlier successful read is served
@@ -104,10 +108,10 @@ expect_status 404 "$(authenticated_status "$gateway_url/raw/$group/release/missi
 kill "$fixture_pid"
 wait "$fixture_pid" 2>/dev/null || true
 fixture_pid=""
-expect_status 404 "$(authenticated_status "$gateway_url/raw/$group/release/missing.txt")" 'Raw negative cache request after upstream shutdown'
+expect_status 404 "$(admin_status "$gateway_url/raw/$group/release/missing.txt")" 'Raw negative cache request after upstream shutdown'
 response=$(curl --silent --show-error "$gateway_url/raw/$group/release/app.txt")
 [[ "$response" == 'raw release artifact' ]] || { printf 'Raw cached GET returned %q after upstream shutdown\n' "$response" >&2; exit 1; }
-expect_status 403 "$(authenticated_status "$gateway_url/raw/$denied_group/release/app.txt")" 'Raw Proxy allowlist denial'
+expect_status 403 "$(admin_status "$gateway_url/raw/$denied_group/release/app.txt")" 'Raw Proxy allowlist denial'
 
 audits=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" "$gateway_url/api/v1/audits?group=$group")
 grep -Eq '"Format":"raw"' <<<"$audits" || { printf '%s\n' 'Raw audit format was not recorded.' >&2; exit 1; }
