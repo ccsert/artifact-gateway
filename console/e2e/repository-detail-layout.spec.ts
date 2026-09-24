@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { defaultSiteSettings } from "../src/lib/siteSettings";
 import { authenticateAsAdmin } from "./support/auth";
 
 const repositoryId = "repo-layout";
@@ -16,6 +17,9 @@ async function mockRepositoryDetail(
   } = {},
 ) {
   await authenticateAsAdmin(page);
+  await page.route("**/api/v2/site-settings", (route) =>
+    route.fulfill({ json: defaultSiteSettings }),
+  );
   const repositoryName =
     format === "npm"
       ? "npm-hosted"
@@ -377,9 +381,10 @@ test("repository detail keeps the whole content region stable when security beco
 
   const navigation = page.getByRole("navigation", { name: "仓库任务" });
   const taskTabs = navigation.locator(".ag-repository-tabs").getByRole("tab");
-  await expect(taskTabs).toHaveCount(11);
+  await expect(taskTabs).toHaveCount(12);
   for (const label of [
     "制品",
+    "使用统计",
     "发布",
     "访问授权",
     "保留策略",
@@ -510,9 +515,10 @@ test("repository detail keeps operational content above the fold", async ({
 
   const navigation = page.getByRole("navigation", { name: "仓库任务" });
   const taskTabs = navigation.locator(".ag-repository-tabs").getByRole("tab");
-  await expect(taskTabs).toHaveCount(10);
+  await expect(taskTabs).toHaveCount(11);
   for (const label of [
     "制品",
+    "使用统计",
     "访问授权",
     "保留策略",
     "制品扫描",
@@ -570,7 +576,7 @@ test("repository detail keeps operational content above the fold", async ({
   await page.goto(`/repositories/${repositoryId}`);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(taskTabs).toHaveCount(10);
+  await expect(taskTabs).toHaveCount(11);
   await expect(
     page.getByRole("tab", { name: "制品", exact: true }),
   ).toHaveAttribute("aria-selected", "true");

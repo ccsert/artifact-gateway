@@ -13,6 +13,8 @@ their meaning.
 
 ## 0.2.0 - 2026-09-24
 
+- Updated the indirect gRPC dependency to v1.83.1 to address GO-2026-6348.
+
 - Added lifecycle artifact download usage. Every successful content download resolved through the Gateway — Hosted, Proxy, or Group, across Maven, OCI, Raw, Conan, npm, PyPI, Go, and APT — is folded at the single audit write point into a durable per-artifact aggregate (`artifact_usage_stats`), so counts accumulate for the artifact's whole lifecycle and survive audit log retention: download count, total bytes, first and last download time, and last actor, keyed by the artifact address clients resolved (a Group download counts for the Group). The management API serves `GET /api/v2/repositories/{repositoryId}/artifact-usage`, and each repository Console gains a Usage (使用统计) tab with lifetime totals and a per-artifact table. HEAD probes, 304 revalidations, publishes, and management operations never count. Repository retention now consumes the same aggregates as cleanup evidence: the dry-run JSON and CSV export attach each candidate's download count and last download time, and a new `keepDownloadedDays` policy field (default 0, preserving current behavior) exempts cleanup units downloaded within the window from the current round regardless of age or version-count reasons, with per-format matching for npm, PyPI, Go, Maven, Raw, OCI manifest pulls, and Conan v2 revisions.
 
 
