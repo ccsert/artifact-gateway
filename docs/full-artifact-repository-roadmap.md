@@ -48,13 +48,18 @@ artifacts and never mutate the source.
 4. **Distribution workflows.** Add policy-gated promotion between Hosted
    Repositories, then resumable replication with checkpoints, integrity checks,
    retry policy, and destination authorization.
-5. **Production scale.** Add capacity accounting, per-Repository quotas,
+5. **Repository authorization.** Evaluate repository operations through one
+   ordered chain: account state, administrator, global role, managed
+   per-repository grants, then legacy static policy. Add permission-filtered
+   repository discovery, effective-access explanation, and reusable
+   authorization roles and templates.
+6. **Production scale.** Add capacity accounting, per-Repository quotas,
    concurrency limits, replication observability, backup/restore coverage for
    every lifecycle state, and release evidence integrated with deployment CI.
 
 ## Current Status
 
-All five delivery stages are implemented for OCI, Maven, Raw, and Conan. Each
+All six delivery stages are implemented for OCI, Maven, Raw, and Conan. Each
 format has Hosted, Proxy, and Group workflows, a native lifecycle, management
 browse where applicable, promotion, checkpointed replication, and operational
 coverage in the backend completion checklist. The roadmap is retained as the

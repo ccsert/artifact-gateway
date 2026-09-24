@@ -197,8 +197,12 @@ operator-facing surface is thinner:
 The Console is a desktop-focused React 19 and Ant Design 6 single-page app with
 grouped, collapsible navigation, global artifact search, public browsing, and
 format-aware repository detail tabs. It supports Chinese/English and
-light/dark themes. The remaining gaps are concentrated in richer artifact
-intelligence and operator tooling rather than basic navigation.
+light/dark themes. Repository surfaces are no longer administrator-only: the
+Console now serves the server's permission-filtered repository catalog to
+non-administrators, repository management surfaces follow effective
+permission, and per-repository grants can be assigned from the user screen.
+The remaining gaps are concentrated in richer artifact intelligence and
+operator tooling rather than basic navigation.
 
 ### Authentication Entry
 
