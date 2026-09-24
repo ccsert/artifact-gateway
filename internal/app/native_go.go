@@ -130,6 +130,9 @@ func (h nativeGoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !isAnonymous(principal) {
 		decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, operation, route.module)
 		if !decision.Allowed {
+			if h.metrics != nil {
+				h.metrics.recordRepositoryAuthorizationDenied("go", decision.Source, decision.Reason)
+			}
 			h.challenge(w, http.StatusForbidden, "repository permission required")
 			return
 		}
@@ -190,6 +193,9 @@ func (h nativeGoHandler) serveNexusUpload(w http.ResponseWriter, r *http.Request
 	}
 	decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryWrite, modulePath)
 	if !decision.Allowed {
+		if h.metrics != nil {
+			h.metrics.recordRepositoryAuthorizationDenied("go", decision.Source, decision.Reason)
+		}
 		h.challenge(w, http.StatusForbidden, "repository permission required")
 		return
 	}

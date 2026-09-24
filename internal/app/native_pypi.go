@@ -131,6 +131,9 @@ func (h nativePyPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, operation, resource)
 		if !decision.Allowed {
+			if h.metrics != nil {
+				h.metrics.recordRepositoryAuthorizationDenied("pypi", decision.Source, decision.Reason)
+			}
 			h.challenge(w, http.StatusForbidden, "repository permission required")
 			return
 		}
