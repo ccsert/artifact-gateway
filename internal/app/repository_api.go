@@ -280,7 +280,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if client, ok := upstreamClient.(APTClient); ok {
 		aptClient = client
 	}
-	nativeAPT := newNativeAPTHandler(store, nativeAPTObjects, authenticator).withProxy(aptClient)
+	nativeAPT := newNativeAPTHandler(store, nativeAPTObjects, authenticator).withProxy(aptClient).withMetrics(metrics)
 	aptPublication := aptpublication.NewManager(store, nativeAPTObjects)
 	var aptSnapshotImporter *aptpublication.SnapshotArchiveImporter
 	if dependencies.APTArchiveTrust != nil {

@@ -78,6 +78,7 @@ type nativeAPTHandler struct {
 	authorizer   RepositoryAuthorizer
 	audit        repository.Store
 	proxy        APTClient
+	metrics      *Metrics
 }
 
 type aptRoute struct {
@@ -101,6 +102,13 @@ func (h nativeAPTHandler) withProxy(client APTClient) nativeAPTHandler {
 	if client != nil {
 		h.proxy = client
 	}
+	return h
+}
+
+// withMetrics attaches the bounded denial counters so an APT authorization
+// denial is counted like every other protocol's, rather than going uncounted.
+func (h nativeAPTHandler) withMetrics(metrics *Metrics) nativeAPTHandler {
+	h.metrics = metrics
 	return h
 }
 
@@ -208,6 +216,9 @@ func (h nativeAPTHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !isAnonymous(principal) {
 		decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryRead, route.path)
 		if !decision.Allowed {
+			if h.metrics != nil {
+				h.metrics.recordRepositoryAuthorizationDenied("apt", decision.Source, decision.Reason)
+			}
 			h.challenge(w, http.StatusForbidden, "repository permission required")
 			return
 		}
