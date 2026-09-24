@@ -3,6 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getOidcSettings,
+  listAuthorizationRoles,
+  listRepositories,
+  listRepositoryGrants,
   listUserIdentities,
   listUserSessions,
   listUsers,
@@ -18,6 +21,10 @@ vi.mock("../../client", () => ({
   deleteUser: vi.fn(),
   deleteUserIdentity: vi.fn(),
   getOidcSettings: vi.fn(),
+  listAuthorizationRoles: vi.fn(),
+  listGrants: vi.fn(),
+  listRepositories: vi.fn(),
+  listRepositoryGrants: vi.fn(),
   listUsers: vi.fn(),
   listUserIdentities: vi.fn(),
   listUserSessions: vi.fn(),
@@ -29,6 +36,9 @@ vi.mock("../../client", () => ({
 
 const mockListUsers = vi.mocked(listUsers);
 const mockListUserIdentities = vi.mocked(listUserIdentities);
+const mockListRepositoryGrants = vi.mocked(listRepositoryGrants);
+const mockListRepositories = vi.mocked(listRepositories);
+const mockListAuthorizationRoles = vi.mocked(listAuthorizationRoles);
 const mockGetOidcSettings = vi.mocked(getOidcSettings);
 const mockListUserSessions = vi.mocked(listUserSessions);
 
@@ -96,6 +106,9 @@ describe("UsersPage", () => {
       data: { items: [alice], total: 1, limit: 20, offset: 0 },
     } as never);
     mockListUserIdentities.mockResolvedValue({ data: { items: [] } } as never);
+    mockListRepositoryGrants.mockResolvedValue({ data: [] } as never);
+    mockListRepositories.mockResolvedValue({ data: { items: [] } } as never);
+    mockListAuthorizationRoles.mockResolvedValue({ data: [] } as never);
     mockGetOidcSettings.mockResolvedValue({
       data: { issuer: "https://issuer.example.test" },
     } as never);

@@ -38,6 +38,7 @@ import {
   localPasswordMeetsMinimum,
 } from "./passwordPolicy";
 import { UserIdentitiesPanel } from "./UserIdentitiesPanel";
+import { UserRepositoryAccessPanel } from "./UserRepositoryAccessPanel";
 import { UserSessionsPanel } from "./UserSessionsPanel";
 import { isUserLocked, roleTone, userInitials } from "./userPresentation";
 
@@ -434,6 +435,10 @@ export function UserDetailsDrawer({
         <Divider />
 
         <UserIdentitiesPanel userId={user.id} />
+
+        <Divider />
+
+        <UserRepositoryAccessPanel userId={user.id} username={user.name} />
 
         <Divider />
 
