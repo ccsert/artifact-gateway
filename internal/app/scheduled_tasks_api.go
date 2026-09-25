@@ -12,8 +12,56 @@ import (
 	"github.com/google/uuid"
 )
 
+// authorizeScheduledTaskTarget reports whether the principal may manage a task
+// bound to the given repository. A repository retention task belongs to the
+// administrators of that repository; a task with no repository is a
+// platform-wide operation.
+func (h generatedRepositoryAPIAdapter) authorizeScheduledTaskTarget(w http.ResponseWriter, r *http.Request, principal Principal, repositoryID string) bool {
+	if repositoryID == "" {
+		return h.authorizePlatformAdministrator(w, principal)
+	}
+	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+		return false
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository failed")
+		return false
+	}
+	if decision := h.authorizer.Authorize(r.Context(), principal, repo, RepositoryAdmin); !decision.Allowed {
+		h.writeRepositoryDenial(w, r, principal, repo, RepositoryAdmin, decision)
+		return false
+	}
+	return true
+}
+
+// scheduledTaskRequestTarget names the repository a task request binds itself
+// to, or the empty string when the request describes a platform-wide task.
+func scheduledTaskRequestTarget(kind adminopenapi.CreateScheduledTaskKind, repositoryID *uuid.UUID) string {
+	if repository.ScheduledTaskKind(kind) != repository.ScheduledTaskRepositoryRetention || repositoryID == nil {
+		return ""
+	}
+	return repositoryID.String()
+}
+
+// canManageScheduledTask reports whether a listed task belongs to the caller:
+// platform-wide tasks need the platform tier, a repository's tasks need that
+// repository's administration.
+func (h generatedRepositoryAPIAdapter) canManageScheduledTask(r *http.Request, principal Principal, task repository.ScheduledTask) bool {
+	if task.RepositoryID == "" {
+		return principal.Admin
+	}
+	repo, err := h.store.GetHostedRepository(r.Context(), task.RepositoryID)
+	if err != nil {
+		return false
+	}
+	return h.authorizer.Authorize(r.Context(), principal, repo, RepositoryAdmin).Allowed
+}
+
 func (h generatedRepositoryAPIAdapter) ListScheduledTasks(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.authorize(w, r); !ok {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
 		return
 	}
 	tasks, err := h.scheduledTasks.ListScheduledTasks(r.Context())
@@ -23,19 +71,25 @@ func (h generatedRepositoryAPIAdapter) ListScheduledTasks(w http.ResponseWriter,
 	}
 	items := make([]adminopenapi.ScheduledTask, 0, len(tasks))
 	for _, task := range tasks {
+		if !h.canManageScheduledTask(r, principal, task) {
+			continue
+		}
 		items = append(items, scheduledTaskResponse(task))
 	}
 	writeNativeMavenJSON(w, http.StatusOK, items)
 }
 
 func (h generatedRepositoryAPIAdapter) CreateScheduledTask(w http.ResponseWriter, r *http.Request) {
-	principal, ok := h.authorize(w, r)
+	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
 	}
 	var request adminopenapi.CreateScheduledTask
 	if err := decodeScheduledTaskRequest(w, r, &request); err != nil {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	if !h.authorizeScheduledTaskTarget(w, r, principal, scheduledTaskRequestTarget(request.Kind, request.RepositoryId)) {
 		return
 	}
 	task, err := h.scheduledTaskFromRequest(r, uuid.NewString(), request, time.Time{})
@@ -57,7 +111,8 @@ func (h generatedRepositoryAPIAdapter) CreateScheduledTask(w http.ResponseWriter
 }
 
 func (h generatedRepositoryAPIAdapter) GetScheduledTask(w http.ResponseWriter, r *http.Request, taskID adminopenapi.ScheduledTaskId) {
-	if _, ok := h.authorize(w, r); !ok {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
 		return
 	}
 	task, err := h.scheduledTasks.GetScheduledTask(r.Context(), taskID.String())
@@ -69,11 +124,14 @@ func (h generatedRepositoryAPIAdapter) GetScheduledTask(w http.ResponseWriter, r
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get scheduled task failed")
 		return
 	}
+	if !h.authorizeScheduledTaskTarget(w, r, principal, task.RepositoryID) {
+		return
+	}
 	writeNativeMavenJSON(w, http.StatusOK, scheduledTaskResponse(task))
 }
 
 func (h generatedRepositoryAPIAdapter) UpdateScheduledTask(w http.ResponseWriter, r *http.Request, taskID adminopenapi.ScheduledTaskId, params adminopenapi.UpdateScheduledTaskParams) {
-	principal, ok := h.authorize(w, r)
+	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
 	}
@@ -89,6 +147,14 @@ func (h generatedRepositoryAPIAdapter) UpdateScheduledTask(w http.ResponseWriter
 	var request adminopenapi.UpdateScheduledTask
 	if err = decodeScheduledTaskRequest(w, r, &request); err != nil {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	// A request that moves a task between targets needs authority over both the
+	// target it leaves and the target it reaches.
+	if !h.authorizeScheduledTaskTarget(w, r, principal, current.RepositoryID) {
+		return
+	}
+	if !h.authorizeScheduledTaskTarget(w, r, principal, scheduledTaskRequestTarget(request.Kind, request.RepositoryId)) {
 		return
 	}
 	task, err := h.scheduledTaskFromRequest(r, current.ID, request, current.NextRunAt)
@@ -118,7 +184,7 @@ func (h generatedRepositoryAPIAdapter) UpdateScheduledTask(w http.ResponseWriter
 }
 
 func (h generatedRepositoryAPIAdapter) DeleteScheduledTask(w http.ResponseWriter, r *http.Request, taskID adminopenapi.ScheduledTaskId) {
-	principal, ok := h.authorize(w, r)
+	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
 	}
@@ -129,6 +195,9 @@ func (h generatedRepositoryAPIAdapter) DeleteScheduledTask(w http.ResponseWriter
 	}
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get scheduled task failed")
+		return
+	}
+	if !h.authorizeScheduledTaskTarget(w, r, principal, task.RepositoryID) {
 		return
 	}
 	if err = h.scheduledTasks.DeleteScheduledTask(r.Context(), task.ID); err != nil {
@@ -140,7 +209,7 @@ func (h generatedRepositoryAPIAdapter) DeleteScheduledTask(w http.ResponseWriter
 }
 
 func (h generatedRepositoryAPIAdapter) RunScheduledTask(w http.ResponseWriter, r *http.Request, taskID adminopenapi.ScheduledTaskId) {
-	principal, ok := h.authorize(w, r)
+	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
 	}
@@ -151,6 +220,9 @@ func (h generatedRepositoryAPIAdapter) RunScheduledTask(w http.ResponseWriter, r
 	}
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get scheduled task failed")
+		return
+	}
+	if !h.authorizeScheduledTaskTarget(w, r, principal, task.RepositoryID) {
 		return
 	}
 	run, err := (ScheduledTaskScheduler{Store: h.sessions.store}).RunNow(r.Context(), task.ID)
@@ -164,14 +236,20 @@ func (h generatedRepositoryAPIAdapter) RunScheduledTask(w http.ResponseWriter, r
 }
 
 func (h generatedRepositoryAPIAdapter) ListScheduledTaskRuns(w http.ResponseWriter, r *http.Request, taskID adminopenapi.ScheduledTaskId, params adminopenapi.ListScheduledTaskRunsParams) {
-	if _, ok := h.authorize(w, r); !ok {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
 		return
 	}
-	if _, err := h.scheduledTasks.GetScheduledTask(r.Context(), taskID.String()); errors.Is(err, repository.ErrNotFound) {
+	task, err := h.scheduledTasks.GetScheduledTask(r.Context(), taskID.String())
+	if errors.Is(err, repository.ErrNotFound) {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "scheduled task not found")
 		return
-	} else if err != nil {
+	}
+	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get scheduled task failed")
+		return
+	}
+	if !h.authorizeScheduledTaskTarget(w, r, principal, task.RepositoryID) {
 		return
 	}
 	limit := 100

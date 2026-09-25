@@ -818,6 +818,9 @@ export const listLifecycleJobs = <ThrowOnError extends boolean = false>(options?
     ...options
 });
 
+/**
+ * Lists the scheduled tasks the caller administers. A repository retention task belongs to the administrators of the repository it targets; a task with no repository belongs to platform administrators only.
+ */
 export const listScheduledTasks = <ThrowOnError extends boolean = false>(options?: Options<ListScheduledTasksData, ThrowOnError>): RequestResult<ListScheduledTasksResponses, ListScheduledTasksErrors, ThrowOnError> => (options?.client ?? client).get<ListScheduledTasksResponses, ListScheduledTasksErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -828,6 +831,9 @@ export const listScheduledTasks = <ThrowOnError extends boolean = false>(options
     ...options
 });
 
+/**
+ * Creates a scheduled task. A repository retention task needs the platform tier, or administration of the repository it targets.
+ */
 export const createScheduledTask = <ThrowOnError extends boolean = false>(options: Options<CreateScheduledTaskData, ThrowOnError>): RequestResult<CreateScheduledTaskResponses, CreateScheduledTaskErrors, ThrowOnError> => (options.client ?? client).post<CreateScheduledTaskResponses, CreateScheduledTaskErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -842,6 +848,9 @@ export const createScheduledTask = <ThrowOnError extends boolean = false>(option
     }
 });
 
+/**
+ * Deletes a task. A repository retention task is managed by the platform tier or by the administrators of the repository it targets.
+ */
 export const deleteScheduledTask = <ThrowOnError extends boolean = false>(options: Options<DeleteScheduledTaskData, ThrowOnError>): RequestResult<DeleteScheduledTaskResponses, DeleteScheduledTaskErrors, ThrowOnError> => (options.client ?? client).delete<DeleteScheduledTaskResponses, DeleteScheduledTaskErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -852,6 +861,9 @@ export const deleteScheduledTask = <ThrowOnError extends boolean = false>(option
     ...options
 });
 
+/**
+ * Reads a task. A repository retention task is readable by the platform tier or by the administrators of the repository it targets.
+ */
 export const getScheduledTask = <ThrowOnError extends boolean = false>(options: Options<GetScheduledTaskData, ThrowOnError>): RequestResult<GetScheduledTaskResponses, GetScheduledTaskErrors, ThrowOnError> => (options.client ?? client).get<GetScheduledTaskResponses, GetScheduledTaskErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -862,6 +874,9 @@ export const getScheduledTask = <ThrowOnError extends boolean = false>(options: 
     ...options
 });
 
+/**
+ * Updates a task. A repository retention task is managed by the platform tier or by the administrators of the repository it targets, and moving a task needs authority over both the repository it leaves and the one it reaches.
+ */
 export const updateScheduledTask = <ThrowOnError extends boolean = false>(options: Options<UpdateScheduledTaskData, ThrowOnError>): RequestResult<UpdateScheduledTaskResponses, UpdateScheduledTaskErrors, ThrowOnError> => (options.client ?? client).put<UpdateScheduledTaskResponses, UpdateScheduledTaskErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -876,6 +891,9 @@ export const updateScheduledTask = <ThrowOnError extends boolean = false>(option
     }
 });
 
+/**
+ * Dispatches a task immediately. A repository retention task is managed by the platform tier or by the administrators of the repository it targets.
+ */
 export const runScheduledTask = <ThrowOnError extends boolean = false>(options: Options<RunScheduledTaskData, ThrowOnError>): RequestResult<RunScheduledTaskResponses, RunScheduledTaskErrors, ThrowOnError> => (options.client ?? client).post<RunScheduledTaskResponses, RunScheduledTaskErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -886,6 +904,9 @@ export const runScheduledTask = <ThrowOnError extends boolean = false>(options: 
     ...options
 });
 
+/**
+ * Lists a task's dispatch history. A repository retention task is readable by the platform tier or by the administrators of the repository it targets.
+ */
 export const listScheduledTaskRuns = <ThrowOnError extends boolean = false>(options: Options<ListScheduledTaskRunsData, ThrowOnError>): RequestResult<ListScheduledTaskRunsResponses, ListScheduledTaskRunsErrors, ThrowOnError> => (options.client ?? client).get<ListScheduledTaskRunsResponses, ListScheduledTaskRunsErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',

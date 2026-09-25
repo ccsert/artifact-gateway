@@ -20120,6 +20120,20 @@ func (response CreateScheduledTask401ApplicationProblemPlusJSONResponse) VisitCr
 	return err
 }
 
+type CreateScheduledTask403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateScheduledTask403ApplicationProblemPlusJSONResponse) VisitCreateScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateScheduledTask409ApplicationProblemPlusJSONResponse Problem
 
 func (response CreateScheduledTask409ApplicationProblemPlusJSONResponse) VisitCreateScheduledTaskResponse(w http.ResponseWriter) error {
@@ -20162,6 +20176,20 @@ func (response DeleteScheduledTask401ApplicationProblemPlusJSONResponse) VisitDe
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteScheduledTask403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteScheduledTask403ApplicationProblemPlusJSONResponse) VisitDeleteScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -20214,6 +20242,20 @@ func (response GetScheduledTask401ApplicationProblemPlusJSONResponse) VisitGetSc
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScheduledTask403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetScheduledTask403ApplicationProblemPlusJSONResponse) VisitGetScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -20282,6 +20324,20 @@ func (response UpdateScheduledTask401ApplicationProblemPlusJSONResponse) VisitUp
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateScheduledTask403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateScheduledTask403ApplicationProblemPlusJSONResponse) VisitUpdateScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -20366,6 +20422,20 @@ func (response RunScheduledTask401ApplicationProblemPlusJSONResponse) VisitRunSc
 	return err
 }
 
+type RunScheduledTask403ApplicationProblemPlusJSONResponse Problem
+
+func (response RunScheduledTask403ApplicationProblemPlusJSONResponse) VisitRunScheduledTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RunScheduledTask404ApplicationProblemPlusJSONResponse Problem
 
 func (response RunScheduledTask404ApplicationProblemPlusJSONResponse) VisitRunScheduledTaskResponse(w http.ResponseWriter) error {
@@ -20443,6 +20513,20 @@ func (response ListScheduledTaskRuns401ApplicationProblemPlusJSONResponse) Visit
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScheduledTaskRuns403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListScheduledTaskRuns403ApplicationProblemPlusJSONResponse) VisitListScheduledTaskRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }

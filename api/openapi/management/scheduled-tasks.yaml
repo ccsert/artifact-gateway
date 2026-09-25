@@ -2,6 +2,9 @@
 scheduled_tasks:
   get:
     operationId: listScheduledTasks
+    description: Lists the scheduled tasks the caller administers. A repository
+      retention task belongs to the administrators of the repository it targets;
+      a task with no repository belongs to platform administrators only.
     responses:
       '200':
         description: Scheduled task catalog
@@ -13,6 +16,8 @@ scheduled_tasks:
       '401': {"$ref": "../components/responses.yaml#/Problem"}
   post:
     operationId: createScheduledTask
+    description: Creates a scheduled task. A repository retention task needs the
+      platform tier, or administration of the repository it targets.
     requestBody:
       required: true
       content:
@@ -26,6 +31,7 @@ scheduled_tasks:
             schema: {"$ref": "../components/schemas.yaml#/ScheduledTask"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
       '409': {"$ref": "../components/responses.yaml#/Problem"}
 
 scheduled_tasks_taskId:
@@ -33,6 +39,8 @@ scheduled_tasks_taskId:
   - "$ref": "../components/parameters.yaml#/ScheduledTaskId"
   get:
     operationId: getScheduledTask
+    description: Reads a task. A repository retention task is readable by the
+      platform tier or by the administrators of the repository it targets.
     responses:
       '200':
         description: Scheduled task
@@ -40,9 +48,14 @@ scheduled_tasks_taskId:
           application/json:
             schema: {"$ref": "../components/schemas.yaml#/ScheduledTask"}
       '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
   put:
     operationId: updateScheduledTask
+    description: Updates a task. A repository retention task is managed by the
+      platform tier or by the administrators of the repository it targets, and
+      moving a task needs authority over both the repository it leaves and the
+      one it reaches.
     parameters:
     - "$ref": "../components/parameters.yaml#/IfMatch"
     requestBody:
@@ -58,14 +71,18 @@ scheduled_tasks_taskId:
             schema: {"$ref": "../components/schemas.yaml#/ScheduledTask"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
       '409': {"$ref": "../components/responses.yaml#/Problem"}
       '412': {"$ref": "../components/responses.yaml#/Problem"}
   delete:
     operationId: deleteScheduledTask
+    description: Deletes a task. A repository retention task is managed by the
+      platform tier or by the administrators of the repository it targets.
     responses:
       '204': {description: Scheduled task deleted}
       '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
 
 scheduled_tasks_taskId_run:
@@ -73,6 +90,9 @@ scheduled_tasks_taskId_run:
   - "$ref": "../components/parameters.yaml#/ScheduledTaskId"
   post:
     operationId: runScheduledTask
+    description: Dispatches a task immediately. A repository retention task is
+      managed by the platform tier or by the administrators of the repository it
+      targets.
     responses:
       '202':
         description: Scheduled task dispatched
@@ -80,6 +100,7 @@ scheduled_tasks_taskId_run:
           application/json:
             schema: {"$ref": "../components/schemas.yaml#/ScheduledTaskRun"}
       '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
       '409': {"$ref": "../components/responses.yaml#/Problem"}
 
@@ -88,6 +109,9 @@ scheduled_tasks_taskId_runs:
   - "$ref": "../components/parameters.yaml#/ScheduledTaskId"
   get:
     operationId: listScheduledTaskRuns
+    description: Lists a task's dispatch history. A repository retention task is
+      readable by the platform tier or by the administrators of the repository
+      it targets.
     parameters:
     - name: limit
       in: query
@@ -102,4 +126,5 @@ scheduled_tasks_taskId_runs:
               items: {"$ref": "../components/schemas.yaml#/ScheduledTaskRun"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '401': {"$ref": "../components/responses.yaml#/Problem"}
+      '403': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
