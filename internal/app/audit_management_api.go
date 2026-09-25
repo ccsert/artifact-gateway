@@ -11,6 +11,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// The audit log stays a platform operation, including for a repository
+// administrator: it spans every repository and every credential, and an audit
+// view scoped to one administrator's repositories is a separate decision that
+// no requirement has made yet. Repository administrators manage their own
+// repositories without seeing this.
 func (h generatedRepositoryAPIAdapter) ListAudits(w http.ResponseWriter, r *http.Request, params adminopenapi.ListAuditsParams) {
 	if _, ok := h.authorize(w, r); !ok {
 		return

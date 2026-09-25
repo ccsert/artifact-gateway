@@ -596,7 +596,8 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryCapacity(w http.ResponseWrit
 }
 
 func (h generatedRepositoryAPIAdapter) ListRepositoryCapacities(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.authorize(w, r); !ok {
+	principal, ok := h.repositoryViewPrincipal(w, r)
+	if !ok {
 		return
 	}
 	store, ok := h.capacities.(repository.RepositoryCapacityRecordStore)
@@ -612,6 +613,9 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryCapacities(w http.ResponseW
 	proxyCapacities, proxyErr := (proxyCacheBrowseHandler{store: h.store, maintenance: h.maintenance, authenticator: h.authenticator, authorizer: h.authorizer}).proxyCacheCapacities(r.Context(), records)
 	items := make(adminopenapi.RepositoryCapacityList, 0, len(records))
 	for _, record := range records {
+		if !h.mayAdministerRepository(r, principal, record.Capacity.RepositoryID) {
+			continue
+		}
 		capacity := record.Capacity
 		if proxyErr == nil {
 			capacity = proxyCapacities[capacity.RepositoryID]

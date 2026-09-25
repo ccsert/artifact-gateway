@@ -38,7 +38,8 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryArtifactScan(w http.Respo
 }
 
 func (h generatedRepositoryAPIAdapter) ListLifecycleJobs(w http.ResponseWriter, r *http.Request, params adminopenapi.ListLifecycleJobsParams) {
-	if _, ok := h.authorize(w, r); !ok {
+	principal, ok := h.repositoryViewPrincipal(w, r)
+	if !ok {
 		return
 	}
 	limit := 500
@@ -61,6 +62,9 @@ func (h generatedRepositoryAPIAdapter) ListLifecycleJobs(w http.ResponseWriter, 
 	}
 	items := make(adminopenapi.RepositoryLifecycleJobList, 0, len(records))
 	for _, record := range records {
+		if !h.mayAdministerRepository(r, principal, record.Job.RepositoryID) {
+			continue
+		}
 		items = append(items, adminopenapi.RepositoryLifecycleJob{
 			RepositoryId:   uuid.MustParse(record.Job.RepositoryID),
 			RepositoryName: record.RepositoryName,
