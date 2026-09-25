@@ -136,6 +136,16 @@ It prints four sections, each naming the identifier to act on:
    does not exist. An actor without one of those prefixes is a token actor and is
    deliberately not listed.
 
+### Rolling Back
+
+The level migration replaces the `reader_roles` and `writer_roles` settings
+columns with one `member_roles` column and narrows the stored levels, so
+switching the image back is not enough: restore the pre-upgrade database and run
+the binary that matches it. `scripts/member-role-upgrade-check.sh` keeps a
+pre-upgrade dump of its probe database, restores it, and asserts the restored
+database still carries the removed levels and the pre-upgrade schema rather than
+the converged constraints, so the procedure is verified rather than assumed.
+
 ## Current Limitations
 
 Deletion is permanent rather than a recoverable tombstone. A local account has

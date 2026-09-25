@@ -66,6 +66,10 @@ GATEWAY_DATABASE_URL=postgres://gateway:...@host:5432/gateway make member-role-m
 3. **由无用户行的主体持有的授权。** API key 与服务账号，带凭据名称与状态——已撤销的 key、已禁用的账号与仍然有效的都会列出。
 4. **模型无法表达的取值。** 等级不是 `none`/`member`/`admin` 的账号；`roles` 含多个等级或含未知等级的 key；落在不存在或已非活跃仓库上的授权；以及名字为 `user:`、`api-key:`、`service-account:` 前缀但对象不存在的授权。不带这些前缀的 actor 是 token 主体，**有意不列**。
 
+### 回滚
+
+等级迁移把 `reader_roles`/`writer_roles` 两列合并为一列 `member_roles`，并收窄存量等级取值，因此**只把镜像切回去不够**：要恢复升级前的数据库，并运行与之匹配的二进制。`scripts/member-role-upgrade-check.sh` 会保留探查库升级前的 dump、把它还原，并断言还原后的库仍带着被移除的等级与升级前的 schema（而不是收敛后的约束），所以这条回滚路径是被验证过的，而不是假定成立。
+
 ## 当前限制
 
 删除永久而非可恢复墓碑；账户只有一个等级，取值为待授权、成员或平台管理员。`member` 等级不附带任何仓库能力，只能访问被显式授权的仓库。已移除的 `reader`/`writer` 等级在升级时被收敛为 `member`，并在当时已存在的仓库上物化了等价授权，因此在原有仓库上无人失去访问权。尚无由任意权限组合的自定义角色与多角色同时分配；未实现密码过期或可配置复杂度；不支持 OIDC back-channel 或 IdP 发起登出。

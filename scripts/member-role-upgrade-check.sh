@@ -4,8 +4,10 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 compose=(docker compose --env-file /dev/null --project-name artifact-gateway-integration -f "$root/compose.integration.yml")
 probe_dir=$(mktemp -d)
 probe_database=gateway_member_role_upgrade_test
+rollback_database=gateway_member_role_rollback_upgrade_test
 cleanup() {
   "${compose[@]}" exec -T postgres dropdb -U gateway --if-exists "$probe_database" >/dev/null 2>&1 || true
+  "${compose[@]}" exec -T postgres dropdb -U gateway --if-exists "$rollback_database" >/dev/null 2>&1 || true
   rm -rf "$probe_dir"
 }
 trap cleanup EXIT
@@ -31,6 +33,11 @@ INSERT INTO api_keys(id,name,secret_hash,roles) VALUES
  ('00000000-0000-4000-8000-000000000022','mixed-key','key-hash-2',ARRAY['reader','admin']),
  ('00000000-0000-4000-8000-000000000023','level-less-key','key-hash-3',ARRAY[]::text[]);
 SQL
+# This migration replaces the reader and writer settings columns, so the
+# documented rollback restores the pre-upgrade database instead of switching the
+# image back. Keep that database and prove it restores as the schema the removed
+# levels still accept.
+"${compose[@]}" exec -T postgres pg_dump -U gateway -d "$probe_database" >"$probe_dir/before-upgrade.sql"
 "${compose[@]}" run --rm --no-deps --env "PGDATABASE=$probe_database" migrate >"$probe_dir/upgrade.log" 2>&1 || { cat "$probe_dir/upgrade.log" >&2; exit 1; }
 "${compose[@]}" exec -T postgres psql -X -U gateway -d "$probe_database" -v ON_ERROR_STOP=1 <<'SQL'
 DO $$ BEGIN
@@ -142,3 +149,18 @@ if [[ -s "$report_log" ]]; then
 else
   printf 'Migration report ran without output; its content is asserted against a real database only.\n'
 fi
+
+rollback_database=gateway_member_role_rollback_upgrade_test
+"${compose[@]}" exec -T postgres createdb -U gateway "$rollback_database"
+"${compose[@]}" exec -T postgres psql -X -q -U gateway -d "$rollback_database" -v ON_ERROR_STOP=1 <"$probe_dir/before-upgrade.sql"
+"${compose[@]}" exec -T postgres psql -X -U gateway -d "$rollback_database" -v ON_ERROR_STOP=1 <<'SQL'
+DO $$ BEGIN
+ IF (SELECT role FROM users WHERE name='legacy-reader')<>'reader' THEN RAISE EXCEPTION 'rollback database lost the reader level'; END IF;
+ IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='oidc_settings' AND column_name='reader_roles') THEN RAISE EXCEPTION 'rollback database is not the pre-upgrade schema'; END IF;
+ IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname='users_role_check') THEN RAISE EXCEPTION 'rollback database already carries the converged level constraint'; END IF;
+ IF (SELECT count(*) FROM hosted_repositories)<>3 THEN RAISE EXCEPTION 'rollback database lost its repositories'; END IF;
+ IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='repository_grants') THEN RAISE EXCEPTION 'rollback database lost the repository grants table'; END IF;
+END $$;
+SQL
+printf 'Member role rollback passed: the pre-upgrade database restores with the removed levels and without the converged constraints.\n'
+
