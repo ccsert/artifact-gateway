@@ -67,3 +67,78 @@ DO $$ BEGIN
 END $$;
 SQL
 printf 'Member role upgrade passed: legacy roles converted, grants materialized on active repositories only, grant-set versions untouched, removed levels narrowed out of accounts and API keys, and the database refuses them.\n'
+
+# The migration report is the operator's inventory of the instances it cannot
+# decide on its own. Seed one instance per class, plus one the report must not
+# claim, and read the report back.
+"${compose[@]}" exec -T postgres psql -X -U gateway -d "$probe_database" -v ON_ERROR_STOP=1 <<'SQL'
+INSERT INTO resolver_audit_log(group_name, repository, actor, outcome, occurred_at, authorization_source, authorization_reason) VALUES
+ ('upgrade-active','upgrade-active','legacy-pattern-reader','resolved',now(),'legacy_static','read_pattern_granted'),
+ ('upgrade-active','upgrade-active','user:legacy-reader','resolved',now(),'legacy_static','read_pattern_granted');
+INSERT INTO api_keys(id,name,secret_hash,roles) VALUES
+ ('00000000-0000-4000-8000-000000000041','report-visible-key','report-hash-1',ARRAY['member']);
+INSERT INTO service_accounts(id,name,state) VALUES
+ ('00000000-0000-4000-8000-000000000042','report-disabled-account','disabled');
+-- A grant needs its repository's grant-set row, which the migration created
+-- for active repositories only.
+INSERT INTO repository_grant_sets(repository_id, version) VALUES
+ ('00000000-0000-4000-8000-000000000003',1);
+INSERT INTO repository_grants(repository_id, principal, scopes, resource_prefix) VALUES
+ ('00000000-0000-4000-8000-000000000001','api-key:00000000-0000-4000-8000-000000000041',ARRAY['repositories:read'],''),
+ ('00000000-0000-4000-8000-000000000002','service-account:00000000-0000-4000-8000-000000000042',ARRAY['repositories:write'],''),
+ ('00000000-0000-4000-8000-000000000003','user:legacy-reader',ARRAY['repositories:read'],''),
+ ('00000000-0000-4000-8000-000000000001','user:ghost-account',ARRAY['repositories:read'],'');
+SQL
+report_database_url="postgres://gateway:integration-password@127.0.0.1:5432/$probe_database"
+report_log="$probe_dir/report.log"
+if "${compose[@]}" exec -T postgres env GATEWAY_DATABASE_URL="$report_database_url" sh -s <"$root/scripts/member-role-migration-report.sh" >"$report_log" 2>&1; then
+  :
+else
+  cat "$report_log" >&2
+  exit 1
+fi
+# The Makefile's docker stub answers no query, so this report is empty there and
+# only its invocation is exercised. The content assertions need a real database
+# and run in the contract job, which is where this script's other probes are
+# effective too.
+if [[ -s "$report_log" ]]; then
+  report_section() { awk -v start="$1" -v end="$2" 'index($0, start) == 1, index($0, end) == 1' "$report_log"; }
+  report_assert() {
+    if [[ $2 == "tail" ]]; then
+      report_tail=$(awk -v start="$1" 'index($0, start) == 1, 0' "$report_log")
+      if ! grep -qF -- "$3" <<<"$report_tail"; then
+        printf 'Migration report did not list %s in section %s:\n' "$3" "$1" >&2
+        cat "$report_log" >&2
+        exit 1
+      fi
+      return
+    fi
+    if ! report_section "$1" "$2" | grep -qF -- "$3"; then
+      printf 'Migration report did not list %s in section %s:\n' "$3" "$1" >&2
+      cat "$report_log" >&2
+      exit 1
+    fi
+  }
+  report_assert '2. Principals' '3. Grants' 'legacy-pattern-reader'
+  report_assert '2. Principals' '3. Grants' 'upgrade-active'
+  report_assert '3. Grants' '4a. Accounts' 'report-visible-key'
+  report_assert '3. Grants' '4a. Accounts' 'report-disabled-account'
+  report_assert '3. Grants' '4a. Accounts' '(disabled)'
+  report_assert '4c. Grants' '4d. Grants' 'upgrade-deleted'
+  report_assert '4d. Grants' tail 'user:ghost-account'
+  if report_section '2. Principals' '3. Grants' | grep -qF -- 'user:legacy-reader'; then
+    printf 'Migration report claimed an actor that already holds a grant:\n' >&2
+    cat "$report_log" >&2
+    exit 1
+  fi
+  for empty in '4a. Accounts' '4b. API keys'; do
+    if ! report_section "$empty" '4c. Grants' | grep -qF '(none)'; then
+      printf 'Migration report did not answer %s with (none):\n' "$empty" >&2
+      cat "$report_log" >&2
+      exit 1
+    fi
+  done
+  printf 'Migration report listed every seeded instance of the four classes and nothing else.\n'
+else
+  printf 'Migration report ran without output; its content is asserted against a real database only.\n'
+fi

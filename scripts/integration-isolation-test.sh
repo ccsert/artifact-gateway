@@ -54,7 +54,7 @@ AG_ISOLATION_LATEST=$(find "$root/migrations" -maxdepth 1 -name '*.sql' | sort |
 AG_ISOLATION_LATEST=${AG_ISOLATION_LATEST##*/}
 "$root/scripts/integration-test.sh" >/dev/null
 make --no-print-directory -C "$root" integration-down >/dev/null
-for expected in 'down -v --remove-orphans' 'up -d --wait postgres rustfs' 'run --rm --no-deps test' 'exec -T postgres createdb -U gateway gateway_apt_lifecycle_upgrade_test' 'exec -T postgres dropdb -U gateway --if-exists gateway_apt_lifecycle_upgrade_test' 'exec -T postgres createdb -U gateway gateway_member_role_upgrade_test' 'exec -T postgres dropdb -U gateway --if-exists gateway_member_role_upgrade_test'; do
+for expected in 'down -v --remove-orphans' 'up -d --wait postgres rustfs' 'run --rm --no-deps test' 'exec -T postgres createdb -U gateway gateway_apt_lifecycle_upgrade_test' 'exec -T postgres dropdb -U gateway --if-exists gateway_apt_lifecycle_upgrade_test' 'exec -T postgres createdb -U gateway gateway_member_role_upgrade_test' 'exec -T postgres dropdb -U gateway --if-exists gateway_member_role_upgrade_test' 'exec -T postgres env GATEWAY_DATABASE_URL='; do
   grep -Fq -- "$expected" "$AG_ISOLATION_LOG"
 done
 printf 'Integration Compose isolation passed with an unrelated exported project name.\n'
