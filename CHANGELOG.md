@@ -11,6 +11,10 @@ their meaning.
 
 ## Unreleased
 
+- A member with no repository grants is told where repository access comes from. The repository catalog's empty state described how to create a repository, which a member cannot do and which is not the reason the list is empty; it now names the actual reason — access is granted per repository by a platform administrator — and a platform administrator still reads the creation copy.
+
+- A repository's Console page follows the repository's own authority instead of the platform flag. The management tabs — access grants, retention, security admission, capacity, tombstones, promotion and replication, lifecycle jobs, signed snapshots, and settings — appear for that repository's administrators, publishing for a write grant, scanning for the independent intelligence scope, and the artifact and usage views for any read authority. The platform administrator keeps every tab, and a tab whose authority is missing is not offered even when the URL names it.
+
 - The V1 compatibility surface stays a platform-administrator operation. The `/api/v1/**` handlers do not take part in the platform/repository split: they predate per-repository authority, and a V1 Group member may carry no repository binding, so nothing attributes it to a repository an administrator could hold. The two tiers live on the v2 surface, and a V1 client that needs repository-scoped administration has to move to `/api/v2`.
 
 - Scheduled tasks now follow the repository they target. A repository retention task is created, read, updated, run, and deleted by the administrators of that repository or by a platform administrator, the catalogue lists only the tasks a caller administers, and moving a task from one repository to another needs authority over both the repository it leaves and the one it reaches. A task with no repository, the audit retention job, remains a platform operation.

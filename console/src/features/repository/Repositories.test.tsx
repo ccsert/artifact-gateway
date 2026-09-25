@@ -27,6 +27,7 @@ vi.mock("../../client", async () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  auth.identity = { administrator: false, role: "member" };
 });
 
 describe("RepositoriesPage role-scoped catalog", () => {
@@ -68,5 +69,33 @@ describe("RepositoriesPage role-scoped catalog", () => {
     ).not.toBeInTheDocument();
     expect(vi.mocked(listRepositoryCapacities)).not.toHaveBeenCalled();
     expect(vi.mocked(listFormatProfiles)).not.toHaveBeenCalled();
+  });
+
+  it("tells a member without grants where repository access comes from", async () => {
+    vi.mocked(listRepositories).mockResolvedValue({
+      data: { items: [] },
+    } as never);
+
+    render(
+      <PreferencesProvider>
+        <MemoryRouter>
+          <RepositoriesPage />
+        </MemoryRouter>
+      </PreferencesProvider>,
+    );
+
+    expect(
+      await screen.findByText(
+        "你还没有任何仓库授权。仓库权限由平台管理员按仓库分配；请联系管理员为你的账号授权。",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "仓库是制品格式与策略的边界；创建后即可发布、代理和治理制品。",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "新建仓库" }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -687,10 +687,15 @@ export function RepositoriesPage() {
             }
             hint={
               items.length === 0
-                ? text(
-                    "仓库是制品格式与策略的边界；创建后即可发布、代理和治理制品。",
-                    "A repository defines a format and policy boundary for publishing, proxying, and governing artifacts.",
-                  )
+                ? isAdmin
+                  ? text(
+                      "仓库是制品格式与策略的边界；创建后即可发布、代理和治理制品。",
+                      "A repository defines a format and policy boundary for publishing, proxying, and governing artifacts.",
+                    )
+                  : text(
+                      "你还没有任何仓库授权。仓库权限由平台管理员按仓库分配；请联系管理员为你的账号授权。",
+                      "You have no repository grants yet. A platform administrator assigns access repository by repository; ask one to grant yours.",
+                    )
                 : deletedCount > 0 && stateFilter === "operational"
                   ? text(
                       "已删除仓库已归档，可在状态筛选中查看",
