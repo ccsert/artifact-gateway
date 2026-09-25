@@ -26,34 +26,32 @@ const (
 // thing for a named account: no role-derived capability at all, so its
 // repository authority comes only from per-repository grants and assigning it
 // never implies access to every repository.
+//
+// The removed legacy values "reader" and "writer" are deliberately not
+// recognized any more: no constant names them, RoleAllows never grants for
+// them, and roleRank ranks them below every recognized role, so a stale value
+// that survived in a credential, a session claim, or a database row authorizes
+// nothing instead of reaching every repository.
 type Role string
 
 const (
 	RoleNone   Role = "none"
 	RoleMember Role = "member"
 	RoleAdmin  Role = "admin"
-	RoleWriter Role = "writer"
-	RoleReader Role = "reader"
 )
 
-// RoleAllows reports whether a role grants the operation. Admin grants all,
-// writer grants read and write, reader grants read only. Member grants nothing
-// here on purpose: per-repository grants decide, which is what stops a single
-// global role from covering every repository.
-func RoleAllows(role Role, operation RepositoryOperation) bool {
-	switch role {
-	case RoleAdmin:
-		return true
-	case RoleWriter:
-		return operation == RepositoryRead || operation == RepositoryWrite
-	case RoleReader:
-		return operation == RepositoryRead
-	}
-	return false
+// RoleAllows reports whether a role grants the operation. Only admin grants
+// anything globally. Member grants nothing here on purpose: per-repository
+// grants decide, which is what stops a single global role from covering every
+// repository. Every other value, including the removed reader and writer roles,
+// grants nothing.
+func RoleAllows(role Role, _ RepositoryOperation) bool {
+	return role == RoleAdmin
 }
 
 // RoleFromRoles picks the most privileged recognized role from a credential's
-// role list. Unrecognized roles are ignored.
+// role list. Unrecognized roles are ignored, so a list holding only removed
+// legacy values selects no role at all.
 func RoleFromRoles(roles []string) Role {
 	best := Role("")
 	for _, r := range roles {
@@ -70,10 +68,6 @@ func RoleFromRoles(roles []string) Role {
 func roleRank(role Role) int {
 	switch role {
 	case RoleAdmin:
-		return 4
-	case RoleWriter:
-		return 3
-	case RoleReader:
 		return 2
 	case RoleMember:
 		return 1

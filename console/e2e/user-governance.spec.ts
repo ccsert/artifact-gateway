@@ -35,7 +35,7 @@ test("mandatory password change keeps the restricted session in memory", async (
       email: `${username}@example.test`,
       description: "Temporary browser test account",
       password: temporaryPassword,
-      role: "reader",
+      role: "member",
       mustChangePassword: true,
     },
   });

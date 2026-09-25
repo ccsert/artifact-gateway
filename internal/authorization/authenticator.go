@@ -637,9 +637,11 @@ func (a Authenticator) principalToken(token string) (Principal, bool) {
 // validGatewayRole reports whether a credential or session role claim names a
 // role the Gateway recognises. Every accept-list must route through here, or a
 // newly added role silently fails to authenticate the sessions that carry it.
+// The removed legacy values "reader" and "writer" are not recognised, so a
+// credential or session that carries one is refused rather than downgraded.
 func validGatewayRole(role Role) bool {
 	switch role {
-	case RoleNone, RoleMember, RoleReader, RoleWriter, RoleAdmin:
+	case RoleNone, RoleMember, RoleAdmin:
 		return true
 	}
 	return false
@@ -659,7 +661,10 @@ func validOIDCMetadata(kind AuthenticationKind, adminSubject bool, mappings []OI
 		return false
 	}
 	for _, mapping := range mappings {
-		if mapping.ExternalRole == "" || mapping.GatewayRole != RoleMember && mapping.GatewayRole != RoleReader && mapping.GatewayRole != RoleWriter && mapping.GatewayRole != RoleAdmin {
+		// Only the two assignable levels can be a mapping target. A mapping to
+		// a removed legacy role is refused, so it can never be replayed into a
+		// global capability it no longer has.
+		if mapping.ExternalRole == "" || mapping.GatewayRole != RoleMember && mapping.GatewayRole != RoleAdmin {
 			return false
 		}
 	}

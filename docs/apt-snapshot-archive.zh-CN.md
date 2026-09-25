@@ -30,7 +30,7 @@ Console 提供与 curl 等价的完整流程：仓库管理员打开 Hosted APT 
 
 ## HTTP 与归档契约
 
-- `GET /api/v2/repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive` 要求 `repositories:admin`；普通 reader/writer 和匿名访问不能下载归档。
+- `GET /api/v2/repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive` 要求 `repositories:admin`；普通成员和匿名访问不能下载归档。
 - 只导出 `visible` 或 `retired` 快照。跨仓库请求为 404，未发布状态或对象损坏为 409。归档包含管理元数据和包内容，响应使用 `Cache-Control: private, no-store`。
 - 媒体类型是 `application/vnd.artifact-gateway.apt-snapshot.v1+tar`，响应提供下载文件名和精确 `Content-Length`。先验证所有对象及 Release 引用，再发送响应头；流式读取期间发生错误会中断 HTTP 响应。客户端必须检查下载是否完整并运行校验命令。
 - tar 首项为 `manifest.json`，后续是按名称排序且去重的 `objects/sha256/<hex>`。同一快照状态下重复导出字节相同；快照从 visible 变为 retired 会改变清单中的状态，原包和签名资产保持不变。

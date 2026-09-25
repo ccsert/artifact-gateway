@@ -262,7 +262,7 @@ repositories_repositoryId_effective_access:
       schema: {type: string, minLength: 1, maxLength: 512}
     - name: role
       in: query
-      schema: {type: string, enum: [member, reader, writer, admin]}
+      schema: {type: string, enum: [member, admin]}
     - name: resource
       in: query
       schema: {type: string, maxLength: 2048}

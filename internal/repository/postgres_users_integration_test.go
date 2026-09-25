@@ -30,7 +30,7 @@ func TestPostgresUserGovernanceLifecycle(t *testing.T) {
 	created, err := store.CreateUser(ctx, User{
 		ID: id, Name: name, DisplayName: "Integration User",
 		Email: "integration@example.test", Description: "user governance integration test",
-		SecretHash: "test-hash", Role: "writer", MustChangePassword: true,
+		SecretHash: "test-hash", Role: "member", MustChangePassword: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -40,12 +40,12 @@ func TestPostgresUserGovernanceLifecycle(t *testing.T) {
 		t.Fatalf("created user defaults=%+v", created)
 	}
 
-	_, err = store.CreateUser(ctx, User{ID: uuid.NewString(), Name: strings.ToUpper(name), SecretHash: "duplicate", Role: "reader"})
+	_, err = store.CreateUser(ctx, User{ID: uuid.NewString(), Name: strings.ToUpper(name), SecretHash: "duplicate", Role: "member"})
 	if !errors.Is(err, ErrNameExists) {
 		t.Fatalf("case-insensitive duplicate error=%v want=%v", err, ErrNameExists)
 	}
 
-	page, err := store.ListUsers(ctx, UserListQuery{Search: "INTEGRATION@EXAMPLE.TEST", Role: "writer", State: UserActive, Limit: 20})
+	page, err := store.ListUsers(ctx, UserListQuery{Search: "INTEGRATION@EXAMPLE.TEST", Role: "member", State: UserActive, Limit: 20})
 	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != id {
 		t.Fatalf("filtered users=%+v err=%v", page, err)
 	}
@@ -118,7 +118,7 @@ func TestPostgresUserGovernanceLifecycle(t *testing.T) {
 		t.Fatalf("pruned sessions=%d err=%v", pruned, err)
 	}
 
-	cascadeUser, err := store.CreateUser(ctx, User{ID: uuid.NewString(), Name: "cascade-" + name, Role: "reader"})
+	cascadeUser, err := store.CreateUser(ctx, User{ID: uuid.NewString(), Name: "cascade-" + name, Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestPostgresUserIdentityBindingAndJITProvisioning(t *testing.T) {
 	issuer := "https://issuer.example.test/" + suffix
 	local, err := store.CreateUser(ctx, User{
 		ID: uuid.NewString(), Name: "identity-local-" + suffix,
-		Email: "identity-" + suffix + "@example.test", Role: "reader",
+		Email: "identity-" + suffix + "@example.test", Role: "member",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -190,9 +190,9 @@ func TestPostgresUserIdentityBindingAndJITProvisioning(t *testing.T) {
 	jitUser, jitIdentity, created, err := store.ResolveOIDCIdentity(ctx, OIDCIdentityProvision{
 		Issuer: issuer, Subject: "jit-subject", Email: "jit-" + suffix + "@example.test",
 		DisplayName: "JIT Identity", PreferredUsername: "jit-" + suffix,
-		EmailVerified: true, Provision: true, DefaultRole: "writer", OccurredAt: occurredAt,
+		EmailVerified: true, Provision: true, DefaultRole: "member", OccurredAt: occurredAt,
 	})
-	if err != nil || !created || jitUser.Role != "writer" || jitUser.PasswordChangedAt != nil || jitIdentity.UserID != jitUser.ID {
+	if err != nil || !created || jitUser.Role != "member" || jitUser.PasswordChangedAt != nil || jitIdentity.UserID != jitUser.ID {
 		t.Fatalf("JIT user=%+v identity=%+v created=%v err=%v", jitUser, jitIdentity, created, err)
 	}
 	defer func() { _ = store.DeleteUser(ctx, jitUser.ID) }()
@@ -210,15 +210,15 @@ func TestPostgresUserIdentityBindingAndJITProvisioning(t *testing.T) {
 	if err != nil || page.Total != 1 || page.Items[0].ID != pending.ID {
 		t.Fatalf("pending list=%+v err=%v", page, err)
 	}
-	reader := "reader"
-	approved, err := store.UpdateUser(ctx, UserUpdate{ID: pending.ID, Role: &reader}, pending.Version)
-	if err != nil || approved.Role != "reader" {
+	member := "member"
+	approved, err := store.UpdateUser(ctx, UserUpdate{ID: pending.ID, Role: &member}, pending.Version)
+	if err != nil || approved.Role != "member" {
 		t.Fatalf("approved user=%+v err=%v", approved, err)
 	}
 	again, _, created, err := store.ResolveOIDCIdentity(ctx, OIDCIdentityProvision{
 		Issuer: issuer, Subject: "pending-subject", Provision: true, DefaultRole: "none", OccurredAt: time.Now().UTC(),
 	})
-	if err != nil || created || again.ID != pending.ID || again.Role != "reader" {
+	if err != nil || created || again.ID != pending.ID || again.Role != "member" {
 		t.Fatalf("repeat sign-in user=%+v created=%v err=%v", again, created, err)
 	}
 }

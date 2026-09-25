@@ -17,7 +17,7 @@ func TestMemoryUserProfileFilteringAndAuthenticationLifecycle(t *testing.T) {
 		Email:       "alice@example.test",
 		Description: "build account",
 		SecretHash:  "hash",
-		Role:        "reader",
+		Role:        "member",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -29,10 +29,10 @@ func TestMemoryUserProfileFilteringAndAuthenticationLifecycle(t *testing.T) {
 	if err != nil || caseInsensitive.ID != created.ID {
 		t.Fatalf("case-insensitive lookup=%+v err=%v", caseInsensitive, err)
 	}
-	if _, err := store.CreateUser(ctx, User{ID: "bob-id", Name: "bob", DisplayName: "Bob", Role: "writer"}); err != nil {
+	if _, err := store.CreateUser(ctx, User{ID: "bob-id", Name: "bob", DisplayName: "Bob", Role: "none"}); err != nil {
 		t.Fatal(err)
 	}
-	page, err := store.ListUsers(ctx, UserListQuery{Search: "alice", Role: "reader", State: UserActive, Limit: 10})
+	page, err := store.ListUsers(ctx, UserListQuery{Search: "alice", Role: "member", State: UserActive, Limit: 10})
 	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].Email != "alice@example.test" {
 		t.Fatalf("filtered users page=%+v err=%v", page, err)
 	}
@@ -97,8 +97,8 @@ func TestMemoryUserStoreProtectsLastActiveAdministrator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader := "reader"
-	if _, err = store.UpdateUser(ctx, UserUpdate{ID: first.ID, Role: &reader}, first.Version); !errors.Is(err, ErrLastActiveAdmin) {
+	member := "member"
+	if _, err = store.UpdateUser(ctx, UserUpdate{ID: first.ID, Role: &member}, first.Version); !errors.Is(err, ErrLastActiveAdmin) {
 		t.Fatalf("demote last admin error=%v want=%v", err, ErrLastActiveAdmin)
 	}
 	if err = store.DeleteUser(ctx, first.ID); !errors.Is(err, ErrLastActiveAdmin) {
@@ -108,7 +108,7 @@ func TestMemoryUserStoreProtectsLastActiveAdministrator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = store.UpdateUser(ctx, UserUpdate{ID: first.ID, Role: &reader}, first.Version); err != nil {
+	if _, err = store.UpdateUser(ctx, UserUpdate{ID: first.ID, Role: &member}, first.Version); err != nil {
 		t.Fatalf("demote with second admin: %v", err)
 	}
 	if err = store.DeleteUser(ctx, second.ID); !errors.Is(err, ErrLastActiveAdmin) {

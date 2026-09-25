@@ -154,7 +154,7 @@ func (h oidcLoginHandler) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.identities != nil {
-		settings := OIDCSettingsView{ProvisioningMode: "disabled", JITDefaultRole: "reader"}
+		settings := OIDCSettingsView{ProvisioningMode: "disabled", JITDefaultRole: "none"}
 		if h.runtime != nil {
 			if current, err := h.runtime.Settings(ctx); err == nil {
 				settings = current

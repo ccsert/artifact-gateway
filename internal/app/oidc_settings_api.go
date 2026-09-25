@@ -52,7 +52,7 @@ func (h generatedRepositoryAPIAdapter) ReplaceOIDCSettings(w http.ResponseWriter
 		JWKSURL: jwksURL, ClientID: request.ClientId, ClientSecret: request.ClientSecret,
 		ClearClientSecret: request.ClearClientSecret != nil && *request.ClearClientSecret,
 		RedirectURL:       request.RedirectUrl, Scopes: request.Scopes, AdminSubjects: request.AdminSubjects,
-		ReaderRoles: request.ReaderRoles, WriterRoles: request.WriterRoles, AdminRoles: request.AdminRoles,
+		MemberRoles: request.MemberRoles, AdminRoles: request.AdminRoles,
 		ProvisioningMode: string(request.ProvisioningMode), EmailLinkingEnabled: request.EmailLinkingEnabled,
 		JITDefaultRole: string(request.JitDefaultRole),
 	}, string(params.IfMatch))
@@ -127,7 +127,7 @@ func oidcSettingsResponse(settings OIDCSettingsView) adminopenapi.OIDCSettings {
 		Issuer: settings.Issuer, Audience: settings.Audience, JwksUrl: optionalString(settings.JWKSURL),
 		ClientId: settings.ClientID, ClientSecretConfigured: settings.ClientSecretConfigured,
 		RedirectUrl: settings.RedirectURL, Scopes: settings.Scopes, AdminSubjects: settings.AdminSubjects,
-		ReaderRoles: settings.ReaderRoles, WriterRoles: settings.WriterRoles, AdminRoles: settings.AdminRoles,
+		MemberRoles: settings.MemberRoles, AdminRoles: settings.AdminRoles,
 		ProvisioningMode: adminopenapi.OIDCSettingsProvisioningMode(settings.ProvisioningMode), EmailLinkingEnabled: settings.EmailLinkingEnabled,
 		JitDefaultRole: adminopenapi.OIDCSettingsJitDefaultRole(settings.JITDefaultRole),
 	}

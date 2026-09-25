@@ -187,7 +187,7 @@ func TestRawUsesManagedGrantsForBoundMembers(t *testing.T) {
 	}
 }
 
-func TestRawPreservesAuthenticatedGlobalRoleAcrossProtocolBoundary(t *testing.T) {
+func TestRawPreservesAuthenticatedAdministratorRoleAcrossProtocolBoundary(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "raw-role-target", Name: "raw-role-target", Format: repository.FormatRaw})
@@ -207,13 +207,24 @@ func TestRawPreservesAuthenticatedGlobalRoleAcrossProtocolBoundary(t *testing.T)
 		Authenticator: authenticator,
 		Client:        &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")},
 	}
-	for _, role := range []Role{RoleReader, RoleWriter} {
+	// The administrator level survives the protocol token round trip; a member
+	// level carries no global role, so the managed grant set decides against it.
+	for _, tc := range []struct {
+		role Role
+		want int
+	}{
+		{RoleAdmin, http.StatusOK},
+		{RoleMember, http.StatusForbidden},
+	} {
 		request := httptest.NewRequest(http.MethodGet, "/raw/role-downloads/release/app.txt", nil)
-		request.Header.Set("Authorization", "Bearer "+authenticator.IssuePrincipalToken(Principal{Actor: string(role), Role: role}))
+		request.Header.Set("Authorization", "Bearer "+authenticator.IssuePrincipalToken(Principal{Actor: "protocol-holder", Role: tc.role}))
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
-		if response.Code != http.StatusOK || response.Body.String() != "artifact" {
-			t.Fatalf("role %s: status=%d body=%q", role, response.Code, response.Body.String())
+		if response.Code != tc.want {
+			t.Fatalf("role %s: status=%d body=%q", tc.role, response.Code, response.Body.String())
+		}
+		if tc.want == http.StatusOK && response.Body.String() != "artifact" {
+			t.Fatalf("role %s: body=%q", tc.role, response.Body.String())
 		}
 	}
 }

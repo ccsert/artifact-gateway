@@ -40,8 +40,7 @@ func (s *MemoryStore) ReplaceOIDCSettings(_ context.Context, settings OIDCSettin
 func cloneOIDCSettings(settings OIDCSettings) OIDCSettings {
 	settings.Scopes = append([]string{}, settings.Scopes...)
 	settings.AdminSubjects = append([]string{}, settings.AdminSubjects...)
-	settings.ReaderRoles = append([]string{}, settings.ReaderRoles...)
-	settings.WriterRoles = append([]string{}, settings.WriterRoles...)
+	settings.MemberRoles = append([]string{}, settings.MemberRoles...)
 	settings.AdminRoles = append([]string{}, settings.AdminRoles...)
 	return settings
 }

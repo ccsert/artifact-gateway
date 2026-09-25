@@ -109,12 +109,12 @@ describe("LoginPage forced password change", () => {
               body.password === "temporary-password"
                 ? {
                     token: "restricted-token",
-                    role: "reader",
+                    role: "member",
                     mustChangePassword: true,
                   }
                 : {
                     token: "final-token",
-                    role: "reader",
+                    role: "member",
                     mustChangePassword: false,
                   },
             ),
@@ -139,7 +139,7 @@ describe("LoginPage forced password change", () => {
     await user.type(screen.getByLabelText("确认新密码"), "personal-password");
     await user.click(screen.getByRole("button", { name: /更新密码并继续/ }));
 
-    expect(auth.setToken).toHaveBeenCalledWith("final-token", "reader");
+    expect(auth.setToken).toHaveBeenCalledWith("final-token", "member");
     expect(fetchMock).toHaveBeenCalledWith("/auth/change-password", {
       method: "POST",
       headers: {

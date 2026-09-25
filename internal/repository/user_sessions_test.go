@@ -9,11 +9,11 @@ import (
 func TestMemoryUserSessionsSupportIndependentRevocationAndPruning(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
-	firstUser, err := store.CreateUser(ctx, User{ID: "first", Name: "first", Role: "reader"})
+	firstUser, err := store.CreateUser(ctx, User{ID: "first", Name: "first", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondUser, err := store.CreateUser(ctx, User{ID: "second", Name: "second", Role: "reader"})
+	secondUser, err := store.CreateUser(ctx, User{ID: "second", Name: "second", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -109,22 +109,7 @@ describe("AppLayout", () => {
     expect(await screen.findByText("public browse")).toBeInTheDocument();
   });
 
-  it("shows a reader the repository catalog without administrator navigation", async () => {
-    Object.assign(auth, {
-      role: "reader",
-      identity: { administrator: false, role: "reader" },
-    });
-
-    renderLayout("/repositories");
-
-    expect(await screen.findByText("repository catalog")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /仓库/ })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: /用户/ }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("shows a member the repository catalog without implicit repository access", async () => {
+  it("shows a member the repository catalog without administrator navigation", async () => {
     Object.assign(auth, {
       role: "member",
       identity: { administrator: false, role: "member" },
@@ -151,10 +136,10 @@ describe("AppLayout", () => {
     expect(screen.queryByText("repository catalog")).not.toBeInTheDocument();
   });
 
-  it("keeps Service Account credential management away from a reader", async () => {
+  it("keeps Service Account credential management away from a member", async () => {
     Object.assign(auth, {
-      role: "reader",
-      identity: { administrator: false, role: "reader" },
+      role: "member",
+      identity: { administrator: false, role: "member" },
     });
 
     renderLayout("/service-accounts");

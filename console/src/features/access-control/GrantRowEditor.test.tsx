@@ -17,11 +17,11 @@ vi.mock("../../client", () => ({
 }));
 
 const principalChoices: PrincipalOption[] = [
-  { value: "user:alice", label: "用户 · alice", detail: "全局角色 reader" },
+  { value: "user:alice", label: "用户 · alice", detail: "全局角色 member" },
   {
     value: "api-key:key-1",
     label: "API Key · deploy",
-    detail: "全局角色 writer",
+    detail: "全局角色 admin",
   },
   {
     value: "service-account:sa-1",

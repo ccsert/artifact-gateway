@@ -211,8 +211,8 @@ describe("RepositoryDetailPage role-scoped tabs", () => {
     );
   }
 
-  it("lets a writer browse and publish without exposing configuration tabs", async () => {
-    auth.identity = { administrator: false, role: "writer" };
+  it("lets a member with a write grant browse and publish without exposing configuration tabs", async () => {
+    auth.identity = { administrator: false, role: "member" };
     renderRole(true);
     expect(await screen.findByText("制品视图已加载")).toBeInTheDocument();
     expect(screen.getAllByRole("tab")).toHaveLength(2);
@@ -223,8 +223,8 @@ describe("RepositoryDetailPage role-scoped tabs", () => {
     });
   });
 
-  it("keeps a reader on the artifact view without upload or publish", async () => {
-    auth.identity = { administrator: false, role: "reader" };
+  it("keeps a member without write authority on the artifact view", async () => {
+    auth.identity = { administrator: false, role: "member" };
     renderRole(false);
     expect(await screen.findByText("制品视图已加载")).toBeInTheDocument();
     expect(screen.getAllByRole("tab")).toHaveLength(1);
@@ -234,8 +234,8 @@ describe("RepositoryDetailPage role-scoped tabs", () => {
     });
   });
 
-  it("shows OCI Docker publication instructions on a writer deep link", async () => {
-    auth.identity = { administrator: false, role: "writer" };
+  it("shows OCI Docker publication instructions on a publisher deep link", async () => {
+    auth.identity = { administrator: false, role: "member" };
     renderRole(true, "oci", "publish");
     expect(
       await screen.findByRole("tab", { name: "发布", selected: true }),

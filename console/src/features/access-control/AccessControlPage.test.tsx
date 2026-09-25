@@ -89,7 +89,7 @@ describe("AccessControlPage", () => {
     } as never);
     mockListUsers.mockResolvedValue({
       data: {
-        items: [{ name: "active-user", role: "reader", state: "active" }],
+        items: [{ name: "active-user", role: "member", state: "active" }],
       },
     } as never);
     mockListApiKeys.mockResolvedValue({ data: { items: [] } } as never);
@@ -119,7 +119,11 @@ describe("AccessControlPage", () => {
           reason: "private",
         },
         permissions: {
-          read: { allowed: true, source: "role", reason: "reader" },
+          read: {
+            allowed: true,
+            source: "repository_grants",
+            reason: "scope_granted",
+          },
           write: { allowed: false, source: "none", reason: "not granted" },
           admin: { allowed: false, source: "none", reason: "not granted" },
           intelligence: {
@@ -160,7 +164,7 @@ describe("AccessControlPage", () => {
         path: { repositoryId: "00000000-0000-4000-8000-000000000001" },
         query: {
           actor: "user:active-user",
-          role: "reader",
+          role: "member",
           resource: undefined,
         },
       }),
@@ -189,25 +193,25 @@ describe("AccessControlPage", () => {
     mockListUsers.mockResolvedValue({
       data: {
         items: [
-          { name: "active-user", role: "reader", state: "active" },
-          { name: "disabled-user", role: "writer", state: "disabled" },
+          { name: "active-user", role: "member", state: "active" },
+          { name: "disabled-user", role: "member", state: "disabled" },
         ],
       },
     } as never);
     mockListApiKeys.mockResolvedValue({
       data: {
         items: [
-          { id: "active-key", name: "Active key", roles: ["reader"] },
+          { id: "active-key", name: "Active key", roles: ["member"] },
           {
             id: "revoked-key",
             name: "Revoked key",
-            roles: ["writer"],
+            roles: ["member"],
             revokedAt: "2026-08-12T00:00:00Z",
           },
           {
             id: "expired-key",
             name: "Expired key",
-            roles: ["reader"],
+            roles: ["member"],
             expiresAt: "2000-01-01T00:00:00Z",
           },
         ],

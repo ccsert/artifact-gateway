@@ -1026,7 +1026,10 @@ type UserIdentity struct {
 const UserIdentityOIDC = "oidc"
 
 // OIDCIdentityProvision describes verified claims and the explicit
-// provisioning policy observed during an OIDC sign-in.
+// provisioning policy observed during an OIDC sign-in. Role is the level an
+// external role mapping selected, DefaultRole the configured JIT default; both
+// are limited to the assignable levels, and an unrecognized value falls back to
+// the member level, which carries no repository capability.
 type OIDCIdentityProvision struct {
 	Issuer            string
 	Subject           string
@@ -1299,8 +1302,7 @@ type OIDCSettings struct {
 	RedirectURL         string    `json:"redirectUrl"`
 	Scopes              []string  `json:"scopes"`
 	AdminSubjects       []string  `json:"adminSubjects"`
-	ReaderRoles         []string  `json:"readerRoles"`
-	WriterRoles         []string  `json:"writerRoles"`
+	MemberRoles         []string  `json:"memberRoles"`
 	AdminRoles          []string  `json:"adminRoles"`
 	ProvisioningMode    string    `json:"provisioningMode"`
 	EmailLinkingEnabled bool      `json:"emailLinkingEnabled"`

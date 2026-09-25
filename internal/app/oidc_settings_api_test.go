@@ -103,7 +103,7 @@ func TestOIDCSettingsCanMoveFromEnvironmentToRuntimeStorage(t *testing.T) {
 		t.Fatalf("initial=%d body=%s", initialResponse.Code, initialResponse.Body.String())
 	}
 
-	body := `{"enabled":true,"issuer":"` + provider.URL + `","audience":"artifact-gateway-api","clientId":"artifact-gateway-console","clientSecret":"runtime-secret","redirectUrl":"http://localhost:4173/auth/oidc/callback","scopes":["openid","profile"],"adminSubjects":[],"readerRoles":["artifact-reader"],"writerRoles":["artifact-writer"],"adminRoles":["artifact-admin"]}`
+	body := `{"enabled":true,"issuer":"` + provider.URL + `","audience":"artifact-gateway-api","clientId":"artifact-gateway-console","clientSecret":"runtime-secret","redirectUrl":"http://localhost:4173/auth/oidc/callback","scopes":["openid","profile"],"adminSubjects":[],"memberRoles":["artifact-member"],"adminRoles":["artifact-admin"]}`
 	replace := httptest.NewRequest(http.MethodPut, "/api/v2/authentication/oidc", strings.NewReader(body))
 	replace.Header.Set("If-Match", "0")
 	authorize(replace, "admin-secret")
@@ -138,6 +138,29 @@ func TestOIDCSettingsCanMoveFromEnvironmentToRuntimeStorage(t *testing.T) {
 	handler.ServeHTTP(conflictResponse, conflict)
 	if conflictResponse.Code != http.StatusPreconditionFailed {
 		t.Fatalf("conflict=%d body=%s", conflictResponse.Code, conflictResponse.Body.String())
+	}
+
+	// The removed legacy levels are refused as the JIT default, and the
+	// surviving levels are accepted.
+	for _, stale := range []string{"reader", "writer"} {
+		staleBody := strings.Replace(body, `"adminRoles":["artifact-admin"]`, `"adminRoles":["artifact-admin"],"jitDefaultRole":"`+stale+`"`, 1)
+		staleRequest := httptest.NewRequest(http.MethodPut, "/api/v2/authentication/oidc", strings.NewReader(staleBody))
+		staleRequest.Header.Set("If-Match", "1")
+		authorize(staleRequest, "admin-secret")
+		staleResponse := httptest.NewRecorder()
+		handler.ServeHTTP(staleResponse, staleRequest)
+		if staleResponse.Code != http.StatusBadRequest {
+			t.Fatalf("jit default %s accepted=%d body=%s", stale, staleResponse.Code, staleResponse.Body.String())
+		}
+	}
+	memberBody := strings.Replace(body, `"adminRoles":["artifact-admin"]`, `"adminRoles":["artifact-admin"],"jitDefaultRole":"member"`, 1)
+	memberRequest := httptest.NewRequest(http.MethodPut, "/api/v2/authentication/oidc", strings.NewReader(memberBody))
+	memberRequest.Header.Set("If-Match", "1")
+	authorize(memberRequest, "admin-secret")
+	memberResponse := httptest.NewRecorder()
+	handler.ServeHTTP(memberResponse, memberRequest)
+	if memberResponse.Code != http.StatusOK || !strings.Contains(memberResponse.Body.String(), `"jitDefaultRole":"member"`) {
+		t.Fatalf("member default=%d body=%s", memberResponse.Code, memberResponse.Body.String())
 	}
 
 	operations := map[string]bool{}

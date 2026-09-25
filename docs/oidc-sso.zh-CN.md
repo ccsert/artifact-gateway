@@ -50,19 +50,29 @@ API Bearer 使用 `GATEWAY_OIDC_AUDIENCE`，浏览器 ID token 独立使用 `GAT
 
 创建 OIDC client，启用 Standard Flow 并注册准确 callback URL。浏览器 ID token 的 `aud` 必须包含 client ID；API Bearer 可使用独立 API audience。
 
-Realm role、client role、顶层 `roles` 和 `groups` 可映射为 Gateway role：
+Realm role、client role、顶层 `roles` 和 `groups` 可映射为 Gateway 账号等级：
 
 ```dotenv
-GATEWAY_OIDC_READER_ROLES=artifact-reader
-GATEWAY_OIDC_WRITER_ROLES=artifact-writer
+GATEWAY_OIDC_MEMBER_ROLES=artifact-member
 GATEWAY_OIDC_ADMIN_ROLES=artifact-admin
 ```
 
-取匹配到的最高角色。
+映射的作用是**审批账号**而非授予仓库能力：命中管理员映射即成为管理员，命中成员映射则通过审批但不附带任何仓库权限，仓库访问来自按仓库授权。两者同时命中时管理员优先。
 
 ## GitLab
 
-注册带准确 callback URL 的 OAuth/OIDC application，使用 GitLab issuer 和 application ID。需要角色映射时，把相关 group claim 加入 ID token，并用相同 reader/writer/admin 变量映射其准确值。
+注册带准确 callback URL 的 OAuth/OIDC application，使用 GitLab issuer 和 application ID。需要角色映射时，把相关 group claim 加入 ID token，并用相同的 member/admin 变量映射其准确值。
+
+## 升级与回滚
+
+保存的 OIDC 设置收敛为单份 member 角色列表：reader 列表与 writer 列表合并进来，已存储的
+JIT 默认值 `reader`/`writer` 变为 `member`，`GATEWAY_OIDC_READER_ROLES` 与
+`GATEWAY_OIDC_WRITER_ROLES` 由 `GATEWAY_OIDC_MEMBER_ROLES` 取代。原先列在任一旧变量里的
+外部 realm 角色，必须在新的变量中重新列出才会继续匹配。
+
+该迁移替换了 reader 与 writer 两列而非将其保留，因此"仅回滚应用"——即用旧镜像对接已迁移的
+schema——无法读取已保存的设置。回滚方式与 APT lifecycle 迁移相同：恢复升级前的数据库并换回
+匹配的二进制。
 
 ## 运维检查
 

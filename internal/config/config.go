@@ -199,8 +199,7 @@ func Load() (Config, error) {
 		OIDCScopes:                      oidcScopes(os.Getenv("GATEWAY_OIDC_SCOPES")),
 		OIDCAdminSubjects:               splitCSV(os.Getenv("GATEWAY_OIDC_ADMIN_SUBJECTS")),
 		OIDCRoles: authorization.OIDCRoleMapping{
-			Reader: splitCSV(os.Getenv("GATEWAY_OIDC_READER_ROLES")),
-			Writer: splitCSV(os.Getenv("GATEWAY_OIDC_WRITER_ROLES")),
+			Member: splitCSV(os.Getenv("GATEWAY_OIDC_MEMBER_ROLES")),
 			Admin:  splitCSV(os.Getenv("GATEWAY_OIDC_ADMIN_ROLES")),
 		},
 		OTLPHTTPEndpoint:  strings.TrimSpace(os.Getenv("GATEWAY_OTLP_HTTP_ENDPOINT")),

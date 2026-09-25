@@ -25,9 +25,7 @@ function CreateKeyDialog({
   const { text } = usePreferences();
   const dialog = useDisclosure();
   const [name, setName] = useState("");
-  const [role, setRole] = useState<"" | "reader" | "writer" | "admin">(
-    "reader",
-  );
+  const [role, setRole] = useState<"member" | "admin">("member");
   const [validDays, setValidDays] = useState<30 | 90 | 180 | 365>(90);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -38,7 +36,7 @@ function CreateKeyDialog({
     const { data, error: err } = await createApiKey({
       body: {
         name: name.trim(),
-        roles: role ? [role] : [],
+        roles: [role],
         expiresAt: new Date(Date.now() + validDays * 86_400_000).toISOString(),
       },
     });
@@ -50,7 +48,7 @@ function CreateKeyDialog({
     if (data) {
       dialog.hide();
       setName("");
-      setRole("reader");
+      setRole("member");
       setValidDays(90);
       onCreated(data);
     }
@@ -117,24 +115,10 @@ function CreateKeyDialog({
               onChange={setRole}
               options={[
                 {
-                  value: "",
+                  value: "member",
                   label: text(
-                    "无全局角色 · 仅依赖仓库授权",
-                    "No global role · repository grants only",
-                  ),
-                },
-                {
-                  value: "reader",
-                  label: text(
-                    "reader · 只读（浏览 / 搜索 / 拉取）",
-                    "reader · browse / search / pull",
-                  ),
-                },
-                {
-                  value: "writer",
-                  label: text(
-                    "writer · 读写（可发布 / 编辑，不可管理用户与密钥）",
-                    "writer · publish / edit, no user or key management",
+                    "member · 成员（无全局权限，按仓库授权）",
+                    "member · no global access, repository grants only",
                   ),
                 },
                 {
@@ -309,13 +293,7 @@ export function ApiKeysPage() {
           {roles.map((role) => (
             <Badge
               key={role}
-              tone={
-                role === "admin"
-                  ? "visualization-3"
-                  : role === "writer"
-                    ? "visualization-5"
-                    : "visualization-4"
-              }
+              tone={role === "admin" ? "visualization-3" : "visualization-1"}
             >
               {role}
             </Badge>
@@ -399,8 +377,8 @@ export function ApiKeysPage() {
       <PageHeader
         title={text("API 密钥", "API keys")}
         description={text(
-          "管理可调用管理 API 的访问密钥（reader / writer / admin）",
-          "Manage reader, writer, and admin credentials for management APIs",
+          "管理可调用管理 API 的访问密钥（member / admin）",
+          "Manage member and admin credentials for management APIs",
         )}
         actions={<CreateKeyDialog onCreated={setReveal} />}
       />

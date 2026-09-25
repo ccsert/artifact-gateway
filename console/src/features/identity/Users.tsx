@@ -300,8 +300,7 @@ export function UsersPage() {
               }}
               options={[
                 { value: "none", label: text("待授权", "Awaiting approval") },
-                { value: "reader", label: "reader" },
-                { value: "writer", label: "writer" },
+                { value: "member", label: "member" },
                 { value: "admin", label: "admin" },
               ]}
             />

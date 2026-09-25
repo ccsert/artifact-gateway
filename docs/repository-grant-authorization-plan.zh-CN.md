@@ -12,7 +12,7 @@ Repository Grant 原本是版本化持久管理数据，本文将其提升为 Ho
 
 输入包括 principal 与 administrator 标记、目标 Repository ID/name/format、`read|write|intelligence|admin` 操作，以及 Grant set 和 legacy reader/writer pattern。
 
-管理员始终允许，保留 `GATEWAY_ADMIN_TOKEN` 和 OIDC admin 的 bootstrap/recovery 路径。任何主体都走同一条固定顺序：`none` 账号状态先被拒绝，管理员身份放行，覆盖该操作的全局角色（`RoleAllows(principal.Role, operation)`）放行，之后才查询该主体的 Repository Grant，最后由旧静态策略兜底。因此已管理 Grant 并不凌驾于全局角色：非管理员的全局 `reader`/`writer` 仍可达所有 Repository，Repository Grant 不会收窄它：
+管理员始终允许，保留 `GATEWAY_ADMIN_TOKEN` 和 OIDC admin 的 bootstrap/recovery 路径。任何主体都走同一条固定顺序：`none` 账号状态先被拒绝，管理员身份放行，覆盖该操作的全局角色（`RoleAllows(principal.Role, operation)`）放行，之后才查询该主体的 Repository Grant，最后由旧静态策略兜底。因此只有管理员等级能越过 Grant：此前覆盖全部 Repository 的全局 `reader`/`writer` 已被移除，而 `member` 本身不附带任何仓库能力，普通账号的可达范围完全由按仓库 Grant 决定：
 
 - `repositories:admin` 包含 write、read、intelligence；
 - `repositories:write` 包含 read；
@@ -23,7 +23,7 @@ Service Account 没有全局角色，只通过显式 Grant 访问，凭证轮换
 
 Authorization Role 与 Authorization Template 是基于 Grant 的可复用管理对象。Role（`migrations/000091_authorization_roles.sql`）是命名的 `repositories:*` scope 集合：在 Grant 编辑器中选择一个 Role 会把它的 scope 复制成显式快照，之后编辑 Role 不会静默改变已持久化的判定。Template（`migrations/000083_authorization_templates.sql`）是可复用的 Grant 集合：把它应用到某个 Repository 会用模板规则替换该 Repository 的 Grant set，替换前按目标 Repository 格式校验规则，并推进标记“已管理”的存储版本。Role 与 Template 的管理仅限管理员。
 
-未管理时保留旧协议静态行为与已有 wildcard 语义；缺少 reader map 时保留本地开发的 unrestricted-read。默认 Grant set 版本为 1；任何成功 `ReplaceRepositoryGrants`（包括空数组）把版本提升到 1 以上，作为“已管理”标记。显式空集拒绝所有走到 Grant 判定步骤的主体，但无法撤销全局角色：角色覆盖该操作的非管理员在读取 Grant 之前就已放行。
+未管理时保留旧协议静态行为与已有 wildcard 语义；缺少 reader map 时会拒绝未匹配的调用方，除非用 `GATEWAY_LEGACY_READ_DEFAULT=allow` 恢复 0.4 之前的姿态。默认 Grant set 版本为 1；任何成功 `ReplaceRepositoryGrants`（包括空数组）把版本提升到 1 以上，作为“已管理”标记。显式空集会拒绝所有走到 Grant 判定步骤的主体，撤销那些只能靠 Grant 获得权限的非管理员。
 
 ## 操作映射
 

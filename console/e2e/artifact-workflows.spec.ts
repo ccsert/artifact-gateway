@@ -239,7 +239,7 @@ test("expired API keys are clearly distinguished from active and revoked keys", 
     headers: authorization(),
     data: {
       name: apiKeyName,
-      roles: ["reader"],
+      roles: ["member"],
       expiresAt: new Date(Date.now() + 1_500).toISOString(),
     },
   });

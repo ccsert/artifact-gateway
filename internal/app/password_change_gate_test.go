@@ -24,7 +24,7 @@ func TestPasswordChangeRequiredBlocksRepositorySurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := store.CreateUser(ctx, repository.User{
-		ID: uuid.NewString(), Name: "reset", Role: string(RoleReader), SecretHash: "hash", MustChangePassword: true,
+		ID: uuid.NewString(), Name: "reset", Role: string(RoleMember), SecretHash: "hash", MustChangePassword: true,
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -319,10 +319,7 @@ export function AppLayout() {
   }
 
   const canBrowseRepositories =
-    identity?.administrator === true ||
-    identity?.role === "member" ||
-    identity?.role === "reader" ||
-    identity?.role === "writer";
+    identity?.administrator === true || identity?.role === "member";
 
   const adminOnlyPath = [
     "/",

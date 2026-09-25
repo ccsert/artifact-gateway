@@ -51,25 +51,25 @@ describe("RepositoryGrantsTab", () => {
     mockListUsers.mockResolvedValue({
       data: {
         items: [
-          { name: "active-user", role: "reader", state: "active" },
-          { name: "disabled-user", role: "writer", state: "disabled" },
+          { name: "active-user", role: "member", state: "active" },
+          { name: "disabled-user", role: "member", state: "disabled" },
         ],
       },
     } as never);
     mockListApiKeys.mockResolvedValue({
       data: {
         items: [
-          { id: "active-key", name: "Active key", roles: ["reader"] },
+          { id: "active-key", name: "Active key", roles: ["member"] },
           {
             id: "revoked-key",
             name: "Revoked key",
-            roles: ["writer"],
+            roles: ["admin"],
             revokedAt: "2026-08-12T00:00:00Z",
           },
           {
             id: "expired-key",
             name: "Expired key",
-            roles: ["reader"],
+            roles: ["member"],
             expiresAt: "2000-01-01T00:00:00Z",
           },
         ],

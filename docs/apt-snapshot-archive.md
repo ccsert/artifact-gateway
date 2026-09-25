@@ -30,7 +30,7 @@ The Console offers the same workflow without curl. A repository administrator op
 
 ## HTTP and Archive Contract
 
-- `GET /api/v2/repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive` requires `repositories:admin`. Ordinary readers, writers, and anonymous callers cannot download archives.
+- `GET /api/v2/repositories/{repositoryId}/apt/snapshots/{snapshotId}/archive` requires `repositories:admin`. Ordinary members and anonymous callers cannot download archives.
 - Only `visible` and `retired` snapshots can be exported. Cross-repository requests return 404; unpublished states or corrupt objects return 409. Archives include management metadata and package contents, so responses use `Cache-Control: private, no-store`.
 - The media type is `application/vnd.artifact-gateway.apt-snapshot.v1+tar`. Responses include a download filename and exact `Content-Length`. All objects and Release references are checked before headers are sent; a streaming failure aborts the HTTP response. Clients must check download completion and run archive verification.
 - The first tar entry is `manifest.json`, followed by sorted, deduplicated `objects/sha256/<hex>` entries. Repeated exports of an unchanged snapshot state are byte-identical. A visible-to-retired transition changes the manifest state while preserving package and signature assets.

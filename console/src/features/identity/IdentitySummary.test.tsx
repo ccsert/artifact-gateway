@@ -29,13 +29,13 @@ describe("IdentitySummary", () => {
         identity={{
           actor: "ci-user",
           kind: "oidc",
-          role: "writer",
+          role: "member",
           administrator: false,
           oidc: {
             adminSubject: false,
             roleMappings: [
-              { externalRole: "gateway-reader", gatewayRole: "reader" },
-              { externalRole: "gateway-writer", gatewayRole: "writer" },
+              { externalRole: "gateway-member", gatewayRole: "member" },
+              { externalRole: "gateway-admin", gatewayRole: "admin" },
             ],
           },
         }}
@@ -44,9 +44,9 @@ describe("IdentitySummary", () => {
 
     expect(screen.getByText("ci-user")).toBeInTheDocument();
     expect(screen.getByText("OIDC")).toBeInTheDocument();
-    expect(screen.getByText("写入者 · 全仓库")).toBeInTheDocument();
-    expect(screen.getByText("gateway-reader → reader")).toBeInTheDocument();
-    expect(screen.getByText("gateway-writer → writer")).toBeInTheDocument();
+    expect(screen.getByText("成员")).toBeInTheDocument();
+    expect(screen.getByText("gateway-member → member")).toBeInTheDocument();
+    expect(screen.getByText("gateway-admin → admin")).toBeInTheDocument();
   });
 
   it("makes the absence of a global role explicit", () => {

@@ -8,7 +8,7 @@ const user: User = {
   displayName: "Alice Chen",
   email: "",
   description: "",
-  role: "reader",
+  role: "member",
   state: "active",
   passwordChangedAt: "2026-08-01T08:00:00Z",
   localPasswordEnabled: true,

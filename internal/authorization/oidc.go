@@ -16,10 +16,13 @@ import (
 
 const oidcJWKSCacheTTL = 5 * time.Minute
 
-// OIDCRoleMapping maps external realm roles onto the Gateway's coarse roles.
+// OIDCRoleMapping maps external realm roles onto the Gateway's account levels.
+// Only the two levels an account can hold are targets: Member approves the
+// account without granting repository capability, and Admin keeps the existing
+// management surface. There is no mapping to editor or reader authority because
+// repository reach comes from per-repository grants, never from a mapped role.
 type OIDCRoleMapping struct {
-	Reader []string
-	Writer []string
+	Member []string
 	Admin  []string
 }
 
@@ -68,8 +71,7 @@ func NewOIDCValidator(config OIDCConfig) *OIDCValidator {
 			admins = append(admins, subject)
 		}
 	}
-	config.Roles.Reader = normalizedOIDCRoles(config.Roles.Reader)
-	config.Roles.Writer = normalizedOIDCRoles(config.Roles.Writer)
+	config.Roles.Member = normalizedOIDCRoles(config.Roles.Member)
 	config.Roles.Admin = normalizedOIDCRoles(config.Roles.Admin)
 	config.AdminSubjects = admins
 	return &OIDCValidator{config: config, client: &http.Client{Timeout: 5 * time.Second}}
@@ -154,10 +156,8 @@ func (v *OIDCValidator) validate(ctx context.Context, token, expectedNonce strin
 	if containsMappedGatewayRole(identity.RoleMappings, RoleAdmin) {
 		identity.Admin = true
 		identity.Role = RoleAdmin
-	} else if containsMappedGatewayRole(identity.RoleMappings, RoleWriter) {
-		identity.Role = RoleWriter
-	} else if containsMappedGatewayRole(identity.RoleMappings, RoleReader) {
-		identity.Role = RoleReader
+	} else if containsMappedGatewayRole(identity.RoleMappings, RoleMember) {
+		identity.Role = RoleMember
 	}
 	return identity, true
 }
@@ -270,7 +270,7 @@ func matchedOIDCRoleMappings(values []string, mapping OIDCRoleMapping) []OIDCRol
 		for _, candidate := range []struct {
 			roles []string
 			role  Role
-		}{{mapping.Admin, RoleAdmin}, {mapping.Writer, RoleWriter}, {mapping.Reader, RoleReader}} {
+		}{{mapping.Admin, RoleAdmin}, {mapping.Member, RoleMember}} {
 			match := OIDCRoleMappingMatch{ExternalRole: value, GatewayRole: candidate.role}
 			if !containsRole(candidate.roles, value) {
 				continue

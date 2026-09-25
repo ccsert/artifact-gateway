@@ -31,15 +31,15 @@ func TestPostgresOIDCSettingsVersionedReplacement(t *testing.T) {
 		Enabled: true, Issuer: "https://identity.example.test/realms/gateway",
 		Audience: "artifact-gateway-api", ClientID: "artifact-gateway-console",
 		ClientSecret: "ciphertext", RedirectURL: "https://gateway.example.test/auth/oidc/callback",
-		Scopes: []string{"openid", "profile"}, ReaderRoles: []string{"artifact-reader"},
-		WriterRoles: []string{"artifact-writer"}, AdminRoles: []string{"artifact-admin"},
+		Scopes: []string{"openid", "profile"}, MemberRoles: []string{"artifact-member"},
+		AdminRoles: []string{"artifact-admin"},
 	}, "0")
-	if err != nil || created.Version != "1" || created.UpdatedAt.IsZero() || created.ProvisioningMode != "disabled" || created.JITDefaultRole != "reader" {
+	if err != nil || created.Version != "1" || created.UpdatedAt.IsZero() || created.ProvisioningMode != "disabled" || created.JITDefaultRole != "member" {
 		t.Fatalf("created=%#v err=%v", created, err)
 	}
 
 	loaded, err := store.GetOIDCSettings(ctx)
-	if err != nil || loaded.ClientSecret != "ciphertext" || !slices.Equal(loaded.Scopes, []string{"openid", "profile"}) || !slices.Equal(loaded.AdminRoles, []string{"artifact-admin"}) {
+	if err != nil || loaded.ClientSecret != "ciphertext" || !slices.Equal(loaded.Scopes, []string{"openid", "profile"}) || !slices.Equal(loaded.MemberRoles, []string{"artifact-member"}) || !slices.Equal(loaded.AdminRoles, []string{"artifact-admin"}) {
 		t.Fatalf("loaded=%#v err=%v", loaded, err)
 	}
 

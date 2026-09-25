@@ -8,7 +8,7 @@ func TestMemoryOIDCSettingsApplyProvisioningDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.ProvisioningMode != "disabled" || created.JITDefaultRole != "reader" {
+	if created.ProvisioningMode != "disabled" || created.JITDefaultRole != "member" {
 		t.Fatalf("provisioning defaults=%+v", created)
 	}
 }
