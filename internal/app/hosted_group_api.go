@@ -6,11 +6,72 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
+	"time"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+// authorizeGroupMembership reports whether the principal may manage the group
+// made of these members. The platform tier always may; otherwise every member
+// has to be a repository the principal administers. A member without a
+// repository binding cannot be attributed to any repository, and a member whose
+// repository cannot be read fails closed, so both need the platform tier.
+// Nothing is cached: a member that is removed, a repository that is deleted, and
+// a grant that is withdrawn all change the answer on the next request.
+func (h generatedRepositoryAPIAdapter) authorizeGroupMembership(w http.ResponseWriter, r *http.Request, principal Principal, groupName string, members []repository.GroupMember) bool {
+	if code, message, blocked := accountStateProblem(principal.AccountStateReason()); blocked {
+		writeHostedProblem(w, http.StatusForbidden, code, message)
+		return false
+	}
+	if principal.Admin {
+		return true
+	}
+	for _, member := range members {
+		repositoryName := ""
+		allowed := false
+		if member.RepositoryID != "" {
+			if repo, err := h.store.GetHostedRepository(r.Context(), member.RepositoryID); err == nil {
+				repositoryName = repo.Name
+				allowed = h.authorizer.Authorize(r.Context(), principal, repo, RepositoryAdmin).Allowed
+			}
+		}
+		if allowed {
+			continue
+		}
+		h.recordGroupMembershipDenial(r, groupName, repositoryName, principal.Actor)
+		writeHostedProblem(w, http.StatusForbidden, "access_denied", "administrator permission is required for member \""+groupMemberLabel(member, repositoryName)+"\"")
+		return false
+	}
+	return true
+}
+
+// groupMemberLabel names a member for an operator: its repository name when the
+// repository is readable, its ID otherwise, and its position for a member that
+// still carries no repository binding.
+func groupMemberLabel(member repository.GroupMember, repositoryName string) string {
+	if repositoryName != "" {
+		return repositoryName
+	}
+	if member.RepositoryID != "" {
+		return member.RepositoryID
+	}
+	return "position " + strconv.Itoa(member.Position)
+}
+
+func (h generatedRepositoryAPIAdapter) recordGroupMembershipDenial(r *http.Request, groupName, repositoryName, actor string) {
+	if h.audit == nil {
+		return
+	}
+	_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{
+		GroupName: groupName, Repository: repositoryName, Actor: actor,
+		Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "management",
+		Resource: "groups/" + groupName, Operation: "group.membership_denied", Status: http.StatusForbidden,
+		CacheDisposition: "bypass",
+	})
+}
 
 func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http.Request, params adminopenapi.ListGroupsParams) {
 	if _, ok := h.authorize(w, r); !ok {
@@ -36,7 +97,7 @@ func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http
 }
 
 func (h generatedRepositoryAPIAdapter) CreateGroup(w http.ResponseWriter, r *http.Request, params adminopenapi.CreateGroupParams) {
-	principal, ok := h.authorize(w, r)
+	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
 	}
@@ -45,6 +106,9 @@ func (h generatedRepositoryAPIAdapter) CreateGroup(w http.ResponseWriter, r *htt
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&group); err != nil || !h.validHostedGroup(r, group) {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "name, format, and members must be valid")
+		return
+	}
+	if !h.authorizeGroupMembership(w, r, principal, group.Name, group.Members) {
 		return
 	}
 	group.ID = uuid.NewString()
@@ -125,15 +189,23 @@ func (h generatedRepositoryAPIAdapter) GetGroupCapacity(w http.ResponseWriter, r
 }
 
 func (h generatedRepositoryAPIAdapter) DeleteGroup(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
-	if _, ok := h.authorize(w, r); !ok {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
 		return
 	}
-	err := h.groups.DeleteHostedGroup(r.Context(), id.String())
+	group, err := h.groups.GetHostedGroup(r.Context(), id.String())
 	if errors.Is(err, repository.ErrNotFound) {
 		writeHostedProblem(w, 404, "not_found", "group not found")
 		return
 	}
 	if err != nil {
+		writeHostedProblem(w, 500, "internal_error", "get group failed")
+		return
+	}
+	if !h.authorizeGroupMembership(w, r, principal, group.Name, group.Members) {
+		return
+	}
+	if err = h.groups.DeleteHostedGroup(r.Context(), id.String()); err != nil {
 		writeHostedProblem(w, 500, "internal_error", "delete group failed")
 		return
 	}
@@ -141,7 +213,17 @@ func (h generatedRepositoryAPIAdapter) DeleteGroup(w http.ResponseWriter, r *htt
 }
 
 func (h generatedRepositoryAPIAdapter) ReplaceGroup(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId, params adminopenapi.ReplaceGroupParams) {
-	if _, ok := h.authorize(w, r); !ok {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
+		return
+	}
+	current, err := h.groups.GetHostedGroup(r.Context(), id.String())
+	if errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, 404, "not_found", "group not found")
+		return
+	}
+	if err != nil {
+		writeHostedProblem(w, 500, "internal_error", "get group failed")
 		return
 	}
 	var group repository.HostedGroup
@@ -151,13 +233,19 @@ func (h generatedRepositoryAPIAdapter) ReplaceGroup(w http.ResponseWriter, r *ht
 		writeHostedProblem(w, 400, "invalid_request", "name, format, and members must be valid")
 		return
 	}
+	// A membership change needs authority over the members it keeps or drops as
+	// well as the ones it adds.
+	if !h.authorizeGroupMembership(w, r, principal, group.Name, append(append([]repository.GroupMember{}, current.Members...), group.Members...)) {
+		return
+	}
 	group.ID = id.String()
 	updated, err := h.groups.ReplaceHostedGroup(r.Context(), group, string(params.IfMatch))
 	h.writeGroupMutation(w, updated, err)
 }
 
 func (h generatedRepositoryAPIAdapter) ReplaceGroupMembers(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId, params adminopenapi.ReplaceGroupMembersParams) {
-	if _, ok := h.authorize(w, r); !ok {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
 		return
 	}
 	group, err := h.groups.GetHostedGroup(r.Context(), id.String())
@@ -165,11 +253,20 @@ func (h generatedRepositoryAPIAdapter) ReplaceGroupMembers(w http.ResponseWriter
 		writeHostedProblem(w, 404, "not_found", "group not found")
 		return
 	}
+	if err != nil {
+		writeHostedProblem(w, 500, "internal_error", "get group failed")
+		return
+	}
 	var members []repository.GroupMember
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&members); err != nil || !h.validHostedGroup(r, repository.HostedGroup{Name: group.Name, Format: group.Format, Members: members}) {
 		writeHostedProblem(w, 400, "invalid_request", "members must be valid")
+		return
+	}
+	// A membership change needs authority over the members it keeps or drops as
+	// well as the ones it adds.
+	if !h.authorizeGroupMembership(w, r, principal, group.Name, append(append([]repository.GroupMember{}, group.Members...), members...)) {
 		return
 	}
 	updated, err := h.groups.ReplaceHostedGroupMembers(r.Context(), id.String(), members, string(params.IfMatch))

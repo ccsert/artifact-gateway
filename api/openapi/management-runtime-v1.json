@@ -3247,6 +3247,7 @@
       },
       "post": {
         "operationId": "createGroup",
+        "description": "A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it. The refusal names the member that is out of bounds.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -3280,6 +3281,7 @@
       ],
       "get": {
         "operationId": "getGroup",
+        "description": "A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.",
         "responses": {
           "200": {
             "$ref": "#/components/responses/Group"
@@ -3288,6 +3290,7 @@
       },
       "put": {
         "operationId": "replaceGroup",
+        "description": "A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it, including the members it drops and the ones it adds. The refusal names the member that is out of bounds.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IfMatch"
@@ -3314,6 +3317,7 @@
       },
       "delete": {
         "operationId": "deleteGroup",
+        "description": "A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.",
         "responses": {
           "204": {
             "description": "Deleted"
@@ -3397,6 +3401,7 @@
       ],
       "get": {
         "operationId": "listGroupMembers",
+        "description": "A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.",
         "responses": {
           "200": {
             "$ref": "#/components/responses/MemberList"
@@ -3405,6 +3410,7 @@
       },
       "put": {
         "operationId": "replaceGroupMembers",
+        "description": "A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IfMatch"
@@ -3443,6 +3449,7 @@
       ],
       "get": {
         "operationId": "getGroupCapacity",
+        "description": "A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.",
         "responses": {
           "200": {
             "$ref": "#/components/responses/GroupCapacity"

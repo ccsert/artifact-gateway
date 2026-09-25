@@ -1377,6 +1377,9 @@ export const listGroups = <ThrowOnError extends boolean = false>(options?: Optio
     ...options
 });
 
+/**
+ * A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it. The refusal names the member that is out of bounds.
+ */
 export const createGroup = <ThrowOnError extends boolean = false>(options: Options<CreateGroupData, ThrowOnError>): RequestResult<CreateGroupResponses, CreateGroupErrors, ThrowOnError> => (options.client ?? client).post<CreateGroupResponses, CreateGroupErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -1391,6 +1394,9 @@ export const createGroup = <ThrowOnError extends boolean = false>(options: Optio
     }
 });
 
+/**
+ * A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
+ */
 export const deleteGroup = <ThrowOnError extends boolean = false>(options: Options<DeleteGroupData, ThrowOnError>): RequestResult<DeleteGroupResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteGroupResponses, unknown, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -1401,6 +1407,9 @@ export const deleteGroup = <ThrowOnError extends boolean = false>(options: Optio
     ...options
 });
 
+/**
+ * A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
+ */
 export const getGroup = <ThrowOnError extends boolean = false>(options: Options<GetGroupData, ThrowOnError>): RequestResult<GetGroupResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetGroupResponses, unknown, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -1411,6 +1420,9 @@ export const getGroup = <ThrowOnError extends boolean = false>(options: Options<
     ...options
 });
 
+/**
+ * A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it, including the members it drops and the ones it adds. The refusal names the member that is out of bounds.
+ */
 export const replaceGroup = <ThrowOnError extends boolean = false>(options: Options<ReplaceGroupData, ThrowOnError>): RequestResult<ReplaceGroupResponses, ReplaceGroupErrors, ThrowOnError> => (options.client ?? client).put<ReplaceGroupResponses, ReplaceGroupErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -1440,6 +1452,9 @@ export const browseGroup = <ThrowOnError extends boolean = false>(options: Optio
     ...options
 });
 
+/**
+ * A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
+ */
 export const listGroupMembers = <ThrowOnError extends boolean = false>(options: Options<ListGroupMembersData, ThrowOnError>): RequestResult<ListGroupMembersResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListGroupMembersResponses, unknown, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -1450,6 +1465,9 @@ export const listGroupMembers = <ThrowOnError extends boolean = false>(options: 
     ...options
 });
 
+/**
+ * A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
+ */
 export const replaceGroupMembers = <ThrowOnError extends boolean = false>(options: Options<ReplaceGroupMembersData, ThrowOnError>): RequestResult<ReplaceGroupMembersResponses, ReplaceGroupMembersErrors, ThrowOnError> => (options.client ?? client).put<ReplaceGroupMembersResponses, ReplaceGroupMembersErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -1464,6 +1482,9 @@ export const replaceGroupMembers = <ThrowOnError extends boolean = false>(option
     }
 });
 
+/**
+ * A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
+ */
 export const getGroupCapacity = <ThrowOnError extends boolean = false>(options: Options<GetGroupCapacityData, ThrowOnError>): RequestResult<GetGroupCapacityResponses, GetGroupCapacityErrors, ThrowOnError> => (options.client ?? client).get<GetGroupCapacityResponses, GetGroupCapacityErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
