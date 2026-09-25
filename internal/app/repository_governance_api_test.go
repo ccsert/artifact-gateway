@@ -121,6 +121,51 @@ func TestHostedGroupManagementLifecycle(t *testing.T) {
 	}
 }
 
+func TestRepositoryGrantRevocationAppliesToTheNextRequest(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "revocation-target", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The store bumps the version on every replacement, so the second set stays
+	// managed; an unmanaged set would keep the legacy policy deciding.
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{
+		{Principal: "build-agent", Scopes: []string{"repositories:read"}},
+	}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authenticator := testAuthenticator()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
+	// One token, minted before the revocation and reused after it: a caller
+	// that never authenticates again has to lose access on its next request.
+	token := authenticator.IssueToken("build-agent")
+	read := func() *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID, nil)
+		authorize(request, token)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+
+	if response := read(); response.Code != http.StatusOK {
+		t.Fatalf("granted read=%d body=%s", response.Code, response.Body.String())
+	}
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, nil, "2"); err != nil {
+		t.Fatal(err)
+	}
+	revoked := read()
+	if revoked.Code != http.StatusForbidden {
+		t.Fatalf("revoked read=%d body=%s", revoked.Code, revoked.Body.String())
+	}
+	if body := revoked.Body.String(); !strings.Contains(body, `"code":"access_denied"`) {
+		t.Fatalf("revoked read body=%s", body)
+	}
+	audit := store.Audits[len(store.Audits)-1]
+	if audit.Outcome != repository.AuditAccessDenied || audit.AuthorizationSource != "repository_grants" || audit.AuthorizationReason != "scope_not_granted" {
+		t.Fatalf("audit=%#v", audit)
+	}
+}
+
 func TestRepositoryGrantManagementUsesETagVersioning(t *testing.T) {
 	store := repository.NewMemoryStore()
 	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "grant-target", Format: repository.FormatRaw})
