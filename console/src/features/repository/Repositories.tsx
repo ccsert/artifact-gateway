@@ -34,6 +34,7 @@ import {
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 import { useAuth } from "../../lib/auth";
+import { platformCapabilities } from "../../lib/authorization";
 import {
   loadFormatProfiles,
   repositoryFormats,
@@ -287,7 +288,7 @@ function CreateRepositoryDialog({
 export function RepositoriesPage() {
   const { locale, text } = usePreferences();
   const { identity } = useAuth();
-  const isAdmin = identity?.administrator === true;
+  const isAdmin = platformCapabilities(identity).platformAdmin;
   const [items, setItems] = useState<Repository[]>([]);
   const [formatProfiles, setFormatProfiles] = useState<FormatProfile[]>([]);
   const [nextToken, setNextToken] = useState<string | undefined>();

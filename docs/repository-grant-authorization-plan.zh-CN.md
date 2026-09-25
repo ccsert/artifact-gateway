@@ -58,6 +58,35 @@ Maven/Raw 保留现有 Basic challenge/status，OCI 保留 Registry Bearer chall
 
 管理员 `GET /api/v2/audits` 可看到可选 `authorizationSource/Reason`；只有进入 Repository 授权判定时出现。客户端应接受未来有界值并把缺失解释为“未发生 Repository 授权判定”。V1 Audit 响应不变。
 
+## 判定取值
+
+每个仓库授权判定都会写明是**哪一级**作出的决定，因此 effective-access 解释面板与审计记录说明的是"谁决定的"，而不只是"允许还是拒绝"。以下是当前的**有界取值**；消费方必须容忍后续新增的有界值，而字段缺失表示该请求从未进入仓库授权判定。
+
+`authorizationSource`：
+
+| 取值 | 由谁产生 |
+| --- | --- |
+| `administrator` | 平台管理员身份：`admin` 等级、管理员 subject 白名单，或静态管理员 token |
+| `role` | 全局账号等级，具体哪一级由 reason 指明 |
+| `repository_grants` | 按仓库授权集合——已标记托管的，或显式命名该主体的 |
+| `legacy_static` | `GATEWAY_REPOSITORY_READERS` / `GATEWAY_REPOSITORY_WRITERS` 中配置的读写模式 |
+| `legacy_protocol` | 原生协议兜底：放行任何已认证主体，适用于 npm、PyPI、OCI、Raw、APT |
+
+`authorizationReason`：
+
+| 取值 | 含义 |
+| --- | --- |
+| `administrator` | 由管理员身份判定 |
+| `role_admin`、`role_member` | 由所指明的全局等级判定。只有 `role_admin` 会放行，其余等级继续落到授权集合 |
+| `scope_granted` | 有授权同时匹配主体、操作与资源 |
+| `scope_not_granted` | 授权集合生效但未匹配 |
+| `grant_lookup_failed` | 授权集合读取失败，按拒绝处理 |
+| `read_pattern_granted`、`write_pattern_granted` | 命中 legacy 静态模式 |
+| `authenticated` | 原生协议兜底放行了已认证主体 |
+| `repository_anonymous_read_enabled`、`repository_anonymous_read_disabled`、`global_anonymous_access_disabled`、`repository_not_active` | effective-access 答复补充的匿名读解释；这些不会进入拒绝计数器 |
+
+拒绝计数器**有意收得更窄**：它只统计授权判定阶段，因为 label 必须收敛到运维可告警的小集合。快照、隔离区与密码相关判定使用各自的 source，它们不是仓库授权判定，不在此列。
+
 ## 指标
 
 `artifact_gateway_repository_authorization_denials_total` 只计已管理 Grant 的拒绝，label 限制为 format、固定 source `repository_grants` 和 reason `scope_not_granted|grant_lookup_failed`。

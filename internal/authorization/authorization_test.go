@@ -403,6 +403,61 @@ func TestRepositoryAuthorizerHonorsPrincipalRoleBeforeGrants(t *testing.T) {
 	}
 }
 
+type perRepositoryGrantStub map[string]repository.RepositoryGrantSet
+
+func (s perRepositoryGrantStub) GetRepositoryGrants(_ context.Context, repositoryID string) (repository.RepositoryGrantSet, error) {
+	set, ok := s[repositoryID]
+	if !ok {
+		return repository.RepositoryGrantSet{}, repository.ErrNotFound
+	}
+	return set, nil
+}
+
+func (perRepositoryGrantStub) ReplaceRepositoryGrants(context.Context, string, []repository.RepositoryGrant, string) (repository.RepositoryGrantSet, error) {
+	panic("unexpected ReplaceRepositoryGrants call")
+}
+
+// A level reaches no repository on its own, and a grant reaches exactly the
+// repository it names, so the same account level is allowed on one repository
+// and refused on the next for every operation.
+func TestRepositoryAuthorizerScopesAuthorityToTheGrantedRepository(t *testing.T) {
+	authorizer := RepositoryAuthorizer{
+		Grants: perRepositoryGrantStub{
+			"repo-read":  {Version: "2", Grants: []repository.RepositoryGrant{{Principal: "read-member", Scopes: []string{"repositories:read"}}}},
+			"repo-admin": {Version: "2", Grants: []repository.RepositoryGrant{{Principal: "admin-member", Scopes: []string{"repositories:admin"}}}},
+		},
+		Legacy: Authenticator{RepositoryReaders: map[string][]string{}},
+	}
+	readGranted := repository.HostedRepository{ID: "repo-read", Name: "read-granted", Format: repository.FormatRaw, State: repository.RepositoryActive}
+	adminGranted := repository.HostedRepository{ID: "repo-admin", Name: "admin-granted", Format: repository.FormatRaw, State: repository.RepositoryActive}
+	operations := []RepositoryOperation{RepositoryRead, RepositoryWrite, RepositoryAdmin, RepositoryIntelligence}
+	full := map[RepositoryOperation]bool{RepositoryRead: true, RepositoryWrite: true, RepositoryAdmin: true, RepositoryIntelligence: true}
+
+	for _, tc := range []struct {
+		name    string
+		actor   string
+		target  repository.HostedRepository
+		allowed map[RepositoryOperation]bool
+	}{
+		{name: "read scope reaches its own repository only", actor: "read-member", target: readGranted, allowed: map[RepositoryOperation]bool{RepositoryRead: true}},
+		{name: "read scope reaches no other repository", actor: "read-member", target: adminGranted},
+		{name: "admin scope reaches its own repository fully", actor: "admin-member", target: adminGranted, allowed: full},
+		{name: "admin scope reaches no other repository", actor: "admin-member", target: readGranted},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, operation := range operations {
+				decision := authorizer.Authorize(context.Background(), Principal{Actor: tc.actor, Role: RoleMember}, tc.target, operation)
+				if decision.Allowed != tc.allowed[operation] {
+					t.Fatalf("operation=%s allowed=%v decision=%+v", operation, tc.allowed[operation], decision)
+				}
+				if !tc.allowed[operation] && decision.Reason == "authorization_pending" {
+					t.Fatalf("operation=%s was refused as pending rather than as unauthorized: %+v", operation, decision)
+				}
+			}
+		})
+	}
+}
+
 func TestAuthenticatorMapsAPIKeyRolesToPrincipal(t *testing.T) {
 	store := repository.NewMemoryStore()
 	authenticator := Authenticator{APIKeys: store}
@@ -798,6 +853,45 @@ func TestLegacyReadDefaultPosture(t *testing.T) {
 		if permissive.CanReadRepository(principal, "releases") {
 			t.Fatalf("account state must survive the permissive fallback: %+v", principal)
 		}
+	}
+}
+
+// A Group member path and a direct repository path must reach the same decision
+// for the same principal, repository, and resource, so a Group read cannot
+// drift from a direct read of one of its members.
+func TestGroupMemberAndRepositoryDecisionsAgree(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "agreement", Name: "agreement", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, target.ID, []repository.RepositoryGrant{
+		{Principal: "reader", Scopes: []string{"repositories:read"}, ResourcePrefix: "releases/"},
+	}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authorizer := RepositoryAuthorizer{Grants: store, Legacy: Authenticator{RepositoryReaders: map[string][]string{}}}
+	for _, tc := range []struct {
+		name     string
+		actor    string
+		resource string
+	}{
+		{name: "granted principal inside the prefix", actor: "reader", resource: "releases/app.zip"},
+		{name: "granted principal outside the prefix", actor: "reader", resource: "snapshots/app.zip"},
+		{name: "ungranted principal", actor: "stranger", resource: "releases/app.zip"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			principal := Principal{Actor: tc.actor}
+			direct := authorizer.AuthorizeResource(ctx, principal, target, RepositoryRead, tc.resource)
+			member, managed := ManagedGroupMemberDecision(ctx, store, authorizer, principal, repository.Member{RepositoryID: target.ID}, repository.FormatRaw, tc.resource)
+			if !managed {
+				t.Fatal("a bound member must be decided by its repository's grant set")
+			}
+			if member != direct {
+				t.Fatalf("direct=%+v member=%+v", direct, member)
+			}
+		})
 	}
 }
 

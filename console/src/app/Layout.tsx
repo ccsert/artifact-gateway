@@ -29,6 +29,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { platformCapabilities } from "../lib/authorization";
 import { Modal, useDisclosure } from "../components/ui/Modal";
 import { Field } from "../components/ui/Layout";
 import { Loading } from "../components/ui/Feedback";
@@ -291,7 +292,9 @@ export function AppLayout() {
     return <Navigate to={`/login?redirect=${target}`} replace />;
   }
 
-  if (identity?.role === "none") {
+  const capabilities = platformCapabilities(identity);
+
+  if (capabilities.pending) {
     return (
       <div className="ag-app-fallback flex min-h-screen items-center justify-center px-6">
         <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center">
@@ -317,9 +320,6 @@ export function AppLayout() {
       </div>
     );
   }
-
-  const canBrowseRepositories =
-    identity?.administrator === true || identity?.role === "member";
 
   const adminOnlyPath = [
     "/",
@@ -348,12 +348,12 @@ export function AppLayout() {
   ].some((prefix) => location.pathname.startsWith(prefix + "/"));
   if (
     identity &&
-    !identity.administrator &&
+    !capabilities.platformAdmin &&
     (adminOnlyPath || adminOnlySection)
   ) {
     return (
       <Navigate
-        to={canBrowseRepositories ? "/repositories" : "/search"}
+        to={capabilities.browseRepositories ? "/repositories" : "/search"}
         replace
       />
     );
@@ -365,14 +365,14 @@ export function AppLayout() {
   const repositoryCatalogPath =
     location.pathname === "/repositories" ||
     location.pathname.startsWith("/repositories/");
-  if (identity && !canBrowseRepositories && repositoryCatalogPath) {
+  if (identity && !capabilities.browseRepositories && repositoryCatalogPath) {
     return <Navigate to="/search" replace />;
   }
 
   const visibleNavItems = navItems.filter(
     (item) =>
-      (!("admin" in item) || identity?.administrator) &&
-      (item.to !== "/repositories" || canBrowseRepositories),
+      (!("admin" in item) || capabilities.platformAdmin) &&
+      (item.to !== "/repositories" || capabilities.browseRepositories),
   );
   const selectedItem = visibleNavItems.find((item) =>
     "exact" in item

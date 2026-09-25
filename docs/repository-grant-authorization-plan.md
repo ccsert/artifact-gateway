@@ -177,6 +177,43 @@ bounded policy vocabulary, but API consumers must accept future bounded values
 and treat an absent field as "no repository authorization decision". The
 legacy `/api/v1/audits` response remains unchanged for V1 consumers.
 
+## Decision Vocabulary
+
+Every repository authorization decision names the authority that reached it, so
+the effective-access explainer and the audit record say which stage decided
+rather than only whether access was allowed. These are the current bounded
+values; a consumer must tolerate new bounded values, and absence of the fields
+means the request never reached a repository authorization decision.
+
+`authorizationSource`:
+
+| Value | Emitted by |
+| --- | --- |
+| `administrator` | The platform administrator identity: the `admin` level, an administrator subject, or the static administrator token |
+| `role` | A global account level; the reason names it |
+| `repository_grants` | The per-repository grant set, either marked managed or naming this principal |
+| `legacy_static` | The configured reader and writer patterns in `GATEWAY_REPOSITORY_READERS` and `GATEWAY_REPOSITORY_WRITERS` |
+| `legacy_protocol` | The native protocol fallback that admits any authenticated principal: npm, PyPI, OCI, Raw, and APT |
+
+`authorizationReason`:
+
+| Value | Meaning |
+| --- | --- |
+| `administrator` | The administrator identity decided |
+| `role_admin`, `role_member` | The named global level decided. Only `role_admin` allows; the other levels fall through to the grant set |
+| `scope_granted` | A grant matched the principal, the operation, and the resource |
+| `scope_not_granted` | The grant set applied and matched nothing |
+| `grant_lookup_failed` | The grant set could not be read, so access is denied |
+| `read_pattern_granted`, `write_pattern_granted` | A configured legacy static pattern matched |
+| `authenticated` | The native protocol fallback admitted an authenticated principal |
+| `repository_anonymous_read_enabled`, `repository_anonymous_read_disabled`, `global_anonymous_access_disabled`, `repository_not_active` | The anonymous-read explanation the effective-access answer adds; these never reach the denial counter |
+
+The denial counter narrows this vocabulary further on purpose: it counts only
+the grant stage, because its labels must stay bounded to a small set an operator
+can alert on. Snapshot, quarantine, and password decisions use their own
+sources; they are not repository authorization decisions and are not listed
+here.
+
 ## Metrics
 
 `artifact_gateway_repository_authorization_denials_total` counts denied
