@@ -104,6 +104,48 @@ Operators should verify the following after changing authentication policy:
 5. The final active administrator cannot be disabled or deleted.
 6. Audit queries distinguish the performing administrator from the target user.
 
+## Upgrade Report
+
+Converging the removed `reader` and `writer` levels into per-repository grants
+leaves a few instances that no migration can decide, because the answer depends
+on the deployment rather than on the data. `make member-role-migration-report`
+reads them out; it is read-only, so run it before the upgrade as an inventory and
+after it to confirm nothing is left. It needs the database to report on:
+
+```sh
+GATEWAY_DATABASE_URL=postgres://gateway:...@host:5432/gateway make member-role-migration-report
+```
+
+It prints four sections, each naming the identifier to act on:
+
+1. **Repository authority beyond the account's level.** Not applicable to the
+   adopted plan, which converts a level into repository-wide grants, so a
+   materialized grant cannot reach further than the level it replaced.
+2. **Principals that reach repositories only through the legacy static
+   patterns.** Each row is an actor and a repository whose access still comes
+   from `GATEWAY_REPOSITORY_READERS` or `GATEWAY_REPOSITORY_WRITERS` and which
+   holds no grant on that repository, with the number of decisions and the last
+   one seen. Give it a grant, or keep its pattern.
+3. **Grants held by principals without a user row.** API keys and service
+   accounts, with the credential's name and state, for the keys that are revoked
+   or the accounts that are disabled as well as the live ones.
+4. **Values the model cannot express.** Accounts whose level is not `none`,
+   `member`, or `admin`; keys whose `roles` holds more than one level or an
+   unrecognized one; grants on a repository that is missing or no longer active;
+   and grants naming a `user:`, `api-key:`, or `service-account:` principal that
+   does not exist. An actor without one of those prefixes is a token actor and is
+   deliberately not listed.
+
+### Rolling Back
+
+The level migration replaces the `reader_roles` and `writer_roles` settings
+columns with one `member_roles` column and narrows the stored levels, so
+switching the image back is not enough: restore the pre-upgrade database and run
+the binary that matches it. `scripts/member-role-upgrade-check.sh` keeps a
+pre-upgrade dump of its probe database, restores it, and asserts the restored
+database still carries the removed levels and the pre-upgrade schema rather than
+the converged constraints, so the procedure is verified rather than assumed.
+
 ## Current Limitations
 
 Deletion is permanent rather than a recoverable tombstone. A local account has
