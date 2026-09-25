@@ -856,6 +856,45 @@ func TestLegacyReadDefaultPosture(t *testing.T) {
 	}
 }
 
+// A Group member path and a direct repository path must reach the same decision
+// for the same principal, repository, and resource, so a Group read cannot
+// drift from a direct read of one of its members.
+func TestGroupMemberAndRepositoryDecisionsAgree(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	target, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "agreement", Name: "agreement", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(ctx, target.ID, []repository.RepositoryGrant{
+		{Principal: "reader", Scopes: []string{"repositories:read"}, ResourcePrefix: "releases/"},
+	}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	authorizer := RepositoryAuthorizer{Grants: store, Legacy: Authenticator{RepositoryReaders: map[string][]string{}}}
+	for _, tc := range []struct {
+		name     string
+		actor    string
+		resource string
+	}{
+		{name: "granted principal inside the prefix", actor: "reader", resource: "releases/app.zip"},
+		{name: "granted principal outside the prefix", actor: "reader", resource: "snapshots/app.zip"},
+		{name: "ungranted principal", actor: "stranger", resource: "releases/app.zip"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			principal := Principal{Actor: tc.actor}
+			direct := authorizer.AuthorizeResource(ctx, principal, target, RepositoryRead, tc.resource)
+			member, managed := ManagedGroupMemberDecision(ctx, store, authorizer, principal, repository.Member{RepositoryID: target.ID}, repository.FormatRaw, tc.resource)
+			if !managed {
+				t.Fatal("a bound member must be decided by its repository's grant set")
+			}
+			if member != direct {
+				t.Fatalf("direct=%+v member=%+v", direct, member)
+			}
+		})
+	}
+}
+
 func TestRepositoryAuthorizerMatchesScopesAndResourcePrefixes(t *testing.T) {
 	target := repository.HostedRepository{ID: "repo-id", Name: "releases", Format: repository.FormatRaw, State: repository.RepositoryActive}
 	authorizer := RepositoryAuthorizer{Grants: grantStoreStub{set: repository.RepositoryGrantSet{

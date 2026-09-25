@@ -156,6 +156,57 @@ func TestNativeNPMHostedPublishInstallAndAnonymousBrowse(t *testing.T) {
 	}
 }
 
+func TestNativeNPMHostedUsesManagedRepositoryGrants(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "npm-granted", Format: repository.FormatNPM,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One package-scoped read grant: the reader reaches that package and nothing
+	// else in the repository.
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{
+		{Principal: "reader", Scopes: []string{"repositories:read"}, ResourcePrefix: "widget"},
+	}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	for _, name := range []string{"widget", "other"} {
+		document := npmFixturePublishDocument(t, name, "1.0.0", name+"-1.0.0.tgz", npmFixtureTarball(t, name, "1.0.0"))
+		publish := httptest.NewRequest(http.MethodPut, "/npm/npm-granted/"+name, strings.NewReader(document))
+		authorize(publish, "admin-secret")
+		published := httptest.NewRecorder()
+		handler.ServeHTTP(published, publish)
+		if published.Code != http.StatusCreated {
+			t.Fatalf("publish %s=%d %s", name, published.Code, published.Body.String())
+		}
+	}
+
+	granted := httptest.NewRequest(http.MethodGet, "/npm/npm-granted/widget", nil)
+	authorize(granted, testAuthenticator().IssueToken("reader"))
+	grantedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(grantedResponse, granted)
+	if grantedResponse.Code != http.StatusOK {
+		t.Fatalf("granted packument=%d %s", grantedResponse.Code, grantedResponse.Body.String())
+	}
+
+	denied := httptest.NewRequest(http.MethodGet, "/npm/npm-granted/other", nil)
+	authorize(denied, testAuthenticator().IssueToken("reader"))
+	deniedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deniedResponse, denied)
+	// The managed grant set decides, so a package outside the grant is refused
+	// even though the deployment's static reader policy would admit the caller.
+	if deniedResponse.Code != http.StatusForbidden {
+		t.Fatalf("ungranted packument=%d %s", deniedResponse.Code, deniedResponse.Body.String())
+	}
+	metrics := httptest.NewRecorder()
+	handler.ServeHTTP(metrics, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if !strings.Contains(metrics.Body.String(), `artifact_gateway_repository_authorization_denials_total{format="npm",authorization_source="repository_grants",authorization_reason="scope_not_granted"} 1`) {
+		t.Fatalf("authorization metrics=%s", metrics.Body.String())
+	}
+}
+
 func TestNativeNPMHostedRejectsTarballIdentityMismatch(t *testing.T) {
 	store := repository.NewMemoryStore()
 	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "npm-private", Format: repository.FormatNPM}); err != nil {
