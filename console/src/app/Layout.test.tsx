@@ -45,6 +45,16 @@ function renderLayout(pathname: string) {
           <Route path="/repositories" element={<AppLayout />}>
             <Route index element={<div>repository catalog</div>} />
           </Route>
+          <Route path="/repositories/:repositoryId" element={<AppLayout />}>
+            <Route index element={<div>repository detail</div>} />
+          </Route>
+          <Route path="/groups/:groupId/browse" element={<AppLayout />}>
+            <Route index element={<div>group browse</div>} />
+          </Route>
+          <Route path="/users" element={<AppLayout />}>
+            <Route index element={<div>user management</div>} />
+            <Route path=":userId" element={<div>user detail</div>} />
+          </Route>
           <Route path="/service-accounts" element={<AppLayout />}>
             <Route index element={<div>service account management</div>} />
           </Route>
@@ -148,6 +158,55 @@ describe("AppLayout", () => {
     expect(
       screen.queryByText("service account management"),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps a member on a repository deep link without administrator navigation", async () => {
+    Object.assign(auth, {
+      role: "member",
+      identity: { administrator: false, role: "member" },
+    });
+
+    // The detail route is not an exact member of the administrator-only list,
+    // so the catalog gate and the page's own capability checks decide it.
+    renderLayout("/repositories/11111111-1111-4111-8111-111111111111");
+
+    expect(await screen.findByText("repository detail")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /用户/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("redirects a member out of an administrator-only section by prefix", async () => {
+    Object.assign(auth, {
+      role: "member",
+      identity: { administrator: false, role: "member" },
+    });
+
+    renderLayout("/users/11111111-1111-4111-8111-111111111111");
+
+    expect(await screen.findByText("repository catalog")).toBeInTheDocument();
+    expect(screen.queryByText("user detail")).not.toBeInTheDocument();
+  });
+
+  it("does not let a trailing slash reach an administrator-only section", async () => {
+    Object.assign(auth, {
+      role: "member",
+      identity: { administrator: false, role: "member" },
+    });
+
+    renderLayout("/users/");
+
+    expect(await screen.findByText("repository catalog")).toBeInTheDocument();
+    expect(screen.queryByText("user management")).not.toBeInTheDocument();
+  });
+
+  it("redirects an identity that cannot browse out of a group browse deep link", async () => {
+    Object.assign(auth, { role: "", identity: { administrator: false } });
+
+    renderLayout("/groups/11111111-1111-4111-8111-111111111111/browse");
+
+    expect(await screen.findByTestId("location")).toHaveTextContent("/search");
+    expect(screen.queryByText("group browse")).not.toBeInTheDocument();
   });
 
   it("shows pending SSO users an approval screen without repository navigation", async () => {
