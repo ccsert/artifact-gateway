@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- The V1 compatibility surface stays a platform-administrator operation. The `/api/v1/**` handlers do not take part in the platform/repository split: they predate per-repository authority, and a V1 Group member may carry no repository binding, so nothing attributes it to a repository an administrator could hold. The two tiers live on the v2 surface, and a V1 client that needs repository-scoped administration has to move to `/api/v2`.
+
 - Scheduled tasks now follow the repository they target. A repository retention task is created, read, updated, run, and deleted by the administrators of that repository or by a platform administrator, the catalogue lists only the tasks a caller administers, and moving a task from one repository to another needs authority over both the repository it leaves and the one it reaches. A task with no repository, the audit retention job, remains a platform operation.
 
 - Two repository management operations now belong to the repository's administrators instead of the platform administrator alone. Testing a repository's egress proxy and applying an authorization template to a repository's grants both act on exactly one repository, so a `member` holding `repositories:admin` on that repository may perform them, while the same caller is refused on any other repository with an audited denial. The authorization template catalogue, repository creation, and every other platform surface still require the `admin` level. In the same pass `GET /formats` dropped its administrator requirement for the authenticated caller its contract already documented: the format table carries no repository state. The remaining platform and repository tiers are follow-up work.

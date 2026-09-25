@@ -180,6 +180,16 @@ bounded policy vocabulary, but API consumers must accept future bounded values
 and treat an absent field as "no repository authorization decision". The
 legacy `/api/v1/audits` response remains unchanged for V1 consumers.
 
+## V1 Compatibility Surface
+
+The `/api/v1/**` handlers remain a platform-administrator operation and do not
+take part in the platform/repository split. They predate per-repository
+authority, and a V1 Group member may carry no repository binding at all, so
+nothing attributes it to a repository an administrator could hold. The two tiers
+live on the v2 surface: hosted repositories, hosted groups, and the management
+views over them. A V1 client that needs repository-scoped administration has to
+move to `/api/v2`.
+
 ## Decision Vocabulary
 
 Every repository authorization decision names the authority that reached it, so

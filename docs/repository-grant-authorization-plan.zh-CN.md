@@ -58,6 +58,10 @@ Maven/Raw 保留现有 Basic challenge/status，OCI 保留 Registry Bearer chall
 
 管理员 `GET /api/v2/audits` 可看到可选 `authorizationSource/Reason`；只有进入 Repository 授权判定时出现。客户端应接受未来有界值并把缺失解释为“未发生 Repository 授权判定”。V1 Audit 响应不变。
 
+## V1 兼容面
+
+`/api/v1/**` 处理器仍是平台管理员操作，**不参与平台/仓库两档拆分**。它们早于按仓库权限模型，且 V1 Group 的成员可能完全没有仓库绑定，因此没有任何信息能把它归到某个管理员所持有的仓库上。两档模型落在 v2 面：hosted 仓库、hosted 群组，以及它们之上的管理视图。需要按仓库管理的 V1 客户端应迁移到 `/api/v2`。
+
 ## 判定取值
 
 每个仓库授权判定都会写明是**哪一级**作出的决定，因此 effective-access 解释面板与审计记录说明的是"谁决定的"，而不只是"允许还是拒绝"。以下是当前的**有界取值**；消费方必须容忍后续新增的有界值，而字段缺失表示该请求从未进入仓库授权判定。

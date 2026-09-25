@@ -132,6 +132,9 @@ func (h nativePyPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, operation, resource)
 		if !decision.Allowed {
 			if h.metrics != nil {
+				// The bounded counter is this format's only refusal signal: the
+				// decision fields are deliberately not attached to an audit
+				// record here, so operators read refusals from the metric.
 				h.metrics.recordRepositoryAuthorizationDenied("pypi", decision.Source, decision.Reason)
 			}
 			h.challenge(w, http.StatusForbidden, "repository permission required")
