@@ -1960,6 +1960,7 @@
     "/scheduled-tasks": {
       "get": {
         "operationId": "listScheduledTasks",
+        "description": "Lists the scheduled tasks the caller administers. A repository retention task belongs to the administrators of the repository it targets; a task with no repository belongs to platform administrators only.",
         "responses": {
           "200": {
             "description": "Scheduled task catalog",
@@ -1981,6 +1982,7 @@
       },
       "post": {
         "operationId": "createScheduledTask",
+        "description": "Creates a scheduled task. A repository retention task needs the platform tier, or administration of the repository it targets.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2008,6 +2010,9 @@
           "401": {
             "$ref": "#/components/responses/Problem"
           },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
           "409": {
             "$ref": "#/components/responses/Problem"
           }
@@ -2022,6 +2027,7 @@
       ],
       "get": {
         "operationId": "getScheduledTask",
+        "description": "Reads a task. A repository retention task is readable by the platform tier or by the administrators of the repository it targets.",
         "responses": {
           "200": {
             "description": "Scheduled task",
@@ -2036,6 +2042,9 @@
           "401": {
             "$ref": "#/components/responses/Problem"
           },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
           "404": {
             "$ref": "#/components/responses/Problem"
           }
@@ -2043,6 +2052,7 @@
       },
       "put": {
         "operationId": "updateScheduledTask",
+        "description": "Updates a task. A repository retention task is managed by the platform tier or by the administrators of the repository it targets, and moving a task needs authority over both the repository it leaves and the one it reaches.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IfMatch"
@@ -2075,6 +2085,9 @@
           "401": {
             "$ref": "#/components/responses/Problem"
           },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
           "404": {
             "$ref": "#/components/responses/Problem"
           },
@@ -2088,11 +2101,15 @@
       },
       "delete": {
         "operationId": "deleteScheduledTask",
+        "description": "Deletes a task. A repository retention task is managed by the platform tier or by the administrators of the repository it targets.",
         "responses": {
           "204": {
             "description": "Scheduled task deleted"
           },
           "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
             "$ref": "#/components/responses/Problem"
           },
           "404": {
@@ -2109,6 +2126,7 @@
       ],
       "post": {
         "operationId": "runScheduledTask",
+        "description": "Dispatches a task immediately. A repository retention task is managed by the platform tier or by the administrators of the repository it targets.",
         "responses": {
           "202": {
             "description": "Scheduled task dispatched",
@@ -2121,6 +2139,9 @@
             }
           },
           "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
             "$ref": "#/components/responses/Problem"
           },
           "404": {
@@ -2140,6 +2161,7 @@
       ],
       "get": {
         "operationId": "listScheduledTaskRuns",
+        "description": "Lists a task's dispatch history. A repository retention task is readable by the platform tier or by the administrators of the repository it targets.",
         "parameters": [
           {
             "name": "limit",
@@ -2170,6 +2192,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
             "$ref": "#/components/responses/Problem"
           },
           "404": {
