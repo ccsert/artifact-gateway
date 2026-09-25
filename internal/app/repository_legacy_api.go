@@ -13,6 +13,12 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/v2contract"
 )
 
+// The V1 compatibility surface stays a platform-administrator operation and does
+// not take part in the platform/repository split. It predates per-repository
+// authority, and a V1 Group member may carry no repository binding at all, so
+// nothing attributes it to a repository an administrator could hold. The v2
+// surface (hosted repositories, hosted groups, their management views) carries
+// the two tiers instead.
 type mavenAPIHandler struct {
 	store         repository.MavenStore
 	repositories  repository.HostedRepositoryStore

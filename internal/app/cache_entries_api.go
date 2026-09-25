@@ -12,6 +12,13 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
+// The V1 compatibility surface stays a platform-administrator operation and does
+// not take part in the platform/repository split. It predates per-repository
+// authority, and a V1 Group member may carry no repository binding at all, so
+// nothing attributes it to a repository an administrator could hold. The v2
+// surface (hosted repositories, hosted groups, their management views) carries
+// the two tiers instead.
+
 // CacheEntry describes one live proxy cache index record for operations
 // listings. Repository carries the artifact coordinate when the format's cache
 // index persists one (the OCI repository path, e.g. library/alpine, for OCI;
