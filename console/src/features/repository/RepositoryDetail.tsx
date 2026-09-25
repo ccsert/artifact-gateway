@@ -102,6 +102,15 @@ export function RepositoryDetailPage() {
   const [accessResolved, setAccessResolved] = useState(false);
   const permissions = repositoryPermissions(effectiveAccess);
   const canWrite = permissions.write;
+  // A tab is offered when the repository's own access answer grants the
+  // authority its endpoints require, which is the same scope the server
+  // enforces. The platform administrator keeps every tab so the console does
+  // not depend on the access answer for its own administration.
+  const tabAllowed = useCallback(
+    (item: (typeof TABS)[number]) =>
+      isAdmin || permissions[item.authority] === true,
+    [isAdmin, permissions],
+  );
   const [error, setError] = useState<unknown>(null);
   const [tab, setTab] = useState<Tab>(() =>
     repositoryTabFromQuery(requestedTab),
@@ -164,12 +173,10 @@ export function RepositoryDetailPage() {
       (item) =>
         item.key === tab &&
         repositoryTabAvailable(item, repo) &&
-        (isAdmin ||
-          item.key === "artifacts" ||
-          (item.key === "publish" && canWrite)),
+        tabAllowed(item),
     );
     if (!available) selectTab("artifacts");
-  }, [repo, selectTab, tab, isAdmin, canWrite, accessResolved]);
+  }, [repo, selectTab, tab, tabAllowed, isAdmin, accessResolved]);
 
   if (error !== null) {
     return (
@@ -182,11 +189,7 @@ export function RepositoryDetailPage() {
   if (!repo) return <Loading />;
 
   const availableTabs = TABS.filter(
-    (item) =>
-      repositoryTabAvailable(item, repo) &&
-      (isAdmin ||
-        item.key === "artifacts" ||
-        (item.key === "publish" && canWrite)),
+    (item) => repositoryTabAvailable(item, repo) && tabAllowed(item),
   );
   const activeTab = availableTabs.some((item) => item.key === tab)
     ? tab

@@ -173,6 +173,12 @@ describe("RepositoryDetailPage role-scoped tabs", () => {
     canWrite: boolean,
     format: "maven" | "oci" = "maven",
     initialTab = "settings",
+    authority: Partial<{
+      read: boolean;
+      write: boolean;
+      admin: boolean;
+      intelligence: boolean;
+    }> = {},
   ) {
     mockGetRepository.mockResolvedValue({
       data: { ...repository, format },
@@ -188,10 +194,10 @@ describe("RepositoryDetailPage role-scoped tabs", () => {
     mockGetEffectiveAccess.mockResolvedValue({
       data: {
         permissions: {
-          read: { allowed: true },
-          write: { allowed: canWrite },
-          admin: { allowed: false },
-          intelligence: { allowed: false },
+          read: { allowed: authority.read ?? true },
+          write: { allowed: authority.write ?? canWrite },
+          admin: { allowed: authority.admin ?? false },
+          intelligence: { allowed: authority.intelligence ?? false },
         },
       },
     } as never);
@@ -211,27 +217,56 @@ describe("RepositoryDetailPage role-scoped tabs", () => {
     );
   }
 
-  it("lets a member with a write grant browse and publish without exposing configuration tabs", async () => {
+  it("offers a member with a write grant the read and write surfaces of that repository", async () => {
     auth.identity = { administrator: false, role: "member" };
-    renderRole(true);
+    renderRole(true, "maven", "artifacts");
     expect(await screen.findByText("制品视图已加载")).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    // The read-gated surfaces come from the same access answer, so a write grant
+    // also reaches usage; nothing that needs administration does.
+    expect(screen.getByRole("tab", { name: "使用统计" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "发布" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "设置" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: "访问授权" }),
+    ).not.toBeInTheDocument();
     expect(artifactsTab.render.mock.calls.at(-1)?.[0]).toMatchObject({
       canWrite: true,
     });
   });
 
-  it("keeps a member without write authority on the artifact view", async () => {
+  it("keeps a member without write authority on the read-only surfaces", async () => {
     auth.identity = { administrator: false, role: "member" };
-    renderRole(false);
+    renderRole(false, "maven", "artifacts");
     expect(await screen.findByText("制品视图已加载")).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(1);
+    expect(screen.getByRole("tab", { name: "使用统计" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "发布" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "设置" })).not.toBeInTheDocument();
     expect(artifactsTab.render.mock.calls.at(-1)?.[0]).toMatchObject({
       canWrite: false,
     });
+  });
+
+  it("offers a repository administrator the management surfaces of its own repository", async () => {
+    auth.identity = { administrator: false, role: "member" };
+    renderRole(false, "maven", "artifacts", { admin: true });
+    expect(await screen.findByText("制品视图已加载")).toBeInTheDocument();
+    for (const name of [
+      "访问授权",
+      "保留策略",
+      "安全准入",
+      "容量",
+      "设置",
+      "墓碑",
+      "晋升 / 复制",
+      "生命周期任务",
+    ]) {
+      expect(screen.getByRole("tab", { name })).toBeInTheDocument();
+    }
+    // Scanning needs the independent intelligence scope, so it stays hidden even
+    // for a repository administrator.
+    expect(
+      screen.queryByRole("tab", { name: "制品扫描" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows OCI Docker publication instructions on a publisher deep link", async () => {

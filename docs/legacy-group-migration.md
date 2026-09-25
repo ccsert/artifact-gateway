@@ -78,7 +78,10 @@ per-repository grant, there is nothing to do. Otherwise:
    catch-all pattern, so every repository an actor needs has to be listed. A
    Group read can also be checked per member, and a member the actor cannot read
    on its own is skipped rather than served, so confirm the remaining reads with
-   the repository's effective-access view before relying on the policy.
+   the repository's effective-access view before relying on the policy. A member
+   name the gateway generated when it created the repository cannot be listed at
+   all, so an actor that has to reach one needs a per-repository grant for it
+   rather than a reader pattern.
 3. Upgrade. Reads that still work are covered by an explicit policy.
 4. If the upgrade has to be staged instead, set `GATEWAY_LEGACY_READ_DEFAULT=allow`
    to keep the old posture while steps 1 and 2 are completed, then unset it. The
