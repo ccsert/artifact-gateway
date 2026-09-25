@@ -32,9 +32,10 @@ For any principal the evaluator applies one fixed order: a `none` account state
 is denied, the administrator identity is allowed, a role allowed by
 `RoleAllows(principal.Role, operation)` is allowed, then the principal's
 per-repository grants are consulted, and the legacy static policy decides last.
-Consequently a managed grant set is not authoritative over a global role: for a
-non-administrator, a global `reader` or `writer` role still reaches every
-repository, and per-repository grants do not narrow it. `repositories:admin`
+Consequently only the administrator level reaches past grants: the global
+`reader` and `writer` roles that used to cover every repository are removed, and
+a `member` holds no repository capability of its own, so per-repository grants
+are what decide for an ordinary account. `repositories:admin`
 includes write, read, and intelligence writes; `repositories:write` includes
 read; `repositories:read` permits only read; and `repositories:intelligence` is
 an independent metadata-writing capability that does not imply any repository
@@ -70,15 +71,15 @@ Until a repository has a managed grant set, legacy patterns remain in force:
   and group/proxy read paths continue to use their static patterns, while
   Native Raw retains its existing authenticated-principal behavior;
 - static maps retain their present wildcard semantics where they already apply;
-- an absent reader map retains the existing local-development unrestricted-read
-  behavior.
+- an absent reader map denies an unmatched caller, unless
+  `GATEWAY_LEGACY_READ_DEFAULT=allow` restores the pre-0.4 posture.
 
 The repository store exposes an unmodified default grant set as version `1`.
 A successful `ReplaceRepositoryGrants`, including replacement with `[]`, moves
 the version above `1`; that is the durable marker that grants are managed. An
 explicit empty managed set denies every principal that reaches the grant stage,
-but it cannot revoke a global role: a non-administrator whose role covers the
-operation is already allowed before grants are read. This makes a new
+and it revokes every non-administrator whose reach came from grants rather than
+from the administrator level. This makes a new
 deployment backward compatible while still making revocation possible without
 deleting policy state.
 

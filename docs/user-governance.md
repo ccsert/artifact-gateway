@@ -107,11 +107,12 @@ Operators should verify the following after changing authentication policy:
 ## Current Limitations
 
 Deletion is permanent rather than a recoverable tombstone. A local account has
-one role, chosen from Pending, Member, and Platform administrator. The `member`
-role carries no repository capability at all, so a member reaches only the
-repositories it is granted. The legacy `reader` and `writer` roles still cover
-every repository, are retained for compatibility, and are being phased out in
-favour of per-repository grants. Custom roles composed from arbitrary
+one level, chosen from Pending, Member, and Platform administrator. The `member`
+level carries no repository capability at all, so a member reaches only the
+repositories it is granted. The removed `reader` and `writer` levels were
+narrowed to `member` on upgrade, with equivalent per-repository grants
+materialized on the repositories that existed then, so nothing lost access on
+the repositories it already had. Custom roles composed from arbitrary
 privileges, and multiple simultaneous role assignments, are not yet part of the
 model. Password expiry and configurable complexity rules are not enforced.
 OIDC back-channel logout and identity-provider-initiated logout are not yet

@@ -120,23 +120,38 @@ Gateway callback URL. The browser ID token must include the client ID in its
 `aud` claim; API Bearer tokens may use the separate Gateway API audience.
 
 Realm roles, client roles, top-level `roles`, and `groups` claims can be mapped
-onto Gateway roles:
+onto Gateway account levels:
 
 ```dotenv
-GATEWAY_OIDC_READER_ROLES=artifact-reader
-GATEWAY_OIDC_WRITER_ROLES=artifact-writer
+GATEWAY_OIDC_MEMBER_ROLES=artifact-member
 GATEWAY_OIDC_ADMIN_ROLES=artifact-admin
 ```
 
-The highest matching Gateway role wins.
+A mapping approves the account rather than granting repository capability: a
+matched administrator mapping makes the account an administrator, and a matched
+member mapping approves it with no repository access of its own, because reach
+comes from per-repository grants. Administrator wins when both match.
 
 ## GitLab
 
 Register an OAuth/OpenID Connect application with the exact Gateway callback
 URL, then use the GitLab issuer and application ID as the client ID. When role
 mapping is required, include the relevant group claims in the ID token and map
-their exact values through the same reader, writer, and administrator
-variables above.
+their exact values through the same member and administrator variables above.
+
+## Upgrade and rollback
+
+The saved OIDC settings move to a single member role list. The reader list and
+the writer list merge into it, a stored JIT default of `reader` or `writer`
+becomes `member`, and `GATEWAY_OIDC_READER_ROLES` and `GATEWAY_OIDC_WRITER_ROLES`
+are replaced by `GATEWAY_OIDC_MEMBER_ROLES`. An external realm role listed in
+either legacy variable has to be listed in the new one to keep matching.
+
+The migration replaces the reader and writer columns rather than leaving them
+behind, so an application-only rollback — deploying the previous image against
+the migrated schema — cannot read the saved settings. Roll back by restoring the
+pre-upgrade database and the matching binary, as the APT lifecycle migration
+also requires.
 
 ## Operational checks
 

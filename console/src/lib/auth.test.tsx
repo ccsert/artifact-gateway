@@ -26,7 +26,7 @@ describe("AuthProvider identity resolution", () => {
           identity: {
             actor: "api-key:key-id",
             kind: "api_key",
-            role: "reader",
+            role: "member",
             administrator: false,
           },
         }),
@@ -41,12 +41,12 @@ describe("AuthProvider identity resolution", () => {
       </AuthProvider>,
     );
 
-    expect(await screen.findByText("api_key:reader")).toBeInTheDocument();
+    expect(await screen.findByText("api_key:member")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/auth/session", {
       credentials: "include",
       headers: { Authorization: "Bearer agk_test" },
     });
-    expect(localStorage.getItem("ag.console.role")).toBe("reader");
+    expect(localStorage.getItem("ag.console.role")).toBe("member");
   });
 
   it("clears an expired token after identity validation returns 401", async () => {
@@ -79,7 +79,7 @@ describe("AuthProvider identity resolution", () => {
           identity: {
             actor: "gitlab-user",
             kind: "oidc",
-            role: "reader",
+            role: "member",
             administrator: false,
           },
         }),
@@ -94,7 +94,7 @@ describe("AuthProvider identity resolution", () => {
       </AuthProvider>,
     );
 
-    expect(await screen.findByText("oidc:reader")).toBeInTheDocument();
+    expect(await screen.findByText("oidc:member")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/auth/session", {
       credentials: "include",
       headers: undefined,

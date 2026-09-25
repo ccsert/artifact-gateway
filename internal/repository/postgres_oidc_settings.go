@@ -7,7 +7,7 @@ import (
 	"errors"
 )
 
-const oidcSettingsColumns = `version::text, enabled, issuer, audience, jwks_url, client_id, client_secret, redirect_url, scopes, admin_subjects, reader_roles, writer_roles, admin_roles, provisioning_mode, email_linking_enabled, jit_default_role, updated_at`
+const oidcSettingsColumns = `version::text, enabled, issuer, audience, jwks_url, client_id, client_secret, redirect_url, scopes, admin_subjects, member_roles, admin_roles, provisioning_mode, email_linking_enabled, jit_default_role, updated_at`
 
 func (s *PostgresStore) GetOIDCSettings(ctx context.Context) (OIDCSettings, error) {
 	var settings OIDCSettings
@@ -20,26 +20,26 @@ func (s *PostgresStore) GetOIDCSettings(ctx context.Context) (OIDCSettings, erro
 
 func (s *PostgresStore) ReplaceOIDCSettings(ctx context.Context, settings OIDCSettings, expectedVersion string) (OIDCSettings, error) {
 	settings = normalizeOIDCSettingsDefaults(settings)
-	scopes, adminSubjects, readerRoles, writerRoles, adminRoles, err := encodeOIDCSettingsLists(settings)
+	scopes, adminSubjects, memberRoles, adminRoles, err := encodeOIDCSettingsLists(settings)
 	if err != nil {
 		return OIDCSettings{}, err
 	}
 	if expectedVersion == "0" {
 		err = scanOIDCSettings(s.db.QueryRowContext(ctx, `INSERT INTO oidc_settings
-			(singleton, enabled, issuer, audience, jwks_url, client_id, client_secret, redirect_url, scopes, admin_subjects, reader_roles, writer_roles, admin_roles, provisioning_mode, email_linking_enabled, jit_default_role)
-			VALUES (true,$1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15)
+			(singleton, enabled, issuer, audience, jwks_url, client_id, client_secret, redirect_url, scopes, admin_subjects, member_roles, admin_roles, provisioning_mode, email_linking_enabled, jit_default_role)
+			VALUES (true,$1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14)
 			ON CONFLICT (singleton) DO NOTHING RETURNING `+oidcSettingsColumns,
 			settings.Enabled, settings.Issuer, settings.Audience, settings.JWKSURL, settings.ClientID, settings.ClientSecret, settings.RedirectURL,
-			scopes, adminSubjects, readerRoles, writerRoles, adminRoles, settings.ProvisioningMode, settings.EmailLinkingEnabled, settings.JITDefaultRole), &settings)
+			scopes, adminSubjects, memberRoles, adminRoles, settings.ProvisioningMode, settings.EmailLinkingEnabled, settings.JITDefaultRole), &settings)
 	} else {
 		err = scanOIDCSettings(s.db.QueryRowContext(ctx, `UPDATE oidc_settings SET
 			enabled=$1, issuer=$2, audience=$3, jwks_url=$4, client_id=$5, client_secret=$6, redirect_url=$7,
-			scopes=$8::jsonb, admin_subjects=$9::jsonb, reader_roles=$10::jsonb, writer_roles=$11::jsonb, admin_roles=$12::jsonb,
-			provisioning_mode=$13, email_linking_enabled=$14, jit_default_role=$15,
+			scopes=$8::jsonb, admin_subjects=$9::jsonb, member_roles=$10::jsonb, admin_roles=$11::jsonb,
+			provisioning_mode=$12, email_linking_enabled=$13, jit_default_role=$14,
 			version=version+1, updated_at=now()
-			WHERE singleton=true AND version::text=$16 RETURNING `+oidcSettingsColumns,
+			WHERE singleton=true AND version::text=$15 RETURNING `+oidcSettingsColumns,
 			settings.Enabled, settings.Issuer, settings.Audience, settings.JWKSURL, settings.ClientID, settings.ClientSecret, settings.RedirectURL,
-			scopes, adminSubjects, readerRoles, writerRoles, adminRoles, settings.ProvisioningMode, settings.EmailLinkingEnabled, settings.JITDefaultRole, expectedVersion), &settings)
+			scopes, adminSubjects, memberRoles, adminRoles, settings.ProvisioningMode, settings.EmailLinkingEnabled, settings.JITDefaultRole, expectedVersion), &settings)
 	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return OIDCSettings{}, ErrVersionConflict
@@ -52,7 +52,7 @@ func normalizeOIDCSettingsDefaults(settings OIDCSettings) OIDCSettings {
 		settings.ProvisioningMode = "disabled"
 	}
 	if settings.JITDefaultRole == "" {
-		settings.JITDefaultRole = "reader"
+		settings.JITDefaultRole = "member"
 	}
 	return settings
 }
@@ -62,11 +62,11 @@ type oidcSettingsScanner interface {
 }
 
 func scanOIDCSettings(scanner oidcSettingsScanner, settings *OIDCSettings) error {
-	var scopes, adminSubjects, readerRoles, writerRoles, adminRoles []byte
+	var scopes, adminSubjects, memberRoles, adminRoles []byte
 	if err := scanner.Scan(
 		&settings.Version, &settings.Enabled, &settings.Issuer, &settings.Audience, &settings.JWKSURL,
 		&settings.ClientID, &settings.ClientSecret, &settings.RedirectURL, &scopes, &adminSubjects,
-		&readerRoles, &writerRoles, &adminRoles, &settings.ProvisioningMode,
+		&memberRoles, &adminRoles, &settings.ProvisioningMode,
 		&settings.EmailLinkingEnabled, &settings.JITDefaultRole, &settings.UpdatedAt,
 	); err != nil {
 		return err
@@ -75,8 +75,8 @@ func scanOIDCSettings(scanner oidcSettingsScanner, settings *OIDCSettings) error
 		raw   []byte
 		value *[]string
 	}{
-		{scopes, &settings.Scopes}, {adminSubjects, &settings.AdminSubjects}, {readerRoles, &settings.ReaderRoles},
-		{writerRoles, &settings.WriterRoles}, {adminRoles, &settings.AdminRoles},
+		{scopes, &settings.Scopes}, {adminSubjects, &settings.AdminSubjects}, {memberRoles, &settings.MemberRoles},
+		{adminRoles, &settings.AdminRoles},
 	} {
 		if err := json.Unmarshal(target.raw, target.value); err != nil {
 			return err
@@ -85,8 +85,8 @@ func scanOIDCSettings(scanner oidcSettingsScanner, settings *OIDCSettings) error
 	return nil
 }
 
-func encodeOIDCSettingsLists(settings OIDCSettings) ([]byte, []byte, []byte, []byte, []byte, error) {
-	values := [][]string{settings.Scopes, settings.AdminSubjects, settings.ReaderRoles, settings.WriterRoles, settings.AdminRoles}
+func encodeOIDCSettingsLists(settings OIDCSettings) ([]byte, []byte, []byte, []byte, error) {
+	values := [][]string{settings.Scopes, settings.AdminSubjects, settings.MemberRoles, settings.AdminRoles}
 	encoded := make([][]byte, len(values))
 	for index, value := range values {
 		if value == nil {
@@ -94,9 +94,9 @@ func encodeOIDCSettingsLists(settings OIDCSettings) ([]byte, []byte, []byte, []b
 		}
 		data, err := json.Marshal(value)
 		if err != nil {
-			return nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		encoded[index] = data
 	}
-	return encoded[0], encoded[1], encoded[2], encoded[3], encoded[4], nil
+	return encoded[0], encoded[1], encoded[2], encoded[3], nil
 }

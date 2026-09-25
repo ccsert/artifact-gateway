@@ -113,19 +113,19 @@ func TestOIDCBrowserJITRegistersPendingUserWithoutRepositoryAccess(t *testing.T)
 	if deniedResponse.Code == http.StatusOK {
 		t.Fatal("pending user reached administrator API")
 	}
-	reader := "reader"
-	user, err = store.UpdateUser(t.Context(), repository.UserUpdate{ID: user.ID, Role: &reader}, user.Version)
+	member := "member"
+	user, err = store.UpdateUser(t.Context(), repository.UserUpdate{ID: user.ID, Role: &member}, user.Version)
 	if err != nil {
 		t.Fatal(err)
 	}
 	approvedResponse := httptest.NewRecorder()
 	handler.ServeHTTP(approvedResponse, identityRequest)
-	if approvedResponse.Code != http.StatusOK || !strings.Contains(approvedResponse.Body.String(), `"role":"reader"`) {
+	if approvedResponse.Code != http.StatusOK || !strings.Contains(approvedResponse.Body.String(), `"role":"member"`) {
 		t.Fatalf("approved identity=%d body=%s", approvedResponse.Code, approvedResponse.Body.String())
 	}
 	_ = signIn()
 	all, err := store.ListUsers(t.Context(), repository.UserListQuery{Limit: 10})
-	if err != nil || all.Total != 1 || all.Items[0].Role != "reader" {
+	if err != nil || all.Total != 1 || all.Items[0].Role != "member" {
 		t.Fatalf("repeat sign-in users=%+v err=%v", all, err)
 	}
 	none := "none"
@@ -197,7 +197,7 @@ func TestOIDCBrowserLoginMapsBoundUserAndRevokesCookieSession(t *testing.T) {
 				"token_type":   "Bearer",
 				"expires_in":   300,
 				"id_token": signedOIDCTokenWithClaims(
-					t, key, keyID, provider.URL, "artifact-gateway-console", "gitlab-user", time.Now().Add(time.Minute), []string{"artifact-reader"}, expectedNonce,
+					t, key, keyID, provider.URL, "artifact-gateway-console", "gitlab-user", time.Now().Add(time.Minute), []string{"artifact-member"}, expectedNonce,
 				),
 			})
 		default:
@@ -209,18 +209,18 @@ func TestOIDCBrowserLoginMapsBoundUserAndRevokesCookieSession(t *testing.T) {
 	authenticator := testAuthenticator()
 	authenticator.OIDC = NewOIDCValidator(OIDCConfig{
 		Issuer: provider.URL, Audience: "artifact-gateway-api", JWKSURL: provider.URL + "/jwks",
-		Roles: OIDCRoleMapping{Reader: []string{"artifact-reader"}},
+		Roles: OIDCRoleMapping{Member: []string{"artifact-member"}},
 	})
 	dependencies := Dependencies{OIDCClient: NewOIDCClient(OIDCClientConfig{
 		Issuer: provider.URL, ClientID: "artifact-gateway-console",
 		RedirectURL: "http://localhost:4173/auth/oidc/callback", Scopes: []string{"openid", "profile"},
 	}), OIDCLoginValidator: NewOIDCValidator(OIDCConfig{
 		Issuer: provider.URL, Audience: "artifact-gateway-console", JWKSURL: provider.URL + "/jwks",
-		Roles: OIDCRoleMapping{Reader: []string{"artifact-reader"}},
+		Roles: OIDCRoleMapping{Member: []string{"artifact-member"}},
 	})}
 	store := repository.NewMemoryStore()
 	localUser, err := store.CreateUser(t.Context(), repository.User{
-		ID: "browser-oidc-user", Name: "local-user", Role: "writer",
+		ID: "browser-oidc-user", Name: "local-user", Role: "member",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -284,7 +284,7 @@ func TestOIDCBrowserLoginMapsBoundUserAndRevokesCookieSession(t *testing.T) {
 	identity.AddCookie(sessionCookie)
 	identityResponse := httptest.NewRecorder()
 	handler.ServeHTTP(identityResponse, identity)
-	if identityResponse.Code != http.StatusOK || !strings.Contains(identityResponse.Body.String(), `"actor":"user:local-user"`) || !strings.Contains(identityResponse.Body.String(), `"kind":"oidc"`) || !strings.Contains(identityResponse.Body.String(), `"role":"writer"`) {
+	if identityResponse.Code != http.StatusOK || !strings.Contains(identityResponse.Body.String(), `"actor":"user:local-user"`) || !strings.Contains(identityResponse.Body.String(), `"kind":"oidc"`) || !strings.Contains(identityResponse.Body.String(), `"role":"member"`) {
 		t.Fatalf("identity=%d body=%s", identityResponse.Code, identityResponse.Body.String())
 	}
 

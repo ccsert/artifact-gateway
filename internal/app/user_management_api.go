@@ -60,7 +60,7 @@ func (h generatedRepositoryAPIAdapter) CreateApiKey(w http.ResponseWriter, r *ht
 	}
 	for _, role := range valueOrEmptyRoles(request.Roles) {
 		switch role {
-		case adminopenapi.CreateAPIKeyRolesAdmin, adminopenapi.CreateAPIKeyRolesWriter, adminopenapi.CreateAPIKeyRolesReader, adminopenapi.CreateAPIKeyRolesMember:
+		case adminopenapi.CreateAPIKeyRolesAdmin, adminopenapi.CreateAPIKeyRolesMember:
 		default:
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "unsupported API key role")
 			return
@@ -159,8 +159,12 @@ func userSessionResponse(session repository.UserSession, current bool) adminopen
 	}
 }
 
+// validUserRole reports whether a string names an assignable account level. The
+// removed legacy roles reader and writer are rejected: an assignment of one is
+// a 400 rather than a silent downgrade, and no stored value can name a level
+// that carries repository authority of its own.
 func validUserRole(role string) bool {
-	return role == string(authorization.RoleNone) || role == string(authorization.RoleMember) || role == string(authorization.RoleAdmin) || role == string(authorization.RoleWriter) || role == string(authorization.RoleReader)
+	return role == string(authorization.RoleNone) || role == string(authorization.RoleMember) || role == string(authorization.RoleAdmin)
 }
 
 const maxLocalPasswordBytes = 72 // bcrypt's maximum effective password length.

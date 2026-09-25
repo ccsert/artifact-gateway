@@ -326,20 +326,6 @@ export function UserDetailsDrawer({
                     label: text("none · 待授权", "none · awaiting approval"),
                   },
                   {
-                    value: "reader",
-                    label: text(
-                      "reader · 只读（全部仓库）",
-                      "reader · read-only (all repositories)",
-                    ),
-                  },
-                  {
-                    value: "writer",
-                    label: text(
-                      "writer · 读写（全部仓库）",
-                      "writer · read/write (all repositories)",
-                    ),
-                  },
-                  {
                     value: "admin",
                     label: text("admin · 管理员", "admin · administrator"),
                   },

@@ -30,7 +30,7 @@ export function UserCreateDialog({
     if (!open) return;
     setError(null);
     form.resetFields();
-    form.setFieldsValue({ role: "reader", mustChangePassword: true });
+    form.setFieldsValue({ role: "member", mustChangePassword: true });
   }, [form, open]);
 
   const submit = async () => {
@@ -131,20 +131,6 @@ export function UserCreateDialog({
                 {
                   value: "none",
                   label: text("none · 待授权", "none · awaiting approval"),
-                },
-                {
-                  value: "reader",
-                  label: text(
-                    "reader · 只读（全部仓库）",
-                    "reader · read-only (all repositories)",
-                  ),
-                },
-                {
-                  value: "writer",
-                  label: text(
-                    "writer · 读写（全部仓库）",
-                    "writer · read/write (all repositories)",
-                  ),
                 },
                 {
                   value: "admin",

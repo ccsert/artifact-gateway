@@ -23,8 +23,6 @@ import (
 const (
 	APIKeyRolesAdmin  APIKeyRoles = "admin"
 	APIKeyRolesMember APIKeyRoles = "member"
-	APIKeyRolesReader APIKeyRoles = "reader"
-	APIKeyRolesWriter APIKeyRoles = "writer"
 )
 
 // Valid indicates whether the value is a known member of the APIKeyRoles enum.
@@ -33,10 +31,6 @@ func (e APIKeyRoles) Valid() bool {
 	case APIKeyRolesAdmin:
 		return true
 	case APIKeyRolesMember:
-		return true
-	case APIKeyRolesReader:
-		return true
-	case APIKeyRolesWriter:
 		return true
 	default:
 		return false
@@ -740,8 +734,6 @@ func (e ConsoleThemePackageValidationStatus) Valid() bool {
 const (
 	CreateAPIKeyRolesAdmin  CreateAPIKeyRoles = "admin"
 	CreateAPIKeyRolesMember CreateAPIKeyRoles = "member"
-	CreateAPIKeyRolesReader CreateAPIKeyRoles = "reader"
-	CreateAPIKeyRolesWriter CreateAPIKeyRoles = "writer"
 )
 
 // Valid indicates whether the value is a known member of the CreateAPIKeyRoles enum.
@@ -750,10 +742,6 @@ func (e CreateAPIKeyRoles) Valid() bool {
 	case CreateAPIKeyRolesAdmin:
 		return true
 	case CreateAPIKeyRolesMember:
-		return true
-	case CreateAPIKeyRolesReader:
-		return true
-	case CreateAPIKeyRolesWriter:
 		return true
 	default:
 		return false
@@ -816,8 +804,6 @@ const (
 	CreateUserRoleAdmin  CreateUserRole = "admin"
 	CreateUserRoleMember CreateUserRole = "member"
 	CreateUserRoleNone   CreateUserRole = "none"
-	CreateUserRoleReader CreateUserRole = "reader"
-	CreateUserRoleWriter CreateUserRole = "writer"
 )
 
 // Valid indicates whether the value is a known member of the CreateUserRole enum.
@@ -829,10 +815,6 @@ func (e CreateUserRole) Valid() bool {
 		return true
 	case CreateUserRoleNone:
 		return true
-	case CreateUserRoleReader:
-		return true
-	case CreateUserRoleWriter:
-		return true
 	default:
 		return false
 	}
@@ -842,8 +824,6 @@ func (e CreateUserRole) Valid() bool {
 const (
 	CreatedAPIKeyRolesAdmin  CreatedAPIKeyRoles = "admin"
 	CreatedAPIKeyRolesMember CreatedAPIKeyRoles = "member"
-	CreatedAPIKeyRolesReader CreatedAPIKeyRoles = "reader"
-	CreatedAPIKeyRolesWriter CreatedAPIKeyRoles = "writer"
 )
 
 // Valid indicates whether the value is a known member of the CreatedAPIKeyRoles enum.
@@ -852,10 +832,6 @@ func (e CreatedAPIKeyRoles) Valid() bool {
 	case CreatedAPIKeyRolesAdmin:
 		return true
 	case CreatedAPIKeyRolesMember:
-		return true
-	case CreatedAPIKeyRolesReader:
-		return true
-	case CreatedAPIKeyRolesWriter:
 		return true
 	default:
 		return false
@@ -867,8 +843,6 @@ const (
 	CurrentIdentityRoleAdmin  CurrentIdentityRole = "admin"
 	CurrentIdentityRoleMember CurrentIdentityRole = "member"
 	CurrentIdentityRoleNone   CurrentIdentityRole = "none"
-	CurrentIdentityRoleReader CurrentIdentityRole = "reader"
-	CurrentIdentityRoleWriter CurrentIdentityRole = "writer"
 )
 
 // Valid indicates whether the value is a known member of the CurrentIdentityRole enum.
@@ -879,10 +853,6 @@ func (e CurrentIdentityRole) Valid() bool {
 	case CurrentIdentityRoleMember:
 		return true
 	case CurrentIdentityRoleNone:
-		return true
-	case CurrentIdentityRoleReader:
-		return true
-	case CurrentIdentityRoleWriter:
 		return true
 	default:
 		return false
@@ -1310,8 +1280,6 @@ func (e LifecycleJobState) Valid() bool {
 const (
 	OIDCRoleMappingMatchGatewayRoleAdmin  OIDCRoleMappingMatchGatewayRole = "admin"
 	OIDCRoleMappingMatchGatewayRoleMember OIDCRoleMappingMatchGatewayRole = "member"
-	OIDCRoleMappingMatchGatewayRoleReader OIDCRoleMappingMatchGatewayRole = "reader"
-	OIDCRoleMappingMatchGatewayRoleWriter OIDCRoleMappingMatchGatewayRole = "writer"
 )
 
 // Valid indicates whether the value is a known member of the OIDCRoleMappingMatchGatewayRole enum.
@@ -1320,10 +1288,6 @@ func (e OIDCRoleMappingMatchGatewayRole) Valid() bool {
 	case OIDCRoleMappingMatchGatewayRoleAdmin:
 		return true
 	case OIDCRoleMappingMatchGatewayRoleMember:
-		return true
-	case OIDCRoleMappingMatchGatewayRoleReader:
-		return true
-	case OIDCRoleMappingMatchGatewayRoleWriter:
 		return true
 	default:
 		return false
@@ -1335,8 +1299,6 @@ const (
 	OIDCSettingsJitDefaultRoleAdmin  OIDCSettingsJitDefaultRole = "admin"
 	OIDCSettingsJitDefaultRoleMember OIDCSettingsJitDefaultRole = "member"
 	OIDCSettingsJitDefaultRoleNone   OIDCSettingsJitDefaultRole = "none"
-	OIDCSettingsJitDefaultRoleReader OIDCSettingsJitDefaultRole = "reader"
-	OIDCSettingsJitDefaultRoleWriter OIDCSettingsJitDefaultRole = "writer"
 )
 
 // Valid indicates whether the value is a known member of the OIDCSettingsJitDefaultRole enum.
@@ -1347,10 +1309,6 @@ func (e OIDCSettingsJitDefaultRole) Valid() bool {
 	case OIDCSettingsJitDefaultRoleMember:
 		return true
 	case OIDCSettingsJitDefaultRoleNone:
-		return true
-	case OIDCSettingsJitDefaultRoleReader:
-		return true
-	case OIDCSettingsJitDefaultRoleWriter:
 		return true
 	default:
 		return false
@@ -1398,8 +1356,6 @@ const (
 	OIDCSettingsUpdateJitDefaultRoleAdmin  OIDCSettingsUpdateJitDefaultRole = "admin"
 	OIDCSettingsUpdateJitDefaultRoleMember OIDCSettingsUpdateJitDefaultRole = "member"
 	OIDCSettingsUpdateJitDefaultRoleNone   OIDCSettingsUpdateJitDefaultRole = "none"
-	OIDCSettingsUpdateJitDefaultRoleReader OIDCSettingsUpdateJitDefaultRole = "reader"
-	OIDCSettingsUpdateJitDefaultRoleWriter OIDCSettingsUpdateJitDefaultRole = "writer"
 )
 
 // Valid indicates whether the value is a known member of the OIDCSettingsUpdateJitDefaultRole enum.
@@ -1410,10 +1366,6 @@ func (e OIDCSettingsUpdateJitDefaultRole) Valid() bool {
 	case OIDCSettingsUpdateJitDefaultRoleMember:
 		return true
 	case OIDCSettingsUpdateJitDefaultRoleNone:
-		return true
-	case OIDCSettingsUpdateJitDefaultRoleReader:
-		return true
-	case OIDCSettingsUpdateJitDefaultRoleWriter:
 		return true
 	default:
 		return false
@@ -2082,8 +2034,6 @@ const (
 	UpdateUserRoleAdmin  UpdateUserRole = "admin"
 	UpdateUserRoleMember UpdateUserRole = "member"
 	UpdateUserRoleNone   UpdateUserRole = "none"
-	UpdateUserRoleReader UpdateUserRole = "reader"
-	UpdateUserRoleWriter UpdateUserRole = "writer"
 )
 
 // Valid indicates whether the value is a known member of the UpdateUserRole enum.
@@ -2094,10 +2044,6 @@ func (e UpdateUserRole) Valid() bool {
 	case UpdateUserRoleMember:
 		return true
 	case UpdateUserRoleNone:
-		return true
-	case UpdateUserRoleReader:
-		return true
-	case UpdateUserRoleWriter:
 		return true
 	default:
 		return false
@@ -2148,8 +2094,6 @@ const (
 	UserRoleAdmin  UserRole = "admin"
 	UserRoleMember UserRole = "member"
 	UserRoleNone   UserRole = "none"
-	UserRoleReader UserRole = "reader"
-	UserRoleWriter UserRole = "writer"
 )
 
 // Valid indicates whether the value is a known member of the UserRole enum.
@@ -2160,10 +2104,6 @@ func (e UserRole) Valid() bool {
 	case UserRoleMember:
 		return true
 	case UserRoleNone:
-		return true
-	case UserRoleReader:
-		return true
-	case UserRoleWriter:
 		return true
 	default:
 		return false
@@ -2315,8 +2255,6 @@ func (e ListProxyCacheEntriesParamsAssetFilter) Valid() bool {
 const (
 	GetRepositoryEffectiveAccessParamsRoleAdmin  GetRepositoryEffectiveAccessParamsRole = "admin"
 	GetRepositoryEffectiveAccessParamsRoleMember GetRepositoryEffectiveAccessParamsRole = "member"
-	GetRepositoryEffectiveAccessParamsRoleReader GetRepositoryEffectiveAccessParamsRole = "reader"
-	GetRepositoryEffectiveAccessParamsRoleWriter GetRepositoryEffectiveAccessParamsRole = "writer"
 )
 
 // Valid indicates whether the value is a known member of the GetRepositoryEffectiveAccessParamsRole enum.
@@ -2325,10 +2263,6 @@ func (e GetRepositoryEffectiveAccessParamsRole) Valid() bool {
 	case GetRepositoryEffectiveAccessParamsRoleAdmin:
 		return true
 	case GetRepositoryEffectiveAccessParamsRoleMember:
-		return true
-	case GetRepositoryEffectiveAccessParamsRoleReader:
-		return true
-	case GetRepositoryEffectiveAccessParamsRoleWriter:
 		return true
 	default:
 		return false
@@ -2340,8 +2274,6 @@ const (
 	ListUsersParamsRoleAdmin  ListUsersParamsRole = "admin"
 	ListUsersParamsRoleMember ListUsersParamsRole = "member"
 	ListUsersParamsRoleNone   ListUsersParamsRole = "none"
-	ListUsersParamsRoleReader ListUsersParamsRole = "reader"
-	ListUsersParamsRoleWriter ListUsersParamsRole = "writer"
 )
 
 // Valid indicates whether the value is a known member of the ListUsersParamsRole enum.
@@ -2352,10 +2284,6 @@ func (e ListUsersParamsRole) Valid() bool {
 	case ListUsersParamsRoleMember:
 		return true
 	case ListUsersParamsRoleNone:
-		return true
-	case ListUsersParamsRoleReader:
-		return true
-	case ListUsersParamsRoleWriter:
 		return true
 	default:
 		return false
@@ -3836,14 +3764,13 @@ type OIDCSettings struct {
 	Issuer                 string                       `json:"issuer"`
 	JitDefaultRole         OIDCSettingsJitDefaultRole   `json:"jitDefaultRole"`
 	JwksUrl                *string                      `json:"jwksUrl,omitempty"`
+	MemberRoles            []string                     `json:"memberRoles"`
 	ProvisioningMode       OIDCSettingsProvisioningMode `json:"provisioningMode"`
-	ReaderRoles            []string                     `json:"readerRoles"`
 	RedirectUrl            string                       `json:"redirectUrl"`
 	Scopes                 []string                     `json:"scopes"`
 	Source                 OIDCSettingsSource           `json:"source"`
 	UpdatedAt              *time.Time                   `json:"updatedAt,omitempty"`
 	Version                string                       `json:"version"`
-	WriterRoles            []string                     `json:"writerRoles"`
 }
 
 // OIDCSettingsJitDefaultRole defines model for OIDCSettings.JitDefaultRole.
@@ -3868,11 +3795,10 @@ type OIDCSettingsUpdate struct {
 	Issuer              string                             `json:"issuer"`
 	JitDefaultRole      OIDCSettingsUpdateJitDefaultRole   `json:"jitDefaultRole"`
 	JwksUrl             *string                            `json:"jwksUrl,omitempty"`
+	MemberRoles         []string                           `json:"memberRoles"`
 	ProvisioningMode    OIDCSettingsUpdateProvisioningMode `json:"provisioningMode"`
-	ReaderRoles         []string                           `json:"readerRoles"`
 	RedirectUrl         string                             `json:"redirectUrl"`
 	Scopes              []string                           `json:"scopes"`
-	WriterRoles         []string                           `json:"writerRoles"`
 }
 
 // OIDCSettingsUpdateJitDefaultRole defines model for OIDCSettingsUpdate.JitDefaultRole.

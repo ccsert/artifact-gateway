@@ -10,7 +10,7 @@ import { PreferencesProvider } from "../../lib/preferences";
 import { RepositoriesPage } from "./Repositories";
 
 const auth = vi.hoisted(() => ({
-  identity: { administrator: false, role: "writer" },
+  identity: { administrator: false, role: "member" },
 }));
 
 vi.mock("../../lib/auth", () => ({
@@ -30,7 +30,7 @@ afterEach(() => {
 });
 
 describe("RepositoriesPage role-scoped catalog", () => {
-  it("shows a writer readable repositories without administrator controls", async () => {
+  it("shows a member readable repositories without administrator controls", async () => {
     vi.mocked(listRepositories).mockResolvedValue({
       data: {
         items: [

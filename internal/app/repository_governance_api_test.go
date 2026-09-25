@@ -463,12 +463,32 @@ func TestRepositoryEffectiveAccessSupportsAdministratorSimulation(t *testing.T) 
 		t.Fatalf("wrong resource = %d %s", wrongResourceResponse.Code, wrongResourceResponse.Body.String())
 	}
 
-	globalRole := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access?actor=release-bot&role=writer", nil)
+	// The administrator level is the only simulated level with a role-derived
+	// allow; a member level is decided by the grants instead.
+	globalRole := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access?actor=release-bot&role=admin", nil)
 	authorize(globalRole, "admin-secret")
 	globalRoleResponse := httptest.NewRecorder()
 	handler.ServeHTTP(globalRoleResponse, globalRole)
-	if globalRoleResponse.Code != http.StatusOK || !strings.Contains(globalRoleResponse.Body.String(), `"read":{"allowed":true,"reason":"role_writer","source":"role"}`) || !strings.Contains(globalRoleResponse.Body.String(), `"write":{"allowed":true,"reason":"role_writer","source":"role"}`) || !strings.Contains(globalRoleResponse.Body.String(), `"admin":{"allowed":false`) {
+	if globalRoleResponse.Code != http.StatusOK || !strings.Contains(globalRoleResponse.Body.String(), `"read":{"allowed":true,"reason":"administrator","source":"administrator"}`) || !strings.Contains(globalRoleResponse.Body.String(), `"write":{"allowed":true,"reason":"administrator","source":"administrator"}`) || !strings.Contains(globalRoleResponse.Body.String(), `"admin":{"allowed":true`) {
 		t.Fatalf("simulated role = %d %s", globalRoleResponse.Code, globalRoleResponse.Body.String())
+	}
+	memberRole := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access?actor=release-bot&role=member", nil)
+	authorize(memberRole, "admin-secret")
+	memberRoleResponse := httptest.NewRecorder()
+	handler.ServeHTTP(memberRoleResponse, memberRole)
+	if memberRoleResponse.Code != http.StatusOK || !strings.Contains(memberRoleResponse.Body.String(), `"read":{"allowed":false`) || !strings.Contains(memberRoleResponse.Body.String(), `"write":{"allowed":false`) {
+		t.Fatalf("simulated member role = %d %s", memberRoleResponse.Code, memberRoleResponse.Body.String())
+	}
+	// A removed legacy level is refused instead of being evaluated as an
+	// unrecognized role.
+	for _, role := range []string{"reader", "writer"} {
+		removedRole := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access?actor=release-bot&role="+role, nil)
+		authorize(removedRole, "admin-secret")
+		removedRoleResponse := httptest.NewRecorder()
+		handler.ServeHTTP(removedRoleResponse, removedRole)
+		if removedRoleResponse.Code != http.StatusBadRequest {
+			t.Fatalf("simulated %s role = %d %s", role, removedRoleResponse.Code, removedRoleResponse.Body.String())
+		}
 	}
 
 	forbidden := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+repo.ID+"/effective-access?actor=build-agent", nil)
@@ -599,6 +619,9 @@ func TestAPIKeyRolesEnforceScopedManagementAccess(t *testing.T) {
 	}
 	authenticator := testAuthenticator()
 	authenticator.APIKeys = store
+	// An explicitly configured reader policy keeps the permissive unconfigured
+	// fallback from masking whether a credential level grants anything.
+	authenticator.RepositoryReaders = map[string][]string{}
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
 
 	createKey := func(t *testing.T, roles string) string {
@@ -620,8 +643,18 @@ func TestAPIKeyRolesEnforceScopedManagementAccess(t *testing.T) {
 		return created.Token
 	}
 
-	readerToken := createKey(t, "reader")
-	writerToken := createKey(t, "writer")
+	// The removed legacy roles are refused at creation, so no key can be minted
+	// that would reach every repository through a global role.
+	for _, roles := range []string{"reader", "writer"} {
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/api-keys", strings.NewReader(`{"name":"legacy","roles":["`+roles+`"]}`))
+		authorize(req, "admin-secret")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("create %s key=%d want 400 body=%s", roles, rec.Code, rec.Body.String())
+		}
+	}
+	memberToken := createKey(t, "member")
 
 	patch := func(token string) int {
 		req := httptest.NewRequest(http.MethodPatch, "/api/v2/repositories/"+repo.ID, strings.NewReader(`{"endpoint":"https://cdn.example","allowedHosts":["cdn.example"]}`))
@@ -639,21 +672,13 @@ func TestAPIKeyRolesEnforceScopedManagementAccess(t *testing.T) {
 		return rec.Code
 	}
 
-	// Reader: read allowed by role, write denied.
-	if code := get(readerToken); code != http.StatusOK {
-		t.Fatalf("reader get=%d", code)
+	// A member credential carries no repository capability of its own, so both
+	// reading and changing the repository are refused without a grant.
+	if code := get(memberToken); code != http.StatusForbidden {
+		t.Fatalf("member get=%d want 403", code)
 	}
-	if code := patch(readerToken); code != http.StatusForbidden {
-		t.Fatalf("reader patch=%d want 403", code)
-	}
-
-	// Writer: read allowed by role; changing the repository configuration is a
-	// repository-administration action, so a write role alone is not enough.
-	if code := get(writerToken); code != http.StatusOK {
-		t.Fatalf("writer get=%d", code)
-	}
-	if code := patch(writerToken); code != http.StatusForbidden {
-		t.Fatalf("writer patch=%d want 403", code)
+	if code := patch(memberToken); code != http.StatusForbidden {
+		t.Fatalf("member patch=%d want 403", code)
 	}
 
 	// A platform administrator still reaches repository configuration.
@@ -661,14 +686,12 @@ func TestAPIKeyRolesEnforceScopedManagementAccess(t *testing.T) {
 		t.Fatalf("administrator patch=%d want 200", code)
 	}
 
-	// Neither reader nor writer may mint new keys (administrator-only).
-	for _, token := range []string{readerToken, writerToken} {
-		req := httptest.NewRequest(http.MethodPost, "/api/v2/api-keys", strings.NewReader(`{"name":"x","roles":["admin"]}`))
-		authorize(req, token)
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-		if rec.Code != http.StatusForbidden {
-			t.Fatalf("%s role minted key=%d want 403", token, rec.Code)
-		}
+	// A member credential may not mint new keys (administrator-only).
+	req := httptest.NewRequest(http.MethodPost, "/api/v2/api-keys", strings.NewReader(`{"name":"x","roles":["admin"]}`))
+	authorize(req, memberToken)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("member role minted key=%d want 403", rec.Code)
 	}
 }

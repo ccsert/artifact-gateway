@@ -184,14 +184,24 @@ func refreshUserIdentity(identity UserIdentity, provision OIDCIdentityProvision,
 	return identity
 }
 
+// provisionedUserRole resolves the level a newly provisioned account gets. A
+// recognized mapped role wins over the configured default, and anything else -
+// including a removed legacy value such as "reader" or "writer" - falls back to
+// the member level, which carries no repository capability, so an unknown value
+// can never hand out repository authority.
+func provisionedUserRole(mapped, defaultRole string) string {
+	role := mapped
+	if role != "admin" && role != "member" && role != "none" {
+		role = defaultRole
+	}
+	if role != "admin" && role != "member" && role != "none" {
+		role = "member"
+	}
+	return role
+}
+
 func newOIDCProvisionedUser(provision OIDCIdentityProvision, existing map[string]User, now time.Time) User {
-	role := provision.Role
-	if role != "admin" && role != "writer" && role != "reader" && role != "member" {
-		role = provision.DefaultRole
-	}
-	if role != "admin" && role != "writer" && role != "reader" && role != "member" && role != "none" {
-		role = "reader"
-	}
+	role := provisionedUserRole(provision.Role, provision.DefaultRole)
 	name := provisionedUsername(provision.PreferredUsername, provision.Email, provision.Issuer, provision.Subject, existing)
 	return User{
 		ID: uuid.NewString(), Name: name, DisplayName: strings.TrimSpace(provision.DisplayName),

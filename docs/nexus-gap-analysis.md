@@ -49,7 +49,7 @@ image names. See the exact paths and evidence in
 
 | Area | Nexus | Artifact Gateway | Severity |
 | --- | --- | --- | --- |
-| Identity and RBAC | Users, Roles, Privileges, Content Selectors, LDAP/SAML/Crowd/OIDC | Governed local users, API keys, reusable permission roles, global reader/writer/admin roles, format-aware repository grants, effective-access explanation, and OIDC role mapping; multi-role identity assignments and LDAP/SAML remain future work | Medium |
+| Identity and RBAC | Users, Roles, Privileges, Content Selectors, LDAP/SAML/Crowd/OIDC | Governed local users, API keys, reusable permission roles, the member/administrator account levels, format-aware repository grants, effective-access explanation, and OIDC role mapping; multi-role identity assignments and LDAP/SAML remain future work | Medium |
 | Login and SSO entry | Login page, SAML/OIDC buttons, sessions | Local credentials, bearer tokens, database-configured OIDC authorization-code SSO with encrypted client secrets, and per-client session inventory/revocation; back-channel and IdP-initiated logout remain future work | Low |
 | Global artifact search | Cross-repo component, checksum, class-name, tag search | Server-side cross-repository coordinate/path search with permission filtering and deep links; checksum/class-name/saved queries remain future work | Medium |
 | Upload and publish UI | UI upload for many formats, drag-and-drop | Maven publish wizard and Raw upload UI; OCI and Conan use native clients | Medium |
@@ -75,9 +75,10 @@ external role mapping.
 Artifact Gateway supports break-glass static tokens, local users, API keys,
 and a runtime PostgreSQL-backed OIDC configuration. The OIDC authorization-code
 flow uses HttpOnly sessions, encrypted client secrets, discovery/JWKS
-validation, and reader/writer/admin role mapping. Local users and API keys have
-bounded global roles, expiry/revocation where applicable, and last-used
-tracking.
+validation, and member/administrator role mapping. Local users and API keys hold
+one of three account levels, with expiry/revocation where applicable and
+last-used tracking; repository reach comes from per-repository grants rather
+than from the level.
 
 Local accounts additionally record profile metadata, last successful sign-in,
 password-change time, failed attempts, temporary lock state, mandatory password

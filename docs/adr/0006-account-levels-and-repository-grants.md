@@ -95,10 +95,13 @@ repository is an explicit grant rather than an inherited side effect. That is a
 deliberate narrowing rather than a migration gap, and it means the convenience of
 "I can read everything" becomes a bulk assignment an administrator performs.
 
-The `reader` and `writer` levels remain accepted for one release so an upgrade
-does not fail an external automation that creates accounts with them. Removing
-them is a separate change, as is narrowing the Console role pickers to the three
-levels.
+The `reader` and `writer` levels are gone. Assigning one is refused rather than
+narrowed silently, the Console pickers and the effective-access simulation offer
+only the three levels, and a database constraint keeps the removed values out of
+the account and API key columns. The two OIDC role-mapping lists collapse into a
+single member list, because a mapped external role now approves an account
+instead of granting repository capability; an external role listed in either
+legacy list stays mapped, to `member`.
 
 The management surface is still one platform tier. Splitting it into platform and
 repository tiers is deferred: the seams are drawn in the issue tracker, and the

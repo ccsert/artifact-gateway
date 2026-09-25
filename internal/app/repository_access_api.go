@@ -29,6 +29,13 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.Respo
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "role requires an actor to simulate")
 		return
 	}
+	// A simulation may only name a level the contract accepts. A removed legacy
+	// role is refused rather than evaluated as an unrecognized role, so a stale
+	// client cannot ask for a capability that no longer exists.
+	if params.Role != nil && *params.Role != adminopenapi.GetRepositoryEffectiveAccessParamsRoleMember && *params.Role != adminopenapi.GetRepositoryEffectiveAccessParamsRoleAdmin {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "role must be member or admin")
+		return
+	}
 	if params.Actor != nil {
 		actor := strings.TrimSpace(*params.Actor)
 		if actor == "" {

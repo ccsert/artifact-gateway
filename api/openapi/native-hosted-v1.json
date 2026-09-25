@@ -1359,8 +1359,6 @@
               "type": "string",
               "enum": [
                 "member",
-                "reader",
-                "writer",
                 "admin"
               ]
             }
@@ -5172,8 +5170,7 @@
           "redirectUrl",
           "scopes",
           "adminSubjects",
-          "readerRoles",
-          "writerRoles",
+          "memberRoles",
           "adminRoles",
           "provisioningMode",
           "emailLinkingEnabled",
@@ -5227,13 +5224,7 @@
               "type": "string"
             }
           },
-          "readerRoles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "writerRoles": {
+          "memberRoles": {
             "type": "array",
             "items": {
               "type": "string"
@@ -5260,9 +5251,7 @@
             "enum": [
               "none",
               "member",
-              "admin",
-              "writer",
-              "reader"
+              "admin"
             ]
           },
           "updatedAt": {
@@ -5281,8 +5270,7 @@
           "redirectUrl",
           "scopes",
           "adminSubjects",
-          "readerRoles",
-          "writerRoles",
+          "memberRoles",
           "adminRoles",
           "provisioningMode",
           "emailLinkingEnabled",
@@ -5331,13 +5319,7 @@
               "type": "string"
             }
           },
-          "readerRoles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "writerRoles": {
+          "memberRoles": {
             "type": "array",
             "items": {
               "type": "string"
@@ -5364,9 +5346,7 @@
             "enum": [
               "none",
               "member",
-              "admin",
-              "writer",
-              "reader"
+              "admin"
             ]
           }
         }
@@ -6184,9 +6164,7 @@
             "type": "string",
             "enum": [
               "member",
-              "admin",
-              "writer",
-              "reader"
+              "admin"
             ]
           }
         }
@@ -6231,9 +6209,7 @@
             "enum": [
               "none",
               "member",
-              "admin",
-              "writer",
-              "reader"
+              "admin"
             ]
           },
           "administrator": {

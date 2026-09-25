@@ -98,26 +98,28 @@ func TestRepositoryCatalogFollowsReadScopeWithoutGrantingManagement(t *testing.T
 	if second.Code != http.StatusOK || len(secondPage.Items) != 1 || secondPage.Items[0].Name != "third" || secondPage.NextPageToken != "" {
 		t.Fatalf("second page=%d %+v", second.Code, secondPage)
 	}
-	writerToken := auth.IssuePrincipalToken(Principal{Actor: "writer", Role: RoleWriter})
-	writerPage := request(writerToken, "/api/v2/repositories")
-	var writerRepositories repositoryPage
-	if err := json.Unmarshal(writerPage.Body.Bytes(), &writerRepositories); err != nil {
+	// No account level widens the catalog on its own: a member without a grant
+	// sees an empty catalog instead of every repository.
+	memberToken := auth.IssuePrincipalToken(Principal{Actor: "member", Role: RoleMember})
+	memberPage := request(memberToken, "/api/v2/repositories")
+	var memberRepositories repositoryPage
+	if err := json.Unmarshal(memberPage.Body.Bytes(), &memberRepositories); err != nil {
 		t.Fatal(err)
 	}
-	if writerPage.Code != http.StatusOK || len(writerRepositories.Items) != 3 {
-		t.Fatalf("writer list=%d %+v", writerPage.Code, writerRepositories)
+	if memberPage.Code != http.StatusOK || len(memberRepositories.Items) != 0 {
+		t.Fatalf("member list=%d %+v", memberPage.Code, memberRepositories)
 	}
 	pending := request(auth.IssuePrincipalToken(Principal{Actor: "pending", Role: RoleNone}), "/api/v2/repositories")
 	if pending.Code != http.StatusForbidden {
 		t.Fatalf("pending list=%d %s", pending.Code, pending.Body.String())
 	}
 	create := httptest.NewRequest(http.MethodPost, "/api/v2/repositories", strings.NewReader(`{"name":"denied","format":"raw"}`))
-	create.Header.Set("Idempotency-Key", "writer-create")
-	authorize(create, writerToken)
+	create.Header.Set("Idempotency-Key", "member-create")
+	authorize(create, memberToken)
 	createResponse := httptest.NewRecorder()
 	handler.ServeHTTP(createResponse, create)
 	if createResponse.Code != http.StatusUnauthorized && createResponse.Code != http.StatusForbidden {
-		t.Fatalf("writer created repository=%d %s", createResponse.Code, createResponse.Body.String())
+		t.Fatalf("member created repository=%d %s", createResponse.Code, createResponse.Body.String())
 	}
 }
 
@@ -405,9 +407,15 @@ func TestRepositoryListIsScopedToReadableRepositories(t *testing.T) {
 	if names := listNames(scoped); len(names) != 1 || names[0] != "granted" {
 		t.Fatalf("scoped principal sees %v", names)
 	}
-	reader := authenticator.IssuePrincipalToken(Principal{Actor: "global-reader", Role: RoleReader})
-	if names := listNames(reader); len(names) != 2 {
-		t.Fatalf("reader sees %v", names)
+	// A member level grants no catalog reach of its own, so a member sees only
+	// what a grant names it in.
+	member := authenticator.IssuePrincipalToken(Principal{Actor: "scoped-reader", Role: RoleMember})
+	if names := listNames(member); len(names) != 1 || names[0] != "granted" {
+		t.Fatalf("member sees %v", names)
+	}
+	ungrantedMember := authenticator.IssuePrincipalToken(Principal{Actor: "member-reader", Role: RoleMember})
+	if names := listNames(ungrantedMember); len(names) != 0 {
+		t.Fatalf("ungranted member sees %v", names)
 	}
 	if names := listNames("admin-secret"); len(names) != 2 {
 		t.Fatalf("administrator sees %v", names)
@@ -443,7 +451,8 @@ func TestMemberRoleCarriesNoImplicitRepositoryAccess(t *testing.T) {
 	}
 	for _, user := range []repository.User{
 		{ID: uuid.NewString(), Name: "member", Role: string(RoleMember), SecretHash: "hash"},
-		{ID: uuid.NewString(), Name: "reader", Role: string(RoleReader), SecretHash: "hash"},
+		// A stored legacy level that survived the vocabulary removal.
+		{ID: uuid.NewString(), Name: "legacy-writer", Role: "writer", SecretHash: "hash"},
 	} {
 		if _, err := store.CreateUser(ctx, user); err != nil {
 			t.Fatal(err)
@@ -489,10 +498,14 @@ func TestMemberRoleCarriesNoImplicitRepositoryAccess(t *testing.T) {
 		t.Fatalf("member reads ungranted repository=%d want 403", code)
 	}
 
-	// The global reader role keeps its existing all-repository reach, so this
-	// change is scoped to the new level rather than a silent tightening.
-	if names := listNames(authenticator.IssueToken("user:reader")); len(names) != 2 {
-		t.Fatalf("reader catalog=%v", names)
+	// A level that no longer exists reaches nothing: the account is not pending,
+	// so it is not blocked, but no repository is admitted on its behalf either.
+	legacy := authenticator.IssueToken("user:legacy-writer")
+	if names := listNames(legacy); len(names) != 0 {
+		t.Fatalf("legacy-level catalog=%v", names)
+	}
+	if code := status(legacy, "/api/v2/repositories/"+granted.ID); code != http.StatusForbidden {
+		t.Fatalf("legacy level reads granted repository=%d want 403", code)
 	}
 }
 
@@ -833,11 +846,18 @@ func TestUserManagementLoginAndSessionAuth(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 		return rec.Code
 	}
-	if code := createUser(`{"name":"alice","password":"supersecret","role":"reader"}`); code != http.StatusCreated {
+	if code := createUser(`{"name":"alice","password":"supersecret","role":"member"}`); code != http.StatusCreated {
 		t.Fatalf("create alice=%d", code)
 	}
-	if code := createUser(`{"name":"alice","password":"supersecret","role":"reader"}`); code != http.StatusConflict {
+	if code := createUser(`{"name":"alice","password":"supersecret","role":"member"}`); code != http.StatusConflict {
 		t.Fatalf("duplicate alice=%d want 409", code)
+	}
+	// The removed legacy roles are rejected outright instead of being stored.
+	if code := createUser(`{"name":"carol","password":"supersecret","role":"reader"}`); code != http.StatusBadRequest {
+		t.Fatalf("create carol with a removed role=%d want 400", code)
+	}
+	if code := createUser(`{"name":"carol","password":"supersecret","role":"writer"}`); code != http.StatusBadRequest {
+		t.Fatalf("create carol with a removed role=%d want 400", code)
 	}
 	if code := createUser(`{"name":"bob","password":"short","role":"admin"}`); code != http.StatusBadRequest {
 		t.Fatalf("short password=%d want 400", code)

@@ -49,8 +49,13 @@ func TestUserManagementProfilePasswordSessionsAndLastAdminProtection(t *testing.
 		t.Fatalf("list=%d body=%s", listed.Code, listed.Body.String())
 	}
 
-	if demoted := adminRequest(http.MethodPatch, "/api/v2/users/"+created.ID, `{"role":"reader"}`, created.Version); demoted.Code != http.StatusConflict {
+	if demoted := adminRequest(http.MethodPatch, "/api/v2/users/"+created.ID, `{"role":"member"}`, created.Version); demoted.Code != http.StatusConflict {
 		t.Fatalf("last admin demotion=%d body=%s", demoted.Code, demoted.Body.String())
+	}
+	// A removed legacy level is refused before the last-administrator check,
+	// because the request never names a level the Gateway accepts.
+	if demoted := adminRequest(http.MethodPatch, "/api/v2/users/"+created.ID, `{"role":"reader"}`, created.Version); demoted.Code != http.StatusBadRequest {
+		t.Fatalf("removed role demotion=%d body=%s", demoted.Code, demoted.Body.String())
 	}
 	if deleted := adminRequest(http.MethodDelete, "/api/v2/users/"+created.ID, "", ""); deleted.Code != http.StatusConflict {
 		t.Fatalf("last admin delete=%d body=%s", deleted.Code, deleted.Body.String())
@@ -150,12 +155,12 @@ func TestUserManagementValidatesProfileAndPasswordBounds(t *testing.T) {
 		name string
 		body map[string]any
 	}{
-		{"long username", map[string]any{"name": strings.Repeat("n", 129), "password": "valid-password", "role": "reader"}},
-		{"long display name", map[string]any{"name": "long-display", "displayName": strings.Repeat("d", 129), "password": "valid-password", "role": "reader"}},
-		{"invalid email", map[string]any{"name": "invalid-email", "email": "not-an-email", "password": "valid-password", "role": "reader"}},
-		{"long description", map[string]any{"name": "long-description", "description": strings.Repeat("d", 513), "password": "valid-password", "role": "reader"}},
-		{"password over 72 ASCII bytes", map[string]any{"name": "long-password", "password": strings.Repeat("p", 73), "role": "reader"}},
-		{"password over 72 multibyte bytes", map[string]any{"name": "long-multibyte-password", "password": strings.Repeat("密", 25), "role": "reader"}},
+		{"long username", map[string]any{"name": strings.Repeat("n", 129), "password": "valid-password", "role": "member"}},
+		{"long display name", map[string]any{"name": "long-display", "displayName": strings.Repeat("d", 129), "password": "valid-password", "role": "member"}},
+		{"invalid email", map[string]any{"name": "invalid-email", "email": "not-an-email", "password": "valid-password", "role": "member"}},
+		{"long description", map[string]any{"name": "long-description", "description": strings.Repeat("d", 513), "password": "valid-password", "role": "member"}},
+		{"password over 72 ASCII bytes", map[string]any{"name": "long-password", "password": strings.Repeat("p", 73), "role": "member"}},
+		{"password over 72 multibyte bytes", map[string]any{"name": "long-multibyte-password", "password": strings.Repeat("密", 25), "role": "member"}},
 	}
 	for _, test := range invalidCreates {
 		t.Run(test.name, func(t *testing.T) {
@@ -168,7 +173,7 @@ func TestUserManagementValidatesProfileAndPasswordBounds(t *testing.T) {
 
 	createdResponse := adminRequest(http.MethodPost, "/api/v2/users", map[string]any{
 		"name": "boundary-user", "email": "boundary@example.test",
-		"password": strings.Repeat("密码", 4), "role": "reader",
+		"password": strings.Repeat("密码", 4), "role": "member",
 	}, "")
 	if createdResponse.Code != http.StatusCreated {
 		t.Fatalf("valid multibyte password create=%d body=%s", createdResponse.Code, createdResponse.Body.String())
@@ -325,7 +330,7 @@ func TestUserManagementIdentityBindingLifecycle(t *testing.T) {
 		handler.ServeHTTP(response, request)
 		return response
 	}
-	created := adminRequest(http.MethodPost, "/api/v2/users", `{"name":"identity-owner","password":"initial-password","role":"reader"}`)
+	created := adminRequest(http.MethodPost, "/api/v2/users", `{"name":"identity-owner","password":"initial-password","role":"member"}`)
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create user=%d body=%s", created.Code, created.Body.String())
 	}

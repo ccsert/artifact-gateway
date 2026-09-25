@@ -75,7 +75,7 @@ interface GrantRow {
   resourcePrefix: string;
 }
 
-type EvaluatorRole = "none" | "member" | "reader" | "writer" | "admin";
+type EvaluatorRole = "none" | "member" | "admin";
 export type AccessControlTab = "grants" | "evaluate" | "policies";
 
 export function accessControlTabFromQuery(
@@ -98,8 +98,6 @@ const CUSTOM_PRINCIPAL = "__custom__";
 
 function strongestRole(roles: ApiKey["roles"]): EvaluatorRole {
   if (roles.includes("admin")) return "admin";
-  if (roles.includes("writer")) return "writer";
-  if (roles.includes("reader")) return "reader";
   if (roles.includes("member")) return "member";
   return "none";
 }
@@ -141,17 +139,17 @@ const ROLE_REFERENCE: {
       "All operations: browse, publish, delete, grants, and key management",
   },
   {
-    role: "writer",
-    tone: "visualization-5",
-    desc: "读 + 写：发布、编辑、复制；不可管理密钥与 admin 授权",
+    role: "member",
+    tone: "visualization-1",
+    desc: "不含隐式权限：仓库访问完全由按仓库授权决定",
     descEn:
-      "Read and write: publish, edit, and replicate; no key or admin grant management",
+      "No implicit capability: repository access comes only from per-repository grants",
   },
   {
-    role: "reader",
-    tone: "visualization-4",
-    desc: "只读：浏览、搜索、拉取",
-    descEn: "Read-only: browse, search, and pull",
+    role: "none",
+    tone: "neutral",
+    desc: "待授权：不能访问任何仓库路径",
+    descEn: "Awaiting approval: no repository path is reachable",
   },
 ];
 const AUTHORIZATION_STEPS = [
@@ -164,10 +162,10 @@ const AUTHORIZATION_STEPS = [
   },
   {
     title: "再看全局角色",
-    text: "admin 允许全部操作（包括写入制品情报），writer 允许读取和发布，reader 只允许读取；制品情报是独立的最小权限。",
+    text: "admin 允许全部操作（包括写入制品情报）；member 等级不附带任何仓库权限，仓库访问由按仓库授权决定；制品情报是独立的最小权限。",
     titleEn: "Apply the global role",
     textEn:
-      "Admin allows all operations, including artifact intelligence writes. Writer allows reads and publishing, reader allows reads only; artifact intelligence is an independent least-privilege scope.",
+      "Admin allows all operations, including artifact intelligence writes. A member level carries no repository capability, so per-repository grants decide; artifact intelligence is an independent least-privilege scope.",
   },
   {
     title: "再看仓库规则",
@@ -1022,8 +1020,7 @@ export function AccessControlPage() {
                           disabled={selectedPrincipal !== CUSTOM_PRINCIPAL}
                           options={[
                             { value: "none", label: text("无", "None") },
-                            { value: "reader", label: "reader" },
-                            { value: "writer", label: "writer" },
+                            { value: "member", label: "member" },
                             { value: "admin", label: "admin" },
                           ]}
                           onChange={(value: EvaluatorRole) => {

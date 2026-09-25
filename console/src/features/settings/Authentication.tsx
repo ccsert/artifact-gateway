@@ -48,12 +48,11 @@ interface AuthenticationFormValues {
   redirectUrl: string;
   scopes: string[];
   adminSubjects: string[];
-  readerRoles: string[];
-  writerRoles: string[];
+  memberRoles: string[];
   adminRoles: string[];
   provisioningMode: "disabled" | "jit";
   emailLinkingEnabled: boolean;
-  jitDefaultRole: "none" | "member" | "admin" | "writer" | "reader";
+  jitDefaultRole: "none" | "member" | "admin";
 }
 
 export function AuthenticationPage() {
@@ -109,8 +108,7 @@ export function AuthenticationPage() {
       redirectUrl: settings.redirectUrl,
       scopes: settings.scopes,
       adminSubjects: settings.adminSubjects,
-      readerRoles: settings.readerRoles,
-      writerRoles: settings.writerRoles,
+      memberRoles: settings.memberRoles,
       adminRoles: settings.adminRoles,
       provisioningMode: settings.provisioningMode,
       emailLinkingEnabled: settings.emailLinkingEnabled,
@@ -173,8 +171,7 @@ export function AuthenticationPage() {
       redirectUrl: values.redirectUrl.trim(),
       scopes: values.scopes ?? [],
       adminSubjects: values.adminSubjects ?? [],
-      readerRoles: values.readerRoles ?? [],
-      writerRoles: values.writerRoles ?? [],
+      memberRoles: values.memberRoles ?? [],
       adminRoles: values.adminRoles ?? [],
       provisioningMode: values.provisioningMode,
       emailLinkingEnabled: values.emailLinkingEnabled,
@@ -528,15 +525,12 @@ export function AuthenticationPage() {
               </div>
               <p className="mb-4 text-xs text-zinc-500">
                 {text(
-                  "支持 Keycloak Realm/Client Roles、顶层 roles、groups 等常见声明；权限按 admin、writer、reader 的最高级生效。",
-                  "Supports common Keycloak realm/client roles, top-level roles, and groups claims. The highest matching gateway role wins.",
+                  "支持 Keycloak Realm/Client Roles、顶层 roles、groups 等常见声明；匹配 admin 映射即成为管理员，匹配 member 映射则通过审批但不附带仓库权限（仓库访问始终来自按仓库授权），两者同时匹配时 admin 优先。",
+                  "Supports common Keycloak realm/client roles, top-level roles, and groups claims. A matched admin mapping makes the account an administrator; a matched member mapping approves it without repository access, which always comes from per-repository grants. Admin wins when both match.",
                 )}
               </p>
-              <div className="grid grid-cols-3 gap-x-5">
-                <Form.Item name="readerRoles" label="Reader">
-                  <Select mode="tags" tokenSeparators={[",", " "]} />
-                </Form.Item>
-                <Form.Item name="writerRoles" label="Writer">
+              <div className="grid grid-cols-2 gap-x-5">
+                <Form.Item name="memberRoles" label="Member">
                   <Select mode="tags" tokenSeparators={[",", " "]} />
                 </Form.Item>
                 <Form.Item name="adminRoles" label="Admin">
@@ -605,20 +599,6 @@ export function AuthenticationPage() {
                         label: text(
                           "member · 无仓库权限",
                           "member · no repository access",
-                        ),
-                      },
-                      {
-                        value: "reader",
-                        label: text(
-                          "reader · 全部仓库只读",
-                          "reader · read-only, all repositories",
-                        ),
-                      },
-                      {
-                        value: "writer",
-                        label: text(
-                          "writer · 全部仓库读写",
-                          "writer · read/write, all repositories",
                         ),
                       },
                       { value: "admin", label: "admin" },

@@ -72,9 +72,9 @@ func TestAPIKeyManagementValidatesExpiryAndRequestShape(t *testing.T) {
 		name string
 		body string
 	}{
-		{name: "already expired", body: `{"name":"expired","roles":["reader"],"expiresAt":"2020-01-01T00:00:00Z"}`},
-		{name: "too far in future", body: `{"name":"long-lived","roles":["reader"],"expiresAt":"2099-01-01T00:00:00Z"}`},
-		{name: "unknown field", body: `{"name":"surprising","roles":["reader"],"neverExpires":true}`},
+		{name: "already expired", body: `{"name":"expired","roles":["member"],"expiresAt":"2020-01-01T00:00:00Z"}`},
+		{name: "too far in future", body: `{"name":"long-lived","roles":["member"],"expiresAt":"2099-01-01T00:00:00Z"}`},
+		{name: "unknown field", body: `{"name":"surprising","roles":["member"],"neverExpires":true}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/api/v2/api-keys", bytes.NewBufferString(tc.body))

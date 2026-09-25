@@ -11,7 +11,7 @@ import (
 func TestUserSessionJanitorRetainsRecentHistoryAndBoundsDeletes(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	user, err := store.CreateUser(ctx, repository.User{ID: "janitor-user", Name: "janitor", Role: "reader"})
+	user, err := store.CreateUser(ctx, repository.User{ID: "janitor-user", Name: "janitor", Role: string(RoleMember)})
 	if err != nil {
 		t.Fatal(err)
 	}

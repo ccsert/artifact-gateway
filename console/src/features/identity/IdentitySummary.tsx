@@ -33,8 +33,6 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
     none: text("待授权", "Awaiting approval"),
     member: text("成员", "Member"),
     admin: text("管理员", "Administrator"),
-    writer: text("写入者 · 全仓库", "Writer · all repositories"),
-    reader: text("只读者 · 全仓库", "Reader · all repositories"),
   };
   return (
     <div className="min-w-0">
@@ -65,15 +63,7 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
             label: text("全局角色", "Global role"),
             children: role ? (
               <Badge
-                tone={
-                  role === "admin"
-                    ? "visualization-3"
-                    : role === "writer"
-                      ? "visualization-5"
-                      : role === "reader"
-                        ? "visualization-4"
-                        : "neutral"
-                }
+                tone={role === "admin" ? "visualization-3" : "visualization-1"}
               >
                 {roleLabels[role]}
               </Badge>
@@ -114,9 +104,7 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
                 tone={
                   mapping.gatewayRole === "admin"
                     ? "visualization-3"
-                    : mapping.gatewayRole === "writer"
-                      ? "visualization-5"
-                      : "visualization-4"
+                    : "visualization-1"
                 }
               >
                 {mapping.externalRole} → {mapping.gatewayRole}

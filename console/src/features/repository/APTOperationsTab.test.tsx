@@ -137,7 +137,7 @@ afterEach(() => {
 });
 
 describe("APT snapshot operations", () => {
-  it("does not fetch administrator-only data for readers", () => {
+  it("does not fetch administrator-only data for members", () => {
     mount(false);
     expect(screen.getByText("需要仓库管理权限")).toBeInTheDocument();
     expect(getAptLifecycleState).not.toHaveBeenCalled();

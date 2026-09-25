@@ -42,14 +42,14 @@ func TestAuthenticatorRejectsExpiredAPIKeyAndRecordsSuccessfulUse(t *testing.T) 
 	now := time.Now().UTC()
 	expiredToken := "agk_expired-token"
 	_, err := store.CreateAPIKey(context.Background(), repository.APIKey{
-		ID: uuid.NewString(), Name: "expired", SecretHash: HashAPIKey(expiredToken), Roles: []string{"reader"}, ExpiresAt: timePointer(now.Add(-time.Minute)),
+		ID: uuid.NewString(), Name: "expired", SecretHash: HashAPIKey(expiredToken), Roles: []string{"member"}, ExpiresAt: timePointer(now.Add(-time.Minute)),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	activeToken := "agk_active-token"
 	active, err := store.CreateAPIKey(context.Background(), repository.APIKey{
-		ID: uuid.NewString(), Name: "active", SecretHash: HashAPIKey(activeToken), Roles: []string{"reader"}, ExpiresAt: timePointer(now.Add(time.Hour)),
+		ID: uuid.NewString(), Name: "active", SecretHash: HashAPIKey(activeToken), Roles: []string{"member"}, ExpiresAt: timePointer(now.Add(time.Hour)),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -143,7 +143,7 @@ func TestAuthenticateBasicDoesNotBroadenStandaloneAPIKeyProtocolAccess(t *testin
 	store := repository.NewMemoryStore()
 	token := "agk_bearer-only-token"
 	if _, err := store.CreateAPIKey(context.Background(), repository.APIKey{
-		ID: uuid.NewString(), Name: "management-client", SecretHash: HashAPIKey(token), Roles: []string{"reader"},
+		ID: uuid.NewString(), Name: "management-client", SecretHash: HashAPIKey(token), Roles: []string{"member"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -175,15 +175,19 @@ func TestRoleAllowsGrantsBoundedOperations(t *testing.T) {
 		{RoleNone, RepositoryRead, false},
 		{RoleNone, RepositoryWrite, false},
 		{RoleNone, RepositoryAdmin, false},
-		{RoleReader, RepositoryRead, true},
-		{RoleReader, RepositoryWrite, false},
-		{RoleReader, RepositoryAdmin, false},
-		{RoleWriter, RepositoryRead, true},
-		{RoleWriter, RepositoryWrite, true},
-		{RoleWriter, RepositoryAdmin, false},
+		// member carries no repository capability of its own, and the removed
+		// reader and writer roles are not recognized at all any more.
+		{RoleMember, RepositoryRead, false},
+		{RoleMember, RepositoryWrite, false},
+		{RoleMember, RepositoryAdmin, false},
+		{"reader", RepositoryRead, false},
+		{"writer", RepositoryRead, false},
+		{"writer", RepositoryWrite, false},
 		{RoleAdmin, RepositoryRead, true},
+		{RoleAdmin, RepositoryWrite, true},
 		{RoleAdmin, RepositoryAdmin, true},
 		{"", RepositoryRead, false},
+		{"administrator", RepositoryRead, false},
 	} {
 		if got := RoleAllows(tc.role, tc.op); got != tc.want {
 			t.Errorf("RoleAllows(%q,%q)=%v want=%v", tc.role, tc.op, got, tc.want)
@@ -229,7 +233,7 @@ func TestPasswordChangeRequiredBlocksEveryRepositoryPath(t *testing.T) {
 	// that has to change its password.
 	principal := Principal{
 		Actor:              "user:reset",
-		Role:               RoleWriter,
+		Role:               RoleMember,
 		MustChangePassword: true,
 		RepositoryPatterns: []string{"team/*"},
 	}
@@ -273,13 +277,17 @@ func TestMemberRoleGrantsNoImplicitOperation(t *testing.T) {
 	if got := RoleFromRoles([]string{"member"}); got != RoleMember {
 		t.Fatalf("RoleFromRoles(member)=%q", got)
 	}
-	// A more capable role still wins, so an existing multi-role credential keeps
-	// its previous reach.
-	if got := RoleFromRoles([]string{"member", "reader"}); got != RoleReader {
-		t.Fatalf("RoleFromRoles(member,reader)=%q", got)
+	// An administrator level still wins, so an existing multi-role credential
+	// keeps the reach it is entitled to.
+	if got := RoleFromRoles([]string{"member", "admin"}); got != RoleAdmin {
+		t.Fatalf("RoleFromRoles(member,admin)=%q", got)
 	}
-	if got := RoleFromRoles([]string{"member", "writer"}); got != RoleWriter {
-		t.Fatalf("RoleFromRoles(member,writer)=%q", got)
+	// The removed reader and writer values select nothing, alone or beside a
+	// recognized level, so a stale credential cannot outrank the member level.
+	for _, roles := range [][]string{{"reader"}, {"writer"}, {"reader", "writer"}, {"member", "writer"}, {"member", "reader"}} {
+		if got := RoleFromRoles(roles); got != "" && got != RoleMember {
+			t.Fatalf("RoleFromRoles(%v)=%q want empty or member", roles, got)
+		}
 	}
 }
 
@@ -322,25 +330,42 @@ func TestManagedResourceDecisionHonorsGlobalRole(t *testing.T) {
 	authorizer := RepositoryAuthorizer{Grants: store}
 	decision, managed := authorizer.ManagedResourceDecision(
 		context.Background(),
-		Principal{Actor: "reader", Role: RoleReader},
+		Principal{Actor: "ops-admin", Role: RoleAdmin},
 		repo,
 		RepositoryRead,
 		"release/app.txt",
 	)
-	if !managed || !decision.Allowed || decision.Source != "role" || decision.Reason != "role_reader" {
+	if !managed || !decision.Allowed || decision.Source != "role" || decision.Reason != "role_admin" {
 		t.Fatalf("managed=%v decision=%#v", managed, decision)
+	}
+	// A member level, and a removed legacy level, must be decided by the grants
+	// instead of by the role check.
+	for _, role := range []Role{RoleMember, "writer", "reader"} {
+		decision, managed := authorizer.ManagedResourceDecision(context.Background(), Principal{Actor: "member-user", Role: role}, repo, RepositoryRead, "release/app.txt")
+		if !managed || decision.Allowed || decision.Source != "repository_grants" {
+			t.Fatalf("role=%q managed=%v decision=%#v", role, managed, decision)
+		}
 	}
 }
 
 func TestRoleFromRolesPicksMostPrivileged(t *testing.T) {
-	if got := RoleFromRoles([]string{"reader", "writer"}); got != RoleWriter {
-		t.Fatalf("reader+writer=%q want writer", got)
+	if got := RoleFromRoles([]string{"none", "member"}); got != RoleMember {
+		t.Fatalf("none+member=%q want member", got)
+	}
+	if got := RoleFromRoles([]string{"member", "admin"}); got != RoleAdmin {
+		t.Fatalf("member+admin=%q want admin", got)
 	}
 	if got := RoleFromRoles([]string{"writer", "admin"}); got != RoleAdmin {
 		t.Fatalf("writer+admin=%q want admin", got)
 	}
-	if got := RoleFromRoles([]string{"unknown", "reader"}); got != RoleReader {
-		t.Fatalf("unknown+reader=%q want reader", got)
+	if got := RoleFromRoles([]string{"unknown", "member"}); got != RoleMember {
+		t.Fatalf("unknown+member=%q want member", got)
+	}
+	// The removed values are unrecognized: a credential holding only those
+	// selects no role, which is what stops a stale key from reaching every
+	// repository.
+	if got := RoleFromRoles([]string{"reader", "writer"}); got != Role("") {
+		t.Fatalf("reader+writer=%q want empty", got)
 	}
 	if got := RoleFromRoles([]string{"unknown"}); got != Role("") {
 		t.Fatalf("unknown=%q want empty", got)
@@ -356,24 +381,25 @@ func TestRepositoryAuthorizerHonorsPrincipalRoleBeforeGrants(t *testing.T) {
 	}
 	target := repository.HostedRepository{ID: "repo-id", Name: "releases"}
 
-	reader := Principal{Actor: "k", Role: RoleReader}
-	if d := authorizer.Authorize(context.Background(), reader, target, RepositoryRead); !d.Allowed || d.Source != "role" {
-		t.Fatalf("reader read=%+v", d)
+	// The administrator level is the only role-derived allow, and it is decided
+	// before the denying grant set is consulted.
+	admin := Principal{Actor: "k", Role: RoleAdmin}
+	if d := authorizer.Authorize(context.Background(), admin, target, RepositoryRead); !d.Allowed || d.Source != "role" {
+		t.Fatalf("admin read=%+v", d)
 	}
-	if d := authorizer.Authorize(context.Background(), reader, target, RepositoryWrite); d.Allowed {
-		t.Fatalf("reader write allowed=%+v", d)
-	}
-
-	writer := Principal{Actor: "k", Role: RoleWriter}
-	if d := authorizer.Authorize(context.Background(), writer, target, RepositoryWrite); !d.Allowed {
-		t.Fatalf("writer write=%+v", d)
-	}
-	if d := authorizer.Authorize(context.Background(), writer, target, RepositoryAdmin); d.Allowed {
-		t.Fatalf("writer admin allowed=%+v", d)
+	if d := authorizer.Authorize(context.Background(), admin, target, RepositoryWrite); !d.Allowed || d.Source != "role" {
+		t.Fatalf("admin write=%+v", d)
 	}
 
-	if d := authorizer.Authorize(context.Background(), Principal{Actor: "k"}, target, RepositoryRead); d.Allowed {
-		t.Fatalf("empty role allowed read=%+v", d)
+	// member, an empty role, and the removed legacy levels carry no role-derived
+	// capability, so the denying grant set decides against them.
+	for _, role := range []Role{RoleMember, "", "reader", "writer"} {
+		for _, operation := range []RepositoryOperation{RepositoryRead, RepositoryWrite, RepositoryAdmin} {
+			d := authorizer.Authorize(context.Background(), Principal{Actor: "k", Role: role}, target, operation)
+			if d.Allowed {
+				t.Fatalf("role=%q operation=%s allowed=%+v", role, operation, d)
+			}
+		}
 	}
 }
 
@@ -390,15 +416,10 @@ func TestAuthenticatorMapsAPIKeyRolesToPrincipal(t *testing.T) {
 		return token, key.ID
 	}
 
-	readerToken, readerID := makeKey(t, []string{"reader"})
-	rp, rok := authenticator.Authenticate("Bearer " + readerToken)
-	if !rok || rp.Role != RoleReader || rp.Admin || rp.Actor != "api-key:"+readerID {
-		t.Fatalf("reader principal=%#v ok=%t", rp, rok)
-	}
-	writerToken, writerID := makeKey(t, []string{"writer"})
-	wp, wok := authenticator.Authenticate("Bearer " + writerToken)
-	if !wok || wp.Role != RoleWriter || wp.Admin || wp.Actor != "api-key:"+writerID {
-		t.Fatalf("writer principal=%#v ok=%t", wp, wok)
+	memberToken, memberID := makeKey(t, []string{"member"})
+	mp, mok := authenticator.Authenticate("Bearer " + memberToken)
+	if !mok || mp.Role != RoleMember || mp.Admin || mp.Actor != "api-key:"+memberID {
+		t.Fatalf("member principal=%#v ok=%t", mp, mok)
 	}
 	adminToken, adminID := makeKey(t, []string{"admin"})
 	ap, aok := authenticator.Authenticate("Bearer " + adminToken)
@@ -406,14 +427,83 @@ func TestAuthenticatorMapsAPIKeyRolesToPrincipal(t *testing.T) {
 		t.Fatalf("admin principal=%#v ok=%t", ap, aok)
 	}
 
-	// A reader credential can read (role) but cannot write, with a configured policy.
+	// A key that still stores a removed legacy role authenticates, because the
+	// key itself is valid, but selects no level and therefore reaches nothing:
+	// only a grant can admit it now.
+	legacyToken, legacyID := makeKey(t, []string{"writer"})
+	lp, lok := authenticator.Authenticate("Bearer " + legacyToken)
+	if !lok || lp.Role != "" || lp.Admin || lp.Actor != "api-key:"+legacyID {
+		t.Fatalf("legacy principal=%#v ok=%t", lp, lok)
+	}
 	authenticator.RepositoryReaders = map[string][]string{}
 	authenticator.RepositoryWriters = map[string][]string{}
-	if !authenticator.CanReadRepository(rp, "any") {
-		t.Fatal("reader denied read")
+	for _, principal := range []Principal{mp, lp} {
+		if authenticator.CanReadRepository(principal, "any") || authenticator.CanWriteMavenRepository(principal, "any") {
+			t.Fatalf("principal %#v reached a repository with a configured policy", principal)
+		}
 	}
-	if authenticator.CanWriteMavenRepository(rp, "any") {
-		t.Fatal("reader allowed write")
+	if !authenticator.CanReadRepository(ap, "any") || !authenticator.CanWriteMavenRepository(ap, "any") {
+		t.Fatal("administrator credential was denied")
+	}
+}
+
+func TestRemovedLegacyRoleValuesNeverAuthenticateOrAuthorize(t *testing.T) {
+	store := repository.NewMemoryStore()
+	authenticator := Authenticator{AdminToken: "admin-secret", ResolverToken: "resolver-secret", Users: store}
+
+	// A stored account whose level is a removed value authenticates with a
+	// recognized-by-nobody level and reaches no repository path of its own.
+	if _, err := store.CreateUser(context.Background(), repository.User{ID: "stale-user", Name: "stale", Role: "writer"}); err != nil {
+		t.Fatal(err)
+	}
+	session := authenticator.IssueUserSession("stale-user")
+	principal, ok := authenticator.Authenticate("Bearer " + session)
+	if !ok || principal.Admin || principal.Role != "writer" {
+		t.Fatalf("stale account principal=%#v ok=%t", principal, ok)
+	}
+	if RoleAllows(principal.Role, RepositoryRead) || principal.CanReadRepository("releases") {
+		t.Fatalf("a stored legacy level authorized access: %#v", principal)
+	}
+
+	// A protocol token that names a removed role is refused outright, so it
+	// cannot be replayed after the constants are gone.
+	protocolToken := authenticator.IssuePrincipalToken(Principal{
+		Actor: "k", Role: "writer", AuthenticationKind: AuthenticationStaticResolver,
+	})
+	if _, ok := authenticator.Authenticate("Bearer " + protocolToken); ok {
+		t.Fatal("a protocol token carrying a removed role authenticated")
+	}
+	// A browser session claim carrying a removed role is refused the same way.
+	webSession := authenticator.IssueWebSession(Principal{
+		Actor: "oidc:user", Role: "reader", AuthenticationKind: AuthenticationOIDC,
+	})
+	if _, ok := authenticator.Authenticate("Bearer " + webSession); ok {
+		t.Fatal("a web session carrying a removed role authenticated")
+	}
+	// A session claim that names a removed role as an OIDC mapping target is
+	// refused, so the mapping cannot be replayed into a capability.
+	staleMapping := authenticator.IssueWebSession(Principal{
+		Actor: "user:stale", Role: RoleMember, AuthenticationKind: AuthenticationOIDC,
+		OIDCRoleMappings: []OIDCRoleMappingMatch{{ExternalRole: "artifact-writer", GatewayRole: "writer"}},
+	})
+	if _, ok := authenticator.Authenticate("Bearer " + staleMapping); ok {
+		t.Fatal("a session carrying a removed mapping target authenticated")
+	}
+	// The recorders accept the levels that still exist.
+	for _, role := range []Role{RoleNone, RoleMember, RoleAdmin} {
+		if !validGatewayRole(role) {
+			t.Fatalf("validGatewayRole(%q)=false", role)
+		}
+	}
+	for _, mapping := range []OIDCRoleMappingMatch{{ExternalRole: "artifact-member", GatewayRole: RoleMember}, {ExternalRole: "artifact-admin", GatewayRole: RoleAdmin}} {
+		if !validOIDCMetadata(AuthenticationOIDC, false, []OIDCRoleMappingMatch{mapping}) {
+			t.Fatalf("valid mapping %+v was refused", mapping)
+		}
+	}
+	for _, mapping := range []OIDCRoleMappingMatch{{ExternalRole: "artifact-reader", GatewayRole: "reader"}, {ExternalRole: "artifact-writer", GatewayRole: "writer"}} {
+		if validOIDCMetadata(AuthenticationOIDC, false, []OIDCRoleMappingMatch{mapping}) {
+			t.Fatalf("removed mapping target %+v was accepted", mapping)
+		}
 	}
 }
 
@@ -577,7 +667,7 @@ func TestAuthenticatorWebSessionPreservesBoundedOIDCIdentity(t *testing.T) {
 func TestAuthenticatorBoundOIDCWebSessionRechecksUserStateAndSessionVersion(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
-	user, err := store.CreateUser(ctx, repository.User{ID: "bound-user", Name: "bound", Role: string(RoleWriter)})
+	user, err := store.CreateUser(ctx, repository.User{ID: "bound-user", Name: "bound", Role: string(RoleMember)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -589,10 +679,10 @@ func TestAuthenticatorBoundOIDCWebSessionRechecksUserStateAndSessionVersion(t *t
 	}
 	authenticator := Authenticator{AdminToken: "admin-secret", UserIdentities: store, Users: store}
 	token := authenticator.IssueWebSession(Principal{
-		Actor: "user:bound", Role: RoleWriter, AuthenticationKind: AuthenticationOIDC,
+		Actor: "user:bound", Role: RoleMember, AuthenticationKind: AuthenticationOIDC,
 	}, user.SessionVersion)
 	principal, ok := authenticator.Authenticate("Bearer " + token)
-	if !ok || principal.Actor != "user:bound" || principal.Role != RoleWriter || principal.Admin || principal.AuthenticationKind != AuthenticationOIDC {
+	if !ok || principal.Actor != "user:bound" || principal.Role != RoleMember || principal.Admin || principal.AuthenticationKind != AuthenticationOIDC {
 		t.Fatalf("bound session principal=%#v ok=%v", principal, ok)
 	}
 
@@ -611,7 +701,7 @@ func TestAuthenticatorBoundOIDCWebSessionRechecksUserStateAndSessionVersion(t *t
 		t.Fatal(err)
 	}
 	if _, ok = authenticator.Authenticate("Bearer " + authenticator.IssueWebSession(Principal{
-		Actor: "user:bound", Role: RoleWriter, AuthenticationKind: AuthenticationOIDC,
+		Actor: "user:bound", Role: RoleMember, AuthenticationKind: AuthenticationOIDC,
 	}, updated.SessionVersion)); ok {
 		t.Fatal("disabled bound OIDC web session authenticated")
 	}
@@ -654,8 +744,14 @@ func TestAuthenticatorMavenPoliciesKeepReadAndWriteSeparate(t *testing.T) {
 	if authenticator.CanWriteMavenRepository(principal, "team/app") {
 		t.Fatal("read pattern unexpectedly granted Maven publication")
 	}
-	if !(Principal{Role: RoleWriter}).CanReadRepository("anything") {
-		t.Fatal("global writer role could not read")
+	if (Principal{Role: RoleMember}).CanReadRepository("anything") {
+		t.Fatal("member read a repository through its own authority")
+	}
+	if (Principal{Role: "writer"}).CanReadRepository("anything") {
+		t.Fatal("a removed global writer role still read")
+	}
+	if !(Principal{Role: RoleAdmin}).CanReadRepository("anything") {
+		t.Fatal("administrator role could not read")
 	}
 }
 

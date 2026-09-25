@@ -11,8 +11,6 @@ export function roleTone(role: User["role"]): BadgeTone {
   // Roles are categories, not success or failure states. Keep them on the
   // visualization palette so operational status colors retain one meaning.
   if (role === "admin") return "visualization-3";
-  if (role === "writer") return "visualization-5";
-  if (role === "reader") return "visualization-4";
   if (role === "member") return "visualization-1";
   return "neutral";
 }

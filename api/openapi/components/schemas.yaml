@@ -471,8 +471,6 @@ APIKey:
         enum:
         - member
         - admin
-        - writer
-        - reader
     createdAt:
       type: string
       format: date-time
@@ -515,8 +513,6 @@ CreateAPIKey:
         enum:
         - member
         - admin
-        - writer
-        - reader
     expiresAt:
       type: string
       format: date-time
@@ -638,8 +634,6 @@ User:
       - none
       - member
       - admin
-      - writer
-      - reader
     state:
       type: string
       enum:
@@ -723,8 +717,6 @@ CreateUser:
       - none
       - member
       - admin
-      - writer
-      - reader
     mustChangePassword:
       type: boolean
       default: false
@@ -748,8 +740,6 @@ UpdateUser:
       - none
       - member
       - admin
-      - writer
-      - reader
     state:
       type: string
       enum:
@@ -1268,7 +1258,7 @@ OIDCRoleMappingMatch:
     externalRole: {type: string, minLength: 1}
     gatewayRole:
       type: string
-      enum: [member, admin, writer, reader]
+      enum: [member, admin]
 OIDCIdentityDetails:
   type: object
   required: [adminSubject, roleMappings]
@@ -1287,7 +1277,7 @@ CurrentIdentity:
     kind: {"$ref": "#/AuthenticationKind"}
     role:
       type: string
-      enum: [none, member, admin, writer, reader]
+      enum: [none, member, admin]
     administrator: {type: boolean}
     oidc: {"$ref": "#/OIDCIdentityDetails"}
 RepositoryEffectiveAccess:
@@ -1739,7 +1729,7 @@ ConsoleThemeToken:
     controlOutline: {type: string, maxLength: 96}
 OIDCSettings:
   type: object
-  required: [version, source, enabled, issuer, audience, clientId, clientSecretConfigured, redirectUrl, scopes, adminSubjects, readerRoles, writerRoles, adminRoles, provisioningMode, emailLinkingEnabled, jitDefaultRole]
+  required: [version, source, enabled, issuer, audience, clientId, clientSecretConfigured, redirectUrl, scopes, adminSubjects, memberRoles, adminRoles, provisioningMode, emailLinkingEnabled, jitDefaultRole]
   additionalProperties: false
   properties:
     version: {type: string}
@@ -1757,10 +1747,7 @@ OIDCSettings:
     adminSubjects:
       type: array
       items: {type: string}
-    readerRoles:
-      type: array
-      items: {type: string}
-    writerRoles:
+    memberRoles:
       type: array
       items: {type: string}
     adminRoles:
@@ -1768,11 +1755,11 @@ OIDCSettings:
       items: {type: string}
     provisioningMode: {type: string, enum: [disabled, jit]}
     emailLinkingEnabled: {type: boolean}
-    jitDefaultRole: {type: string, enum: [none, member, admin, writer, reader]}
+    jitDefaultRole: {type: string, enum: [none, member, admin]}
     updatedAt: {type: string, format: date-time}
 OIDCSettingsUpdate:
   type: object
-  required: [enabled, issuer, audience, clientId, redirectUrl, scopes, adminSubjects, readerRoles, writerRoles, adminRoles, provisioningMode, emailLinkingEnabled, jitDefaultRole]
+  required: [enabled, issuer, audience, clientId, redirectUrl, scopes, adminSubjects, memberRoles, adminRoles, provisioningMode, emailLinkingEnabled, jitDefaultRole]
   additionalProperties: false
   properties:
     enabled: {type: boolean}
@@ -1791,10 +1778,7 @@ OIDCSettingsUpdate:
     adminSubjects:
       type: array
       items: {type: string}
-    readerRoles:
-      type: array
-      items: {type: string}
-    writerRoles:
+    memberRoles:
       type: array
       items: {type: string}
     adminRoles:
@@ -1802,7 +1786,7 @@ OIDCSettingsUpdate:
       items: {type: string}
     provisioningMode: {type: string, enum: [disabled, jit]}
     emailLinkingEnabled: {type: boolean}
-    jitDefaultRole: {type: string, enum: [none, member, admin, writer, reader]}
+    jitDefaultRole: {type: string, enum: [none, member, admin]}
 OIDCConnectionTest:
   type: object
   required: [reachable, issuer, latencyMs, checkedAt]

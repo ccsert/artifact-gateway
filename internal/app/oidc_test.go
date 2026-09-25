@@ -65,7 +65,7 @@ func TestOIDCBearerIdentityUsesBoundLocalAccountRoleAndState(t *testing.T) {
 
 	store := repository.NewMemoryStore()
 	user, err := store.CreateUser(context.Background(), repository.User{
-		ID: "bound-user", Name: "bound-user", Role: string(RoleReader),
+		ID: "bound-user", Name: "bound-user", Role: string(RoleMember),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -88,7 +88,7 @@ func TestOIDCBearerIdentityUsesBoundLocalAccountRoleAndState(t *testing.T) {
 		time.Now().Add(time.Minute), []string{"provider-admin-role"},
 	)
 	principal, ok := authenticator.Authenticate("Bearer " + token)
-	if !ok || principal.Actor != "user:bound-user" || principal.Role != authorization.RoleReader || principal.Admin || principal.AuthenticationKind != authorization.AuthenticationOIDC {
+	if !ok || principal.Actor != "user:bound-user" || principal.Role != authorization.RoleMember || principal.Admin || principal.AuthenticationKind != authorization.AuthenticationOIDC {
 		t.Fatalf("bound bearer principal=%#v ok=%v", principal, ok)
 	}
 
@@ -150,7 +150,7 @@ func TestOIDCAuthenticatorMapsRealmRolesByHighestPrivilege(t *testing.T) {
 	defer server.Close()
 	authenticator := Authenticator{OIDC: NewOIDCValidator(OIDCConfig{
 		Issuer: "https://issuer.example.test", Audience: "artifact-gateway", JWKSURL: server.URL,
-		Roles: OIDCRoleMapping{Reader: []string{" gateway-reader "}, Writer: []string{"gateway-writer"}, Admin: []string{"gateway-admin"}},
+		Roles: OIDCRoleMapping{Member: []string{" gateway-member "}, Admin: []string{"gateway-admin"}},
 	})}
 
 	for _, tc := range []struct {
@@ -160,9 +160,9 @@ func TestOIDCAuthenticatorMapsRealmRolesByHighestPrivilege(t *testing.T) {
 		admin   bool
 		matches int
 	}{
-		{name: "reader", roles: []string{"gateway-reader"}, want: RoleReader, matches: 1},
-		{name: "writer wins reader", roles: []string{"gateway-reader", "gateway-writer"}, want: RoleWriter, matches: 2},
-		{name: "admin wins writer", roles: []string{"gateway-writer", "gateway-admin"}, want: RoleAdmin, admin: true, matches: 2},
+		{name: "member", roles: []string{"gateway-member"}, want: RoleMember, matches: 1},
+		{name: "admin wins member", roles: []string{"gateway-member", "gateway-admin"}, want: RoleAdmin, admin: true, matches: 2},
+		{name: "removed legacy value is unmapped", roles: []string{"gateway-reader", "gateway-writer"}},
 		{name: "unmapped", roles: []string{"other"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

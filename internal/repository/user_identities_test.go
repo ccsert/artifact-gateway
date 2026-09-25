@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -11,7 +12,7 @@ func TestMemoryUserIdentityBindingAndResolution(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
 	user, err := store.CreateUser(ctx, User{
-		ID: "identity-user", Name: "alice", Email: "alice@example.test", Role: "writer",
+		ID: "identity-user", Name: "alice", Email: "alice@example.test", Role: "member",
 		SecretHash: "local-hash",
 	})
 	if err != nil {
@@ -35,7 +36,7 @@ func TestMemoryUserIdentityBindingAndResolution(t *testing.T) {
 	}); !errors.Is(err, ErrIdentityExists) {
 		t.Fatalf("second identity for issuer error=%v want=%v", err, ErrIdentityExists)
 	}
-	other, err := store.CreateUser(ctx, User{ID: "identity-other", Name: "bob", Role: "reader"})
+	other, err := store.CreateUser(ctx, User{ID: "identity-other", Name: "bob", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,9 +85,9 @@ func TestMemoryUserIdentityJITProvisioningAndEmailSafety(t *testing.T) {
 	created, identity, wasCreated, err := store.ResolveOIDCIdentity(ctx, OIDCIdentityProvision{
 		Issuer: "https://issuer.example.test", Subject: "jit-subject", Email: "new@example.test",
 		DisplayName: "JIT User", PreferredUsername: "jit-user", EmailVerified: true,
-		Provision: true, DefaultRole: "writer", OccurredAt: time.Now().UTC(),
+		Provision: true, DefaultRole: "member", OccurredAt: time.Now().UTC(),
 	})
-	if err != nil || !wasCreated || created.Role != "writer" || created.SecretHash != "" || identity.UserID != created.ID {
+	if err != nil || !wasCreated || created.Role != "member" || created.SecretHash != "" || identity.UserID != created.ID {
 		t.Fatalf("JIT result user=%+v identity=%+v created=%v err=%v", created, identity, wasCreated, err)
 	}
 	if created.PasswordChangedAt != nil || created.LastLoginAt == nil || identity.LastLoginAt == nil || !created.LastLoginAt.Equal(*identity.LastLoginAt) {
@@ -102,11 +103,11 @@ func TestMemoryUserIdentityJITProvisioningAndEmailSafety(t *testing.T) {
 		t.Fatalf("repeat JIT result user=%+v identity=%+v created=%v err=%v", second, refreshed, wasCreated, err)
 	}
 
-	first, err := store.CreateUser(ctx, User{ID: "email-one", Name: "email-one", Email: "shared@example.test", Role: "reader"})
+	first, err := store.CreateUser(ctx, User{ID: "email-one", Name: "email-one", Email: "shared@example.test", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CreateUser(ctx, User{ID: "email-two", Name: "email-two", Email: "shared@example.test", Role: "reader"}); err != nil {
+	if _, err := store.CreateUser(ctx, User{ID: "email-two", Name: "email-two", Email: "shared@example.test", Role: "member"}); err != nil {
 		// Memory users intentionally allow duplicate email values; ambiguity is
 		// rejected by the identity resolver instead of by account creation.
 		t.Fatal(err)
@@ -136,14 +137,14 @@ func TestMemoryUserIdentityJITPendingRoleCanBeApprovedAndRevoked(t *testing.T) {
 	if err != nil || page.Total != 1 || page.Items[0].ID != user.ID {
 		t.Fatalf("pending user list=%+v err=%v", page, err)
 	}
-	reader := "reader"
-	user, err = store.UpdateUser(ctx, UserUpdate{ID: user.ID, Role: &reader}, user.Version)
-	if err != nil || user.Role != "reader" {
+	member := "member"
+	user, err = store.UpdateUser(ctx, UserUpdate{ID: user.ID, Role: &member}, user.Version)
+	if err != nil || user.Role != "member" {
 		t.Fatalf("approve user=%+v err=%v", user, err)
 	}
 	provision.Email = "new@example.test"
 	same, refreshed, created, err := store.ResolveOIDCIdentity(ctx, provision)
-	if err != nil || created || same.ID != user.ID || same.Role != "reader" || same.Email != provision.Email || refreshed.Email != provision.Email {
+	if err != nil || created || same.ID != user.ID || same.Role != "member" || same.Email != provision.Email || refreshed.Email != provision.Email {
 		t.Fatalf("repeat login user=%+v identity=%+v created=%v err=%v", same, refreshed, created, err)
 	}
 	none := "none"
@@ -158,5 +159,41 @@ func TestMemoryUserIdentityJITPendingRoleCanBeApprovedAndRevoked(t *testing.T) {
 	admin, _, created, err := store.ResolveOIDCIdentity(ctx, adminProvision)
 	if err != nil || !created || admin.Role != "admin" {
 		t.Fatalf("admin subject bootstrap user=%+v created=%v err=%v", admin, created, err)
+	}
+}
+
+func TestMemoryUserIdentityJITRejectsRemovedLegacyLevels(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	// A mapped role or a configured default that no longer names a level is
+	// ignored in favour of the member level, so a stale mapping cannot hand out
+	// repository reach; a surviving level is still honored.
+	for _, tc := range []struct {
+		name     string
+		mapped   string
+		fallback string
+		want     string
+	}{
+		{name: "removed mapped role falls back to the configured default", mapped: "writer", fallback: "none", want: "none"},
+		{name: "removed default falls back to member", fallback: "reader", want: "member"},
+		{name: "nothing recognized falls back to member", mapped: "unknown", fallback: "unknown-level", want: "member"},
+		{name: "member mapping wins", mapped: "member", fallback: "none", want: "member"},
+		{name: "admin mapping wins", mapped: "admin", want: "admin"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			subject := strings.ReplaceAll(tc.name, " ", "-")
+			user, _, created, err := store.ResolveOIDCIdentity(ctx, OIDCIdentityProvision{
+				Issuer: "https://issuer.example.test", Subject: subject,
+				Email: subject + "@example.test", PreferredUsername: subject,
+				Role: tc.mapped, DefaultRole: tc.fallback, Provision: true, OccurredAt: time.Now().UTC(),
+			})
+			if err != nil || !created {
+				t.Fatalf("provision user=%+v created=%v err=%v", user, created, err)
+			}
+			if user.Role != tc.want {
+				t.Fatalf("role=%q want=%q", user.Role, tc.want)
+			}
+		})
 	}
 }

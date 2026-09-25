@@ -46,7 +46,7 @@ func TestPostgresAPIKeyRevocation(t *testing.T) {
 
 	expiredToken := "agk_postgres-expired-" + uuid.NewString()
 	past := time.Now().UTC().Add(-time.Minute)
-	if _, err := store.CreateAPIKey(context.Background(), repository.APIKey{ID: uuid.NewString(), Name: "expired", SecretHash: authorization.HashAPIKey(expiredToken), Roles: []string{"reader"}, ExpiresAt: &past}); err != nil {
+	if _, err := store.CreateAPIKey(context.Background(), repository.APIKey{ID: uuid.NewString(), Name: "expired", SecretHash: authorization.HashAPIKey(expiredToken), Roles: []string{"member"}, ExpiresAt: &past}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.FindActiveAPIKeyByHash(context.Background(), authorization.HashAPIKey(expiredToken)); err != repository.ErrNotFound {
