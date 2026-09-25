@@ -54,7 +54,7 @@ OCI 终态为 Registry `403 DENIED`，Maven/Raw/Conan 保留现有 `403`。Conan
 
 ## 协议契约
 
-Maven/Raw 保留现有 Basic challenge/status，OCI 保留 Registry Bearer challenge，管理路由保留 `application/problem+json` 和未认证 `access_denied`。授权 source/reason 只写审计，不通过 not-found 或 principal-specific 错误泄露。
+Maven/Raw 保留现有 Basic challenge/status，OCI 保留 Registry Bearer challenge，管理路由保留 `application/problem+json` 和未认证 `access_denied`。授权 source/reason 在 Maven、OCI、Raw、Conan（legacy 与 native）以及管理路由上写入审计；npm、PyPI、Go、APT 的拒绝只计入有界计数器、不带判定字段，这部分拆为独立工作。二者都不会通过 not-found 或 principal-specific 错误泄露。
 
 管理员 `GET /api/v2/audits` 可看到可选 `authorizationSource/Reason`；只有进入 Repository 授权判定时出现。客户端应接受未来有界值并把缺失解释为“未发生 Repository 授权判定”。V1 Audit 响应不变。
 
