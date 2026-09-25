@@ -49,6 +49,7 @@ import {
 import { FormatBadge, Badge, type BadgeTone } from "../../components/ui/Badge";
 import { AccessDecisionSummary } from "./AccessDecisionSummary";
 import { useAuth } from "../../lib/auth";
+import { platformCapabilities } from "../../lib/authorization";
 import {
   CopyableValue,
   FilterBar,
@@ -270,7 +271,7 @@ export function AccessControlPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = accessControlTabFromQuery(searchParams.get("tab"));
   const english = locale === "en-US";
-  const canManageAnonymousPolicy = identity?.administrator === true;
+  const canManageAnonymousPolicy = platformCapabilities(identity).platformAdmin;
   const [rows, setRows] = useState<GrantRow[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [principalFilter, setPrincipalFilter] = useState("");

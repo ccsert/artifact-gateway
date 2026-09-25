@@ -19,6 +19,10 @@ import { MavenPublishWizard } from "./MavenPublishWizard";
 import { usePreferences } from "../../lib/preferences";
 import { useAuth } from "../../lib/auth";
 import {
+  platformCapabilities,
+  repositoryPermissions,
+} from "../../lib/authorization";
+import {
   NpmPublishGuide,
   OCIPublishGuide,
   PyPIPublishGuide,
@@ -75,7 +79,7 @@ import { RepositorySettingsTab } from "./RepositorySettingsTab";
 export function RepositoryDetailPage() {
   const { text } = usePreferences();
   const { identity } = useAuth();
-  const isAdmin = identity?.administrator === true;
+  const isAdmin = platformCapabilities(identity).platformAdmin;
   const { repositoryId = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
@@ -96,7 +100,8 @@ export function RepositoryDetailPage() {
   const [effectiveAccess, setEffectiveAccess] =
     useState<RepositoryEffectiveAccess | null>(null);
   const [accessResolved, setAccessResolved] = useState(false);
-  const canWrite = effectiveAccess?.permissions?.write.allowed === true;
+  const permissions = repositoryPermissions(effectiveAccess);
+  const canWrite = permissions.write;
   const [error, setError] = useState<unknown>(null);
   const [tab, setTab] = useState<Tab>(() =>
     repositoryTabFromQuery(requestedTab),
@@ -231,9 +236,7 @@ export function RepositoryDetailPage() {
             <RepositoryArtifactsTab
               repo={repo}
               canWrite={canWrite}
-              canQuarantine={
-                effectiveAccess?.permissions?.admin.allowed === true
-              }
+              canQuarantine={permissions.administer}
               artifactTarget={artifactTarget}
               buildTarget={buildTarget}
               assetTarget={assetTarget}
@@ -296,7 +299,7 @@ export function RepositoryDetailPage() {
             <APTOperationsTab
               key={repo.id}
               repo={repo}
-              canAdmin={effectiveAccess?.permissions?.admin.allowed === true}
+              canAdmin={permissions.administer}
             />
           )}
           {activeTab === "retention" && <RepositoryRetentionTab repo={repo} />}
@@ -306,10 +309,8 @@ export function RepositoryDetailPage() {
               capabilities={caps}
               capabilitiesLoading={capsLoading}
               capabilitiesError={capsError}
-              canManage={
-                effectiveAccess?.permissions?.intelligence.allowed === true
-              }
-              canViewJobs={effectiveAccess?.permissions?.admin.allowed === true}
+              canManage={permissions.intelligence}
+              canViewJobs={permissions.administer}
             />
           )}
           {activeTab === "security" && (
