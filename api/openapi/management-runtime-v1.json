@@ -1658,7 +1658,7 @@
     "/repository-grants": {
       "get": {
         "operationId": "listRepositoryGrants",
-        "description": "Lists repository grant records across all repositories for the administrator console.",
+        "description": "Lists repository grant records across repositories for the administrator console. A platform administrator sees every repository; any other caller sees only the repositories it administers, so a repository it cannot administer contributes no rows and is indistinguishable from one that does not exist.",
         "responses": {
           "200": {
             "$ref": "#/components/responses/RepositoryGrantRecordList"
@@ -1920,7 +1920,7 @@
     "/repository-capacities": {
       "get": {
         "operationId": "listRepositoryCapacities",
-        "description": "Lists logical capacity snapshots across all repositories for the administrator console.",
+        "description": "Lists logical capacity snapshots across repositories for the administrator console. A platform administrator sees every repository; any other caller sees only the repositories it administers, so a repository it cannot administer contributes no rows and is indistinguishable from one that does not exist.",
         "responses": {
           "200": {
             "$ref": "#/components/responses/RepositoryCapacityList"
@@ -1934,7 +1934,7 @@
     "/lifecycle-jobs": {
       "get": {
         "operationId": "listLifecycleJobs",
-        "description": "Lists the newest lifecycle jobs across all repositories for the administrator console.",
+        "description": "Lists the newest lifecycle jobs across repositories for the administrator console. A platform administrator sees every repository; any other caller sees only the repositories it administers, so a repository it cannot administer contributes no rows and is indistinguishable from one that does not exist.",
         "parameters": [
           {
             "name": "limit",

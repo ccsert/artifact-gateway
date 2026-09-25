@@ -647,7 +647,7 @@ export const createRepository = <ThrowOnError extends boolean = false>(options: 
 });
 
 /**
- * Lists repository grant records across all repositories for the administrator console.
+ * Lists repository grant records across repositories for the administrator console. A platform administrator sees every repository; any other caller sees only the repositories it administers, so a repository it cannot administer contributes no rows and is indistinguishable from one that does not exist.
  */
 export const listRepositoryGrants = <ThrowOnError extends boolean = false>(options?: Options<ListRepositoryGrantsData, ThrowOnError>): RequestResult<ListRepositoryGrantsResponses, ListRepositoryGrantsErrors, ThrowOnError> => (options?.client ?? client).get<ListRepositoryGrantsResponses, ListRepositoryGrantsErrors, ThrowOnError>({
     security: [{
@@ -793,7 +793,7 @@ export const updateAuthorizationRole = <ThrowOnError extends boolean = false>(op
 });
 
 /**
- * Lists logical capacity snapshots across all repositories for the administrator console.
+ * Lists logical capacity snapshots across repositories for the administrator console. A platform administrator sees every repository; any other caller sees only the repositories it administers, so a repository it cannot administer contributes no rows and is indistinguishable from one that does not exist.
  */
 export const listRepositoryCapacities = <ThrowOnError extends boolean = false>(options?: Options<ListRepositoryCapacitiesData, ThrowOnError>): RequestResult<ListRepositoryCapacitiesResponses, ListRepositoryCapacitiesErrors, ThrowOnError> => (options?.client ?? client).get<ListRepositoryCapacitiesResponses, ListRepositoryCapacitiesErrors, ThrowOnError>({
     security: [{
@@ -806,7 +806,7 @@ export const listRepositoryCapacities = <ThrowOnError extends boolean = false>(o
 });
 
 /**
- * Lists the newest lifecycle jobs across all repositories for the administrator console.
+ * Lists the newest lifecycle jobs across repositories for the administrator console. A platform administrator sees every repository; any other caller sees only the repositories it administers, so a repository it cannot administer contributes no rows and is indistinguishable from one that does not exist.
  */
 export const listLifecycleJobs = <ThrowOnError extends boolean = false>(options?: Options<ListLifecycleJobsData, ThrowOnError>): RequestResult<ListLifecycleJobsResponses, ListLifecycleJobsErrors, ThrowOnError> => (options?.client ?? client).get<ListLifecycleJobsResponses, ListLifecycleJobsErrors, ThrowOnError>({
     security: [{
