@@ -10,6 +10,7 @@ groups:
         "$ref": "../components/responses.yaml#/GroupList"
   post:
     operationId: createGroup
+    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it. The refusal names the member that is out of bounds.
     parameters:
     - "$ref": "../components/parameters.yaml#/IdempotencyKey"
     requestBody:
@@ -28,11 +29,13 @@ groups_groupId:
   - "$ref": "../components/parameters.yaml#/GroupId"
   get:
     operationId: getGroup
+    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
     responses:
       '200':
         "$ref": "../components/responses.yaml#/Group"
   put:
     operationId: replaceGroup
+    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it, including the members it drops and the ones it adds. The refusal names the member that is out of bounds.
     parameters:
     - "$ref": "../components/parameters.yaml#/IfMatch"
     requestBody:
@@ -48,6 +51,7 @@ groups_groupId:
         "$ref": "../components/responses.yaml#/Problem"
   delete:
     operationId: deleteGroup
+    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
     responses:
       '204':
         description: Deleted
@@ -56,11 +60,13 @@ groups_groupId_members:
   - "$ref": "../components/parameters.yaml#/GroupId"
   get:
     operationId: listGroupMembers
+    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
     responses:
       '200':
         "$ref": "../components/responses.yaml#/MemberList"
   put:
     operationId: replaceGroupMembers
+    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
     parameters:
     - "$ref": "../components/parameters.yaml#/IfMatch"
     requestBody:
@@ -83,6 +89,7 @@ groups_groupId_capacity:
   - "$ref": "../components/parameters.yaml#/GroupId"
   get:
     operationId: getGroupCapacity
+    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
     responses:
       '200':
         "$ref": "../components/responses.yaml#/GroupCapacity"
