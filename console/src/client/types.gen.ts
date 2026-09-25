@@ -4583,6 +4583,10 @@ export type CreateScheduledTaskErrors = {
   /**
    * Problem response
    */
+  403: Problem;
+  /**
+   * Problem response
+   */
   409: Problem;
 };
 
@@ -4616,6 +4620,10 @@ export type DeleteScheduledTaskErrors = {
   /**
    * Problem response
    */
+  403: Problem;
+  /**
+   * Problem response
+   */
   404: Problem;
 };
 
@@ -4646,6 +4654,10 @@ export type GetScheduledTaskErrors = {
    * Problem response
    */
   401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
   /**
    * Problem response
    */
@@ -4686,6 +4698,10 @@ export type UpdateScheduledTaskErrors = {
    * Problem response
    */
   401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
   /**
    * Problem response
    */
@@ -4730,6 +4746,10 @@ export type RunScheduledTaskErrors = {
   /**
    * Problem response
    */
+  403: Problem;
+  /**
+   * Problem response
+   */
   404: Problem;
   /**
    * Problem response
@@ -4770,6 +4790,10 @@ export type ListScheduledTaskRunsErrors = {
    * Problem response
    */
   401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
   /**
    * Problem response
    */

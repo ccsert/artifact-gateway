@@ -169,15 +169,25 @@ func (h hostedRepositoryAPIHandler) authorize(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return Principal{}, false
 	}
-	if principal.MustChangePassword {
-		writeHostedProblem(w, http.StatusForbidden, "password_change_required", "password change is required")
-		return Principal{}, false
-	}
-	if !principal.Admin {
-		writeHostedProblem(w, http.StatusForbidden, "access_denied", "administrator permission is required")
+	if !h.authorizePlatformAdministrator(w, principal) {
 		return Principal{}, false
 	}
 	return principal, true
+}
+
+// authorizePlatformAdministrator answers a principal-wide block or a missing
+// platform administration, so a caller that authenticated for a narrower reason
+// can be checked without looking up its credential again.
+func (h hostedRepositoryAPIHandler) authorizePlatformAdministrator(w http.ResponseWriter, principal Principal) bool {
+	if principal.MustChangePassword {
+		writeHostedProblem(w, http.StatusForbidden, "password_change_required", "password change is required")
+		return false
+	}
+	if !principal.Admin {
+		writeHostedProblem(w, http.StatusForbidden, "access_denied", "administrator permission is required")
+		return false
+	}
+	return true
 }
 
 func (h hostedRepositoryAPIHandler) authenticate(w http.ResponseWriter, r *http.Request) (Principal, bool) {
