@@ -1778,6 +1778,7 @@
       ],
       "post": {
         "operationId": "applyAuthorizationTemplate",
+        "description": "Applies an authorization template to the grants of the repository named in the request body. The target repository's administrators may do this; the template catalogue itself stays a platform operation.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IfMatch"
@@ -1798,6 +1799,12 @@
             "$ref": "#/components/responses/GrantList"
           },
           "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
             "$ref": "#/components/responses/Problem"
           },
           "404": {
@@ -2242,7 +2249,7 @@
       ],
       "post": {
         "operationId": "testEgressProxy",
-        "description": "Probes the repository's egress path to its upstream using the stored egress proxy configuration. Administrator-only; the result is ephemeral and never persisted.",
+        "description": "Probes the repository's egress path to its upstream using the stored egress proxy configuration. The repository's administrators may do this; the result is ephemeral and never persisted.",
         "responses": {
           "200": {
             "$ref": "#/components/responses/EgressProxyTest"
@@ -2251,6 +2258,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
             "$ref": "#/components/responses/Problem"
           },
           "404": {

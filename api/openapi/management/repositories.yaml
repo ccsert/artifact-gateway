@@ -105,6 +105,9 @@ authorization_templates_templateId_apply:
   - "$ref": "../components/parameters.yaml#/AuthorizationTemplateId"
   post:
     operationId: applyAuthorizationTemplate
+    description: Applies an authorization template to the grants of the repository
+      named in the request body. The target repository's administrators may do
+      this; the template catalogue itself stays a platform operation.
     parameters:
     - "$ref": "../components/parameters.yaml#/IfMatch"
     requestBody:
@@ -117,6 +120,10 @@ authorization_templates_templateId_apply:
       '200':
         "$ref": "../components/responses.yaml#/GrantList"
       '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
         "$ref": "../components/responses.yaml#/Problem"
       '404':
         "$ref": "../components/responses.yaml#/Problem"

@@ -203,4 +203,37 @@ func TestEgressProxyTestEndpoint(t *testing.T) {
 	if strings.Contains(rec.Body.String(), "password") || strings.Contains(rec.Body.String(), "://proxy") {
 		t.Fatalf("result leaks details: %s", rec.Body.String())
 	}
+
+	// A probe belongs to the repository's administrators: this one reaches the
+	// repository it administers and nothing else.
+	if _, err := store.ReplaceRepositoryGrants(context.Background(), proxy.ID, []repository.RepositoryGrant{{Principal: "repo-admin", Scopes: []string{"repositories:admin"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name       string
+		repository string
+		want       int
+	}{
+		{name: "administers the repository", repository: proxy.ID, want: http.StatusOK},
+		{name: "administers another repository", repository: hosted.ID, want: http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+tc.repository+"/egress-proxy:test", nil)
+			authorize(request, testAuthenticator().IssueToken("repo-admin"))
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != tc.want {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
+	}
+	var deniedAudit bool
+	for _, audit := range store.Audits {
+		if audit.Format == "management" && audit.Outcome == repository.AuditAccessDenied && audit.Actor == "repo-admin" && audit.AuthorizationReason == "scope_not_granted" {
+			deniedAudit = true
+		}
+	}
+	if !deniedAudit {
+		t.Fatalf("missing repository-tier denial audit: %#v", store.Audits)
+	}
 }

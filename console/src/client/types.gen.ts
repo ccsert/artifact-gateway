@@ -4293,6 +4293,14 @@ export type ApplyAuthorizationTemplateErrors = {
   /**
    * Problem response
    */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
   404: Problem;
   /**
    * Problem response
@@ -4896,6 +4904,10 @@ export type TestEgressProxyErrors = {
    * Problem response
    */
   401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
   /**
    * Problem response
    */

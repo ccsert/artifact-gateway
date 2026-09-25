@@ -560,19 +560,19 @@ func (h generatedRepositoryAPIAdapter) DeleteArtifact(w http.ResponseWriter, r *
 }
 
 func (h generatedRepositoryAPIAdapter) GetPublishSession(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId) {
-	h.withSessionScope(w, r, sessionID.String(), RepositoryRead, func(Principal) {
+	h.withSessionScope(w, r, sessionID.String(), RepositoryRead, func(Principal, repository.HostedRepository) {
 		h.sessions.getSession(w, r, sessionID.String())
 	})
 }
 
 func (h generatedRepositoryAPIAdapter) UploadPublishObject(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId, objectName string) {
-	h.withSessionScope(w, r, sessionID.String(), RepositoryWrite, func(Principal) {
+	h.withSessionScope(w, r, sessionID.String(), RepositoryWrite, func(Principal, repository.HostedRepository) {
 		h.sessions.upload(w, r, sessionID.String(), objectName)
 	})
 }
 
 func (h generatedRepositoryAPIAdapter) CommitPublishSession(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId) {
-	h.withSessionScope(w, r, sessionID.String(), RepositoryWrite, func(Principal) {
+	h.withSessionScope(w, r, sessionID.String(), RepositoryWrite, func(Principal, repository.HostedRepository) {
 		h.sessions.commit(w, r, sessionID.String())
 	})
 }

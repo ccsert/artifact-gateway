@@ -31,7 +31,7 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.Response
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "targetRepositoryId, immutable artifact coordinate, and digest are required")
 			return
 		}
-		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal) {
+		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
 			target, err := h.sessions.store.GetHostedRepository(r.Context(), request.TargetRepositoryId.String())
 			if err != nil || target.ID == source.ID || target.Format != source.Format || target.Type != repository.RepositoryTypeHosted || target.State != repository.RepositoryActive {
 				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active Hosted repository with the same format")
@@ -107,7 +107,7 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "replication requires a visible format-specific coordinate and sha256 digest")
 			return
 		}
-		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal) {
+		h.withRepositoryScopeForPrincipal(w, r, principal, request.TargetRepositoryId.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
 			target, err := h.store.GetHostedRepository(r.Context(), request.TargetRepositoryId.String())
 			if err != nil || target.ID == source.ID || target.Format != source.Format || target.Type != repository.RepositoryTypeHosted || target.State != repository.RepositoryActive {
 				writeHostedProblem(w, http.StatusConflict, "invalid_target", "target must be an active Hosted repository with the same format")

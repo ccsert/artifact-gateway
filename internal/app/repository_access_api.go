@@ -577,7 +577,8 @@ func (h generatedRepositoryAPIAdapter) DeleteAuthorizationTemplate(w http.Respon
 }
 
 func (h generatedRepositoryAPIAdapter) ApplyAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateID adminopenapi.AuthorizationTemplateId, params adminopenapi.ApplyAuthorizationTemplateParams) {
-	if _, ok := h.authorize(w, r); !ok {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
 		return
 	}
 	var body adminopenapi.ApplyAuthorizationTemplate
@@ -587,44 +588,39 @@ func (h generatedRepositoryAPIAdapter) ApplyAuthorizationTemplate(w http.Respons
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "repositoryId is required")
 		return
 	}
-	repo, err := h.store.GetHostedRepository(r.Context(), body.RepositoryId.String())
-	if errors.Is(err, repository.ErrNotFound) {
-		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
-		return
-	}
-	if err != nil {
-		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository failed")
-		return
-	}
-	template, err := h.templates.GetAuthorizationTemplate(r.Context(), templateID.String())
-	if errors.Is(err, repository.ErrNotFound) {
-		writeHostedProblem(w, http.StatusNotFound, "not_found", "authorization template not found")
-		return
-	}
-	if err != nil {
-		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get authorization template failed")
-		return
-	}
-	if !validRepositoryGrants(template.Grants, repo.Format) {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "template grants are not valid for the target repository format")
-		return
-	}
-	set, err := h.templates.ApplyAuthorizationTemplate(r.Context(), templateID.String(), body.RepositoryId.String(), string(params.IfMatch))
-	if errors.Is(err, repository.ErrNotFound) {
-		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository or authorization template not found")
-		return
-	}
-	if errors.Is(err, repository.ErrVersionConflict) {
-		writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current repository grant version")
-		return
-	}
-	if err != nil {
-		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "apply authorization template failed")
-		return
-	}
-	h.recordAuthorizationAudit(r, repo.Name, "repositories/"+repo.ID+"/grants", "repository.grants.apply_template", http.StatusOK)
-	w.Header().Set("ETag", set.Version)
-	writeNativeMavenJSON(w, http.StatusOK, set.Grants)
+	// Applying a template writes the target repository's grants, so the target's
+	// administrators may do it; the template catalogue itself stays platform-only.
+	h.withRepositoryScopeForPrincipal(w, r, principal, body.RepositoryId.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+		template, err := h.templates.GetAuthorizationTemplate(r.Context(), templateID.String())
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "authorization template not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get authorization template failed")
+			return
+		}
+		if !validRepositoryGrants(template.Grants, repo.Format) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "template grants are not valid for the target repository format")
+			return
+		}
+		set, err := h.templates.ApplyAuthorizationTemplate(r.Context(), templateID.String(), body.RepositoryId.String(), string(params.IfMatch))
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository or authorization template not found")
+			return
+		}
+		if errors.Is(err, repository.ErrVersionConflict) {
+			writeHostedProblem(w, http.StatusPreconditionFailed, "version_conflict", "If-Match does not match current repository grant version")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "apply authorization template failed")
+			return
+		}
+		h.recordAuthorizationAudit(r, repo.Name, "repositories/"+repo.ID+"/grants", "repository.grants.apply_template", http.StatusOK)
+		w.Header().Set("ETag", set.Version)
+		writeNativeMavenJSON(w, http.StatusOK, set.Grants)
+	})
 }
 
 func (h generatedRepositoryAPIAdapter) ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceGrantsParams) {

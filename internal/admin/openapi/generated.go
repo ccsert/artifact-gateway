@@ -13883,6 +13883,34 @@ func (response ApplyAuthorizationTemplate400ApplicationProblemPlusJSONResponse) 
 	return err
 }
 
+type ApplyAuthorizationTemplate401ApplicationProblemPlusJSONResponse Problem
+
+func (response ApplyAuthorizationTemplate401ApplicationProblemPlusJSONResponse) VisitApplyAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyAuthorizationTemplate403ApplicationProblemPlusJSONResponse Problem
+
+func (response ApplyAuthorizationTemplate403ApplicationProblemPlusJSONResponse) VisitApplyAuthorizationTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ApplyAuthorizationTemplate404ApplicationProblemPlusJSONResponse Problem
 
 func (response ApplyAuthorizationTemplate404ApplicationProblemPlusJSONResponse) VisitApplyAuthorizationTemplateResponse(w http.ResponseWriter) error {
@@ -18356,6 +18384,20 @@ func (response TestEgressProxy401ApplicationProblemPlusJSONResponse) VisitTestEg
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestEgressProxy403ApplicationProblemPlusJSONResponse Problem
+
+func (response TestEgressProxy403ApplicationProblemPlusJSONResponse) VisitTestEgressProxyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }

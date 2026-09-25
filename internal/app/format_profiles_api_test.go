@@ -4,14 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
-func TestFormatProfilesAPIRequiresAdministratorAndReturnsCapabilities(t *testing.T) {
+func TestFormatProfilesAPINeedsAnAuthenticatedCallerAndReturnsCapabilities(t *testing.T) {
 	store := repository.NewMemoryStore()
 	authenticator := testAuthenticator()
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
@@ -22,11 +21,13 @@ func TestFormatProfilesAPIRequiresAdministratorAndReturnsCapabilities(t *testing
 		t.Fatalf("unauthenticated=%d %s", unauthenticated.Code, unauthenticated.Body.String())
 	}
 
+	// The format table carries no repository state, so an authenticated caller
+	// that holds no platform administration may read it.
 	nonAdminRequest := httptest.NewRequest(http.MethodGet, "/api/v2/formats", nil)
 	authorize(nonAdminRequest, authenticator.IssueToken("reader"))
 	nonAdmin := httptest.NewRecorder()
 	handler.ServeHTTP(nonAdmin, nonAdminRequest)
-	if nonAdmin.Code != http.StatusForbidden || !strings.Contains(nonAdmin.Body.String(), `"code":"access_denied"`) {
+	if nonAdmin.Code != http.StatusOK {
 		t.Fatalf("non-admin=%d %s", nonAdmin.Code, nonAdmin.Body.String())
 	}
 
