@@ -475,12 +475,15 @@ func TestRepositoryReadersParsesActorRepositoryPatterns(t *testing.T) {
 	}
 }
 
-func TestLegacyReadDefaultOptsIntoDenyingUnconfiguredReaders(t *testing.T) {
-	if legacyReadDefaultDeny("") || legacyReadDefaultDeny("allow") || legacyReadDefaultDeny("ALLOW") {
-		t.Fatal("the unconfigured default must stay permissive until the next release")
+func TestLegacyReadDefaultDeniesUnconfiguredReadersUnlessExplicitlyPermissive(t *testing.T) {
+	if legacyReadPermissive("") || legacyReadPermissive("deny") || legacyReadPermissive("DENY") {
+		t.Fatal("the unconfigured default must deny unmatched readers")
 	}
-	if !legacyReadDefaultDeny("deny") || !legacyReadDefaultDeny(" DENY ") {
-		t.Fatal("deny must opt into refusing unmatched readers")
+	if !legacyReadPermissive("allow") || !legacyReadPermissive(" ALLOW ") {
+		t.Fatal("allow must opt back into admitting unmatched readers")
+	}
+	if legacyReadPermissive("true") || legacyReadPermissive("1") {
+		t.Fatal("an unrecognized value must fail closed")
 	}
 }
 

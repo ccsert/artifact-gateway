@@ -64,23 +64,28 @@ candidate changes, Range/conditional reads, failure recovery, and grant isolatio
 
 ## Unconfigured reader policy
 
-A deployment that configures no reader patterns admits an unmatched authenticated
-caller to a legacy repository. That has been the documented posture and it is
-changing: the next release denies unmatched readers when no policy is
-configured.
+A deployment that configures no reader patterns refuses an unmatched authenticated
+caller. That is the default from this release on. On 0.3.1 and earlier such a
+caller was admitted silently.
 
-Upgrade action, to be completed before that release:
+If every actor that reads a legacy repository already holds a reader pattern or a
+per-repository grant, there is nothing to do. Otherwise:
 
-1. Inventory the actors that read legacy repositories without a grant. Those are
-   the ones relying on the unconfigured default.
+1. Inventory the actors that read legacy repositories without a grant. They were
+   relying on the removed fallback and now receive `403`.
 2. Give each one an exact repository name or a `prefix/*` pattern in
    `GATEWAY_REPOSITORY_READERS`, or a per-repository grant. There is no
-   catch-all pattern, so every repository an actor needs has to be listed.
-3. Set `GATEWAY_LEGACY_READ_DEFAULT=deny` and restart. Reads that still work are
-   covered by an explicit policy, and the startup warning is gone.
-4. Leave `deny` in place. The next release makes it the default, so nothing is
-   left relying on the permissive fallback when that happens.
+   catch-all pattern, so every repository an actor needs has to be listed. A
+   Group read can also be checked per member, and a member the actor cannot read
+   on its own is skipped rather than served, so confirm the remaining reads with
+   the repository's effective-access view before relying on the policy.
+3. Upgrade. Reads that still work are covered by an explicit policy.
+4. If the upgrade has to be staged instead, set `GATEWAY_LEGACY_READ_DEFAULT=allow`
+   to keep the old posture while steps 1 and 2 are completed, then unset it. The
+   gateway logs a startup warning while it is set. The only recognized permissive
+   value is `allow`, so a typo fails closed instead of widening access.
 
 An administrator, a global read role, and this repository's own grants are
-unaffected because they never used the fallback. A pending or password-change
-account is refused under every posture.
+unaffected because they never used the fallback. Anonymous access is unaffected
+because it is governed by the repository's own anonymous-read setting. A pending
+or password-change account is refused under every posture.

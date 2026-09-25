@@ -39,6 +39,7 @@ func TestPostgresMavenProtocolPublishesDirectlyByDefault(t *testing.T) {
 	objects := NewMemoryOCIObjectStore()
 	handler := NewGatewayHandler(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, Authenticator{
 		ResolverToken:     "resolver-secret",
+		RepositoryReaders: map[string][]string{"maven": {repo.Name}},
 		RepositoryWriters: map[string][]string{"maven": {repo.Name}},
 	})
 	pom := []byte("<project><groupId>org.example</groupId><artifactId>direct</artifactId><version>1.0.0</version></project>")
@@ -915,7 +916,7 @@ func TestPostgresNativeMavenPromotionFailureLeavesS3ObjectsUnpublished(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := newNativeMavenHandler(store, objects, Authenticator{ResolverToken: "resolver-secret", RepositoryWriters: map[string][]string{"maven": {repo.Name}}})
+	handler := newNativeMavenHandler(store, objects, Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"maven": {repo.Name}}, RepositoryWriters: map[string][]string{"maven": {repo.Name}}})
 	request := func(method, path, body string) *httptest.ResponseRecorder {
 		t.Helper()
 		r := httptest.NewRequest(method, path, strings.NewReader(body))

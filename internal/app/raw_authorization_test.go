@@ -110,6 +110,34 @@ func TestRawDoesNotExposeOCIGroupAndChecksMemberGrantBeforeCache(t *testing.T) {
 	}
 }
 
+func TestRawLegacyReadDefaultDeniesUnmatchedCallers(t *testing.T) {
+	store := repository.NewMemoryStore()
+	if _, err := store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}}); err != nil {
+		t.Fatal(err)
+	}
+	client := &rawFixtureClient{responses: map[string]int{"hosted": http.StatusOK}, body: []byte("artifact")}
+	for _, tc := range []struct {
+		name          string
+		authenticator Authenticator
+		want          int
+	}{
+		{name: "unconfigured deployment denies", authenticator: Authenticator{ResolverToken: "resolver-secret", ResolverActor: "build-agent"}, want: http.StatusForbidden},
+		{name: "explicit opt-out admits", authenticator: Authenticator{ResolverToken: "resolver-secret", ResolverActor: "build-agent", LegacyReadPermissive: true}, want: http.StatusOK},
+		// Raw checks the Group and then each unbound member, so a pattern has to
+		// cover both names.
+		{name: "reader pattern admits", authenticator: Authenticator{ResolverToken: "resolver-secret", ResolverActor: "build-agent", RepositoryReaders: map[string][]string{"build-agent": {"downloads", "hosted"}}}, want: http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := RawHandler{Store: store, Authenticator: tc.authenticator, Client: client, Metrics: &Metrics{}}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, rawRequest(http.MethodGet, "/raw/downloads/release/app.txt"))
+			if response.Code != tc.want {
+				t.Fatalf("status=%d body=%q want=%d", response.Code, response.Body.String(), tc.want)
+			}
+		})
+	}
+}
+
 func TestRawUsesManagedGrantsForBoundMembers(t *testing.T) {
 	store := repository.NewMemoryStore()
 	deniedRepository, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-denied", Name: "raw-denied", Format: repository.FormatRaw})

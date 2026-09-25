@@ -116,7 +116,7 @@ type Config struct {
 	LocalAuthMaxFailedAttempts      int
 	LocalAuthLockoutDuration        time.Duration
 	RepositoryReaders               map[string][]string
-	LegacyReadDefaultDeny           bool
+	LegacyReadPermissive            bool
 	RepositoryCacheQuotas           map[string]int64
 	OIDCIssuer                      string
 	OIDCAudience                    string
@@ -188,7 +188,7 @@ func Load() (Config, error) {
 		LocalAuthMaxFailedAttempts:      5,
 		LocalAuthLockoutDuration:        15 * time.Minute,
 		RepositoryReaders:               repositoryReaders(os.Getenv("GATEWAY_REPOSITORY_READERS")),
-		LegacyReadDefaultDeny:           legacyReadDefaultDeny(os.Getenv("GATEWAY_LEGACY_READ_DEFAULT")),
+		LegacyReadPermissive:            legacyReadPermissive(os.Getenv("GATEWAY_LEGACY_READ_DEFAULT")),
 		RepositoryCacheQuotas:           repositoryCacheQuotas(os.Getenv("GATEWAY_REPOSITORY_CACHE_QUOTAS")),
 		OIDCIssuer:                      strings.TrimRight(strings.TrimSpace(os.Getenv("GATEWAY_OIDC_ISSUER")), "/"),
 		OIDCAudience:                    strings.TrimSpace(os.Getenv("GATEWAY_OIDC_AUDIENCE")),
@@ -784,12 +784,12 @@ func repositoryReaders(raw string) map[string][]string {
 	return readers
 }
 
-// legacyReadDefaultDeny reports whether a deployment that has configured no
-// reader patterns denies an otherwise-unmatched caller. The opt-in lets an
-// operator adopt the stricter posture before the default flips, so an upgrade
-// never has to take reads away from running clients unannounced.
-func legacyReadDefaultDeny(raw string) bool {
-	return strings.EqualFold(strings.TrimSpace(raw), "deny")
+// legacyReadPermissive reports whether a deployment that has configured no
+// reader patterns admits an otherwise-unmatched caller. Denying is the default
+// and the only recognized opt-out is allow, so a typo fails closed rather than
+// silently widening access.
+func legacyReadPermissive(raw string) bool {
+	return strings.EqualFold(strings.TrimSpace(raw), "allow")
 }
 
 func repositoryCacheQuotas(raw string) map[string]int64 {

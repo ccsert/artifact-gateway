@@ -75,8 +75,12 @@ func (f failingGetStore) GetGroup(context.Context, string) (repository.Group, er
 	return repository.Group{}, errors.New("database read failed")
 }
 
+// testAuthenticator models a deployment that opted into the pre-0.4 legacy read
+// posture, so the protocol suites behind it can read an arbitrary repository
+// with the resolver credential without restating a reader pattern per fixture.
+// Authorization behavior itself is asserted with explicit postures instead.
 func testAuthenticator() Authenticator {
-	return Authenticator{AdminToken: "admin-secret", ResolverToken: "resolver-secret", AdminActor: "alice", ResolverActor: "build-agent", RepositoryWriters: map[string][]string{"build-agent": {"releases", "deploys"}, "maven": {"releases", "deploys"}}}
+	return Authenticator{AdminToken: "admin-secret", ResolverToken: "resolver-secret", AdminActor: "alice", ResolverActor: "build-agent", LegacyReadPermissive: true, RepositoryWriters: map[string][]string{"build-agent": {"releases", "deploys"}, "maven": {"releases", "deploys"}}}
 }
 
 func authorize(request *http.Request, token string) {

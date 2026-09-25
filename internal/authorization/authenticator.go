@@ -67,13 +67,16 @@ type Authenticator struct {
 	LocalAuthMaxAttempts int
 	LocalAuthLockout     time.Duration
 	// RepositoryReaders maps an actor to exact repository names or prefix
-	// patterns ending in /*. A nil map keeps the local-development default.
+	// patterns ending in /*. A nil map means the deployment configured no
+	// reader policy at all, which denies every unmatched caller unless
+	// LegacyReadPermissive restores the pre-0.4 posture.
 	RepositoryReaders map[string][]string
-	// LegacyReadDefaultDeny makes a deployment that configured no reader
-	// patterns deny an unmatched caller instead of admitting it. The next
-	// release flips this default; until then it is an explicit opt-in so an
-	// upgrade never takes reads away from running clients unannounced.
-	LegacyReadDefaultDeny bool
+	// LegacyReadPermissive makes a deployment that configured no reader
+	// patterns admit an unmatched caller instead of denying it. Denying is the
+	// default, so this is an explicit opt-out an operator sets to keep the
+	// pre-0.4 legacy posture while it inventories the actors that read without
+	// a grant; the zero value must never widen access.
+	LegacyReadPermissive bool
 	// RepositoryWriters is intentionally separate from readers: Maven deploy
 	// must never turn a download grant into publication authority.
 	RepositoryWriters map[string][]string
@@ -259,15 +262,14 @@ func (p Principal) RepositoryAccessBlocked() bool {
 // CanReadRepository reports whether the principal may read the named legacy
 // repository. An administrator, a global read role, or a matching reader
 // pattern qualifies. A deployment that configured no reader patterns at all
-// admits an otherwise-unmatched caller, because that is the documented
-// production posture; GATEWAY_LEGACY_READ_DEFAULT=deny opts into the stricter
-// posture early and the next release makes it the default. A pending or
-// password-change account is never admitted, whatever the posture.
+// denies an otherwise-unmatched caller, and GATEWAY_LEGACY_READ_DEFAULT=allow
+// restores the pre-0.4 posture that admitted it. A pending or password-change
+// account is never admitted, whatever the posture.
 func (a Authenticator) CanReadRepository(principal Principal, repositoryName string) bool {
 	if principal.CanReadRepository(repositoryName) {
 		return true
 	}
-	return !principal.RepositoryAccessBlocked() && a.RepositoryReaders == nil && !a.LegacyReadDefaultDeny
+	return !principal.RepositoryAccessBlocked() && a.RepositoryReaders == nil && a.LegacyReadPermissive
 }
 
 // CanReadRepository reports whether the principal's own authority - account
