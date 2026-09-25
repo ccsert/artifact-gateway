@@ -292,7 +292,9 @@ export function AppLayout() {
     return <Navigate to={`/login?redirect=${target}`} replace />;
   }
 
-  if (platformCapabilities(identity).pending) {
+  const capabilities = platformCapabilities(identity);
+
+  if (capabilities.pending) {
     return (
       <div className="ag-app-fallback flex min-h-screen items-center justify-center px-6">
         <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center">
@@ -318,8 +320,6 @@ export function AppLayout() {
       </div>
     );
   }
-
-  const capabilities = platformCapabilities(identity);
 
   const adminOnlyPath = [
     "/",
