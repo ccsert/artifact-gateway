@@ -19,13 +19,13 @@ test("server identity overrides a stale administrator role", async ({
   await expect(page.getByRole("link", { name: "API 密钥" })).toHaveCount(0);
 });
 
-test("a reader sees the repository catalog without administrator navigation", async ({
+test("a member sees the repository catalog without administrator navigation", async ({
   page,
 }) => {
   await authenticateWithIdentity(page, {
-    actor: "user:reader",
+    actor: "user:member",
     kind: "local_session",
-    role: "reader",
+    role: "member",
     administrator: false,
   });
   await page.route("**/api/v2/repositories?**", (route) =>

@@ -4,7 +4,7 @@ interface MockIdentity {
   actor: string;
   kind:
     "static_admin" | "static_resolver" | "local_session" | "api_key" | "oidc";
-  role?: "admin" | "writer" | "reader";
+  role?: "admin" | "member" | "none";
   administrator: boolean;
 }
 
