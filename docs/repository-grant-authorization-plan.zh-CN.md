@@ -91,6 +91,16 @@ Maven/Raw 保留现有 Basic challenge/status，OCI 保留 Registry Bearer chall
 
 拒绝计数器**有意收得更窄**：它只统计授权判定阶段，因为 label 必须收敛到运维可告警的小集合。快照、隔离区与密码相关判定使用各自的 source，它们不是仓库授权判定，不在此列。
 
+## Console 能力推导
+
+会话载荷维持现有形状：`/auth/session` 与 `/api/v2/identity` 返回 `{actor, kind,
+role?, administrator, oidc?}`，**有意不携带能力集**。两档权限在 Console 内、由会话已有的数据推导，且只在一个模块里推导（`console/src/lib/authorization.ts`），导航项、路由守卫与仓库页面都只读它：
+
+- `platformCapabilities(identity)`：把 `administrator` 变成 `platformAdmin`，把 `role === "none"` 变成 `pending`，两者再合成 `browseRepositories`。
+- `repositoryPermissions(access)`：把单个仓库的 effective-access 答复变成 `read`、`write`、`administer`、`intelligence`。
+
+仓库档不能放在会话里：它是**按仓库**回答的，而 effective-access 答复本身就是服务端实际执行的那份权威答案。会话上的能力集会是同一个按仓库判定的第二份副本，且在还没有任何仓库被指明时就已签发，两份可能互相矛盾。平台管理员无论该仓库的答复如何都保留全部仓库界面，因此 Console 自身的管理不依赖该答复。
+
 ## 指标
 
 `artifact_gateway_repository_authorization_denials_total` 只计已管理 Grant 的拒绝，label 限制为 format、固定 source `repository_grants` 和 reason `scope_not_granted|grant_lookup_failed`。

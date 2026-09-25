@@ -1,5 +1,12 @@
 import type { Page } from "@playwright/test";
 
+/**
+ * The identity payload the server really sends. It carries no capability set:
+ * `platformCapabilities` derives the platform tier from `administrator` and
+ * `role`, and the repository tier comes from the repository's own
+ * effective-access answer. A mock that invented capability fields would prove
+ * the console reads fields production never sends.
+ */
 interface MockIdentity {
   actor: string;
   kind:
@@ -35,4 +42,26 @@ export function authenticateAsAdmin(page: Page) {
     role: "admin",
     administrator: true,
   });
+}
+
+/** A member account: the level that reaches repositories through grants. */
+export function authenticateAsMember(page: Page, actor = "user:member") {
+  return authenticateWithIdentity(page, {
+    actor,
+    kind: "local_session",
+    role: "member",
+    administrator: false,
+  });
+}
+
+/**
+ * A repository administrator is a member account holding grants on a
+ * repository, so the identity alone cannot express it: the caller still has to
+ * mock that repository's effective-access answer.
+ */
+export function authenticateAsRepositoryAdministrator(
+  page: Page,
+  actor = "user:repo-admin",
+) {
+  return authenticateAsMember(page, actor);
 }

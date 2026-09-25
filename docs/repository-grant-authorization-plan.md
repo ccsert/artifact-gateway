@@ -227,6 +227,27 @@ can alert on. Snapshot, quarantine, and password decisions use their own
 sources; they are not repository authorization decisions and are not listed
 here.
 
+## Console Capability Derivation
+
+The session payload keeps its current shape: `{actor, kind, role?, administrator,
+oidc?}` from `/auth/session` and `/api/v2/identity`. It deliberately carries no
+capability set. The two tiers are derived in the Console from data the session
+already holds, in one module (`console/src/lib/authorization.ts`) that every
+navigation item, route guard, and repository surface reads:
+
+- `platformCapabilities(identity)` turns `administrator` into `platformAdmin`,
+  `role === "none"` into `pending`, and either into `browseRepositories`.
+- `repositoryPermissions(access)` turns one repository's effective-access answer
+  into `read`, `write`, `administer`, and `intelligence`.
+
+The repository tier cannot live in the session: it is answered per repository,
+and the effective-access response is already the authoritative answer the server
+enforces. A capability set on the session would be a second copy of a
+per-repository decision, issued before any repository is named, and the two
+could disagree. The platform administrator keeps every repository surface
+regardless of the access answer, so the Console's own administration does not
+depend on it.
+
 ## Metrics
 
 `artifact_gateway_repository_authorization_denials_total` counts denied
