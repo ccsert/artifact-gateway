@@ -410,8 +410,10 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryCapabilities(w http.Response
 	})
 }
 
+// ListFormatProfiles serves the static format table. It carries no repository
+// state, so it needs an authenticated caller rather than an administrator.
 func (h generatedRepositoryAPIAdapter) ListFormatProfiles(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.authorize(w, r); !ok {
+	if _, ok := h.authenticate(w, r); !ok {
 		return
 	}
 	profiles := repository.SupportedFormatProfiles()
@@ -482,7 +484,7 @@ func (h generatedRepositoryAPIAdapter) withRepositoryBrowseScope(w http.Response
 	handler(principal, repo)
 }
 
-func (h generatedRepositoryAPIAdapter) withSessionScope(w http.ResponseWriter, r *http.Request, sessionID string, operation RepositoryOperation, handler func(Principal)) {
+func (h generatedRepositoryAPIAdapter) withSessionScope(w http.ResponseWriter, r *http.Request, sessionID string, operation RepositoryOperation, handler func(Principal, repository.HostedRepository)) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
@@ -499,7 +501,7 @@ func (h generatedRepositoryAPIAdapter) withSessionScope(w http.ResponseWriter, r
 	h.withRepositoryScopeForPrincipal(w, r, principal, session.RepositoryID, operation, handler)
 }
 
-func (h generatedRepositoryAPIAdapter) withRepositoryScopeForPrincipal(w http.ResponseWriter, r *http.Request, principal Principal, repositoryID string, operation RepositoryOperation, handler func(Principal)) {
+func (h generatedRepositoryAPIAdapter) withRepositoryScopeForPrincipal(w http.ResponseWriter, r *http.Request, principal Principal, repositoryID string, operation RepositoryOperation, handler func(Principal, repository.HostedRepository)) {
 	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID)
 	if errors.Is(err, repository.ErrNotFound) {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
@@ -513,7 +515,7 @@ func (h generatedRepositoryAPIAdapter) withRepositoryScopeForPrincipal(w http.Re
 		h.writeRepositoryDenial(w, r, principal, repo, operation, decision)
 		return
 	}
-	handler(principal)
+	handler(principal, repo)
 }
 
 // accountStateProblem maps a principal-wide block reported by the repository

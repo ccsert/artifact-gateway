@@ -717,6 +717,9 @@ export const updateAuthorizationTemplate = <ThrowOnError extends boolean = false
     }
 });
 
+/**
+ * Applies an authorization template to the grants of the repository named in the request body. The target repository's administrators may do this; the template catalogue itself stays a platform operation.
+ */
 export const applyAuthorizationTemplate = <ThrowOnError extends boolean = false>(options: Options<ApplyAuthorizationTemplateData, ThrowOnError>): RequestResult<ApplyAuthorizationTemplateResponses, ApplyAuthorizationTemplateErrors, ThrowOnError> => (options.client ?? client).post<ApplyAuthorizationTemplateResponses, ApplyAuthorizationTemplateErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',
@@ -934,7 +937,7 @@ export const updateRepository = <ThrowOnError extends boolean = false>(options: 
 });
 
 /**
- * Probes the repository's egress path to its upstream using the stored egress proxy configuration. Administrator-only; the result is ephemeral and never persisted.
+ * Probes the repository's egress path to its upstream using the stored egress proxy configuration. The repository's administrators may do this; the result is ephemeral and never persisted.
  */
 export const testEgressProxy = <ThrowOnError extends boolean = false>(options: Options<TestEgressProxyData, ThrowOnError>): RequestResult<TestEgressProxyResponses, TestEgressProxyErrors, ThrowOnError> => (options.client ?? client).post<TestEgressProxyResponses, TestEgressProxyErrors, ThrowOnError>({
     security: [{

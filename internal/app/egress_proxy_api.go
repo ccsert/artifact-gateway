@@ -87,27 +87,18 @@ type egressProxyTestResult struct {
 }
 
 // TestEgressProxy probes the repository's egress path to its upstream with the
-// stored configuration. Administrator-only; nothing is persisted.
+// stored configuration. It belongs to the repository's administrators; nothing
+// is persisted.
 func (h generatedRepositoryAPIAdapter) TestEgressProxy(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
-	if _, ok := h.authorize(w, r); !ok {
-		return
-	}
-	repo, err := h.store.GetHostedRepository(r.Context(), id.String())
-	if errors.Is(err, repository.ErrNotFound) {
-		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
-		return
-	}
-	if err != nil {
-		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get repository failed")
-		return
-	}
-	if repo.Type != repository.RepositoryTypeProxy {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "egress proxy tests only apply to proxy repositories")
-		return
-	}
-	result := probeEgressProxy(r.Context(), repo)
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(result)
+	h.withRepositoryScope(w, r, id.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+		if repo.Type != repository.RepositoryTypeProxy {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "egress proxy tests only apply to proxy repositories")
+			return
+		}
+		result := probeEgressProxy(r.Context(), repo)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(result)
+	})
 }
 
 // probeEgressProxy builds the egress client exactly as the protocol paths do

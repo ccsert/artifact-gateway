@@ -642,7 +642,7 @@
       ],
       "post": {
         "operationId": "testEgressProxy",
-        "description": "Probes the repository's egress path to its upstream using the stored egress proxy configuration. Administrator-only; the result is ephemeral and never persisted.",
+        "description": "Probes the repository's egress path to its upstream using the stored egress proxy configuration. The repository's administrators may do this; the result is ephemeral and never persisted.",
         "responses": {
           "200": {
             "$ref": "#/components/responses/EgressProxyTest"
@@ -651,6 +651,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
             "$ref": "#/components/responses/Problem"
           },
           "404": {
