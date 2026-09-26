@@ -595,6 +595,8 @@ export function OperationsPage() {
         )}
       />
       <Tabs
+        className="ag-compact-tabs"
+        tabBarGutter={24}
         activeKey={activeTab}
         onChange={(key) => {
           setActiveTab(key);

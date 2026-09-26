@@ -18,7 +18,12 @@ import {
 } from "../../client";
 import type { Repository, Group, AuditRecord } from "../../client";
 import { PageHeader, Card, CardHeader } from "../../components/ui/Layout";
-import { Loading, ErrorBanner, isNotFound } from "../../components/ui/Feedback";
+import {
+  Loading,
+  ErrorBanner,
+  EmptyState,
+  isNotFound,
+} from "../../components/ui/Feedback";
 import { FormatBadge, StateBadge } from "../../components/ui/Badge";
 import { formatBytes, formatDate, formatNumber } from "../../lib/format";
 import {
@@ -110,14 +115,17 @@ export function DashboardPage() {
     void load();
   }, [load]);
 
-  if (error)
+  // A refresh failure keeps the loaded overview on screen and says what
+  // happened above it; only a first load has nothing to fall back to.
+  const firstLoad = !repos || !groups || !audits;
+  if (firstLoad) {
     return (
       <div className="ag-page-stack">
         <PageHeader title={text("总览", "Overview")} />
-        <ErrorBanner error={error} onRetry={load} />
+        {error ? <ErrorBanner error={error} onRetry={load} /> : <Loading />}
       </div>
     );
-  if (!repos || !groups || !audits) return <Loading />;
+  }
 
   const active = repos.filter((r) => r.state === "active").length;
   const inactive = repos.length - active;
@@ -317,6 +325,7 @@ export function DashboardPage() {
           </Button>
         }
       />
+      {error ? <ErrorBanner error={error} onRetry={load} /> : null}
       <div className="ag-health-strip flex items-center justify-between gap-6 border-y border-zinc-800/80 py-3">
         <div className="flex items-center gap-3">
           <span
@@ -491,7 +500,17 @@ export function DashboardPage() {
             dataSource={repos.slice(0, 6)}
             columns={repositoryColumns}
             pagination={false}
-            locale={{ emptyText: text("暂无仓库", "No repositories") }}
+            locale={{
+              emptyText: (
+                <EmptyState
+                  title={text("暂无仓库", "No repositories")}
+                  hint={text(
+                    "创建第一个仓库后，这里会显示发布与下载概况。",
+                    "Create the first repository to see publishing and downloads here.",
+                  )}
+                />
+              ),
+            }}
             scroll={{ x: 520 }}
           />
         </Card>
@@ -527,7 +546,17 @@ export function DashboardPage() {
             dataSource={audits}
             columns={auditColumns}
             pagination={false}
-            locale={{ emptyText: text("暂无审计记录", "No audit records") }}
+            locale={{
+              emptyText: (
+                <EmptyState
+                  title={text("暂无审计记录", "No audit records")}
+                  hint={text(
+                    "产生访问或发布行为后，这里会列出最近的判定记录。",
+                    "Recent decisions appear here once access or publishing is recorded.",
+                  )}
+                />
+              ),
+            }}
             scroll={{ x: 520 }}
           />
         </Card>

@@ -22,7 +22,7 @@ import {
   MetricStrip,
   useClipboardAction,
 } from "../../components/ui/ConsolePrimitives";
-import { ErrorBanner, Loading } from "../../components/ui/Feedback";
+import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { Card, CardHeader } from "../../components/ui/Layout";
 
 const dependencyLabels: Record<string, [string, string]> = {
@@ -598,7 +598,16 @@ export function SystemDiagnosticsPanel() {
             dataSource={diagnostics.queues}
             columns={queueColumns}
             locale={{
-              emptyText: text("当前没有活跃队列", "No active queue entries"),
+              emptyText: (
+                <EmptyState
+                  compact
+                  title={text("当前没有活跃队列", "No active queue entries")}
+                  hint={text(
+                    "后台任务启动后会占用队列，这里会实时显示。",
+                    "Background jobs appear here as soon as they occupy a queue.",
+                  )}
+                />
+              ),
             }}
             pagination={false}
             scroll={

@@ -382,7 +382,7 @@ export function ApiKeysPage() {
         )}
         actions={<CreateKeyDialog onCreated={setReveal} />}
       />
-      {error !== null ? (
+      {error !== null && !keys ? (
         <ErrorBanner error={error} onRetry={load} />
       ) : !keys ? (
         <Loading />
@@ -398,6 +398,7 @@ export function ApiKeysPage() {
         </Card>
       ) : (
         <>
+          {error !== null ? <ErrorBanner error={error} onRetry={load} /> : null}
           <MetricStrip
             items={[
               {

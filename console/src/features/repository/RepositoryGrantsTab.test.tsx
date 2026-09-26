@@ -256,8 +256,16 @@ describe("RepositoryGrantsTab", () => {
 
     const row = (await screen.findByText("user:active-user")).closest("tr");
     expect(row).not.toBeNull();
-    await user.click(within(row!).getByRole("button", { name: /删\s*除/ }));
-    await user.click(await screen.findByRole("button", { name: /移\s*除/ }));
+    await user.click(
+      within(row!).getByRole("button", { name: "移除该行授权" }),
+    );
+    // The confirmation lives in the popover; the row button is labelled
+    // distinctly so the two are never confused by name.
+    await user.click(
+      within(await screen.findByRole("tooltip")).getByRole("button", {
+        name: /^移\s*除$/,
+      }),
+    );
 
     await waitFor(() =>
       expect(mockDeleteGrant).toHaveBeenCalledWith({

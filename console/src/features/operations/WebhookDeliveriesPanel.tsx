@@ -403,8 +403,12 @@ export function WebhookDeliveriesPanel() {
             </Space>
           }
         />
-        {!subscriptions ? (
-          <Loading label={text("加载 Webhook 订阅…", "Loading webhooks…")} />
+        {subscriptions === null ? (
+          // A first load in flight is the only case that shows a placeholder:
+          // once it fails, the banner above is the whole answer.
+          error ? null : (
+            <Loading label={text("加载 Webhook 订阅…", "Loading webhooks…")} />
+          )
         ) : subscriptions.length === 0 ? (
           <EmptyState
             title={text("还没有 Webhook 订阅", "No webhook subscriptions yet")}

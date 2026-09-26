@@ -762,7 +762,7 @@ export function GroupsPage() {
           />
         }
       />
-      {error !== null ? (
+      {error !== null && groups.length === 0 ? (
         isNotFound(error) ? (
           <Card>
             <EmptyState
@@ -776,7 +776,7 @@ export function GroupsPage() {
         ) : (
           <ErrorBanner error={error} onRetry={load} />
         )
-      ) : loading ? (
+      ) : loading && groups.length === 0 ? (
         <Loading />
       ) : groups.length === 0 ? (
         <Card>
@@ -790,6 +790,7 @@ export function GroupsPage() {
         </Card>
       ) : (
         <>
+          {error !== null ? <ErrorBanner error={error} onRetry={load} /> : null}
           <MetricStrip
             items={[
               {

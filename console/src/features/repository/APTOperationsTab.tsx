@@ -626,6 +626,8 @@ function APTSuiteOperations({
             />
           )}
           <Tabs
+            className="ag-compact-tabs"
+            tabBarGutter={24}
             destroyOnHidden
             items={[
               {

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { authenticateAsAdmin } from "./support/auth";
+import { expectTabGutter } from "./support/tabs";
 
 const repositoryId = "apt-console";
 const repo = {
@@ -174,6 +175,8 @@ for (const [width, theme, locale] of [
         exact: true,
       }),
     ).toBeVisible();
+    // The APT package views share the task-tab rhythm too.
+    await expectTabGutter(page, ".ag-compact-tabs", ".ag-apt-operations");
     const surface = page.locator(".ag-apt-operations");
     const gaps = await surface.evaluate((el) => {
       const rects = Array.from(el.children).map((child) =>

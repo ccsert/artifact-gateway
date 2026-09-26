@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { authenticateAsAdmin } from "./support/auth";
+import { expectTabGutter } from "./support/tabs";
 
 test("operations survives legacy runtime node null arrays", async ({
   page,
@@ -94,6 +95,7 @@ test("operations survives legacy runtime node null arrays", async ({
 
   await page.goto("/operations");
   await expect(page.getByRole("heading", { name: "任务中心" })).toBeVisible();
+  await expectTabGutter(page, ".ag-compact-tabs", ".ag-page-stack");
   await page.getByRole("tab", { name: "系统诊断" }).click();
   await expect(page.getByRole("heading", { name: "构建信息" })).toBeVisible();
   await expect(

@@ -638,6 +638,7 @@ export function ServiceAccountsPage() {
               ) : (
                 <>
                   <Table<ServiceAccountCredential>
+                    className="ag-console-table"
                     rowKey="id"
                     columns={columns}
                     dataSource={credentials}

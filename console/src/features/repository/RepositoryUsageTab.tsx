@@ -7,7 +7,7 @@ import {
   type Repository,
   type RepositoryArtifactUsage,
 } from "../../client";
-import { ErrorBanner, Loading } from "../../components/ui/Feedback";
+import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { formatBytes, formatDate, formatNumber } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 
@@ -135,13 +135,23 @@ export function RepositoryUsageTab({ repo }: { repo: Repository }) {
         ))}
       </div>
       <Table<UsageRow>
+        className="ag-console-table"
         size="small"
         columns={columns}
         dataSource={rows}
         loading={loading}
         pagination={false}
         locale={{
-          emptyText: text("暂无下载记录", "No downloads recorded yet"),
+          emptyText: (
+            <EmptyState
+              compact
+              title={text("暂无下载记录", "No downloads recorded yet")}
+              hint={text(
+                "该窗口内没有来自此仓库的读取请求。",
+                "No reads from this repository were recorded in this window.",
+              )}
+            />
+          ),
         }}
       />
       <div>

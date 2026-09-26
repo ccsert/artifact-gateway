@@ -440,8 +440,12 @@ export function ScheduledTasksPanel() {
             </Space>
           }
         />
-        {!tasks ? (
-          <Loading label={text("加载计划任务…", "Loading schedules…")} />
+        {tasks === null ? (
+          // A first load in flight is the only case that shows a placeholder:
+          // once it fails, the banner above is the whole answer.
+          error ? null : (
+            <Loading label={text("加载计划任务…", "Loading schedules…")} />
+          )
         ) : tasks.length === 0 ? (
           <EmptyState
             title={text("还没有计划任务", "No scheduled tasks yet")}
@@ -718,7 +722,16 @@ function TaskRunHistory({
         columns={columns}
         pagination={false}
         locale={{
-          emptyText: text("尚无投递记录", "No dispatch history"),
+          emptyText: (
+            <EmptyState
+              compact
+              title={text("尚无投递记录", "No dispatch history")}
+              hint={text(
+                "计划触发后，每次投递的结果都会记录在这里。",
+                "Each dispatch is recorded here once the schedule fires.",
+              )}
+            />
+          ),
         }}
         scroll={{ x: 980, y: 280 }}
       />

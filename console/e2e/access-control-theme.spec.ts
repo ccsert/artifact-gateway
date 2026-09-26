@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { defaultConsoleThemes } from "../src/lib/consoleTheme";
 import { authenticateAsAdmin } from "./support/auth";
+import { expectTabGutter } from "./support/tabs";
 
 function captureRuntimeErrors(page: Page) {
   const errors: string[] = [];
@@ -113,6 +114,8 @@ test("public access layers use coherent light-theme surfaces", async ({
   for (const layer of await layers.all()) {
     await expect(layer).toHaveCSS("background-color", "rgb(250, 250, 250)");
   }
+  // The access tabs share the task-tab rhythm: one gutter, no tab padding.
+  await expectTabGutter(page, ".ag-access-tabs", ".ag-card");
   expect(await horizontalOverflow(page)).toBe(0);
   expect(runtimeErrors).toEqual([]);
 
@@ -120,6 +123,11 @@ test("public access layers use coherent light-theme surfaces", async ({
     await page.screenshot({
       path: testInfo.outputPath("access-control-light.png"),
       fullPage: true,
+    });
+    // A viewport capture too: the console shell's sidebar is fixed, so a
+    // full-page capture composites it over the scrolled content.
+    await page.screenshot({
+      path: testInfo.outputPath("access-control-light-viewport.png"),
     });
   }
 

@@ -789,6 +789,7 @@ export function AccessControlPage() {
       <Tabs
         className="ag-access-tabs"
         size="small"
+        tabBarGutter={24}
         activeKey={activeTab}
         onChange={(key) => {
           const nextTab = accessControlTabFromQuery(key);
