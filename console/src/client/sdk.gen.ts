@@ -971,7 +971,7 @@ export const testEgressProxy = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
- * Removes a single grant identified by principal and optional resource prefix, leaving every other grant of the repository untouched. Answers 404 when no such grant exists, so a console working from a stale list learns the row is already gone.
+ * Removes a single grant identified by principal and optional resource prefix, leaving every other grant of the repository untouched. Answers 404 when no such grant exists, so a console working from a stale list learns the row is already gone. The parameters deliberately carry no length cap beyond a non-empty principal, because the request only has to name a stored row and a row written by an earlier revision must stay removable even when its key is longer than today's write rules allow.
  */
 export const deleteGrant = <ThrowOnError extends boolean = false>(options: Options<DeleteGrantData, ThrowOnError>): RequestResult<DeleteGrantResponses, DeleteGrantErrors, ThrowOnError> => (options.client ?? client).delete<DeleteGrantResponses, DeleteGrantErrors, ThrowOnError>({
     security: [{

@@ -182,6 +182,9 @@ export type Member = {
 export type MemberList = Array<Member>;
 
 export type Grant = {
+  /**
+   * Names the grant holder. The same shape is accepted by the single-grant endpoints, the whole-list replace, and the authorization template editor, so a grant written by one of them can always be addressed by another.
+   */
   principal: string;
   scopes: Array<
     | "repositories:read"
