@@ -685,6 +685,74 @@ func (h generatedRepositoryAPIAdapter) ReplaceGrants(w http.ResponseWriter, r *h
 	})
 }
 
+// UpsertGrant writes exactly one grant row. Unlike ReplaceGrants it needs no
+// If-Match precondition: the write is confined to the (principal, resource
+// prefix) key, so two administrators editing different principals cannot
+// clobber each other, which is what made the whole-list replace risky once a
+// repository accumulates many grants.
+func (h generatedRepositoryAPIAdapter) UpsertGrant(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+		var body adminopenapi.Grant
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&body); err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "invalid grant body")
+			return
+		}
+		prefix := ""
+		if body.ResourcePrefix != nil {
+			prefix = *body.ResourcePrefix
+		}
+		scopes := make([]string, 0, len(body.Scopes))
+		for _, scope := range body.Scopes {
+			scopes = append(scopes, string(scope))
+		}
+		grant := repository.RepositoryGrant{Principal: body.Principal, Scopes: scopes, ResourcePrefix: prefix}
+		if !validRepositoryGrants([]repository.RepositoryGrant{grant}, repo.Format) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "grant must name a principal, valid scopes, and a canonical resource prefix")
+			return
+		}
+		set, err := h.grants.UpsertRepositoryGrant(r.Context(), repositoryID.String(), grant)
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "upsert grant failed")
+			return
+		}
+		h.recordAuthorizationAudit(r, repo.Name, "repositories/"+repo.ID+"/grants", "repository.grants.upsert", http.StatusOK)
+		w.Header().Set("ETag", set.Version)
+		writeNativeMavenJSON(w, http.StatusOK, set.Grants)
+	})
+}
+
+func (h generatedRepositoryAPIAdapter) DeleteGrant(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.DeleteGrantParams) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+		principal := strings.TrimSpace(params.Principal)
+		prefix := ""
+		if params.ResourcePrefix != nil {
+			prefix = *params.ResourcePrefix
+		}
+		if principal == "" || len(principal) > 512 || strings.ContainsAny(principal, "\x00\r\n") || len(prefix) > 255 || strings.ContainsAny(prefix, "\x00\r\n") {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "principal and resourcePrefix must be valid")
+			return
+		}
+		set, err := h.grants.DeleteRepositoryGrant(r.Context(), repositoryID.String(), principal, prefix)
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusNotFound, "not_found", "grant not found")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "delete grant failed")
+			return
+		}
+		h.recordAuthorizationAudit(r, repo.Name, "repositories/"+repo.ID+"/grants", "repository.grants.delete", http.StatusNoContent)
+		w.Header().Set("ETag", set.Version)
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
 func (h generatedRepositoryAPIAdapter) recordAuthorizationAudit(r *http.Request, repositoryName, resource, operation string, status int) {
 	if h.audit == nil {
 		return

@@ -5056,6 +5056,12 @@ type GetRepositoryEffectiveAccessParams struct {
 // GetRepositoryEffectiveAccessParamsRole defines parameters for GetRepositoryEffectiveAccess.
 type GetRepositoryEffectiveAccessParamsRole string
 
+// DeleteGrantParams defines parameters for DeleteGrant.
+type DeleteGrantParams struct {
+	Principal      string  `form:"principal" json:"principal"`
+	ResourcePrefix *string `form:"resourcePrefix,omitempty" json:"resourcePrefix,omitempty"`
+}
+
 // ReplaceGrantsParams defines parameters for ReplaceGrants.
 type ReplaceGrantsParams struct {
 	IfMatch IfMatch `json:"If-Match"`
@@ -5305,6 +5311,9 @@ type RefreshProxyCacheJSONRequestBody = MavenCacheRefreshRequest
 
 // ReplaceRepositoryCapacityJSONRequestBody defines body for ReplaceRepositoryCapacity for application/json ContentType.
 type ReplaceRepositoryCapacityJSONRequestBody = RepositoryCapacityQuota
+
+// UpsertGrantJSONRequestBody defines body for UpsertGrant for application/json ContentType.
+type UpsertGrantJSONRequestBody = Grant
 
 // ReplaceGrantsJSONRequestBody defines body for ReplaceGrants for application/json ContentType.
 type ReplaceGrantsJSONRequestBody = GrantList
@@ -5684,8 +5693,14 @@ type ServerInterface interface {
 	// (POST /repositories/{repositoryId}/egress-proxy:test)
 	TestEgressProxy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
+	// (DELETE /repositories/{repositoryId}/grants)
+	DeleteGrant(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params DeleteGrantParams)
+
 	// (GET /repositories/{repositoryId}/grants)
 	ListGrants(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (POST /repositories/{repositoryId}/grants)
+	UpsertGrant(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
 	// (PUT /repositories/{repositoryId}/grants)
 	ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ReplaceGrantsParams)
@@ -9665,6 +9680,61 @@ func (siw *ServerInterfaceWrapper) TestEgressProxy(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteGrant operation middleware
+func (siw *ServerInterfaceWrapper) DeleteGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteGrantParams
+
+	// ------------- Required query parameter "principal" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "principal", r.URL.Query(), &params.Principal, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "principal"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principal", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "resourcePrefix" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resourcePrefix", r.URL.Query(), &params.ResourcePrefix, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resourcePrefix"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourcePrefix", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteGrant(w, r, repositoryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListGrants operation middleware
 func (siw *ServerInterfaceWrapper) ListGrants(w http.ResponseWriter, r *http.Request) {
 
@@ -9682,6 +9752,32 @@ func (siw *ServerInterfaceWrapper) ListGrants(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListGrants(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpsertGrant operation middleware
+func (siw *ServerInterfaceWrapper) UpsertGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpsertGrant(w, r, repositoryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12373,7 +12469,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/conan/references", wrapper.ListConanReferences)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/effective-access", wrapper.GetRepositoryEffectiveAccess)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/egress-proxy:test", wrapper.TestEgressProxy)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.DeleteGrant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ListGrants)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.UpsertGrant)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/grants", wrapper.ReplaceGrants)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs", wrapper.ListRepositoryLifecycleJobs)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/cancel", wrapper.CancelRepositoryLifecycleJob)
@@ -18416,6 +18514,53 @@ func (response TestEgressProxy404ApplicationProblemPlusJSONResponse) VisitTestEg
 	return err
 }
 
+type DeleteGrantRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Params       DeleteGrantParams
+}
+
+type DeleteGrantResponseObject interface {
+	VisitDeleteGrantResponse(w http.ResponseWriter) error
+}
+
+type DeleteGrant204Response struct {
+}
+
+func (response DeleteGrant204Response) VisitDeleteGrantResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteGrant400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteGrant400ApplicationProblemPlusJSONResponse) VisitDeleteGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteGrant404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteGrant404ApplicationProblemPlusJSONResponse) VisitDeleteGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListGrantsRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 }
@@ -18435,6 +18580,60 @@ func (response ListGrants200JSONResponse) VisitListGrantsResponse(w http.Respons
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpsertGrantRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Body         *UpsertGrantJSONRequestBody
+}
+
+type UpsertGrantResponseObject interface {
+	VisitUpsertGrantResponse(w http.ResponseWriter) error
+}
+
+type UpsertGrant200JSONResponse struct{ GrantListJSONResponse }
+
+func (response UpsertGrant200JSONResponse) VisitUpsertGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpsertGrant400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpsertGrant400ApplicationProblemPlusJSONResponse) VisitUpsertGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpsertGrant404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpsertGrant404ApplicationProblemPlusJSONResponse) VisitUpsertGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -22641,8 +22840,14 @@ type StrictServerInterface interface {
 	// (POST /repositories/{repositoryId}/egress-proxy:test)
 	TestEgressProxy(ctx context.Context, request TestEgressProxyRequestObject) (TestEgressProxyResponseObject, error)
 
+	// (DELETE /repositories/{repositoryId}/grants)
+	DeleteGrant(ctx context.Context, request DeleteGrantRequestObject) (DeleteGrantResponseObject, error)
+
 	// (GET /repositories/{repositoryId}/grants)
 	ListGrants(ctx context.Context, request ListGrantsRequestObject) (ListGrantsResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/grants)
+	UpsertGrant(ctx context.Context, request UpsertGrantRequestObject) (UpsertGrantResponseObject, error)
 
 	// (PUT /repositories/{repositoryId}/grants)
 	ReplaceGrants(ctx context.Context, request ReplaceGrantsRequestObject) (ReplaceGrantsResponseObject, error)
@@ -25465,6 +25670,33 @@ func (sh *strictHandler) TestEgressProxy(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// DeleteGrant operation middleware
+func (sh *strictHandler) DeleteGrant(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params DeleteGrantParams) {
+	var request DeleteGrantRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteGrant(ctx, request.(DeleteGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteGrantResponseObject); ok {
+		if err := validResponse.VisitDeleteGrantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListGrants operation middleware
 func (sh *strictHandler) ListGrants(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
 	var request ListGrantsRequestObject
@@ -25484,6 +25716,39 @@ func (sh *strictHandler) ListGrants(w http.ResponseWriter, r *http.Request, repo
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListGrantsResponseObject); ok {
 		if err := validResponse.VisitListGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpsertGrant operation middleware
+func (sh *strictHandler) UpsertGrant(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request UpsertGrantRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body UpsertGrantJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpsertGrant(ctx, request.(UpsertGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpsertGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpsertGrantResponseObject); ok {
+		if err := validResponse.VisitUpsertGrantResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -2333,6 +2333,66 @@
             "$ref": "#/components/responses/Problem"
           }
         }
+      },
+      "post": {
+        "operationId": "upsertGrant",
+        "description": "Creates or replaces a single grant identified by its principal and resource prefix, leaving every other grant of the repository untouched. Unlike replaceGrants no If-Match is required, because the write is confined to one grant row and cannot clobber concurrent changes to other principals. Returns the full grant list with the new version, exactly like replaceGrants.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Grant"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GrantList"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteGrant",
+        "description": "Removes a single grant identified by principal and optional resource prefix, leaving every other grant of the repository untouched. Answers 404 when no such grant exists, so a console working from a stale list learns the row is already gone.",
+        "parameters": [
+          {
+            "name": "principal",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          },
+          {
+            "name": "resourcePrefix",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Grant removed"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
       }
     },
     "/repositories/{repositoryId}/retention-policy": {

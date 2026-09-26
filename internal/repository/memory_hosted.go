@@ -392,6 +392,61 @@ func (s *MemoryStore) ReplaceRepositoryGrants(_ context.Context, repositoryID st
 	return cloneRepositoryGrantSet(set), nil
 }
 
+func (s *MemoryStore) UpsertRepositoryGrant(_ context.Context, repositoryID string, grant RepositoryGrant) (RepositoryGrantSet, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.hostedRepositories[repositoryID]; !ok {
+		return RepositoryGrantSet{}, ErrNotFound
+	}
+	set := s.repositoryGrants[repositoryID]
+	if set.Version == "" {
+		set.Version = "1"
+	}
+	set.Version = nextHostedGroupVersion(set.Version)
+	grant.Scopes = append([]string(nil), grant.Scopes...)
+	replaced := false
+	for i := range set.Grants {
+		if set.Grants[i].Principal == grant.Principal && set.Grants[i].ResourcePrefix == grant.ResourcePrefix {
+			set.Grants[i] = grant
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		set.Grants = append(set.Grants, grant)
+	}
+	s.repositoryGrants[repositoryID] = set
+	return cloneRepositoryGrantSet(set), nil
+}
+
+func (s *MemoryStore) DeleteRepositoryGrant(_ context.Context, repositoryID, principal, resourcePrefix string) (RepositoryGrantSet, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.hostedRepositories[repositoryID]; !ok {
+		return RepositoryGrantSet{}, ErrNotFound
+	}
+	set, ok := s.repositoryGrants[repositoryID]
+	if !ok {
+		return RepositoryGrantSet{}, ErrNotFound
+	}
+	grants := make([]RepositoryGrant, 0, len(set.Grants))
+	found := false
+	for _, grant := range set.Grants {
+		if grant.Principal == principal && grant.ResourcePrefix == resourcePrefix {
+			found = true
+			continue
+		}
+		grants = append(grants, grant)
+	}
+	if !found {
+		return RepositoryGrantSet{}, ErrNotFound
+	}
+	set.Version = nextHostedGroupVersion(set.Version)
+	set.Grants = grants
+	s.repositoryGrants[repositoryID] = set
+	return cloneRepositoryGrantSet(set), nil
+}
+
 func defaultRepositoryRetentionPolicy() RepositoryRetentionPolicy {
 	return RepositoryRetentionPolicy{
 		Version:            "1",

@@ -4951,6 +4951,41 @@ export type TestEgressProxyResponses = {
 export type TestEgressProxyResponse =
   TestEgressProxyResponses[keyof TestEgressProxyResponses];
 
+export type DeleteGrantData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query: {
+    principal: string;
+    resourcePrefix?: string;
+  };
+  url: "/repositories/{repositoryId}/grants";
+};
+
+export type DeleteGrantErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type DeleteGrantError = DeleteGrantErrors[keyof DeleteGrantErrors];
+
+export type DeleteGrantResponses = {
+  /**
+   * Grant removed
+   */
+  204: void;
+};
+
+export type DeleteGrantResponse =
+  DeleteGrantResponses[keyof DeleteGrantResponses];
+
 export type ListGrantsData = {
   body?: never;
   path: {
@@ -4968,6 +5003,38 @@ export type ListGrantsResponses = {
 };
 
 export type ListGrantsResponse = ListGrantsResponses[keyof ListGrantsResponses];
+
+export type UpsertGrantData = {
+  body: Grant;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/grants";
+};
+
+export type UpsertGrantErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type UpsertGrantError = UpsertGrantErrors[keyof UpsertGrantErrors];
+
+export type UpsertGrantResponses = {
+  /**
+   * Grants
+   */
+  200: GrantList;
+};
+
+export type UpsertGrantResponse =
+  UpsertGrantResponses[keyof UpsertGrantResponses];
 
 export type ReplaceGrantsData = {
   body: GrantList;
