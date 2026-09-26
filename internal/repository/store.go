@@ -125,6 +125,13 @@ type HostedGroupStore interface {
 type RepositoryGrantStore interface {
 	GetRepositoryGrants(context.Context, string) (RepositoryGrantSet, error)
 	ReplaceRepositoryGrants(context.Context, string, []RepositoryGrant, string) (RepositoryGrantSet, error)
+	// UpsertRepositoryGrant creates or replaces the single grant keyed by
+	// (principal, resource prefix) and leaves every other grant untouched, so
+	// concurrent editors of different principals never clobber each other.
+	UpsertRepositoryGrant(context.Context, string, RepositoryGrant) (RepositoryGrantSet, error)
+	// DeleteRepositoryGrant removes the single grant keyed by (principal,
+	// resource prefix) and answers ErrNotFound when no such grant exists.
+	DeleteRepositoryGrant(context.Context, string, string, string) (RepositoryGrantSet, error)
 }
 
 type RepositoryGrantRecordStore interface {

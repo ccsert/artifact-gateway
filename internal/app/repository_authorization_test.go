@@ -20,6 +20,14 @@ func (grantStoreStub) ReplaceRepositoryGrants(context.Context, string, []reposit
 	panic("unexpected ReplaceRepositoryGrants call")
 }
 
+func (grantStoreStub) UpsertRepositoryGrant(context.Context, string, repository.RepositoryGrant) (repository.RepositoryGrantSet, error) {
+	panic("unexpected UpsertRepositoryGrant call")
+}
+
+func (grantStoreStub) DeleteRepositoryGrant(context.Context, string, string, string) (repository.RepositoryGrantSet, error) {
+	panic("unexpected DeleteRepositoryGrant call")
+}
+
 func TestRepositoryAuthorizerUsesManagedGrantScopes(t *testing.T) {
 	target := repository.HostedRepository{ID: "repo-id", Name: "releases"}
 	authorizer := RepositoryAuthorizer{Grants: grantStoreStub{set: repository.RepositoryGrantSet{Version: "2", Grants: []repository.RepositoryGrant{

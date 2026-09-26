@@ -91,6 +91,14 @@ func (grantStoreStub) ReplaceRepositoryGrants(context.Context, string, []reposit
 	panic("unexpected ReplaceRepositoryGrants call")
 }
 
+func (grantStoreStub) UpsertRepositoryGrant(context.Context, string, repository.RepositoryGrant) (repository.RepositoryGrantSet, error) {
+	panic("unexpected UpsertRepositoryGrant call")
+}
+
+func (grantStoreStub) DeleteRepositoryGrant(context.Context, string, string, string) (repository.RepositoryGrantSet, error) {
+	panic("unexpected DeleteRepositoryGrant call")
+}
+
 func TestAuthenticateBasicReturnsConfiguredActorPrincipal(t *testing.T) {
 	authenticator := Authenticator{
 		ResolverToken:     "resolver-secret",
@@ -415,6 +423,14 @@ func (s perRepositoryGrantStub) GetRepositoryGrants(_ context.Context, repositor
 
 func (perRepositoryGrantStub) ReplaceRepositoryGrants(context.Context, string, []repository.RepositoryGrant, string) (repository.RepositoryGrantSet, error) {
 	panic("unexpected ReplaceRepositoryGrants call")
+}
+
+func (perRepositoryGrantStub) UpsertRepositoryGrant(context.Context, string, repository.RepositoryGrant) (repository.RepositoryGrantSet, error) {
+	panic("unexpected UpsertRepositoryGrant call")
+}
+
+func (perRepositoryGrantStub) DeleteRepositoryGrant(context.Context, string, string, string) (repository.RepositoryGrantSet, error) {
+	panic("unexpected DeleteRepositoryGrant call")
 }
 
 // A level reaches no repository on its own, and a grant reaches exactly the
