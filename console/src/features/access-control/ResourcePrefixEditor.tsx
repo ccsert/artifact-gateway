@@ -124,6 +124,7 @@ export function ResourcePrefixEditor({
     <AutoComplete
       className="w-full font-mono"
       allowClear
+      maxLength={255}
       value={parts[0] ?? ""}
       options={examples.map((example) => ({ value: example }))}
       placeholder={placeholder}
