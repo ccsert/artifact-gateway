@@ -48,6 +48,7 @@ import {
 } from "../../components/ui/Feedback";
 import { FormatBadge, Badge, type BadgeTone } from "../../components/ui/Badge";
 import { AccessDecisionSummary } from "./AccessDecisionSummary";
+import { grantRowKey } from "./grantDraft";
 import { useAuth } from "../../lib/auth";
 import { platformCapabilities } from "../../lib/authorization";
 import {
@@ -926,7 +927,11 @@ export function AccessControlPage() {
                   <Table<GrantRow>
                     className="ag-console-table"
                     rowKey={(row) =>
-                      `${row.repositoryId}-${row.principal}-${row.resourcePrefix}`
+                      grantRowKey(
+                        row.repositoryId,
+                        row.principal,
+                        row.resourcePrefix,
+                      )
                     }
                     size="middle"
                     dataSource={filtered}

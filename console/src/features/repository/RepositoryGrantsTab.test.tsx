@@ -211,7 +211,7 @@ describe("RepositoryGrantsTab", () => {
     expect(mockDeleteGrant).not.toHaveBeenCalled();
   });
 
-  it("deletes the previous key when an edit moves the grant to a new principal", async () => {
+  it("deletes the previous key before writing the new one when an edit moves the grant", async () => {
     mockListGrants.mockResolvedValue({ data: [existingGrant] } as never);
     mockPrincipalSources();
     mockUpsertGrant.mockResolvedValue({
@@ -238,6 +238,34 @@ describe("RepositoryGrantsTab", () => {
         },
       }),
     );
+    await waitFor(() => expect(mockUpsertGrant).toHaveBeenCalled());
+    // Removing the old row first keeps a failure from leaving the grant wider
+    // than the administrator asked for.
+    expect(mockDeleteGrant.mock.invocationCallOrder[0]).toBeLessThan(
+      mockUpsertGrant.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("keeps the draft and writes nothing when removing the previous row fails", async () => {
+    mockListGrants.mockResolvedValue({ data: [existingGrant] } as never);
+    mockPrincipalSources();
+    mockDeleteGrant.mockResolvedValue({
+      error: { status: 500, message: "delete failed" },
+    } as never);
+
+    const user = userEvent.setup();
+    renderTab();
+
+    await user.click(await screen.findByRole("button", { name: /编\s*辑/ }));
+    await user.click(screen.getByRole("combobox", { name: "授权主体" }));
+    await user.click(await screen.findByText(/API Key · Active key/));
+    await user.click(screen.getByRole("button", { name: /保\s*存/ }));
+
+    expect(
+      await screen.findByText("旧授权删除失败，新授权未保存，请重试。"),
+    ).toBeInTheDocument();
+    expect(mockUpsertGrant).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("removes only the confirmed row", async () => {

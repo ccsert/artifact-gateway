@@ -43,6 +43,7 @@ import {
   emptyGrant,
   grantedCapabilitiesLabel,
   grantLevel,
+  grantRowKey,
   grantTone,
   type DraftGrant,
   type PrincipalOption,
@@ -72,7 +73,7 @@ type ComposeBase = {
 };
 
 function recordKey(record: RepositoryGrantRecord): string {
-  return `${record.repositoryId}\x00${record.resourcePrefix ?? ""}`;
+  return grantRowKey(record.repositoryId, record.resourcePrefix);
 }
 
 /**
@@ -305,20 +306,13 @@ export function UserRepositoryAccessPanel({
     setSaveError(null);
     try {
       const prefix = normalizePrefix(draft.resourcePrefix);
-      const { error: requestError } = await upsertGrant({
-        path: { repositoryId: composeRepositoryId },
-        body: { principal, scopes: [...draft.scopes], resourcePrefix: prefix },
-      });
-      if (requestError) {
-        setSaveError(requestError);
-        return;
-      }
       // An edit that changed the prefix moved the entry: the old prefix is a
       // different row and must go, or the edit would fork one grant into two.
-      if (
-        composeTargetPrefix !== null &&
-        composeTargetPrefix !== (prefix ?? "")
-      ) {
+      // It goes first, so a failure here leaves the grant narrower rather than
+      // wider than the administrator asked for.
+      const moved =
+        composeTargetPrefix !== null && composeTargetPrefix !== (prefix ?? "");
+      if (moved) {
         const { error: deleteError } = await deleteGrant({
           path: { repositoryId: composeRepositoryId },
           query: {
@@ -330,14 +324,30 @@ export function UserRepositoryAccessPanel({
           setSaveError(
             new Error(
               text(
-                "新授权已保存，但原资源范围的授权删除失败，请手动移除旧行。",
-                "The updated grant was saved, but removing the previous resource scope failed. Remove it manually.",
+                "原资源范围的授权删除失败，新授权未保存，请重试。",
+                "The previous resource scope could not be removed, so the new grant was not saved. Please retry.",
               ),
             ),
           );
-          await load();
           return;
         }
+      }
+      const { error: requestError } = await upsertGrant({
+        path: { repositoryId: composeRepositoryId },
+        body: { principal, scopes: [...draft.scopes], resourcePrefix: prefix },
+      });
+      if (requestError) {
+        setSaveError(
+          moved
+            ? new Error(
+                text(
+                  "旧行已移除，但新授权保存失败，请再次保存以写入新授权。",
+                  "The previous row was removed, but saving the new grant failed. Save again to write it.",
+                ),
+              )
+            : requestError,
+        );
+        return;
       }
       void message.success(text("仓库授权已保存", "Repository grant saved"));
       closeCompose();
