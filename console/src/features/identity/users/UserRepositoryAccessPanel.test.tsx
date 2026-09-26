@@ -8,33 +8,36 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  deleteGrant,
   listAuthorizationRoles,
   listGrants,
   listRepositories,
   listRepositoryGrants,
-  replaceGrants,
+  upsertGrant,
 } from "../../../client";
-import type { Grant } from "../../../client";
 import { AntdProvider } from "../../../app/AntdProvider";
 import { PreferencesProvider } from "../../../lib/preferences";
 import { UserRepositoryAccessPanel } from "./UserRepositoryAccessPanel";
 
 vi.mock("../../../client", () => ({
+  deleteGrant: vi.fn(),
   listAuthorizationRoles: vi.fn(),
   listGrants: vi.fn(),
   listRepositories: vi.fn(),
   listRepositoryGrants: vi.fn(),
-  replaceGrants: vi.fn(),
+  upsertGrant: vi.fn(),
 }));
 
 const mockListRepositoryGrants = vi.mocked(listRepositoryGrants);
 const mockListRepositories = vi.mocked(listRepositories);
 const mockListAuthorizationRoles = vi.mocked(listAuthorizationRoles);
 const mockListGrants = vi.mocked(listGrants);
-const mockReplaceGrants = vi.mocked(replaceGrants);
+const mockUpsertGrant = vi.mocked(upsertGrant);
+const mockDeleteGrant = vi.mocked(deleteGrant);
 
 const userId = "00000000-0000-0000-0000-000000000001";
 const username = "alice";
+const principal = `user:${username}`;
 const artifactsId = "00000000-0000-0000-0000-0000000000a1";
 const iconsId = "00000000-0000-0000-0000-0000000000a2";
 
@@ -58,27 +61,23 @@ const bobAdmin = {
 };
 
 const aliceReleases = {
-  principal: `user:${username}`,
+  principal,
   scopes: ["repositories:write"],
   resourcePrefix: "releases/",
 };
 
 const aliceSnapshots = {
-  principal: `user:${username}`,
+  principal,
   scopes: ["repositories:read"],
   resourcePrefix: "snapshots/",
 };
-
-function versionResponse(etag: string) {
-  return { headers: { get: () => etag } };
-}
 
 function record(overrides: Record<string, unknown> = {}) {
   return {
     repositoryId: artifactsId,
     repositoryName: "artifacts",
     format: "raw",
-    principal: `user:${username}`,
+    principal,
     scopes: ["repositories:read"],
     ...overrides,
   };
@@ -99,10 +98,6 @@ function mockOkSources() {
     data: { items: [artifacts, icons] },
   } as never);
   mockListAuthorizationRoles.mockResolvedValue({ data: [] } as never);
-}
-
-function submittedBody(callIndex = 0): Grant[] {
-  return mockReplaceGrants.mock.calls[callIndex][0].body;
 }
 
 afterEach(() => {
@@ -175,14 +170,13 @@ describe("UserRepositoryAccessPanel", () => {
     expect(screen.getByRole("button", { name: /重\s*试/ })).toBeInTheDocument();
   });
 
-  it("adds a grant by merging into the repository's current set", async () => {
+  it("adds a grant through the single-grant upsert, without the repository's set", async () => {
     mockListRepositoryGrants.mockResolvedValue({ data: [] } as never);
     mockOkSources();
     mockListGrants.mockResolvedValue({
       data: [{ principal: "user:bob", scopes: ["repositories:write"] }],
-      response: versionResponse('"7"'),
     } as never);
-    mockReplaceGrants.mockResolvedValue({ data: [] } as never);
+    mockUpsertGrant.mockResolvedValue({ data: [] } as never);
 
     const user = userEvent.setup();
     renderPanel();
@@ -194,34 +188,30 @@ describe("UserRepositoryAccessPanel", () => {
     await user.click(screen.getByRole("button", { name: /^保\s*存$/ }));
 
     await waitFor(() => {
-      expect(mockReplaceGrants).toHaveBeenCalledTimes(1);
+      expect(mockUpsertGrant).toHaveBeenCalledTimes(1);
     });
-    expect(mockReplaceGrants).toHaveBeenCalledWith({
+    expect(mockUpsertGrant).toHaveBeenCalledWith({
       path: { repositoryId: artifactsId },
-      body: [
-        { principal: "user:bob", scopes: ["repositories:write"] },
-        expect.objectContaining({
-          principal: `user:${username}`,
-          scopes: ["repositories:read"],
-        }),
-      ],
-      headers: { "If-Match": "7" },
+      body: {
+        principal,
+        scopes: ["repositories:read"],
+        resourcePrefix: undefined,
+      },
     });
+    // The repository's other grants are never read back into a submission.
+    expect(mockDeleteGrant).not.toHaveBeenCalled();
     expect(await screen.findByText("仓库授权已保存")).toBeInTheDocument();
   });
 
-  it("prefills the acted-on row when editing it and replaces it in place", async () => {
+  it("prefills the acted-on row and updates it in place when the prefix is unchanged", async () => {
     mockListRepositoryGrants.mockResolvedValue({
       data: [
         record({ scopes: ["repositories:write"], resourcePrefix: "releases/" }),
       ],
     } as never);
     mockOkSources();
-    mockListGrants.mockResolvedValue({
-      data: [aliceReleases],
-      response: versionResponse('"4"'),
-    } as never);
-    mockReplaceGrants.mockResolvedValue({ data: [] } as never);
+    mockListGrants.mockResolvedValue({ data: [aliceReleases] } as never);
+    mockUpsertGrant.mockResolvedValue({ data: [] } as never);
 
     const user = userEvent.setup();
     renderPanel();
@@ -234,21 +224,19 @@ describe("UserRepositoryAccessPanel", () => {
     await user.click(screen.getByRole("button", { name: /^保\s*存$/ }));
 
     await waitFor(() => {
-      expect(mockReplaceGrants).toHaveBeenCalledWith({
+      expect(mockUpsertGrant).toHaveBeenCalledWith({
         path: { repositoryId: artifactsId },
-        body: [
-          expect.objectContaining({
-            principal: `user:${username}`,
-            scopes: ["repositories:write"],
-            resourcePrefix: "releases/",
-          }),
-        ],
-        headers: { "If-Match": "4" },
+        body: {
+          principal,
+          scopes: ["repositories:write"],
+          resourcePrefix: "releases/",
+        },
       });
     });
+    expect(mockDeleteGrant).not.toHaveBeenCalled();
   });
 
-  it("edits one entry and submits the account's other prefixes untouched", async () => {
+  it("upserts the new prefix and deletes the old row when an edit moves the entry", async () => {
     mockListRepositoryGrants.mockResolvedValue({
       data: [
         record({ scopes: ["repositories:write"], resourcePrefix: "releases/" }),
@@ -258,48 +246,9 @@ describe("UserRepositoryAccessPanel", () => {
     mockOkSources();
     mockListGrants.mockResolvedValue({
       data: [aliceReleases, aliceSnapshots],
-      response: versionResponse('"5"'),
     } as never);
-    mockReplaceGrants.mockResolvedValue({ data: [] } as never);
-
-    const user = userEvent.setup();
-    renderPanel();
-
-    expect(await screen.findByText("releases/")).toBeInTheDocument();
-    // The first row stands for the releases/ entry.
-    await user.click(
-      screen.getAllByRole("button", { name: "编辑该条授权" })[0],
-    );
-    expect(await screen.findByText("写入 · 发布 / 编辑")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /^保\s*存$/ }));
-
-    await waitFor(() => {
-      expect(mockReplaceGrants).toHaveBeenCalledTimes(1);
-    });
-    const body = submittedBody();
-    expect(body).toHaveLength(2);
-    expect(body.map((grant) => grant.resourcePrefix)).toEqual([
-      "releases/",
-      "snapshots/",
-    ]);
-    // Byte-identical: the account's other prefix is resubmitted as the very
-    // same object, so editing one entry cannot silently drop the others.
-    expect(body[1]).toBe(aliceSnapshots);
-  });
-
-  it("moves the acted-on entry when the edit changes its prefix", async () => {
-    mockListRepositoryGrants.mockResolvedValue({
-      data: [
-        record({ scopes: ["repositories:write"], resourcePrefix: "releases/" }),
-        record({ resourcePrefix: "snapshots/" }),
-      ],
-    } as never);
-    mockOkSources();
-    mockListGrants.mockResolvedValue({
-      data: [aliceReleases, aliceSnapshots],
-      response: versionResponse('"5"'),
-    } as never);
-    mockReplaceGrants.mockResolvedValue({ data: [] } as never);
+    mockUpsertGrant.mockResolvedValue({ data: [] } as never);
+    mockDeleteGrant.mockResolvedValue({} as never);
 
     const user = userEvent.setup();
     renderPanel();
@@ -315,36 +264,32 @@ describe("UserRepositoryAccessPanel", () => {
     await user.click(screen.getByRole("button", { name: /^保\s*存$/ }));
 
     await waitFor(() => {
-      expect(mockReplaceGrants).toHaveBeenCalledTimes(1);
+      expect(mockUpsertGrant).toHaveBeenCalledWith({
+        path: { repositoryId: artifactsId },
+        body: {
+          principal,
+          scopes: ["repositories:write"],
+          resourcePrefix: "stable/",
+        },
+      });
     });
-    const body = submittedBody();
-    // The edited entry moved to stable/ in the slot it occupied; nothing was
-    // left behind under the old prefix and the account's other entry is still
-    // there untouched.
-    expect(body.map((grant) => grant.resourcePrefix)).toEqual([
-      "stable/",
-      "snapshots/",
-    ]);
-    expect(body[1]).toBe(aliceSnapshots);
+    // The old row goes, or the edit would fork one grant into two; the
+    // account's snapshots/ entry is never part of either call.
+    await waitFor(() => {
+      expect(mockDeleteGrant).toHaveBeenCalledWith({
+        path: { repositoryId: artifactsId },
+        query: { principal, resourcePrefix: "releases/" },
+      });
+    });
   });
 
-  it("refreshes the version after a 412 and lets the user save again", async () => {
+  it("keeps the dialog open with the error when the upsert fails", async () => {
     mockListRepositoryGrants.mockResolvedValue({ data: [] } as never);
     mockOkSources();
-    mockListGrants
-      .mockResolvedValueOnce({
-        data: [],
-        response: versionResponse('"7"'),
-      } as never)
-      .mockResolvedValueOnce({
-        data: [],
-        response: versionResponse('"8"'),
-      } as never);
-    mockReplaceGrants
-      .mockResolvedValueOnce({
-        error: { status: 412, code: "version_conflict", message: "conflict" },
-      } as never)
-      .mockResolvedValueOnce({ data: [] } as never);
+    mockListGrants.mockResolvedValue({ data: [] } as never);
+    mockUpsertGrant.mockResolvedValue({
+      error: { status: 500, message: "upsert failed" },
+    } as never);
 
     const user = userEvent.setup();
     renderPanel();
@@ -353,123 +298,13 @@ describe("UserRepositoryAccessPanel", () => {
     await user.click(screen.getByRole("combobox"));
     await user.click(await screen.findByText("artifacts · raw"));
     await screen.findByText("读取 · 浏览 / 拉取");
-
     await user.click(screen.getByRole("button", { name: /^保\s*存$/ }));
-    expect(await screen.findByText("授权版本冲突")).toBeInTheDocument();
-    await waitFor(() => {
-      expect(mockListGrants).toHaveBeenCalledTimes(2);
-    });
 
-    // The composed grant is still there, so the second save retries against
-    // the refreshed version instead of failing silently.
-    await user.click(screen.getByRole("button", { name: /^保\s*存$/ }));
-    await waitFor(() => {
-      expect(mockReplaceGrants).toHaveBeenCalledTimes(2);
-    });
-    expect(mockReplaceGrants).toHaveBeenLastCalledWith(
-      expect.objectContaining({ headers: { "If-Match": "8" } }),
-    );
+    expect(await screen.findByText("upsert failed")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  it("keeps the acted-on entry after a 412 refresh and merges into the new set", async () => {
-    const bobInSet = {
-      principal: "user:bob",
-      scopes: ["repositories:admin"],
-    };
-    mockListRepositoryGrants.mockResolvedValue({
-      data: [
-        record({ scopes: ["repositories:write"], resourcePrefix: "releases/" }),
-        record({ resourcePrefix: "snapshots/" }),
-      ],
-    } as never);
-    mockOkSources();
-    mockListGrants
-      .mockResolvedValueOnce({
-        data: [aliceReleases, aliceSnapshots],
-        response: versionResponse('"7"'),
-      } as never)
-      .mockResolvedValueOnce({
-        data: [aliceReleases, aliceSnapshots, bobInSet],
-        response: versionResponse('"8"'),
-      } as never);
-    mockReplaceGrants
-      .mockResolvedValueOnce({
-        error: { status: 412, code: "version_conflict", message: "conflict" },
-      } as never)
-      .mockResolvedValueOnce({ data: [] } as never);
-
-    const user = userEvent.setup();
-    renderPanel();
-
-    expect(await screen.findByText("releases/")).toBeInTheDocument();
-    await user.click(
-      screen.getAllByRole("button", { name: "编辑该条授权" })[0],
-    );
-    expect(await screen.findByText("写入 · 发布 / 编辑")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /^保\s*存$/ }));
-    expect(await screen.findByText("授权版本冲突")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /^保\s*存$/ }));
-
-    await waitFor(() => {
-      expect(mockReplaceGrants).toHaveBeenCalledTimes(2);
-    });
-    const retry = mockReplaceGrants.mock.calls[1][0];
-    expect(retry.headers).toEqual({ "If-Match": "8" });
-    // Still the same acted-on entry, merged into the refreshed set: the other
-    // entries of this account and the concurrent one survive untouched.
-    expect(retry.body).toHaveLength(3);
-    expect(retry.body[0]).toEqual({
-      principal: `user:${username}`,
-      scopes: ["repositories:write"],
-      resourcePrefix: "releases/",
-    });
-    expect(retry.body[1]).toBe(aliceSnapshots);
-    expect(retry.body[2]).toBe(bobInSet);
-  });
-
-  it("removes a grant by merging the rest of the repository's set", async () => {
-    mockListRepositoryGrants.mockResolvedValue({
-      data: [
-        record(),
-        record({
-          repositoryId: iconsId,
-          repositoryName: "icons",
-          format: "oci",
-          scopes: ["repositories:write"],
-        }),
-      ],
-    } as never);
-    mockOkSources();
-    mockListGrants.mockResolvedValue({
-      data: [
-        { principal: `user:${username}`, scopes: ["repositories:read"] },
-        bobAdmin,
-      ],
-      response: versionResponse('"9"'),
-    } as never);
-    mockReplaceGrants.mockResolvedValue({ data: [] } as never);
-
-    const user = userEvent.setup();
-    renderPanel();
-
-    expect(await screen.findByText("artifacts")).toBeInTheDocument();
-    await user.click(
-      screen.getAllByRole("button", { name: "移除仓库授权" })[0],
-    );
-    await user.click(await screen.findByRole("button", { name: /^移\s*除$/ }));
-
-    await waitFor(() => {
-      expect(mockReplaceGrants).toHaveBeenCalledTimes(1);
-    });
-    expect(mockReplaceGrants).toHaveBeenCalledWith({
-      path: { repositoryId: artifactsId },
-      body: [bobAdmin],
-      headers: { "If-Match": "9" },
-    });
-  });
-
-  it("removal drops every entry of the account on that repository and nothing else", async () => {
+  it("removes every entry of the account on that repository, one delete each", async () => {
     mockListRepositoryGrants.mockResolvedValue({
       data: [
         record({ scopes: ["repositories:write"], resourcePrefix: "releases/" }),
@@ -479,9 +314,8 @@ describe("UserRepositoryAccessPanel", () => {
     mockOkSources();
     mockListGrants.mockResolvedValue({
       data: [aliceReleases, aliceSnapshots, bobAdmin],
-      response: versionResponse('"11"'),
     } as never);
-    mockReplaceGrants.mockResolvedValue({ data: [] } as never);
+    mockDeleteGrant.mockResolvedValue({} as never);
 
     const user = userEvent.setup();
     renderPanel();
@@ -493,44 +327,51 @@ describe("UserRepositoryAccessPanel", () => {
     await user.click(await screen.findByRole("button", { name: /^移\s*除$/ }));
 
     await waitFor(() => {
-      expect(mockReplaceGrants).toHaveBeenCalledTimes(1);
+      expect(mockDeleteGrant).toHaveBeenCalledTimes(2);
     });
-    // The action is explicitly bulk for this repository: both prefixes go,
-    // and the other principal's entry is resubmitted as the very same object.
-    const body = submittedBody();
-    expect(body).toHaveLength(1);
-    expect(body[0]).toBe(bobAdmin);
+    expect(mockDeleteGrant).toHaveBeenNthCalledWith(1, {
+      path: { repositoryId: artifactsId },
+      query: { principal, resourcePrefix: "releases/" },
+    });
+    expect(mockDeleteGrant).toHaveBeenNthCalledWith(2, {
+      path: { repositoryId: artifactsId },
+      query: { principal, resourcePrefix: "snapshots/" },
+    });
+    // The other principal's entry is never deleted or resubmitted.
+    expect(mockUpsertGrant).not.toHaveBeenCalled();
+    expect(await screen.findByText("仓库授权已移除")).toBeInTheDocument();
   });
 
-  it("tells the user when a concurrent removal already happened", async () => {
+  it("tolerates rows a concurrent removal already deleted", async () => {
     mockListRepositoryGrants.mockResolvedValue({
-      data: [record()],
+      data: [
+        record({ scopes: ["repositories:write"], resourcePrefix: "releases/" }),
+        record({ resourcePrefix: "snapshots/" }),
+      ],
     } as never);
     mockOkSources();
-    mockListGrants
-      .mockResolvedValueOnce({
-        data: [
-          { principal: `user:${username}`, scopes: ["repositories:read"] },
-        ],
-        response: versionResponse('"9"'),
-      } as never)
-      .mockResolvedValueOnce({
-        data: [{ principal: "user:bob", scopes: ["repositories:admin"] }],
-        response: versionResponse('"10"'),
-      } as never);
-    mockReplaceGrants.mockResolvedValueOnce({
-      error: { status: 412, code: "version_conflict", message: "conflict" },
+    mockListGrants.mockResolvedValue({
+      data: [aliceReleases, aliceSnapshots],
     } as never);
+    mockDeleteGrant
+      .mockResolvedValueOnce({
+        error: { status: 404, code: "not_found", message: "gone" },
+      } as never)
+      .mockResolvedValueOnce({} as never);
 
     const user = userEvent.setup();
     renderPanel();
 
-    expect(await screen.findByText("artifacts")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "移除仓库授权" }));
+    expect(await screen.findByText("releases/")).toBeInTheDocument();
+    await user.click(
+      screen.getAllByRole("button", { name: "移除仓库授权" })[0],
+    );
     await user.click(await screen.findByRole("button", { name: /^移\s*除$/ }));
 
-    expect(
-      await screen.findByText("该授权已被其他人移除，列表已刷新。"),
-    ).toBeInTheDocument();
+    // The already-gone row is skipped and the remaining row is still removed.
+    await waitFor(() => {
+      expect(mockDeleteGrant).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByText("仓库授权已移除")).toBeInTheDocument();
   });
 });
