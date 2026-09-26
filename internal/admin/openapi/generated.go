@@ -3507,6 +3507,7 @@ type GlobalArtifactSearchPage struct {
 
 // Grant defines model for Grant.
 type Grant struct {
+	// Principal Names the grant holder. The same shape is accepted by the single-grant endpoints, the whole-list replace, and the authorization template editor, so a grant written by one of them can always be addressed by another.
 	Principal string `json:"principal"`
 
 	// ResourcePrefix Optional canonical resource prefix. Empty or omitted grants repository-wide access.

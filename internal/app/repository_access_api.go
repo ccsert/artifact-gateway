@@ -345,7 +345,9 @@ func validAuthorizationTemplateGrants(grants []repository.RepositoryGrant) bool 
 	}
 	keys := map[string]bool{}
 	for _, grant := range grants {
-		if strings.TrimSpace(grant.Principal) == "" || len(grant.Principal) > 512 || strings.ContainsAny(grant.Principal, "\x00\r\n") || len(grant.Scopes) == 0 || len(grant.ResourcePrefix) > 255 || strings.ContainsAny(grant.ResourcePrefix, "\x00\r\n") {
+		// A template's principal and prefix rules are the write rules, so a
+		// grant that is storable on a repository is expressible in a template.
+		if !validGrantPrincipal(grant.Principal) || len(grant.Scopes) == 0 || !validGrantResourcePrefixShape(grant.ResourcePrefix) {
 			return false
 		}
 		key := grant.Principal + "\x00" + grant.ResourcePrefix
@@ -734,8 +736,8 @@ func (h generatedRepositoryAPIAdapter) DeleteGrant(w http.ResponseWriter, r *htt
 		if params.ResourcePrefix != nil {
 			prefix = *params.ResourcePrefix
 		}
-		if principal == "" || len(principal) > 512 || strings.ContainsAny(principal, "\x00\r\n") || len(prefix) > 255 || strings.ContainsAny(prefix, "\x00\r\n") {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "principal and resourcePrefix must be valid")
+		if !grantKeyAddressable(principal) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "principal must name the grant to delete")
 			return
 		}
 		set, err := h.grants.DeleteRepositoryGrant(r.Context(), repositoryID.String(), principal, prefix)
@@ -768,7 +770,7 @@ func validRepositoryGrants(grants []repository.RepositoryGrant, format repositor
 	validScopes := map[string]bool{"repositories:read": true, "repositories:write": true, "repositories:admin": true, "repositories:intelligence": true}
 	keys := map[string]bool{}
 	for _, grant := range grants {
-		if strings.TrimSpace(grant.Principal) == "" || len(grant.Scopes) == 0 || !validArtifactSearchQuery(format, grant.ResourcePrefix) {
+		if !validGrantPrincipal(grant.Principal) || len(grant.Scopes) == 0 || !validGrantResourcePrefix(grant.ResourcePrefix, format) {
 			return false
 		}
 		key := grant.Principal + "\x00" + grant.ResourcePrefix
@@ -785,4 +787,36 @@ func validRepositoryGrants(grants []repository.RepositoryGrant, format repositor
 		}
 	}
 	return true
+}
+
+// validGrantPrincipal reports whether a principal may be written as a grant.
+// The single-row endpoints, the whole-list replace, and the authorization
+// template editor all accept exactly this shape, so a grant one of them
+// creates can always be addressed and removed by another.
+func validGrantPrincipal(principal string) bool {
+	trimmed := strings.TrimSpace(principal)
+	return trimmed != "" && len(trimmed) <= 512 && !strings.ContainsAny(trimmed, "\x00\r\n")
+}
+
+// validGrantResourcePrefix reports whether a resource prefix may be written on
+// a repository: it has to satisfy the shape rules and be a valid prefix for
+// that repository's format.
+func validGrantResourcePrefix(prefix string, format repository.Format) bool {
+	return validGrantResourcePrefixShape(prefix) && validArtifactSearchQuery(format, prefix)
+}
+
+// validGrantResourcePrefixShape reports whether a prefix has the shape every
+// written grant must have. The repository format's own rules are checked where
+// a grant lands on a repository, so an authorization template — which is
+// format-agnostic until it is applied — shares this half.
+func validGrantResourcePrefixShape(prefix string) bool {
+	return len(prefix) <= 255 && !strings.ContainsAny(prefix, "\x00\r\n")
+}
+
+// grantKeyAddressable reports whether a delete request names a row well enough
+// to address it. It deliberately checks less than the write rules: a row
+// written by an earlier revision, or by any path that validated differently,
+// must stay removable, so only the shape needed to look it up is required.
+func grantKeyAddressable(principal string) bool {
+	return strings.TrimSpace(principal) != ""
 }

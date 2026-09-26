@@ -132,6 +132,7 @@ export function GrantRowEditor({
         {kind === "custom" && (
           <Input
             className="mt-2 font-mono"
+            maxLength={512}
             placeholder={text(
               "完整 actor，例如 oidc:gitlab:team/release",
               "Complete actor, for example oidc:gitlab:team/release",

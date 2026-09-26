@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -101,5 +102,60 @@ func TestRepositoryGrantsUpsertDeleteHTTP(t *testing.T) {
 	}
 	if upserts != 3 || deletes != 1 {
 		t.Fatalf("rejected requests must not be audited as mutations: upserts=%d deletes=%d audits=%#v", upserts, deletes, store.Audits)
+	}
+}
+
+// A grant row must be writable and removable by the same rules: the row the
+// single-row endpoints can create is exactly the row they can address. The
+// delete path stays deliberately looser than the write path, so a row written
+// by an earlier revision remains removable.
+func TestRepositoryGrantValidationSymmetry(t *testing.T) {
+	store := repository.NewMemoryStore()
+	ctx := context.Background()
+	// Raw repositories accept long path prefixes, which is where the write and
+	// delete rules used to disagree.
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "22222222-2222-2222-2222-222222222222", Name: "files", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	request := func(method, path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		authorize(r, "admin-secret")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	grantsPath := "/api/v2/repositories/" + repo.ID + "/grants"
+
+	longPrefix := strings.Repeat("a/", 130) + "z"
+	longPrincipal := "user:" + strings.Repeat("x", 600)
+	if len(longPrefix) <= 255 || len(longPrincipal) <= 512 {
+		t.Fatalf("fixture must exceed the contract limits: prefix=%d principal=%d", len(longPrefix), len(longPrincipal))
+	}
+
+	for name, body := range map[string]string{
+		"long resource prefix": `{"principal":"user:alice","scopes":["repositories:read"],"resourcePrefix":"` + longPrefix + `"}`,
+		"long principal":       `{"principal":"` + longPrincipal + `","scopes":["repositories:read"]}`,
+		"control character":    "{\"principal\":\"user:sn\\neaky\",\"scopes\":[\"repositories:read\"]}",
+	} {
+		if got := request(http.MethodPost, grantsPath, body); got.Code != http.StatusBadRequest {
+			t.Fatalf("upsert with %s = %d %s", name, got.Code, got.Body.String())
+		}
+	}
+
+	// Rows an earlier revision could have stored stay removable, so nothing
+	// that exists can become unreachable through the API.
+	for _, grant := range []repository.RepositoryGrant{
+		{Principal: "user:alice", Scopes: []string{"repositories:read"}, ResourcePrefix: longPrefix},
+		{Principal: longPrincipal, Scopes: []string{"repositories:read"}},
+	} {
+		if _, err := store.UpsertRepositoryGrant(ctx, repo.ID, grant); err != nil {
+			t.Fatal(err)
+		}
+		query := "?principal=" + url.QueryEscape(grant.Principal) + "&resourcePrefix=" + url.QueryEscape(grant.ResourcePrefix)
+		if got := request(http.MethodDelete, grantsPath+query, ""); got.Code != http.StatusNoContent {
+			t.Fatalf("delete of stored row %q = %d %s", grant.Principal, got.Code, got.Body.String())
+		}
 	}
 }
