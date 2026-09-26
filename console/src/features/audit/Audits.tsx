@@ -26,6 +26,7 @@ import {
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
+import { auditOperationLabel } from "./auditOperations";
 
 const AUDIT_CSV_COLUMNS_ZH = [
   "时间",
@@ -85,18 +86,6 @@ function auditOutcomeLabel(value: string): string {
     proxy_denied: "proxy_denied · 代理拒绝",
     upstream_error: "upstream_error · 上游错误",
     storage_error: "storage_error · 存储错误",
-  };
-  return labels[value] ?? value;
-}
-
-function auditOperationLabel(value: string): string {
-  const labels: Record<string, string> = {
-    get: "GET · 读取",
-    head: "HEAD · 探测",
-    put: "PUT · 发布",
-    post: "POST · 创建",
-    delete: "DELETE · 删除",
-    grant: "grant · 授权",
   };
   return labels[value] ?? value;
 }
@@ -234,7 +223,7 @@ export function AuditsPage() {
     ),
   )
     .sort()
-    .map((value) => ({ value, label: auditOperationLabel(value) }));
+    .map((value) => ({ value, label: auditOperationLabel(value, text) }));
   const actorOptions = Array.from(
     new Set(
       filtered
@@ -294,7 +283,7 @@ export function AuditsPage() {
           title={row.record.operation}
         >
           {row.record.operation
-            ? auditOperationLabel(row.record.operation)
+            ? auditOperationLabel(row.record.operation, text)
             : "—"}
         </span>
       ),

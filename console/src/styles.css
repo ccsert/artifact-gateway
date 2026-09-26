@@ -1065,7 +1065,9 @@ html[data-theme="light"] .ag-public-access-layer {
 
 .ag-repository-tabs .ant-tabs-tab {
   min-height: 36px;
-  padding: 7px 10px;
+  /* Spacing comes from tabBarGutter alone, so the gap between two labels is
+     exactly the gutter and the first tab sits flush with the content edge. */
+  padding: 7px 0;
   font-weight: 500;
 }
 
@@ -2910,7 +2912,7 @@ html .ag-brand-mark.text-white {
 
   .ag-repository-tabs .ant-tabs-tab {
     min-height: 44px;
-    padding-inline: 8px;
+    padding-inline: 0;
   }
 
   .ag-metric-strip-cols-2,

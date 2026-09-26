@@ -558,6 +558,24 @@ test("repository detail keeps operational content above the fold", async ({
   expect(summaryToNavigationGap).toBeLessThanOrEqual(17);
   expect(navigationToSurfaceGap).toBeGreaterThanOrEqual(15);
   expect(navigationToSurfaceGap).toBeLessThanOrEqual(17);
+
+  // Tab labels are separated by the 24px gutter alone — no tab padding doubles
+  // the gap — and the first tab sits flush with the content edge.
+  const firstTabBoxes = await taskTabs.evaluateAll((tabs) =>
+    tabs.slice(0, 4).map((tab) => {
+      const box = tab.getBoundingClientRect();
+      return { x: box.x, right: box.x + box.width };
+    }),
+  );
+  for (let index = 1; index < firstTabBoxes.length; index += 1) {
+    const gap = firstTabBoxes[index].x - firstTabBoxes[index - 1].right;
+    expect(gap).toBeGreaterThanOrEqual(23);
+    expect(gap).toBeLessThanOrEqual(25);
+  }
+  expect(
+    Math.abs((firstTabBoxes[0]?.x ?? 0) - (summaryBox?.x ?? 0)),
+  ).toBeLessThanOrEqual(1);
+
   expect(
     (await table.boundingBox())?.y ?? Number.POSITIVE_INFINITY,
   ).toBeLessThan(400);
