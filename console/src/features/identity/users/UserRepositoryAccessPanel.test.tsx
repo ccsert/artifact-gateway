@@ -263,6 +263,15 @@ describe("UserRepositoryAccessPanel", () => {
     fireEvent.change(prefixInput, { target: { value: "stable/" } });
     await user.click(screen.getByRole("button", { name: /^保\s*存$/ }));
 
+    // The old row goes first, or the edit would fork one grant into two and a
+    // failure would leave the grant wider than asked for; the account's
+    // snapshots/ entry is never part of either call.
+    await waitFor(() => {
+      expect(mockDeleteGrant).toHaveBeenCalledWith({
+        path: { repositoryId: artifactsId },
+        query: { principal, resourcePrefix: "releases/" },
+      });
+    });
     await waitFor(() => {
       expect(mockUpsertGrant).toHaveBeenCalledWith({
         path: { repositoryId: artifactsId },
@@ -273,14 +282,39 @@ describe("UserRepositoryAccessPanel", () => {
         },
       });
     });
-    // The old row goes, or the edit would fork one grant into two; the
-    // account's snapshots/ entry is never part of either call.
-    await waitFor(() => {
-      expect(mockDeleteGrant).toHaveBeenCalledWith({
-        path: { repositoryId: artifactsId },
-        query: { principal, resourcePrefix: "releases/" },
-      });
-    });
+    expect(mockDeleteGrant.mock.invocationCallOrder[0]).toBeLessThan(
+      mockUpsertGrant.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("does not write the new prefix when removing the old one fails", async () => {
+    mockListRepositoryGrants.mockResolvedValue({
+      data: [
+        record({ scopes: ["repositories:write"], resourcePrefix: "releases/" }),
+      ],
+    } as never);
+    mockOkSources();
+    mockListGrants.mockResolvedValue({ data: [aliceReleases] } as never);
+    mockDeleteGrant.mockResolvedValue({
+      error: { status: 500, message: "delete failed" },
+    } as never);
+
+    const user = userEvent.setup();
+    renderPanel();
+
+    expect(await screen.findByText("releases/")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "编辑该条授权" }));
+    const prefixInput = await screen.findByDisplayValue("releases/");
+    fireEvent.change(prefixInput, { target: { value: "stable/" } });
+    await user.click(screen.getByRole("button", { name: /^保\s*存$/ }));
+
+    expect(
+      await screen.findByText(
+        "原资源范围的授权删除失败，新授权未保存，请重试。",
+      ),
+    ).toBeInTheDocument();
+    expect(mockUpsertGrant).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("keeps the dialog open with the error when the upsert fails", async () => {
