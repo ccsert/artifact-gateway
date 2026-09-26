@@ -1,7 +1,7 @@
 ---
 info:
   title: Artifact Gateway Native Hosted Management API
-  version: 0.3.1
+  version: 0.4.0
   description: Runtime management contract for Artifact Gateway 0.2.
 servers:
 - url: https://gateway.example.com/api/v2
