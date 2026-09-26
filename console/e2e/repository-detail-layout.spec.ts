@@ -320,6 +320,9 @@ async function mockRepositoryDetail(
         },
       });
     }
+    if (path.endsWith("/grants") && request.method() === "GET") {
+      return route.fulfill({ json: [] });
+    }
     return route.fulfill({
       json: {
         id: repositoryId,
@@ -591,6 +594,135 @@ test("repository detail keeps operational content above the fold", async ({
   if (process.env.CAPTURE_REPOSITORY_DETAIL) {
     await page.screenshot({
       path: testInfo.outputPath("repository-detail-mobile.png"),
+      fullPage: true,
+    });
+  }
+});
+
+test("repository grants tab manages rows in a table", async ({
+  page,
+}, testInfo) => {
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockRepositoryDetail(page);
+
+  const grants = [
+    {
+      principal: "user:alice",
+      scopes: ["repositories:write"],
+      resourcePrefix: "releases/",
+    },
+    { principal: "user:bob", scopes: ["repositories:read"] },
+  ];
+  const upsertBodies: unknown[] = [];
+  const upsertHeaders: Record<string, string>[] = [];
+  const deleteQueries: string[] = [];
+  await page.route(
+    `**/api/v2/repositories/${repositoryId}/grants**`,
+    (route) => {
+      const request = route.request();
+      if (request.method() === "POST") {
+        upsertBodies.push(request.postDataJSON());
+        upsertHeaders.push(request.headers());
+        return route.fulfill({ json: grants });
+      }
+      if (request.method() === "DELETE") {
+        deleteQueries.push(new URL(request.url()).search);
+        return route.fulfill({ status: 204 });
+      }
+      return route.fulfill({ json: grants });
+    },
+  );
+  await page.route("**/api/v2/users**", (route) =>
+    route.fulfill({
+      json: {
+        items: [{ name: "alice", role: "member", state: "active" }],
+      },
+    }),
+  );
+  await page.route("**/api/v2/api-keys**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/v2/service-accounts**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/v2/authorization-roles**", (route) =>
+    route.fulfill({ json: [] }),
+  );
+
+  await page.goto(`/repositories/${repositoryId}?tab=grants`);
+
+  const addButton = page.getByRole("button", { name: /添加授权/ });
+  await expect(addButton).toBeVisible();
+  const table = page.locator(".ag-console-table");
+  await expect(table).toBeVisible();
+  await expect(table.getByRole("row")).toHaveCount(3);
+  await expect(table).toContainText("user:alice");
+  await expect(table).toContainText("releases/");
+
+  // Editing one row writes exactly that row: a single-grant upsert with no
+  // If-Match precondition, never the repository's whole grant set.
+  await table
+    .getByRole("button", { name: /编\s*辑/ })
+    .first()
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: /^保\s*存$/ }).click();
+  await expect(dialog).toBeHidden();
+  expect(upsertBodies).toEqual([
+    {
+      principal: "user:alice",
+      scopes: ["repositories:write"],
+      resourcePrefix: "releases/",
+    },
+  ]);
+  expect(upsertHeaders[0]["if-match"]).toBeUndefined();
+
+  // Removing one row deletes exactly its (principal, prefix) key.
+  await table
+    .getByRole("button", { name: /删\s*除/ })
+    .first()
+    .click();
+  await page.getByRole("button", { name: /^移\s*除$/ }).click();
+  await expect.poll(() => deleteQueries.length).toBe(1);
+  const deleteParams = new URLSearchParams(deleteQueries[0]);
+  expect(deleteParams.get("principal")).toBe("user:alice");
+  expect(deleteParams.get("resourcePrefix")).toBe("releases/");
+
+  expect(
+    await page.evaluate(
+      () => document.body.scrollWidth - document.body.clientWidth,
+    ),
+  ).toBe(0);
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+
+  if (process.env.CAPTURE_REPOSITORY_DETAIL) {
+    await page.screenshot({
+      path: testInfo.outputPath("repository-grants-table.png"),
+      fullPage: true,
+    });
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(table).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.body.scrollWidth - document.body.clientWidth,
+    ),
+  ).toBe(0);
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+
+  if (process.env.CAPTURE_REPOSITORY_DETAIL) {
+    await page.screenshot({
+      path: testInfo.outputPath("repository-grants-table-mobile.png"),
       fullPage: true,
     });
   }

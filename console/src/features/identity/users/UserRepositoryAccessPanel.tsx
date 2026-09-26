@@ -16,16 +16,16 @@ import {
   Typography,
 } from "antd";
 import {
+  deleteGrant,
   listAuthorizationRoles,
   listGrants,
   listRepositories,
   listRepositoryGrants,
-  replaceGrants,
+  upsertGrant,
 } from "../../../client";
 import type {
   AuthorizationRole,
   Grant,
-  Problem,
   Repository,
   RepositoryGrantRecord,
 } from "../../../client";
@@ -34,6 +34,7 @@ import {
   EmptyState,
   ErrorBanner,
   Loading,
+  isNotFound,
 } from "../../../components/ui/Feedback";
 import { Modal, useDisclosure } from "../../../components/ui/Modal";
 import { usePreferences } from "../../../lib/preferences";
@@ -46,12 +47,11 @@ import {
   type DraftGrant,
   type PrincipalOption,
 } from "../../access-control/grantDraft";
-import {
-  normalizeResourcePrefix,
-  removePrincipalGrants,
-  replaceGrantEntry,
-  upsertGrant,
-} from "../../access-control/grantMerge";
+
+/** A blank prefix means repository-wide access, submitted as `undefined`. */
+function normalizePrefix(prefix: string | undefined): string | undefined {
+  return prefix?.trim() || undefined;
+}
 
 interface UserRepositoryAccessPanelProps {
   userId: string;
@@ -65,40 +65,26 @@ type GrantSnapshot = {
   items: RepositoryGrantRecord[];
 };
 
-/** The current server state a composed grant is merged into. */
+/** The repository grant list the open editor was prefilled from. */
 type ComposeBase = {
   repositoryId: string;
   grants: Grant[];
-  version: string;
 };
 
 function recordKey(record: RepositoryGrantRecord): string {
   return `${record.repositoryId}\x00${record.resourcePrefix ?? ""}`;
 }
 
-function stripEtag(etag: string | null): string | undefined {
-  return etag ? etag.replaceAll('"', "") : undefined;
-}
-
-function isVersionConflict(error: unknown): boolean {
-  const problem = error as Partial<Problem> | undefined;
-  return problem?.status === 412 || problem?.code === "version_conflict";
-}
-
 /**
  * One account's per-repository grants, reachable from the user drawer instead
  * of visiting every repository page.
  *
- * `replaceGrants` replaces a repository's whole grant set, so every write here
- * re-reads the repository's current grants and merges one entry into them:
- * saving a composed grant replaces only the entry the editor was opened for
- * (`upsertGrant` for a new grant, `replaceGrantEntry` for an edit) and
- * removing a row drops every entry of the account on that repository
- * (`removePrincipalGrants`, this panel's only bulk operation). The result is
- * submitted with the `If-Match` version read alongside it. A `412` means
- * another administrator wrote in between: the version is refreshed, the
- * composed draft and its target entry are kept, and the user is told to save
- * again rather than losing the write silently.
+ * Every write goes through the single-grant endpoints: saving a composed grant
+ * upserts exactly its (principal, resource prefix) row, and removing a row
+ * deletes the account's entries one by one, so this panel never submits the
+ * repository's whole grant set and a concurrent edit to another principal
+ * cannot be clobbered. An edit that changes the entry's prefix is an upsert
+ * of the new prefix followed by a delete of the old one.
  *
  * The list below shows one row per stored entry, so an account holding several
  * resource prefixes on one repository stays visible and each row can be
@@ -139,7 +125,6 @@ export function UserRepositoryAccessPanel({
   const [draft, setDraft] = useState<DraftGrant | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
-  const [versionConflict, setVersionConflict] = useState(false);
   const composeRequest = useRef(0);
 
   const load = useCallback(async () => {
@@ -199,16 +184,10 @@ export function UserRepositoryAccessPanel({
     void load();
   }, [load, refreshKey]);
 
-  /** Read one repository's grants together with their concurrency token. */
+  /** Read one repository's current grants to prefill or target the editor. */
   const readRepository = useCallback(
-    async (
-      repositoryId: string,
-    ): Promise<{ grants: Grant[]; version: string }> => {
-      const {
-        data,
-        error: requestError,
-        response,
-      } = await listGrants({
+    async (repositoryId: string): Promise<Grant[]> => {
+      const { data, error: requestError } = await listGrants({
         path: { repositoryId },
       });
       if (requestError || !data) {
@@ -219,58 +198,47 @@ export function UserRepositoryAccessPanel({
           )
         );
       }
-      return {
-        grants: data,
-        version:
-          stripEtag(response?.headers.get("ETag") ?? null) ??
-          repositories.find((repository) => repository.id === repositoryId)
-            ?.version ??
-          "",
-      };
+      return data;
     },
-    [repositories, text],
+    [text],
   );
 
   /**
-   * Read the repository's grants plus their version and prefill the editor.
-   * `targetPrefix` is the normalized prefix of the entry the user acted on
-   * (the empty string means repository-wide), or `null` to compose a new
-   * grant. The target is remembered as the merge key, so an edit keeps
-   * pointing at that one entry even while the draft is edited.
+   * Read the repository's grants and prefill the editor. `targetPrefix` is the
+   * normalized prefix of the entry the user acted on (the empty string means
+   * repository-wide), or `null` to compose a new grant. The target is
+   * remembered, so an edit keeps pointing at that one entry even while the
+   * draft is edited.
    */
   const loadCompose = async (
     repositoryId: string,
     targetPrefix: string | null,
-    keepDraft = false,
   ) => {
     const requestId = composeRequest.current + 1;
     composeRequest.current = requestId;
     setComposeLoading(true);
     setComposeError(null);
     try {
-      const current = await readRepository(repositoryId);
+      const grants = await readRepository(repositoryId);
       if (requestId !== composeRequest.current) return;
-      setComposeBase({ repositoryId, ...current });
-      if (!keepDraft) {
-        const existing =
-          targetPrefix === null
-            ? undefined
-            : current.grants.find(
-                (grant) =>
-                  grant.principal.trim() === principal &&
-                  (normalizeResourcePrefix(grant.resourcePrefix) ?? "") ===
-                    targetPrefix,
-              );
-        // Editing keys on the entry the user acted on, but only while that
-        // entry is still in the merge base; a row that vanished meanwhile
-        // composes a new grant instead of targeting a different entry.
-        setComposeTargetPrefix(existing ? targetPrefix : null);
-        setDraft(
-          existing
-            ? { ...existing, scopes: [...existing.scopes] }
-            : { ...emptyGrant(), principal },
-        );
-      }
+      setComposeBase({ repositoryId, grants });
+      const existing =
+        targetPrefix === null
+          ? undefined
+          : grants.find(
+              (grant) =>
+                grant.principal.trim() === principal &&
+                (normalizePrefix(grant.resourcePrefix) ?? "") === targetPrefix,
+            );
+      // Editing keys on the entry the user acted on, but only while that
+      // entry still exists; a row that vanished meanwhile composes a new
+      // grant instead of targeting a different entry.
+      setComposeTargetPrefix(existing ? targetPrefix : null);
+      setDraft(
+        existing
+          ? { ...existing, scopes: [...existing.scopes] }
+          : { ...emptyGrant(), principal },
+      );
     } catch (caught) {
       if (requestId !== composeRequest.current) return;
       setComposeBase(null);
@@ -289,7 +257,6 @@ export function UserRepositoryAccessPanel({
     setDraft(null);
     setComposeError(null);
     setSaveError(null);
-    setVersionConflict(false);
   };
 
   const openCompose = () => {
@@ -297,9 +264,9 @@ export function UserRepositoryAccessPanel({
     editor.show();
   };
 
-  /** Edit one existing entry; that row's prefix becomes the merge target. */
+  /** Edit one existing entry; that row's prefix becomes the edit target. */
   const openEdit = (record: RepositoryGrantRecord) => {
-    const targetPrefix = normalizeResourcePrefix(record.resourcePrefix) ?? "";
+    const targetPrefix = normalizePrefix(record.resourcePrefix) ?? "";
     resetCompose();
     setComposeTargetPrefix(targetPrefix);
     setComposeRepositoryId(record.repositoryId);
@@ -336,92 +303,76 @@ export function UserRepositoryAccessPanel({
     }
     setSaving(true);
     setSaveError(null);
-    setVersionConflict(false);
-    const change = {
-      scopes: draft.scopes,
-      resourcePrefix: draft.resourcePrefix,
-    };
-    // Editing one row replaces exactly the entry that row stands for, even
-    // when the user changes its prefix. A new grant upserts on its own
-    // (principal, prefix) key. Either way every other entry of the repository
-    // is submitted untouched.
-    const body =
-      composeTargetPrefix === null
-        ? upsertGrant(composeBase.grants, principal, change)
-        : replaceGrantEntry(
-            composeBase.grants,
-            principal,
-            composeTargetPrefix,
-            change,
-          );
-    const { error: requestError } = await replaceGrants({
-      path: { repositoryId: composeBase.repositoryId },
-      body,
-      headers: { "If-Match": composeBase.version },
-    });
-    setSaving(false);
-    if (requestError) {
-      if (isVersionConflict(requestError)) {
-        setVersionConflict(true);
-        // Refresh the merge base and the version, keep the composed draft and
-        // its target, and let the user save again instead of retrying behind
-        // their back.
-        await loadCompose(composeBase.repositoryId, composeTargetPrefix, true);
+    try {
+      const prefix = normalizePrefix(draft.resourcePrefix);
+      const { error: requestError } = await upsertGrant({
+        path: { repositoryId: composeRepositoryId },
+        body: { principal, scopes: [...draft.scopes], resourcePrefix: prefix },
+      });
+      if (requestError) {
+        setSaveError(requestError);
         return;
       }
-      setSaveError(requestError);
-      return;
+      // An edit that changed the prefix moved the entry: the old prefix is a
+      // different row and must go, or the edit would fork one grant into two.
+      if (
+        composeTargetPrefix !== null &&
+        composeTargetPrefix !== (prefix ?? "")
+      ) {
+        const { error: deleteError } = await deleteGrant({
+          path: { repositoryId: composeRepositoryId },
+          query: {
+            principal,
+            resourcePrefix: composeTargetPrefix || undefined,
+          },
+        });
+        if (deleteError && !isNotFound(deleteError)) {
+          setSaveError(
+            new Error(
+              text(
+                "新授权已保存，但原资源范围的授权删除失败，请手动移除旧行。",
+                "The updated grant was saved, but removing the previous resource scope failed. Remove it manually.",
+              ),
+            ),
+          );
+          await load();
+          return;
+        }
+      }
+      void message.success(text("仓库授权已保存", "Repository grant saved"));
+      closeCompose();
+      await load();
+    } finally {
+      setSaving(false);
     }
-    void message.success(text("仓库授权已保存", "Repository grant saved"));
-    closeCompose();
-    await load();
   };
 
   const remove = async (record: RepositoryGrantRecord) => {
     // Deliberately bulk: this action is "remove this user's access to this
     // repository", so every entry of the principal goes, whatever its prefix.
-    // Other principals and their entries stay; `removePrincipalGrants` is the
-    // only bulk operation in this panel.
+    // Each row is deleted individually; a row already removed by someone else
+    // is skipped, and other principals are never touched.
     setRemoving(recordKey(record));
     setRemoveError(null);
     try {
-      const current = await readRepository(record.repositoryId);
-      const { error: requestError } = await replaceGrants({
-        path: { repositoryId: record.repositoryId },
-        body: removePrincipalGrants(current.grants, principal),
-        headers: { "If-Match": current.version },
-      });
-      if (requestError) {
-        if (isVersionConflict(requestError)) {
-          // Re-read so the retry merges against the newest version, and say
-          // what happened instead of failing silently.
-          let notice = text(
-            "该仓库的授权刚被其他人修改，已刷新到最新版本，请重试。",
-            "These grants were just changed by someone else. The latest version was reloaded; please retry.",
-          );
-          try {
-            const refreshed = await readRepository(record.repositoryId);
-            if (
-              !refreshed.grants.some((grant) => grant.principal === principal)
-            ) {
-              notice = text(
-                "该授权已被其他人移除，列表已刷新。",
-                "This grant was already removed by someone else. The list was refreshed.",
-              );
-            }
-          } catch {
-            // Keep the generic conflict notice; the retry will re-read anyway.
-          }
-          setRemoveError(new Error(notice));
-          await load();
-          return;
-        }
-        throw requestError;
+      const grants = await readRepository(record.repositoryId);
+      for (const grant of grants.filter(
+        (entry) => entry.principal.trim() === principal,
+      )) {
+        const { error: requestError } = await deleteGrant({
+          path: { repositoryId: record.repositoryId },
+          query: {
+            principal: grant.principal,
+            resourcePrefix: normalizePrefix(grant.resourcePrefix),
+          },
+        });
+        if (requestError && !isNotFound(requestError)) throw requestError;
       }
       void message.success(text("仓库授权已移除", "Repository grant removed"));
       await load();
     } catch (caught) {
       setRemoveError(caught);
+      await load();
     } finally {
       setRemoving("");
     }
@@ -633,17 +584,6 @@ export function UserRepositoryAccessPanel({
               }
             />
           ) : null}
-          {versionConflict ? (
-            <Alert
-              type="warning"
-              showIcon
-              title={text("授权版本冲突", "Grant version conflict")}
-              description={text(
-                "该仓库的授权刚被其他人修改，已刷新到最新版本。请再次点击保存以按最新授权重试。",
-                "These grants were just changed by someone else. The latest version has been reloaded; click Save again to retry.",
-              )}
-            />
-          ) : null}
           {saveError !== null ? <ErrorBanner error={saveError} /> : null}
           <div>
             <div className="mb-1 text-xs font-medium text-zinc-500">
@@ -697,7 +637,6 @@ export function UserRepositoryAccessPanel({
                 authorizationRoles={authorizationRoles}
                 format={selectedRepository?.format ?? "raw"}
                 onChange={(next) => setDraft({ ...next, principal })}
-                onRemove={resetCompose}
               />
             </div>
           ) : null}
