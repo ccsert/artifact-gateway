@@ -45,8 +45,8 @@ export type GrantRowEditorProps = {
   format: Repository["format"];
   /** Receives the complete next row after any control changes. */
   onChange: (next: DraftGrant) => void;
-  /** Removes this row from the parent draft. */
-  onRemove: () => void;
+  /** Removes this row from the parent draft; omitted in single-grant editors. */
+  onRemove?: () => void;
 };
 
 export function GrantRowEditor({
@@ -154,6 +154,7 @@ export function GrantRowEditor({
       <div className="min-w-0">
         <Select
           className="w-full"
+          aria-label={text("权限级别", "Permission")}
           value={selectedPermission}
           options={[
             ...(selectedPermission === SNAPSHOT_PERMISSION
@@ -227,15 +228,19 @@ export function GrantRowEditor({
           {grantedCapabilitiesLabel(grant.scopes, text)}
         </Badge>
       </div>
-      <Tooltip title={text("移除规则", "Remove rule")}>
-        <Button
-          type="text"
-          danger
-          aria-label={text("移除规则", "Remove rule")}
-          icon={<DeleteOutlined />}
-          onClick={onRemove}
-        />
-      </Tooltip>
+      {onRemove ? (
+        <Tooltip title={text("移除规则", "Remove rule")}>
+          <Button
+            type="text"
+            danger
+            aria-label={text("移除规则", "Remove rule")}
+            icon={<DeleteOutlined />}
+            onClick={onRemove}
+          />
+        </Tooltip>
+      ) : (
+        <span />
+      )}
     </div>
   );
 }

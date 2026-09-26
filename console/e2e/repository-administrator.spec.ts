@@ -186,7 +186,7 @@ test("a repository administrator manages its repository without platform navigat
     "true",
   );
   await expect(page.getByText("暂无授权规则", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "编辑授权" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /添加授权/ })).toBeVisible();
 });
 
 test("a reader keeps only the read surfaces and cannot reach a management tab by URL", async ({

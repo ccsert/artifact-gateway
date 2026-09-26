@@ -13,9 +13,14 @@ their meaning.
 
 - Repository grants can now be written one row at a time. `POST /repositories/{repositoryId}/grants` creates or replaces the single grant identified by its principal and resource prefix, and `DELETE` on the same path removes exactly that row, answering `404` when it is already gone. Neither operation takes an `If-Match` precondition, because the write is confined to one grant row and cannot clobber a concurrent change to another principal — the failure mode that made the whole-list `PUT` risky as grant lists grow. Both operations bump the grant-set version and are audited as `repository.grants.upsert` and `repository.grants.delete`; the whole-list replace stays for authorization templates and bulk edits.
 
+<<<<<<< HEAD
 - The repository detail tabs no longer double their spacing: the gap between two tab labels was the 12px gutter plus 10px of padding on each side, and the first tab sat 10px inset from the content edge. Spacing now comes from a single 24px gutter, so labels sit exactly 24px apart and the first tab is flush with the summary above and the surface below.
 
 - The audit log's operation column now reads as a localized label instead of the raw machine code: `repository.grants.upsert` shows as "Upsert repository grant" (写入仓库授权), plain traffic codes as "Read (GET)" (读取（GET）), and so on for the full set of codes the gateway writes. The raw code stays on the cell's tooltip and is still what the operation filter and the CSV export carry, and a code the console does not know — one written by a newer backend — degrades to showing the code itself rather than a blank.
+||||||| 60a91db
+=======
+- The console's grant editors now work one row at a time instead of replacing the whole grant set behind the scenes. The repository's access tab lists its grants as a table with per-row edit and remove actions, and both it and the per-user repository access panel write through the single-grant endpoints, so a concurrent change to another principal can no longer be silently clobbered and the `412` version-conflict retry loop is gone from both surfaces. An edit that moves an entry to a different resource prefix is an upsert of the new row followed by a delete of the old one, so the edit never forks one grant into two.
+>>>>>>> origin/main
 
 ## 0.4.0 - 2026-09-26
 
