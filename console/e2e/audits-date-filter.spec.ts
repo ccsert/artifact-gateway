@@ -134,6 +134,14 @@ test("audit refresh failure retains the previously loaded records", async ({
             outcome: "resolved",
             repository: "stable-releases",
           },
+          {
+            actor: "user:mallory",
+            occurredAt: "2026-08-19T08:03:00Z",
+            operation: "get",
+            outcome: "access_denied",
+            status: 403,
+            repository: "stable-releases",
+          },
         ],
       },
     });
@@ -143,11 +151,29 @@ test("audit refresh failure retains the previously loaded records", async ({
   await expect(page.getByText("stable-releases").first()).toBeVisible();
   // Known codes render as readable labels, the raw code stays on the cell's
   // tooltip, and a code the console does not know degrades to the raw code.
-  const knownLabel = page.getByText("读取（GET）");
+  const knownLabel = page.getByText("读取（GET）").first();
   await expect(knownLabel).toBeVisible();
   await expect(knownLabel).toHaveAttribute("title", "get");
   await expect(page.getByText("写入仓库授权")).toBeVisible();
   await expect(page.getByText("future.feature.action")).toBeVisible();
+
+  // The outcome column reads as a label too, with its code kept in the tooltip.
+  const deniedRow = page.locator('span[title="access_denied"]');
+  await expect(deniedRow).toContainText("访问被拒");
+
+  // The filter keeps machine codes searchable: pasting the code from a CSV
+  // export still finds the operation it names.
+  await page.getByText("高级筛选").click();
+  const operationFilter = page.getByRole("combobox", {
+    name: "操作类型",
+  });
+  await operationFilter.click();
+  await operationFilter.fill("repository.grants.upsert");
+  await expect(
+    page.locator(".ant-select-item-option").filter({
+      hasText: "写入仓库授权",
+    }),
+  ).toBeVisible();
 
   if (process.env.CAPTURE_AUDITS) {
     await page.screenshot({

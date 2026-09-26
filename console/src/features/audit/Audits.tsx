@@ -17,7 +17,7 @@ import {
   EmptyState,
   isNotFound,
 } from "../../components/ui/Feedback";
-import { StateBadge, FormatBadge } from "../../components/ui/Badge";
+import { Badge, FormatBadge } from "../../components/ui/Badge";
 import { formatBytes, formatDate } from "../../lib/format";
 import { toCsv, downloadCsv } from "../../lib/csv";
 import {
@@ -27,6 +27,11 @@ import {
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 import { auditOperationLabel } from "./auditOperations";
+import {
+  auditOutcomeIsDenied,
+  auditOutcomeLabel,
+  auditOutcomeTone,
+} from "./auditOutcomes";
 
 const AUDIT_CSV_COLUMNS_ZH = [
   "时间",
@@ -76,31 +81,19 @@ type AuditTableRow = {
   record: AuditRecord;
 };
 
-function auditOutcomeLabel(value: string): string {
-  const labels: Record<string, string> = {
-    resolved: "resolved · 已处理",
-    failed: "failed · 失败",
-    denied: "denied · 拒绝",
-    access_denied: "access_denied · 访问拒绝",
-    not_found: "not_found · 未找到",
-    proxy_denied: "proxy_denied · 代理拒绝",
-    upstream_error: "upstream_error · 上游错误",
-    storage_error: "storage_error · 存储错误",
-  };
-  return labels[value] ?? value;
-}
-
 function AuditSelect({
   label,
   value,
   placeholder,
   options,
+  searchByValue,
   onChange,
 }: {
   label: string;
   value: string;
   placeholder: string;
   options: { value: string; label: string }[];
+  searchByValue?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
@@ -108,7 +101,12 @@ function AuditSelect({
       <Select
         className="w-full min-w-[170px]"
         allowClear
-        showSearch={{ optionFilterProp: "label" }}
+        showSearch={{
+          // Options carry a readable label and the stored machine code, and a
+          // reader may search by either — for operations, pasting the code
+          // from a CSV export has to find the row it names.
+          optionFilterProp: searchByValue ? ["label", "value"] : "label",
+        }}
         value={value || undefined}
         placeholder={placeholder}
         options={options}
@@ -207,7 +205,9 @@ export function AuditsPage() {
   }));
   const outcomeOptions = Array.from(
     new Set(filtered.map((a) => a.outcome).filter(Boolean)),
-  ).map((value) => ({ value, label: auditOutcomeLabel(value) }));
+  )
+    .sort()
+    .map((value) => ({ value, label: auditOutcomeLabel(value, text) }));
   const formatOptions = Array.from(
     new Set(
       filtered
@@ -234,11 +234,12 @@ export function AuditsPage() {
     .sort()
     .map((value) => ({ value, label: value }));
   const failedCount = filtered.filter(
-    (record) => record.outcome === "failed" || (record.status ?? 0) >= 400,
-  ).length;
-  const deniedCount = filtered.filter(
     (record) =>
-      record.outcome === "denied" || record.outcome === "access_denied",
+      !auditOutcomeIsDenied(record.outcome) &&
+      (record.outcome === "failed" || (record.status ?? 0) >= 400),
+  ).length;
+  const deniedCount = filtered.filter((record) =>
+    auditOutcomeIsDenied(record.outcome),
   ).length;
   const actorCount = new Set(
     filtered.map((record) => record.actor).filter(Boolean),
@@ -292,7 +293,15 @@ export function AuditsPage() {
       title: text("结果", "Outcome"),
       key: "outcome",
       width: 170,
-      render: (_, row) => <StateBadge state={row.record.outcome} />,
+      render: (_, row) => (
+        <span title={row.record.outcome}>
+          <Badge tone={auditOutcomeTone(row.record.outcome)}>
+            {row.record.outcome
+              ? auditOutcomeLabel(row.record.outcome, text)
+              : "—"}
+          </Badge>
+        </span>
+      ),
     },
     {
       title: text("仓库/分组", "Repository / group"),
@@ -482,6 +491,7 @@ export function AuditsPage() {
             value={outcome}
             placeholder={text("全部结果", "All outcomes")}
             options={outcomeOptions}
+            searchByValue
             onChange={setOutcome}
           />
           <FilterField label={text("加载窗口", "Load window")}>
@@ -550,6 +560,7 @@ export function AuditsPage() {
                     value={operation}
                     placeholder={text("全部操作类型", "All operations")}
                     options={operationOptions}
+                    searchByValue
                     onChange={setOperation}
                   />
                   <AuditSelect
@@ -557,6 +568,7 @@ export function AuditsPage() {
                     value={actor}
                     placeholder={text("全部访问主体", "All actors")}
                     options={actorOptions}
+                    searchByValue
                     onChange={setActor}
                   />
                   <AuditSelect

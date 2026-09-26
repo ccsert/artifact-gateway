@@ -46,6 +46,22 @@ describe("auditOperationLabel", () => {
     }
   });
 
+  it("labels the codes denial audits and APT package operations write", () => {
+    const samples: [string, string, string][] = [
+      ["admin", "仓库管理", "Repository admin"],
+      ["intelligence", "制品情报", "Artifact intelligence"],
+      ["apt.package.promote", "晋升 APT 包", "Promote APT package"],
+      ["apt.package.replicate", "复制 APT 包", "Replicate APT package"],
+      ["apt.package.delete", "删除 APT 包", "Delete APT package"],
+      ["apt.package.restore", "恢复 APT 包", "Restore APT package"],
+      ["apt.package.retention", "按保留策略清理 APT 包", "Retain APT package"],
+    ];
+    for (const [code, chinese, english] of samples) {
+      expect(auditOperationLabel(code, zh)).toBe(chinese);
+      expect(auditOperationLabel(code, en)).toBe(english);
+    }
+  });
+
   it("keeps an unknown code readable by showing the code itself", () => {
     expect(auditOperationLabel("future.feature.action", zh)).toBe(
       "future.feature.action",
