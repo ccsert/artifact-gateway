@@ -136,4 +136,43 @@ describe("ScheduledTasksPanel", () => {
     await user.click(targetSelect);
     expect(await screen.findByTitle("go-modules")).toBeInTheDocument();
   });
+
+  it("shows the error alone when the first load fails", async () => {
+    mockListTasks.mockResolvedValue({
+      error: { status: 500, message: "schedules unavailable" },
+    } as never);
+    mockListRepositories.mockResolvedValue({
+      data: { items: [], nextPageToken: undefined },
+    } as never);
+
+    renderPanel();
+
+    expect(
+      await screen.findByText("schedules unavailable"),
+    ).toBeInTheDocument();
+    // A failed first load must not leave a spinner turning underneath it.
+    expect(screen.queryByText("加载计划任务…")).not.toBeInTheDocument();
+  });
+
+  it("keeps the loaded schedules when a refresh fails", async () => {
+    const user = userEvent.setup();
+    mockListTasks.mockResolvedValue({
+      data: [task("11111111-1111-4111-8111-111111111111", "Audit one")],
+    } as never);
+    mockListRepositories.mockResolvedValue({
+      data: { items: [], nextPageToken: undefined },
+    } as never);
+
+    renderPanel();
+    expect(await screen.findByText("Audit one")).toBeInTheDocument();
+
+    mockListTasks.mockResolvedValue({
+      error: { status: 503, message: "refresh failed" },
+    } as never);
+    await user.click(screen.getByRole("button", { name: /刷\s*新/ }));
+
+    expect(await screen.findByText("refresh failed")).toBeInTheDocument();
+    expect(screen.getByText("Audit one")).toBeInTheDocument();
+    expect(screen.queryByText("加载计划任务…")).not.toBeInTheDocument();
+  });
 });

@@ -703,10 +703,7 @@ test("repository grants tab manages rows in a table", async ({
   expect(upsertHeaders[0]["if-match"]).toBeUndefined();
 
   // Removing one row deletes exactly its (principal, prefix) key.
-  await table
-    .getByRole("button", { name: /删\s*除/ })
-    .first()
-    .click();
+  await table.getByRole("button", { name: "移除该行授权" }).first().click();
   await page.getByRole("button", { name: /^移\s*除$/ }).click();
   await expect.poll(() => deleteQueries.length).toBe(1);
   const deleteParams = new URLSearchParams(deleteQueries[0]);

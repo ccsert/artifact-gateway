@@ -990,8 +990,15 @@ button:not(:disabled):active,
   margin-bottom: 16px;
 }
 
-.ag-access-tabs .ant-tabs-tab {
+/* One gutter, no tab padding: every task tab bar spaces its labels by
+   `tabBarGutter` alone, so the gap is the same everywhere and the first label
+   sits flush with the content edge. */
+.ag-repository-tabs .ant-tabs-tab,
+.ag-access-tabs .ant-tabs-tab,
+.ag-compact-tabs .ant-tabs-tab {
   min-height: 36px;
+  padding: 7px 0;
+  font-weight: 500;
 }
 
 .ag-public-access-header {
@@ -1061,14 +1068,6 @@ html[data-theme="light"] .ag-public-access-layer {
 
 .ag-repository-tabs > .ant-tabs-content-holder {
   display: none;
-}
-
-.ag-repository-tabs .ant-tabs-tab {
-  min-height: 36px;
-  /* Spacing comes from tabBarGutter alone, so the gap between two labels is
-     exactly the gutter and the first tab sits flush with the content edge. */
-  padding: 7px 0;
-  font-weight: 500;
 }
 
 .ag-artifact-browser {
@@ -2910,7 +2909,9 @@ html .ag-brand-mark.text-white {
     width: 100%;
   }
 
-  .ag-repository-tabs .ant-tabs-tab {
+  .ag-repository-tabs .ant-tabs-tab,
+  .ag-access-tabs .ant-tabs-tab,
+  .ag-compact-tabs .ant-tabs-tab {
     min-height: 44px;
     padding-inline: 0;
   }

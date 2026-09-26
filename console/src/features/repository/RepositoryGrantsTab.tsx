@@ -336,8 +336,9 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
               size="small"
               danger
               loading={removing === grantKey(grant)}
+              aria-label={text("移除该行授权", "Remove this grant row")}
             >
-              {text("删除", "Delete")}
+              {text("移除", "Remove")}
             </Button>
           </Popconfirm>
         </Space>
