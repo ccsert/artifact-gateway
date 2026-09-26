@@ -90,7 +90,7 @@ test("audit date picker stays inside the card at narrow zoom", async ({
 
 test("audit refresh failure retains the previously loaded records", async ({
   page,
-}) => {
+}, testInfo) => {
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
   page.on("console", (message) => {
@@ -120,17 +120,46 @@ test("audit refresh failure retains the previously loaded records", async ({
             outcome: "resolved",
             repository: "stable-releases",
           },
+          {
+            actor: "user:alice",
+            occurredAt: "2026-08-19T08:01:00Z",
+            operation: "repository.grants.upsert",
+            outcome: "resolved",
+            repository: "stable-releases",
+          },
+          {
+            actor: "user:alice",
+            occurredAt: "2026-08-19T08:02:00Z",
+            operation: "future.feature.action",
+            outcome: "resolved",
+            repository: "stable-releases",
+          },
         ],
       },
     });
   });
 
   await page.goto("/audits");
-  await expect(page.getByText("stable-releases")).toBeVisible();
+  await expect(page.getByText("stable-releases").first()).toBeVisible();
+  // Known codes render as readable labels, the raw code stays on the cell's
+  // tooltip, and a code the console does not know degrades to the raw code.
+  const knownLabel = page.getByText("读取（GET）");
+  await expect(knownLabel).toBeVisible();
+  await expect(knownLabel).toHaveAttribute("title", "get");
+  await expect(page.getByText("写入仓库授权")).toBeVisible();
+  await expect(page.getByText("future.feature.action")).toBeVisible();
+
+  if (process.env.CAPTURE_AUDITS) {
+    await page.screenshot({
+      path: testInfo.outputPath("audits-operation-labels.png"),
+      fullPage: true,
+    });
+  }
+
   failRefresh = true;
   await page.getByRole("button", { name: "刷新" }).click();
   await expect(page.getByText("refresh failed")).toBeVisible();
-  await expect(page.getByText("stable-releases")).toBeVisible();
+  await expect(page.getByText("stable-releases").first()).toBeVisible();
   await expect(page.getByText("加载中…")).toHaveCount(0);
   expect(consoleErrors).toHaveLength(1);
   expect(consoleErrors[0]).toContain("503");

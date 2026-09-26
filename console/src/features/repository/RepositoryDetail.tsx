@@ -222,7 +222,7 @@ export function RepositoryDetailPage() {
           className="ag-repository-tabs"
           size="small"
           animated={false}
-          tabBarGutter={12}
+          tabBarGutter={24}
           activeKey={activeTab}
           onChange={(key) => selectTab(key as Tab)}
           items={availableTabs.map((item) => ({
