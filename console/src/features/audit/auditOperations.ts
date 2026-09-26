@@ -8,10 +8,18 @@
  * instead of a blank or a wrong guess, so the map can lag the backend without
  * hiding information.
  *
- * The codes come from the backend's audit call sites (`Operation:` literals in
- * `internal/app`, `internal/aptpublication`, and the lifecycle runtimes) plus
- * the operations derived from the HTTP method or the repository operation
- * enum; keep the map in sync when a backend change adds one.
+ * The codes have three sources, and the groups below follow them:
+ *
+ *  - `Operation:` literals at the audit call sites in `internal/app`,
+ *    `internal/aptpublication`, and the handlers' audit helper functions;
+ *  - the HTTP method, which artifact traffic records as its operation;
+ *  - the authorization layer's operation enum, which denial audits stringify.
+ *
+ * A few labels are marked as historical: current code writes no audit with
+ * them, but the lifecycle job runtimes and earlier revisions used the same
+ * words, so stored rows may carry them. They stay so old records keep reading
+ * as words rather than as codes. Keep the map in sync when a backend change
+ * adds an operation.
  */
 
 /** Bilingual copy callback from `usePreferences().text`. */
@@ -26,17 +34,14 @@ const AUDIT_OPERATION_LABELS: Record<string, { zh: string; en: string }> = {
   delete: { zh: "删除（DELETE）", en: "Delete (DELETE)" },
   patch: { zh: "修改（PATCH）", en: "Modify (PATCH)" },
   commit: { zh: "提交部署", en: "Commit deployment" },
-  // Repository operations recorded for denied management requests.
+  // Repository operations recorded for denied management requests. The values
+  // come from the authorization layer's operation enum, so all four can appear.
   read: { zh: "读取", en: "Read" },
   write: { zh: "写入", en: "Write" },
-  publish: { zh: "发布", en: "Publish" },
-  browse: { zh: "浏览", en: "Browse" },
-  restore: { zh: "恢复", en: "Restore" },
-  retain: { zh: "保留", en: "Retain" },
-  reclaim: { zh: "回收", en: "Reclaim" },
-  // Distribution and lifecycle.
+  admin: { zh: "仓库管理", en: "Repository admin" },
+  intelligence: { zh: "制品情报", en: "Artifact intelligence" },
+  // Distribution, recorded as the operation itself or with a refusal suffix.
   promote: { zh: "晋升制品", en: "Promote artifact" },
-  promotion: { zh: "晋升任务", en: "Promotion job" },
   "promote.quarantine": {
     zh: "晋升被隔离拦截",
     en: "Promotion blocked by quarantine",
@@ -50,9 +55,7 @@ const AUDIT_OPERATION_LABELS: Record<string, { zh: string; en: string }> = {
     zh: "复制被隔离拦截",
     en: "Replication blocked by quarantine",
   },
-  scan: { zh: "扫描任务", en: "Scan job" },
-  "intelligence-copy": { zh: "复制制品情报", en: "Copy artifact intelligence" },
-  lifecycle: { zh: "生命周期任务", en: "Lifecycle job" },
+  // Lifecycle and reconciliation.
   "lifecycle.run_now": { zh: "立即执行生命周期任务", en: "Run lifecycle job" },
   "lifecycle.retry": { zh: "重试生命周期任务", en: "Retry lifecycle job" },
   "lifecycle.cancel": { zh: "取消生命周期任务", en: "Cancel lifecycle job" },
@@ -60,8 +63,19 @@ const AUDIT_OPERATION_LABELS: Record<string, { zh: string; en: string }> = {
     zh: "对账制品情报",
     en: "Reconcile artifact intelligence",
   },
-  // Repository grants and authorization.
+  // Historical, kept for rows written by earlier revisions or named after a
+  // lifecycle job kind: the current code records no audit with these.
   grant: { zh: "授权", en: "Grant" },
+  promotion: { zh: "晋升任务", en: "Promotion job" },
+  scan: { zh: "扫描任务", en: "Scan job" },
+  lifecycle: { zh: "生命周期任务", en: "Lifecycle job" },
+  "intelligence-copy": { zh: "复制制品情报", en: "Copy artifact intelligence" },
+  publish: { zh: "发布", en: "Publish" },
+  browse: { zh: "浏览", en: "Browse" },
+  restore: { zh: "恢复", en: "Restore" },
+  retain: { zh: "保留", en: "Retain" },
+  reclaim: { zh: "回收", en: "Reclaim" },
+  // Repository grants and authorization.
   "repository.grants.replace": {
     zh: "替换仓库授权",
     en: "Replace repository grants",
@@ -133,6 +147,15 @@ const AUDIT_OPERATION_LABELS: Record<string, { zh: string; en: string }> = {
     en: "Restore APT snapshot",
   },
   "apt.snapshot.prune": { zh: "清理 APT 快照", en: "Prune APT snapshots" },
+  // Package-level APT operations on a published snapshot.
+  "apt.package.promote": { zh: "晋升 APT 包", en: "Promote APT package" },
+  "apt.package.replicate": { zh: "复制 APT 包", en: "Replicate APT package" },
+  "apt.package.delete": { zh: "删除 APT 包", en: "Delete APT package" },
+  "apt.package.restore": { zh: "恢复 APT 包", en: "Restore APT package" },
+  "apt.package.retention": {
+    zh: "按保留策略清理 APT 包",
+    en: "Retain APT package",
+  },
   // Authentication and users.
   "authentication.oidc.configure": { zh: "配置 OIDC", en: "Configure OIDC" },
   "authentication.oidc.test": { zh: "测试 OIDC 连接", en: "Test OIDC" },
