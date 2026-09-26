@@ -587,6 +587,78 @@ func (s *PostgresStore) ReplaceRepositoryGrants(ctx context.Context, repositoryI
 	return RepositoryGrantSet{Version: version, Grants: append([]RepositoryGrant{}, grants...)}, nil
 }
 
+func (s *PostgresStore) UpsertRepositoryGrant(ctx context.Context, repositoryID string, grant RepositoryGrant) (RepositoryGrantSet, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var exists bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM hosted_repositories WHERE id::text=$1)`, repositoryID).Scan(&exists); err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	if !exists {
+		return RepositoryGrantSet{}, ErrNotFound
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO repository_grant_sets (repository_id,version) VALUES ($1,1) ON CONFLICT DO NOTHING`, repositoryID); err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO repository_grants (repository_id,principal,scopes,resource_prefix) VALUES ($1,$2,$3,$4)
+		ON CONFLICT (repository_id,principal,resource_prefix) DO UPDATE SET scopes=EXCLUDED.scopes`, repositoryID, grant.Principal, grant.Scopes, grant.ResourcePrefix); err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	var version string
+	if err = tx.QueryRowContext(ctx, `UPDATE repository_grant_sets SET version=version+1 WHERE repository_id::text=$1 RETURNING version::text`, repositoryID).Scan(&version); err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	set, err := loadRepositoryGrants(ctx, tx, repositoryID, version)
+	if err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	return set, nil
+}
+
+func (s *PostgresStore) DeleteRepositoryGrant(ctx context.Context, repositoryID, principal, resourcePrefix string) (RepositoryGrantSet, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var exists bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM hosted_repositories WHERE id::text=$1)`, repositoryID).Scan(&exists); err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	if !exists {
+		return RepositoryGrantSet{}, ErrNotFound
+	}
+	result, err := tx.ExecContext(ctx, `DELETE FROM repository_grants WHERE repository_id::text=$1 AND principal=$2 AND resource_prefix=$3`, repositoryID, principal, resourcePrefix)
+	if err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	if deleted == 0 {
+		return RepositoryGrantSet{}, ErrNotFound
+	}
+	var version string
+	if err = tx.QueryRowContext(ctx, `UPDATE repository_grant_sets SET version=version+1 WHERE repository_id::text=$1 RETURNING version::text`, repositoryID).Scan(&version); err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	set, err := loadRepositoryGrants(ctx, tx, repositoryID, version)
+	if err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return RepositoryGrantSet{}, err
+	}
+	return set, nil
+}
+
 func (s *PostgresStore) GetRepositoryRetentionPolicy(ctx context.Context, repositoryID string) (RepositoryRetentionPolicy, error) {
 	var exists bool
 	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM hosted_repositories WHERE id::text=$1)`, repositoryID).Scan(&exists); err != nil {
