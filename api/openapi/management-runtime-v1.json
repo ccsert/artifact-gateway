@@ -2361,7 +2361,7 @@
       },
       "delete": {
         "operationId": "deleteGrant",
-        "description": "Removes a single grant identified by principal and optional resource prefix, leaving every other grant of the repository untouched. Answers 404 when no such grant exists, so a console working from a stale list learns the row is already gone.",
+        "description": "Removes a single grant identified by principal and optional resource prefix, leaving every other grant of the repository untouched. Answers 404 when no such grant exists, so a console working from a stale list learns the row is already gone. The parameters deliberately carry no length cap beyond a non-empty principal, because the request only has to name a stored row and a row written by an earlier revision must stay removable even when its key is longer than today's write rules allow.",
         "parameters": [
           {
             "name": "principal",
@@ -2369,16 +2369,14 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
-              "maxLength": 512
+              "minLength": 1
             }
           },
           {
             "name": "resourcePrefix",
             "in": "query",
             "schema": {
-              "type": "string",
-              "maxLength": 255
+              "type": "string"
             }
           }
         ],
@@ -5703,7 +5701,10 @@
         ],
         "properties": {
           "principal": {
-            "type": "string"
+            "type": "string",
+            "description": "Names the grant holder. The same shape is accepted by the single-grant endpoints, the whole-list replace, and the authorization template editor, so a grant written by one of them can always be addressed by another.",
+            "minLength": 1,
+            "maxLength": 512
           },
           "scopes": {
             "type": "array",

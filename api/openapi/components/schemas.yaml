@@ -968,6 +968,9 @@ Grant:
   properties:
     principal:
       type: string
+      description: Names the grant holder. The same shape is accepted by the single-grant endpoints, the whole-list replace, and the authorization template editor, so a grant written by one of them can always be addressed by another.
+      minLength: 1
+      maxLength: 512
     scopes:
       type: array
       items:

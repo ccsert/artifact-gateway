@@ -5,6 +5,7 @@ import {
   emptyGrant,
   grantedCapabilitiesLabel,
   grantLevel,
+  grantRowKey,
   permissionSelection,
   principalEditorKind,
   scopesForLevel,
@@ -175,5 +176,36 @@ describe("emptyGrant", () => {
     expect(grant.principal).toBe("");
     expect(grant.scopes).toEqual(["repositories:read"]);
     expect(grant.key).toBeTruthy();
+  });
+});
+
+describe("grantRowKey", () => {
+  it("keeps grants apart that a separator-joined key would collapse", () => {
+    // Both pairs are legitimate, distinct rows: the server keys a grant by its
+    // principal and resource prefix, and a prefix may contain spaces or dashes.
+    expect(grantRowKey("service-account:deploy-bot", "")).not.toBe(
+      grantRowKey("service-account:deploy", "bot"),
+    );
+    expect(grantRowKey("service-account:deploy-bot", "")).not.toBe(
+      grantRowKey("service-account:deploy", "-bot"),
+    );
+    expect(grantRowKey("user:alice", "a b")).not.toBe(
+      grantRowKey("user:alice a", "b"),
+    );
+  });
+
+  it("treats a missing prefix as the repository-wide grant", () => {
+    expect(grantRowKey("user:alice", undefined)).toBe(
+      grantRowKey("user:alice", ""),
+    );
+  });
+
+  it("keeps the same key for the same grant and distinguishes extra parts", () => {
+    expect(grantRowKey("user:alice", "releases/")).toBe(
+      grantRowKey("user:alice", "releases/"),
+    );
+    expect(grantRowKey("repo-1", "user:alice", "releases/")).not.toBe(
+      grantRowKey("repo-2", "user:alice", "releases/"),
+    );
   });
 });

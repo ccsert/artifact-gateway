@@ -85,6 +85,19 @@ export function scopesForRole(role: AuthorizationRole): Grant["scopes"] {
   return [...role.scopes];
 }
 
+/**
+ * Stable identity of one grant row, for React keys and for the per-row loading
+ * and removal bookkeeping around them.
+ *
+ * The fields are JSON-encoded rather than joined with a separator: a principal
+ * and a resource prefix may each contain the separators a hand-rolled key would
+ * pick (`-`, a space), so two different grants could collapse into one key,
+ * which shows up as duplicate React keys and as acting on the wrong row.
+ */
+export function grantRowKey(...parts: (string | undefined)[]): string {
+  return JSON.stringify(parts.map((part) => part ?? ""));
+}
+
 /** A blank grant row: no principal and the least-privilege read scope. */
 export function emptyGrant(): DraftGrant {
   return {
