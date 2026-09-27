@@ -420,8 +420,8 @@ export function UserRepositoryAccessPanel({
     composeBase !== null && composeBase.repositoryId === composeRepositoryId;
 
   return (
-    <section>
-      <div className="mb-3 flex items-start justify-between gap-3">
+    <section className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-zinc-100">
             {text("仓库授权", "Repository access")}
@@ -459,22 +459,16 @@ export function UserRepositoryAccessPanel({
         <ErrorBanner error={error} onRetry={() => void load()} />
       ) : null}
       {repositoriesError !== null ? (
-        <div className="mb-3">
-          <Alert
-            type="warning"
-            showIcon
-            title={text(
-              "仓库列表暂时不可用，无法新增授权；已有授权仍可查看和移除。",
-              "The repository list is unavailable, so new grants cannot be added. Existing grants can still be viewed and removed.",
-            )}
-          />
-        </div>
+        <Alert
+          type="warning"
+          showIcon
+          title={text(
+            "仓库列表暂时不可用，无法新增授权；已有授权仍可查看和移除。",
+            "The repository list is unavailable, so new grants cannot be added. Existing grants can still be viewed and removed.",
+          )}
+        />
       ) : null}
-      {removeError !== null ? (
-        <div className="mb-3">
-          <ErrorBanner error={removeError} />
-        </div>
-      ) : null}
+      {removeError !== null ? <ErrorBanner error={removeError} /> : null}
 
       {error === null && items === null ? <Loading /> : null}
       {error === null && items !== null && rows.length === 0 ? (

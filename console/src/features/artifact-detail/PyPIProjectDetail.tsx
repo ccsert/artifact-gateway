@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Tag } from "antd";
+import { Tag } from "antd";
 import type { TableProps } from "antd";
-import { Loading } from "../../components/ui/Feedback";
+import { ErrorBanner, Loading } from "../../components/ui/Feedback";
 import {
   MetadataItem,
   SearchableVersionSelect,
@@ -150,8 +150,7 @@ export function PyPIProjectDetail({
   }, [initialVersion, versions]);
 
   if (loading) return <Loading />;
-  if (error)
-    return <Alert showIcon type="error" title={error} className="my-2" />;
+  if (error) return <ErrorBanner error={error} />;
   if (!document || !selectedVersion) return null;
 
   const selectedFiles = document.files.filter(

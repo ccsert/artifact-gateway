@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   Button,
   InputNumber,
   Popconfirm,
@@ -26,6 +25,7 @@ import {
   EmptyState,
   ErrorBanner,
   Loading,
+  Notice,
   isNotFound,
 } from "../../components/ui/Feedback";
 import { Card, CardHeader, Field } from "../../components/ui/Layout";
@@ -751,11 +751,13 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
   return (
     <div className="space-y-6">
       {saveError !== null && <ErrorBanner error={saveError} />}
-      {notice && <Alert type="success" showIcon title={notice} />}
+      {notice && (
+        <Notice tone="success" title={notice} onClose={() => setNotice("")} />
+      )}
       {isRaw && (
-        <Alert
-          type="info"
-          showIcon
+        <Notice
+          tone="info"
+          closable={false}
           title={text("Raw 按路径资产清理", "Raw cleanup by path asset")}
           description={text(
             "Raw 没有版本分组，因此不应用最少或最多版本数；期限按资产最后更新时间计算。",

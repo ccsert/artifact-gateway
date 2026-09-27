@@ -22,6 +22,7 @@ import {
   EmptyState,
   ErrorBanner,
   Loading,
+  Notice,
   isNotFound,
 } from "../../components/ui/Feedback";
 import { Field } from "../../components/ui/Layout";
@@ -483,7 +484,9 @@ export function RepositoryDistributionTab({
     <div className="ag-page-stack ag-distribution">
       {error !== null && <ErrorBanner error={error} onRetry={load} />}
       {actionError !== null && <ErrorBanner error={actionError} />}
-      {notice && <Alert type="success" showIcon title={notice} />}
+      {notice && (
+        <Notice tone="success" title={notice} onClose={() => setNotice("")} />
+      )}
 
       {/* 发起表单 */}
       <div className="rounded-lg border border-zinc-800 p-4">

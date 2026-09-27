@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DeleteOutlined } from "@ant-design/icons";
-import { Alert, Button, Popconfirm } from "antd";
+import { Button, Popconfirm } from "antd";
+import { ErrorBanner } from "../../components/ui/Feedback";
 import {
   deleteArtifact,
   deleteConanPackageRevision,
@@ -465,7 +466,7 @@ export function ConanArtifactDetail({
       versions={
         managed ? (
           <div className="space-y-4">
-            {error && <Alert type="error" showIcon title={error} />}
+            {error && <ErrorBanner error={error} />}
             <VersionList
               title={text("Recipe revisions", "Recipe revisions")}
               items={recipeRevisions.map((item) => ({

@@ -17,6 +17,7 @@ import {
   EmptyState,
   ErrorBanner,
   Loading,
+  Notice,
   isNotFound,
 } from "../../components/ui/Feedback";
 import { Modal, useDisclosure } from "../../components/ui/Modal";
@@ -348,17 +349,13 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
   ];
 
   return (
-    <div>
-      <div className="mb-4 flex justify-end">
+    <div className="space-y-4">
+      <div className="flex justify-end">
         <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
           {text("添加授权", "Add grant")}
         </Button>
       </div>
-      {mutationError !== null && (
-        <div className="mb-4">
-          <ErrorBanner error={mutationError} />
-        </div>
-      )}
+      {mutationError !== null && <ErrorBanner error={mutationError} />}
       {grants.length === 0 ? (
         <EmptyState
           title={text("暂无授权规则", "No access grants")}
@@ -406,9 +403,9 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
               )}
             />
           )}
-          <Alert
-            type="info"
-            showIcon
+          <Notice
+            tone="info"
+            closable={false}
             title={text(
               "仓库规则只会追加权限，不能撤销用户或 API Key 已有的全局角色；服务账号没有全局角色。",
               "Repository rules add permissions; they cannot revoke an existing global user or API key role. Service accounts have no global role.",

@@ -550,7 +550,7 @@ export function RepositoriesPage() {
     : [...new Set(items.map((item) => item.format))];
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("仓库", "Repositories")}
         description={text(
@@ -610,7 +610,6 @@ export function RepositoriesPage() {
         ]}
       />
       <FilterBar
-        className="mt-4 mb-4"
         actions={
           filter || formatFilter !== "all" || stateFilter !== "operational" ? (
             <Button

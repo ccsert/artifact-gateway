@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { SyncOutlined } from "@ant-design/icons";
-import { Alert, Button, Popconfirm } from "antd";
+import { Button, Popconfirm } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   reconcileRepositoryArtifactIntelligence,
@@ -16,6 +16,7 @@ import {
   EmptyState,
   ErrorBanner,
   Loading,
+  Notice,
   isNotFound,
 } from "../../components/ui/Feedback";
 import { Pagination } from "../../components/ui/Layout";
@@ -206,11 +207,19 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
   return (
     <div className="space-y-3">
       {reconcileNotice && (
-        <Alert type="success" showIcon title={reconcileNotice} />
+        <Notice
+          tone="success"
+          title={reconcileNotice}
+          onClose={() => setReconcileNotice("")}
+        />
       )}
       {reconcileError !== null && <ErrorBanner error={reconcileError} />}
       {scanReconcileNotice && (
-        <Alert type="success" showIcon title={scanReconcileNotice} />
+        <Notice
+          tone="success"
+          title={scanReconcileNotice}
+          onClose={() => setScanReconcileNotice("")}
+        />
       )}
       {scanReconcileError !== null && (
         <ErrorBanner error={scanReconcileError} />
@@ -410,12 +419,14 @@ export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
 
   return (
     <div className="space-y-3">
-      {restoreError !== null && (
-        <div className="mb-3">
-          <ErrorBanner error={restoreError} />
-        </div>
+      {restoreError !== null && <ErrorBanner error={restoreError} />}
+      {restoreNotice && (
+        <Notice
+          tone="success"
+          title={restoreNotice}
+          onClose={() => setRestoreNotice("")}
+        />
       )}
-      {restoreNotice && <Alert type="success" showIcon title={restoreNotice} />}
       {items.length === 0 ? (
         <EmptyState
           title={text("暂无墓碑", "No tombstones")}

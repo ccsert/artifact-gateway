@@ -979,13 +979,6 @@ button:not(:disabled):active,
     box-shadow 180ms var(--ease-out-expo);
 }
 
-/* Keep page-level surfaces visually distinct without affecting nested cards. */
-.ag-card + .ag-metric-strip,
-.ag-metric-strip + .ag-card,
-.ag-filter-bar + .ag-card {
-  margin-top: 16px;
-}
-
 .ag-access-tabs > .ant-tabs-nav {
   margin-bottom: 16px;
 }
@@ -1621,10 +1614,6 @@ html[data-theme="light"] .ag-public-access-layer {
   border-bottom: 1px solid var(--ag-border-subtle);
 }
 
-.ag-operation-summary + .ag-card {
-  margin-top: 16px;
-}
-
 .ag-operation-filters {
   border-bottom: 1px solid var(--ag-border-subtle);
 }
@@ -1682,10 +1671,6 @@ html[data-theme="light"] .ag-public-access-layer {
 .ag-diagnostics-tab > * {
   min-width: 0;
   margin: 0 !important;
-}
-
-.ag-system-diagnostics > * + * {
-  margin-top: 16px;
 }
 
 .ag-diagnostics-detail-grid {

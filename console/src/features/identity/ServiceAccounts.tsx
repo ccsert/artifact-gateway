@@ -29,7 +29,12 @@ import {
   CopyableValue,
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
-import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
+import {
+  EmptyState,
+  ErrorBanner,
+  Loading,
+  Notice,
+} from "../../components/ui/Feedback";
 import {
   Card,
   CardHeader,
@@ -423,10 +428,9 @@ export function ServiceAccountsPage() {
         }
       />
 
-      <Alert
-        type="info"
-        showIcon
-        icon={<SafetyCertificateOutlined />}
+      <Notice
+        tone="info"
+        closable={false}
         title={text(
           "机器身份与凭据分离",
           "Machine identity is separate from credentials",

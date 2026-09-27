@@ -29,7 +29,7 @@ import type {
   OidcSettingsUpdateWritable,
 } from "../../client";
 import { Card, PageHeader } from "../../components/ui/Layout";
-import { ErrorBanner, Loading } from "../../components/ui/Feedback";
+import { ErrorBanner, Loading, Notice } from "../../components/ui/Feedback";
 import {
   CopyableValue,
   MetricStrip,
@@ -287,7 +287,7 @@ export function AuthenticationPage() {
         ]}
       />
 
-      <div className="ag-feedback-stack space-y-4">
+      <div className="space-y-4">
         {settings.source === "environment" && (
           <Alert
             type="info"
@@ -299,16 +299,18 @@ export function AuthenticationPage() {
           />
         )}
         {actionError !== null && <ErrorBanner error={actionError} />}
-        {notice && <Alert type="success" showIcon title={notice} />}
+        {notice && (
+          <Notice tone="success" title={notice} onClose={() => setNotice("")} />
+        )}
         {testResult && (
-          <Alert
-            type="success"
-            showIcon
+          <Notice
+            tone="success"
             title={text(
               `连接成功，发现耗时 ${testResult.latencyMs} ms`,
               `Connection succeeded in ${testResult.latencyMs} ms`,
             )}
-            description={testResult.authorizationEndpoint}
+            description={testResult.authorizationEndpoint || undefined}
+            onClose={() => setTestResult(null)}
           />
         )}
       </div>

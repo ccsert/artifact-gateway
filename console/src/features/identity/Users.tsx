@@ -249,7 +249,7 @@ export function UsersPage() {
   const filtersActive = Boolean(searchInput || role || state);
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("用户", "Users")}
         description={text(
@@ -269,7 +269,7 @@ export function UsersPage() {
 
       {error ? <ErrorBanner error={error} onRetry={load} /> : null}
 
-      <Card className={error ? "mt-4" : ""}>
+      <Card>
         <FilterBar
           className="rounded-none border-x-0 border-t-0"
           actions={

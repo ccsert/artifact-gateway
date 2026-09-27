@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  CheckCircleOutlined,
-  ScanOutlined,
-  SyncOutlined,
-} from "@ant-design/icons";
+import { ScanOutlined, SyncOutlined } from "@ant-design/icons";
 import { Alert, Button, Form, Input, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -17,7 +13,12 @@ import type {
   RepositoryCapabilities,
 } from "../../client";
 import { StateBadge } from "../../components/ui/Badge";
-import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
+import {
+  EmptyState,
+  ErrorBanner,
+  Loading,
+  Notice,
+} from "../../components/ui/Feedback";
 import { Card, CardHeader } from "../../components/ui/Layout";
 import {
   RepositoryArtifactSelect,
@@ -366,26 +367,25 @@ export function RepositoryScanningTab({
             )}
           />
         )}
-        <Alert
-          className={artifactScanning && canManage ? "xl:col-span-2" : ""}
-          type="info"
-          showIcon
-          title={text(
-            "扫描与处置是两个步骤",
-            "Scanning and enforcement are separate",
-          )}
-          description={text(
-            "扫描与发布后调度都是异步 best-effort：失败不会回滚已成功的上传。扫描结果不会自动隔离制品，也不会直接阻断读取；读取阻断需要管理员隔离制品并启用独立的隔离读取策略。",
-            "Scanning and scan-on-publish scheduling are asynchronous and best effort; failures do not roll back a successful upload. Results do not automatically quarantine artifacts or block reads. Read blocking requires an administrator to quarantine the artifact and enable the separate quarantine-read policy.",
-          )}
-        />
+        <div className={artifactScanning && canManage ? "xl:col-span-2" : ""}>
+          <Notice
+            tone="info"
+            closable={false}
+            title={text(
+              "扫描与处置是两个步骤",
+              "Scanning and enforcement are separate",
+            )}
+            description={text(
+              "扫描与发布后调度都是异步 best-effort：失败不会回滚已成功的上传。扫描结果不会自动隔离制品，也不会直接阻断读取；读取阻断需要管理员隔离制品并启用独立的隔离读取策略。",
+              "Scanning and scan-on-publish scheduling are asynchronous and best effort; failures do not roll back a successful upload. Results do not automatically quarantine artifacts or block reads. Read blocking requires an administrator to quarantine the artifact and enable the separate quarantine-read policy.",
+            )}
+          />
+        </div>
       </div>
 
       {submittedJob && (
-        <Alert
-          type="success"
-          showIcon
-          icon={<CheckCircleOutlined />}
+        <Notice
+          tone="success"
           title={text("扫描任务已提交", "Scan job queued")}
           description={
             <span>
@@ -393,6 +393,7 @@ export function RepositoryScanningTab({
               <code>{submittedJob.id}</code>
             </span>
           }
+          onClose={() => setSubmittedJob(null)}
         />
       )}
       {submitError !== null && <ErrorBanner error={submitError} />}
@@ -578,7 +579,11 @@ export function RepositoryScanningTab({
       </Card>
 
       {reconcileNotice && (
-        <Alert type="success" showIcon title={reconcileNotice} />
+        <Notice
+          tone="success"
+          title={reconcileNotice}
+          onClose={() => setReconcileNotice("")}
+        />
       )}
       {reconcileError !== null && <ErrorBanner error={reconcileError} />}
 

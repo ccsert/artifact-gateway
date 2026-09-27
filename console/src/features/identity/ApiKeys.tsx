@@ -374,7 +374,7 @@ export function ApiKeysPage() {
   ];
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("API 密钥", "API keys")}
         description={text(
