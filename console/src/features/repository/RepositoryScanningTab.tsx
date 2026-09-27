@@ -161,28 +161,33 @@ export function RepositoryScanningTab({
     setSubmitting(true);
     setSubmitError(null);
     setSubmittedJob(null);
-    const { data, error } = await createRepositoryArtifactScan({
-      path: { repositoryId: repo.id },
-      headers: { "Idempotency-Key": manualScanIdempotencyKey(repo.id) },
-      body: {
-        coordinate: values.coordinate.trim(),
-        digest: values.digest.trim(),
-      },
-    });
-    setSubmitting(false);
-    if (error) {
-      setSubmitError(error);
-      return;
+    try {
+      const { data, error } = await createRepositoryArtifactScan({
+        path: { repositoryId: repo.id },
+        headers: { "Idempotency-Key": manualScanIdempotencyKey(repo.id) },
+        body: {
+          coordinate: values.coordinate.trim(),
+          digest: values.digest.trim(),
+        },
+      });
+      if (error) {
+        setSubmitError(error);
+        return;
+      }
+      if (!data) return;
+      setSubmittedJob(data);
+      setJobs((current) => [
+        data,
+        ...(current ?? []).filter((job) => job.id !== data.id),
+      ]);
+      form.resetFields();
+      setSelectedArtifact(null);
+      setManualIdentity(false);
+    } catch (nextError) {
+      setSubmitError(nextError);
+    } finally {
+      setSubmitting(false);
     }
-    if (!data) return;
-    setSubmittedJob(data);
-    setJobs((current) => [
-      data,
-      ...(current ?? []).filter((job) => job.id !== data.id),
-    ]);
-    form.resetFields();
-    setSelectedArtifact(null);
-    setManualIdentity(false);
   };
 
   const reconcileScans = async () => {

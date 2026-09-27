@@ -70,23 +70,28 @@ export function UserSessionsPanel({
   const revoke = async (session: UserSession) => {
     setRevoking(session.id);
     setError(null);
-    const { data, error: requestError } = await revokeUserSession({
-      path: { userId, sessionId: session.id },
-    });
-    setRevoking("");
-    if (requestError || !data) {
-      setError(
-        requestError ??
-          new Error(text("撤销会话失败", "Failed to revoke session")),
+    try {
+      const { data, error: requestError } = await revokeUserSession({
+        path: { userId, sessionId: session.id },
+      });
+      if (requestError || !data) {
+        setError(
+          requestError ??
+            new Error(text("撤销会话失败", "Failed to revoke session")),
+        );
+        return;
+      }
+      setItems((current) =>
+        includeInactive
+          ? current.map((item) => (item.id === data.id ? data : item))
+          : current.filter((item) => item.id !== data.id),
       );
-      return;
+      void message.success(text("会话已撤销", "Session revoked"));
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setRevoking("");
     }
-    setItems((current) =>
-      includeInactive
-        ? current.map((item) => (item.id === data.id ? data : item))
-        : current.filter((item) => item.id !== data.id),
-    );
-    void message.success(text("会话已撤销", "Session revoked"));
   };
 
   return (

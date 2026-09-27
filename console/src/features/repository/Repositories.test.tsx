@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import {
   createRepository,
+  deleteRepository,
   listRepositories,
   listRepositoryCapacities,
   listFormatProfiles,
@@ -30,6 +31,7 @@ vi.mock("../../lib/auth", () => ({
 vi.mock("../../client", async () => ({
   ...(await vi.importActual<typeof import("../../client")>("../../client")),
   createRepository: vi.fn(),
+  deleteRepository: vi.fn(),
   listRepositories: vi.fn(),
   listRepositoryCapacities: vi.fn(),
   listFormatProfiles: vi.fn(),
@@ -137,7 +139,7 @@ describe("RepositoriesPage role-scoped catalog", () => {
       data: { items: [] },
     } as never);
     vi.mocked(listRepositoryCapacities).mockResolvedValue({
-      data: { items: [] },
+      data: [],
     } as never);
     vi.mocked(listFormatProfiles).mockResolvedValue({
       data: { items: profiles },
@@ -173,6 +175,55 @@ describe("RepositoriesPage role-scoped catalog", () => {
       await within(screen.getByRole("dialog")).findByText("network down"),
     ).toBeInTheDocument();
 
+    clickMask();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("frees the delete confirmation when the request rejects", async () => {
+    const user = userEvent.setup();
+    auth.identity = { administrator: true, role: "admin" };
+    vi.mocked(listRepositories).mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            name: "release-files",
+            format: "raw",
+            type: "hosted",
+            state: "active",
+            version: "1",
+          },
+        ],
+      },
+    } as never);
+    vi.mocked(listRepositoryCapacities).mockResolvedValue({
+      data: [],
+    } as never);
+    vi.mocked(listFormatProfiles).mockResolvedValue({
+      data: { items: profiles },
+    } as never);
+    vi.mocked(deleteRepository).mockRejectedValueOnce(
+      new Error("network down"),
+    );
+
+    render(
+      <PreferencesProvider>
+        <MemoryRouter>
+          <RepositoriesPage />
+        </MemoryRouter>
+      </PreferencesProvider>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "删除 release-files" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: /^删\s*除$/ }));
+
+    expect(await screen.findByText("network down")).toBeInTheDocument();
+    // The rejection released `deleting`, so the dialog is dismissible again.
     clickMask();
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),

@@ -280,26 +280,31 @@ export function AuthorizationTemplatesPanel({
       description: draftDescription.trim() || undefined,
       grants: normalizedGrants,
     };
-    const result = editing
-      ? await updateAuthorizationTemplate({
-          path: { templateId: editing.id },
-          headers: { "If-Match": editing.version },
-          body,
-        })
-      : await createAuthorizationTemplate({ body });
-    setSaving(false);
-    if (result.error || !result.data) {
-      setSaveError(
-        result.error ??
-          new Error(
-            text("保存授权模板失败", "Failed to save authorization template"),
-          ),
-      );
-      return;
+    try {
+      const result = editing
+        ? await updateAuthorizationTemplate({
+            path: { templateId: editing.id },
+            headers: { "If-Match": editing.version },
+            body,
+          })
+        : await createAuthorizationTemplate({ body });
+      if (result.error || !result.data) {
+        setSaveError(
+          result.error ??
+            new Error(
+              text("保存授权模板失败", "Failed to save authorization template"),
+            ),
+        );
+        return;
+      }
+      setEditorOpen(false);
+      setEditing(null);
+      await load();
+    } catch (nextError) {
+      setSaveError(nextError);
+    } finally {
+      setSaving(false);
     }
-    setEditorOpen(false);
-    setEditing(null);
-    await load();
   };
 
   const apply = async () => {

@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createApiKey, listApiKeys } from "../../client";
+import { createApiKey, listApiKeys, revokeApiKey } from "../../client";
 import { AntdProvider } from "../../app/AntdProvider";
 import { PreferencesProvider } from "../../lib/preferences";
 import { ApiKeysPage } from "./ApiKeys";
@@ -72,6 +72,37 @@ describe("ApiKeysPage", () => {
       await within(screen.getByRole("dialog")).findByText("network down"),
     ).toBeInTheDocument();
 
+    clickMask();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("frees the revoke confirmation when the request rejects", async () => {
+    const user = userEvent.setup();
+    mockListKeys.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            name: "ci-deploy",
+            roles: ["member"],
+            createdAt: "2026-08-01T00:00:00Z",
+          },
+        ],
+      },
+    } as never);
+    vi.mocked(revokeApiKey).mockRejectedValueOnce(new Error("network down"));
+
+    renderPage();
+    await user.click(
+      await screen.findByRole("button", { name: "吊销密钥 ci-deploy" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: /^吊\s*销$/ }));
+
+    expect(await screen.findByText("network down")).toBeInTheDocument();
+    // The rejection released `revoking`, so the dialog is dismissible again.
     clickMask();
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),

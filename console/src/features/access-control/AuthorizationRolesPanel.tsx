@@ -112,26 +112,31 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
       description: description.trim() || undefined,
       scopes,
     };
-    const result = editing
-      ? await updateAuthorizationRole({
-          path: { roleId: editing.id },
-          headers: { "If-Match": editing.version },
-          body,
-        })
-      : await createAuthorizationRole({ body });
-    setSaving(false);
-    if (result.error || !result.data) {
-      setSaveError(
-        result.error ??
-          new Error(
-            text("保存授权角色失败", "Failed to save authorization role"),
-          ),
-      );
-      return;
+    try {
+      const result = editing
+        ? await updateAuthorizationRole({
+            path: { roleId: editing.id },
+            headers: { "If-Match": editing.version },
+            body,
+          })
+        : await createAuthorizationRole({ body });
+      if (result.error || !result.data) {
+        setSaveError(
+          result.error ??
+            new Error(
+              text("保存授权角色失败", "Failed to save authorization role"),
+            ),
+        );
+        return;
+      }
+      setEditorOpen(false);
+      await load();
+      onChanged?.();
+    } catch (nextError) {
+      setSaveError(nextError);
+    } finally {
+      setSaving(false);
     }
-    setEditorOpen(false);
-    await load();
-    onChanged?.();
   };
 
   const columns: ColumnsType<AuthorizationRole> = [

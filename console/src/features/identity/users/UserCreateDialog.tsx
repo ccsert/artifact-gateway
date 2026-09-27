@@ -39,25 +39,30 @@ export function UserCreateDialog({
     if (!values) return;
     setBusy(true);
     setError(null);
-    const { data, error: requestError } = await createUser({
-      body: {
-        ...values,
-        name: values.name.trim(),
-        displayName: values.displayName?.trim(),
-        email: values.email?.trim(),
-        description: values.description?.trim(),
-      },
-    });
-    setBusy(false);
-    if (requestError || !data) {
-      setError(
-        requestError ??
-          new Error(text("创建用户失败", "Failed to create user")),
-      );
-      return;
+    try {
+      const { data, error: requestError } = await createUser({
+        body: {
+          ...values,
+          name: values.name.trim(),
+          displayName: values.displayName?.trim(),
+          email: values.email?.trim(),
+          description: values.description?.trim(),
+        },
+      });
+      if (requestError || !data) {
+        setError(
+          requestError ??
+            new Error(text("创建用户失败", "Failed to create user")),
+        );
+        return;
+      }
+      void message.success(text("用户已创建", "User created"));
+      onCreated(data);
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusy(false);
     }
-    void message.success(text("用户已创建", "User created"));
-    onCreated(data);
   };
 
   return (

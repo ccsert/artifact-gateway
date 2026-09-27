@@ -107,4 +107,25 @@ describe("UserSessionsPanel", () => {
     const empty = await screen.findByText("当前没有活动会话");
     expect(empty.closest(".ag-empty-state")).not.toBeNull();
   });
+
+  it("frees the revoke action when the request rejects", async () => {
+    const user = userEvent.setup();
+    mockListSessions.mockResolvedValue({ data: { items: [active] } } as never);
+    mockRevokeSession.mockRejectedValueOnce(new Error("network down"));
+
+    renderPanel();
+    const revokeButton = await screen.findByRole("button", {
+      name: "撤销会话",
+    });
+    await user.click(revokeButton);
+
+    const confirm = await screen.findByRole("button", { name: /^撤\s*销$/ });
+    await user.click(confirm);
+
+    expect(await screen.findByText("network down")).toBeInTheDocument();
+    // The rejection released `revoking`, so the row button stops spinning.
+    await waitFor(() =>
+      expect(revokeButton).not.toHaveClass("ant-btn-loading"),
+    );
+  });
 });

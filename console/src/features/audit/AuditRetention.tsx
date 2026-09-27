@@ -58,33 +58,43 @@ export function AuditRetentionPage() {
     setSaving(true);
     setSaveError(null);
     setNotice("");
-    const { error: err } = await replaceAuditRetentionPolicy({
-      body: { ...policy, enabled, keepDays },
-      headers: { "If-Match": policy.version },
-    });
-    setSaving(false);
-    if (err) {
-      setSaveError(err);
-      return;
+    try {
+      const { error: err } = await replaceAuditRetentionPolicy({
+        body: { ...policy, enabled, keepDays },
+        headers: { "If-Match": policy.version },
+      });
+      if (err) {
+        setSaveError(err);
+        return;
+      }
+      setNotice(text("策略已保存", "Policy saved"));
+      void load();
+    } catch (nextError) {
+      setSaveError(nextError);
+    } finally {
+      setSaving(false);
     }
-    setNotice(text("策略已保存", "Policy saved"));
-    void load();
   };
 
   const execute = async () => {
     setExecuting(true);
     setSaveError(null);
     setNotice("");
-    const { error: err } = await executeAuditRetention({
-      headers: { "Idempotency-Key": crypto.randomUUID() },
-    });
-    setExecuting(false);
-    if (err) {
-      setSaveError(err);
-      return;
+    try {
+      const { error: err } = await executeAuditRetention({
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      });
+      if (err) {
+        setSaveError(err);
+        return;
+      }
+      setNotice(text("清理任务已提交", "Cleanup job submitted"));
+      setTimeout(() => void load(), 1000);
+    } catch (nextError) {
+      setSaveError(nextError);
+    } finally {
+      setExecuting(false);
     }
-    setNotice(text("清理任务已提交", "Cleanup job submitted"));
-    setTimeout(() => void load(), 1000);
   };
 
   if (error !== null) {
