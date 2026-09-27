@@ -29,7 +29,12 @@ import type {
   Repository,
 } from "../../client";
 import { Badge, StateBadge } from "../../components/ui/Badge";
-import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
+import {
+  EmptyState,
+  ErrorBanner,
+  Loading,
+  Notice,
+} from "../../components/ui/Feedback";
 import { Field } from "../../components/ui/Layout";
 import { downloadBlob, sha256Receipt } from "../../lib/download";
 import { formatDate, shortDigest } from "../../lib/format";
@@ -63,9 +68,9 @@ export function APTOperationsTab({
     );
   return (
     <div className="ag-page-stack ag-apt-operations">
-      <Alert
-        type="info"
-        showIcon
+      <Notice
+        tone="info"
+        closable={false}
         title={text(
           "APT 签名快照 · 操作预览",
           "APT signed snapshots · Operator preview",
@@ -208,7 +213,9 @@ function APTArchiveOperations({
         )}
       </p>
       {error !== null && <ErrorBanner error={error} />}
-      {notice && <Alert type="success" showIcon title={notice} />}
+      {notice && (
+        <Notice tone="success" title={notice} onClose={() => setNotice("")} />
+      )}
       {savedArchive && (
         <Alert
           type={savedArchive.digest ? "success" : "warning"}
@@ -568,7 +575,9 @@ function APTSuiteOperations({
       </div>
       {error !== null && <ErrorBanner error={error} onRetry={load} />}
       {actionError !== null && !review && <ErrorBanner error={actionError} />}
-      {notice && <Alert type="success" showIcon title={notice} />}
+      {notice && (
+        <Notice tone="success" title={notice} onClose={() => setNotice("")} />
+      )}
       {!state ? (
         loading ? (
           <Loading />

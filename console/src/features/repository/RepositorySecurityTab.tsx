@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Alert, Button, Select, Switch, Tag } from "antd";
+import { Button, Select, Switch, Tag } from "antd";
 import {
   getAptRepositorySigningState,
   getQuarantineReadPolicy,
@@ -19,7 +19,12 @@ import type {
   Repository,
   SecurityPolicy,
 } from "../../client";
-import { ErrorBanner, Loading, isNotFound } from "../../components/ui/Feedback";
+import {
+  ErrorBanner,
+  Loading,
+  Notice,
+  isNotFound,
+} from "../../components/ui/Feedback";
 import { Field } from "../../components/ui/Layout";
 import { usePreferences } from "../../lib/preferences";
 import { APTSigningStatePanel } from "./APTSigningStatePanel";
@@ -327,7 +332,13 @@ export function RepositorySecurityTab({
         )}
         {readPolicy && (
           <>
-            {readNotice && <Alert type="success" showIcon title={readNotice} />}
+            {readNotice && (
+              <Notice
+                tone="success"
+                title={readNotice}
+                onClose={() => setReadNotice("")}
+              />
+            )}
             <div className="grid gap-px overflow-hidden rounded-lg border border-zinc-800/80 bg-[var(--ag-border-subtle)] sm:grid-cols-2">
               <ScopeFact
                 label={text("影响请求", "Affected requests")}
@@ -403,7 +414,9 @@ export function RepositorySecurityTab({
         }
       >
         {saveError !== null && <ErrorBanner error={saveError} />}
-        {notice && <Alert type="success" showIcon title={notice} />}
+        {notice && (
+          <Notice tone="success" title={notice} onClose={() => setNotice("")} />
+        )}
 
         <PolicySectionHeader
           title={text("安全情报", "Security intelligence")}

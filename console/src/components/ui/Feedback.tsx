@@ -36,10 +36,17 @@ export function ErrorBanner({
   error,
   onRetry,
   title,
+  tone = "error",
 }: {
   error: unknown;
   onRetry?: () => void;
   title?: string;
+  /**
+   * `warning` is for a failure the page can live with — a refresh that failed
+   * while earlier data stays on screen, or one optional source being
+   * unavailable. `error` is for "there is nothing to show".
+   */
+  tone?: "error" | "warning";
 }) {
   const { text } = usePreferences();
   const problem =
@@ -62,7 +69,7 @@ export function ErrorBanner({
   return (
     <Alert
       className="ag-feedback-enter"
-      type="error"
+      type={tone}
       showIcon
       title={title ?? text("请求出错", "Request failed")}
       description={
@@ -83,7 +90,7 @@ export function ErrorBanner({
       action={
         onRetry ? (
           <Button
-            danger
+            danger={tone === "error"}
             size="small"
             icon={<ReloadOutlined />}
             onClick={onRetry}
@@ -92,6 +99,43 @@ export function ErrorBanner({
           </Button>
         ) : undefined
       }
+    />
+  );
+}
+
+/**
+ * A notice about something that already happened or a standing explanation,
+ * as opposed to `ErrorBanner`, which is about a request that failed.
+ *
+ * Success and warning notices are closable by default; pass `onClose` to clear
+ * the caller's state so a later notice of the same text shows again. Standing
+ * explanations use `tone="info"`, which drops the icon and stays open.
+ */
+export function Notice({
+  tone,
+  title,
+  description,
+  action,
+  closable,
+  onClose,
+}: {
+  tone: "success" | "info" | "warning";
+  title: ReactNode;
+  description?: ReactNode;
+  action?: ReactNode;
+  closable?: boolean;
+  onClose?: () => void;
+}) {
+  return (
+    <Alert
+      className="ag-feedback-enter"
+      type={tone}
+      showIcon={tone !== "info"}
+      closable={closable ?? tone !== "info"}
+      onClose={onClose}
+      title={title}
+      description={description}
+      action={action}
     />
   );
 }

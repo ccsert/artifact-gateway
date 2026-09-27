@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, InputNumber, Progress, Space } from "antd";
+import { Button, InputNumber, Progress, Space } from "antd";
 import { getRepositoryCapacity, replaceRepositoryCapacity } from "../../client";
 import type { Repository, RepositoryCapacity } from "../../client";
-import { ErrorBanner, Loading, isNotFound } from "../../components/ui/Feedback";
+import {
+  ErrorBanner,
+  Loading,
+  Notice,
+  isNotFound,
+} from "../../components/ui/Feedback";
 import { Field } from "../../components/ui/Layout";
 import { formatBytes, formatNumber } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
@@ -90,7 +95,9 @@ export function RepositoryCapacityTab({ repo }: { repo: Repository }) {
             )}
       </div>
       {saveError !== null && <ErrorBanner error={saveError} />}
-      {notice && <Alert type="success" showIcon title={notice} />}
+      {notice && (
+        <Notice tone="success" title={notice} onClose={() => setNotice("")} />
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-lg border border-zinc-800 px-4 py-3">
           <div className="text-xs uppercase tracking-wider text-zinc-500">
