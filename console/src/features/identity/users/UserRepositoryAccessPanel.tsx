@@ -38,7 +38,7 @@ import {
 } from "../../../components/ui/Feedback";
 import { Modal, useDisclosure } from "../../../components/ui/Modal";
 import { usePreferences } from "../../../lib/preferences";
-import { GrantRowEditor } from "../../access-control/GrantRowEditor";
+import { GrantForm } from "../../access-control/GrantForm";
 import {
   emptyGrant,
   grantedCapabilitiesLabel,
@@ -564,7 +564,7 @@ export function UserRepositoryAccessPanel({
             : text("编辑仓库授权", "Edit repository grant")
         }
         onClose={closeCompose}
-        wide
+        width={680}
         footer={
           <Space>
             <Button onClick={closeCompose}>{text("取消", "Cancel")}</Button>
@@ -628,19 +628,13 @@ export function UserRepositoryAccessPanel({
                   "Repository rules add permissions; they cannot revoke the user's existing global role. A grant for the same principal and resource scope is replaced by this one; the user's other resource scopes and other principals keep theirs.",
                 )}
               />
-              <div className="grid grid-cols-[minmax(300px,1.35fr)_170px_minmax(360px,1.5fr)_170px_40px] items-center gap-3 px-2 pb-2 text-xs font-medium text-zinc-500">
-                <span>{text("主体", "Principal")}</span>
-                <span>{text("权限级别", "Permission")}</span>
-                <span>{text("资源范围", "Resource scope")}</span>
-                <span>{text("本规则授予", "Granted by this rule")}</span>
-                <span />
-              </div>
-              <GrantRowEditor
+              <GrantForm
                 grant={draft}
                 principalOptions={principalChoices}
                 authorizationRoles={authorizationRoles}
                 format={selectedRepository?.format ?? "raw"}
                 onChange={(next) => setDraft({ ...next, principal })}
+                lockPrincipal
               />
             </div>
           ) : null}

@@ -1223,3 +1223,86 @@ test("a blocked admission reads as a policy judgment in both themes", async ({
     }
   }
 });
+
+test("the grant dialog keeps every field reachable at both widths", async ({
+  page,
+}, testInfo) => {
+  await mockRepositoryDetail(page);
+  await page.route(`**/api/v2/repositories/${repositoryId}/grants**`, (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.route("**/api/v2/users**", (route) =>
+    route.fulfill({
+      json: {
+        items: [{ name: "alice", role: "member", state: "active" }],
+      },
+    }),
+  );
+  await page.route("**/api/v2/api-keys**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/v2/service-accounts**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/v2/authorization-roles**", (route) =>
+    route.fulfill({ json: [] }),
+  );
+
+  for (const [width, height] of [
+    [1440, 900],
+    [390, 844],
+  ] as const) {
+    for (const mode of ["dark", "light"] as const) {
+      if (mode === "light") {
+        await page.getByRole("button", { name: /选择主题/ }).click();
+        await page.getByRole("menuitem", { name: /Gateway Light/ }).click();
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-theme",
+          "light",
+        );
+      }
+      await page.setViewportSize({ width, height });
+      await page.goto(`/repositories/${repositoryId}?tab=grants`);
+      await page
+        .getByRole("button", { name: /添加授权/ })
+        .last()
+        .click();
+      const dialog = page.locator(".ant-modal").first();
+      await expect(dialog).toBeVisible();
+      await page.waitForTimeout(400);
+
+      const body = dialog.locator(".ant-modal-body");
+      // Nothing may sit past the dialog's own edge: the body scrolls vertically
+      // only, so horizontally clipped controls are unreachable.
+      const overflow = await body.evaluate((element) => ({
+        hidden: element.scrollWidth - element.clientWidth,
+        width: Math.round(element.getBoundingClientRect().width),
+      }));
+      expect(overflow.hidden, `${width}px dialog body overflows`).toBe(0);
+
+      for (const label of ["授权主体", "权限级别", "资源范围", "本规则授予"]) {
+        await expect(body.getByText(label, { exact: true })).toBeVisible();
+      }
+      // The scope control and its prefix input are reachable, not cut off.
+      const prefix = body.getByText("整个仓库", { exact: true });
+      await expect(prefix).toBeVisible();
+      const box = await prefix.boundingBox();
+      const dialogBox = await dialog.boundingBox();
+      expect(box).not.toBeNull();
+      expect(dialogBox).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(dialogBox!.x);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(
+        dialogBox!.x + dialogBox!.width + 1,
+      );
+
+      if (width === 1440) expect(overflow.width).toBe(632);
+      if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+        await page.screenshot({
+          path: testInfo.outputPath(`grant-dialog-${width}-${mode}.png`),
+        });
+      }
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+    }
+  }
+});

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthorizationRole } from "../../client";
 import { AntdProvider } from "../../app/AntdProvider";
 import { PreferencesProvider } from "../../lib/preferences";
-import { GrantRowEditor } from "./GrantRowEditor";
+import { GrantForm } from "./GrantForm";
 import type { DraftGrant, PrincipalOption } from "./grantDraft";
 
 vi.mock("../../client", () => ({
@@ -47,27 +47,30 @@ function draft(overrides: Partial<DraftGrant> = {}): DraftGrant {
   };
 }
 
-function renderRow(grant: DraftGrant, roles: AuthorizationRole[] = []) {
+function renderForm(
+  grant: DraftGrant,
+  roles: AuthorizationRole[] = [],
+  options: { lockPrincipal?: boolean } = {},
+) {
   const onChange = vi.fn<(next: DraftGrant) => void>();
-  const onRemove = vi.fn<() => void>();
   render(
     <PreferencesProvider>
       <AntdProvider>
-        <GrantRowEditor
+        <GrantForm
           grant={grant}
           principalOptions={principalChoices}
           authorizationRoles={roles}
           format="raw"
           onChange={onChange}
-          onRemove={onRemove}
+          {...options}
         />
       </AntdProvider>
     </PreferencesProvider>,
   );
-  return { onChange, onRemove };
+  return { onChange };
 }
 
-function lastChange(onChange: ReturnType<typeof renderRow>["onChange"]) {
+function lastChange(onChange: ReturnType<typeof renderForm>["onChange"]) {
   return onChange.mock.calls.at(-1)?.[0];
 }
 
@@ -76,10 +79,26 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("GrantRowEditor", () => {
+describe("GrantForm", () => {
+  it("labels every field where the administrator reads it", () => {
+    renderForm(draft());
+
+    expect(screen.getByText("授权主体")).toBeInTheDocument();
+    expect(screen.getByText("权限级别")).toBeInTheDocument();
+    expect(screen.getByText("资源范围")).toBeInTheDocument();
+    expect(screen.getByText("本规则授予")).toBeInTheDocument();
+    // Each visible label is also the control's accessible name.
+    expect(
+      screen.getByRole("combobox", { name: "授权主体" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "权限级别" }),
+    ).toBeInTheDocument();
+  });
+
   it("offers the principal options it is given", async () => {
     const user = userEvent.setup();
-    renderRow(draft({ principal: "" }));
+    renderForm(draft({ principal: "" }));
 
     await user.click(screen.getByRole("combobox", { name: "授权主体" }));
 
@@ -89,11 +108,20 @@ describe("GrantRowEditor", () => {
     expect(screen.getByText(/OIDC \/ 自定义 actor/)).toBeInTheDocument();
   });
 
+  it("shows a fixed principal as text instead of a select that cannot change", () => {
+    renderForm(draft(), [], { lockPrincipal: true });
+
+    expect(
+      screen.queryByRole("combobox", { name: "授权主体" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("user:alice")).toBeInTheDocument();
+  });
+
   it("copies the scopes of a chosen custom authorization role", async () => {
     const user = userEvent.setup();
-    const { onChange } = renderRow(draft(), [releaseRole]);
+    const { onChange } = renderForm(draft(), [releaseRole]);
 
-    await user.click(screen.getAllByRole("combobox")[1]);
+    await user.click(screen.getByRole("combobox", { name: "权限级别" }));
     await user.click(screen.getByText("发布机器人"));
 
     const next = lastChange(onChange);
@@ -105,11 +133,11 @@ describe("GrantRowEditor", () => {
 
   it("maps a chosen built-in level to that level's scopes", async () => {
     const user = userEvent.setup();
-    const { onChange } = renderRow(draft({ scopes: ["repositories:read"] }), [
+    const { onChange } = renderForm(draft({ scopes: ["repositories:read"] }), [
       releaseRole,
     ]);
 
-    await user.click(screen.getAllByRole("combobox")[1]);
+    await user.click(screen.getByRole("combobox", { name: "权限级别" }));
     await user.click(screen.getByText("写入 · 发布 / 编辑"));
 
     const next = lastChange(onChange);
@@ -120,7 +148,7 @@ describe("GrantRowEditor", () => {
 
   it("reports a resource prefix change picked from the scope segmented control", async () => {
     const user = userEvent.setup();
-    const { onChange } = renderRow(draft({ resourcePrefix: "" }));
+    const { onChange } = renderForm(draft({ resourcePrefix: "" }));
 
     await user.click(screen.getByText("限定范围"));
 
@@ -129,7 +157,7 @@ describe("GrantRowEditor", () => {
 
   it("reports a typed resource prefix", async () => {
     const user = userEvent.setup();
-    const { onChange } = renderRow(draft({ resourcePrefix: "releases/" }));
+    const { onChange } = renderForm(draft({ resourcePrefix: "releases/" }));
 
     // Principal select, permission select, then the resource prefix input.
     const prefixInput = screen.getAllByRole("combobox")[2];
