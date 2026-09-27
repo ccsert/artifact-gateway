@@ -416,16 +416,6 @@ export function WebhookDeliveriesPanel() {
               "创建订阅，将隔离状态变更可靠投递给自动化系统。",
               "Create a subscription to deliver quarantine state changes to automation systems.",
             )}
-            action={
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                aria-label={text("新建订阅", "New subscription")}
-                onClick={openCreate}
-              >
-                {text("新建订阅", "New subscription")}
-              </Button>
-            }
           />
         ) : (
           <Table<WebhookSubscription>

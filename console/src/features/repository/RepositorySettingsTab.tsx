@@ -355,7 +355,10 @@ export function RepositorySettingsTab({
                         value={egressProtocol}
                         onChange={setEgressProtocol}
                         options={[
-                          { value: "http", label: "HTTP（CONNECT）" },
+                          {
+                            value: "http",
+                            label: text("HTTP（CONNECT）", "HTTP (CONNECT)"),
+                          },
                           { value: "socks5", label: "SOCKS5" },
                         ]}
                       />

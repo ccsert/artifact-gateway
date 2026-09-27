@@ -311,7 +311,7 @@ export function AuditRetentionPage() {
           </div>
           <Alert
             className="h-fit"
-            type="warning"
+            type={policyDirty ? "warning" : "info"}
             showIcon
             title={text("清理说明", "Cleanup notes")}
             description={

@@ -247,9 +247,12 @@ describe("ServiceAccountsPage", () => {
     renderPage();
 
     expect(await screen.findByText("暂无服务账号")).toBeInTheDocument();
-    await user.click(
-      screen.getAllByRole("button", { name: "新建服务账号" }).at(-1)!,
-    );
+    // The header action is the only primary; the empty state must not twin it.
+    const createButtons = screen.getAllByRole("button", {
+      name: /新建服务账号/,
+    });
+    expect(createButtons).toHaveLength(1);
+    await user.click(createButtons[0]);
     const dialog = await screen.findByRole("dialog");
     const fields = within(dialog).getAllByRole("textbox");
     await user.type(fields[0], "  pipeone-ci  ");

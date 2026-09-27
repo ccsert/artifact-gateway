@@ -8,10 +8,8 @@ import {
 import {
   App,
   Button,
-  Empty,
   Popconfirm,
   Space,
-  Spin,
   Switch,
   Tag,
   Tooltip,
@@ -21,7 +19,11 @@ import {
 import { listUserSessions, revokeUserSession } from "../../../client";
 import type { UserSession } from "../../../client";
 import { Badge } from "../../../components/ui/Badge";
-import { ErrorBanner } from "../../../components/ui/Feedback";
+import {
+  EmptyState,
+  ErrorBanner,
+  Loading,
+} from "../../../components/ui/Feedback";
 import { formatDate } from "../../../lib/format";
 import { usePreferences } from "../../../lib/preferences";
 
@@ -136,19 +138,15 @@ export function UserSessionsPanel({
         }}
       >
         {loading ? (
-          <div className="flex min-h-24 items-center justify-center">
-            <Spin size="small" />
-          </div>
+          <Loading />
         ) : items.length === 0 ? (
-          <div className="py-4">
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={text(
-                includeInactive ? "没有会话记录" : "当前没有活动会话",
-                includeInactive ? "No session history" : "No active sessions",
-              )}
-            />
-          </div>
+          <EmptyState
+            compact
+            title={text(
+              includeInactive ? "没有会话记录" : "当前没有活动会话",
+              includeInactive ? "No session history" : "No active sessions",
+            )}
+          />
         ) : (
           items.map((session, index) => {
             const expired = new Date(session.expiresAt).getTime() <= Date.now();

@@ -2,18 +2,18 @@ import { Button } from "antd";
 import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 
-export function CopyButton({ text }: { text: string }) {
-  const { text: localize } = usePreferences();
+export function CopyButton({ text: value }: { text: string }) {
+  const { text } = usePreferences();
   const { copiedValue, copy } = useClipboardAction();
-  const copied = copiedValue === text;
+  const copied = copiedValue === value;
   return (
     <Button
       type="text"
       size="small"
-      onClick={() => void copy(text)}
+      onClick={() => void copy(value)}
       className="shrink-0"
     >
-      {copied ? localize("已复制", "Copied") : localize("复制", "Copy")}
+      {copied ? text("已复制", "Copied") : text("复制", "Copy")}
     </Button>
   );
 }

@@ -69,7 +69,10 @@ function scanStatus(
   return { label: text("未扫描", "Not scanned") };
 }
 
-function coordinatePlaceholder(format: Repository["format"]): string {
+function coordinatePlaceholder(
+  format: Repository["format"],
+  fallback: string,
+): string {
   switch (format) {
     case "maven":
       return "com.example:widget:1.2.3";
@@ -86,7 +89,7 @@ function coordinatePlaceholder(format: Repository["format"]): string {
     case "raw":
       return "releases/widget-1.2.3.tar.gz";
     default:
-      return "制品的规范坐标";
+      return fallback;
   }
 }
 
@@ -500,7 +503,10 @@ export function RepositoryScanningTab({
             >
               <Input
                 disabled={!artifactScanning || !canManage}
-                placeholder={coordinatePlaceholder(repo.format)}
+                placeholder={coordinatePlaceholder(
+                  repo.format,
+                  text("制品的规范坐标", "Canonical artifact coordinate"),
+                )}
                 autoComplete="off"
               />
             </Form.Item>

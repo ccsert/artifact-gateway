@@ -9,13 +9,11 @@ import {
   Alert,
   App,
   Button,
-  Empty,
   Form,
   Input,
   Modal,
   Popconfirm,
   Space,
-  Spin,
   Tag,
 } from "antd";
 import {
@@ -26,7 +24,11 @@ import {
 } from "../../../client";
 import type { CreateUserIdentity, UserIdentity } from "../../../client";
 import { Badge } from "../../../components/ui/Badge";
-import { ErrorBanner } from "../../../components/ui/Feedback";
+import {
+  EmptyState,
+  ErrorBanner,
+  Loading,
+} from "../../../components/ui/Feedback";
 import { formatDate } from "../../../lib/format";
 import { usePreferences } from "../../../lib/preferences";
 
@@ -145,13 +147,11 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
 
       {error ? <ErrorBanner error={error} onRetry={() => void load()} /> : null}
       {loading ? (
-        <div className="flex justify-center py-6">
-          <Spin />
-        </div>
+        <Loading />
       ) : items.length === 0 ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={text("尚未绑定外部身份", "No external identity linked")}
+        <EmptyState
+          compact
+          title={text("尚未绑定外部身份", "No external identity linked")}
         />
       ) : (
         <div className="space-y-2">

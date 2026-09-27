@@ -481,11 +481,6 @@ export function ServiceAccountsPage() {
               "为第一个 CI 机器人创建稳定身份。",
               "Create a stable identity for your first CI robot.",
             )}
-            action={
-              <Button type="primary" onClick={createDialog.show}>
-                {text("新建服务账号", "New service account")}
-              </Button>
-            }
           />
         </Card>
       ) : (

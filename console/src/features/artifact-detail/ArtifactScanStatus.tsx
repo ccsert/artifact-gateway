@@ -111,7 +111,7 @@ export function ArtifactScanStatus({
     return (
       <Alert
         className="col-span-full"
-        type="warning"
+        type="error"
         showIcon
         title={loadError}
         action={
@@ -158,9 +158,7 @@ export function ArtifactScanStatus({
           )}
         </Space>
       </div>
-      {error && (
-        <Alert className="mt-2" type="warning" showIcon title={error} />
-      )}
+      {error && <Alert className="mt-2" type="error" showIcon title={error} />}
       {loadError && (
         <Alert
           className="mt-2"

@@ -190,27 +190,29 @@ export function RuntimeNodesPanel({
         }
       />
       {health && (health.issues ?? []).length > 0 && (
-        <Alert
-          className="ag-feedback-enter rounded-none border-x-0 border-t-0"
-          type={health.status === "critical" ? "error" : "warning"}
-          showIcon
-          title={text(
-            "集群运行能力需要关注",
-            "Cluster capabilities need attention",
-          )}
-          description={
-            <div className="space-y-1">
-              {(health.issues ?? []).map((issue) => (
-                <div key={issue.code}>
-                  <span className="font-mono text-xs text-zinc-500">
-                    {issue.code}
-                  </span>
-                  <span className="ml-2">{issue.message}</span>
-                </div>
-              ))}
-            </div>
-          }
-        />
+        <div className="px-5 pt-4">
+          <Alert
+            className="ag-feedback-enter"
+            type={health.status === "critical" ? "error" : "warning"}
+            showIcon
+            title={text(
+              "集群运行能力需要关注",
+              "Cluster capabilities need attention",
+            )}
+            description={
+              <div className="space-y-1">
+                {(health.issues ?? []).map((issue) => (
+                  <div key={issue.code}>
+                    <span className="font-mono text-xs text-zinc-500">
+                      {issue.code}
+                    </span>
+                    <span className="ml-2">{issue.message}</span>
+                  </div>
+                ))}
+              </div>
+            }
+          />
+        </div>
       )}
       {error ? (
         <ErrorBanner error={error} onRetry={load} />
