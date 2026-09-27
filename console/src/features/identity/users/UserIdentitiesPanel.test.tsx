@@ -173,4 +173,33 @@ describe("UserIdentitiesPanel", () => {
     const empty = await screen.findByText("尚未绑定外部身份");
     expect(empty.closest(".ag-empty-state")).not.toBeNull();
   });
+
+  it("reports a failed link inside the dialog that started it", async () => {
+    mockListIdentities.mockResolvedValue({ data: { items: [] } } as never);
+    mockGetOidcSettings.mockResolvedValue({
+      data: { issuer: identity.issuer },
+    } as never);
+    let rejectLink: (error: unknown) => void = () => {};
+    mockCreateIdentity.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectLink = reject;
+        }) as never,
+    );
+
+    const user = userEvent.setup();
+    renderPanel();
+
+    await screen.findByText("尚未绑定外部身份");
+    await user.click(screen.getByText("绑定身份", { selector: "span" }));
+    await user.type(screen.getByLabelText("Subject"), "provider-subject");
+    const dialog = screen.getByRole("dialog", { name: "绑定 OIDC 身份" });
+    await user.click(within(dialog).getByRole("button", { name: /绑\s*定/ }));
+
+    rejectLink(new Error("network down"));
+    expect(await within(dialog).findByText("network down")).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "绑定 OIDC 身份" }),
+    ).toBeVisible();
+  });
 });

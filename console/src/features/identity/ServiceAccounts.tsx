@@ -126,6 +126,10 @@ export function ServiceAccountsPage() {
   const credentialRequestId = useRef(0);
   const [error, setError] = useState<unknown>(null);
   const [credentialsError, setCredentialsError] = useState<unknown>(null);
+  // Save failures belong to the dialog that started the write: the page
+  // banners stay reserved for loading the account and credential lists.
+  const [createError, setCreateError] = useState<unknown>(null);
+  const [issueError, setIssueError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [accountName, setAccountName] = useState("");
   const [accountDescription, setAccountDescription] = useState("");
@@ -233,7 +237,7 @@ export function ServiceAccountsPage() {
 
   const submitAccount = async () => {
     setBusy(true);
-    setError(null);
+    setCreateError(null);
     try {
       const { data, error: createError } = await createServiceAccount({
         body: {
@@ -242,7 +246,9 @@ export function ServiceAccountsPage() {
         },
       });
       if (createError || !data) {
-        setError(createError ?? new Error(text("创建失败", "Creation failed")));
+        setCreateError(
+          createError ?? new Error(text("创建失败", "Creation failed")),
+        );
         return;
       }
       createDialog.hide();
@@ -251,7 +257,7 @@ export function ServiceAccountsPage() {
       await loadAccounts();
       setSelectedAccountId(data.id);
     } catch (nextError) {
-      setError(nextError);
+      setCreateError(nextError);
     } finally {
       setBusy(false);
     }
@@ -260,7 +266,7 @@ export function ServiceAccountsPage() {
   const submitCredential = async () => {
     if (!selectedAccount) return;
     setBusy(true);
-    setCredentialsError(null);
+    setIssueError(null);
     try {
       const { data, error: createError } = await createServiceAccountCredential(
         {
@@ -274,7 +280,7 @@ export function ServiceAccountsPage() {
         },
       );
       if (createError || !data) {
-        setCredentialsError(
+        setIssueError(
           createError ?? new Error(text("签发失败", "Issuance failed")),
         );
         return;
@@ -285,7 +291,7 @@ export function ServiceAccountsPage() {
       setReveal(data);
       await loadCredentials();
     } catch (nextError) {
-      setCredentialsError(nextError);
+      setIssueError(nextError);
     } finally {
       setBusy(false);
     }
@@ -421,7 +427,10 @@ export function ServiceAccountsPage() {
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={createDialog.show}
+            onClick={() => {
+              setCreateError(null);
+              createDialog.show();
+            }}
           >
             {text("新建服务账号", "New service account")}
           </Button>
@@ -607,7 +616,10 @@ export function ServiceAccountsPage() {
                     type="primary"
                     icon={<ApiOutlined />}
                     disabled={selectedAccount.state !== "active"}
-                    onClick={credentialDialog.show}
+                    onClick={() => {
+                      setIssueError(null);
+                      credentialDialog.show();
+                    }}
                   >
                     {text("签发新凭据", "Issue credential")}
                   </Button>
@@ -687,6 +699,7 @@ export function ServiceAccountsPage() {
         }
       >
         <div className="space-y-4">
+          {createError !== null && <ErrorBanner error={createError} />}
           <Field
             label={text("账号名称", "Account name")}
             hint={text(
@@ -733,6 +746,7 @@ export function ServiceAccountsPage() {
         }
       >
         <div className="space-y-4">
+          {issueError !== null && <ErrorBanner error={issueError} />}
           <Field
             label={text("凭据名称", "Credential name")}
             hint={text(

@@ -33,6 +33,9 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
   const [items, setItems] = useState<UserIdentity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
+  // A failed link belongs to the dialog that started it; the panel banner
+  // stays reserved for loading the identity list.
+  const [linkError, setLinkError] = useState<unknown>(null);
   const [open, setOpen] = useState(false);
   const [issuer, setIssuer] = useState("");
   const [subject, setSubject] = useState("");
@@ -68,23 +71,28 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
     };
     if (!body.issuer || !body.subject) return;
     setBusy(true);
-    setError(null);
-    const { data, error: requestError } = await createUserIdentity({
-      path: { userId },
-      body,
-    });
-    setBusy(false);
-    if (requestError || !data) {
-      setError(
-        requestError ??
-          new Error(text("绑定身份失败", "Failed to link identity")),
-      );
-      return;
+    setLinkError(null);
+    try {
+      const { data, error: requestError } = await createUserIdentity({
+        path: { userId },
+        body,
+      });
+      if (requestError || !data) {
+        setLinkError(
+          requestError ??
+            new Error(text("绑定身份失败", "Failed to link identity")),
+        );
+        return;
+      }
+      setItems((current) => [...current, data]);
+      setSubject("");
+      setOpen(false);
+      void message.success(text("身份已绑定", "Identity linked"));
+    } catch (nextError) {
+      setLinkError(nextError);
+    } finally {
+      setBusy(false);
     }
-    setItems((current) => [...current, data]);
-    setSubject("");
-    setOpen(false);
-    void message.success(text("身份已绑定", "Identity linked"));
   };
 
   const unlink = async (identity: UserIdentity) => {
@@ -127,6 +135,7 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
             icon={<PlusOutlined />}
             onClick={() => {
               setError(null);
+              setLinkError(null);
               setSubject("");
               setOpen(true);
             }}
@@ -222,6 +231,11 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
           </Space>
         }
       >
+        {linkError !== null && (
+          <div className="mb-4">
+            <ErrorBanner error={linkError} />
+          </div>
+        )}
         <Alert
           className="mb-4"
           type="info"
