@@ -668,7 +668,7 @@ export function SearchPage() {
   };
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("全局搜索", "Global search")}
         description={
@@ -690,7 +690,7 @@ export function SearchPage() {
             {text("搜索", "Search")}
           </Button>
         }
-        className="mb-5 max-w-3xl"
+        className="max-w-3xl"
         placeholder={text(
           "输入坐标、路径、镜像名前缀或 SHA-256…",
           "Enter a coordinate, path, image prefix, or SHA-256 digest…",
@@ -780,12 +780,8 @@ export function SearchPage() {
               },
             ]}
           />
-          {error && (
-            <div className="my-4">
-              <ErrorBanner error={error} />
-            </div>
-          )}
-          <div className="mt-4 overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-900/20">
+          {error && <ErrorBanner error={error} />}
+          <div className="overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-900/20">
             <Table<SearchTableRow>
               className="ag-console-table"
               rowKey="key"
@@ -813,7 +809,7 @@ export function SearchPage() {
             />
           </div>
           {nextPageToken && (
-            <div className="mt-4 flex justify-center">
+            <div className="flex justify-center">
               <Button loading={loadingMore} onClick={() => void loadMore()}>
                 {text("加载更多", "Load more")}
               </Button>

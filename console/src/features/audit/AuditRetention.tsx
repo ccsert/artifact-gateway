@@ -190,11 +190,7 @@ export function AuditRetentionPage() {
           "Automatic cleanup rules for global audit records",
         )}
       />
-      {saveError !== null && (
-        <div className="mb-4">
-          <ErrorBanner error={saveError} />
-        </div>
-      )}
+      {saveError !== null && <ErrorBanner error={saveError} />}
       {notice && (
         <Notice tone="success" title={notice} onClose={() => setNotice("")} />
       )}

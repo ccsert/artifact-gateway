@@ -967,7 +967,7 @@ export function AccessControlPage() {
                       <Spinner />
                     )}
                   </div>
-                  <div className="px-5 py-4">
+                  <div className="space-y-4 px-5 py-4">
                     {evaluatorOptionsError !== null && (
                       <ErrorBanner error={evaluatorOptionsError} />
                     )}

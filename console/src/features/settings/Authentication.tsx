@@ -287,7 +287,7 @@ export function AuthenticationPage() {
         ]}
       />
 
-      <div className="ag-feedback-stack space-y-4">
+      <div className="space-y-4">
         {settings.source === "environment" && (
           <Alert
             type="info"
