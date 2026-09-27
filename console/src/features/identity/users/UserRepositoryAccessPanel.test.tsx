@@ -408,4 +408,41 @@ describe("UserRepositoryAccessPanel", () => {
     });
     expect(await screen.findByText("仓库授权已移除")).toBeInTheDocument();
   });
+
+  it("warns before an edit moves the entry onto a prefix that already exists", async () => {
+    mockListRepositoryGrants.mockResolvedValue({
+      data: [
+        record({ scopes: ["repositories:write"], resourcePrefix: "releases/" }),
+        record({ resourcePrefix: "snapshots/" }),
+      ],
+    } as never);
+    mockOkSources();
+    mockListGrants.mockResolvedValue({
+      data: [aliceReleases, aliceSnapshots],
+    } as never);
+
+    const user = userEvent.setup();
+    renderPanel();
+
+    expect(await screen.findByText("releases/")).toBeInTheDocument();
+    await user.click(
+      screen.getAllByRole("button", { name: "编辑该条授权" })[0],
+    );
+
+    expect(
+      screen.queryByText("该用户在此资源范围已有授权，保存将替换原有规则。"),
+    ).not.toBeInTheDocument();
+
+    // One change event replaces the whole prefix; clearing first would unmount
+    // the prefix fields while the value is empty.
+    fireEvent.change(await screen.findByDisplayValue("releases/"), {
+      target: { value: "snapshots/" },
+    });
+
+    expect(
+      await screen.findByText(
+        "该用户在此资源范围已有授权，保存将替换原有规则。",
+      ),
+    ).toBeInTheDocument();
+  });
 });

@@ -220,9 +220,11 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
         );
         return;
       }
-      setGrants(data ?? null);
+      // The upsert answers with the repository's whole grant set, so the list
+      // takes it directly; a second read would flicker over the result.
+      if (data) setGrants(data);
       editor.hide();
-      void load();
+      if (!data) void load();
     } finally {
       setSaving(false);
     }
@@ -263,14 +265,25 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
     );
   if (!grants) return <Loading />;
 
-  const draftKeyExists =
+  // A write lands on one (principal, resource prefix) row. If that row already
+  // belongs to someone else's edit target — that is, an existing row that is
+  // not the one being edited — saving replaces it, so the dialog says so first.
+  const conflictExists =
     draft !== null &&
-    editingKey === null &&
     grants.some(
       (grant) =>
         grant.principal === draft.principal.trim() &&
-        (grant.resourcePrefix ?? "") === (draft.resourcePrefix?.trim() ?? ""),
+        (grant.resourcePrefix ?? "") === (draft.resourcePrefix?.trim() ?? "") &&
+        !(
+          editingKey !== null &&
+          editingKey.principal === grant.principal &&
+          editingKey.resourcePrefix === (grant.resourcePrefix ?? "")
+        ),
     );
+  const principalMissing =
+    draft === null ||
+    !draft.principal.trim() ||
+    draft.principal === CUSTOM_PRINCIPAL;
 
   const grantColumns: ColumnsType<Grant> = [
     {
@@ -382,10 +395,18 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
         }
         onClose={editor.hide}
         width={680}
+        busy={saving}
         footer={
           <Space>
-            <Button onClick={editor.hide}>{text("取消", "Cancel")}</Button>
-            <Button type="primary" onClick={() => void save()} loading={saving}>
+            <Button onClick={editor.hide} disabled={saving}>
+              {text("取消", "Cancel")}
+            </Button>
+            <Button
+              type="primary"
+              onClick={() => void save()}
+              loading={saving}
+              disabled={principalMissing}
+            >
               {text("保存", "Save")}
             </Button>
           </Space>
@@ -393,7 +414,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
       >
         <div className="space-y-3">
           {saveError !== null && <ErrorBanner error={saveError} />}
-          {draftKeyExists && (
+          {conflictExists && (
             <Alert
               type="warning"
               showIcon
