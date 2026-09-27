@@ -413,6 +413,19 @@ export function UserRepositoryAccessPanel({
     ],
     [principal, text, username],
   );
+  // Writing a (principal, resource scope) pair that another existing row holds
+  // replaces that row, so the dialog warns before the save instead of after.
+  const conflictExists =
+    draft !== null &&
+    (composeBase?.grants ?? []).some(
+      (grant) =>
+        grant.principal.trim() === principal &&
+        (normalizePrefix(grant.resourcePrefix) ?? "") ===
+          (normalizePrefix(draft.resourcePrefix) ?? "") &&
+        (composeTargetPrefix === null ||
+          (normalizePrefix(grant.resourcePrefix) ?? "") !==
+            composeTargetPrefix),
+    );
   const selectedRepository = repositories.find(
     (repository) => repository.id === composeRepositoryId,
   );
@@ -565,9 +578,12 @@ export function UserRepositoryAccessPanel({
         }
         onClose={closeCompose}
         width={680}
+        busy={saving}
         footer={
           <Space>
-            <Button onClick={closeCompose}>{text("取消", "Cancel")}</Button>
+            <Button onClick={closeCompose} disabled={saving}>
+              {text("取消", "Cancel")}
+            </Button>
             <Button
               type="primary"
               loading={saving}
@@ -624,10 +640,21 @@ export function UserRepositoryAccessPanel({
                 type="info"
                 showIcon
                 title={text(
-                  "仓库规则只会追加权限，不能撤销用户已有的全局角色。同一主体、同一资源范围的授权会被本条替换；该用户在其他资源范围的授权与其他主体的授权不受影响。",
-                  "Repository rules add permissions; they cannot revoke the user's existing global role. A grant for the same principal and resource scope is replaced by this one; the user's other resource scopes and other principals keep theirs.",
+                  "仓库规则只会追加权限，不能撤销用户已有的全局角色。该用户在其他资源范围的授权与其他主体的授权不受影响。",
+                  "Repository rules add permissions; they cannot revoke the user's existing global role. The user's other resource scopes and other principals keep theirs.",
                 )}
               />
+              {conflictExists && (
+                <Alert
+                  className="mb-3"
+                  type="warning"
+                  showIcon
+                  title={text(
+                    "该用户在此资源范围已有授权，保存将替换原有规则。",
+                    "This user already holds a grant at this resource scope; saving replaces it.",
+                  )}
+                />
+              )}
               <GrantForm
                 grant={draft}
                 principalOptions={principalChoices}

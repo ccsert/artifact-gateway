@@ -312,4 +312,82 @@ describe("RepositoryGrantsTab", () => {
     ).toBeInTheDocument();
     expect(mockUpsertGrant).not.toHaveBeenCalled();
   });
+
+  it("warns before an edit moves a grant onto a row that already exists", async () => {
+    mockListGrants.mockResolvedValue({
+      data: [
+        existingGrant,
+        {
+          principal: "user:active-user",
+          scopes: ["repositories:read"],
+          resourcePrefix: "releases/",
+        },
+      ],
+    } as never);
+    mockPrincipalSources();
+
+    const user = userEvent.setup();
+    renderTab();
+
+    await user.click(
+      (await screen.findAllByRole("button", { name: /编\s*辑/ }))[0],
+    );
+    expect(
+      screen.queryByText("该主体在此资源范围已有授权，保存将替换原有规则。"),
+    ).not.toBeInTheDocument();
+
+    // A raw repository starts its limited scope at the format's own example,
+    // which is exactly the prefix the second row already holds.
+    await user.click(screen.getByText("限定范围"));
+
+    expect(
+      await screen.findByText(
+        "该主体在此资源范围已有授权，保存将替换原有规则。",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("refuses to be dismissed while a save is in flight", async () => {
+    let release: (value: { data: Grant[] }) => void = () => {};
+    mockListGrants.mockResolvedValue({ data: [] } as never);
+    mockPrincipalSources();
+    mockUpsertGrant.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }) as never,
+    );
+
+    const user = userEvent.setup();
+    renderTab();
+
+    await user.click(await screen.findByRole("button", { name: /添加授权/ }));
+    await user.click(screen.getByRole("combobox", { name: "授权主体" }));
+    await user.click(await screen.findByText(/用户 · active-user/));
+    await user.click(screen.getByRole("button", { name: /^保\s*存$/ }));
+
+    expect(screen.getByRole("button", { name: /^取\s*消$/ })).toBeDisabled();
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    release({ data: [existingGrant] });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("takes the saved list from the response instead of reading it twice", async () => {
+    mockListGrants.mockResolvedValue({ data: [] } as never);
+    mockPrincipalSources();
+    mockUpsertGrant.mockResolvedValue({ data: [existingGrant] } as never);
+
+    const user = userEvent.setup();
+    renderTab();
+
+    await user.click(await screen.findByRole("button", { name: /添加授权/ }));
+    await user.click(screen.getByRole("combobox", { name: "授权主体" }));
+    await user.click(await screen.findByText(/用户 · active-user/));
+    await user.click(screen.getByRole("button", { name: /^保\s*存$/ }));
+
+    expect(await screen.findByText("user:active-user")).toBeInTheDocument();
+    expect(mockListGrants).toHaveBeenCalledTimes(1);
+  });
 });
