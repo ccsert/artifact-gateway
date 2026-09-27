@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Button,
   Collapse,
   Input,
   Popconfirm,
   Select,
   Switch,
-  Table,
   Tabs,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -41,9 +39,10 @@ import type {
 } from "../../client";
 import { PageHeader, Card, CardHeader } from "../../components/ui/Layout";
 import {
-  Loading,
-  ErrorBanner,
   EmptyState,
+  ErrorBanner,
+  Loading,
+  Notice,
   Spinner,
 } from "../../components/ui/Feedback";
 import { FormatBadge, Badge, type BadgeTone } from "../../components/ui/Badge";
@@ -52,6 +51,7 @@ import { grantRowKey } from "./grantDraft";
 import { useAuth } from "../../lib/auth";
 import { platformCapabilities } from "../../lib/authorization";
 import {
+  ConsoleTable,
   CopyableValue,
   FilterBar,
   FilterField,
@@ -925,8 +925,7 @@ export function AccessControlPage() {
                     }
                   />
                 ) : (
-                  <Table<GrantRow>
-                    className="ag-console-table"
+                  <ConsoleTable<GrantRow>
                     rowKey={(row) =>
                       grantRowKey(
                         row.repositoryId,
@@ -934,7 +933,6 @@ export function AccessControlPage() {
                         row.resourcePrefix,
                       )
                     }
-                    size="middle"
                     dataSource={filtered}
                     columns={columns}
                     pagination={false}
@@ -967,17 +965,14 @@ export function AccessControlPage() {
                       <Spinner />
                     )}
                   </div>
-                  <div className="px-5 py-4">
+                  <div className="space-y-4 px-5 py-4">
                     {evaluatorOptionsError !== null && (
-                      <div className="mb-4">
-                        <ErrorBanner error={evaluatorOptionsError} />
-                      </div>
+                      <ErrorBanner error={evaluatorOptionsError} />
                     )}
                     {serviceAccountsError !== null && (
-                      <Alert
-                        className="mb-4"
-                        type="warning"
-                        showIcon
+                      <Notice
+                        tone="warning"
+                        closable={false}
                         title={text(
                           "部分身份来源不可用",
                           "Some identity sources are unavailable",

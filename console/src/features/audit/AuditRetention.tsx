@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  Alert,
-  Button,
-  Form,
-  InputNumber,
-  Popconfirm,
-  Space,
-  Switch,
-  Table,
-} from "antd";
+import { Button, Form, InputNumber, Popconfirm, Space, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ReloadOutlined } from "@ant-design/icons";
 import {
@@ -19,10 +10,13 @@ import {
 } from "../../client";
 import type { AuditRetentionPolicy, AuditCleanupJob } from "../../client";
 import { PageHeader, Card, CardHeader } from "../../components/ui/Layout";
-import { Loading, ErrorBanner } from "../../components/ui/Feedback";
+import { ErrorBanner, Loading, Notice } from "../../components/ui/Feedback";
 import { StateBadge } from "../../components/ui/Badge";
 import { formatDate, formatNumber } from "../../lib/format";
-import { MetricStrip } from "../../components/ui/ConsolePrimitives";
+import {
+  ConsoleTable,
+  MetricStrip,
+} from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 
 export function AuditRetentionPage() {
@@ -191,13 +185,9 @@ export function AuditRetentionPage() {
           "Automatic cleanup rules for global audit records",
         )}
       />
-      {saveError !== null && (
-        <div className="mb-4">
-          <ErrorBanner error={saveError} />
-        </div>
-      )}
+      {saveError !== null && <ErrorBanner error={saveError} />}
       {notice && (
-        <Alert className="mb-4" type="success" showIcon title={notice} />
+        <Notice tone="success" title={notice} onClose={() => setNotice("")} />
       )}
       <MetricStrip
         items={[
@@ -309,28 +299,29 @@ export function AuditRetentionPage() {
               </Space>
             </Form>
           </div>
-          <Alert
-            className="h-fit"
-            type={policyDirty ? "warning" : "info"}
-            showIcon
-            title={text("清理说明", "Cleanup notes")}
-            description={
-              policyDirty
-                ? text(
-                    "请先保存当前策略；立即执行只会使用已经保存并启用的策略。",
-                    "Save the current policy first; manual cleanup uses only the saved enabled policy.",
-                  )
-                : policy.enabled
+          <div className="h-fit">
+            <Notice
+              tone={policyDirty ? "warning" : "info"}
+              closable={false}
+              title={text("清理说明", "Cleanup notes")}
+              description={
+                policyDirty
                   ? text(
-                      "立即执行会提交异步删除任务；保存策略不会立即删除记录。",
-                      "Run cleanup submits an asynchronous deletion job; saving does not delete records immediately.",
+                      "请先保存当前策略；立即执行只会使用已经保存并启用的策略。",
+                      "Save the current policy first; manual cleanup uses only the saved enabled policy.",
                     )
-                  : text(
-                      "启用自动清理并保存策略后，才能提交清理任务。",
-                      "Enable and save automatic cleanup before submitting a cleanup job.",
-                    )
-            }
-          />
+                  : policy.enabled
+                    ? text(
+                        "立即执行会提交异步删除任务；保存策略不会立即删除记录。",
+                        "Run cleanup submits an asynchronous deletion job; saving does not delete records immediately.",
+                      )
+                    : text(
+                        "启用自动清理并保存策略后，才能提交清理任务。",
+                        "Enable and save automatic cleanup before submitting a cleanup job.",
+                      )
+              }
+            />
+          </div>
         </div>
       </Card>
 
@@ -355,10 +346,8 @@ export function AuditRetentionPage() {
             {text("暂无清理任务", "No cleanup jobs")}
           </p>
         ) : (
-          <Table<AuditCleanupJob>
-            className="ag-console-table"
+          <ConsoleTable<AuditCleanupJob>
             rowKey="id"
-            size="middle"
             dataSource={jobs}
             columns={jobColumns}
             pagination={false}

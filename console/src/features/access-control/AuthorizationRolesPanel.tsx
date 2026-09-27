@@ -2,11 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Button,
   Input,
-  Modal,
   Popconfirm,
   Select,
   Space,
-  Table,
   Tag,
   Typography,
 } from "antd";
@@ -27,6 +25,8 @@ import type { AuthorizationRole } from "../../client";
 import { usePreferences } from "../../lib/preferences";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { Card, CardHeader } from "../../components/ui/Layout";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
+import { Modal } from "../../components/ui/Modal";
 
 export type AuthorizationScope = AuthorizationRole["scopes"][number];
 
@@ -245,8 +245,7 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
           )}
         />
       ) : (
-        <Table<AuthorizationRole>
-          className="ag-console-table"
+        <ConsoleTable<AuthorizationRole>
           rowKey="id"
           dataSource={roles}
           columns={columns}
@@ -261,9 +260,9 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
             ? text("编辑授权角色", "Edit authorization role")
             : text("新建授权角色", "New authorization role")
         }
-        onCancel={() => setEditorOpen(false)}
-        destroyOnHidden
+        onClose={() => setEditorOpen(false)}
         width={680}
+        busy={saving}
         footer={
           <Space>
             <Button onClick={() => setEditorOpen(false)} disabled={saving}>

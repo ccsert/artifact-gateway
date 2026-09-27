@@ -4,16 +4,7 @@ import {
   SendOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
-import {
-  Button,
-  Input,
-  Popconfirm,
-  Result,
-  Select,
-  Steps,
-  Table,
-  Upload,
-} from "antd";
+import { Button, Input, Popconfirm, Result, Select, Steps, Upload } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { UploadProps } from "antd";
 import {
@@ -28,6 +19,7 @@ import { ErrorBanner } from "../../components/ui/Feedback";
 import { StateBadge, Badge } from "../../components/ui/Badge";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 async function sha256Hex(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
@@ -345,10 +337,8 @@ export function MavenPublishWizard({
           </Field>
           {staged.length > 0 && (
             <Card>
-              <Table<StagedFile>
-                className="ag-console-table"
+              <ConsoleTable<StagedFile>
                 rowKey="name"
-                size="middle"
                 dataSource={staged}
                 columns={stagedColumns}
                 pagination={false}
@@ -383,10 +373,8 @@ export function MavenPublishWizard({
             </span>
           </div>
           <Card>
-            <Table<StagedFile>
-              className="ag-console-table"
+            <ConsoleTable<StagedFile>
               rowKey="name"
-              size="middle"
               dataSource={staged}
               columns={uploadColumns}
               pagination={false}

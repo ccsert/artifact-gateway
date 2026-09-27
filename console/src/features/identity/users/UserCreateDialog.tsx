@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { App, Form, Input, Modal, Select, Switch } from "antd";
+import { App, Button, Form, Input, Select, Space, Switch } from "antd";
 import { createUser } from "../../../client";
 import type { CreateUser, User } from "../../../client";
 import { ErrorBanner } from "../../../components/ui/Feedback";
+import { Modal } from "../../../components/ui/Modal";
 import { usePreferences } from "../../../lib/preferences";
 import {
   localPasswordFitsBcrypt,
@@ -64,13 +65,18 @@ export function UserCreateDialog({
       open={open}
       title={text("新建本地用户", "Create local user")}
       width={680}
-      centered
-      destroyOnHidden
-      confirmLoading={busy}
-      okText={text("创建用户", "Create user")}
-      cancelText={text("取消", "Cancel")}
-      onOk={() => void submit()}
-      onCancel={onClose}
+      busy={busy}
+      onClose={onClose}
+      footer={
+        <Space>
+          <Button onClick={onClose} disabled={busy}>
+            {text("取消", "Cancel")}
+          </Button>
+          <Button type="primary" loading={busy} onClick={() => void submit()}>
+            {text("创建用户", "Create user")}
+          </Button>
+        </Space>
+      }
     >
       {error ? (
         <div className="mb-4">

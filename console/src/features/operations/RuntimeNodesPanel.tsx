@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Table, Tooltip } from "antd";
+import { Alert, Button, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { listRuntimeNodes } from "../../client";
 import type { RuntimeNode, RuntimeNodeList } from "../../client";
@@ -9,6 +9,7 @@ import { FormatBadge, StateBadge } from "../../components/ui/Badge";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { Card, CardHeader } from "../../components/ui/Layout";
 import { usePreferences } from "../../lib/preferences";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 function runtimeNodeColumns(
   locale: string,
@@ -180,7 +181,6 @@ export function RuntimeNodesPanel({
               <Button
                 aria-label={text("刷新运行节点", "Refresh runtime nodes")}
                 type="text"
-                size="small"
                 icon={<ReloadOutlined />}
                 loading={refreshing}
                 onClick={() => void load()}
@@ -231,10 +231,8 @@ export function RuntimeNodesPanel({
           />
         </div>
       ) : (
-        <Table<RuntimeNode>
-          className="ag-console-table"
+        <ConsoleTable<RuntimeNode>
           rowKey={(node) => node.sessionId}
-          size="small"
           dataSource={nodes}
           columns={nodeColumns}
           pagination={false}

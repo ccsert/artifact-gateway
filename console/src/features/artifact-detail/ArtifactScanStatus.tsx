@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Space } from "antd";
+import { Button, Space } from "antd";
 import {
   createRepositoryArtifactScan,
   getRepositoryArtifactScanStatus,
@@ -9,6 +9,7 @@ import type { ArtifactScanStatus as ScanStatus } from "../../client";
 import { StateBadge } from "../../components/ui/Badge";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
+import { ErrorBanner } from "../../components/ui/Feedback";
 
 const activeStates = new Set(["pending", "running", "retrying"]);
 
@@ -109,17 +110,9 @@ export function ArtifactScanStatus({
   if (!status && !loadError) return null;
   if (!status)
     return (
-      <Alert
-        className="col-span-full"
-        type="error"
-        showIcon
-        title={loadError}
-        action={
-          <Button size="small" loading={loading} onClick={() => void load()}>
-            {text("重试", "Retry")}
-          </Button>
-        }
-      />
+      <div className="col-span-full">
+        <ErrorBanner error={loadError} onRetry={() => void load()} />
+      </div>
     );
 
   const job = status.job;
@@ -158,19 +151,19 @@ export function ArtifactScanStatus({
           )}
         </Space>
       </div>
-      {error && <Alert className="mt-2" type="error" showIcon title={error} />}
+      {error && (
+        <div className="mt-2">
+          <ErrorBanner error={error} />
+        </div>
+      )}
       {loadError && (
-        <Alert
-          className="mt-2"
-          type="warning"
-          showIcon
-          title={loadError}
-          action={
-            <Button size="small" loading={loading} onClick={() => void load()}>
-              {text("重试", "Retry")}
-            </Button>
-          }
-        />
+        <div className="mt-2">
+          <ErrorBanner
+            error={loadError}
+            tone="warning"
+            onRetry={() => void load()}
+          />
+        </div>
       )}
       {job?.lastError && status.state === "failed" && (
         <div

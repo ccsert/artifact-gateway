@@ -13,7 +13,7 @@ import {
   SearchOutlined,
   UpOutlined,
 } from "@ant-design/icons";
-import { Button, Input, Table, Tooltip } from "antd";
+import { Button, Input, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -57,7 +57,10 @@ import { NpmPackageDetail } from "../artifact-detail/NpmPackageDetail";
 import { PyPIProjectDetail } from "../artifact-detail/PyPIProjectDetail";
 import { GoModuleDetail } from "../artifact-detail/GoModuleDetail";
 import { APTAssetDetail } from "../artifact-detail/APTAssetDetail";
-import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
+import {
+  ConsoleTable,
+  useClipboardAction,
+} from "../../components/ui/ConsolePrimitives";
 import { SiteBrandMark, SiteName } from "../../components/ui/SiteBrand";
 import { useAuth } from "../../lib/auth";
 import {
@@ -1748,10 +1751,8 @@ export function PublicBrowsePage() {
                     onCopyUsage={(snippet) => void copyUsage(snippet)}
                   />
                 ) : (
-                  <Table<PublicArtifactTableRow>
-                    className="ag-console-table"
+                  <ConsoleTable<PublicArtifactTableRow>
                     rowKey="key"
-                    size="middle"
                     dataSource={artifactTableRows}
                     columns={artifactColumns}
                     pagination={false}

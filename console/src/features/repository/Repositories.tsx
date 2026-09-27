@@ -6,7 +6,7 @@ import {
   PlusOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import { Button, Input, Segmented, Select, Space, Switch, Table } from "antd";
+import { Button, Input, Segmented, Select, Space, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link } from "react-router-dom";
 import {
@@ -27,6 +27,7 @@ import { FormatBadge, StateBadge, Badge } from "../../components/ui/Badge";
 import { Modal, ConfirmDialog, useDisclosure } from "../../components/ui/Modal";
 import { formatBytes, formatNumber } from "../../lib/format";
 import {
+  ConsoleTable,
   CopyableValue,
   FilterBar,
   FilterField,
@@ -549,7 +550,7 @@ export function RepositoriesPage() {
     : [...new Set(items.map((item) => item.format))];
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("仓库", "Repositories")}
         description={text(
@@ -609,7 +610,6 @@ export function RepositoriesPage() {
         ]}
       />
       <FilterBar
-        className="mt-4 mb-4"
         actions={
           filter || formatFilter !== "all" || stateFilter !== "operational" ? (
             <Button
@@ -728,11 +728,9 @@ export function RepositoriesPage() {
               )}
             />
           ) : (
-            <Table<Repository>
-              className="ag-console-table"
+            <ConsoleTable<Repository>
               rowKey="id"
               rowClassName={() => "group"}
-              size="middle"
               dataSource={visible}
               columns={visibleColumns}
               pagination={false}

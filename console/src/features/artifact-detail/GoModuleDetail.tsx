@@ -9,7 +9,7 @@ import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
 import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
-import { Loading } from "../../components/ui/Feedback";
+import { ErrorBanner, Loading } from "../../components/ui/Feedback";
 import {
   MetadataItem,
   SearchableVersionSelect,
@@ -198,8 +198,7 @@ export function GoModuleDetail({
     : [];
 
   if (loading) return <Loading />;
-  if (error && versions.length === 0)
-    return <Alert type="error" showIcon title={error} />;
+  if (error && versions.length === 0) return <ErrorBanner error={error} />;
 
   return (
     <div className="space-y-4 px-1 py-2">

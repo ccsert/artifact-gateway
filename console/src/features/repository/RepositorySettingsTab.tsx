@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Alert,
   Button,
   Checkbox,
   Input,
@@ -19,7 +18,7 @@ import type {
   UpstreamAuthWritable,
 } from "../../client";
 import { Badge } from "../../components/ui/Badge";
-import { ErrorBanner } from "../../components/ui/Feedback";
+import { ErrorBanner, Notice } from "../../components/ui/Feedback";
 import { Field } from "../../components/ui/Layout";
 import { usePreferences } from "../../lib/preferences";
 
@@ -214,7 +213,7 @@ export function RepositorySettingsTab({
         </Space>
       </div>
       {notice && (
-        <Alert className="mb-4" type="success" showIcon title={notice} />
+        <Notice tone="success" title={notice} onClose={() => setNotice("")} />
       )}
       <Space orientation="vertical" size="large" className="w-full">
         <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">

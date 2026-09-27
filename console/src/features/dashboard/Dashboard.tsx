@@ -7,7 +7,7 @@ import {
   RocketOutlined,
   SafetyCertificateOutlined,
 } from "@ant-design/icons";
-import { Button, Grid, Steps, Table } from "antd";
+import { Button, Grid, Steps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -31,7 +31,10 @@ import {
   recordDashboardSample,
   type DashboardSample,
 } from "../../lib/history";
-import { MetricStrip } from "../../components/ui/ConsolePrimitives";
+import {
+  ConsoleTable,
+  MetricStrip,
+} from "../../components/ui/ConsolePrimitives";
 import {
   DashboardTrendCharts,
   StorageByFormatChart,
@@ -493,10 +496,8 @@ export function DashboardPage() {
               </Link>
             }
           />
-          <Table<Repository>
-            className="ag-console-table"
+          <ConsoleTable<Repository>
             rowKey="id"
-            size="middle"
             dataSource={repos.slice(0, 6)}
             columns={repositoryColumns}
             pagination={false}
@@ -535,14 +536,12 @@ export function DashboardPage() {
               </div>
             }
           />
-          <Table<AuditRecord>
-            className="ag-console-table"
+          <ConsoleTable<AuditRecord>
             rowKey={(record) =>
               record.requestId ??
               record.traceId ??
               `${record.occurredAt}-${record.actor ?? ""}-${record.operation ?? ""}-${record.resource ?? ""}`
             }
-            size="middle"
             dataSource={audits}
             columns={auditColumns}
             pagination={false}

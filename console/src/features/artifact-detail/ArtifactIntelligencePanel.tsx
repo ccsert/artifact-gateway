@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Alert, Card, Tag } from "antd";
+import { Card, Tag } from "antd";
 import { getArtifactIntelligence } from "../../client";
 import type { ArtifactIntelligence } from "../../client";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-import { isNotFound } from "../../components/ui/Feedback";
+import { ErrorBanner, isNotFound } from "../../components/ui/Feedback";
 import { ArtifactVulnerabilityFindings } from "./ArtifactVulnerabilityFindings";
 
 export function ArtifactIntelligencePanel({
@@ -57,12 +57,9 @@ export function ArtifactIntelligencePanel({
       (error as { message?: string })?.message ??
       text("读取制品情报失败", "Failed to load artifact intelligence");
     return (
-      <Alert
-        type="warning"
-        showIcon
-        title={message}
-        className="col-span-full"
-      />
+      <div className="col-span-full">
+        <ErrorBanner error={message} tone="warning" />
+      </div>
     );
   }
   if (!metadata) return null;

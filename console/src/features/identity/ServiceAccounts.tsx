@@ -8,7 +8,7 @@ import {
   SafetyCertificateOutlined,
   StopOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Input, Select, Space, Table, Typography } from "antd";
+import { Alert, Button, Input, Select, Space, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   createServiceAccount,
@@ -25,10 +25,16 @@ import type {
 } from "../../client";
 import { Badge, StateBadge } from "../../components/ui/Badge";
 import {
+  ConsoleTable,
   CopyableValue,
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
-import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
+import {
+  EmptyState,
+  ErrorBanner,
+  Loading,
+  Notice,
+} from "../../components/ui/Feedback";
 import {
   Card,
   CardHeader,
@@ -422,10 +428,9 @@ export function ServiceAccountsPage() {
         }
       />
 
-      <Alert
-        type="info"
-        showIcon
-        icon={<SafetyCertificateOutlined />}
+      <Notice
+        tone="info"
+        closable={false}
         title={text(
           "机器身份与凭据分离",
           "Machine identity is separate from credentials",
@@ -632,8 +637,7 @@ export function ServiceAccountsPage() {
                 </div>
               ) : (
                 <>
-                  <Table<ServiceAccountCredential>
-                    className="ag-console-table"
+                  <ConsoleTable<ServiceAccountCredential>
                     rowKey="id"
                     columns={columns}
                     dataSource={credentials}

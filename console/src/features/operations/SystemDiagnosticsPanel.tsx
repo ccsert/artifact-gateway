@@ -6,7 +6,7 @@ import {
   ReloadOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Space, Table, Tooltip } from "antd";
+import { Alert, Button, Space, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { getDiagnostics } from "../../client";
 import type {
@@ -19,6 +19,7 @@ import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { FormatBadge, StateBadge } from "../../components/ui/Badge";
 import {
+  ConsoleTable,
   MetricStrip,
   useClipboardAction,
 } from "../../components/ui/ConsolePrimitives";
@@ -591,10 +592,8 @@ export function SystemDiagnosticsPanel() {
         </Card>
         <Card className="ag-diagnostics-queue-card">
           <CardHeader title={text("后台队列", "Background queues")} />
-          <Table<DiagnosticQueueStat>
-            className="ag-console-table"
+          <ConsoleTable<DiagnosticQueueStat>
             rowKey={(queue) => `${queue.kind}-${queue.format}-${queue.state}`}
-            size="small"
             dataSource={diagnostics.queues}
             columns={queueColumns}
             locale={{

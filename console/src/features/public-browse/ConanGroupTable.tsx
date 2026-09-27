@@ -5,7 +5,7 @@ import {
   LinkOutlined,
   UpOutlined,
 } from "@ant-design/icons";
-import { Button, Input, Table, Tooltip } from "antd";
+import { Button, Input, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { ArtifactSummary } from "../../client";
 import { formatDate, shortDigest } from "../../lib/format";
@@ -23,6 +23,7 @@ import {
   SearchableVersionSelect,
   UsageSnippetBlock,
 } from "../../components/ui/PublicBrowsePrimitives";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 export interface ConanRevision {
   revision: string;
@@ -357,7 +358,6 @@ export function ConanGroupTable({
           </div>
         )}
         <SearchableVersionSelect
-          className="mt-3"
           value={row.selectedRevisionValue}
           options={row.visibleRevisions.map((revision) => ({
             value: revision.revision,
@@ -482,10 +482,8 @@ export function ConanGroupTable({
   );
 
   return (
-    <Table<ConanTableRow>
-      className="ag-console-table"
+    <ConsoleTable<ConanTableRow>
       rowKey="key"
-      size="middle"
       dataSource={tableRows}
       columns={columns}
       pagination={false}
