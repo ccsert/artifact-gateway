@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Button, Input, Popconfirm, Select, Space, Table } from "antd";
+import { Alert, Button, Input, Popconfirm, Select, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   createRepositoryPromotion,
@@ -22,6 +22,7 @@ import {
   EmptyState,
   ErrorBanner,
   Loading,
+  Notice,
   isNotFound,
 } from "../../components/ui/Feedback";
 import { Field } from "../../components/ui/Layout";
@@ -32,6 +33,7 @@ import {
 } from "./RepositoryArtifactSelect";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 function securityReason(
   reason: string,
@@ -482,7 +484,9 @@ export function RepositoryDistributionTab({
     <div className="ag-page-stack ag-distribution">
       {error !== null && <ErrorBanner error={error} onRetry={load} />}
       {actionError !== null && <ErrorBanner error={actionError} />}
-      {notice && <Alert type="success" showIcon title={notice} />}
+      {notice && (
+        <Notice tone="success" title={notice} onClose={() => setNotice("")} />
+      )}
 
       {/* 发起表单 */}
       <div className="rounded-lg border border-zinc-800 p-4">
@@ -727,7 +731,6 @@ export function RepositoryDistributionTab({
         </div>
         {evaluation && (
           <Alert
-            className="mt-4"
             type={evaluation.allowed ? "success" : "error"}
             showIcon
             title={text(
@@ -801,10 +804,8 @@ export function RepositoryDistributionTab({
         ) : plans.length === 0 ? (
           <EmptyState title={text("暂无复制计划", "No replication plans")} />
         ) : (
-          <Table<ReplicationPlan>
-            className="ag-console-table"
+          <ConsoleTable<ReplicationPlan>
             rowKey="id"
-            size="middle"
             dataSource={plans}
             columns={planColumns}
             pagination={false}
@@ -846,8 +847,7 @@ export function RepositoryDistributionTab({
                 {text("暂无检查点", "No checkpoints")}
               </p>
             ) : (
-              <Table<ReplicationPlanDetail["checkpoints"][number]>
-                className="ag-console-table"
+              <ConsoleTable<ReplicationPlanDetail["checkpoints"][number]>
                 rowKey={(checkpoint, index) =>
                   `${checkpoint.objectKey}-${index}`
                 }

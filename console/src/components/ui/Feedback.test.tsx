@@ -1,8 +1,9 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { PreferencesProvider } from "../../lib/preferences";
 import { SearchOutlined } from "@ant-design/icons";
-import { EmptyState, ErrorBanner, Loading } from "./Feedback";
+import { EmptyState, ErrorBanner, Loading, Notice } from "./Feedback";
 
 afterEach(cleanup);
 
@@ -100,5 +101,41 @@ describe("EmptyState", () => {
     expect(
       screen.getByRole("button", { name: "Open management" }),
     ).toBeVisible();
+  });
+});
+
+describe("Notice", () => {
+  it("is closable by default and reports the close to the caller", async () => {
+    const onClose = vi.fn();
+    render(
+      <PreferencesProvider>
+        <Notice tone="success" title="保存成功" onClose={onClose} />
+      </PreferencesProvider>,
+    );
+
+    expect(screen.getByText("保存成功")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: /close/i }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps standing explanations open and without an icon", () => {
+    const { container } = render(
+      <PreferencesProvider>
+        <Notice tone="info" title="这是一段说明" />
+      </PreferencesProvider>,
+    );
+
+    expect(screen.getByText("这是一段说明")).toBeVisible();
+    expect(container.querySelector(".ant-alert-icon")).toBeNull();
+    expect(screen.queryByRole("button", { name: /close/i })).toBeNull();
+  });
+
+  it("renders the warning tone for failures the page can live with", () => {
+    const { container } = render(
+      <PreferencesProvider>
+        <ErrorBanner error={new Error("upstream slow")} tone="warning" />
+      </PreferencesProvider>,
+    );
+    expect(container.querySelector(".ant-alert-warning")).not.toBeNull();
   });
 });

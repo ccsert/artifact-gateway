@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Collapse, DatePicker, Select, Space, Table } from "antd";
+import { Button, Collapse, DatePicker, Select, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
@@ -21,6 +21,7 @@ import { Badge, FormatBadge } from "../../components/ui/Badge";
 import { formatBytes, formatDate } from "../../lib/format";
 import { toCsv, downloadCsv } from "../../lib/csv";
 import {
+  ConsoleTable,
   FilterBar,
   FilterField,
   MetricStrip,
@@ -419,7 +420,7 @@ export function AuditsPage() {
           },
         ]}
       />
-      <Card className="mt-4">
+      <Card>
         <FilterBar
           embedded
           actions={
@@ -600,7 +601,7 @@ export function AuditsPage() {
       {records === null ? (
         error !== null ? (
           isNotFound(error) ? (
-            <Card className="mt-4">
+            <Card>
               <EmptyState
                 title={text("审计功能未启用", "Audit log is unavailable")}
                 hint={text(
@@ -616,7 +617,7 @@ export function AuditsPage() {
           <Loading />
         )
       ) : filtered.length === 0 ? (
-        <Card className="mt-4">
+        <Card>
           <EmptyState
             title={text("没有匹配的审计记录", "No matching audit records")}
             hint={text(
@@ -626,11 +627,9 @@ export function AuditsPage() {
           />
         </Card>
       ) : (
-        <Card className="mt-4">
-          <Table<AuditTableRow>
-            className="ag-console-table"
+        <Card>
+          <ConsoleTable<AuditTableRow>
             rowKey="key"
-            size="middle"
             dataSource={tableRows}
             columns={columns}
             pagination={false}

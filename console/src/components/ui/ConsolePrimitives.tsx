@@ -1,5 +1,6 @@
 import { CheckOutlined, CopyOutlined } from "@ant-design/icons";
-import { App, Button, Tooltip } from "antd";
+import { App, Button, Table, Tooltip } from "antd";
+import type { TableProps } from "antd/es/table";
 import {
   useCallback,
   useEffect,
@@ -190,5 +191,29 @@ export function TechnicalLabel({ children }: { children: ReactNode }) {
     <span className="font-mono text-xs leading-5 text-zinc-500">
       {children}
     </span>
+  );
+}
+
+/**
+ * The console's table baseline: themed header and row colors, page-level row
+ * density, and the shared empty state.
+ *
+ * `compact` is for tables nested inside a modal or an expanded row, where the
+ * smaller density reads better; a page-level table keeps the default. Nested
+ * tables must not set their own vertical scroll — the surrounding modal body
+ * already scrolls, and two scrollbars in one dialog read as a bug.
+ */
+export function ConsoleTable<RecordType extends object = object>({
+  compact = false,
+  className = "",
+  size,
+  ...rest
+}: TableProps<RecordType> & { compact?: boolean }) {
+  return (
+    <Table<RecordType>
+      {...rest}
+      size={size ?? (compact ? "small" : "middle")}
+      className={`ag-console-table ${className}`.trim()}
+    />
   );
 }

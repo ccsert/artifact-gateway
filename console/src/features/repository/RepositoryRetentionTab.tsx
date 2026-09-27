@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   Button,
   InputNumber,
   Popconfirm,
   Select,
   Space,
   Switch,
-  Table,
   Tooltip,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -27,6 +25,7 @@ import {
   EmptyState,
   ErrorBanner,
   Loading,
+  Notice,
   isNotFound,
 } from "../../components/ui/Feedback";
 import { Card, CardHeader, Field } from "../../components/ui/Layout";
@@ -36,6 +35,7 @@ import { formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { artifactCoordinateForDisplay } from "../../lib/rawPath";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 type Localize = (chinese: string, english: string) => string;
 
@@ -751,11 +751,13 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
   return (
     <div className="space-y-6">
       {saveError !== null && <ErrorBanner error={saveError} />}
-      {notice && <Alert type="success" showIcon title={notice} />}
+      {notice && (
+        <Notice tone="success" title={notice} onClose={() => setNotice("")} />
+      )}
       {isRaw && (
-        <Alert
-          type="info"
-          showIcon
+        <Notice
+          tone="info"
+          closable={false}
           title={text("Raw 按路径资产清理", "Raw cleanup by path asset")}
           description={text(
             "Raw 没有版本分组，因此不应用最少或最多版本数；期限按资产最后更新时间计算。",
@@ -995,12 +997,10 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
               )}
             />
           ) : (
-            <Table<RetentionDryRun["candidates"][number]>
-              className="ag-console-table"
+            <ConsoleTable<RetentionDryRun["candidates"][number]>
               rowKey={(candidate) =>
                 `${candidate.format}:${candidate.coordinate}:${candidate.digest}`
               }
-              size="middle"
               dataSource={dryRun.candidates}
               columns={dryRunColumns}
               pagination={false}

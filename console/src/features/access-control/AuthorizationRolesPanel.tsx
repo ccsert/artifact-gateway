@@ -5,7 +5,6 @@ import {
   Popconfirm,
   Select,
   Space,
-  Table,
   Tag,
   Typography,
 } from "antd";
@@ -26,6 +25,7 @@ import type { AuthorizationRole } from "../../client";
 import { usePreferences } from "../../lib/preferences";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { Card, CardHeader } from "../../components/ui/Layout";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 import { Modal } from "../../components/ui/Modal";
 
 export type AuthorizationScope = AuthorizationRole["scopes"][number];
@@ -245,8 +245,7 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
           )}
         />
       ) : (
-        <Table<AuthorizationRole>
-          className="ag-console-table"
+        <ConsoleTable<AuthorizationRole>
           rowKey="id"
           dataSource={roles}
           columns={columns}

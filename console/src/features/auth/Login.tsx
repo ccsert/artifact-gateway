@@ -7,6 +7,7 @@ import {
   UserOutlined,
 } from "@ant-design/icons";
 import { Alert, Button, Input, Segmented } from "antd";
+import { Notice } from "../../components/ui/Feedback";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../lib/auth";
 import { client } from "../../client/client.gen";
@@ -303,9 +304,9 @@ export function LoginPage() {
           <div className="ag-login-mode-body">
             {pendingPasswordChange ? (
               <form onSubmit={submitPasswordChange} className="ag-login-form">
-                <Alert
-                  type="info"
-                  showIcon
+                <Notice
+                  tone="info"
+                  closable={false}
                   title={t("auth.changePasswordTitle")}
                   description={t("auth.changePasswordHint")}
                 />

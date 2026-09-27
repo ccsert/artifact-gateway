@@ -4,7 +4,7 @@ import { expectTabGutter } from "./support/tabs";
 
 test("operations survives legacy runtime node null arrays", async ({
   page,
-}) => {
+}, testInfo) => {
   await authenticateAsAdmin(page);
 
   await page.route("**/api/v2/repositories**", (route) =>
@@ -95,6 +95,11 @@ test("operations survives legacy runtime node null arrays", async ({
 
   await page.goto("/operations");
   await expect(page.getByRole("heading", { name: "任务中心" })).toBeVisible();
+  if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+    await page.screenshot({
+      path: testInfo.outputPath("operations-tables.png"),
+    });
+  }
   await expectTabGutter(page, ".ag-compact-tabs", ".ag-page-stack");
   await page.getByRole("tab", { name: "系统诊断" }).click();
   await expect(page.getByRole("heading", { name: "构建信息" })).toBeVisible();

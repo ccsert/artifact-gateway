@@ -5,14 +5,18 @@ import {
   PlusOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import { Button, Dropdown, Input, Select, Space, Table, Tooltip } from "antd";
+import { Button, Dropdown, Input, Select, Space, Tooltip } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import { listUsers } from "../../client";
 import type { User } from "../../client";
 import { Badge, StateBadge } from "../../components/ui/Badge";
 import { EmptyState, ErrorBanner } from "../../components/ui/Feedback";
 import { Card, PageHeader } from "../../components/ui/Layout";
-import { FilterBar, FilterField } from "../../components/ui/ConsolePrimitives";
+import {
+  ConsoleTable,
+  FilterBar,
+  FilterField,
+} from "../../components/ui/ConsolePrimitives";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { UserCreateDialog } from "./users/UserCreateDialog";
@@ -245,7 +249,7 @@ export function UsersPage() {
   const filtersActive = Boolean(searchInput || role || state);
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("用户", "Users")}
         description={text(
@@ -265,7 +269,7 @@ export function UsersPage() {
 
       {error ? <ErrorBanner error={error} onRetry={load} /> : null}
 
-      <Card className={error ? "mt-4" : ""}>
+      <Card>
         <FilterBar
           className="rounded-none border-x-0 border-t-0"
           actions={
@@ -326,10 +330,8 @@ export function UsersPage() {
           </FilterField>
         </FilterBar>
 
-        <Table<User>
-          className="ag-console-table"
+        <ConsoleTable<User>
           rowKey="id"
-          size="middle"
           dataSource={users}
           columns={columns}
           loading={loading}

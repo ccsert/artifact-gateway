@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { PlusOutlined, SearchOutlined, StopOutlined } from "@ant-design/icons";
-import { Alert, Button, Input, Select, Space, Table, Typography } from "antd";
+import { Alert, Button, Input, Select, Space, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { listApiKeys, createApiKey, revokeApiKey } from "../../client";
 import type { ApiKey, CreatedApiKey } from "../../client";
@@ -10,6 +10,7 @@ import { StateBadge, Badge } from "../../components/ui/Badge";
 import { Modal, ConfirmDialog, useDisclosure } from "../../components/ui/Modal";
 import { formatDate } from "../../lib/format";
 import {
+  ConsoleTable,
   CopyableValue,
   FilterBar,
   FilterField,
@@ -373,7 +374,7 @@ export function ApiKeysPage() {
   ];
 
   return (
-    <div>
+    <div className="ag-page-stack">
       <PageHeader
         title={text("API 密钥", "API keys")}
         description={text(
@@ -480,10 +481,8 @@ export function ApiKeysPage() {
                 )}
               />
             ) : (
-              <Table<ApiKey>
-                className="ag-console-table"
+              <ConsoleTable<ApiKey>
                 rowKey="id"
-                size="middle"
                 dataSource={visibleKeys}
                 columns={columns}
                 pagination={false}

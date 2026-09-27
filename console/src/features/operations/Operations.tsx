@@ -14,7 +14,6 @@ import {
   Progress,
   Select,
   Space,
-  Table,
   Tabs,
   Tooltip,
 } from "antd";
@@ -37,6 +36,7 @@ import { SystemDiagnosticsPanel } from "./SystemDiagnosticsPanel";
 import { WebhookDeliveriesPanel } from "./WebhookDeliveriesPanel";
 import { LifecycleJobDetails } from "./LifecycleJobDetails";
 import {
+  ConsoleTable,
   FilterBar,
   FilterField,
   MetricStrip,
@@ -796,10 +796,9 @@ export function OperationsPage() {
                       ))}
                     </div>
                   ) : (
-                    <Table<OperationRow>
-                      className="ag-console-table ag-operation-desktop-table"
+                    <ConsoleTable<OperationRow>
+                      className="ag-operation-desktop-table"
                       rowKey={operationRowKey}
-                      size="middle"
                       dataSource={visibleRows}
                       columns={columns}
                       expandable={{

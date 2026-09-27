@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { DeleteOutlined } from "@ant-design/icons";
-import { Button, Popconfirm, Select, Table } from "antd";
+import { Button, Popconfirm, Select } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { listOciManifests } from "../../client";
 import type { OciManifestSummary } from "../../client";
@@ -14,7 +14,10 @@ import { usePreferences } from "../../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
-import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
+import {
+  ConsoleTable,
+  useClipboardAction,
+} from "../../components/ui/ConsolePrimitives";
 
 interface OciDescriptor {
   mediaType: string;
@@ -541,8 +544,7 @@ export function OciImageDetail({
                 </Badge>
               )}
             </div>
-            <Table<OciDescriptor>
-              className="ag-console-table"
+            <ConsoleTable<OciDescriptor>
               rowKey="digest"
               size="small"
               pagination={false}
