@@ -16,7 +16,6 @@ import {
   Drawer,
   Form,
   Input,
-  Modal,
   Select,
   Space,
   Switch,
@@ -31,6 +30,7 @@ import {
 import type { ResetUserPassword, UpdateUser, User } from "../../../client";
 import { Badge, StateBadge } from "../../../components/ui/Badge";
 import { ErrorBanner } from "../../../components/ui/Feedback";
+import { ConfirmDialog, Modal } from "../../../components/ui/Modal";
 import { formatDate } from "../../../lib/format";
 import { usePreferences } from "../../../lib/preferences";
 import {
@@ -49,13 +49,15 @@ interface UserDetailsDrawerProps {
   onDeleted: () => void;
 }
 
+type PendingAction = "revoke-sessions" | "delete-account";
+
 export function UserDetailsDrawer({
   user,
   onClose,
   onChanged,
   onDeleted,
 }: UserDetailsDrawerProps) {
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const { locale, text } = usePreferences();
   const { token } = antdTheme.useToken();
   const [profileForm] = Form.useForm<UpdateUser>();
@@ -63,6 +65,9 @@ export function UserDetailsDrawer({
   const [profileBusy, setProfileBusy] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(
+    null,
+  );
   const [sessionsRefreshKey, setSessionsRefreshKey] = useState(0);
   const [error, setError] = useState<unknown>(null);
 
@@ -136,62 +141,58 @@ export function UserDetailsDrawer({
     onChanged(data);
   };
 
-  const confirmRevokeSessions = () => {
-    modal.confirm({
-      title: text("撤销全部会话", "Revoke all sessions"),
-      content: text(
-        `用户 ${user.name} 已签发的本地登录令牌将立即失效，需要重新登录。`,
-        `All local session tokens issued to ${user.name} become invalid immediately.`,
-      ),
-      okText: text("撤销会话", "Revoke sessions"),
-      cancelText: text("取消", "Cancel"),
-      onOk: async () => {
-        setActionBusy(true);
-        setError(null);
-        const { data, error: requestError } = await revokeUserSessions({
-          path: { userId: user.id },
-          headers: { "If-Match": user.version },
-        });
-        setActionBusy(false);
-        if (requestError || !data) {
-          setError(
-            requestError ??
-              new Error(text("撤销会话失败", "Failed to revoke sessions")),
-          );
-          throw requestError;
-        }
-        void message.success(text("全部会话已撤销", "All sessions revoked"));
-        setSessionsRefreshKey((current) => current + 1);
-        onChanged(data);
-      },
-    });
+  const openConfirm = (action: PendingAction) => {
+    setError(null);
+    setPendingAction(action);
   };
 
-  const confirmDelete = () => {
-    modal.confirm({
-      title: text("删除用户", "Delete user"),
-      content: text(
-        `确定永久删除用户 ${user.name}？该账户将立即无法访问系统。`,
-        `Permanently delete ${user.name}? The account immediately loses access.`,
-      ),
-      okText: text("删除用户", "Delete user"),
-      okButtonProps: { danger: true },
-      cancelText: text("取消", "Cancel"),
-      onOk: async () => {
-        setActionBusy(true);
-        setError(null);
-        const { error: requestError } = await deleteUser({
-          path: { userId: user.id },
-        });
-        setActionBusy(false);
-        if (requestError) {
-          setError(requestError);
-          throw requestError;
-        }
-        void message.success(text("用户已删除", "User deleted"));
-        onDeleted();
-      },
+  const closeConfirm = () => {
+    if (actionBusy) return;
+    setError(null);
+    setPendingAction(null);
+  };
+
+  const closePassword = () => {
+    if (actionBusy) return;
+    setError(null);
+    setPasswordOpen(false);
+  };
+
+  const revokeSessions = async () => {
+    setActionBusy(true);
+    setError(null);
+    const { data, error: requestError } = await revokeUserSessions({
+      path: { userId: user.id },
+      headers: { "If-Match": user.version },
     });
+    setActionBusy(false);
+    if (requestError || !data) {
+      setError(
+        requestError ??
+          new Error(text("撤销会话失败", "Failed to revoke sessions")),
+      );
+      return;
+    }
+    setPendingAction(null);
+    void message.success(text("全部会话已撤销", "All sessions revoked"));
+    setSessionsRefreshKey((current) => current + 1);
+    onChanged(data);
+  };
+
+  const deleteAccount = async () => {
+    setActionBusy(true);
+    setError(null);
+    const { error: requestError } = await deleteUser({
+      path: { userId: user.id },
+    });
+    setActionBusy(false);
+    if (requestError) {
+      setError(requestError);
+      return;
+    }
+    setPendingAction(null);
+    void message.success(text("用户已删除", "User deleted"));
+    onDeleted();
   };
 
   const locked = isUserLocked(user);
@@ -407,7 +408,7 @@ export function UserDetailsDrawer({
             <Button
               icon={<LogoutOutlined />}
               loading={actionBusy}
-              onClick={confirmRevokeSessions}
+              onClick={() => openConfirm("revoke-sessions")}
             >
               {text("撤销全部会话", "Revoke all sessions")}
             </Button>
@@ -442,7 +443,7 @@ export function UserDetailsDrawer({
             danger
             icon={<DeleteOutlined />}
             loading={actionBusy}
-            onClick={confirmDelete}
+            onClick={() => openConfirm("delete-account")}
           >
             {text("删除用户", "Delete user")}
           </Button>
@@ -455,16 +456,22 @@ export function UserDetailsDrawer({
           `重置 ${user.name} 的密码`,
           `Reset password for ${user.name}`,
         )}
-        width={520}
-        destroyOnHidden
-        confirmLoading={actionBusy}
-        okText={text("重置密码", "Reset password")}
-        cancelText={text("取消", "Cancel")}
-        onOk={() => void resetPassword()}
-        onCancel={() => {
-          setError(null);
-          setPasswordOpen(false);
-        }}
+        onClose={closePassword}
+        busy={actionBusy}
+        footer={
+          <Space>
+            <Button onClick={closePassword} disabled={actionBusy}>
+              {text("取消", "Cancel")}
+            </Button>
+            <Button
+              type="primary"
+              loading={actionBusy}
+              onClick={() => void resetPassword()}
+            >
+              {text("重置密码", "Reset password")}
+            </Button>
+          </Space>
+        }
       >
         {error ? (
           <div className="mb-4">
@@ -513,6 +520,46 @@ export function UserDetailsDrawer({
           </Form.Item>
         </Form>
       </Modal>
+
+      <ConfirmDialog
+        open={pendingAction !== null}
+        busy={actionBusy}
+        danger={pendingAction === "delete-account"}
+        title={
+          pendingAction === "delete-account"
+            ? text("删除用户", "Delete user")
+            : text("撤销全部会话", "Revoke all sessions")
+        }
+        confirmLabel={
+          pendingAction === "delete-account"
+            ? text("删除用户", "Delete user")
+            : text("撤销会话", "Revoke sessions")
+        }
+        message={
+          <>
+            {pendingAction === "delete-account"
+              ? text(
+                  `确定永久删除用户 ${user.name}？该账户将立即无法访问系统。`,
+                  `Permanently delete ${user.name}? The account immediately loses access.`,
+                )
+              : text(
+                  `用户 ${user.name} 已签发的本地登录令牌将立即失效，需要重新登录。`,
+                  `All local session tokens issued to ${user.name} become invalid immediately.`,
+                )}
+            {error ? (
+              <div className="mt-3">
+                <ErrorBanner error={error} />
+              </div>
+            ) : null}
+          </>
+        }
+        onConfirm={() =>
+          void (pendingAction === "delete-account"
+            ? deleteAccount()
+            : revokeSessions())
+        }
+        onClose={closeConfirm}
+      />
     </>
   );
 }

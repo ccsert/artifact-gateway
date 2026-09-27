@@ -4,7 +4,6 @@ import {
   Button,
   Dropdown,
   Input,
-  Modal,
   Popconfirm,
   Select,
   Space,
@@ -38,6 +37,7 @@ import type {
 } from "../../client";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { Card, CardHeader } from "../../components/ui/Layout";
+import { Modal } from "../../components/ui/Modal";
 import { usePreferences } from "../../lib/preferences";
 import {
   inferResourcePrefixFormat,
@@ -475,9 +475,9 @@ export function AuthorizationTemplatesPanel({
             ? text("编辑授权模板", "Edit authorization template")
             : text("新建授权模板", "New authorization template")
         }
-        onCancel={() => setEditorOpen(false)}
-        destroyOnHidden
-        width={980}
+        onClose={() => setEditorOpen(false)}
+        wide
+        busy={saving}
         footer={
           <Space>
             <Button onClick={() => setEditorOpen(false)} disabled={saving}>
@@ -517,7 +517,7 @@ export function AuthorizationTemplatesPanel({
           dataSource={draftGrants}
           pagination={false}
           size="small"
-          scroll={{ x: 760, y: 300 }}
+          scroll={{ x: 760 }}
           columns={[
             {
               title: text("主体", "Principal"),
@@ -697,8 +697,8 @@ export function AuthorizationTemplatesPanel({
       <Modal
         open={Boolean(applyTarget)}
         title={text("应用授权模板", "Apply authorization template")}
-        onCancel={() => setApplyTarget(null)}
-        destroyOnHidden
+        onClose={() => setApplyTarget(null)}
+        busy={applying}
         footer={
           <Space>
             <Button onClick={() => setApplyTarget(null)} disabled={applying}>

@@ -12,7 +12,6 @@ import {
   Empty,
   Form,
   Input,
-  Modal,
   Popconfirm,
   Space,
   Spin,
@@ -27,6 +26,7 @@ import {
 import type { CreateUserIdentity, UserIdentity } from "../../../client";
 import { Badge } from "../../../components/ui/Badge";
 import { ErrorBanner } from "../../../components/ui/Feedback";
+import { Modal } from "../../../components/ui/Modal";
 import { formatDate } from "../../../lib/format";
 import { usePreferences } from "../../../lib/preferences";
 
@@ -213,12 +213,23 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
       <Modal
         open={open}
         title={text("绑定 OIDC 身份", "Link OIDC identity")}
-        confirmLoading={busy}
-        okText={text("绑定", "Link")}
-        cancelText={text("取消", "Cancel")}
-        okButtonProps={{ disabled: !issuer.trim() || !subject.trim() }}
-        onOk={() => void link()}
-        onCancel={() => setOpen(false)}
+        onClose={() => setOpen(false)}
+        busy={busy}
+        footer={
+          <Space>
+            <Button onClick={() => setOpen(false)} disabled={busy}>
+              {text("取消", "Cancel")}
+            </Button>
+            <Button
+              type="primary"
+              loading={busy}
+              disabled={!issuer.trim() || !subject.trim()}
+              onClick={() => void link()}
+            >
+              {text("绑定", "Link")}
+            </Button>
+          </Space>
+        }
       >
         <Alert
           className="mb-4"

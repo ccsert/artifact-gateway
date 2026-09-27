@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SafetyCertificateOutlined, UnlockOutlined } from "@ant-design/icons";
-import { Alert, Button, Input, Modal } from "antd";
+import { Alert, Button, Input, Space } from "antd";
 import { getArtifactQuarantine, replaceArtifactQuarantine } from "../../client";
 import type { ArtifactQuarantine } from "../../client";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { ErrorBanner, isNotFound } from "../../components/ui/Feedback";
+import { Modal } from "../../components/ui/Modal";
 
 type QuarantineState = ArtifactQuarantine["state"];
 
@@ -191,29 +192,31 @@ export function ArtifactQuarantinePanel({
 
       <Modal
         open={nextState !== null}
-        centered
-        destroyOnHidden
         title={
           modalQuarantining
             ? text("隔离制品", "Quarantine artifact")
             : text("解除隔离", "Release artifact")
         }
-        okText={
-          modalQuarantining
-            ? text("确认隔离", "Quarantine")
-            : text("确认解除", "Release")
+        onClose={closeTransition}
+        busy={saving}
+        footer={
+          <Space>
+            <Button onClick={closeTransition} disabled={saving}>
+              {text("取消", "Cancel")}
+            </Button>
+            <Button
+              type="primary"
+              danger={modalQuarantining}
+              disabled={!reason.trim()}
+              loading={saving}
+              onClick={() => void submit()}
+            >
+              {modalQuarantining
+                ? text("确认隔离", "Quarantine")
+                : text("确认解除", "Release")}
+            </Button>
+          </Space>
         }
-        cancelText={text("取消", "Cancel")}
-        confirmLoading={saving}
-        okButtonProps={{
-          danger: modalQuarantining,
-          disabled: !reason.trim(),
-        }}
-        cancelButtonProps={{ disabled: saving }}
-        closable={!saving}
-        mask={{ closable: !saving }}
-        onCancel={closeTransition}
-        onOk={() => void submit()}
       >
         <div className="space-y-3">
           <p className="text-sm leading-6 text-zinc-400">

@@ -4,8 +4,8 @@ import {
   Button,
   Input,
   InputNumber,
-  Modal,
   Popconfirm,
+  Space,
   Tabs,
   Upload,
 } from "antd";
@@ -35,6 +35,7 @@ import {
   Notice,
 } from "../../components/ui/Feedback";
 import { Field } from "../../components/ui/Layout";
+import { Modal } from "../../components/ui/Modal";
 import { downloadBlob, sha256Receipt } from "../../lib/download";
 import { formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
@@ -884,17 +885,13 @@ function APTSuiteOperations({
       <Modal
         open={!!review}
         title={text("审阅快照变更", "Review snapshot change")}
-        onCancel={() => {
-          if (!busy) {
-            setReview(null);
-            setActionError(null);
-          }
+        onClose={() => {
+          setReview(null);
+          setActionError(null);
         }}
-        closable={!busy}
-        mask={{ closable: !busy }}
-        keyboard={!busy}
+        busy={busy}
         footer={
-          <>
+          <Space>
             <Button
               disabled={busy}
               onClick={() => {
@@ -915,7 +912,7 @@ function APTSuiteOperations({
             >
               {text("应用并签署新快照", "Apply and sign new snapshot")}
             </Button>
-          </>
+          </Space>
         }
       >
         {review && (
