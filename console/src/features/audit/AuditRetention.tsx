@@ -1,12 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  Button,
-  Form,
-  InputNumber,
-  Popconfirm,
-  Space,
-  Switch,
-} from "antd";
+import { Button, Form, InputNumber, Popconfirm, Space, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ReloadOutlined } from "@ant-design/icons";
 import {
