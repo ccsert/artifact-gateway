@@ -88,6 +88,10 @@ type nativeMavenCoordinateCommitRequest struct {
 	ExpectedAssetNames []string `json:"expectedAssetNames"`
 }
 
+// Direct Maven uploads must accept the largest Hosted assets being migrated
+// while keeping a bounded temporary spool per request.
+const maxMavenDirectAssetBytes = 128 << 20
+
 func (h nativeMavenHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/repository/maven/") {
 		if repositoryName, coordinate, ok := mavenCoordinateCommitPath(r.URL.Path); ok && r.Method == http.MethodPost {
@@ -758,7 +762,7 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	coordinate := group + ":" + artifact + ":" + version
-	spool, err := spoolUpload(r.Body, 64<<20)
+	spool, err := spoolUpload(r.Body, maxMavenDirectAssetBytes)
 	if err != nil {
 		if errors.Is(err, errUploadTooLarge) {
 			http.Error(w, "Maven asset is too large", http.StatusRequestEntityTooLarge)
