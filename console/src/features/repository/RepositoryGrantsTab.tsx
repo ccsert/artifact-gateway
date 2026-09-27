@@ -23,7 +23,7 @@ import {
 import { Modal, useDisclosure } from "../../components/ui/Modal";
 import { usePreferences } from "../../lib/preferences";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
-import { GrantRowEditor } from "../access-control/GrantRowEditor";
+import { GrantForm } from "../access-control/GrantForm";
 import {
   CUSTOM_PRINCIPAL,
   emptyGrant,
@@ -381,7 +381,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
             : text("添加授权", "Add grant")
         }
         onClose={editor.hide}
-        wide
+        width={680}
         footer={
           <Space>
             <Button onClick={editor.hide}>{text("取消", "Cancel")}</Button>
@@ -422,24 +422,13 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
             />
           )}
           {draft !== null && (
-            <div>
-              <div className="grid grid-cols-[minmax(300px,1.35fr)_170px_minmax(360px,1.5fr)_170px_40px] items-center gap-3 px-2 pb-2 text-xs font-medium text-zinc-500">
-                <span>{text("主体", "Principal")}</span>
-                <span>{text("权限级别", "Permission")}</span>
-                <span>{text("资源范围", "Resource scope")}</span>
-                <span>{text("本规则授予", "Granted by this rule")}</span>
-                <span />
-              </div>
-              <div className="border-b border-zinc-800/70">
-                <GrantRowEditor
-                  grant={draft}
-                  principalOptions={principalChoices}
-                  authorizationRoles={authorizationRoles}
-                  format={repo.format}
-                  onChange={setDraft}
-                />
-              </div>
-            </div>
+            <GrantForm
+              grant={draft}
+              principalOptions={principalChoices}
+              authorizationRoles={authorizationRoles}
+              format={repo.format}
+              onChange={setDraft}
+            />
           )}
         </div>
       </Modal>
