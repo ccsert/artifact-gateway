@@ -18,9 +18,9 @@ import {
   Button,
   Checkbox,
   Input,
-  Modal,
   Popconfirm,
   Radio,
+  Space,
   Upload,
 } from "antd";
 import {
@@ -37,6 +37,7 @@ import {
 } from "../../client";
 import { Card, PageHeader } from "../../components/ui/Layout";
 import { ErrorBanner, Loading } from "../../components/ui/Feedback";
+import { Modal } from "../../components/ui/Modal";
 import { SiteBrandMark } from "../../components/ui/SiteBrand";
 import { defaultSiteSettings, useSiteSettings } from "../../lib/siteSettings";
 import { usePreferences } from "../../lib/preferences";
@@ -749,31 +750,36 @@ export function SiteSettingsPage() {
       </Card>
       <Modal
         open={pendingThemePackage !== null}
-        width={620}
-        destroyOnHidden
-        mask={{ closable: !installingThemePackage }}
-        closable={!installingThemePackage}
+        width={680}
+        busy={installingThemePackage}
         title={
           pendingThemePackage?.validation.status === "replaceable"
             ? text("替换上传主题", "Replace uploaded theme")
             : text("安装主题包", "Install theme package")
         }
-        okText={
-          pendingThemePackage?.validation.status === "replaceable"
-            ? text("确认替换", "Replace theme")
-            : pendingThemePackage?.validation.status === "reserved"
-              ? text("ID 不可用", "ID unavailable")
-              : text("安装并启用", "Install and enable")
+        onClose={() => setPendingThemePackage(null)}
+        footer={
+          <Space>
+            <Button
+              onClick={() => setPendingThemePackage(null)}
+              disabled={installingThemePackage}
+            >
+              {text("取消", "Cancel")}
+            </Button>
+            <Button
+              type="primary"
+              disabled={pendingThemePackage?.validation.status === "reserved"}
+              loading={installingThemePackage}
+              onClick={() => void commitThemePackage()}
+            >
+              {pendingThemePackage?.validation.status === "replaceable"
+                ? text("确认替换", "Replace theme")
+                : pendingThemePackage?.validation.status === "reserved"
+                  ? text("ID 不可用", "ID unavailable")
+                  : text("安装并启用", "Install and enable")}
+            </Button>
+          </Space>
         }
-        cancelText={text("取消", "Cancel")}
-        okButtonProps={{
-          disabled: pendingThemePackage?.validation.status === "reserved",
-        }}
-        confirmLoading={installingThemePackage}
-        onCancel={() => {
-          if (!installingThemePackage) setPendingThemePackage(null);
-        }}
-        onOk={() => void commitThemePackage()}
       >
         {pendingThemePackage && (
           <div className="ag-theme-package-review">

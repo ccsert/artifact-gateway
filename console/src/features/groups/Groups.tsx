@@ -317,6 +317,7 @@ function CapacityDialog({ group }: { group: Group }) {
       <Modal
         open={dialog.open}
         onClose={dialog.hide}
+        wide
         title={text(`容量贡献 · ${group.name}`, `Capacity · ${group.name}`)}
       >
         {error !== null && <ErrorBanner error={error} />}
