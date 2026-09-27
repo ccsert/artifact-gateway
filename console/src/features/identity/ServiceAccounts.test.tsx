@@ -417,9 +417,10 @@ describe("ServiceAccountsPage", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
     rejectSave(new Error("network down"));
-    // The creation error belongs to the page behind the dialog, so assert it
-    // on the page rather than inside the dialog.
-    expect(await screen.findByText("network down")).toBeInTheDocument();
+    // The failure has to be readable while the dialog stays open.
+    expect(
+      await within(screen.getByRole("dialog")).findByText("network down"),
+    ).toBeInTheDocument();
 
     clickMask();
     await waitFor(() =>
@@ -453,9 +454,10 @@ describe("ServiceAccountsPage", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
     rejectSave(new Error("network down"));
-    // The issuance error belongs to the credentials panel behind the dialog,
-    // so assert it on the page rather than inside the dialog.
-    expect(await screen.findByText("network down")).toBeInTheDocument();
+    // The failure has to be readable while the dialog stays open.
+    expect(
+      await within(screen.getByRole("dialog")).findByText("network down"),
+    ).toBeInTheDocument();
 
     clickMask();
     await waitFor(() =>
