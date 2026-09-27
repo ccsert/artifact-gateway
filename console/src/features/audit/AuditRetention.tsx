@@ -191,14 +191,8 @@ export function AuditRetentionPage() {
           "Automatic cleanup rules for global audit records",
         )}
       />
-      {saveError !== null && (
-        <div className="mb-4">
-          <ErrorBanner error={saveError} />
-        </div>
-      )}
-      {notice && (
-        <Alert className="mb-4" type="success" showIcon title={notice} />
-      )}
+      {saveError !== null && <ErrorBanner error={saveError} />}
+      {notice && <Alert type="success" showIcon title={notice} />}
       <MetricStrip
         items={[
           {

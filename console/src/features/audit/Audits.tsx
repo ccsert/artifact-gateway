@@ -419,7 +419,7 @@ export function AuditsPage() {
           },
         ]}
       />
-      <Card className="mt-4">
+      <Card>
         <FilterBar
           embedded
           actions={
@@ -600,7 +600,7 @@ export function AuditsPage() {
       {records === null ? (
         error !== null ? (
           isNotFound(error) ? (
-            <Card className="mt-4">
+            <Card>
               <EmptyState
                 title={text("审计功能未启用", "Audit log is unavailable")}
                 hint={text(
@@ -616,7 +616,7 @@ export function AuditsPage() {
           <Loading />
         )
       ) : filtered.length === 0 ? (
-        <Card className="mt-4">
+        <Card>
           <EmptyState
             title={text("没有匹配的审计记录", "No matching audit records")}
             hint={text(
@@ -626,7 +626,7 @@ export function AuditsPage() {
           />
         </Card>
       ) : (
-        <Card className="mt-4">
+        <Card>
           <Table<AuditTableRow>
             className="ag-console-table"
             rowKey="key"

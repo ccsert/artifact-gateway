@@ -967,15 +967,12 @@ export function AccessControlPage() {
                       <Spinner />
                     )}
                   </div>
-                  <div className="px-5 py-4">
+                  <div className="space-y-4 px-5 py-4">
                     {evaluatorOptionsError !== null && (
-                      <div className="mb-4">
-                        <ErrorBanner error={evaluatorOptionsError} />
-                      </div>
+                      <ErrorBanner error={evaluatorOptionsError} />
                     )}
                     {serviceAccountsError !== null && (
                       <Alert
-                        className="mb-4"
                         type="warning"
                         showIcon
                         title={text(

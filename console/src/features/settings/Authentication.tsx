@@ -287,7 +287,7 @@ export function AuthenticationPage() {
         ]}
       />
 
-      <div className="ag-feedback-stack space-y-4">
+      <div className="space-y-4">
         {settings.source === "environment" && (
           <Alert
             type="info"
@@ -308,7 +308,7 @@ export function AuthenticationPage() {
               `连接成功，发现耗时 ${testResult.latencyMs} ms`,
               `Connection succeeded in ${testResult.latencyMs} ms`,
             )}
-            description={testResult.authorizationEndpoint}
+            description={testResult.authorizationEndpoint || undefined}
           />
         )}
       </div>
