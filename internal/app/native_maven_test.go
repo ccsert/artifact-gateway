@@ -207,6 +207,55 @@ func TestNativeMavenProtocolPublishesDirectlyByDefault(t *testing.T) {
 	}
 }
 
+type mavenFillReader struct{ value byte }
+
+func (r mavenFillReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = r.value
+	}
+	return len(p), nil
+}
+
+func TestNativeMavenDirectUploadAcceptsLargeJar(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "large-releases", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects := NewMemoryOCIObjectStore()
+	handler := newNativeMavenHandler(store, objects, testAuthenticator())
+	base := "/repository/maven/large-releases/org/example/big/1.0.0/"
+	pom := `<project><groupId>org.example</groupId><artifactId>big</artifactId><version>1.0.0</version></project>`
+	put := func(name string, body io.Reader) *httptest.ResponseRecorder {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodPut, base+name, body)
+		authorize(request, "admin-secret")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	if response := put("big-1.0.0.pom", strings.NewReader(pom)); response.Code != http.StatusCreated {
+		t.Fatalf("POM PUT=%d %s", response.Code, response.Body.String())
+	}
+	const size = 82 << 20 // Exercises a real upload above the previous 64 MiB limit.
+	if response := put("big-1.0.0.jar", io.LimitReader(mavenFillReader{'x'}, size)); response.Code != http.StatusCreated {
+		t.Fatalf("large JAR PUT=%d %s", response.Code, response.Body.String())
+	}
+	wantHash := sha256.New()
+	if _, err := io.Copy(wantHash, io.LimitReader(mavenFillReader{'x'}, size)); err != nil {
+		t.Fatal(err)
+	}
+	wantDigest := "sha256:" + hex.EncodeToString(wantHash.Sum(nil))
+	asset, err := store.GetMavenAsset(context.Background(), repo.ID, "org/example/big/1.0.0/big-1.0.0.jar")
+	if err != nil || asset.Size != size || asset.Digest != wantDigest {
+		t.Fatalf("published JAR=%#v err=%v", asset, err)
+	}
+	stored, err := objects.Stat(context.Background(), asset.ObjectKey)
+	if err != nil || stored.Size != size || stored.Digest != wantDigest {
+		t.Fatalf("stored JAR=%#v err=%v", stored, err)
+	}
+}
+
 func TestNativeMavenDirectSnapshotMetadataClosesTheBuildSession(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "deploys", Format: repository.FormatMaven})
