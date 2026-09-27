@@ -8,7 +8,7 @@ import {
   SearchOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { Button, Input, Select, Space, Switch, Table } from "antd";
+import { Button, Input, Select, Space, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   listGroups,
@@ -44,10 +44,11 @@ import { Badge, FormatBadge } from "../../components/ui/Badge";
 import { Modal, ConfirmDialog, useDisclosure } from "../../components/ui/Modal";
 import { MemberOrderPicker } from "./MemberOrderPicker";
 import {
+  ConsoleTable,
+  CopyableValue,
   FilterBar,
   FilterField,
   MetricStrip,
-  CopyableValue,
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 import { groupFormats, loadFormatProfiles } from "../../lib/formatProfiles";
@@ -323,8 +324,7 @@ function CapacityDialog({ group }: { group: Group }) {
         {!capacity ? (
           <Loading />
         ) : (
-          <Table<GroupCapacityMember>
-            className="ag-console-table"
+          <ConsoleTable<GroupCapacityMember>
             rowKey="repositoryId"
             size="small"
             dataSource={capacity.members}
@@ -875,10 +875,8 @@ export function GroupsPage() {
                 )}
               />
             ) : (
-              <Table<Group>
-                className="ag-console-table"
+              <ConsoleTable<Group>
                 rowKey="id"
-                size="middle"
                 dataSource={visibleGroups}
                 columns={columns}
                 pagination={false}

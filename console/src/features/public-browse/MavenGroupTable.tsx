@@ -1,5 +1,5 @@
 import { DownOutlined, LinkOutlined, UpOutlined } from "@ant-design/icons";
-import { Button, Table } from "antd";
+import { Button } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { ArtifactSummary } from "../../client";
 import { formatBytes, formatDate } from "../../lib/format";
@@ -15,6 +15,7 @@ import {
   SearchableVersionSelect,
   UsageSnippetBlock,
 } from "../../components/ui/PublicBrowsePrimitives";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 interface MavenGroupTableProps {
   groups: MavenArtifactGroup[];
@@ -274,10 +275,8 @@ export function MavenGroupTable({
   };
 
   return (
-    <Table<MavenTableRow>
-      className="ag-console-table"
+    <ConsoleTable<MavenTableRow>
       rowKey="key"
-      size="middle"
       dataSource={tableRows}
       columns={columns}
       pagination={false}

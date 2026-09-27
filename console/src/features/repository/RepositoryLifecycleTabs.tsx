@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { SyncOutlined } from "@ant-design/icons";
-import { Button, Popconfirm, Table } from "antd";
+import { Button, Popconfirm } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   reconcileRepositoryArtifactIntelligence,
@@ -23,6 +23,7 @@ import { Pagination } from "../../components/ui/Layout";
 import { formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 export function RepositoryJobsTab({ repo }: { repo: Repository }) {
   const { text } = usePreferences();
@@ -264,10 +265,8 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
           </Popconfirm>
         </div>
       )}
-      <Table<LifecycleJob>
-        className="ag-console-table"
+      <ConsoleTable<LifecycleJob>
         rowKey="id"
-        size="middle"
         dataSource={jobs}
         columns={jobColumns}
         expandable={{
@@ -438,12 +437,10 @@ export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
         />
       ) : (
         <>
-          <Table<ArtifactTombstone>
-            className="ag-console-table"
+          <ConsoleTable<ArtifactTombstone>
             rowKey={(item) =>
               `${item.coordinate}:${item.digest}:${item.tombstonedAt}`
             }
-            size="middle"
             dataSource={items}
             columns={tombstoneColumns}
             pagination={false}

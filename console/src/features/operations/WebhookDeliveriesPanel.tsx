@@ -5,7 +5,7 @@ import {
   RedoOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
-import { Button, Input, Select, Space, Switch, Table, Tooltip } from "antd";
+import { Button, Input, Select, Space, Switch, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   createWebhookSubscription,
@@ -28,6 +28,7 @@ import { Badge, StateBadge } from "../../components/ui/Badge";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { Card, CardHeader, Field } from "../../components/ui/Layout";
 import { Modal, useDisclosure } from "../../components/ui/Modal";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 type SubscriptionForm = {
   name: string;
@@ -428,10 +429,8 @@ export function WebhookDeliveriesPanel() {
             }
           />
         ) : (
-          <Table<WebhookSubscription>
-            className="ag-console-table"
+          <ConsoleTable<WebhookSubscription>
             rowKey="id"
-            size="middle"
             dataSource={subscriptions}
             columns={subscriptionColumns}
             pagination={false}
@@ -471,10 +470,8 @@ export function WebhookDeliveriesPanel() {
             )}
           />
         ) : (
-          <Table<WebhookDelivery>
-            className="ag-console-table"
+          <ConsoleTable<WebhookDelivery>
             rowKey="id"
-            size="middle"
             dataSource={deliveries}
             columns={deliveryColumns}
             pagination={false}

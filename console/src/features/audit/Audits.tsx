@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Collapse, DatePicker, Select, Space, Table } from "antd";
+import { Button, Collapse, DatePicker, Select, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
@@ -21,6 +21,7 @@ import { Badge, FormatBadge } from "../../components/ui/Badge";
 import { formatBytes, formatDate } from "../../lib/format";
 import { toCsv, downloadCsv } from "../../lib/csv";
 import {
+  ConsoleTable,
   FilterBar,
   FilterField,
   MetricStrip,
@@ -627,10 +628,8 @@ export function AuditsPage() {
         </Card>
       ) : (
         <Card>
-          <Table<AuditTableRow>
-            className="ag-console-table"
+          <ConsoleTable<AuditTableRow>
             rowKey="key"
-            size="middle"
             dataSource={tableRows}
             columns={columns}
             pagination={false}

@@ -15,7 +15,6 @@ import {
   Select,
   Space,
   Switch,
-  Table,
   Tooltip,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -40,6 +39,7 @@ import { Card, CardHeader, Field } from "../../components/ui/Layout";
 import { Modal, useDisclosure } from "../../components/ui/Modal";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 type TaskForm = CreateScheduledTask;
 
@@ -455,10 +455,8 @@ export function ScheduledTasksPanel() {
             )}
           />
         ) : (
-          <Table<ScheduledTask>
-            className="ag-console-table"
+          <ConsoleTable<ScheduledTask>
             rowKey="id"
-            size="middle"
             dataSource={tasks}
             columns={columns}
             pagination={false}
@@ -713,8 +711,7 @@ function TaskRunHistory({
           {text("投递历史", "Dispatch history")} · {task.name}
         </span>
       </div>
-      <Table<ScheduledTaskRun>
-        className="ag-console-table"
+      <ConsoleTable<ScheduledTaskRun>
         rowKey="id"
         size="small"
         loading={loading}

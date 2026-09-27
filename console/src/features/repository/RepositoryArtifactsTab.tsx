@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { FolderOutlined, UnorderedListOutlined } from "@ant-design/icons";
-import { Button, Input, Segmented, Select, Table } from "antd";
+import { Button, Input, Segmented, Select } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   listConanReferences,
@@ -52,6 +52,7 @@ import {
   type ProxyMavenAssetFilter,
 } from "./ProxyMavenCacheSection";
 import type { ArtifactRow } from "./artifactRow";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 async function fetchMavenArtifactPage(
   repositoryId: string,
@@ -998,10 +999,8 @@ export function RepositoryArtifactsTab({
               onWarmed={() => void load(q)}
             />
           )}
-          <Table<ArtifactRow>
-            className="ag-console-table"
+          <ConsoleTable<ArtifactRow>
             rowKey="key"
-            size="middle"
             dataSource={rows}
             columns={columns}
             pagination={false}

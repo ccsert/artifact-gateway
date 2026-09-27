@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Table, Tag } from "antd";
+import { Tag } from "antd";
 import type { TableProps } from "antd";
 import { ErrorBanner, Loading } from "../../components/ui/Feedback";
 import {
@@ -14,7 +14,10 @@ import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { useAuth } from "../../lib/auth";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { pypiUsage } from "../../lib/usage";
-import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
+import {
+  ConsoleTable,
+  useClipboardAction,
+} from "../../components/ui/ConsolePrimitives";
 
 interface PyPIFile {
   filename: string;
@@ -305,8 +308,7 @@ export function PyPIProjectDetail({
             value={totalSize > 0 ? formatBytes(totalSize) : formatBytes(size)}
           />
         </div>
-        <Table<PyPIFile>
-          className="ag-console-table mt-3"
+        <ConsoleTable<PyPIFile>
           rowKey="filename"
           size="small"
           tableLayout="fixed"

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScanOutlined, SyncOutlined } from "@ant-design/icons";
-import { Alert, Button, Form, Input, Space, Table, Tag } from "antd";
+import { Alert, Button, Form, Input, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   createRepositoryArtifactScan,
@@ -26,6 +26,7 @@ import {
 } from "./RepositoryArtifactSelect";
 import { formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 type ScanForm = {
   coordinate: string;
@@ -633,10 +634,8 @@ export function RepositoryScanningTab({
             )}
           />
         ) : (
-          <Table<LifecycleJob>
-            className="ag-console-table"
+          <ConsoleTable<LifecycleJob>
             rowKey="id"
-            size="middle"
             dataSource={jobs}
             columns={columns}
             pagination={{ pageSize: 10, hideOnSinglePage: true }}

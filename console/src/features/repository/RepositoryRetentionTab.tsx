@@ -6,7 +6,6 @@ import {
   Select,
   Space,
   Switch,
-  Table,
   Tooltip,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -36,6 +35,7 @@ import { formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { artifactCoordinateForDisplay } from "../../lib/rawPath";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 type Localize = (chinese: string, english: string) => string;
 
@@ -997,12 +997,10 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
               )}
             />
           ) : (
-            <Table<RetentionDryRun["candidates"][number]>
-              className="ag-console-table"
+            <ConsoleTable<RetentionDryRun["candidates"][number]>
               rowKey={(candidate) =>
                 `${candidate.format}:${candidate.coordinate}:${candidate.digest}`
               }
-              size="middle"
               dataSource={dryRun.candidates}
               columns={dryRunColumns}
               pagination={false}
