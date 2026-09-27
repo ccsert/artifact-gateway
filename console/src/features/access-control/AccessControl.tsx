@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Button,
   Collapse,
   Input,
@@ -41,9 +40,10 @@ import type {
 } from "../../client";
 import { PageHeader, Card, CardHeader } from "../../components/ui/Layout";
 import {
-  Loading,
-  ErrorBanner,
   EmptyState,
+  ErrorBanner,
+  Loading,
+  Notice,
   Spinner,
 } from "../../components/ui/Feedback";
 import { FormatBadge, Badge, type BadgeTone } from "../../components/ui/Badge";
@@ -969,15 +969,12 @@ export function AccessControlPage() {
                   </div>
                   <div className="px-5 py-4">
                     {evaluatorOptionsError !== null && (
-                      <div className="mb-4">
-                        <ErrorBanner error={evaluatorOptionsError} />
-                      </div>
+                      <ErrorBanner error={evaluatorOptionsError} />
                     )}
                     {serviceAccountsError !== null && (
-                      <Alert
-                        className="mb-4"
-                        type="warning"
-                        showIcon
+                      <Notice
+                        tone="warning"
+                        closable={false}
                         title={text(
                           "部分身份来源不可用",
                           "Some identity sources are unavailable",
