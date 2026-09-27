@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
-import { InboxOutlined, ReloadOutlined } from "@ant-design/icons";
+import {
+  CloseOutlined,
+  InboxOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import { Alert, Button, Empty, Spin } from "antd";
 import type { Problem } from "../../client";
 import { usePreferences } from "../../lib/preferences";
@@ -131,8 +135,13 @@ export function Notice({
       className="ag-feedback-enter"
       type={tone}
       showIcon={tone !== "info"}
-      closable={closable ?? tone !== "info"}
-      onClose={onClose}
+      // antd 6.5 treats an object `closable` without `closeIcon` as not
+      // closable at all, so the callback alone would silently remove the button.
+      closable={
+        (closable ?? tone !== "info")
+          ? { closeIcon: <CloseOutlined />, onClose }
+          : false
+      }
       title={title}
       description={description}
       action={action}

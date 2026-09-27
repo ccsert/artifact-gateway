@@ -143,6 +143,7 @@ run_console() {
   run "generated API client" make console-api-check
   run "type check" make console-typecheck
   run "lint and formatting" make console-check
+  run "antd component lint" make console-antd-lint
   run "unit tests" make console-test
   run "build" make console-build
   run "deployment image" make console-docker-build
