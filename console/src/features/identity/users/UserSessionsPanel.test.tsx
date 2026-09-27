@@ -90,4 +90,21 @@ describe("UserSessionsPanel", () => {
     });
     expect((await screen.findAllByText("已撤销")).length).toBe(2);
   });
+
+  it("shows the shared loading state while the first request is in flight", async () => {
+    mockListSessions.mockReturnValue(new Promise(() => {}) as never);
+
+    renderPanel();
+
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+  });
+
+  it("shares the console empty state", async () => {
+    mockListSessions.mockResolvedValue({ data: { items: [] } } as never);
+
+    renderPanel();
+
+    const empty = await screen.findByText("当前没有活动会话");
+    expect(empty.closest(".ag-empty-state")).not.toBeNull();
+  });
 });

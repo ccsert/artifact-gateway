@@ -111,11 +111,7 @@ export function ArtifactScanStatus({
   if (!status)
     return (
       <div className="col-span-full">
-        <ErrorBanner
-          error={loadError}
-          tone="warning"
-          onRetry={() => void load()}
-        />
+        <ErrorBanner error={loadError} onRetry={() => void load()} />
       </div>
     );
 

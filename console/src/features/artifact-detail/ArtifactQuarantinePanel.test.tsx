@@ -64,6 +64,15 @@ describe("ArtifactQuarantinePanel", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("reads quarantine as an ongoing state, not a system error", async () => {
+    mockGetQuarantine.mockResolvedValue({ data: quarantine() } as never);
+    renderPanel();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveClass("ant-alert-warning");
+    expect(alert).not.toHaveClass("ant-alert-error");
+  });
+
   it("treats 404 as unquarantined and creates the first record at version zero", async () => {
     const user = userEvent.setup();
     const created = quarantine();

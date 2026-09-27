@@ -103,4 +103,36 @@ describe("ArtifactScanStatus", () => {
     expect(await screen.findByText("已完成")).toBeInTheDocument();
     expect(mockGetStatus).toHaveBeenCalledTimes(2);
   });
+
+  it("reads a first-load failure as an error, not a warning", async () => {
+    mockGetStatus.mockResolvedValue({
+      error: new Error("network unavailable"),
+    } as never);
+
+    renderStatus();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveClass("ant-alert-error");
+    expect(alert).not.toHaveClass("ant-alert-warning");
+  });
+
+  it("reads a failed rescan as an error, like every other mutation failure", async () => {
+    mockGetStatus.mockResolvedValue({
+      data: {
+        coordinate: "releases/widget.bin",
+        digest,
+        state: "completed",
+      },
+    } as never);
+    mockCreateScan.mockRejectedValue(new Error("queue unavailable"));
+
+    renderStatus();
+    await screen.findByText(/扫描状态/);
+
+    await userEvent.click(screen.getByRole("button", { name: /重新扫描/ }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveClass("ant-alert-error");
+    expect(alert).not.toHaveClass("ant-alert-warning");
+  });
 });

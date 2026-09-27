@@ -140,4 +140,37 @@ describe("UserIdentitiesPanel", () => {
       within(dialog).getByRole("button", { name: /绑\s*定/ }),
     ).toBeDisabled();
   });
+
+  it("shows the shared loading state while the first request is in flight", async () => {
+    mockListIdentities.mockReturnValue(new Promise(() => {}) as never);
+    mockGetOidcSettings.mockReturnValue(new Promise(() => {}) as never);
+
+    render(
+      <PreferencesProvider>
+        <AntdProvider>
+          <UserIdentitiesPanel userId="00000000-0000-0000-0000-000000000001" />
+        </AntdProvider>
+      </PreferencesProvider>,
+    );
+
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+  });
+
+  it("shares the console empty state", async () => {
+    mockListIdentities.mockResolvedValue({ data: { items: [] } } as never);
+    mockGetOidcSettings.mockResolvedValue({
+      data: { issuer: "https://issuer.example.test" },
+    } as never);
+
+    render(
+      <PreferencesProvider>
+        <AntdProvider>
+          <UserIdentitiesPanel userId="00000000-0000-0000-0000-000000000001" />
+        </AntdProvider>
+      </PreferencesProvider>,
+    );
+
+    const empty = await screen.findByText("尚未绑定外部身份");
+    expect(empty.closest(".ag-empty-state")).not.toBeNull();
+  });
 });

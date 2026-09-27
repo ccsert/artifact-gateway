@@ -55,6 +55,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
   vi.clearAllMocks();
 });
 
@@ -363,6 +364,34 @@ describe("RepositoryScanningTab", () => {
     expect(screen.getByLabelText("SHA-256 摘要")).toHaveAttribute(
       "placeholder",
       "sha256:…",
+    );
+  });
+
+  it("localizes the coordinate placeholder for formats without a canonical example", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("ag.console.locale", "en-US");
+    mockListJobs.mockResolvedValue({ data: [] } as never);
+
+    render(
+      <PreferencesProvider>
+        <RepositoryScanningTab
+          repo={{ ...repository, format: "apt", name: "apt-hosted" }}
+          capabilities={{ ...capabilities, format: "apt" }}
+          capabilitiesLoading={false}
+          capabilitiesError={null}
+          canManage
+          canViewJobs={false}
+        />
+      </PreferencesProvider>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "Advanced manual input" }),
+    );
+
+    expect(await screen.findByLabelText("Artifact coordinate")).toHaveAttribute(
+      "placeholder",
+      "Canonical artifact coordinate",
     );
   });
 });

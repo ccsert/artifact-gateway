@@ -244,6 +244,12 @@ describe("RepositoryDistributionTab", () => {
     expect(
       await screen.findByText("制品已隔离，无法晋升或复制"),
     ).toBeInTheDocument();
+    // Quarantine is an ongoing state an operation can lift, not a system error.
+    const quarantineAlert = screen
+      .getByText("制品已隔离，无法晋升或复制")
+      .closest(".ant-alert");
+    expect(quarantineAlert).toHaveClass("ant-alert-warning");
+    expect(quarantineAlert).not.toHaveClass("ant-alert-error");
     expect(
       screen.getByText("请先在制品详情中解除隔离，然后重新评估准入。"),
     ).toBeInTheDocument();
@@ -300,6 +306,12 @@ describe("RepositoryDistributionTab", () => {
     await user.click(screen.getByRole("button", { name: "评估准入" }));
 
     expect(await screen.findByText("安全策略阻止晋升")).toBeInTheDocument();
+    // A policy judgment is a warning; only a failed request reads as an error.
+    const policyAlert = screen
+      .getByText("安全策略阻止晋升")
+      .closest(".ant-alert");
+    expect(policyAlert).toHaveClass("ant-alert-warning");
+    expect(policyAlert).not.toHaveClass("ant-alert-error");
     expect(screen.getByText("缺少已验证签名")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /晋\s*升/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /复\s*制/ })).toBeEnabled();

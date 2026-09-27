@@ -5,18 +5,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
-import {
-  Alert,
-  App,
-  Button,
-  Empty,
-  Form,
-  Input,
-  Popconfirm,
-  Space,
-  Spin,
-  Tag,
-} from "antd";
+import { Alert, App, Button, Form, Input, Popconfirm, Space, Tag } from "antd";
 import {
   createUserIdentity,
   deleteUserIdentity,
@@ -25,7 +14,11 @@ import {
 } from "../../../client";
 import type { CreateUserIdentity, UserIdentity } from "../../../client";
 import { Badge } from "../../../components/ui/Badge";
-import { ErrorBanner } from "../../../components/ui/Feedback";
+import {
+  EmptyState,
+  ErrorBanner,
+  Loading,
+} from "../../../components/ui/Feedback";
 import { Modal } from "../../../components/ui/Modal";
 import { formatDate } from "../../../lib/format";
 import { usePreferences } from "../../../lib/preferences";
@@ -145,13 +138,11 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
 
       {error ? <ErrorBanner error={error} onRetry={() => void load()} /> : null}
       {loading ? (
-        <div className="flex justify-center py-6">
-          <Spin />
-        </div>
+        <Loading />
       ) : items.length === 0 ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={text("尚未绑定外部身份", "No external identity linked")}
+        <EmptyState
+          compact
+          title={text("尚未绑定外部身份", "No external identity linked")}
         />
       ) : (
         <div className="space-y-2">

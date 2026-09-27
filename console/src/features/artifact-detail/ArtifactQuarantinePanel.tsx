@@ -130,7 +130,7 @@ export function ArtifactQuarantinePanel({
         <ErrorBanner error={loadError} onRetry={() => void load()} />
       ) : activeRecord ? (
         <Alert
-          type="error"
+          type="warning"
           showIcon
           title={text("制品已隔离", "Artifact quarantined")}
           description={

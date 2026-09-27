@@ -117,4 +117,14 @@ describe("WebhookDeliveriesPanel", () => {
       },
     });
   });
+
+  it("keeps one primary action when the subscription list is empty", async () => {
+    mockListSubscriptions.mockResolvedValue({ data: [] } as never);
+    mockListDeliveries.mockResolvedValue({ data: [] } as never);
+
+    renderPanel();
+
+    expect(await screen.findByText("还没有 Webhook 订阅")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "新建订阅" })).toHaveLength(1);
+  });
 });

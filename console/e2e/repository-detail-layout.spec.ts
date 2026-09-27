@@ -1119,3 +1119,107 @@ test("security guardrails use independent desktop columns", async ({
     });
   }
 });
+
+test("a quarantined artifact reads as an ongoing state in both themes", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockRepositoryDetail(page, { format: "npm" });
+  const packageName = "pipeone-npm-frontend-validation-v2-beta";
+  await page.route("**/artifact-quarantine**", (route) =>
+    route.fulfill({
+      json: {
+        repositoryId,
+        format: "npm",
+        coordinate: `${packageName}@0.1.3`,
+        digest: `sha256:${"8".repeat(64)}`,
+        state: "quarantined",
+        reason: "critical vulnerability under investigation",
+        version: "2",
+        updatedBy: "alice",
+        updatedAt: "2026-08-11T08:00:00Z",
+        quarantinedAt: "2026-08-11T08:00:00Z",
+      },
+    }),
+  );
+
+  const quarantineAlert = page
+    .locator(".ant-alert")
+    .filter({ hasText: "制品已隔离" })
+    .first();
+  for (const mode of ["dark", "light"] as const) {
+    if (mode === "light") {
+      await page.getByRole("button", { name: /选择主题/ }).click();
+      await page.getByRole("menuitem", { name: /Gateway Light/ }).click();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    }
+    await page.goto(
+      `/repositories/${repositoryId}?artifact=${packageName}&version=0.1.3`,
+    );
+    await expect(quarantineAlert).toBeVisible();
+    await expect(quarantineAlert).toHaveClass(/ant-alert-warning/);
+    await expect(quarantineAlert).not.toHaveClass(/ant-alert-error/);
+    if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+      await page.screenshot({
+        path: testInfo.outputPath(`tone-quarantine-${mode}.png`),
+      });
+    }
+  }
+});
+
+test("a blocked admission reads as a policy judgment in both themes", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockRepositoryDetail(page, { distributionEnabled: true });
+  await page.route("**/security-policy:evaluate**", (route) =>
+    route.fulfill({
+      json: {
+        allowed: false,
+        enforced: true,
+        policyVersion: "5",
+        intelligencePresent: true,
+        reasons: ["verified_signature_required"],
+      },
+    }),
+  );
+
+  const coordinate = "releases/example-1.zip";
+  const openEvaluation = async () => {
+    await page.getByRole("combobox", { name: "搜索并选择源制品" }).click();
+    await page
+      .locator(".ant-select-item-option")
+      .filter({ hasText: coordinate })
+      .first()
+      .click();
+    await page.getByRole("combobox", { name: "选择目标仓库" }).click();
+    await page
+      .locator(".ant-select-item-option")
+      .filter({ hasText: "production-files" })
+      .first()
+      .click();
+    await page.getByRole("button", { name: "评估准入" }).click();
+  };
+
+  const policyAlert = page
+    .locator(".ant-alert")
+    .filter({ hasText: "安全策略阻止晋升" })
+    .first();
+  for (const mode of ["dark", "light"] as const) {
+    if (mode === "light") {
+      await page.getByRole("button", { name: /选择主题/ }).click();
+      await page.getByRole("menuitem", { name: /Gateway Light/ }).click();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    }
+    await page.goto(`/repositories/${repositoryId}?tab=distribute`);
+    await openEvaluation();
+    await expect(policyAlert).toBeVisible();
+    await expect(policyAlert).toHaveClass(/ant-alert-warning/);
+    await expect(policyAlert).not.toHaveClass(/ant-alert-error/);
+    if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+      await page.screenshot({
+        path: testInfo.outputPath(`tone-policy-${mode}.png`),
+      });
+    }
+  }
+});

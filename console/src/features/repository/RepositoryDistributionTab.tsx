@@ -731,7 +731,7 @@ export function RepositoryDistributionTab({
         </div>
         {evaluation && (
           <Alert
-            type={evaluation.allowed ? "success" : "error"}
+            type={evaluation.allowed ? "success" : "warning"}
             showIcon
             title={text(
               artifactQuarantined

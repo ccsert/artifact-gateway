@@ -98,6 +98,12 @@ describe("RuntimeNodesPanel", () => {
     expect(mockListRuntimeNodes).toHaveBeenCalledTimes(2);
     expect(screen.getByText("陈旧")).toBeInTheDocument();
     expect(screen.getByText("集群运行能力需要关注")).toBeInTheDocument();
+    // In-card alerts keep the shared rounded inset; only filter bars sit flush.
+    const banner = screen
+      .getByText("集群运行能力需要关注")
+      .closest(".ant-alert");
+    expect(banner).not.toHaveClass("rounded-none");
+    expect(banner?.parentElement).toHaveClass("px-5");
   });
 
   it("retries a node-specific error without involving task loading", async () => {
