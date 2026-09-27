@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Every dialog that starts a write now stays put until that write settles. The create forms for repositories, API keys, service accounts, credentials, groups, scheduled tasks, and webhook subscriptions, plus the Raw upload dialog, no longer dismiss through Escape, the mask, or the close button while their request is in flight, so a half-applied change cannot be abandoned under a pending response and the same record cannot be submitted twice by reopening the form. Each of those save paths also releases its busy state in a `finally`, so a request that fails at the network level leaves the dialog dismissible again instead of locking the form open.
+
 ## 0.4.1 - 2026-09-27
 
 - Direct Maven Hosted uploads now accept assets up to 128 MiB, allowing larger JARs to be imported while retaining a bounded temporary spool.

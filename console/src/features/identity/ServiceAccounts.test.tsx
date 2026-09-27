@@ -1,6 +1,7 @@
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -98,6 +99,15 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
+
+// The mask is the dismissal route the dialogs' `busy` flag controls, and it
+// only closes on a click that both starts and lands on it.
+function clickMask() {
+  const mask = document.querySelector(".ant-modal-wrap");
+  expect(mask).not.toBeNull();
+  fireEvent.mouseDown(mask as HTMLElement);
+  fireEvent.click(mask as HTMLElement);
+}
 
 describe("ServiceAccountsPage", () => {
   it("does not present a failed initial request as still loading", async () => {
@@ -377,5 +387,79 @@ describe("ServiceAccountsPage", () => {
     expect(
       await screen.findByRole("button", { name: /禁\s*用\s*账\s*号/ }),
     ).toBeInTheDocument();
+  });
+
+  it("holds the create dialog shut while saving and frees it after a failure", async () => {
+    const user = userEvent.setup();
+    mockListServiceAccounts.mockResolvedValue({
+      data: { items: [] },
+    } as never);
+    mockListServiceAccountCredentials.mockResolvedValue({
+      data: { items: [] },
+    } as never);
+    let rejectSave: (error: unknown) => void = () => {};
+    mockCreateServiceAccount.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectSave = reject;
+        }) as never,
+    );
+
+    renderPage();
+    await user.click(
+      await screen.findByRole("button", { name: /新建服务账号/ }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getAllByRole("textbox")[0], "pipeone-ci");
+    await user.click(within(dialog).getByRole("button", { name: /创\s*建/ }));
+
+    clickMask();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    rejectSave(new Error("network down"));
+    // The creation error belongs to the page behind the dialog, so assert it
+    // on the page rather than inside the dialog.
+    expect(await screen.findByText("network down")).toBeInTheDocument();
+
+    clickMask();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("holds the credential dialog shut while the issuance is in flight", async () => {
+    const user = userEvent.setup();
+    mockListServiceAccounts.mockResolvedValue({
+      data: { items: [activeAccount] },
+    } as never);
+    mockListServiceAccountCredentials.mockResolvedValue({
+      data: { items: [oldCredential] },
+    } as never);
+    let rejectSave: (error: unknown) => void = () => {};
+    mockCreateServiceAccountCredential.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectSave = reject;
+        }) as never,
+    );
+
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: /签发新凭据/ }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByRole("textbox"), "jenkins-green");
+    await user.click(within(dialog).getByRole("button", { name: /签\s*发/ }));
+
+    clickMask();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    rejectSave(new Error("network down"));
+    // The issuance error belongs to the credentials panel behind the dialog,
+    // so assert it on the page rather than inside the dialog.
+    expect(await screen.findByText("network down")).toBeInTheDocument();
+
+    clickMask();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
   });
 });

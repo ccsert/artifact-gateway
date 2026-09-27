@@ -1,4 +1,11 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -55,6 +62,15 @@ const renderPanel = () =>
       <WebhookDeliveriesPanel />
     </PreferencesProvider>,
   );
+
+// The mask is the dismissal route this dialog's `busy` flag controls, and it
+// only closes on a click that both starts and lands on it.
+function clickMask() {
+  const mask = document.querySelector(".ant-modal-wrap");
+  expect(mask).not.toBeNull();
+  fireEvent.mouseDown(mask as HTMLElement);
+  fireEvent.click(mask as HTMLElement);
+}
 
 afterEach(() => {
   cleanup();
@@ -126,5 +142,49 @@ describe("WebhookDeliveriesPanel", () => {
 
     expect(await screen.findByText("还没有 Webhook 订阅")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "新建订阅" })).toHaveLength(1);
+  });
+
+  it("holds the editor shut while saving and reopens dismissal after a failure", async () => {
+    const user = userEvent.setup();
+    mockListSubscriptions.mockResolvedValue({ data: [] } as never);
+    mockListDeliveries.mockResolvedValue({ data: [] } as never);
+    let rejectSave: (error: unknown) => void = () => {};
+    mockCreate.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectSave = reject;
+        }) as never,
+    );
+
+    renderPanel();
+    await screen.findByText("还没有 Webhook 订阅");
+    await user.click(screen.getAllByRole("button", { name: "新建订阅" })[0]);
+    await user.type(
+      screen.getByPlaceholderText("例如：安全自动化"),
+      "Security automation",
+    );
+    await user.type(
+      screen.getByPlaceholderText("https://hooks.example.com/artifacts"),
+      "https://hooks.example.test/artifacts",
+    );
+    await user.type(
+      screen.getByPlaceholderText("至少 32 个字符"),
+      "webhook-signing-secret-at-least-32-characters",
+    );
+    await user.click(screen.getByRole("button", { name: "创建" }));
+
+    clickMask();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    rejectSave(new Error("network down"));
+    // The panel and the dialog share one error state, so assert the dialog's.
+    expect(
+      await within(screen.getByRole("dialog")).findByText("network down"),
+    ).toBeInTheDocument();
+
+    clickMask();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
   });
 });

@@ -1,7 +1,15 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createScheduledTask,
   listRepositories,
   listScheduledTaskRuns,
   listScheduledTasks,
@@ -45,6 +53,18 @@ const renderPanel = () =>
       <ScheduledTasksPanel />
     </PreferencesProvider>,
   );
+
+// Escape is not a usable dismissal probe here: once an antd Select has been
+// opened, its dropdown portal keeps the escape stack occupied in jsdom (the
+// leave animation never completes), so the dialog never receives the key. The
+// mask is the route this dialog's `busy` flag controls, so assert that one.
+// The mask only closes on a click that both starts and lands on it.
+function clickMask() {
+  const mask = document.querySelector(".ant-modal-wrap");
+  expect(mask).not.toBeNull();
+  fireEvent.mouseDown(mask as HTMLElement);
+  fireEvent.click(mask as HTMLElement);
+}
 
 afterEach(() => {
   cleanup();
@@ -174,5 +194,59 @@ describe("ScheduledTasksPanel", () => {
     expect(await screen.findByText("refresh failed")).toBeInTheDocument();
     expect(screen.getByText("Audit one")).toBeInTheDocument();
     expect(screen.queryByText("加载计划任务…")).not.toBeInTheDocument();
+  });
+
+  it("holds the editor shut while saving and reopens dismissal after a failure", async () => {
+    const user = userEvent.setup();
+    mockListTasks.mockResolvedValue({ data: [] } as never);
+    mockListRepositories.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            name: "go-modules",
+            format: "go",
+            type: "hosted",
+            anonymousRead: false,
+            mavenStrictPublication: false,
+            state: "active",
+            version: "1",
+          },
+        ],
+        nextPageToken: undefined,
+      },
+    } as never);
+    let rejectSave: (error: unknown) => void = () => {};
+    vi.mocked(createScheduledTask).mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectSave = reject;
+        }) as never,
+    );
+
+    renderPanel();
+    await user.click(await screen.findByRole("button", { name: /新建计划/ }));
+    await user.type(
+      screen.getByRole("textbox", { name: "任务名称" }),
+      "Nightly audit",
+    );
+    const [, targetSelect] = screen.getAllByRole("combobox");
+    await user.click(targetSelect);
+    await user.click(await screen.findByTitle("go-modules"));
+    await user.click(screen.getByRole("button", { name: /创\s*建/ }));
+
+    clickMask();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    rejectSave(new Error("network down"));
+    // The panel and the dialog share one error state, so assert the dialog's.
+    expect(
+      await within(screen.getByRole("dialog")).findByText("network down"),
+    ).toBeInTheDocument();
+
+    clickMask();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
   });
 });

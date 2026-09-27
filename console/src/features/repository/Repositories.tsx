@@ -82,33 +82,38 @@ function CreateRepositoryDialog({
       .split(",")
       .map((h) => h.trim())
       .filter(Boolean);
-    const { data, error: err } = await createRepository({
-      body: {
-        name: name.trim(),
-        format: selectedFormat,
-        type,
-        ...(type === "proxy"
-          ? { endpoint: endpoint.trim(), allowedHosts: hosts }
-          : {}),
-        ...(type === "hosted" && selectedFormat === "maven"
-          ? { mavenStrictPublication }
-          : {}),
-      },
-      headers: { "Idempotency-Key": crypto.randomUUID() },
-    });
-    setBusy(false);
-    if (err) {
-      setError(err);
-      return;
-    }
-    if (data) {
-      dialog.hide();
-      setName("");
-      setEndpoint("");
-      setAllowedHosts("");
-      setMavenStrictPublication(false);
-      setType("hosted");
-      onCreated();
+    try {
+      const { data, error: err } = await createRepository({
+        body: {
+          name: name.trim(),
+          format: selectedFormat,
+          type,
+          ...(type === "proxy"
+            ? { endpoint: endpoint.trim(), allowedHosts: hosts }
+            : {}),
+          ...(type === "hosted" && selectedFormat === "maven"
+            ? { mavenStrictPublication }
+            : {}),
+        },
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      });
+      if (err) {
+        setError(err);
+        return;
+      }
+      if (data) {
+        dialog.hide();
+        setName("");
+        setEndpoint("");
+        setAllowedHosts("");
+        setMavenStrictPublication(false);
+        setType("hosted");
+        onCreated();
+      }
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -140,6 +145,7 @@ function CreateRepositoryDialog({
         open={dialog.open}
         title={text("新建仓库", "New repository")}
         onClose={dialog.hide}
+        busy={busy}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>

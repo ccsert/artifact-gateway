@@ -1,5 +1,6 @@
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -31,6 +32,15 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+
+// The mask is the dismissal route the upload dialog's `busy` flag controls,
+// and it only closes on a click that both starts and lands on it.
+function clickMask() {
+  const mask = document.querySelector(".ant-modal-wrap");
+  expect(mask).not.toBeNull();
+  fireEvent.mouseDown(mask as HTMLElement);
+  fireEvent.click(mask as HTMLElement);
+}
 
 describe("RawUploadDialog", () => {
   it("uploads Unicode file names using the server's canonical Raw path encoding", async () => {
@@ -179,5 +189,45 @@ describe("RawUploadDialog", () => {
     expect(
       within(dialog).queryByText(/invalid raw path/),
     ).not.toBeInTheDocument();
+  });
+
+  it("holds the dialog while the upload is in flight and frees it on failure", async () => {
+    const user = userEvent.setup();
+    let settle: (response: Response) => void = () => {};
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <PreferencesProvider>
+        <RawUploadDialog repo={repository} onUploaded={vi.fn()} />
+      </PreferencesProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /上传$/ }));
+    const dialog = screen.getByRole("dialog");
+    const fileInput =
+      document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(fileInput).not.toBeNull();
+    await user.upload(fileInput!, new File(["image"], "release.png"));
+    await user.click(within(dialog).getByRole("button", { name: /上\s*传/ }));
+
+    clickMask();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    settle(new Response("storage offline", { status: 503 }));
+    expect(
+      await within(screen.getByRole("dialog")).findByText(
+        /上传失败 \(503\): storage offline/,
+      ),
+    ).toBeInTheDocument();
+
+    clickMask();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
   });
 });

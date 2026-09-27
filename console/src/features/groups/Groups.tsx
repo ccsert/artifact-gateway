@@ -89,25 +89,30 @@ function CreateGroupDialog({
       repositoryId,
       position,
     }));
-    const { error: err } = await createGroup({
-      body: {
-        name: name.trim(),
-        format: selectedFormat,
-        anonymousRead,
-        members,
-      },
-      headers: { "Idempotency-Key": crypto.randomUUID() },
-    });
-    setBusy(false);
-    if (err) {
-      setError(err);
-      return;
+    try {
+      const { error: err } = await createGroup({
+        body: {
+          name: name.trim(),
+          format: selectedFormat,
+          anonymousRead,
+          members,
+        },
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      });
+      if (err) {
+        setError(err);
+        return;
+      }
+      dialog.hide();
+      setName("");
+      setMemberIds([]);
+      setAnonymousRead(false);
+      onCreated();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusy(false);
     }
-    dialog.hide();
-    setName("");
-    setMemberIds([]);
-    setAnonymousRead(false);
-    onCreated();
   };
 
   return (
@@ -127,6 +132,7 @@ function CreateGroupDialog({
         open={dialog.open}
         title={text("新建分组", "New group")}
         onClose={dialog.hide}
+        busy={busy}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
@@ -355,18 +361,23 @@ function RenameGroupDialog({
   const save = async () => {
     setBusy(true);
     setError(null);
-    const { error: err } = await replaceGroup({
-      path: { groupId: group.id },
-      body: { ...group, name: name.trim(), anonymousRead },
-      headers: { "If-Match": group.version },
-    });
-    setBusy(false);
-    if (err) {
-      setError(err);
-      return;
+    try {
+      const { error: err } = await replaceGroup({
+        path: { groupId: group.id },
+        body: { ...group, name: name.trim(), anonymousRead },
+        headers: { "If-Match": group.version },
+      });
+      if (err) {
+        setError(err);
+        return;
+      }
+      dialog.hide();
+      onSaved();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusy(false);
     }
-    dialog.hide();
-    onSaved();
   };
 
   return (
@@ -387,6 +398,7 @@ function RenameGroupDialog({
         open={dialog.open}
         title={text(`设置分组：${group.name}`, `Group settings: ${group.name}`)}
         onClose={dialog.hide}
+        busy={busy}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
@@ -480,18 +492,23 @@ function MembersDialog({
       repositoryId,
       position,
     }));
-    const { error: err } = await replaceGroupMembers({
-      path: { groupId: group.id },
-      body: members,
-      headers: { "If-Match": version },
-    });
-    setBusy(false);
-    if (err) {
-      setError(err);
-      return;
+    try {
+      const { error: err } = await replaceGroupMembers({
+        path: { groupId: group.id },
+        body: members,
+        headers: { "If-Match": version },
+      });
+      if (err) {
+        setError(err);
+        return;
+      }
+      dialog.hide();
+      onSaved();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusy(false);
     }
-    dialog.hide();
-    onSaved();
   };
 
   return (
@@ -503,6 +520,7 @@ function MembersDialog({
         open={dialog.open}
         title={text(`编辑成员：${group.name}`, `Edit members: ${group.name}`)}
         onClose={dialog.hide}
+        busy={busy}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
