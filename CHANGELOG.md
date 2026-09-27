@@ -11,6 +11,10 @@ their meaning.
 
 ## Unreleased
 
+## 0.4.1 - 2026-09-27
+
+- Direct Maven Hosted uploads now accept assets up to 128 MiB, allowing larger JARs to be imported while retaining a bounded temporary spool.
+
 - Repository grants can now be written one row at a time. `POST /repositories/{repositoryId}/grants` creates or replaces the single grant identified by its principal and resource prefix, and `DELETE` on the same path removes exactly that row, answering `404` when it is already gone. Neither operation takes an `If-Match` precondition, because the write is confined to one grant row and cannot clobber a concurrent change to another principal — the failure mode that made the whole-list `PUT` risky as grant lists grow. Both operations bump the grant-set version and are audited as `repository.grants.upsert` and `repository.grants.delete`; the whole-list replace stays for authorization templates and bulk edits.
 
 - The console's grant editors now work one row at a time instead of replacing the whole grant set behind the scenes. The repository's access tab lists its grants as a table with per-row edit and remove actions, and both it and the per-user repository access panel write through the single-grant endpoints, so a concurrent change to another principal can no longer be silently clobbered and the `412` version-conflict retry loop is gone from both surfaces. An edit that moves an entry to a different resource prefix is an upsert of the new row followed by a delete of the old one, so the edit never forks one grant into two.
