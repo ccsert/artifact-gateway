@@ -8,7 +8,6 @@ import {
   Popconfirm,
   Select,
   Space,
-  Table,
   Tag,
   Typography,
 } from "antd";
@@ -45,6 +44,7 @@ import {
   ResourcePrefixEditor,
 } from "./ResourcePrefixEditor";
 import { emptyGrant, scopesForRole, type DraftGrant } from "./grantDraft";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 export type PrincipalOption = { value: string; label: string };
 
@@ -460,8 +460,7 @@ export function AuthorizationTemplatesPanel({
           )}
         />
       ) : (
-        <Table<AuthorizationTemplate>
-          className="ag-console-table"
+        <ConsoleTable<AuthorizationTemplate>
           rowKey="id"
           dataSource={templates}
           columns={columns}
@@ -513,8 +512,7 @@ export function AuthorizationTemplatesPanel({
             "Choose a known user or API key, or enter an OIDC / CI actor directly. Leave the resource prefix blank for the entire repository; suggestions follow the repository format.",
           )}
         </div>
-        <Table<DraftGrant>
-          className="mt-4"
+        <ConsoleTable<DraftGrant>
           rowKey="key"
           dataSource={draftGrants}
           pagination={false}
@@ -688,7 +686,6 @@ export function AuthorizationTemplatesPanel({
           ]}
         />
         <Button
-          className="mt-3"
           icon={<PlusOutlined />}
           onClick={() =>
             setDraftGrants((current) => [...current, emptyGrant()])

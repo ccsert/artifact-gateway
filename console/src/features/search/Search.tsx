@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { DownOutlined, LinkOutlined, UpOutlined } from "@ant-design/icons";
-import { Button, Descriptions, Input, Space, Table, Tooltip } from "antd";
+import { Button, Descriptions, Input, Space, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { searchArtifacts } from "../../client";
@@ -21,6 +21,7 @@ import { NpmPackageDetail } from "../artifact-detail/NpmPackageDetail";
 import { PyPIProjectDetail } from "../artifact-detail/PyPIProjectDetail";
 import { GoModuleDetail } from "../artifact-detail/GoModuleDetail";
 import {
+  ConsoleTable,
   CopyableValue,
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
@@ -786,10 +787,8 @@ export function SearchPage() {
             </div>
           )}
           <div className="mt-4 overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-900/20">
-            <Table<SearchTableRow>
-              className="ag-console-table"
+            <ConsoleTable<SearchTableRow>
               rowKey="key"
-              size="middle"
               dataSource={tableRows}
               columns={columns}
               pagination={false}

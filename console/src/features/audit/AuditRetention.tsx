@@ -7,7 +7,6 @@ import {
   Popconfirm,
   Space,
   Switch,
-  Table,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ReloadOutlined } from "@ant-design/icons";
@@ -22,7 +21,10 @@ import { PageHeader, Card, CardHeader } from "../../components/ui/Layout";
 import { Loading, ErrorBanner } from "../../components/ui/Feedback";
 import { StateBadge } from "../../components/ui/Badge";
 import { formatDate, formatNumber } from "../../lib/format";
-import { MetricStrip } from "../../components/ui/ConsolePrimitives";
+import {
+  ConsoleTable,
+  MetricStrip,
+} from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 
 export function AuditRetentionPage() {
@@ -355,10 +357,8 @@ export function AuditRetentionPage() {
             {text("暂无清理任务", "No cleanup jobs")}
           </p>
         ) : (
-          <Table<AuditCleanupJob>
-            className="ag-console-table"
+          <ConsoleTable<AuditCleanupJob>
             rowKey="id"
-            size="middle"
             dataSource={jobs}
             columns={jobColumns}
             pagination={false}

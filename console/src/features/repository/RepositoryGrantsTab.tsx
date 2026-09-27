@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, App, Button, Popconfirm, Space, Table } from "antd";
+import { Alert, App, Button, Popconfirm, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined } from "@ant-design/icons";
 import {
@@ -34,6 +34,7 @@ import {
   type DraftGrant,
   type PrincipalOption,
 } from "../access-control/grantDraft";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 function grantKey(grant: Pick<Grant, "principal" | "resourcePrefix">): string {
   return grantRowKey(grant.principal, grant.resourcePrefix);
@@ -367,10 +368,8 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
           )}
         />
       ) : (
-        <Table<Grant>
-          className="ag-console-table"
+        <ConsoleTable<Grant>
           rowKey={(grant) => grantKey(grant)}
-          size="middle"
           dataSource={grants}
           columns={grantColumns}
           pagination={false}

@@ -7,7 +7,6 @@ import {
   Popconfirm,
   Select,
   Switch,
-  Table,
   Tabs,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -52,6 +51,7 @@ import { grantRowKey } from "./grantDraft";
 import { useAuth } from "../../lib/auth";
 import { platformCapabilities } from "../../lib/authorization";
 import {
+  ConsoleTable,
   CopyableValue,
   FilterBar,
   FilterField,
@@ -925,8 +925,7 @@ export function AccessControlPage() {
                     }
                   />
                 ) : (
-                  <Table<GrantRow>
-                    className="ag-console-table"
+                  <ConsoleTable<GrantRow>
                     rowKey={(row) =>
                       grantRowKey(
                         row.repositoryId,
@@ -934,7 +933,6 @@ export function AccessControlPage() {
                         row.resourcePrefix,
                       )
                     }
-                    size="middle"
                     dataSource={filtered}
                     columns={columns}
                     pagination={false}

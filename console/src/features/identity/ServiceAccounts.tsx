@@ -8,7 +8,7 @@ import {
   SafetyCertificateOutlined,
   StopOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Input, Select, Space, Table, Typography } from "antd";
+import { Alert, Button, Input, Select, Space, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   createServiceAccount,
@@ -25,6 +25,7 @@ import type {
 } from "../../client";
 import { Badge, StateBadge } from "../../components/ui/Badge";
 import {
+  ConsoleTable,
   CopyableValue,
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
@@ -637,8 +638,7 @@ export function ServiceAccountsPage() {
                 </div>
               ) : (
                 <>
-                  <Table<ServiceAccountCredential>
-                    className="ag-console-table"
+                  <ConsoleTable<ServiceAccountCredential>
                     rowKey="id"
                     columns={columns}
                     dataSource={credentials}

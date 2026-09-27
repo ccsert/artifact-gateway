@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Space, Table, Tag, Tooltip } from "antd";
+import { Button, Space, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   listRepositoryArtifactUsage,
@@ -10,6 +10,7 @@ import {
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { formatBytes, formatDate, formatNumber } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 type UsageRow = ArtifactUsageStat & { key: string };
 
@@ -134,8 +135,7 @@ export function RepositoryUsageTab({ repo }: { repo: Repository }) {
           </div>
         ))}
       </div>
-      <Table<UsageRow>
-        className="ag-console-table"
+      <ConsoleTable<UsageRow>
         size="small"
         columns={columns}
         dataSource={rows}

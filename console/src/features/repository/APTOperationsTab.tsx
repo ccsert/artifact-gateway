@@ -6,7 +6,6 @@ import {
   InputNumber,
   Modal,
   Popconfirm,
-  Table,
   Tabs,
   Upload,
 } from "antd";
@@ -35,6 +34,7 @@ import { downloadBlob, sha256Receipt } from "../../lib/download";
 import { formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { RepositoryDistributionTab } from "./RepositoryDistributionTab";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 type Review = {
   request: AptLifecycleRequest;
@@ -231,10 +231,8 @@ function APTArchiveOperations({
         aria-label={text("导出灾备归档", "Export disaster-recovery archive")}
       >
         <h4>{text("导出灾备归档", "Export disaster-recovery archive")}</h4>
-        <Table
-          className="ag-console-table"
+        <ConsoleTable
           rowKey={(item) => item.snapshot.id}
-          size="small"
           dataSource={exportable}
           scroll={{ x: 720 }}
           pagination={{ pageSize: 10, hideOnSinglePage: true }}
@@ -255,7 +253,6 @@ function APTArchiveOperations({
               title: text("操作", "Action"),
               render: (_, item) => (
                 <Button
-                  size="small"
                   loading={exportingId === item.snapshot.id}
                   disabled={exportBusy}
                   onClick={() => void exportArchive(item.snapshot)}
@@ -295,12 +292,7 @@ function APTArchiveOperations({
           {file && (
             <>
               <code>{file.name}</code>
-              <Button
-                type="link"
-                size="small"
-                disabled={busy}
-                onClick={() => setFile(null)}
-              >
+              <Button type="link" disabled={busy} onClick={() => setFile(null)}>
                 {text("移除", "Remove")}
               </Button>
             </>
@@ -658,10 +650,8 @@ function APTSuiteOperations({
                         {text("预览删除", "Preview deletion")}
                       </Button>
                     </div>
-                    <Table
-                      className="ag-console-table"
+                    <ConsoleTable
                       rowKey="publicationSessionId"
-                      size="small"
                       dataSource={state.packages}
                       columns={packageColumns}
                       scroll={{ x: 640 }}
@@ -735,10 +725,8 @@ function APTSuiteOperations({
                   `Recovery (${state.deletions.length})`,
                 ),
                 children: (
-                  <Table
-                    className="ag-console-table"
+                  <ConsoleTable
                     rowKey="id"
-                    size="small"
                     dataSource={state.deletions}
                     scroll={{ x: 640 }}
                     pagination={{ pageSize: 10, hideOnSinglePage: true }}
@@ -759,7 +747,6 @@ function APTSuiteOperations({
                         title: text("操作", "Action"),
                         render: (_, item) => (
                           <Button
-                            size="small"
                             disabled={
                               disabled ||
                               !current ||
@@ -788,10 +775,8 @@ function APTSuiteOperations({
                   `Snapshots (${state.snapshots.length})`,
                 ),
                 children: (
-                  <Table
-                    className="ag-console-table"
+                  <ConsoleTable
                     rowKey={(item) => item.snapshot.id}
-                    size="small"
                     dataSource={state.snapshots}
                     scroll={{ x: 720 }}
                     pagination={{ pageSize: 10, hideOnSinglePage: true }}
@@ -842,7 +827,6 @@ function APTSuiteOperations({
                             cancelText={text("取消", "Cancel")}
                           >
                             <Button
-                              size="small"
                               danger
                               disabled={
                                 disabled ||
