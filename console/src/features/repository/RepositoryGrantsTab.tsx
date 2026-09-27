@@ -347,17 +347,13 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
   ];
 
   return (
-    <div>
-      <div className="mb-4 flex justify-end">
+    <div className="space-y-4">
+      <div className="flex justify-end">
         <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
           {text("添加授权", "Add grant")}
         </Button>
       </div>
-      {mutationError !== null && (
-        <div className="mb-4">
-          <ErrorBanner error={mutationError} />
-        </div>
-      )}
+      {mutationError !== null && <ErrorBanner error={mutationError} />}
       {grants.length === 0 ? (
         <EmptyState
           title={text("暂无授权规则", "No access grants")}

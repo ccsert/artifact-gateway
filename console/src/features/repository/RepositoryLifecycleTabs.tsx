@@ -411,11 +411,7 @@ export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
 
   return (
     <div className="space-y-3">
-      {restoreError !== null && (
-        <div className="mb-3">
-          <ErrorBanner error={restoreError} />
-        </div>
-      )}
+      {restoreError !== null && <ErrorBanner error={restoreError} />}
       {restoreNotice && <Alert type="success" showIcon title={restoreNotice} />}
       {items.length === 0 ? (
         <EmptyState
