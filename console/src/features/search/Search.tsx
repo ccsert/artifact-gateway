@@ -184,22 +184,27 @@ export function SearchPage() {
     if (!nextPageToken || loadingMore) return;
     setLoadingMore(true);
     setError(null);
-    const response = await searchArtifacts({
-      query: { q, pageSize: SEARCH_PAGE_SIZE, pageToken: nextPageToken },
-    });
-    setLoadingMore(false);
-    if (response.error || !response.data) {
-      setError(
-        response.error ??
-          new Error(
-            text("加载更多搜索结果失败", "Failed to load more results"),
-          ),
-      );
-      return;
+    try {
+      const response = await searchArtifacts({
+        query: { q, pageSize: SEARCH_PAGE_SIZE, pageToken: nextPageToken },
+      });
+      if (response.error || !response.data) {
+        setError(
+          response.error ??
+            new Error(
+              text("加载更多搜索结果失败", "Failed to load more results"),
+            ),
+        );
+        return;
+      }
+      setHits((current) => [...current, ...response.data.items]);
+      setSearchedRepos(response.data.searchedRepositories);
+      setNextPageToken(response.data.nextPageToken);
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setLoadingMore(false);
     }
-    setHits((current) => [...current, ...response.data.items]);
-    setSearchedRepos(response.data.searchedRepositories);
-    setNextPageToken(response.data.nextPageToken);
   };
 
   const openHit = (hit: GlobalArtifactSearchHit) =>

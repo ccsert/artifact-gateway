@@ -13,6 +13,7 @@ import {
   listRepositories,
   listScheduledTaskRuns,
   listScheduledTasks,
+  runScheduledTask,
 } from "../../client";
 import type { ScheduledTask } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
@@ -248,5 +249,26 @@ describe("ScheduledTasksPanel", () => {
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
+  });
+
+  it("frees the run-now action when the request rejects", async () => {
+    const user = userEvent.setup();
+    mockListTasks.mockResolvedValue({
+      data: [task("11111111-1111-4111-8111-111111111111", "Audit one")],
+    } as never);
+    mockListRepositories.mockResolvedValue({
+      data: { items: [], nextPageToken: undefined },
+    } as never);
+    vi.mocked(runScheduledTask).mockRejectedValueOnce(
+      new Error("network down"),
+    );
+
+    renderPanel();
+    const runButton = await screen.findByRole("button", { name: "立即执行" });
+    await user.click(runButton);
+
+    expect(await screen.findByText("network down")).toBeInTheDocument();
+    // The rejection released `busyId`, so the button stops spinning.
+    await waitFor(() => expect(runButton).not.toHaveClass("ant-btn-loading"));
   });
 });

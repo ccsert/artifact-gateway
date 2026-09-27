@@ -473,33 +473,38 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
     setSaving(true);
     setSaveError(null);
     setNotice("");
-    const { error: err } = await replaceRetentionPolicy({
-      path: { repositoryId: repo.id },
-      body: {
-        ...policy,
-        enabled,
-        keepDays,
-        snapshotKeepDays: isMaven
-          ? snapshotKeepDays
-          : (policy.snapshotKeepDays ?? policy.keepDays),
-        minimumVersions: isRaw ? policy.minimumVersions : minimumVersions,
-        maximumVersions: isRaw
-          ? (policy.maximumVersions ?? 0)
-          : maximumVersions,
-        keepDownloadedDays,
-        coordinatePatterns,
-        protectedPatterns,
-      },
-      headers: { "If-Match": policy.version },
-    });
-    setSaving(false);
-    if (err) {
-      setSaveError(err);
-      return;
+    try {
+      const { error: err } = await replaceRetentionPolicy({
+        path: { repositoryId: repo.id },
+        body: {
+          ...policy,
+          enabled,
+          keepDays,
+          snapshotKeepDays: isMaven
+            ? snapshotKeepDays
+            : (policy.snapshotKeepDays ?? policy.keepDays),
+          minimumVersions: isRaw ? policy.minimumVersions : minimumVersions,
+          maximumVersions: isRaw
+            ? (policy.maximumVersions ?? 0)
+            : maximumVersions,
+          keepDownloadedDays,
+          coordinatePatterns,
+          protectedPatterns,
+        },
+        headers: { "If-Match": policy.version },
+      });
+      if (err) {
+        setSaveError(err);
+        return;
+      }
+      setNotice(text("策略已保存", "Policy saved"));
+      setDryRun(null);
+      void load();
+    } catch (nextError) {
+      setSaveError(nextError);
+    } finally {
+      setSaving(false);
     }
-    setNotice(text("策略已保存", "Policy saved"));
-    setDryRun(null);
-    void load();
   };
 
   const runDryRun = async () => {

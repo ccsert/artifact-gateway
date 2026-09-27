@@ -182,30 +182,35 @@ export function AuthenticationPage() {
       body.clientSecret = values.clientSecret.trim();
     if (clearSecret) body.clearClientSecret = true;
 
-    const { data, error } = await replaceOidcSettings({
-      body,
-      headers: { "If-Match": settings.version },
-    });
-    setSaving(false);
-    if (error || !data) {
-      setActionError(
-        error ??
-          new Error(
-            text(
-              "保存身份认证配置失败",
-              "Failed to save authentication settings",
+    try {
+      const { data, error } = await replaceOidcSettings({
+        body,
+        headers: { "If-Match": settings.version },
+      });
+      if (error || !data) {
+        setActionError(
+          error ??
+            new Error(
+              text(
+                "保存身份认证配置失败",
+                "Failed to save authentication settings",
+              ),
             ),
-          ),
+        );
+        return;
+      }
+      applySettings(data);
+      setNotice(
+        text(
+          "配置已保存并在当前节点生效",
+          "Settings saved and active on this node",
+        ),
       );
-      return;
+    } catch (nextError) {
+      setActionError(nextError);
+    } finally {
+      setSaving(false);
     }
-    applySettings(data);
-    setNotice(
-      text(
-        "配置已保存并在当前节点生效",
-        "Settings saved and active on this node",
-      ),
-    );
   };
 
   const testConnection = async () => {

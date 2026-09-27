@@ -92,24 +92,29 @@ export function MavenPublishWizard({
       digest: f.digest,
       size: f.size,
     }));
-    const { data, error: err } = await createPublishSession({
-      path: { repositoryId },
-      body: {
-        format: "maven",
-        coordinate: coordinate.trim(),
-        pomObject,
-        objects,
-      },
-      headers: { "Idempotency-Key": crypto.randomUUID() },
-    });
-    setBusy(false);
-    if (err) {
-      setError(err);
-      return;
-    }
-    if (data) {
-      setSession(data);
-      setStep("upload");
+    try {
+      const { data, error: err } = await createPublishSession({
+        path: { repositoryId },
+        body: {
+          format: "maven",
+          coordinate: coordinate.trim(),
+          pomObject,
+          objects,
+        },
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      });
+      if (err) {
+        setError(err);
+        return;
+      }
+      if (data) {
+        setSession(data);
+        setStep("upload");
+      }
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -157,16 +162,21 @@ export function MavenPublishWizard({
     if (!session) return;
     setBusy(true);
     setError(null);
-    const { error: err } = await commitPublishSession({
-      path: { sessionId: session.id },
-    });
-    setBusy(false);
-    if (err) {
-      setError(err);
-      return;
+    try {
+      const { error: err } = await commitPublishSession({
+        path: { sessionId: session.id },
+      });
+      if (err) {
+        setError(err);
+        return;
+      }
+      setStep("done");
+      onPublished?.();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusy(false);
     }
-    setStep("done");
-    onPublished?.();
   };
 
   const reset = () => {

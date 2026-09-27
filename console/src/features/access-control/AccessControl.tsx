@@ -467,22 +467,27 @@ export function AccessControlPage() {
     if (!anonymousPolicy || savingAnonymousPolicy) return;
     setSavingAnonymousPolicy(true);
     setAnonymousPolicyError(null);
-    const { data, error: err } = await replaceAnonymousAccessPolicy({
-      body: { ...anonymousPolicy, enabled },
-      headers: { "If-Match": anonymousPolicy.version },
-    });
-    setSavingAnonymousPolicy(false);
-    if (err || !data)
-      setAnonymousPolicyError(
-        err ??
-          new Error(
-            text(
-              "保存匿名访问策略失败",
-              "Failed to save anonymous access policy",
+    try {
+      const { data, error: err } = await replaceAnonymousAccessPolicy({
+        body: { ...anonymousPolicy, enabled },
+        headers: { "If-Match": anonymousPolicy.version },
+      });
+      if (err || !data)
+        setAnonymousPolicyError(
+          err ??
+            new Error(
+              text(
+                "保存匿名访问策略失败",
+                "Failed to save anonymous access policy",
+              ),
             ),
-          ),
-      );
-    else setAnonymousPolicy(data);
+        );
+      else setAnonymousPolicy(data);
+    } catch (nextError) {
+      setAnonymousPolicyError(nextError);
+    } finally {
+      setSavingAnonymousPolicy(false);
+    }
   };
 
   const evaluatorPrincipals = useMemo<EvaluatorPrincipal[]>(() => {

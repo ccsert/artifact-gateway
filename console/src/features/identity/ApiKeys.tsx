@@ -257,15 +257,20 @@ export function ApiKeysPage() {
   const confirmRevoke = async () => {
     if (!toRevoke) return;
     setRevoking(true);
-    const { error: err } = await revokeApiKey({
-      path: { apiKeyId: toRevoke.id },
-    });
-    setRevoking(false);
-    if (!err) {
-      setToRevoke(null);
-      void load();
-    } else {
-      setError(err);
+    try {
+      const { error: err } = await revokeApiKey({
+        path: { apiKeyId: toRevoke.id },
+      });
+      if (!err) {
+        setToRevoke(null);
+        void load();
+      } else {
+        setError(err);
+      }
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setRevoking(false);
     }
   };
 

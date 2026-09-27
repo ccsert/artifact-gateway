@@ -177,48 +177,63 @@ export function ScheduledTasksPanel() {
   const updateEnabled = async (task: ScheduledTask, enabled: boolean) => {
     setBusyId(task.id);
     setError(null);
-    const result = await updateScheduledTask({
-      path: { taskId: task.id },
-      headers: { "If-Match": task.version },
-      body: {
-        name: task.name,
-        description: task.description,
-        kind: task.kind,
-        repositoryId: task.repositoryId,
-        intervalMinutes: task.intervalMinutes,
-        enabled,
-      },
-    });
-    setBusyId(null);
-    if (result.error) {
-      setError(result.error);
-      return;
+    try {
+      const result = await updateScheduledTask({
+        path: { taskId: task.id },
+        headers: { "If-Match": task.version },
+        body: {
+          name: task.name,
+          description: task.description,
+          kind: task.kind,
+          repositoryId: task.repositoryId,
+          intervalMinutes: task.intervalMinutes,
+          enabled,
+        },
+      });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      await load();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusyId(null);
     }
-    await load();
   };
 
   const runNow = async (task: ScheduledTask) => {
     setBusyId(task.id);
     setError(null);
-    const result = await runScheduledTask({ path: { taskId: task.id } });
-    setBusyId(null);
-    const dispatchError = result.error;
-    await load();
-    if (expandedTask === task.id) await loadRuns(task.id);
-    if (dispatchError) setError(dispatchError);
+    try {
+      const result = await runScheduledTask({ path: { taskId: task.id } });
+      const dispatchError = result.error;
+      await load();
+      if (expandedTask === task.id) await loadRuns(task.id);
+      if (dispatchError) setError(dispatchError);
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const remove = async (task: ScheduledTask) => {
     setBusyId(task.id);
     setError(null);
-    const result = await deleteScheduledTask({ path: { taskId: task.id } });
-    setBusyId(null);
-    if (result.error) {
-      setError(result.error);
-      return;
+    try {
+      const result = await deleteScheduledTask({ path: { taskId: task.id } });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      if (expandedTask === task.id) setExpandedTask(null);
+      await load();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusyId(null);
     }
-    if (expandedTask === task.id) setExpandedTask(null);
-    await load();
   };
 
   const loadRuns = async (taskId: string) => {

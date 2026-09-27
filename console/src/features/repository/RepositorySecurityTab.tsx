@@ -183,22 +183,27 @@ export function RepositorySecurityTab({
     setSaving(true);
     setSaveError(null);
     setNotice("");
-    const { data, error: err } = await replaceSecurityPolicy({
-      path: { repositoryId: repo.id },
-      headers: { "If-Match": policy.version },
-      body: { version: policy.version, ...draft },
-    });
-    setSaving(false);
-    if (err) {
-      setSaveError(err);
-      return;
-    }
-    setNotice(text("仓库安全策略已保存", "Repository security policy saved"));
-    if (data) {
-      setPolicy(data);
-      setDraft(draftFromPolicy(data));
-    } else {
-      void load();
+    try {
+      const { data, error: err } = await replaceSecurityPolicy({
+        path: { repositoryId: repo.id },
+        headers: { "If-Match": policy.version },
+        body: { version: policy.version, ...draft },
+      });
+      if (err) {
+        setSaveError(err);
+        return;
+      }
+      setNotice(text("仓库安全策略已保存", "Repository security policy saved"));
+      if (data) {
+        setPolicy(data);
+        setDraft(draftFromPolicy(data));
+      } else {
+        void load();
+      }
+    } catch (nextError) {
+      setSaveError(nextError);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -207,22 +212,27 @@ export function RepositorySecurityTab({
     setReadSaving(true);
     setReadError(null);
     setReadNotice("");
-    const { data, error: err } = await replaceQuarantineReadPolicy({
-      path: { repositoryId: repo.id },
-      headers: { "If-Match": readPolicy.version },
-      body: { version: readPolicy.version, enabled: readEnabled },
-    });
-    setReadSaving(false);
-    if (err) {
-      setReadError(err);
-      return;
-    }
-    setReadNotice(text("隔离读取策略已保存", "Quarantine read policy saved"));
-    if (data) {
-      setReadPolicy(data);
-      setReadEnabled(data.enabled);
-    } else {
-      void loadReadPolicy();
+    try {
+      const { data, error: err } = await replaceQuarantineReadPolicy({
+        path: { repositoryId: repo.id },
+        headers: { "If-Match": readPolicy.version },
+        body: { version: readPolicy.version, enabled: readEnabled },
+      });
+      if (err) {
+        setReadError(err);
+        return;
+      }
+      setReadNotice(text("隔离读取策略已保存", "Quarantine read policy saved"));
+      if (data) {
+        setReadPolicy(data);
+        setReadEnabled(data.enabled);
+      } else {
+        void loadReadPolicy();
+      }
+    } catch (nextError) {
+      setReadError(nextError);
+    } finally {
+      setReadSaving(false);
     }
   };
 

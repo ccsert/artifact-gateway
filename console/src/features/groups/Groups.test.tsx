@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import {
   createGroup,
+  deleteGroup,
   getGroupCapacity,
   listFormatProfiles,
   listGroupMembers,
@@ -186,6 +187,25 @@ describe("GroupsPage dialogs", () => {
       await within(screen.getByRole("dialog")).findByText("network down"),
     ).toBeInTheDocument();
 
+    clickMask();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("frees the delete confirmation when the request rejects", async () => {
+    const user = userEvent.setup();
+    vi.mocked(deleteGroup).mockRejectedValueOnce(new Error("network down"));
+
+    renderPage();
+    await user.click(
+      await screen.findByRole("button", { name: "删除分组 oci-mirror" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: /^删\s*除$/ }));
+
+    expect(await screen.findByText("network down")).toBeInTheDocument();
+    // The rejection released `deleting`, so the dialog is dismissible again.
     clickMask();
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),

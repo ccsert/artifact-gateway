@@ -146,33 +146,38 @@ export function RepositorySettingsTab({
       .split(",")
       .map((h) => h.trim())
       .filter(Boolean);
-    const { error: err } = await updateRepository({
-      path: { repositoryId: repo.id },
-      headers: { "If-Match": repo.version },
-      body: {
-        anonymousRead,
-        ...(repo.type === "hosted" && repo.format === "maven"
-          ? { mavenStrictPublication }
-          : {}),
-        ...(repo.type === "proxy"
-          ? {
-              endpoint: endpoint.trim(),
-              allowedHosts,
-              egressProxy: buildEgressProxyBody(),
-              ...(repo.format === "go"
-                ? { upstreamAuth: buildUpstreamAuthBody() }
-                : {}),
-            }
-          : {}),
-      },
-    });
-    setSaving(false);
-    if (err) {
-      setError(err);
-      return;
+    try {
+      const { error: err } = await updateRepository({
+        path: { repositoryId: repo.id },
+        headers: { "If-Match": repo.version },
+        body: {
+          anonymousRead,
+          ...(repo.type === "hosted" && repo.format === "maven"
+            ? { mavenStrictPublication }
+            : {}),
+          ...(repo.type === "proxy"
+            ? {
+                endpoint: endpoint.trim(),
+                allowedHosts,
+                egressProxy: buildEgressProxyBody(),
+                ...(repo.format === "go"
+                  ? { upstreamAuth: buildUpstreamAuthBody() }
+                  : {}),
+              }
+            : {}),
+        },
+      });
+      if (err) {
+        setError(err);
+        return;
+      }
+      setNotice(text("仓库设置已保存", "Repository settings saved"));
+      onUpdated();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setSaving(false);
     }
-    setNotice(text("仓库设置已保存", "Repository settings saved"));
-    onUpdated();
   };
 
   const runEgressTest = async () => {

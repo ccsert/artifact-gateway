@@ -187,4 +187,23 @@ describe("WebhookDeliveriesPanel", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
   });
+
+  it("frees the replay action when the request rejects", async () => {
+    const user = userEvent.setup();
+    mockListSubscriptions.mockResolvedValue({ data: [subscription] } as never);
+    mockListDeliveries.mockResolvedValue({ data: [deadDelivery] } as never);
+    mockReplay.mockRejectedValueOnce(new Error("network down"));
+
+    renderPanel();
+    const replayButton = await screen.findByRole("button", {
+      name: "重放投递",
+    });
+    await user.click(replayButton);
+
+    expect(await screen.findByText("network down")).toBeInTheDocument();
+    // The rejection released `busyId`, so the button stops spinning.
+    await waitFor(() =>
+      expect(replayButton).not.toHaveClass("ant-btn-loading"),
+    );
+  });
 });

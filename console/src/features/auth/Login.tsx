@@ -206,13 +206,18 @@ export function LoginPage() {
     setBusy(true);
     setError("");
     client.setConfig({ baseUrl: "/api/v2", auth: () => trimmed });
-    const { data: identity, error: err } = await getCurrentIdentity();
-    setBusy(false);
-    if (err || !identity) {
+    try {
+      const { data: identity, error: err } = await getCurrentIdentity();
+      if (err || !identity) {
+        setError(t("auth.invalidToken"));
+        return;
+      }
+      finish(trimmed, identity.role);
+    } catch {
       setError(t("auth.invalidToken"));
-      return;
+    } finally {
+      setBusy(false);
     }
-    finish(trimmed, identity.role);
   };
 
   return (

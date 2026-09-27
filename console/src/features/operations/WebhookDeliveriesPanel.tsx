@@ -190,15 +190,20 @@ export function WebhookDeliveriesPanel() {
   const replay = async (delivery: WebhookDelivery) => {
     setBusyId(delivery.id);
     setError(null);
-    const result = await replayWebhookDelivery({
-      path: { deliveryId: delivery.id },
-    });
-    setBusyId(null);
-    if (result.error) {
-      setError(result.error);
-      return;
+    try {
+      const result = await replayWebhookDelivery({
+        path: { deliveryId: delivery.id },
+      });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      await load();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusyId(null);
     }
-    await load();
   };
 
   const subscriptionColumns: ColumnsType<WebhookSubscription> = [

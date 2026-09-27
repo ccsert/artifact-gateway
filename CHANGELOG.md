@@ -15,6 +15,8 @@ their meaning.
 
 - Creating a service account, issuing a credential, and linking an OIDC identity now report a failed save inside the dialog that started it. Those three were the last write dialogs that printed their failure to a banner behind the mask, which read as "the button did nothing"; the page banners stay reserved for loading the account, credential, and identity lists.
 
+- Every console write path now releases its busy state in a `finally`. A request that throws instead of answering — rather than returning the client's `{error}` result — can no longer leave a confirmation dialog locked open or a row button spinning.
+
 ## 0.4.1 - 2026-09-27
 
 - Direct Maven Hosted uploads now accept assets up to 128 MiB, allowing larger JARs to be imported while retaining a bounded temporary spool.

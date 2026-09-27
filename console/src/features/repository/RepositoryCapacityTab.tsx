@@ -52,17 +52,22 @@ export function RepositoryCapacityTab({ repo }: { repo: Repository }) {
     setSaving(true);
     setSaveError(null);
     setNotice("");
-    const { error: err } = await replaceRepositoryCapacity({
-      path: { repositoryId: repo.id },
-      body: { quotaBytes: quotaGiB * 2 ** 30 },
-    });
-    setSaving(false);
-    if (err) {
-      setSaveError(err);
-      return;
+    try {
+      const { error: err } = await replaceRepositoryCapacity({
+        path: { repositoryId: repo.id },
+        body: { quotaBytes: quotaGiB * 2 ** 30 },
+      });
+      if (err) {
+        setSaveError(err);
+        return;
+      }
+      setNotice(text("配额已更新", "Quota updated"));
+      void load();
+    } catch (nextError) {
+      setSaveError(nextError);
+    } finally {
+      setSaving(false);
     }
-    setNotice(text("配额已更新", "Quota updated"));
-    void load();
   };
 
   if (error !== null)

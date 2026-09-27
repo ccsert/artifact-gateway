@@ -356,18 +356,21 @@ export function RepositoriesPage() {
   const loadMore = async () => {
     if (!nextToken) return;
     setLoadingMore(true);
-    const { data, error: err } = await listRepositories({
-      query: { pageSize: 100, pageToken: nextToken },
-    });
-    if (err) {
+    try {
+      const { data, error: err } = await listRepositories({
+        query: { pageSize: 100, pageToken: nextToken },
+      });
+      if (err) {
+        setError(err);
+        return;
+      }
+      setItems((prev) => [...prev, ...(data?.items ?? [])]);
+      setNextToken(data?.nextPageToken);
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
       setLoadingMore(false);
-      setError(err);
-      return;
     }
-    const nextItems = data?.items ?? [];
-    setItems((prev) => [...prev, ...nextItems]);
-    setNextToken(data?.nextPageToken);
-    setLoadingMore(false);
   };
 
   const confirmDelete = async () => {
@@ -377,15 +380,20 @@ export function RepositoriesPage() {
       return;
     }
     setDeleting(true);
-    const { error: err } = await deleteRepository({
-      path: { repositoryId: toDelete.id },
-    });
-    setDeleting(false);
-    if (!err) {
-      setToDelete(null);
-      void load();
-    } else {
-      setError(err);
+    try {
+      const { error: err } = await deleteRepository({
+        path: { repositoryId: toDelete.id },
+      });
+      if (!err) {
+        setToDelete(null);
+        void load();
+      } else {
+        setError(err);
+      }
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setDeleting(false);
     }
   };
 
