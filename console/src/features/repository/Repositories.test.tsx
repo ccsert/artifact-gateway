@@ -1,11 +1,21 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import {
+  createRepository,
   listRepositories,
   listRepositoryCapacities,
   listFormatProfiles,
 } from "../../client";
+import type { FormatProfile } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RepositoriesPage } from "./Repositories";
 
@@ -19,10 +29,31 @@ vi.mock("../../lib/auth", () => ({
 
 vi.mock("../../client", async () => ({
   ...(await vi.importActual<typeof import("../../client")>("../../client")),
+  createRepository: vi.fn(),
   listRepositories: vi.fn(),
   listRepositoryCapacities: vi.fn(),
   listFormatProfiles: vi.fn(),
 }));
+
+const profiles: FormatProfile[] = [
+  {
+    format: "oci",
+    repositoryTypes: ["hosted", "proxy"],
+    groupSupported: true,
+    anonymousRead: true,
+    hostedOperations: ["read", "publish"],
+    proxyOperations: ["read"],
+  },
+];
+
+// The mask is the dismissal route the create dialog's `busy` flag controls,
+// and it only closes on a click that both starts and lands on it.
+function clickMask() {
+  const mask = document.querySelector(".ant-modal-wrap");
+  expect(mask).not.toBeNull();
+  fireEvent.mouseDown(mask as HTMLElement);
+  fireEvent.click(mask as HTMLElement);
+}
 
 afterEach(() => {
   cleanup();
@@ -97,5 +128,54 @@ describe("RepositoriesPage role-scoped catalog", () => {
     expect(
       screen.queryByRole("button", { name: "新建仓库" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("holds the create dialog shut while saving and frees it after a failure", async () => {
+    const user = userEvent.setup();
+    auth.identity = { administrator: true, role: "admin" };
+    vi.mocked(listRepositories).mockResolvedValue({
+      data: { items: [] },
+    } as never);
+    vi.mocked(listRepositoryCapacities).mockResolvedValue({
+      data: { items: [] },
+    } as never);
+    vi.mocked(listFormatProfiles).mockResolvedValue({
+      data: { items: profiles },
+    } as never);
+    let rejectSave: (error: unknown) => void = () => {};
+    vi.mocked(createRepository).mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectSave = reject;
+        }) as never,
+    );
+
+    render(
+      <PreferencesProvider>
+        <MemoryRouter>
+          <RepositoriesPage />
+        </MemoryRouter>
+      </PreferencesProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /新建仓库/ }));
+    await user.type(
+      screen.getByRole("textbox", { name: "仓库名称" }),
+      "release-files",
+    );
+    await user.click(screen.getByRole("button", { name: /创\s*建/ }));
+
+    clickMask();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    rejectSave(new Error("network down"));
+    expect(
+      await within(screen.getByRole("dialog")).findByText("network down"),
+    ).toBeInTheDocument();
+
+    clickMask();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
   });
 });

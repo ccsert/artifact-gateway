@@ -151,22 +151,27 @@ export function ScheduledTasksPanel() {
       repositoryId:
         form.kind === "repository-retention" ? form.repositoryId : undefined,
     };
-    const result = editing
-      ? await updateScheduledTask({
-          path: { taskId: editing.id },
-          headers: { "If-Match": editing.version },
-          body,
-        })
-      : await createScheduledTask({ body });
-    setBusyId(null);
-    if (result.error) {
-      setError(result.error);
-      return;
+    try {
+      const result = editing
+        ? await updateScheduledTask({
+            path: { taskId: editing.id },
+            headers: { "If-Match": editing.version },
+            body,
+          })
+        : await createScheduledTask({ body });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      dialog.hide();
+      setEditing(null);
+      setForm(DEFAULT_FORM);
+      await load();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusyId(null);
     }
-    dialog.hide();
-    setEditing(null);
-    setForm(DEFAULT_FORM);
-    await load();
   };
 
   const updateEnabled = async (task: ScheduledTask, enabled: boolean) => {
@@ -488,6 +493,7 @@ export function ScheduledTasksPanel() {
           dialog.hide();
           setEditing(null);
         }}
+        busy={busyId === (editing?.id ?? "create")}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busyId !== null}>

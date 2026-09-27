@@ -34,24 +34,31 @@ function CreateKeyDialog({
   const submit = async () => {
     setBusy(true);
     setError(null);
-    const { data, error: err } = await createApiKey({
-      body: {
-        name: name.trim(),
-        roles: [role],
-        expiresAt: new Date(Date.now() + validDays * 86_400_000).toISOString(),
-      },
-    });
-    setBusy(false);
-    if (err) {
-      setError(err);
-      return;
-    }
-    if (data) {
-      dialog.hide();
-      setName("");
-      setRole("member");
-      setValidDays(90);
-      onCreated(data);
+    try {
+      const { data, error: err } = await createApiKey({
+        body: {
+          name: name.trim(),
+          roles: [role],
+          expiresAt: new Date(
+            Date.now() + validDays * 86_400_000,
+          ).toISOString(),
+        },
+      });
+      if (err) {
+        setError(err);
+        return;
+      }
+      if (data) {
+        dialog.hide();
+        setName("");
+        setRole("member");
+        setValidDays(90);
+        onCreated(data);
+      }
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -71,6 +78,7 @@ function CreateKeyDialog({
         open={dialog.open}
         title={text("新建 API 密钥", "New API key")}
         onClose={dialog.hide}
+        busy={busy}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>

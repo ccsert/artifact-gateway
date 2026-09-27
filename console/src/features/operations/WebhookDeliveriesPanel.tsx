@@ -132,30 +132,35 @@ export function WebhookDeliveriesPanel() {
       eventTypes: form.eventTypes,
       enabled: form.enabled,
     };
-    const result = editing
-      ? await updateWebhookSubscription({
-          path: { subscriptionId: editing.id },
-          headers: { "If-Match": editing.version },
-          body: {
-            ...base,
-            secret: form.secret || undefined,
-          } satisfies UpdateWebhookSubscriptionWritable,
-        })
-      : await createWebhookSubscription({
-          body: {
-            ...base,
-            secret: form.secret,
-          } satisfies CreateWebhookSubscriptionWritable,
-        });
-    setBusyId(null);
-    if (result.error) {
-      setError(result.error);
-      return;
+    try {
+      const result = editing
+        ? await updateWebhookSubscription({
+            path: { subscriptionId: editing.id },
+            headers: { "If-Match": editing.version },
+            body: {
+              ...base,
+              secret: form.secret || undefined,
+            } satisfies UpdateWebhookSubscriptionWritable,
+          })
+        : await createWebhookSubscription({
+            body: {
+              ...base,
+              secret: form.secret,
+            } satisfies CreateWebhookSubscriptionWritable,
+          });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      dialog.hide();
+      setEditing(null);
+      setForm(DEFAULT_FORM);
+      await load();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusyId(null);
     }
-    dialog.hide();
-    setEditing(null);
-    setForm(DEFAULT_FORM);
-    await load();
   };
 
   const setEnabled = async (
@@ -481,6 +486,7 @@ export function WebhookDeliveriesPanel() {
           dialog.hide();
           setEditing(null);
         }}
+        busy={busyId === (editing?.id ?? "create")}
         footer={
           <Space>
             <Button

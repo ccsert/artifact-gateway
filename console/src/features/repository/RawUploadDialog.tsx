@@ -145,6 +145,7 @@ export function RawUploadDialog({
         open={dialog.open}
         title={`${text("上传到", "Upload to")} ${repo.name}`}
         onClose={dialog.hide}
+        busy={busy}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>

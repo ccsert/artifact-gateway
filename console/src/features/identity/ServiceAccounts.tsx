@@ -669,6 +669,7 @@ export function ServiceAccountsPage() {
         open={createDialog.open}
         title={text("新建服务账号", "New service account")}
         onClose={createDialog.hide}
+        busy={busy}
         footer={
           <Space>
             <Button onClick={createDialog.hide} disabled={busy}>
@@ -714,6 +715,7 @@ export function ServiceAccountsPage() {
         open={credentialDialog.open}
         title={text("签发新凭据", "Issue credential")}
         onClose={credentialDialog.hide}
+        busy={busy}
         footer={
           <Space>
             <Button onClick={credentialDialog.hide} disabled={busy}>
