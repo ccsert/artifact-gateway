@@ -6,7 +6,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -365,5 +367,34 @@ func TestCargoProxyUpstreamCredentialRedirectBoundary(t *testing.T) {
 	repo.Endpoint = disallowed.URL
 	if _, err := client.FetchCargo(context.Background(), repo, disallowed.URL+"/config.json", nil); err == nil || strings.Contains(err.Error(), "cargo-upstream-secret") {
 		t.Fatalf("disallowed redirect=%v", err)
+	}
+}
+
+func TestCargoProxyAllowlistAndEgressFailureDoNotDial(t *testing.T) {
+	oldLookup, oldDial, oldEnvironment := rawProxyLookupIP, rawProxyDialContext, rawProxyFromEnvironment
+	t.Cleanup(func() {
+		rawProxyLookupIP, rawProxyDialContext, rawProxyFromEnvironment = oldLookup, oldDial, oldEnvironment
+	})
+	dials := 0
+	rawProxyLookupIP = func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("127.0.0.1")}, nil
+	}
+	rawProxyDialContext = func(context.Context, string, string) (net.Conn, error) {
+		dials++
+		return nil, errors.New("network dial must not occur")
+	}
+	rawProxyFromEnvironment = func(*http.Request) (*url.URL, error) { return nil, nil }
+	repo := repository.HostedRepository{ID: "cargo-egress", Name: "cargo-egress", Format: repository.FormatCargo,
+		Type: repository.RepositoryTypeProxy, Endpoint: "https://allowed.example", EgressProxy: &repository.EgressProxy{Mode: repository.EgressProxyModeDirect},
+		UpstreamAuth: &repository.UpstreamAuth{Scheme: repository.UpstreamAuthSchemeBearer, Secret: sealedUpstreamSecret(t, "cargo-private-token")}}
+	client := UpstreamClient{}
+	if _, err := client.FetchCargo(context.Background(), repo, "https://unlisted.example/config.json", nil); err == nil || strings.Contains(err.Error(), "cargo-private-token") {
+		t.Fatalf("allowlist rejection=%v", err)
+	}
+	if _, err := client.FetchCargo(context.Background(), repo, "https://allowed.example/config.json", nil); err == nil || strings.Contains(err.Error(), "cargo-private-token") {
+		t.Fatalf("private egress rejection=%v", err)
+	}
+	if dials != 0 {
+		t.Fatalf("rejected Cargo upstream caused %d network dials", dials)
 	}
 }

@@ -3,6 +3,8 @@ name: artifact-gateway-integration
 services:
   postgres:
     image: postgres:16-alpine
+    ports:
+      - "127.0.0.1::5432"
     command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
     environment:
       POSTGRES_DB: gateway_test
@@ -48,6 +50,8 @@ services:
 
   rustfs:
     image: rustfs/rustfs:1.0.0-beta.12@sha256:41fe89380f4120a337790c02af192c3fe7bb55c3edc2e6e9357b487b47c6ab21
+    ports:
+      - "127.0.0.1::9000"
     entrypoint: ["/bin/sh", "/usr/local/bin/run-rustfs"]
     environment:
       RUSTFS_VOLUMES: /data
