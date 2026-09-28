@@ -18,6 +18,8 @@ if [[ -n "$candidate_image" ]]; then
 fi
 environment_file=${GATEWAY_ENV_FILE:-.env}
 test -f "$environment_file" || { printf '%s\n' 'Backup readiness requires a configured environment file.' >&2; exit 1; }
+command -v cargo >/dev/null || { printf '%s\n' 'Backup readiness requires Cargo 1.96.0.' >&2; exit 1; }
+[[ $(cargo --version) == cargo\ 1.96.0\ * ]] || { printf '%s\n' 'Backup readiness requires Cargo 1.96.0.' >&2; exit 1; }
 # shellcheck disable=SC1090
 source "$environment_file"
 
@@ -34,6 +36,7 @@ grant_headers=$(mktemp)
 grant_response=$(mktemp)
 oci_headers=$(mktemp)
 go_workspace=$(mktemp -d)
+cargo_workspace=$(mktemp -d)
 mkdir -p "$repo_root/.artifacts"
 backup_dir=$(mktemp -d "$repo_root/.artifacts/backup-readiness.XXXXXX")
 
@@ -52,6 +55,8 @@ cleanup() {
   rm -f "$oci_headers"
   chmod -R u+w "$go_workspace" >/dev/null 2>&1 || true
   rm -rf "$go_workspace"
+  chmod -R u+w "$cargo_workspace" >/dev/null 2>&1 || true
+  rm -rf "$cargo_workspace"
   rm -rf "$backup_dir"
 }
 trap cleanup EXIT
@@ -180,6 +185,46 @@ assert_rustfs_object_state() {
     RUSTFS_ACCESS_KEY="$RUSTFS_ACCESS_KEY" RUSTFS_SECRET_KEY="$RUSTFS_SECRET_KEY" \
     go run ./scripts/rustfs-object-state "$state" "$object_key"
 }
+cargo_index_path='ca/rg/cargo-recovery-fixture'
+cargo_name='cargo-recovery-fixture'
+cargo_version='1.0.0'
+cargo_psql() {
+  compose exec -T postgres psql -X -A -t -v ON_ERROR_STOP=1 -U gateway -d gateway -c "$1"
+}
+cargo_archive_digest() {
+  local repository_name=$1
+  curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
+    "$gateway_url/cargo/$repository_name/api/v1/crates/$cargo_name/$cargo_version/download" |
+    shasum -a 256 | awk '{print $1}'
+}
+cargo_index_row() {
+  local repository_name=$1
+  curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
+    "$gateway_url/cargo/$repository_name/$cargo_index_path"
+}
+assert_cargo_install() {
+  local repository_name=$1 stage=${2:-before} home="$cargo_workspace/home-${2:-before}-$1" output="$cargo_workspace/install-${2:-before}-$1"
+  mkdir -p "$home"
+  printf '[registries.recovery]\nindex = "sparse+%s/cargo/%s/"\ncredential-provider = "cargo:token"\n' \
+    "$gateway_url" "$repository_name" >"$home/config.toml"
+  CARGO_HOME="$home" CARGO_TARGET_DIR="$cargo_workspace/target-$stage-$1" \
+    CARGO_REGISTRIES_RECOVERY_TOKEN="$GATEWAY_ADMIN_TOKEN" HTTP_PROXY='' HTTPS_PROXY='' ALL_PROXY='' \
+    NO_PROXY=127.0.0.1,localhost cargo install "$cargo_name" --registry recovery --root "$output" >/dev/null
+  test -x "$output/bin/$cargo_name"
+}
+promotion_completed() {
+  local repository_id=$1 job_id=$2 detail
+  for _ in $(seq 1 90); do
+    detail=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
+      "$gateway_url/api/v2/repositories/$repository_id/lifecycle-jobs") || return 1
+    if python3 -c 'import json,sys; jobs=json.load(sys.stdin); wanted=sys.argv[1]; sys.exit(not any(job["id"]==wanted and job["state"]=="completed" for job in jobs))' "$job_id" <<<"$detail"; then
+      return 0
+    fi
+    sleep 1
+  done
+  printf 'Cargo promotion job %s did not complete.\n' "$job_id" >&2
+  return 1
+}
 run_id="backup-${RANDOM}"
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$isolated_environment" RAW_E2E_RUN_ID="$run_id" ./scripts/raw-e2e.sh
 raw_group="raw-ready-${run_id}"
@@ -300,6 +345,70 @@ if len(jobs) != 3:
 print(",".join(sorted(job["id"] for job in jobs)))
 ' <<<"$go_lifecycle_jobs")
 
+# Cargo is deliberately absent from public repository provisioning until C5.
+# Seed the isolated fixture through its persisted store schema, then exercise
+# publication, Group ownership, distribution, and restore through real HTTP.
+cargo_source_repository="cargo-source-${run_id}"
+cargo_other_repository="cargo-other-${run_id}"
+cargo_promotion_repository="cargo-promotion-${run_id}"
+cargo_replication_repository="cargo-replication-${run_id}"
+cargo_group="cargo-group-${run_id}"
+cargo_source_id=$(python3 -c 'import uuid; print(uuid.uuid4())')
+cargo_other_id=$(python3 -c 'import uuid; print(uuid.uuid4())')
+cargo_promotion_id=$(python3 -c 'import uuid; print(uuid.uuid4())')
+cargo_replication_id=$(python3 -c 'import uuid; print(uuid.uuid4())')
+cargo_group_id=$(python3 -c 'import uuid; print(uuid.uuid4())')
+cargo_psql "BEGIN;
+INSERT INTO hosted_repositories(id,name,format) VALUES
+('$cargo_source_id','$cargo_source_repository','cargo'),
+('$cargo_other_id','$cargo_other_repository','cargo'),
+('$cargo_promotion_id','$cargo_promotion_repository','cargo'),
+('$cargo_replication_id','$cargo_replication_repository','cargo');
+INSERT INTO hosted_groups(id,name,format) VALUES ('$cargo_group_id','$cargo_group','cargo');
+INSERT INTO hosted_group_members(group_id,repository_id,position) VALUES
+('$cargo_group_id','$cargo_source_id',0),('$cargo_group_id','$cargo_other_id',1);
+COMMIT;" >/dev/null
+mkdir -p "$cargo_workspace/package/src" "$cargo_workspace/publish-home"
+cat >"$cargo_workspace/package/Cargo.toml" <<'CARGO_TOML'
+[package]
+name = "cargo-recovery-fixture"
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+description = "Artifact Gateway backup and restore fixture"
+CARGO_TOML
+printf 'fn main() { println!("Cargo recovery fixture"); }\n' >"$cargo_workspace/package/src/main.rs"
+printf '[registries.recovery]\nindex = "sparse+%s/cargo/%s/"\ncredential-provider = "cargo:token"\n' \
+  "$gateway_url" "$cargo_source_repository" >"$cargo_workspace/publish-home/config.toml"
+(cd "$cargo_workspace/package" && CARGO_HOME="$cargo_workspace/publish-home" \
+  CARGO_REGISTRIES_RECOVERY_TOKEN="$GATEWAY_ADMIN_TOKEN" HTTP_PROXY='' HTTPS_PROXY='' ALL_PROXY='' \
+  NO_PROXY=127.0.0.1,localhost cargo publish --registry recovery --allow-dirty --no-verify) >/dev/null
+cargo_source_row=$(cargo_index_row "$cargo_source_repository")
+cargo_group_row=$(cargo_index_row "$cargo_group")
+python3 - "$cargo_source_row" "$cargo_group_row" <<'PY'
+import json
+import sys
+
+if json.loads(sys.argv[1]) != json.loads(sys.argv[2]):
+    raise SystemExit("Cargo Group index changed source identity")
+PY
+cargo_owner=$(cargo_psql "SELECT source_repository_id FROM native_cargo_group_versions WHERE group_id='$cargo_group_id' AND name='$cargo_name' AND version='$cargo_version'")
+[[ "$cargo_owner" == "$cargo_source_id" ]] || { printf '%s\n' 'Cargo Group did not persist its first owner.' >&2; exit 1; }
+cargo_digest=$(cargo_archive_digest "$cargo_source_repository")
+cargo_object_key="native/cargo/sha256/$cargo_digest"
+assert_rustfs_object_state present "$cargo_object_key"
+cargo_promotion_job_id=$(enqueue_idempotently "/api/v2/repositories/$cargo_source_id/promotions" "cargo-promotion-${run_id}" "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"%s@%s\",\"digest\":\"sha256:%s\"}' "$cargo_promotion_id" "$cargo_name" "$cargo_version" "$cargo_digest")")
+cargo_replication_plan_id=$(enqueue_idempotently "/api/v2/repositories/$cargo_source_id/replications" "cargo-replication-${run_id}" "$(printf '{\"targetRepositoryId\":\"%s\",\"coordinate\":\"%s@%s\",\"digest\":\"sha256:%s\"}' "$cargo_replication_id" "$cargo_name" "$cargo_version" "$cargo_digest")")
+promotion_completed "$cargo_promotion_id" "$cargo_promotion_job_id"
+replication_completed "$cargo_replication_id" "$cargo_replication_plan_id"
+for cargo_repository in "$cargo_group" "$cargo_promotion_repository" "$cargo_replication_repository"; do
+  [[ $(cargo_archive_digest "$cargo_repository") == "$cargo_digest" ]] || { printf 'Cargo %s archive changed during distribution.\n' "$cargo_repository" >&2; exit 1; }
+  expected_cargo_row=$cargo_source_row
+  [[ "$cargo_repository" != "$cargo_group" ]] || expected_cargo_row=$cargo_group_row
+  [[ $(cargo_index_row "$cargo_repository") == "$expected_cargo_row" ]] || { printf 'Cargo %s index changed during distribution.\n' "$cargo_repository" >&2; exit 1; }
+  assert_cargo_install "$cargo_repository"
+done
+
 oci_replication_target_id=$(create_hosted_repository oci "oci-replication-restore-${run_id}" "oci-replication-target-${run_id}")
 oci_promotion_target_id=$(create_hosted_repository oci "oci-promotion-restore-${run_id}" "oci-promotion-target-${run_id}")
 maven_replication_target_id=$(create_hosted_repository maven "maven-replication-restore-${run_id}" "maven-replication-target-${run_id}")
@@ -373,6 +482,10 @@ group_recovery_fixture() {
 group_recovery_fixture seed
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$isolated_environment" ./scripts/backup-drill.sh "$backup_dir"
 group_recovery_fixture mutate
+(cd "$cargo_workspace/package" && CARGO_HOME="$cargo_workspace/publish-home" \
+  CARGO_REGISTRIES_RECOVERY_TOKEN="$GATEWAY_ADMIN_TOKEN" HTTP_PROXY='' HTTPS_PROXY='' ALL_PROXY='' \
+  NO_PROXY=127.0.0.1,localhost cargo yank "$cargo_name@$cargo_version" --registry recovery) >/dev/null
+[[ $(cargo_index_row "$cargo_source_repository") != "$cargo_source_row" ]] || { printf '%s\n' 'Post-backup Cargo yank did not change the source index.' >&2; exit 1; }
 go_mutation_version="v1.1.0"
 go_mutation_archive="$go_workspace/$go_mutation_version.zip"
 write_go_module_zip "$go_mutation_archive" "$go_module_path" "$go_mutation_version" after-backup
@@ -387,6 +500,23 @@ status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}
 [[ "$status" == 201 ]] || { printf 'Creating post-backup mutation returned HTTP %s.\n' "$status" >&2; exit 1; }
 COMPOSE_PROJECT_NAME="$project" GATEWAY_ENV_FILE="$isolated_environment" ./scripts/restore-drill.sh "$backup_dir"
 group_recovery_fixture verify
+for cargo_repository in "$cargo_source_repository" "$cargo_group" "$cargo_promotion_repository" "$cargo_replication_repository"; do
+  expected_cargo_row=$cargo_source_row
+  [[ "$cargo_repository" != "$cargo_group" ]] || expected_cargo_row=$cargo_group_row
+  [[ $(cargo_index_row "$cargo_repository") == "$expected_cargo_row" ]] || { printf 'Restored Cargo %s index row changed.\n' "$cargo_repository" >&2; exit 1; }
+  [[ $(cargo_archive_digest "$cargo_repository") == "$cargo_digest" ]] || { printf 'Restored Cargo %s archive digest changed.\n' "$cargo_repository" >&2; exit 1; }
+  assert_cargo_install "$cargo_repository" after
+done
+assert_rustfs_object_state present "$cargo_object_key"
+restored_cargo_owner=$(cargo_psql "SELECT source_repository_id FROM native_cargo_group_versions WHERE group_id='$cargo_group_id' AND name='$cargo_name' AND version='$cargo_version'")
+[[ "$restored_cargo_owner" == "$cargo_source_id" ]] || { printf '%s\n' 'Restored Cargo Group owner changed.' >&2; exit 1; }
+restored_cargo_members=$(cargo_psql "SELECT string_agg(repository_id::text, ',' ORDER BY position) FROM hosted_group_members WHERE group_id='$cargo_group_id'")
+[[ "$restored_cargo_members" == "$cargo_source_id,$cargo_other_id" ]] || { printf '%s\n' 'Restored Cargo Group member order changed.' >&2; exit 1; }
+restored_cargo_jobs=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" \
+  "$gateway_url/api/v2/repositories/$cargo_promotion_id/lifecycle-jobs")
+python3 -c 'import json,sys; wanted=sys.argv[1]; jobs=json.load(sys.stdin); sys.exit(not any(job["id"]==wanted and job["state"]=="completed" for job in jobs))' \
+  "$cargo_promotion_job_id" <<<"$restored_cargo_jobs" || { printf '%s\n' 'Restored Cargo promotion job lost completion state.' >&2; exit 1; }
+assert_restored_replication_completion "$cargo_replication_id" "$cargo_replication_plan_id"
 
 for format in raw conan; do
   group_var="${format}_group"
@@ -470,7 +600,7 @@ grep -Fq '"Format":"raw"' <<<"$audits" || { printf '%s\n' 'Restored Raw audit is
 grep -Fq '"Format":"conan"' <<<"$audits" || { printf '%s\n' 'Restored Conan audit is unavailable.' >&2; exit 1; }
 grep -Fq '"Actor":"recovery-denied"' <<<"$audits" || { printf '%s\n' 'Restored Repository grant denial audit is unavailable.' >&2; exit 1; }
 grep -Fq '"AuthorizationSource":"repository_grants"' <<<"$audits" || { printf '%s\n' 'Restored Repository grant authorization source is unavailable.' >&2; exit 1; }
-[[ $(grep -o '"Operation":"promote"' <<<"$audits" | wc -l | tr -d ' ') -ge 4 ]] || { printf '%s\n' 'Restored promotion audits do not cover all native formats.' >&2; exit 1; }
-[[ $(grep -o '"Operation":"replicate"' <<<"$audits" | wc -l | tr -d ' ') -ge 4 ]] || { printf '%s\n' 'Restored replication audits do not cover all native formats.' >&2; exit 1; }
+[[ $(grep -o '"Operation":"promote"' <<<"$audits" | wc -l | tr -d ' ') -ge 5 ]] || { printf '%s\n' 'Restored promotion audits do not cover all native formats.' >&2; exit 1; }
+[[ $(grep -o '"Operation":"replicate"' <<<"$audits" | wc -l | tr -d ' ') -ge 5 ]] || { printf '%s\n' 'Restored replication audits do not cover all native formats.' >&2; exit 1; }
 
-printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and RustFS restore preserved OCI, Maven, Raw, Conan, and Go Artifacts, Go recovery intents, promotion jobs and replication plans, artifact quarantine, Repository grants, and authorization audits.'
+printf '%s\n' 'Backup/restore readiness passed: isolated PostgreSQL and RustFS restore preserved OCI, Maven, Raw, Conan, Go, and Cargo Artifacts; Cargo Group owner, source index and object digest; recovery intents, promotion jobs and replication plans; quarantine, grants, and audits.'

@@ -36,7 +36,12 @@ the source index identity and initial yank state; a target can then manage its
 own yank state. Each operation copies only the requested crate/version. Direct
 same-registry dependencies must already have a matching, non-yanked, readable
 target version; external-registry dependencies remain with that registry.
-The full backup/restore drill and public format admission remain open.
+The isolated `make backup-restore-readiness` drill now publishes with Cargo
+1.96.0, pins a Group owner, promotes and replicates the version, then restores
+PostgreSQL and RustFS after a post-backup yank. Fresh Cargo homes read the
+restored source, Group, and targets with unchanged index rows and archive
+digest. An upgrade from an older deployed schema, distribution outcome
+webhooks, and public format admission remain open.
 `make integration-test` also drives an official Cargo client through a
 PostgreSQL/RustFS Proxy replay after the upstream is shut down. This document
 uses only Gitea and Cargo-owned documentation as protocol evidence.
