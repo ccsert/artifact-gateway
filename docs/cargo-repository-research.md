@@ -3,11 +3,12 @@
 [简体中文](cargo-repository-research.zh-CN.md) | [Documentation index](README.md)
 
 Status: research recommendation, not an implemented protocol or an admitted
-format profile. The C0 byte foundation is now implemented: strict bounded
+format profile. The non-public C0 foundation now includes strict bounded
 publish framing, complete `.crate` validation, normalized manifest identity,
 sparse-index path/row translation, and official `cargo package`/`cargo publish`
-contract tests. Persisted collision reservation and Memory/PostgreSQL identity
-conformance remain before C0 exits; no Cargo route, repository format, OpenAPI
+contract tests. A validated publish request can reserve its crate/version
+identity in Memory or PostgreSQL, with case-insensitive and `-`/`_` collision
+constraints and exact-retry behavior. No Cargo route, repository format, OpenAPI
 surface, or Console option is advertised yet. This document uses only Gitea
 and Cargo-owned documentation as protocol evidence.
 
@@ -305,10 +306,11 @@ weaken Artifact Gateway's immutable-coordinate rule
 
 ### C0: frozen contract and byte parser
 
-Current state: the byte parser and official-client contract are complete. The
-remaining C0 slice is the non-public persisted identity reservation used to
-prove case-insensitive and `-`/`_` collision behavior across Memory and
-PostgreSQL before C1 starts.
+Current state: the byte parser, official-client contract, and non-public
+persisted identity reservation are implemented. Memory and PostgreSQL
+conformance covers case-insensitive and `-`/`_` collisions, concurrent claims,
+and exact retries. The reservation is not a completed publication or a visible
+sparse-index row.
 
 - Freeze the sparse-only route, canonical identity, collision policy, publish
   framing limits, Cargo error envelope, and private-auth behavior.

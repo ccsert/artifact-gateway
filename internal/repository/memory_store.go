@@ -67,6 +67,8 @@ type MemoryStore struct {
 	goVersions             map[string]GoModuleVersion
 	goAssets               map[string]GoModuleAsset
 	goObjectLocks          map[string]*sync.Mutex
+	cargoNames             map[string]string
+	cargoReservations      map[string]CargoIdentityReservation
 	aptAssets              map[string]APTAsset
 	aptObjectLocks         map[string]*sync.Mutex
 	aptPublicationSessions map[string]APTPublicationSession
