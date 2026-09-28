@@ -293,30 +293,9 @@ func (h nativeCargoHandler) proxyDownload(w http.ResponseWriter, r *http.Request
 }
 
 func (h nativeCargoHandler) proxySearch(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, actor string) {
-	config, err := h.proxyConfig(r, repo)
-	if err != nil || config.SearchAPI == "" {
-		h.writeError(w, http.StatusBadGateway, "Cargo upstream search unavailable")
-		return
-	}
-	u, err := url.Parse(strings.TrimRight(config.SearchAPI, "/") + "/api/v1/crates")
+	body, err := h.proxySearchBody(r, repo)
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, "Cargo upstream search unavailable")
-		return
-	}
-	u.RawQuery = r.URL.RawQuery
-	response, err := h.upstream.FetchCargo(r.Context(), repo, u.String(), nil)
-	if err != nil {
-		h.writeError(w, http.StatusBadGateway, "Cargo upstream search unavailable")
-		return
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusOK {
-		h.writeError(w, http.StatusBadGateway, "Cargo upstream search unavailable")
-		return
-	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20+1))
-	if err != nil || len(body) > 1<<20 || !json.Valid(body) {
-		h.writeError(w, http.StatusBadGateway, "Cargo upstream search invalid")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -325,4 +304,29 @@ func (h nativeCargoHandler) proxySearch(w http.ResponseWriter, r *http.Request, 
 		_, _ = w.Write(body)
 	}
 	h.recordAudit(r, repo, r.URL.Query().Get("q"), "search", actor, repository.AuditResolved, http.StatusOK, int64(len(body)))
+}
+
+func (h nativeCargoHandler) proxySearchBody(r *http.Request, repo repository.HostedRepository) ([]byte, error) {
+	config, err := h.proxyConfig(r, repo)
+	if err != nil || config.SearchAPI == "" {
+		return nil, errors.New("cargo upstream search unavailable")
+	}
+	u, err := url.Parse(strings.TrimRight(config.SearchAPI, "/") + "/api/v1/crates")
+	if err != nil {
+		return nil, err
+	}
+	u.RawQuery = r.URL.RawQuery
+	response, err := h.upstream.FetchCargo(r.Context(), repo, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return nil, errors.New("cargo upstream search status")
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20+1))
+	if err != nil || len(body) > 1<<20 || !json.Valid(body) {
+		return nil, errors.New("cargo upstream search invalid")
+	}
+	return body, nil
 }

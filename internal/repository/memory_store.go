@@ -73,6 +73,7 @@ type MemoryStore struct {
 	cargoProxyConfigs      map[string]CargoProxyConfig
 	cargoProxyIndexes      map[string]CargoProxyIndex
 	cargoProxyCrates       map[string]CargoProxyCrate
+	cargoGroupVersions     map[string]CargoGroupVersion
 	cargoObjectLocks       map[string]*sync.Mutex
 	aptAssets              map[string]APTAsset
 	aptObjectLocks         map[string]*sync.Mutex

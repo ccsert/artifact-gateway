@@ -62,6 +62,8 @@ Gateway 重写客户端 config 中的 `dl/api/auth`，绝不改 crate version、
 
 crates.io source replacement 要求完全等价，应只指向专用、保 checksum 的 Proxy。混合私有 Group 是 alternate registry，不能作为 crates.io replacement。
 
+混合 Group 的 Cargo 配置应使用独立 registry 身份，例如 `[registries.company]` 下设置 `index = "sparse+https://gateway.example/cargo/company/"`，并在依赖中写 `registry = "company"`。不要把这个 Group 写进 `[source.crates-io]` 的 `replace-with`；它包含私有版本，无法满足 crates.io 完全等价的前提。Group 测试应核对 `Cargo.lock` 中保留独立 registry 来源。
+
 ### 有序 Group
 
 Group 是合成只读 registry，生成自己的 config，合并成员 index。Ownership 由规范 crate name 与版本唯一键确定；只有不可变 index 数据和 checksum 完全相同时可去重，冲突必须拒绝 member 变更或新发布，不能因顺序变化选择不同字节。

@@ -136,6 +136,7 @@ type GatewayStore interface {
 	repository.NativeGoStore
 	repository.NativeCargoStore
 	repository.CargoProxyStore
+	repository.CargoGroupStore
 	repository.NativeAPTStore
 	repository.NativeAPTPublicationStore
 	repository.APIKeyStore
@@ -372,7 +373,10 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		goModules:  &v2GroupGoHandler{native: &nativeGo},
 		next:       nativeGo}
 	mux.Handle("/go/", goGroupRouter)
-	mux.Handle("/cargo/", nativeCargo)
+	cargoGroupRouter := v2GroupRouter{format: repository.FormatCargo, groups: store, repos: store, audit: store, auth: authenticator,
+		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
+		cargo:      &v2GroupCargoHandler{native: &nativeCargo, owners: store}, next: nativeCargo}
+	mux.Handle("/cargo/", cargoGroupRouter)
 	aptGroupRouter := v2GroupRouter{format: repository.FormatAPT, groups: store, repos: store, audit: store, auth: authenticator,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
 		apt:        &v2GroupAPTHandler{native: &nativeAPT},
