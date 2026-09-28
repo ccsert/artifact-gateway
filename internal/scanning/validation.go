@@ -12,7 +12,7 @@ import (
 const maxAssets = 256
 
 func validateArtifact(artifact Artifact, maxBytes int64) error {
-	if !validText(artifact.RepositoryID, 128) || !repository.IsSupportedFormat(artifact.Format) || !validText(artifact.Coordinate, 1024) || !validDigest(artifact.Digest) || len(artifact.Assets) == 0 || len(artifact.Assets) > maxAssets {
+	if !validText(artifact.RepositoryID, 128) || (!repository.IsSupportedFormat(artifact.Format) && artifact.Format != repository.FormatCargo) || !validText(artifact.Coordinate, 1024) || !validDigest(artifact.Digest) || len(artifact.Assets) == 0 || len(artifact.Assets) > maxAssets {
 		return ErrInvalidArtifact
 	}
 	if artifact.Format == repository.FormatAPT {

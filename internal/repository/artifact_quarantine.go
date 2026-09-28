@@ -10,7 +10,7 @@ func artifactQuarantineKey(repositoryID string, format Format, coordinate, diges
 }
 
 func validArtifactQuarantine(value ArtifactQuarantine) bool {
-	if value.RepositoryID == "" || !IsSupportedFormat(value.Format) || strings.TrimSpace(value.Coordinate) == "" || utf8.RuneCountInString(value.Coordinate) > 1024 || strings.ContainsRune(value.Coordinate, '\x00') {
+	if value.RepositoryID == "" || (!IsSupportedFormat(value.Format) && value.Format != FormatCargo) || strings.TrimSpace(value.Coordinate) == "" || utf8.RuneCountInString(value.Coordinate) > 1024 || strings.ContainsRune(value.Coordinate, '\x00') {
 		return false
 	}
 	if value.Format == FormatAPT && !ValidAPTArtifactCoordinate(value.Coordinate) {

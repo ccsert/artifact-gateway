@@ -182,6 +182,8 @@ func artifactSearchItemMatchesCanonicalIdentity(format repository.Format, item r
 		return item.Coordinate == coordinate
 	case repository.FormatNPM, repository.FormatPyPI, repository.FormatGo:
 		return item.Coordinate != "" && item.Version != "" && item.Coordinate+"@"+item.Version == coordinate
+	case repository.FormatCargo:
+		return item.Coordinate != "" && item.Version != "" && item.Coordinate+"@"+item.Version == coordinate
 	default:
 		return false
 	}
@@ -189,6 +191,20 @@ func artifactSearchItemMatchesCanonicalIdentity(format repository.Format, item r
 
 func nativeVersionedArtifactVisible(ctx context.Context, store repository.ArtifactSearchStore, repositoryID string, format repository.Format, coordinate, digest string) (visible, handled bool, err error) {
 	switch format {
+	case repository.FormatCargo:
+		native, ok := store.(repository.NativeCargoStore)
+		if !ok {
+			return false, false, nil
+		}
+		name, version, ok := splitVersionCoordinate(coordinate)
+		if !ok || !validCargoVersionCoordinate(coordinate) {
+			return false, true, nil
+		}
+		item, err := native.GetCargoPublication(ctx, repositoryID, name, version)
+		if errors.Is(err, repository.ErrNotFound) {
+			return false, true, nil
+		}
+		return err == nil && item.RepositoryID == repositoryID && item.Name+"@"+item.Version == coordinate && item.Digest == digest, true, err
 	case repository.FormatNPM:
 		native, ok := store.(repository.NativeNPMStore)
 		if !ok {
@@ -341,7 +357,7 @@ func supportsQuarantineReadPolicy(repo repository.HostedRepository) bool {
 		return false
 	}
 	switch repo.Format {
-	case repository.FormatRaw, repository.FormatMaven, repository.FormatOCI, repository.FormatNPM, repository.FormatPyPI, repository.FormatConan, repository.FormatAPT, repository.FormatGo:
+	case repository.FormatRaw, repository.FormatMaven, repository.FormatOCI, repository.FormatNPM, repository.FormatPyPI, repository.FormatConan, repository.FormatAPT, repository.FormatGo, repository.FormatCargo:
 		return true
 	default:
 		return false

@@ -19,20 +19,24 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/felixge/httpsnoop"
 	"github.com/google/uuid"
+	"golang.org/x/mod/semver"
 )
 
 const cargoPublishBodyLimit = (129 << 20) + 8
 
 type nativeCargoHandler struct {
-	store      cargoPublicationStore
-	proxy      repository.CargoProxyStore
-	upstream   UpstreamClient
-	repos      repository.HostedRepositoryStore
-	objects    OCIObjectStore
-	auth       Authenticator
-	authorizer RepositoryAuthorizer
-	audit      repository.Store
-	anonymous  repository.AnonymousAccessPolicyStore
+	store              cargoPublicationStore
+	proxy              repository.CargoProxyStore
+	upstream           UpstreamClient
+	repos              repository.HostedRepositoryStore
+	objects            OCIObjectStore
+	auth               Authenticator
+	authorizer         RepositoryAuthorizer
+	audit              repository.Store
+	anonymous          repository.AnonymousAccessPolicyStore
+	readPolicies       repository.RepositoryQuarantineReadPolicyStore
+	quarantine         repository.ArtifactQuarantineStore
+	publicationScanner *publicationScanScheduler
 }
 
 type cargoPublicationStore interface {
@@ -52,7 +56,22 @@ func newNativeCargoHandler(store GatewayStore, objects OCIObjectStore, auth Auth
 		objects = NewMemoryOCIObjectStore()
 	}
 	return nativeCargoHandler{store: store, proxy: store, repos: store, objects: objects, auth: auth,
-		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth}, audit: store, anonymous: store}
+		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth}, audit: store, anonymous: store,
+		readPolicies: store, quarantine: store}
+}
+
+func (h nativeCargoHandler) withPublicationScanner(scanner publicationScanScheduler) nativeCargoHandler {
+	h.publicationScanner = &scanner
+	return h
+}
+
+func validCargoVersionCoordinate(coordinate string) bool {
+	name, version, ok := splitVersionCoordinate(coordinate)
+	if !ok {
+		return false
+	}
+	_, err := cargo.NormalizeIdentity(name, version)
+	return err == nil
 }
 
 func (h nativeCargoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -330,7 +349,27 @@ func (h nativeCargoHandler) publish(w http.ResponseWriter, r *http.Request, repo
 	}})
 	if !replay {
 		h.recordAudit(r, repo, committed.Name+"@"+committed.Version, "crate", principal.Actor, repository.AuditResolved, http.StatusOK, committed.Size)
+		if h.publicationScanner != nil {
+			_ = h.publicationScanner.Schedule(r.Context(), repo, committed.Name+"@"+committed.Version, committed.Digest, principal.Actor)
+		}
 	}
+}
+
+func (h nativeCargoHandler) readBlocked(ctx context.Context, repo repository.HostedRepository, publication repository.CargoPublication) (bool, error) {
+	return repository.QuarantinedArtifactReadBlocked(ctx, h.readPolicies, h.quarantine, repo.ID,
+		repository.FormatCargo, publication.Name+"@"+publication.Version, publication.Digest)
+}
+
+func (h nativeCargoHandler) deniedRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, publication repository.CargoPublication, actor string) {
+	h.writeError(w, http.StatusForbidden, repository.ArtifactQuarantinedReason)
+	_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{
+		GroupName: repo.Name, Repository: repo.Name, Actor: actor,
+		Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(),
+		Format: string(repository.FormatCargo), Resource: publication.Name + "@" + publication.Version,
+		Representation: publication.Digest, MemberType: string(repo.Type), Operation: strings.ToLower(r.Method),
+		Status: http.StatusForbidden, CacheDisposition: "bypass", AuthorizationSource: "quarantine_read_policy",
+		AuthorizationReason: repository.ArtifactQuarantinedReason,
+	})
 }
 
 func (h nativeCargoHandler) ensureObject(ctx context.Context, source io.ReaderAt, envelope cargo.PublishEnvelope, publication repository.CargoPublication) (bool, error) {
@@ -407,7 +446,18 @@ func (h nativeCargoHandler) search(w http.ResponseWriter, r *http.Request, repo 
 		}
 		limit = parsed
 	}
-	items, total, err := h.store.SearchCargoCrates(r.Context(), repo.ID, query, limit, "", false)
+	policy, err := h.readPolicies.GetRepositoryQuarantineReadPolicy(r.Context(), repo.ID)
+	if err != nil {
+		h.writeError(w, http.StatusServiceUnavailable, "Cargo quarantine policy unavailable")
+		return
+	}
+	var items []repository.CargoCrateSummary
+	var total int
+	if policy.Enabled {
+		items, total, err = h.searchReadableCrates(r.Context(), repo.ID, query, limit)
+	} else {
+		items, total, err = h.store.SearchCargoCrates(r.Context(), repo.ID, query, limit, "", false)
+	}
 	if err != nil {
 		h.writeError(w, http.StatusServiceUnavailable, "Cargo search unavailable")
 		return
@@ -431,6 +481,53 @@ func (h nativeCargoHandler) search(w http.ResponseWriter, r *http.Request, repo 
 	h.recordAudit(r, repo, query, "search", actor, repository.AuditResolved, http.StatusOK, int64(len(body)))
 }
 
+func (h nativeCargoHandler) searchReadableCrates(ctx context.Context, repositoryID, query string, limit int) ([]repository.CargoCrateSummary, int, error) {
+	results := make([]repository.CargoCrateSummary, 0, limit)
+	total := 0
+	after := ""
+	for {
+		page, _, err := h.store.SearchCargoCrates(ctx, repositoryID, query, 200, after, false)
+		if err != nil {
+			return nil, 0, err
+		}
+		for _, summary := range page {
+			publications, err := h.store.ListCargoPublications(ctx, repositoryID, summary.Name)
+			if err != nil {
+				return nil, 0, err
+			}
+			visible := repository.CargoCrateSummary{Name: summary.Name}
+			for _, publication := range publications {
+				if publication.Yanked {
+					continue
+				}
+				quarantine, err := h.quarantine.GetArtifactQuarantine(ctx, repositoryID, repository.FormatCargo,
+					publication.Name+"@"+publication.Version, publication.Digest)
+				if err != nil && !errors.Is(err, repository.ErrNotFound) {
+					return nil, 0, err
+				}
+				if err == nil && quarantine.State == repository.ArtifactQuarantineStateQuarantined {
+					continue
+				}
+				visible.Versions++
+				if visible.MaxVersion == "" || semver.Compare("v"+publication.Version, "v"+visible.MaxVersion) > 0 {
+					visible.MaxVersion = publication.Version
+					visible.Description = publication.Description
+				}
+			}
+			if visible.Versions > 0 {
+				total++
+				if len(results) < limit {
+					results = append(results, visible)
+				}
+			}
+		}
+		if len(page) < 200 {
+			return results, total, nil
+		}
+		after = page[len(page)-1].Name
+	}
+}
+
 func (h nativeCargoHandler) index(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name, actor string) {
 	items, err := h.store.ListCargoPublications(r.Context(), repo.ID, name)
 	if errors.Is(err, repository.ErrNotFound) {
@@ -443,6 +540,14 @@ func (h nativeCargoHandler) index(w http.ResponseWriter, r *http.Request, repo r
 	}
 	var body bytes.Buffer
 	for _, item := range items {
+		blocked, blockErr := h.readBlocked(r.Context(), repo, item)
+		if blockErr != nil {
+			h.writeError(w, http.StatusServiceUnavailable, "Cargo quarantine policy unavailable")
+			return
+		}
+		if blocked {
+			continue
+		}
 		var entry cargo.IndexEntry
 		if err := json.Unmarshal(item.IndexRow, &entry); err != nil {
 			h.writeError(w, http.StatusServiceUnavailable, "Cargo index metadata is invalid")
@@ -476,6 +581,15 @@ func (h nativeCargoHandler) download(w http.ResponseWriter, r *http.Request, rep
 	}
 	if err != nil {
 		h.writeError(w, http.StatusServiceUnavailable, "Cargo crate unavailable")
+		return
+	}
+	blocked, err := h.readBlocked(r.Context(), repo, publication)
+	if err != nil {
+		h.writeError(w, http.StatusServiceUnavailable, "Cargo quarantine policy unavailable")
+		return
+	}
+	if blocked {
+		h.deniedRead(w, r, repo, publication, actor)
 		return
 	}
 	reader, size, err := h.objects.Open(r.Context(), publication.ObjectKey)

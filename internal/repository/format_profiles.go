@@ -241,6 +241,11 @@ func FormatSupportsOperation(format Format, repositoryType RepositoryType, opera
 // FormatSupportsPublicationScanning reports whether a Hosted publication has a
 // native immutable-asset resolver and can participate in scan reconciliation.
 func FormatSupportsPublicationScanning(format Format, repositoryType RepositoryType) bool {
+	// Cargo is available to internal Hosted repositories before its public
+	// format profile is admitted. Its immutable crate is already scanable.
+	if format == FormatCargo {
+		return repositoryType == RepositoryTypeHosted
+	}
 	profile, ok := FormatProfileFor(format)
 	return ok && repositoryType == RepositoryTypeHosted && profile.PublicationScanning
 }
