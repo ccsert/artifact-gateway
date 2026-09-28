@@ -304,7 +304,7 @@ func (h nativeCargoHandler) ensureObject(ctx context.Context, source io.ReaderAt
 		if stored.Digest == publication.Digest && stored.Size == publication.Size {
 			return false, nil
 		}
-		return false, errors.New("Cargo object checksum changed")
+		return false, errors.New("cargo object checksum changed")
 	}
 	if !errors.Is(err, objectstore.ErrNotFound) {
 		return false, err
