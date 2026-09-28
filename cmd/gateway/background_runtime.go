@@ -86,6 +86,9 @@ func (r backgroundRuntime) startWorkers(ctx context.Context, cfg config.Config, 
 	r.startNPMWorkers(ctx, cfg)
 	r.startPyPIWorkers(ctx, cfg)
 	r.startGoWorkers(ctx, cfg)
+	if cfg.WorkerEnabled("cargo", "reclaim") {
+		app.NativeCargoMaintenance{Store: r.store, Objects: r.objects}.StartWorker(ctx, time.Minute)
+	}
 	r.startAPTWorkers(ctx, cfg)
 }
 

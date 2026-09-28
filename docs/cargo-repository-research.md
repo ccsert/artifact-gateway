@@ -2,19 +2,24 @@
 
 [简体中文](cargo-repository-research.zh-CN.md) | [Documentation index](README.md)
 
-Status: research recommendation, not an implemented protocol or an admitted
-format profile. The non-public C0 foundation now includes strict bounded
-publish framing, complete `.crate` validation, normalized manifest identity,
-sparse-index path/row translation, and official `cargo package`/`cargo publish`
-contract tests. A validated publish request can reserve its crate/version
-identity in Memory or PostgreSQL, with case-insensitive and `-`/`_` collision
-constraints and exact-retry behavior. No Cargo route, repository format, OpenAPI
-surface, or Console option is advertised yet. This document uses only Gitea
-and Cargo-owned documentation as protocol evidence.
+Status: research recommendation and phased implementation record; Cargo is not
+an admitted public format profile. The non-public C0 foundation includes strict
+bounded publish framing, complete `.crate` validation, normalized manifest
+identity, sparse-index path/row translation, and durable identity reservations
+in Memory and PostgreSQL. The C1 Hosted core adds an internal
+`/cargo/{repository}/` route for official-client publish, resolution, and
+install; atomic server-generated index publication and immutable downloads;
+private/anonymous read policy, capacity, audit, and durable orphan recovery.
+Memory and PostgreSQL/RustFS recovery paths are tested. A reservation remains
+invisible until publication. Cargo Hosted repositories require internal
+creation; the public format catalog, OpenAPI, and Console do not advertise
+Cargo. Search, yank/unyank, Proxy, Group, full lifecycle, and public admission
+remain in later issues. This document uses only Gitea and Cargo-owned
+documentation as protocol evidence.
 
 Run `make cargo-contract` with the pinned Rust/Cargo 1.96.0 prerequisite. The
-gate fails when Cargo is absent and drives both `cargo package` and
-`cargo publish` through the staged parser contract.
+gate fails when Cargo is absent and drives `cargo package`/`cargo publish`
+through the parser contract plus a Hosted publish/add/check/install flow.
 
 ## Decision
 

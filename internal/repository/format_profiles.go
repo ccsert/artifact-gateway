@@ -161,12 +161,14 @@ func SupportedFormats() []Format {
 // are included for internal recovery/reclaim workers even though those
 // operations are not advertised as user-facing lifecycle capabilities.
 func WorkerFormats() []Format {
-	formats := make([]Format, 0, len(supportedFormatProfiles))
+	formats := make([]Format, 0, len(supportedFormatProfiles)+1)
 	for _, profile := range supportedFormatProfiles {
 		if profile.Format == FormatAPT || profile.Format == FormatGo || hasBackgroundOperation(profile.HostedOperations) || hasBackgroundOperation(profile.ProxyOperations) {
 			formats = append(formats, profile.Format)
 		}
 	}
+	// Cargo's pre-admission Hosted path still needs durable orphan recovery.
+	formats = append(formats, FormatCargo)
 	return formats
 }
 

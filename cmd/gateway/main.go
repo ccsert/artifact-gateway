@@ -80,6 +80,7 @@ func main() {
 	dependencies.NativeNPMObjectStore = objectStore
 	dependencies.NativePyPIObjectStore = objectStore
 	dependencies.NativeGoObjectStore = objectStore
+	dependencies.NativeCargoObjectStore = objectStore
 	dependencies.NativeAPTObjectStore = objectStore
 
 	if len(cfg.APTRestoreTrustedFingerprints) > 0 {

@@ -15,6 +15,9 @@ const (
 	FormatNPM   Format = "npm"
 	FormatPyPI  Format = "pypi"
 	FormatGo    Format = "go"
+	// FormatCargo is an internal Hosted target until the Cargo admission issue
+	// makes a verified profile available in management APIs and the Console.
+	FormatCargo Format = "cargo"
 	// FormatAPT is a protocol-only Debian repository proxy. APT publication
 	// requires trusted Release metadata and signing, so Hosted is intentionally
 	// not admitted until that workflow is implemented.
