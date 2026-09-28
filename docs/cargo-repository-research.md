@@ -13,11 +13,13 @@ private/anonymous read policy, capacity, audit, and durable orphan recovery.
 The Hosted search and yank increment adds official-client search/yank/unyank,
 index cache validation, management search/browse, and crate version deep links.
 Memory and PostgreSQL/RustFS recovery paths are tested. A reservation remains
-invisible until publication. Cargo Hosted repositories require internal
+invisible until publication. Cargo repositories and Groups require internal
 creation; the public format catalog, OpenAPI, and Console do not advertise
-Cargo. The C2 sparse Proxy cache and checksum gate and the C3 durable Group
-version owner core are merged; their remaining acceptance work is tracked by
-#145 and #146. Lifecycle and public admission remain in #147–#149.
+Cargo. The C2 sparse Proxy cache, checksum gate, and PostgreSQL/RustFS offline
+replay were accepted in #156 and #158. The C3 durable Group owner, member
+collision preflight, and first-read conflict rejection were accepted in #157
+and #159. Lifecycle, security admission, and public capabilities remain in
+#147–#149.
 `make integration-test` also drives an official Cargo client through a
 PostgreSQL/RustFS Proxy replay after the upstream is shut down. This document
 uses only Gitea and Cargo-owned documentation as protocol evidence.

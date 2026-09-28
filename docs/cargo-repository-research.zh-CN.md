@@ -4,7 +4,7 @@
 
 状态：研究建议与分阶段实施记录，Cargo 尚未通过公开格式准入。非公开 C0 基础已实现严格有界 publish framing、完整 `.crate` 校验、规范 manifest 身份、sparse index 路径/行转换，以及 Memory/PostgreSQL 的持久身份预留。C1 Hosted 主路径增加 `/cargo/{repository}/` 路由：官方客户端发布、依赖解析和安装，服务端原子提交索引行与不可变下载，私有/匿名读取策略、容量和审计，以及未提交对象的持久回收。Memory 与 PostgreSQL/RustFS 的故障恢复均有测试覆盖。
 
-持久预留覆盖大小写与 `-`/`_` 碰撞、并发 claim 和精确重试；预留不代表发布完成，也不是可见 sparse index 行。Cargo 路由仅能用于内部创建的仓库；对外格式目录、OpenAPI 和 Console 创建选项尚不声明 Cargo。Hosted 已有官方客户端搜索、yank/unyank、管理搜索与浏览、版本深链接及索引缓存校验。C2 Proxy 的 sparse 缓存与 checksum 校验、C3 Group 的持久版本 owner 核心已合并；两者的剩余验收分别由 #145、#146 跟踪。完整生命周期与公开准入仍由 #147–#149 跟踪。运行 `make cargo-contract` 需要固定 Rust/Cargo 1.96.0；缺少 Cargo 时门禁失败。`make integration-test` 另用官方 Cargo 验证 PostgreSQL/RustFS 上的 Proxy 离线重放。
+持久预留覆盖大小写与 `-`/`_` 碰撞、并发 claim 和精确重试；预留不代表发布完成，也不是可见 sparse index 行。Cargo 路由仅能用于内部创建的仓库与 Group；对外格式目录、OpenAPI 和 Console 创建选项尚不声明 Cargo。Hosted 已有官方客户端搜索、yank/unyank、管理搜索与浏览、版本深链接及索引缓存校验。C2 Proxy 的 sparse 缓存、checksum 校验和 PostgreSQL/RustFS 离线重放已由 #156、#158 验收；C3 Group 的持久 owner、成员冲突预检及首次读取冲突拒绝已由 #157、#159 验收。Cargo 生命周期、安全准入与公开能力仍由 #147–#149 跟踪。运行 `make cargo-contract` 需要固定 Rust/Cargo 1.96.0；缺少 Cargo 时门禁失败。`make integration-test` 另用官方 Cargo 验证 PostgreSQL/RustFS 上的 Proxy 离线重放。
 
 ## 决策
 
