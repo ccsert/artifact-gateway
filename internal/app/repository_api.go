@@ -135,6 +135,7 @@ type GatewayStore interface {
 	repository.NativePyPIStore
 	repository.NativeGoStore
 	repository.NativeCargoStore
+	repository.CargoProxyStore
 	repository.NativeAPTStore
 	repository.NativeAPTPublicationStore
 	repository.APIKeyStore
@@ -274,6 +275,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	}
 	nativeGo := newNativeGoHandler(store, nativeGoObjects, authenticator).withMetrics(metrics).withProxy(goClient).withPublicationScanner(publicationScanner)
 	nativeCargo := newNativeCargoHandler(store, dependencies.NativeCargoObjectStore, authenticator)
+	nativeCargo.upstream = UpstreamClient{HTTPClient: dependencies.CargoUpstreamClient}
 	nativeAPTObjects := dependencies.NativeAPTObjectStore
 	if nativeAPTObjects == nil {
 		nativeAPTObjects = NewMemoryOCIObjectStore()
