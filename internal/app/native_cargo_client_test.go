@@ -147,4 +147,27 @@ func TestNativeCargoOfficialClientHostedFlow(t *testing.T) {
 	runWithEnvironment(publicEnvironment, publicConsumer, "add", "gateway-official-cargo", "--registry", "fixture")
 	runWithEnvironment(publicEnvironment, publicConsumer, "check")
 	runWithEnvironment(publicEnvironment, publicConsumer, "install", "gateway-official-cargo", "--registry", "fixture", "--root", filepath.Join(t.TempDir(), "public-install"))
+	if _, err := store.TombstoneCargoPublication(context.Background(), repo.ID, "gateway-official-cargo", "0.2.0"); err != nil {
+		t.Fatal(err)
+	}
+	blockedHome := t.TempDir()
+	write(filepath.Join(blockedHome, "config.toml"), config)
+	blockedEnvironment := append(os.Environ(), "CARGO_HOME="+blockedHome, "CARGO_TARGET_DIR="+filepath.Join(t.TempDir(), "blocked-target"),
+		"CARGO_REGISTRIES_FIXTURE_TOKEN=", "HTTP_PROXY=", "HTTPS_PROXY=", "ALL_PROXY=", "NO_PROXY=127.0.0.1,localhost")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	blocked := exec.CommandContext(ctx, cargoPath, "install", "gateway-official-cargo", "--registry", "fixture", "--root", filepath.Join(t.TempDir(), "blocked-install"))
+	blocked.Dir, blocked.Env = publicConsumer, blockedEnvironment
+	blockedOutput, blockedErr := blocked.CombinedOutput()
+	cancel()
+	if blockedErr == nil {
+		t.Fatalf("official Cargo installed a tombstoned crate: %s", blockedOutput)
+	}
+	if _, err := store.RestoreCargoPublication(context.Background(), repo.ID, "gateway-official-cargo", "0.2.0"); err != nil {
+		t.Fatal(err)
+	}
+	restoredHome := t.TempDir()
+	write(filepath.Join(restoredHome, "config.toml"), config)
+	restoredEnvironment := append(os.Environ(), "CARGO_HOME="+restoredHome, "CARGO_TARGET_DIR="+filepath.Join(t.TempDir(), "restored-target"),
+		"CARGO_REGISTRIES_FIXTURE_TOKEN=", "HTTP_PROXY=", "HTTPS_PROXY=", "ALL_PROXY=", "NO_PROXY=127.0.0.1,localhost")
+	runWithEnvironment(restoredEnvironment, publicConsumer, "install", "gateway-official-cargo", "--registry", "fixture", "--root", filepath.Join(t.TempDir(), "restored-install"))
 }
