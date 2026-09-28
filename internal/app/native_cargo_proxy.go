@@ -64,7 +64,7 @@ func (h nativeCargoHandler) proxyConfig(r *http.Request, repo repository.HostedR
 		}
 		return current, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		if have {
 			return current, nil
@@ -128,7 +128,7 @@ func (h nativeCargoHandler) proxyIndex(r *http.Request, repo repository.HostedRe
 		}
 		return current, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusNotModified && have {
 		ttl := cargoIndexTTL
 		if current.Status != http.StatusOK {
@@ -231,7 +231,7 @@ func (h nativeCargoHandler) proxyDownload(w http.ResponseWriter, r *http.Request
 			h.writeError(w, http.StatusBadGateway, "Cargo upstream archive unavailable")
 			return
 		}
-		defer response.Body.Close()
+		defer func() { _ = response.Body.Close() }()
 		if response.StatusCode != http.StatusOK {
 			h.writeError(w, http.StatusBadGateway, "Cargo upstream archive unavailable")
 			return
@@ -244,7 +244,7 @@ func (h nativeCargoHandler) proxyDownload(w http.ResponseWriter, r *http.Request
 			h.writeError(w, http.StatusBadGateway, "Cargo upstream archive invalid")
 			return
 		}
-		defer spool.Close()
+		defer func() { _ = spool.Close() }()
 		if spool.Digest() != "sha256:"+checksum {
 			h.writeError(w, http.StatusBadGateway, "Cargo upstream archive checksum mismatch")
 			return
@@ -269,7 +269,7 @@ func (h nativeCargoHandler) proxyDownload(w http.ResponseWriter, r *http.Request
 		h.writeError(w, http.StatusServiceUnavailable, "Cargo archive object unavailable")
 		return
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	if size != crate.Size {
 		h.writeError(w, http.StatusServiceUnavailable, "Cargo archive object size changed")
 		return
@@ -282,7 +282,7 @@ func (h nativeCargoHandler) proxyDownload(w http.ResponseWriter, r *http.Request
 		h.writeError(w, http.StatusServiceUnavailable, "Cargo archive object checksum changed")
 		return
 	}
-	defer spool.Close()
+	defer func() { _ = spool.Close() }()
 	w.Header().Set("ETag", `"`+checksum+`"`)
 	w.Header().Set("X-Checksum-Sha256", checksum)
 	w.Header().Set("Content-Type", "application/octet-stream")
@@ -309,7 +309,7 @@ func (h nativeCargoHandler) proxySearch(w http.ResponseWriter, r *http.Request, 
 		h.writeError(w, http.StatusBadGateway, "Cargo upstream search unavailable")
 		return
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		h.writeError(w, http.StatusBadGateway, "Cargo upstream search unavailable")
 		return

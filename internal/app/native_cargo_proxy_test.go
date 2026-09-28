@@ -70,7 +70,7 @@ func TestCargoProxyVerifiedCacheAndOfflineReplay(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res.Body.Close()
+		defer func() { _ = res.Body.Close() }()
 		body, err := io.ReadAll(res.Body)
 		if err != nil {
 			t.Fatal(err)

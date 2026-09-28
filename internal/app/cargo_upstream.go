@@ -16,7 +16,7 @@ import (
 func (c UpstreamClient) FetchCargo(ctx context.Context, repo repository.HostedRepository, target string, headers http.Header) (*http.Response, error) {
 	u, err := url.Parse(target)
 	if err != nil || !proxyUpstreamURLAllowed(repo, u) {
-		return nil, errors.New("Cargo upstream target is not allowed")
+		return nil, errors.New("cargo upstream target is not allowed")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -29,7 +29,7 @@ func (c UpstreamClient) FetchCargo(ctx context.Context, repo repository.HostedRe
 		}
 	}
 	if err := applyUpstreamAuth(req, repo.UpstreamAuth); err != nil {
-		return nil, errors.New("Cargo upstream credential unavailable")
+		return nil, errors.New("cargo upstream credential unavailable")
 	}
 	client := c.HTTPClient
 	if client == nil {
@@ -41,13 +41,13 @@ func (c UpstreamClient) FetchCargo(ctx context.Context, repo repository.HostedRe
 	if u.Scheme == "https" {
 		client, err = egress.Apply(client, repo.EgressProxy, u.String(), rawEgressHooks())
 		if err != nil {
-			return nil, errors.New("Cargo upstream egress unavailable")
+			return nil, errors.New("cargo upstream egress unavailable")
 		}
 	}
 	origin := u.Host
 	client.CheckRedirect = func(next *http.Request, _ []*http.Request) error {
 		if !proxyUpstreamURLAllowed(repo, next.URL) {
-			return errors.New("Cargo upstream redirect is not allowed")
+			return errors.New("cargo upstream redirect is not allowed")
 		}
 		if next.URL.Host != origin {
 			next.Header.Del("Authorization")
@@ -56,7 +56,7 @@ func (c UpstreamClient) FetchCargo(ctx context.Context, repo repository.HostedRe
 	}
 	response, err := tracedHTTPClient(client).Do(req)
 	if err != nil {
-		return nil, errors.New("Cargo upstream unavailable")
+		return nil, errors.New("cargo upstream unavailable")
 	}
 	return response, nil
 }
