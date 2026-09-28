@@ -51,7 +51,7 @@ reference-scanner-smoke:
 
 cargo-contract:
 	@CARGO_REQUIRED=1 CARGO_EXPECTED_VERSION=1.96.0 go test -count=1 ./internal/protocol/cargo ./internal/protocol/identity
-	@CARGO_REQUIRED=1 go test -count=1 ./internal/app -run 'TestNativeCargoOfficialClientHostedFlow|TestCargoProxyOfficialSourceReplacementOnlineAndOffline'
+	@CARGO_REQUIRED=1 go test -count=1 ./internal/app -run 'TestNativeCargoOfficialClientHostedFlow|TestCargoProxyOfficialSourceReplacementOnlineAndOffline|TestCargoGroupOfficialAlternateRegistry'
 
 openapi-dependency-test:
 	@bash ./scripts/openapi-dependency-test.sh

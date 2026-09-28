@@ -120,10 +120,16 @@ func TestCargoGroupIndexAndDownloadStayWithOwner(t *testing.T) {
 func TestCargoGroupOfficialAlternateRegistry(t *testing.T) {
 	cargoPath, err := exec.LookPath("cargo")
 	if err != nil {
+		if os.Getenv("CARGO_REQUIRED") == "1" {
+			t.Fatal("Cargo 1.96.0 is required for the Group contract")
+		}
 		t.Skip("Cargo is unavailable")
 	}
 	version, err := exec.Command(cargoPath, "--version").Output()
 	if err != nil || !strings.HasPrefix(string(version), "cargo 1.96.0 ") {
+		if os.Getenv("CARGO_REQUIRED") == "1" {
+			t.Fatalf("Cargo 1.96.0 is required, got %q: %v", version, err)
+		}
 		t.Skipf("Cargo 1.96.0 is unavailable: %s", version)
 	}
 	write := func(path, content string) {
