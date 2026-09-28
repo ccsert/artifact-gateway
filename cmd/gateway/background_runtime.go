@@ -90,6 +90,12 @@ func (r backgroundRuntime) startWorkers(ctx context.Context, cfg config.Config, 
 	if cfg.WorkerEnabled("cargo", "reclaim") {
 		app.NativeCargoMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
 	}
+	if cfg.WorkerEnabled("cargo", "promotion") {
+		app.NativeCargoPromotion{Store: r.store, Objects: r.objects, Intelligence: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
+	}
+	if cfg.WorkerEnabled("cargo", "replication") {
+		app.CargoReplication{Store: r.store, Source: r.objects, Destination: r.objects, Metrics: r.metrics}.Start(ctx, time.Minute)
+	}
 	r.startAPTWorkers(ctx, cfg)
 }
 

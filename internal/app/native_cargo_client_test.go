@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 func TestNativeCargoOfficialClientHostedFlow(t *testing.T) {
@@ -35,7 +36,8 @@ func TestNativeCargoOfficialClientHostedFlow(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: NewMemoryOCIObjectStore()},
+	objects := NewMemoryOCIObjectStore()
+	server := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: objects},
 		store, TestAdapter{}, testAuthenticator()))
 	defer server.Close()
 	home := t.TempDir()
@@ -170,4 +172,55 @@ func TestNativeCargoOfficialClientHostedFlow(t *testing.T) {
 	restoredEnvironment := append(os.Environ(), "CARGO_HOME="+restoredHome, "CARGO_TARGET_DIR="+filepath.Join(t.TempDir(), "restored-target"),
 		"CARGO_REGISTRIES_FIXTURE_TOKEN=", "HTTP_PROXY=", "HTTPS_PROXY=", "ALL_PROXY=", "NO_PROXY=127.0.0.1,localhost")
 	runWithEnvironment(restoredEnvironment, publicConsumer, "install", "gateway-official-cargo", "--registry", "fixture", "--root", filepath.Join(t.TempDir(), "restored-install"))
+	publication, err := store.GetCargoPublication(context.Background(), repo.ID, "gateway-official-cargo", "0.2.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	promotionTarget, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "cargo-official-promoted", Format: repository.FormatCargo,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	replicationTarget, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{
+		ID: uuid.NewString(), Name: "cargo-official-replicated", Format: repository.FormatCargo,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	promoter := NativeCargoPromotion{Store: store, Objects: objects}
+	if _, _, err := promoter.Enqueue(context.Background(), promotionTarget.ID, "official-promote", CargoPromotionPayload{
+		SourceRepositoryID: repo.ID, Name: publication.Name, Version: publication.Version, Digest: publication.Digest,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := promoter.RunJobs(context.Background(), 10); err != nil {
+		t.Fatal(err)
+	}
+	plan, _, err := store.CreateReplicationPlan(context.Background(), repository.ReplicationPlan{
+		ID: uuid.NewString(), SourceRepositoryID: repo.ID, TargetRepositoryID: replicationTarget.ID,
+		Format: repository.FormatCargo, Coordinate: publication.Name + "@" + publication.Version,
+		Digest: publication.Digest, IdempotencyKey: "official-replicate",
+	}, []repository.ReplicationCheckpoint{{SourceObjectKey: publication.ObjectKey,
+		ObjectKey: publication.ObjectKey, Digest: publication.Digest, Size: publication.Size}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := (CargoReplication{Store: store, Source: objects, Destination: objects}).RunJobs(context.Background(), 10); err != nil {
+		t.Fatal(err)
+	}
+	if completed, err := store.GetReplicationPlan(context.Background(), replicationTarget.ID, plan.ID); err != nil || completed.State != "completed" {
+		t.Fatalf("official replication=%+v err=%v", completed, err)
+	}
+	for _, target := range []struct {
+		registry string
+		repo     repository.HostedRepository
+	}{{"promoted", promotionTarget}, {"replicated", replicationTarget}} {
+		targetHome := t.TempDir()
+		write(filepath.Join(targetHome, "config.toml"), "[registries."+target.registry+"]\nindex = \"sparse+"+server.URL+"/cargo/"+target.repo.Name+"/\"\ncredential-provider = \"cargo:token\"\n")
+		targetEnvironment := append(os.Environ(), "CARGO_HOME="+targetHome, "CARGO_TARGET_DIR="+filepath.Join(t.TempDir(), "distribution-target"),
+			"CARGO_REGISTRIES_"+strings.ToUpper(target.registry)+"_TOKEN=admin-secret", "HTTP_PROXY=", "HTTPS_PROXY=", "ALL_PROXY=", "NO_PROXY=127.0.0.1,localhost")
+		runWithEnvironment(targetEnvironment, publicConsumer, "install", "gateway-official-cargo", "--registry", target.registry,
+			"--root", filepath.Join(t.TempDir(), "distribution-install"))
+	}
 }

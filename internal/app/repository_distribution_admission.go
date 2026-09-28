@@ -30,6 +30,17 @@ func (h generatedRepositoryAPIAdapter) artifactDistributionDigests(ctx context.C
 		}
 		return goPublicationDigests(publication), nil
 	}
+	if source.Format == repository.FormatCargo {
+		name, version, valid := splitVersionCoordinate(coordinate)
+		if !valid {
+			return nil, repository.ErrNotFound
+		}
+		publication, err := h.cargo.GetCargoPublication(ctx, source.ID, name, version)
+		if err != nil || publication.Digest != digest {
+			return nil, repository.ErrNotFound
+		}
+		return digests, nil
+	}
 	if source.Format != repository.FormatPyPI {
 		return digests, nil
 	}

@@ -222,7 +222,8 @@ func FormatSupportsRepositoryProvisioning(format Format, repositoryType Reposito
 func FormatSupportsOperation(format Format, repositoryType RepositoryType, operation RepositoryOperation) bool {
 	if format == FormatCargo && repositoryType == RepositoryTypeHosted {
 		switch operation {
-		case RepositoryOperationDelete, RepositoryOperationRestore, RepositoryOperationRetain, RepositoryOperationReclaim:
+		case RepositoryOperationDelete, RepositoryOperationRestore, RepositoryOperationRetain, RepositoryOperationReclaim,
+			RepositoryOperationPromote, RepositoryOperationReplicate:
 			return true
 		}
 	}
