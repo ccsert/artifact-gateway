@@ -39,6 +39,7 @@ type Dependencies struct {
 	NativePyPIObjectStore         OCIObjectStore
 	NativeGoObjectStore           OCIObjectStore
 	NativeCargoObjectStore        OCIObjectStore
+	CargoUpstreamClient           *http.Client
 	NativeAPTObjectStore          OCIObjectStore
 	APTArchiveTrust               aptpublication.SnapshotArchiveTrustVerifier
 	APTSigner                     aptpublication.Signer

@@ -25,6 +25,8 @@ const cargoPublishBodyLimit = (129 << 20) + 8
 
 type nativeCargoHandler struct {
 	store      cargoPublicationStore
+	proxy      repository.CargoProxyStore
+	upstream   UpstreamClient
 	repos      repository.HostedRepositoryStore
 	objects    OCIObjectStore
 	auth       Authenticator
@@ -49,7 +51,7 @@ func newNativeCargoHandler(store GatewayStore, objects OCIObjectStore, auth Auth
 	if objects == nil {
 		objects = NewMemoryOCIObjectStore()
 	}
-	return nativeCargoHandler{store: store, repos: store, objects: objects, auth: auth,
+	return nativeCargoHandler{store: store, proxy: store, repos: store, objects: objects, auth: auth,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth}, audit: store, anonymous: store}
 }
 
@@ -68,7 +70,7 @@ func (h nativeCargoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusServiceUnavailable, "repository unavailable")
 		return
 	}
-	if repo.Format != repository.FormatCargo || repo.Type != repository.RepositoryTypeHosted || repo.State != repository.RepositoryActive {
+	if repo.Format != repository.FormatCargo || (repo.Type != repository.RepositoryTypeHosted && repo.Type != repository.RepositoryTypeProxy) || repo.State != repository.RepositoryActive {
 		http.NotFound(w, r)
 		return
 	}
@@ -82,6 +84,10 @@ func (h nativeCargoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		allowedMethod = r.Method == http.MethodGet || r.Method == http.MethodHead
 	}
 	if !allowedMethod {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if repo.Type == repository.RepositoryTypeProxy && (route.kind == "publish" || route.kind == "yank" || route.kind == "unyank") {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -110,6 +116,10 @@ func (h nativeCargoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.recordAudit(r, repo, route.name, route.kind, principal.Actor, repository.AuditAccessDenied, http.StatusForbidden, 0)
 			return
 		}
+	}
+	if repo.Type == repository.RepositoryTypeProxy {
+		h.serveProxy(w, r, repo, route, principal.Actor)
+		return
 	}
 	switch route.kind {
 	case "config":
