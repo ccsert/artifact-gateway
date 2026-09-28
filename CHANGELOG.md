@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+## 0.4.2 - 2026-09-28
+
 - Every dialog that starts a write now stays put until that write settles. The create forms for repositories, API keys, service accounts, credentials, groups, scheduled tasks, and webhook subscriptions, plus the Raw upload dialog, no longer dismiss through Escape, the mask, or the close button while their request is in flight, so a half-applied change cannot be abandoned under a pending response and the same record cannot be submitted twice by reopening the form. Each of those save paths also releases its busy state in a `finally`, so a request that fails at the network level leaves the dialog dismissible again instead of locking the form open.
 
 - Creating a service account, issuing a credential, and linking an OIDC identity now report a failed save inside the dialog that started it. Those three were the last write dialogs that printed their failure to a banner behind the mask, which read as "the button did nothing"; the page banners stay reserved for loading the account, credential, and identity lists.
