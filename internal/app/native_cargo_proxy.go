@@ -130,7 +130,11 @@ func (h nativeCargoHandler) proxyIndex(r *http.Request, repo repository.HostedRe
 	}
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusNotModified && have {
-		current.FetchedAt, current.ExpiresAt = now, now.Add(cargoIndexTTL)
+		ttl := cargoIndexTTL
+		if current.Status != http.StatusOK {
+			ttl = cargoNegativeTTL
+		}
+		current.FetchedAt, current.ExpiresAt = now, now.Add(ttl)
 		if err := h.proxy.PutCargoProxyIndex(r.Context(), current); err != nil {
 			return current, err
 		}

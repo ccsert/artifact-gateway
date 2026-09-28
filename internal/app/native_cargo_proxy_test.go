@@ -246,3 +246,75 @@ func TestCargoProxyOfficialSourceReplacementOnlineAndOffline(t *testing.T) {
 	run("check", "--locked")
 	run("check", "--locked", "--offline")
 }
+
+func TestCargoProxyNegativeAndConditionalIndexCache(t *testing.T) {
+	ctx := context.Background()
+	var mu sync.Mutex
+	status, hits, condition := http.StatusNotFound, 0, ""
+	checksum := strings.Repeat("a", 64)
+	row := `{"name":"demo","vers":"1.0.0","cksum":"` + checksum + `","yanked":false}` + "\n"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/de/mo/demo" {
+			http.NotFound(w, r)
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		hits++
+		condition = r.Header.Get("If-None-Match")
+		if status == http.StatusOK && condition == `"v1"` {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		if status != http.StatusOK {
+			w.WriteHeader(status)
+			return
+		}
+		w.Header().Set("ETag", `"v1"`)
+		_, _ = io.WriteString(w, row)
+	}))
+	defer upstream.Close()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "cargo-negative", Name: "cargo-negative",
+		Format: repository.FormatCargo, Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newNativeCargoHandler(store, NewMemoryOCIObjectStore(), testAuthenticator())
+	h.upstream = UpstreamClient{HTTPClient: upstream.Client()}
+	request := httptest.NewRequest(http.MethodGet, "http://gateway/cargo/cargo-negative/de/mo/demo", nil)
+	first, err := h.proxyIndex(request, repo, "demo")
+	if err != nil || first.Status != 404 {
+		t.Fatalf("negative=%+v err=%v", first, err)
+	}
+	if _, err := h.proxyIndex(request, repo, "demo"); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	gotHits := hits
+	status = http.StatusOK
+	mu.Unlock()
+	if gotHits != 1 {
+		t.Fatalf("negative cache hits=%d", gotHits)
+	}
+	first.FetchedAt, first.ExpiresAt = time.Now().Add(-2*time.Minute), time.Now().Add(-time.Minute)
+	if err := store.PutCargoProxyIndex(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	positive, err := h.proxyIndex(request, repo, "demo")
+	if err != nil || positive.Status != 200 || string(positive.Body) != row {
+		t.Fatalf("positive=%+v err=%v", positive, err)
+	}
+	positive.FetchedAt, positive.ExpiresAt = time.Now().Add(-2*time.Minute), time.Now().Add(-time.Minute)
+	if err := store.PutCargoProxyIndex(ctx, positive); err != nil {
+		t.Fatal(err)
+	}
+	refreshed, err := h.proxyIndex(request, repo, "demo")
+	mu.Lock()
+	gotCondition := condition
+	gotHits = hits
+	mu.Unlock()
+	if err != nil || gotCondition != `"v1"` || gotHits != 3 || string(refreshed.Body) != row || !refreshed.ExpiresAt.After(time.Now()) {
+		t.Fatalf("conditional index=%+v condition=%q hits=%d err=%v", refreshed, gotCondition, gotHits, err)
+	}
+}
