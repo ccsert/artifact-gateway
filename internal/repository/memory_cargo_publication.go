@@ -56,6 +56,10 @@ func (s *MemoryStore) CommitCargoPublication(ctx context.Context, incoming Cargo
 		if owner, found := s.cargoGroupVersions[ownerKey]; found && !cargoGroupPublicationCompatible(owner, publication) {
 			return CargoPublication{}, false, ErrCargoGroupConflict
 		}
+		if err := s.preflightCargoGroupMembersLocked(group.ID, group.Members,
+			cargoGroupKnownIndex{RepositoryID: publication.RepositoryID, Body: publication.IndexRow}); err != nil {
+			return CargoPublication{}, false, err
+		}
 	}
 	capacity, err := s.repositoryCapacityLocked(repo.ID)
 	if err != nil {

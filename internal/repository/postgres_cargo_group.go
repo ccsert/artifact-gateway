@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sort"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/protocol/cargo"
 )
@@ -107,4 +108,89 @@ func (s *PostgresStore) GetCargoGroupVersion(ctx context.Context, groupID, name,
 		return CargoGroupVersion{}, ErrNotFound
 	}
 	return value, err
+}
+
+// Group mutations take member repository locks before the group row lock. A
+// concurrent Hosted publication or Proxy index write takes the repository
+// lock first, so the preflight sees a stable set of known coordinates.
+func lockCargoGroupRepositories(ctx context.Context, tx *sql.Tx, memberSets ...[]GroupMember) error {
+	set := make(map[string]bool)
+	for _, members := range memberSets {
+		for _, member := range members {
+			set[member.RepositoryID] = true
+		}
+	}
+	ids := make([]string, 0, len(set))
+	for id := range set {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		var found string
+		if err := tx.QueryRowContext(ctx, `SELECT id::text FROM hosted_repositories WHERE id::text=$1 FOR UPDATE`, id).Scan(&found); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrNotFound
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func preflightPostgresCargoGroupMembers(ctx context.Context, tx *sql.Tx, groupID string, members []GroupMember, additional ...cargoGroupKnownIndex) error {
+	preflight := newCargoGroupPreflight(groupID)
+	ownerRows, err := tx.QueryContext(ctx, `SELECT group_id::text,source_repository_id::text,name,version,checksum,index_row
+		FROM native_cargo_group_versions WHERE group_id::text=$1`, groupID)
+	if err != nil {
+		return err
+	}
+	for ownerRows.Next() {
+		var owner CargoGroupVersion
+		if err := ownerRows.Scan(&owner.GroupID, &owner.SourceRepositoryID, &owner.Name, &owner.Version, &owner.Checksum, &owner.IndexRow); err != nil {
+			_ = ownerRows.Close()
+			return err
+		}
+		if err := preflight.addVersion(owner); err != nil {
+			_ = ownerRows.Close()
+			return err
+		}
+	}
+	err = ownerRows.Err()
+	_ = ownerRows.Close()
+	if err != nil {
+		return err
+	}
+	for _, member := range members {
+		for _, query := range []string{
+			`SELECT index_row FROM native_cargo_publications WHERE repository_id::text=$1`,
+			`SELECT body FROM native_cargo_proxy_indexes WHERE repository_id::text=$1 AND status=200`,
+		} {
+			rows, err := tx.QueryContext(ctx, query, member.RepositoryID)
+			if err != nil {
+				return err
+			}
+			for rows.Next() {
+				var body []byte
+				if err := rows.Scan(&body); err != nil {
+					_ = rows.Close()
+					return err
+				}
+				if err := preflight.addIndex(cargoGroupKnownIndex{RepositoryID: member.RepositoryID, Body: body}); err != nil {
+					_ = rows.Close()
+					return err
+				}
+			}
+			err = rows.Err()
+			_ = rows.Close()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	for _, index := range additional {
+		if err := preflight.addIndex(index); err != nil {
+			return err
+		}
+	}
+	return nil
 }
