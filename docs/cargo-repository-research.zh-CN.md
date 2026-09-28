@@ -2,9 +2,9 @@
 
 [English](cargo-repository-research.md) | [文档索引](README.zh-CN.md)
 
-状态：研究建议，不是已实现协议或已接纳格式。C0 字节基础已实现严格有界 publish framing、完整 `.crate` 校验、规范 manifest 身份、sparse index 路径/行转换，以及官方 `cargo package`/`cargo publish` 契约测试。
+状态：研究建议，不是已实现协议或已接纳格式。非公开 C0 基础已实现严格有界 publish framing、完整 `.crate` 校验、规范 manifest 身份、sparse index 路径/行转换、官方 `cargo package`/`cargo publish` 契约测试，以及 Memory/PostgreSQL 的持久身份预留。
 
-C0 退出前仍需持久碰撞预留和 Memory/PostgreSQL 身份一致性；目前不公开 Cargo 路由、格式、OpenAPI 或 Console 选项。运行 `make cargo-contract` 需要固定 Rust/Cargo 1.96.0；缺少 Cargo 时门禁失败。
+持久预留覆盖大小写与 `-`/`_` 碰撞、并发 claim 和精确重试；预留不代表发布完成，也不是可见 sparse index 行。目前不公开 Cargo 路由、格式、OpenAPI 或 Console 选项。运行 `make cargo-contract` 需要固定 Rust/Cargo 1.96.0；缺少 Cargo 时门禁失败。
 
 ## 决策
 
@@ -90,7 +90,7 @@ Cargo 会把 registry URL 写入 lockfile，同时提供 sparse/Git 会形成不
 
 ### C0：冻结契约与字节 parser
 
-Parser 与官方 client 契约已完成；剩余持久 identity reservation，用于在 Memory/PostgreSQL 证明大小写与 `-`/`_` 碰撞。
+Parser、官方 client 契约和非公开持久 identity reservation 已实现；Memory/PostgreSQL 一致性覆盖大小写与 `-`/`_` 碰撞、并发 claim 和精确重试。
 
 冻结 sparse route、身份、碰撞、frame limit、error envelope、private auth；覆盖异常 frame、gzip/tar expansion、重复/穿越路径、metadata mismatch、renamed dependency、feature、SemVer build metadata、checksum 和当前 index 字段。
 
