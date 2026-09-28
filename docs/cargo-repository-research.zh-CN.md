@@ -6,6 +6,8 @@
 
 持久预留覆盖大小写与 `-`/`_` 碰撞、并发 claim 和精确重试；预留不代表发布完成，也不是可见 sparse index 行。Cargo 路由仅能用于内部创建的仓库与 Group；对外格式目录、OpenAPI 和 Console 创建选项尚不声明 Cargo。Hosted 已有官方客户端搜索、yank/unyank、管理搜索与浏览、版本深链接及索引缓存校验。C2 Proxy 的 sparse 缓存、checksum 校验和 PostgreSQL/RustFS 离线重放已由 #156、#158 验收；C3 Group 的持久 owner、成员冲突预检及首次读取冲突拒绝已由 #157、#159 验收。Cargo 生命周期、安全准入与公开能力仍由 #147–#149 跟踪。运行 `make cargo-contract` 需要固定 Rust/Cargo 1.96.0；缺少 Cargo 时门禁失败。`make integration-test` 另用官方 Cargo 验证 PostgreSQL/RustFS 上的 Proxy 离线重放。
 
+C4 首段将 Hosted 扫描作业绑定到已提交的 crate/version 和 SHA-256 身份。显式配置的外部扫描服务可读取并校验精确的 `.crate` 字节；内置参考扫描器尚不声明 Cargo 覆盖。版本化隔离记录与需显式开启的读取策略可从 Hosted、Group 的 sparse index 和搜索中隐藏隔离版本，并拒绝 GET/HEAD 下载；解除隔离后恢复读取。墓碑、保留回收、晋级、复制和公开格式准入仍未完成。
+
 ## 决策
 
 Cargo 值得在 APT H3 后成为下一个新生态，优先于 NuGet；APT 生产签名、恢复和生命周期仍是当前完成工作。这是工程优先级建议，不代表已证实客户需求。

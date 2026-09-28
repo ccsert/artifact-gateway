@@ -275,7 +275,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		nativeGoObjects = NewMemoryOCIObjectStore()
 	}
 	nativeGo := newNativeGoHandler(store, nativeGoObjects, authenticator).withMetrics(metrics).withProxy(goClient).withPublicationScanner(publicationScanner)
-	nativeCargo := newNativeCargoHandler(store, dependencies.NativeCargoObjectStore, authenticator)
+	nativeCargo := newNativeCargoHandler(store, dependencies.NativeCargoObjectStore, authenticator).withPublicationScanner(publicationScanner)
 	nativeCargo.upstream = UpstreamClient{HTTPClient: dependencies.CargoUpstreamClient}
 	nativeAPTObjects := dependencies.NativeAPTObjectStore
 	if nativeAPTObjects == nil {

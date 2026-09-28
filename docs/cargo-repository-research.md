@@ -20,6 +20,13 @@ replay were accepted in #156 and #158. The C3 durable Group owner, member
 collision preflight, and first-read conflict rejection were accepted in #157
 and #159. Lifecycle, security admission, and public capabilities remain in
 #147–#149.
+The first C4 slice binds Hosted scan jobs to the committed crate/version and
+SHA-256 identity. Explicitly configured external scanners can scan the exact
+`.crate` bytes; the bundled reference scanner does not yet claim Cargo
+coverage. A versioned Hosted quarantine record and an opt-in read policy hide
+quarantined versions from Hosted and Group sparse indexes and search, and deny
+GET/HEAD downloads. Release restores reads. Tombstone, retention, promotion,
+replication, and public format admission remain open.
 `make integration-test` also drives an official Cargo client through a
 PostgreSQL/RustFS Proxy replay after the upstream is shut down. This document
 uses only Gitea and Cargo-owned documentation as protocol evidence.

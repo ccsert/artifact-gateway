@@ -47,6 +47,7 @@ var supportedScannerFormats = func() map[string]struct{} {
 	for _, format := range repository.SupportedFormats() {
 		formats[string(format)] = struct{}{}
 	}
+	formats[string(repository.FormatCargo)] = struct{}{}
 	return formats
 }()
 

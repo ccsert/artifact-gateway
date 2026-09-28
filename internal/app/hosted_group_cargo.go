@@ -76,6 +76,11 @@ func (h v2GroupCargoHandler) serve(w http.ResponseWriter, r *http.Request, resol
 			h.writeResolutionError(w, r, err)
 			return
 		}
+		versions, err = h.readableVersions(r, resolver, versions)
+		if err != nil {
+			h.native.writeError(w, http.StatusServiceUnavailable, "Cargo group quarantine policy unavailable")
+			return
+		}
 		var body bytes.Buffer
 		for _, version := range versions {
 			body.Write(bytes.TrimSuffix(version.IndexRow, []byte("\n")))
@@ -90,6 +95,31 @@ func (h v2GroupCargoHandler) serve(w http.ResponseWriter, r *http.Request, resol
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (h v2GroupCargoHandler) readableVersions(r *http.Request, resolver v2GroupResolver, versions []repository.CargoGroupVersion) ([]repository.CargoGroupVersion, error) {
+	readable := make([]repository.CargoGroupVersion, 0, len(versions))
+	for _, version := range versions {
+		repo, err := resolver.repos.GetHostedRepository(r.Context(), version.SourceRepositoryID)
+		if err != nil {
+			return nil, err
+		}
+		if repo.Type == repository.RepositoryTypeHosted {
+			publication, err := h.native.store.GetCargoPublication(r.Context(), repo.ID, version.Name, version.Version)
+			if err != nil || publication.Digest != "sha256:"+version.Checksum {
+				return nil, repository.ErrUpstreamChanged
+			}
+			blocked, err := h.native.readBlocked(r.Context(), repo, publication)
+			if err != nil {
+				return nil, err
+			}
+			if blocked {
+				continue
+			}
+		}
+		readable = append(readable, version)
+	}
+	return readable, nil
 }
 
 func (h v2GroupCargoHandler) reconcileIndex(r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, name string) ([]repository.CargoGroupVersion, error) {
@@ -302,14 +332,16 @@ func (h v2GroupCargoHandler) search(w http.ResponseWriter, r *http.Request, reso
 		all = append(all, item)
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].Name < all[j].Name })
-	total := len(all)
-	if len(all) > limit {
-		all = all[:limit]
-	}
-	for i := range all {
-		versions, err := h.reconcileIndex(r, resolver, group, members, all[i].Name)
+	visible := make([]result, 0, len(all))
+	for _, item := range all {
+		versions, err := h.reconcileIndex(r, resolver, group, members, item.Name)
 		if err != nil {
 			h.writeResolutionError(w, r, err)
+			return
+		}
+		versions, err = h.readableVersions(r, resolver, versions)
+		if err != nil {
+			h.native.writeError(w, http.StatusServiceUnavailable, "Cargo group quarantine policy unavailable")
 			return
 		}
 		latest := ""
@@ -325,10 +357,15 @@ func (h v2GroupCargoHandler) search(w http.ResponseWriter, r *http.Request, reso
 			}
 		}
 		if latest != "" {
-			all[i].MaxVersion = latest
+			item.MaxVersion = latest
+			visible = append(visible, item)
 		}
 	}
-	body, err := json.Marshal(map[string]any{"crates": all, "meta": map[string]int{"total": total}})
+	total := len(visible)
+	if len(visible) > limit {
+		visible = visible[:limit]
+	}
+	body, err := json.Marshal(map[string]any{"crates": visible, "meta": map[string]int{"total": total}})
 	if err != nil {
 		h.native.writeError(w, http.StatusServiceUnavailable, "Cargo group search unavailable")
 		return
