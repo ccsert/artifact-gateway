@@ -18,6 +18,8 @@ func (s *MemoryStore) ListArtifactBrowseNodes(_ context.Context, repositoryID st
 		nodes = s.listMemoryMavenBrowseNodes(repositoryID, parent)
 	case FormatRaw:
 		nodes = s.listMemoryRawBrowseNodes(repositoryID, parent)
+	case FormatCargo:
+		nodes = s.listMemoryCargoBrowseNodes(repositoryID, parent)
 	default:
 		return nil, ErrUnsupportedBrowseFormat
 	}

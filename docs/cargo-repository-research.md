@@ -10,11 +10,13 @@ in Memory and PostgreSQL. The C1 Hosted core adds an internal
 `/cargo/{repository}/` route for official-client publish, resolution, and
 install; atomic server-generated index publication and immutable downloads;
 private/anonymous read policy, capacity, audit, and durable orphan recovery.
+The Hosted search and yank increment adds official-client search/yank/unyank,
+index cache validation, management search/browse, and crate version deep links.
 Memory and PostgreSQL/RustFS recovery paths are tested. A reservation remains
 invisible until publication. Cargo Hosted repositories require internal
 creation; the public format catalog, OpenAPI, and Console do not advertise
-Cargo. Search, yank/unyank, Proxy, Group, full lifecycle, and public admission
-remain in later issues. This document uses only Gitea and Cargo-owned
+Cargo. Proxy, Group, full lifecycle, and public admission remain in later
+issues. This document uses only Gitea and Cargo-owned
 documentation as protocol evidence.
 
 Run `make cargo-contract` with the pinned Rust/Cargo 1.96.0 prerequisite. The

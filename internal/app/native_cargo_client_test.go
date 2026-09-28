@@ -79,6 +79,48 @@ func TestNativeCargoOfficialClientHostedFlow(t *testing.T) {
 	run(consumerDir, "add", "gateway-official-cargo", "--registry", "fixture")
 	run(consumerDir, "check")
 	run(consumerDir, "install", "gateway-official-cargo", "--registry", "fixture", "--root", filepath.Join(t.TempDir(), "install"))
+	run(packageDir, "search", "gateway-official-cargo", "--registry", "fixture")
+	run(packageDir, "yank", "gateway-official-cargo@0.2.0", "--registry", "fixture")
+	run(consumerDir, "check", "--locked")
+	yankedHome := t.TempDir()
+	write(filepath.Join(yankedHome, "config.toml"), config)
+	yankedEnvironment := append(os.Environ(), "CARGO_HOME="+yankedHome, "CARGO_TARGET_DIR="+filepath.Join(t.TempDir(), "yanked-target"),
+		"CARGO_REGISTRIES_FIXTURE_TOKEN=admin-secret", "HTTP_PROXY=", "HTTPS_PROXY=", "ALL_PROXY=", "NO_PROXY=127.0.0.1,localhost")
+	for _, fixture := range []struct {
+		name     string
+		lockfile bool
+	}{{"fresh", false}, {"locked", true}} {
+		directory := filepath.Join(t.TempDir(), fixture.name)
+		if err := os.MkdirAll(filepath.Join(directory, "src"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range []string{"Cargo.toml", "src/main.rs"} {
+			content, err := os.ReadFile(filepath.Join(consumerDir, file))
+			if err != nil {
+				t.Fatal(err)
+			}
+			write(filepath.Join(directory, file), string(content))
+		}
+		if fixture.lockfile {
+			content, err := os.ReadFile(filepath.Join(consumerDir, "Cargo.lock"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			write(filepath.Join(directory, "Cargo.lock"), string(content))
+			runWithEnvironment(yankedEnvironment, directory, "check", "--locked")
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		command := exec.CommandContext(ctx, cargoPath, "check")
+		command.Dir = directory
+		command.Env = yankedEnvironment
+		output, err := command.CombinedOutput()
+		cancel()
+		if err == nil || !strings.Contains(string(output), "failed to select a version") {
+			t.Fatalf("new resolution selected yanked version: err=%v output=%s", err, output)
+		}
+	}
+	run(packageDir, "yank", "gateway-official-cargo@0.2.0", "--undo", "--registry", "fixture")
 
 	repo, err := store.GetHostedRepositoryByName(context.Background(), "cargo-official")
 	if err != nil {
@@ -101,6 +143,7 @@ func TestNativeCargoOfficialClientHostedFlow(t *testing.T) {
 	write(filepath.Join(publicConsumer, "src", "main.rs"), "fn main() { println!(\"{}\", gateway_official_cargo::answer()); }\n")
 	publicEnvironment := append(os.Environ(), "CARGO_HOME="+publicHome, "CARGO_TARGET_DIR="+filepath.Join(t.TempDir(), "public-target"),
 		"CARGO_REGISTRIES_FIXTURE_TOKEN=", "HTTP_PROXY=", "HTTPS_PROXY=", "ALL_PROXY=", "NO_PROXY=127.0.0.1,localhost")
+	runWithEnvironment(publicEnvironment, publicConsumer, "search", "gateway-official-cargo", "--registry", "fixture")
 	runWithEnvironment(publicEnvironment, publicConsumer, "add", "gateway-official-cargo", "--registry", "fixture")
 	runWithEnvironment(publicEnvironment, publicConsumer, "check")
 	runWithEnvironment(publicEnvironment, publicConsumer, "install", "gateway-official-cargo", "--registry", "fixture", "--root", filepath.Join(t.TempDir(), "public-install"))

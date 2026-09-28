@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,21 +72,35 @@ func (h nativeCargoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if route.kind == "publish" && r.Method != http.MethodPut || route.kind != "publish" && r.Method != http.MethodGet && r.Method != http.MethodHead {
+	allowedMethod := false
+	switch route.kind {
+	case "publish", "unyank":
+		allowedMethod = r.Method == http.MethodPut
+	case "yank":
+		allowedMethod = r.Method == http.MethodDelete
+	default:
+		allowedMethod = r.Method == http.MethodGet || r.Method == http.MethodHead
+	}
+	if !allowedMethod {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 	principal, authenticated := h.principal(r)
 	if !authenticated {
-		if route.kind == "publish" || !anonymousHostedRepositoryReadAllowed(r.Context(), h.anonymous, repo, r.Method) {
+		if route.kind == "publish" || route.kind == "yank" || route.kind == "unyank" ||
+			!anonymousHostedRepositoryReadAllowed(r.Context(), h.anonymous, repo, r.Method) {
 			h.challenge(w, http.StatusUnauthorized)
 			h.recordAudit(r, repo, route.name, route.kind, anonymousActor, repository.AuditAccessDenied, http.StatusUnauthorized, 0)
 			return
 		}
 		principal = anonymousPrincipal()
 	}
-	if route.kind == "publish" {
+	switch route.kind {
+	case "publish":
 		h.publish(w, r, repo, principal)
+		return
+	case "yank", "unyank":
+		h.setYanked(w, r, repo, route.name, route.version, route.kind == "yank", principal)
 		return
 	}
 	if !isAnonymous(principal) {
@@ -99,6 +114,8 @@ func (h nativeCargoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch route.kind {
 	case "config":
 		h.config(w, r, repo)
+	case "search":
+		h.search(w, r, repo, principal.Actor)
 	case "index":
 		h.index(w, r, repo, route.name, principal.Actor)
 	case "download":
@@ -124,10 +141,13 @@ func parseCargoRoute(escapedPath string) (cargoRoute, bool) {
 	case "api/v1/crates/new":
 		route.kind = "publish"
 		return route, true
+	case "api/v1/crates":
+		route.kind = "search"
+		return route, true
 	}
 	if strings.HasPrefix(path, "api/v1/crates/") {
 		parts := strings.Split(strings.TrimPrefix(path, "api/v1/crates/"), "/")
-		if len(parts) != 3 || parts[2] != "download" {
+		if len(parts) != 3 || (parts[2] != "download" && parts[2] != "yank" && parts[2] != "unyank") {
 			return cargoRoute{}, false
 		}
 		name, nameErr := url.PathUnescape(parts[0])
@@ -138,7 +158,7 @@ func parseCargoRoute(escapedPath string) (cargoRoute, bool) {
 		if _, err := cargo.NormalizeIdentity(name, version); err != nil {
 			return cargoRoute{}, false
 		}
-		route.kind, route.name, route.version = "download", name, version
+		route.kind, route.name, route.version = parts[2], name, version
 		return route, true
 	}
 	parts := strings.Split(path, "/")
@@ -251,6 +271,9 @@ func (h nativeCargoHandler) publish(w http.ResponseWriter, r *http.Request, repo
 		Size:               inspection.Envelope.CrateSize, IndexRow: row, Publisher: principal.Actor,
 		PublishedAt: reservation.CreatedAt,
 	}
+	if inspection.Envelope.Metadata.Description != nil {
+		publication.Description = *inspection.Envelope.Metadata.Description
+	}
 	objectCtx, releaseObject, err := repository.LockObjectKeys(r.Context(), []string{publication.ObjectKey}, h.store,
 		repository.FormatCargo, h.store.LockCargoObject)
 	if err != nil {
@@ -336,6 +359,66 @@ func (h nativeCargoHandler) cleanupUnreferencedObject(ctx context.Context, objec
 	}
 }
 
+func (h nativeCargoHandler) setYanked(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name, version string, yanked bool, principal Principal) {
+	decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, RepositoryWrite, name)
+	if !decision.Allowed {
+		h.challenge(w, http.StatusForbidden)
+		h.recordAudit(r, repo, name+"@"+version, "crate", principal.Actor, repository.AuditAccessDenied, http.StatusForbidden, 0)
+		return
+	}
+	publication, _, err := h.store.SetCargoYanked(r.Context(), repo.ID, name, version, yanked)
+	if errors.Is(err, repository.ErrNotFound) {
+		h.writeError(w, http.StatusNotFound, "crate version does not exist")
+		return
+	}
+	if err != nil {
+		h.writeError(w, http.StatusServiceUnavailable, "update Cargo index failed")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+	h.recordAudit(r, repo, publication.Name+"@"+publication.Version, "index", principal.Actor, repository.AuditResolved, http.StatusOK, 0)
+}
+
+func (h nativeCargoHandler) search(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, actor string) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if query == "" || len(query) > 255 || strings.ContainsRune(query, '\x00') {
+		h.writeError(w, http.StatusBadRequest, "q must contain between 1 and 255 characters")
+		return
+	}
+	limit := 10
+	if value := r.URL.Query().Get("per_page"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 100 {
+			h.writeError(w, http.StatusBadRequest, "per_page must be between 1 and 100")
+			return
+		}
+		limit = parsed
+	}
+	items, total, err := h.store.SearchCargoCrates(r.Context(), repo.ID, query, limit, "", false)
+	if err != nil {
+		h.writeError(w, http.StatusServiceUnavailable, "Cargo search unavailable")
+		return
+	}
+	results := make([]map[string]string, 0, len(items))
+	for _, item := range items {
+		results = append(results, map[string]string{
+			"name": item.Name, "max_version": item.MaxVersion, "description": item.Description,
+		})
+	}
+	body, err := json.Marshal(map[string]any{"crates": results, "meta": map[string]int{"total": total}})
+	if err != nil {
+		h.writeError(w, http.StatusServiceUnavailable, "Cargo search unavailable")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method == http.MethodGet {
+		_, _ = w.Write(body)
+	}
+	h.recordAudit(r, repo, query, "search", actor, repository.AuditResolved, http.StatusOK, int64(len(body)))
+}
+
 func (h nativeCargoHandler) index(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name, actor string) {
 	items, err := h.store.ListCargoPublications(r.Context(), repo.ID, name)
 	if errors.Is(err, repository.ErrNotFound) {
@@ -347,19 +430,28 @@ func (h nativeCargoHandler) index(w http.ResponseWriter, r *http.Request, repo r
 		return
 	}
 	var body bytes.Buffer
-	var modified time.Time
 	for _, item := range items {
-		body.Write(item.IndexRow)
-		body.WriteByte('\n')
-		if item.CreatedAt.After(modified) {
-			modified = item.CreatedAt
+		var entry cargo.IndexEntry
+		if err := json.Unmarshal(item.IndexRow, &entry); err != nil {
+			h.writeError(w, http.StatusServiceUnavailable, "Cargo index metadata is invalid")
+			return
 		}
+		entry.Yanked = item.Yanked
+		row, err := json.Marshal(entry)
+		if err != nil {
+			h.writeError(w, http.StatusServiceUnavailable, "Cargo index metadata is invalid")
+			return
+		}
+		body.Write(row)
+		body.WriteByte('\n')
 	}
 	sum := sha256.Sum256(body.Bytes())
 	w.Header().Set("ETag", `"`+hex.EncodeToString(sum[:])+`"`)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	captured := httpsnoop.CaptureMetricsFn(w, func(output http.ResponseWriter) {
-		http.ServeContent(output, r, name, modified, bytes.NewReader(body.Bytes()))
+		// A yank can change the index more than once in one second. Strong ETags
+		// remain precise where Last-Modified's second resolution would not.
+		http.ServeContent(output, r, name, time.Time{}, bytes.NewReader(body.Bytes()))
 	})
 	h.recordAudit(r, repo, name, "index", actor, repository.AuditResolved, captured.Code, captured.Written)
 }

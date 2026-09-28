@@ -17,8 +17,8 @@ import (
 
 func (h generatedRepositoryAPIAdapter) BrowseRepository(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.BrowseRepositoryParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(principal Principal, repo repository.HostedRepository) {
-		if repo.Format != repository.FormatMaven && repo.Format != repository.FormatRaw {
-			writeHostedProblem(w, http.StatusBadRequest, "unsupported_format", "directory browsing is currently available for Maven and Raw repositories")
+		if repo.Format != repository.FormatMaven && repo.Format != repository.FormatRaw && repo.Format != repository.FormatCargo {
+			writeHostedProblem(w, http.StatusBadRequest, "unsupported_format", "directory browsing is not available for this repository format")
 			return
 		}
 		if repo.Type == repository.RepositoryTypeProxy && h.proxyCache.directoryStore() == nil {
@@ -122,6 +122,13 @@ func validRepositoryBrowseParent(format repository.Format, parent repository.Art
 		}
 	case repository.FormatRaw:
 		return parent.Kind == repository.BrowseNodeDirectory && parent.Path != "" && !strings.HasPrefix(parent.Path, "/")
+	case repository.FormatCargo:
+		switch parent.Kind {
+		case repository.BrowseNodeComponent:
+			return parent.Component != "" && parent.Namespace == "" && parent.Version == ""
+		case repository.BrowseNodeVersion:
+			return parent.Component != "" && parent.Namespace == "" && strings.HasPrefix(parent.Version, parent.Component+"@")
+		}
 	}
 	return false
 }
@@ -146,6 +153,9 @@ func (h hostedRepositoryAPIHandler) repositoryBrowseNodeResponse(repo repository
 		Endpoint: "repository-browse-node", RepositoryID: repo.ID, Format: string(repo.Format), Principal: principal,
 		Revision: repositoryBrowseRevision(repo), Kind: string(node.Kind), Namespace: node.Namespace, Component: node.Component, Version: node.Coordinate, BuildNumber: node.BuildNumber, Path: node.Path,
 		ExpiresAt: time.Now().UTC().Add(time.Hour).Unix(),
+	}
+	if repo.Format == repository.FormatCargo && node.Kind == repository.BrowseNodeComponent {
+		cursor.Version = ""
 	}
 	name := node.Name
 	if repo.Format == repository.FormatRaw {

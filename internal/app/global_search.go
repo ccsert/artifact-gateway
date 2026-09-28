@@ -38,7 +38,7 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 	format := repository.Format("")
 	if params.Format != nil {
 		format = repository.Format(*params.Format)
-		if !repository.IsSupportedFormat(format) {
+		if format != repository.FormatCargo && !repository.IsSupportedFormat(format) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "format is not supported")
 			return
 		}

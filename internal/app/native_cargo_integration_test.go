@@ -129,6 +129,46 @@ func TestPostgresRustFSCargoHostedInterruptedPublishAndRestart(t *testing.T) {
 	if download.StatusCode != http.StatusOK || !bytes.Equal(returned, crate) {
 		t.Fatalf("restart download=%d bytes=%d", download.StatusCode, len(returned))
 	}
+	yankURL := serverA.URL + "/cargo/" + repo.Name + "/api/v1/crates/demo/1.0.0/yank"
+	yank, err := http.NewRequest(http.MethodDelete, yankURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	yank.Header.Set("Authorization", "admin-secret")
+	yankResult, err := serverA.Client().Do(yank)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = yankResult.Body.Close()
+	if yankResult.StatusCode != http.StatusOK {
+		t.Fatalf("cross-instance yank=%d", yankResult.StatusCode)
+	}
+	yankedIndex := get(serverB, indexPath)
+	yankedBody, _ := io.ReadAll(yankedIndex.Body)
+	_ = yankedIndex.Body.Close()
+	if yankedIndex.StatusCode != http.StatusOK || !bytes.Contains(yankedBody, []byte(`"yanked":true`)) {
+		t.Fatalf("cross-instance yanked index=%d body=%s", yankedIndex.StatusCode, yankedBody)
+	}
+	yankedDownload := get(serverB, "/cargo/"+repo.Name+"/api/v1/crates/demo/1.0.0/download")
+	yankedBytes, _ := io.ReadAll(yankedDownload.Body)
+	_ = yankedDownload.Body.Close()
+	if yankedDownload.StatusCode != http.StatusOK || !bytes.Equal(yankedBytes, crate) {
+		t.Fatalf("cross-instance yanked download=%d bytes=%d", yankedDownload.StatusCode, len(yankedBytes))
+	}
+	undoURL := serverB.URL + "/cargo/" + repo.Name + "/api/v1/crates/demo/1.0.0/unyank"
+	undo, err := http.NewRequest(http.MethodPut, undoURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	undo.Header.Set("Authorization", "admin-secret")
+	undoResult, err := serverB.Client().Do(undo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = undoResult.Body.Close()
+	if undoResult.StatusCode != http.StatusOK {
+		t.Fatalf("cross-instance unyank=%d", undoResult.StatusCode)
+	}
 	if err := (NativeCargoMaintenance{Store: storeB, Objects: objectsB}).RunReclaimJobs(ctx, 10); err != nil {
 		t.Fatal(err)
 	}

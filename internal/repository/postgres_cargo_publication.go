@@ -9,7 +9,7 @@ import (
 )
 
 const cargoPublicationColumns = `p.repository_id::text,n.name,r.version,r.digest,r.metadata_digest,
-	p.object_key,p.size,p.index_row,p.publisher,p.published_at,p.created_at`
+	p.object_key,p.size,p.index_row,p.description,p.publisher,p.published_at,p.created_at,p.yanked,p.updated_at`
 
 func (s *PostgresStore) CommitCargoPublication(ctx context.Context, incoming CargoPublication) (CargoPublication, bool, error) {
 	publication, normalized, err := normalizeCargoPublication(incoming)
@@ -77,10 +77,11 @@ func (s *PostgresStore) CommitCargoPublication(ctx context.Context, incoming Car
 		return CargoPublication{}, false, ErrQuotaExceeded
 	}
 	err = tx.QueryRowContext(ctx, `INSERT INTO native_cargo_publications
-		(repository_id,collision_key,version_key,object_key,size,index_row,publisher,published_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING created_at`, publication.RepositoryID,
+		(repository_id,collision_key,version_key,object_key,size,index_row,description,publisher,published_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING created_at,yanked,updated_at`, publication.RepositoryID,
 		normalized.CollisionKey, normalized.VersionKey, publication.ObjectKey, publication.Size,
-		string(publication.IndexRow), publication.Publisher, publication.PublishedAt).Scan(&publication.CreatedAt)
+		string(publication.IndexRow), publication.Description, publication.Publisher, publication.PublishedAt).
+		Scan(&publication.CreatedAt, &publication.Yanked, &publication.UpdatedAt)
 	if IsQuotaExceeded(err) {
 		return CargoPublication{}, false, ErrQuotaExceeded
 	}
@@ -143,10 +144,58 @@ func (s *PostgresStore) ListCargoPublications(ctx context.Context, repositoryID,
 	return items, nil
 }
 
+func (s *PostgresStore) SetCargoYanked(ctx context.Context, repositoryID, name, version string, yanked bool) (CargoPublication, bool, error) {
+	identity, err := cargo.NormalizeIdentity(name, version)
+	if err != nil || repositoryID == "" {
+		return CargoPublication{}, false, ErrInvalidCargoIdentity
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return CargoPublication{}, false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var format Format
+	var repoType RepositoryType
+	var state RepositoryState
+	err = tx.QueryRowContext(ctx, `SELECT format,repo_type,state FROM hosted_repositories WHERE id::text=$1 FOR UPDATE`, repositoryID).
+		Scan(&format, &repoType, &state)
+	if errors.Is(err, sql.ErrNoRows) || err == nil && (format != FormatCargo || repoType != RepositoryTypeHosted || state != RepositoryActive) {
+		return CargoPublication{}, false, ErrNotFound
+	}
+	if err != nil {
+		return CargoPublication{}, false, err
+	}
+	var publication CargoPublication
+	err = scanCargoPublication(tx.QueryRowContext(ctx, `SELECT `+cargoPublicationColumns+`
+		FROM native_cargo_publications p JOIN native_cargo_identity_reservations r
+		USING (repository_id,collision_key,version_key) JOIN native_cargo_names n USING (repository_id,collision_key)
+		WHERE p.repository_id::text=$1 AND p.collision_key=$2 AND p.version_key=$3 FOR UPDATE OF p`,
+		repositoryID, identity.CollisionKey, identity.VersionKey), &publication)
+	if errors.Is(err, sql.ErrNoRows) {
+		return CargoPublication{}, false, ErrNotFound
+	}
+	if err != nil {
+		return CargoPublication{}, false, err
+	}
+	changed := publication.Yanked != yanked
+	if changed {
+		err = tx.QueryRowContext(ctx, `UPDATE native_cargo_publications SET yanked=$4,updated_at=now()
+			WHERE repository_id::text=$1 AND collision_key=$2 AND version_key=$3 RETURNING yanked,updated_at`,
+			repositoryID, identity.CollisionKey, identity.VersionKey, yanked).Scan(&publication.Yanked, &publication.UpdatedAt)
+		if err != nil {
+			return CargoPublication{}, false, err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return CargoPublication{}, false, err
+	}
+	return publication, changed, nil
+}
+
 func scanCargoPublication(row interface{ Scan(...any) error }, publication *CargoPublication) error {
 	return row.Scan(&publication.RepositoryID, &publication.Name, &publication.Version, &publication.Digest,
-		&publication.MetadataDigest, &publication.ObjectKey, &publication.Size, &publication.IndexRow,
-		&publication.Publisher, &publication.PublishedAt, &publication.CreatedAt)
+		&publication.MetadataDigest, &publication.ObjectKey, &publication.Size, &publication.IndexRow, &publication.Description,
+		&publication.Publisher, &publication.PublishedAt, &publication.CreatedAt, &publication.Yanked, &publication.UpdatedAt)
 }
 
 func (s *PostgresStore) LockCargoObject(ctx context.Context, objectKey string) (func(), error) {

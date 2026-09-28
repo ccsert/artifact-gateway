@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -92,5 +93,83 @@ func TestMemoryCargoPublicationVisibilityRetryAndQuota(t *testing.T) {
 	capacity, err := store.GetRepositoryCapacity(ctx, claim.RepositoryID)
 	if err != nil || capacity.UsedBytes != 7 || capacity.ObjectCount != 1 {
 		t.Fatalf("capacity=%+v err=%v", capacity, err)
+	}
+}
+
+func TestMemoryCargoSearchAndYankPreservePublishedBytes(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if _, err := store.CreateHostedRepository(ctx, HostedRepository{ID: "cargo-search", Name: "cargo-search", Format: FormatCargo}); err != nil {
+		t.Fatal(err)
+	}
+	versions := []string{"1.2.0", "1.10.0"}
+	publications := make([]CargoPublication, 0, len(versions))
+	for index, version := range versions {
+		claim := cargoTestClaim("cargo-search", version, []string{"a", "b"}[index])
+		reservation, _, err := store.ReserveCargoIdentity(ctx, claim)
+		if err != nil {
+			t.Fatal(err)
+		}
+		publication := cargoTestPublication(t, claim, reservation, 7)
+		publication.Description = "description for " + version
+		if _, _, err := store.CommitCargoPublication(ctx, publication); err != nil {
+			t.Fatal(err)
+		}
+		publications = append(publications, publication)
+	}
+	checkSearch := func(expected string, total int) {
+		t.Helper()
+		items, count, err := store.SearchCargoCrates(ctx, "cargo-search", "demo", 10, "", false)
+		if err != nil || count != total || len(items) != total {
+			t.Fatalf("search items=%+v total=%d err=%v", items, count, err)
+		}
+		if total > 0 && (items[0].MaxVersion != expected || items[0].Description != "description for "+expected) {
+			t.Fatalf("search chose %+v, want %s", items[0], expected)
+		}
+	}
+	checkSearch("1.10.0", 1)
+	before, err := store.GetCargoPublication(ctx, "cargo-search", "demo-crate", "1.10.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, didChange, err := store.SetCargoYanked(ctx, "cargo-search", "demo-crate", "1.10.0", true)
+	if err != nil || !didChange || !changed.Yanked || !bytes.Equal(changed.IndexRow, before.IndexRow) || changed.Digest != before.Digest {
+		t.Fatalf("yank changed immutable publication: %+v changed=%t err=%v", changed, didChange, err)
+	}
+	checkSearch("1.2.0", 1)
+	if _, didChange, err := store.SetCargoYanked(ctx, "cargo-search", "demo-crate", "1.10.0", true); err != nil || didChange {
+		t.Fatalf("repeated yank changed=%t err=%v", didChange, err)
+	}
+	if _, didChange, err := store.CommitCargoPublication(ctx, publications[1]); err != nil || !didChange {
+		t.Fatalf("exact publish replay after yank=%t err=%v", didChange, err)
+	}
+	if _, _, err := store.SetCargoYanked(ctx, "cargo-search", "demo-crate", "1.2.0", true); err != nil {
+		t.Fatal(err)
+	}
+	checkSearch("", 0)
+	managed, count, err := store.SearchCargoCrates(ctx, "cargo-search", "demo", 10, "", true)
+	if err != nil || count != 1 || len(managed) != 1 || managed[0].MaxVersion != "1.10.0" {
+		t.Fatalf("management search must retain fully yanked crate: %+v total=%d err=%v", managed, count, err)
+	}
+	if _, _, err := store.SetCargoYanked(ctx, "cargo-search", "demo-crate", "1.10.0", false); err != nil {
+		t.Fatal(err)
+	}
+	checkSearch("1.10.0", 1)
+	helper := cargoTestClaim("cargo-search", "0.1.0", "d")
+	helper.Name = "demo-helper"
+	reservation, _, err := store.ReserveCargoIdentity(ctx, helper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.CommitCargoPublication(ctx, cargoTestPublication(t, helper, reservation, 7)); err != nil {
+		t.Fatal(err)
+	}
+	first, total, err := store.SearchCargoCrates(ctx, "cargo-search", "demo", 1, "", false)
+	if err != nil || total != 2 || len(first) != 1 || first[0].Name != "demo-crate" {
+		t.Fatalf("first Cargo search page=%+v total=%d err=%v", first, total, err)
+	}
+	second, total, err := store.SearchCargoCrates(ctx, "cargo-search", "demo", 1, first[0].Name, false)
+	if err != nil || total != 2 || len(second) != 1 || second[0].Name != "demo-helper" {
+		t.Fatalf("second Cargo search page=%+v total=%d err=%v", second, total, err)
 	}
 }
