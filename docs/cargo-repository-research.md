@@ -25,8 +25,12 @@ SHA-256 identity. Explicitly configured external scanners can scan the exact
 `.crate` bytes; the bundled reference scanner does not yet claim Cargo
 coverage. A versioned Hosted quarantine record and an opt-in read policy hide
 quarantined versions from Hosted and Group sparse indexes and search, and deny
-GET/HEAD downloads. Release restores reads. Tombstone, retention, promotion,
-replication, and public format admission remain open.
+GET/HEAD downloads. Release restores reads. The next C4 slice adds Hosted
+tombstones separately from yank, a recoverable window, explicit retention
+preview, and delayed reclamation gated by object references. The original
+crate identity and quota usage remain until collection; a collected version
+cannot be restored. Group ownership remains with the tombstoned member.
+Promotion, replication, and public format admission remain open.
 `make integration-test` also drives an official Cargo client through a
 PostgreSQL/RustFS Proxy replay after the upstream is shut down. This document
 uses only Gitea and Cargo-owned documentation as protocol evidence.

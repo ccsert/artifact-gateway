@@ -133,7 +133,7 @@ func (s *MemoryStore) artifactIdentitiesLocked(repositoryID string, format Forma
 		}
 	case FormatCargo:
 		for _, publication := range s.cargoPublications {
-			if publication.RepositoryID == repositoryID && publication.ObjectKey != "" {
+			if publication.RepositoryID == repositoryID && publication.ObjectKey != "" && publication.CollectedAt.IsZero() && !s.cargoPublicationTombstonedLocked(publication) {
 				appendIdentity(publication.Name+"@"+publication.Version, publication.Digest, sizeOf(publication.Size), publication.CreatedAt)
 			}
 		}

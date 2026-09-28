@@ -36,6 +36,7 @@ type nativeCargoHandler struct {
 	anonymous          repository.AnonymousAccessPolicyStore
 	readPolicies       repository.RepositoryQuarantineReadPolicyStore
 	quarantine         repository.ArtifactQuarantineStore
+	tombstones         repository.ArtifactTombstoneStore
 	publicationScanner *publicationScanScheduler
 }
 
@@ -57,7 +58,7 @@ func newNativeCargoHandler(store GatewayStore, objects OCIObjectStore, auth Auth
 	}
 	return nativeCargoHandler{store: store, proxy: store, repos: store, objects: objects, auth: auth,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth}, audit: store, anonymous: store,
-		readPolicies: store, quarantine: store}
+		readPolicies: store, quarantine: store, tombstones: store}
 }
 
 func (h nativeCargoHandler) withPublicationScanner(scanner publicationScanScheduler) nativeCargoHandler {

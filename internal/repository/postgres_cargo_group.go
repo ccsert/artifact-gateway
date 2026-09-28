@@ -110,6 +110,28 @@ func (s *PostgresStore) GetCargoGroupVersion(ctx context.Context, groupID, name,
 	return value, err
 }
 
+func (s *PostgresStore) ListCargoGroupVersions(ctx context.Context, groupID, name string) ([]CargoGroupVersion, error) {
+	identity, err := cargo.NormalizeIdentity(name, "0.0.0")
+	if err != nil || groupID == "" {
+		return nil, ErrInvalidCargoIdentity
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT group_id::text,source_repository_id::text,name,version,checksum,index_row
+		FROM native_cargo_group_versions WHERE group_id::text=$1 AND collision_key=$2 ORDER BY version_key`, groupID, identity.CollisionKey)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	items := make([]CargoGroupVersion, 0)
+	for rows.Next() {
+		var value CargoGroupVersion
+		if err := rows.Scan(&value.GroupID, &value.SourceRepositoryID, &value.Name, &value.Version, &value.Checksum, &value.IndexRow); err != nil {
+			return nil, err
+		}
+		items = append(items, value)
+	}
+	return items, rows.Err()
+}
+
 // Group mutations take member repository locks before the group row lock. A
 // concurrent Hosted publication or Proxy index write takes the repository
 // lock first, so the preflight sees a stable set of known coordinates.

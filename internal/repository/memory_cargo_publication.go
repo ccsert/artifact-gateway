@@ -30,6 +30,12 @@ func (s *MemoryStore) CommitCargoPublication(ctx context.Context, incoming Cargo
 		return CargoPublication{}, false, ErrCargoIdentityConflict
 	}
 	if existing, ok := s.cargoPublications[key]; ok {
+		if !existing.CollectedAt.IsZero() {
+			return CargoPublication{}, false, ErrCargoPublicationConflict
+		}
+		if _, tombstoned := s.artifactTombstones[cargoTombstoneKey(existing.RepositoryID, existing.Name, existing.Version)]; tombstoned {
+			return CargoPublication{}, false, ErrArtifactTombstoned
+		}
 		if !cargoPublicationMatches(existing, publication) {
 			return CargoPublication{}, false, ErrCargoPublicationConflict
 		}
@@ -90,7 +96,7 @@ func (s *MemoryStore) SetCargoYanked(ctx context.Context, repositoryID, name, ve
 	defer s.mu.Unlock()
 	key := cargoVersionReservationKey(repositoryID, identity.CollisionKey, identity.VersionKey)
 	publication, ok := s.cargoPublications[key]
-	if !ok {
+	if !ok || !publication.CollectedAt.IsZero() || s.cargoPublicationTombstonedLocked(publication) {
 		return CargoPublication{}, false, ErrNotFound
 	}
 	if publication.Yanked == yanked {
@@ -113,7 +119,7 @@ func (s *MemoryStore) GetCargoPublication(ctx context.Context, repositoryID, nam
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	publication, ok := s.cargoPublications[cargoVersionReservationKey(repositoryID, identity.CollisionKey, identity.VersionKey)]
-	if !ok {
+	if !ok || !publication.CollectedAt.IsZero() || s.cargoPublicationTombstonedLocked(publication) {
 		return CargoPublication{}, ErrNotFound
 	}
 	return cloneCargoPublication(publication), nil
@@ -132,7 +138,7 @@ func (s *MemoryStore) ListCargoPublications(ctx context.Context, repositoryID, n
 	items := make([]CargoPublication, 0)
 	prefix := cargoNameReservationKey(repositoryID, identity.CollisionKey) + "\x00"
 	for key, publication := range s.cargoPublications {
-		if strings.HasPrefix(key, prefix) {
+		if strings.HasPrefix(key, prefix) && publication.CollectedAt.IsZero() && !s.cargoPublicationTombstonedLocked(publication) {
 			items = append(items, cloneCargoPublication(publication))
 		}
 	}
@@ -165,7 +171,7 @@ func (s *MemoryStore) CargoObjectHasReference(ctx context.Context, objectKey str
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, publication := range s.cargoPublications {
-		if publication.ObjectKey == objectKey {
+		if publication.ObjectKey == objectKey && publication.CollectedAt.IsZero() {
 			return true, nil
 		}
 	}

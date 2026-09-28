@@ -110,7 +110,10 @@ func postgresArtifactIdentityQuery(format Format, purpose ArtifactIdentityPurpos
 			FROM native_cargo_publications p
 			JOIN native_cargo_identity_reservations r USING (repository_id,collision_key,version_key)
 			JOIN native_cargo_names n USING (repository_id,collision_key)
-			WHERE p.repository_id::text=$1 AND p.object_key<>'' AND r.digest ~ '^sha256:[a-f0-9]{64}$'`, nil
+			WHERE p.repository_id::text=$1 AND p.object_key<>'' AND p.collected_at IS NULL
+			  AND r.digest ~ '^sha256:[a-f0-9]{64}$'
+			  AND NOT EXISTS (SELECT 1 FROM artifact_tombstones t WHERE t.repository_id=p.repository_id
+			    AND t.format='cargo' AND t.coordinate=n.name || '@' || r.version)`, nil
 	case FormatConan:
 		recipes := `SELECT ` + protocolidentity.PostgreSQLConanRecipe("reference", "revision") + ` AS coordinate,digest,NULL::bigint AS size,created_at AS published_at
 			FROM native_conan_recipe_revisions r

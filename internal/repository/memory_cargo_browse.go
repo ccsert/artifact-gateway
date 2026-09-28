@@ -10,7 +10,7 @@ import (
 func (s *MemoryStore) listMemoryCargoBrowseNodes(repositoryID string, parent ArtifactBrowseParent) []ArtifactBrowseNode {
 	nodes := make(map[string]ArtifactBrowseNode)
 	for _, publication := range s.cargoPublications {
-		if publication.RepositoryID != repositoryID {
+		if publication.RepositoryID != repositoryID || !publication.CollectedAt.IsZero() || s.cargoPublicationTombstonedLocked(publication) {
 			continue
 		}
 		identity, err := cargo.NormalizeIdentity(publication.Name, publication.Version)
