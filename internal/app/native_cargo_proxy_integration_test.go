@@ -64,6 +64,12 @@ func TestPostgresRustFSCargoProxyOfflineRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	group, _, err := storeA.CreateHostedGroupIdempotently(ctx, repository.HostedGroup{ID: uuid.NewString(),
+		Name: "cargo-proxy-group-" + uuid.NewString()[:8], Format: repository.FormatCargo,
+		Members: []repository.GroupMember{{RepositoryID: repo.ID, Position: 0}}}, "integration", uuid.NewString(), "cargo-group")
+	if err != nil {
+		t.Fatal(err)
+	}
 	request := func(server *httptest.Server, path string) (int, []byte) {
 		t.Helper()
 		req, err := http.NewRequest(http.MethodGet, server.URL+path, nil)
@@ -93,6 +99,10 @@ func TestPostgresRustFSCargoProxyOfflineRestart(t *testing.T) {
 	}
 	if status, body := request(warm, base+"/api/v1/crates/demo/1.0.0/download"); status != 200 || !bytes.Equal(body, archive) {
 		t.Fatalf("download status=%d body=%q", status, body)
+	}
+	groupBase := "/cargo/" + group.Name
+	if status, body := request(warm, groupBase+"/de/mo/demo"); status != 200 || string(body) != row {
+		t.Fatalf("group index status=%d body=%s", status, body)
 	}
 	warm.Close()
 	upstream.Close()
@@ -130,5 +140,15 @@ func TestPostgresRustFSCargoProxyOfflineRestart(t *testing.T) {
 	}
 	if status, body := request(restarted, base+"/api/v1/crates/demo/1.0.0/download"); status != 200 || !bytes.Equal(body, archive) {
 		t.Fatalf("restart download=%d body=%q", status, body)
+	}
+	if status, body := request(restarted, groupBase+"/de/mo/demo"); status != 200 || string(body) != row {
+		t.Fatalf("restart group index=%d body=%s", status, body)
+	}
+	if status, body := request(restarted, groupBase+"/api/v1/crates/demo/1.0.0/download"); status != 200 || !bytes.Equal(body, archive) {
+		t.Fatalf("restart group download=%d body=%q", status, body)
+	}
+	owner, err := storeB.GetCargoGroupVersion(ctx, group.ID, "demo", "1.0.0")
+	if err != nil || owner.SourceRepositoryID != repo.ID || owner.Checksum != checksum {
+		t.Fatalf("restart group owner=%+v err=%v", owner, err)
 	}
 }

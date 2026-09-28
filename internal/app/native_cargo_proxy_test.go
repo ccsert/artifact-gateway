@@ -184,6 +184,7 @@ func TestCargoProxyOfficialSourceReplacementOnlineAndOffline(t *testing.T) {
 	packageDir := filepath.Join(t.TempDir(), "proxy-official-demo")
 	write(filepath.Join(packageDir, "Cargo.toml"), "[package]\nname=\"proxy-official-demo\"\nversion=\"1.0.0\"\nedition=\"2024\"\nlicense=\"MIT\"\ndescription=\"Proxy test\"\n")
 	write(filepath.Join(packageDir, "src/lib.rs"), "pub fn value() -> u8 { 42 }\n")
+	write(filepath.Join(packageDir, "src/main.rs"), "fn main() { println!(\"{}\", proxy_official_demo::value()); }\n")
 	packageCommand := exec.Command(cargoPath, "package", "--allow-dirty", "--no-verify")
 	packageCommand.Dir = packageDir
 	packageTarget := filepath.Join(t.TempDir(), "package-target")
@@ -250,6 +251,11 @@ func TestCargoProxyOfficialSourceReplacementOnlineAndOffline(t *testing.T) {
 	environment = append(os.Environ(), "CARGO_HOME="+freshHome, "CARGO_TARGET_DIR="+filepath.Join(t.TempDir(), "fresh-target"),
 		"HTTP_PROXY=", "HTTPS_PROXY=", "ALL_PROXY=", "NO_PROXY=127.0.0.1,localhost")
 	run("check", "--locked")
+	installRoot := filepath.Join(t.TempDir(), "install")
+	run("install", "proxy-official-demo", "--version", "1.0.0", "--root", installRoot)
+	if _, err := os.Stat(filepath.Join(installRoot, "bin", "proxy-official-demo")); err != nil {
+		t.Fatalf("offline Gateway cache did not serve cargo install: %v", err)
+	}
 	run("check", "--locked", "--offline")
 }
 
@@ -322,5 +328,42 @@ func TestCargoProxyNegativeAndConditionalIndexCache(t *testing.T) {
 	mu.Unlock()
 	if err != nil || gotCondition != `"v1"` || gotHits != 3 || string(refreshed.Body) != row || !refreshed.ExpiresAt.After(time.Now()) {
 		t.Fatalf("conditional index=%+v condition=%q hits=%d err=%v", refreshed, gotCondition, gotHits, err)
+	}
+}
+
+func TestCargoProxyUpstreamCredentialRedirectBoundary(t *testing.T) {
+	secret := sealedUpstreamSecret(t, "cargo-upstream-secret")
+	var originAuth, destinationAuth string
+	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		destinationAuth = r.Header.Get("Authorization")
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer destination.Close()
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		originAuth = r.Header.Get("Authorization")
+		http.Redirect(w, r, destination.URL+"/archive", http.StatusFound)
+	}))
+	defer primary.Close()
+	repo := repository.HostedRepository{ID: "cargo-auth", Name: "cargo-auth", Format: repository.FormatCargo,
+		Type: repository.RepositoryTypeProxy, Endpoint: primary.URL,
+		UpstreamAuth: &repository.UpstreamAuth{Scheme: repository.UpstreamAuthSchemeBearer, Secret: secret}}
+	client := UpstreamClient{HTTPClient: primary.Client()}
+	response, err := client.FetchCargo(context.Background(), repo, primary.URL+"/config.json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if originAuth != "Bearer cargo-upstream-secret" || destinationAuth != "" {
+		t.Fatalf("upstream credential origin=%q redirect=%q", originAuth, destinationAuth)
+	}
+	// A redirect outside the configured endpoint/allowlist is rejected before
+	// making a network request and never exposes the credential in diagnostics.
+	disallowed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://untrusted.invalid/archive", http.StatusFound)
+	}))
+	defer disallowed.Close()
+	repo.Endpoint = disallowed.URL
+	if _, err := client.FetchCargo(context.Background(), repo, disallowed.URL+"/config.json", nil); err == nil || strings.Contains(err.Error(), "cargo-upstream-secret") {
+		t.Fatalf("disallowed redirect=%v", err)
 	}
 }

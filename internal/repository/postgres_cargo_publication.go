@@ -66,6 +66,41 @@ func (s *PostgresStore) CommitCargoPublication(ctx context.Context, incoming Car
 	if !errors.Is(err, sql.ErrNoRows) {
 		return CargoPublication{}, false, err
 	}
+	// Serialize publication with Group reconciliation and reject a collision
+	// before the Hosted version becomes visible.
+	groupRows, err := tx.QueryContext(ctx, `SELECT g.id::text FROM hosted_groups g
+		JOIN hosted_group_members m ON m.group_id=g.id
+		WHERE m.repository_id::text=$1 AND g.format='cargo' ORDER BY g.id FOR UPDATE OF g`, publication.RepositoryID)
+	if err != nil {
+		return CargoPublication{}, false, err
+	}
+	groupIDs := make([]string, 0)
+	for groupRows.Next() {
+		var groupID string
+		if err := groupRows.Scan(&groupID); err != nil {
+			_ = groupRows.Close()
+			return CargoPublication{}, false, err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+	err = groupRows.Err()
+	_ = groupRows.Close()
+	if err != nil {
+		return CargoPublication{}, false, err
+	}
+	for _, groupID := range groupIDs {
+		var owner CargoGroupVersion
+		err := tx.QueryRowContext(ctx, `SELECT group_id::text,source_repository_id::text,name,version,checksum,index_row
+			FROM native_cargo_group_versions WHERE group_id::text=$1 AND collision_key=$2 AND version_key=$3`,
+			groupID, normalized.CollisionKey, normalized.VersionKey).
+			Scan(&owner.GroupID, &owner.SourceRepositoryID, &owner.Name, &owner.Version, &owner.Checksum, &owner.IndexRow)
+		if err == nil && !cargoGroupPublicationCompatible(owner, publication) {
+			return CargoPublication{}, false, ErrCargoGroupConflict
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return CargoPublication{}, false, err
+		}
+	}
 	var quota, used int64
 	err = tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT quota_bytes FROM repository_capacity_quotas WHERE repository_id=h.id),0),
 		COALESCE((SELECT SUM(size) FROM native_cargo_publications WHERE repository_id=h.id),0)

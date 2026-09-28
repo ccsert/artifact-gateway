@@ -234,6 +234,14 @@ replace-with = "gateway-crates-io"
 A mixed private Group is an alternate registry, not a valid crates.io source
 replacement.
 
+Configure a mixed Group under a distinct registry identity, for example
+`[registries.company]` with
+`index = "sparse+https://gateway.example/cargo/company/"`, and declare
+dependencies with `registry = "company"`. Do not set it as
+`[source.crates-io] replace-with`: private versions violate Cargo's exact
+source-replacement assumption. The Group contract checks that `Cargo.lock`
+retains the distinct registry source.
+
 ### Ordered Group
 
 A Group is a synthetic read-only registry. It generates its own `config.json`

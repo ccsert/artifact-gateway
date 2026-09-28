@@ -35,6 +35,28 @@ func (s *MemoryStore) CommitCargoPublication(ctx context.Context, incoming Cargo
 		}
 		return cloneCargoPublication(existing), true, nil
 	}
+	for _, group := range s.hostedGroups {
+		if group.Format != FormatCargo {
+			continue
+		}
+		member := false
+		for _, source := range group.Members {
+			if source.RepositoryID == publication.RepositoryID {
+				member = true
+				break
+			}
+		}
+		if !member {
+			continue
+		}
+		ownerKey, err := cargoProxyCrateKey(group.ID, publication.Name, publication.Version)
+		if err != nil {
+			return CargoPublication{}, false, err
+		}
+		if owner, found := s.cargoGroupVersions[ownerKey]; found && !cargoGroupPublicationCompatible(owner, publication) {
+			return CargoPublication{}, false, ErrCargoGroupConflict
+		}
+	}
 	capacity, err := s.repositoryCapacityLocked(repo.ID)
 	if err != nil {
 		return CargoPublication{}, false, err

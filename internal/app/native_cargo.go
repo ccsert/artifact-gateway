@@ -314,6 +314,8 @@ func (h nativeCargoHandler) publish(w http.ResponseWriter, r *http.Request, repo
 		switch {
 		case repository.IsQuotaExceeded(err):
 			h.writeError(w, http.StatusInsufficientStorage, "repository capacity quota exceeded")
+		case errors.Is(err, repository.ErrCargoGroupConflict):
+			h.writeError(w, http.StatusConflict, "crate version conflicts with an existing Cargo group owner")
 		case errors.Is(err, repository.ErrCargoPublicationConflict), errors.Is(err, repository.ErrCargoIdentityConflict):
 			h.writeError(w, http.StatusConflict, "crate version already exists with different content")
 		default:
