@@ -149,7 +149,7 @@ func (m NativeCargoMaintenance) reclaim(ctx context.Context, job repository.Life
 		if !visible {
 			if m.Objects == nil {
 				_ = m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, "Cargo object store is unavailable")
-				return errors.New("Cargo object store is unavailable")
+				return errors.New("cargo object store is unavailable")
 			}
 			if err := m.Objects.Delete(ctx, payload.ObjectKey); err != nil && !errors.Is(err, objectstore.ErrNotFound) {
 				_ = m.Store.FailLifecycleJob(ctx, job.ID, job.LeaseToken, "delete tombstoned Cargo object failed")
