@@ -17,6 +17,8 @@ func (s *PostgresStore) ListArtifactBrowseNodes(ctx context.Context, repositoryI
 		return s.listPostgresMavenBrowseNodes(ctx, repositoryID, parent, limit, after)
 	case FormatRaw:
 		return s.listPostgresRawBrowseNodes(ctx, repositoryID, parent, limit, after)
+	case FormatCargo:
+		return s.listPostgresCargoBrowseNodes(ctx, repositoryID, parent, limit, after)
 	default:
 		return nil, ErrUnsupportedBrowseFormat
 	}

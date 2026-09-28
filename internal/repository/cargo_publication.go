@@ -19,9 +19,12 @@ type CargoPublication struct {
 	ObjectKey   string
 	Size        int64
 	IndexRow    []byte
+	Description string
 	Publisher   string
 	PublishedAt time.Time
 	CreatedAt   time.Time
+	Yanked      bool
+	UpdatedAt   time.Time
 }
 
 type NativeCargoStore interface {
@@ -29,13 +32,22 @@ type NativeCargoStore interface {
 	CommitCargoPublication(context.Context, CargoPublication) (CargoPublication, bool, error)
 	GetCargoPublication(context.Context, string, string, string) (CargoPublication, error)
 	ListCargoPublications(context.Context, string, string) ([]CargoPublication, error)
+	SetCargoYanked(context.Context, string, string, string, bool) (CargoPublication, bool, error)
+	SearchCargoCrates(context.Context, string, string, int, string, bool) ([]CargoCrateSummary, int, error)
 	CargoObjectHasReference(context.Context, string) (bool, error)
 	LockCargoObject(context.Context, string) (func(), error)
 }
 
+type CargoCrateSummary struct {
+	Name        string
+	MaxVersion  string
+	Description string
+	Versions    int
+}
+
 func normalizeCargoPublication(in CargoPublication) (CargoPublication, CargoIdentityReservation, error) {
 	reservation, err := normalizeCargoIdentityClaim(in.CargoIdentityClaim)
-	if err != nil || in.Size <= 0 || in.Publisher == "" || in.PublishedAt.IsZero() ||
+	if err != nil || in.Size <= 0 || in.Publisher == "" || in.PublishedAt.IsZero() || in.Yanked || !in.UpdatedAt.IsZero() ||
 		in.ObjectKey != "native/cargo/sha256/"+strings.TrimPrefix(in.Digest, "sha256:") || len(in.IndexRow) == 0 {
 		return CargoPublication{}, CargoIdentityReservation{}, ErrInvalidCargoIdentity
 	}

@@ -112,6 +112,21 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Reques
 func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http.Request, repo repository.HostedRepository, query repository.ArtifactSearchQuery, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {
 	query = repositorySearchQueryForFormat(repo.Format, query)
 	items := make([]adminopenapi.ArtifactSummary, 0, limit)
+	if repo.Format == repository.FormatCargo {
+		if query.Mode != repository.ArtifactSearchByCoordinate {
+			return items, nil
+		}
+		crates, _, err := h.cargo.SearchCargoCrates(r.Context(), repo.ID, query.Value, limit, after.Coordinate, true)
+		if err != nil {
+			return nil, err
+		}
+		for _, crate := range crates {
+			version := crate.MaxVersion
+			versionCount := int32(crate.Versions)
+			items = append(items, adminopenapi.ArtifactSummary{Coordinate: crate.Name, Version: &version, VersionCount: &versionCount})
+		}
+		return items, nil
+	}
 	if h.searchProjection != nil {
 		projected, err := h.searchProjection.SearchArtifactProjection(r.Context(), repo.ID, repo.Format, query, limit, repository.ArtifactSearchPosition{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber, Digest: after.Digest})
 		if err != nil {

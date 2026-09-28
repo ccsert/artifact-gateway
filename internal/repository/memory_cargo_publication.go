@@ -46,9 +46,34 @@ func (s *MemoryStore) CommitCargoPublication(ctx context.Context, incoming Cargo
 		s.cargoPublications = make(map[string]CargoPublication)
 	}
 	publication.CreatedAt = time.Now().UTC()
+	publication.UpdatedAt = publication.CreatedAt
 	publication.IndexRow = append([]byte(nil), publication.IndexRow...)
 	s.cargoPublications[key] = publication
 	return cloneCargoPublication(publication), false, nil
+}
+
+func (s *MemoryStore) SetCargoYanked(ctx context.Context, repositoryID, name, version string, yanked bool) (CargoPublication, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return CargoPublication{}, false, err
+	}
+	identity, err := cargo.NormalizeIdentity(name, version)
+	if err != nil || repositoryID == "" {
+		return CargoPublication{}, false, ErrInvalidCargoIdentity
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := cargoVersionReservationKey(repositoryID, identity.CollisionKey, identity.VersionKey)
+	publication, ok := s.cargoPublications[key]
+	if !ok {
+		return CargoPublication{}, false, ErrNotFound
+	}
+	if publication.Yanked == yanked {
+		return cloneCargoPublication(publication), false, nil
+	}
+	publication.Yanked = yanked
+	publication.UpdatedAt = time.Now().UTC()
+	s.cargoPublications[key] = publication
+	return cloneCargoPublication(publication), true, nil
 }
 
 func (s *MemoryStore) GetCargoPublication(ctx context.Context, repositoryID, name, version string) (CargoPublication, error) {

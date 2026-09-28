@@ -278,6 +278,7 @@ type generatedRepositoryAPIAdapter struct {
 	oidcRuntime            *OIDCRuntime
 	replication            repository.ReplicationStore
 	oci                    repository.NativeOCIStore
+	cargo                  repository.NativeCargoStore
 	conan                  repository.NativeConanStore
 	apiKeys                repository.APIKeyStore
 	serviceAccounts        repository.ServiceAccountStore

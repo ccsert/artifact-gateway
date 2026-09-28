@@ -112,11 +112,14 @@ func (m *CacheMaintenance) runFormats(ctx context.Context, formats []string) err
 	return nil
 }
 
-func (m *CacheMaintenance) Start(ctx context.Context, interval time.Duration) {
+func (m *CacheMaintenance) Start(ctx context.Context, interval time.Duration) <-chan struct{} {
+	done := make(chan struct{})
 	if interval <= 0 {
-		return
+		close(done)
+		return done
 	}
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -131,6 +134,7 @@ func (m *CacheMaintenance) Start(ctx context.Context, interval time.Duration) {
 			}
 		}
 	}()
+	return done
 }
 
 func (m *CacheMaintenance) snapshot() CacheMaintenanceStatus {

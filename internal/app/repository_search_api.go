@@ -169,6 +169,22 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 			if len(items) > 0 {
 				lastCoordinate = items[len(items)-1].Coordinate
 			}
+		case repository.FormatCargo:
+			crates, _, err := h.cargo.SearchCargoCrates(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, true)
+			if err != nil {
+				writeHostedProblem(w, 500, "internal_error", "search Cargo crates failed")
+				return
+			}
+			hasMore = len(crates) > pageSize
+			if hasMore {
+				crates = crates[:pageSize]
+			}
+			for _, crate := range crates {
+				version := crate.MaxVersion
+				versionCount := int32(crate.Versions)
+				items = append(items, adminopenapi.ArtifactSummary{Coordinate: crate.Name, Version: &version, VersionCount: &versionCount})
+				lastCoordinate = crate.Name
+			}
 		case repository.FormatAPT:
 			if repo.Type == repository.RepositoryTypeProxy {
 				assets, err := h.sessions.store.ListAPTAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
@@ -379,6 +395,8 @@ func validArtifactSearchQuery(format repository.Format, query string) bool {
 		return validGoModuleSearchPrefix(query)
 	case repository.FormatAPT:
 		return validAPTPathPrefix(query)
+	case repository.FormatCargo:
+		return len(query) <= 255 && !strings.ContainsRune(query, '\x00')
 	default:
 		return false
 	}

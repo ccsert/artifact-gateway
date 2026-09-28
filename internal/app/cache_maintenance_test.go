@@ -58,7 +58,7 @@ func TestCacheMaintenanceSchedulerStopsWithContext(t *testing.T) {
 	store := NewMemoryOCIObjectStore()
 	maintenance := NewCacheMaintenance(store, NewDefaultOCICache(store, nil))
 	ctx, cancel := context.WithCancel(context.Background())
-	maintenance.Start(ctx, time.Millisecond)
+	done := maintenance.Start(ctx, time.Millisecond)
 	deadline := time.After(100 * time.Millisecond)
 	for maintenance.snapshot().SuccessfulRuns == 0 {
 		select {
@@ -68,6 +68,11 @@ func TestCacheMaintenanceSchedulerStopsWithContext(t *testing.T) {
 		}
 	}
 	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("scheduled cleanup did not stop after cancellation")
+	}
 	runs := maintenance.snapshot().SuccessfulRuns
 	time.Sleep(5 * time.Millisecond)
 	if got := maintenance.snapshot().SuccessfulRuns; got != runs {
