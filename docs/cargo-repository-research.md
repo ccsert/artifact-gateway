@@ -15,9 +15,12 @@ index cache validation, management search/browse, and crate version deep links.
 Memory and PostgreSQL/RustFS recovery paths are tested. A reservation remains
 invisible until publication. Cargo Hosted repositories require internal
 creation; the public format catalog, OpenAPI, and Console do not advertise
-Cargo. Proxy, Group, full lifecycle, and public admission remain in later
-issues. This document uses only Gitea and Cargo-owned
-documentation as protocol evidence.
+Cargo. The C2 sparse Proxy cache and checksum gate and the C3 durable Group
+version owner core are merged; their remaining acceptance work is tracked by
+#145 and #146. Lifecycle and public admission remain in #147–#149.
+`make integration-test` also drives an official Cargo client through a
+PostgreSQL/RustFS Proxy replay after the upstream is shut down. This document
+uses only Gitea and Cargo-owned documentation as protocol evidence.
 
 Run `make cargo-contract` with the pinned Rust/Cargo 1.96.0 prerequisite. The
 gate fails when Cargo is absent and drives `cargo package`/`cargo publish`
@@ -251,6 +254,12 @@ members expose identical immutable index data and checksum, the Group may
 de-duplicate it. If their checksum or any immutable index field differs, Group
 creation/member replacement or the new publication must report a conflict; it
 must not select different bytes merely because member order changed.
+
+A sparse Proxy has no reliable way to enumerate every upstream crate. Member
+admission should preflight previously claimed Group versions, Hosted
+publications, and cached Proxy indexes. A previously unseen upstream version
+must fail with an explicit conflict on first read rather than silently
+selecting or falling back to a different member.
 
 The first successful exposure records an immutable Group claim containing the
 owner, index-row digest, and `.crate` digest. Reordering or adding members must
