@@ -216,6 +216,11 @@ func (s *MemoryStore) CreateHostedGroupIdempotently(_ context.Context, group Hos
 			return HostedGroup{}, false, ErrNameExists
 		}
 	}
+	if group.Format == FormatCargo {
+		if err := s.preflightCargoGroupMembersLocked(group.ID, group.Members); err != nil {
+			return HostedGroup{}, false, err
+		}
+	}
 	group.Version = "1"
 	group.Members = append([]GroupMember(nil), group.Members...)
 	sort.Slice(group.Members, func(i, j int) bool { return group.Members[i].Position < group.Members[j].Position })
@@ -289,6 +294,11 @@ func (s *MemoryStore) ReplaceHostedGroup(_ context.Context, group HostedGroup, e
 	if stored.Version != expectedVersion {
 		return HostedGroup{}, ErrVersionConflict
 	}
+	if group.Format == FormatCargo {
+		if err := s.preflightCargoGroupMembersLocked(group.ID, group.Members); err != nil {
+			return HostedGroup{}, err
+		}
+	}
 	group.Version = nextHostedGroupVersion(stored.Version)
 	group.Members = append([]GroupMember(nil), group.Members...)
 	sort.Slice(group.Members, func(i, j int) bool { return group.Members[i].Position < group.Members[j].Position })
@@ -305,6 +315,11 @@ func (s *MemoryStore) ReplaceHostedGroupMembers(_ context.Context, id string, me
 	}
 	if group.Version != expectedVersion {
 		return HostedGroup{}, ErrVersionConflict
+	}
+	if group.Format == FormatCargo {
+		if err := s.preflightCargoGroupMembersLocked(group.ID, members); err != nil {
+			return HostedGroup{}, err
+		}
 	}
 	group.Members = append([]GroupMember(nil), members...)
 	sort.Slice(group.Members, func(i, j int) bool { return group.Members[i].Position < group.Members[j].Position })

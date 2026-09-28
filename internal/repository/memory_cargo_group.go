@@ -68,3 +68,30 @@ func (s *MemoryStore) GetCargoGroupVersion(ctx context.Context, groupID, name, v
 	value.IndexRow = bytes.Clone(value.IndexRow)
 	return value, nil
 }
+
+// Call with s.mu held by the group mutation. This keeps membership changes
+// atomic with Hosted publication and Proxy cache writes in the memory store.
+func (s *MemoryStore) preflightCargoGroupMembersLocked(groupID string, members []GroupMember, additional ...cargoGroupKnownIndex) error {
+	memberIDs := make(map[string]bool, len(members))
+	for _, member := range members {
+		memberIDs[member.RepositoryID] = true
+	}
+	owners := make([]CargoGroupVersion, 0)
+	for _, owner := range s.cargoGroupVersions {
+		if owner.GroupID == groupID {
+			owners = append(owners, owner)
+		}
+	}
+	indexes := make([]cargoGroupKnownIndex, 0)
+	for _, publication := range s.cargoPublications {
+		if memberIDs[publication.RepositoryID] {
+			indexes = append(indexes, cargoGroupKnownIndex{RepositoryID: publication.RepositoryID, Body: publication.IndexRow})
+		}
+	}
+	for _, index := range s.cargoProxyIndexes {
+		if memberIDs[index.RepositoryID] && index.Status == 200 {
+			indexes = append(indexes, cargoGroupKnownIndex{RepositoryID: index.RepositoryID, Body: index.Body})
+		}
+	}
+	return validateCargoGroupKnownVersions(groupID, owners, append(indexes, additional...))
+}

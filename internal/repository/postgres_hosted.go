@@ -346,6 +346,14 @@ func (s *PostgresStore) CreateHostedGroupIdempotently(ctx context.Context, group
 	if !errors.Is(err, sql.ErrNoRows) {
 		return HostedGroup{}, false, err
 	}
+	if group.Format == FormatCargo {
+		if err := lockCargoGroupRepositories(ctx, tx, group.Members); err != nil {
+			return HostedGroup{}, false, err
+		}
+		if err := preflightPostgresCargoGroupMembers(ctx, tx, group.ID, group.Members); err != nil {
+			return HostedGroup{}, false, err
+		}
+	}
 	if err = tx.QueryRowContext(ctx, `INSERT INTO hosted_groups (id,name,format,anonymous_read,version) VALUES ($1,$2,$3,$4,1) RETURNING version::text`, group.ID, group.Name, group.Format, group.AnonymousRead).Scan(&group.Version); err != nil {
 		if isUnique(err) {
 			return HostedGroup{}, false, ErrNameExists
@@ -425,6 +433,15 @@ func (s *PostgresStore) replaceHostedGroup(ctx context.Context, id, name string,
 		return HostedGroup{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if format == FormatCargo {
+		current, err := s.getHostedGroup(ctx, tx, id)
+		if err != nil {
+			return HostedGroup{}, err
+		}
+		if err := lockCargoGroupRepositories(ctx, tx, current.Members, members); err != nil {
+			return HostedGroup{}, err
+		}
+	}
 	query := `UPDATE hosted_groups SET version=version+1`
 	args := []any{id, expectedVersion}
 	if replaceMetadata {
@@ -442,6 +459,11 @@ func (s *PostgresStore) replaceHostedGroup(ctx context.Context, id, name string,
 	}
 	if err != nil {
 		return HostedGroup{}, err
+	}
+	if group.Format == FormatCargo {
+		if err := preflightPostgresCargoGroupMembers(ctx, tx, id, members); err != nil {
+			return HostedGroup{}, err
+		}
 	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM hosted_group_members WHERE group_id::text=$1`, id); err != nil {
 		return HostedGroup{}, err

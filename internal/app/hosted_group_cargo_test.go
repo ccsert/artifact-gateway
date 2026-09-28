@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -114,6 +115,64 @@ func TestCargoGroupIndexAndDownloadStayWithOwner(t *testing.T) {
 	}
 	if status, _ := request(http.MethodGet, base+"/api/v1/crates/demo/1.0.0/download", "resolver-secret", nil); status != http.StatusServiceUnavailable {
 		t.Fatalf("removed owner download=%d", status)
+	}
+}
+
+func TestCargoGroupFirstReadRejectsUnseenProxyCollision(t *testing.T) {
+	ctx := context.Background()
+	proxyChecksum := sha256.Sum256([]byte("different upstream archive"))
+	row := `{"name":"demo","vers":"1.0.0","deps":[],"cksum":"` + hex.EncodeToString(proxyChecksum[:]) + `","features":{},"yanked":false}` + "\n"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/de/mo/demo" {
+			_, _ = io.WriteString(w, row)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer upstream.Close()
+	store := repository.NewMemoryStore()
+	hosted, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "cargo-unseen-hosted", Name: "cargo-unseen-hosted", Format: repository.FormatCargo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "cargo-unseen-proxy", Name: "cargo-unseen-proxy",
+		Format: repository.FormatCargo, Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	group := createV2Group(t, store, "cargo-unseen-group", repository.FormatCargo,
+		repository.GroupMember{RepositoryID: hosted.ID, Position: 0}, repository.GroupMember{RepositoryID: proxy.ID, Position: 1})
+	gateway := httptest.NewServer(NewGatewayHandler(Dependencies{NativeCargoObjectStore: NewMemoryOCIObjectStore(), CargoUpstreamClient: upstream.Client()},
+		store, TestAdapter{}, testAuthenticator()))
+	defer gateway.Close()
+	publish, _ := cargoC0PublishFixture(t, "demo", "1.0.0", "demo")
+	request := func(method, path, token string, body []byte) *http.Response {
+		t.Helper()
+		req, err := http.NewRequest(method, gateway.URL+path, bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", token)
+		response, err := gateway.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response
+	}
+	response := request(http.MethodPut, "/cargo/"+hosted.Name+"/api/v1/crates/new", "admin-secret", publish)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("Hosted publish status=%d", response.StatusCode)
+	}
+	for _, path := range []string{"/de/mo/demo", "/api/v1/crates/demo/1.0.0/download"} {
+		response := request(http.MethodGet, "/cargo/"+group.Name+path, "resolver-secret", nil)
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusConflict {
+			t.Fatalf("unseen Proxy collision %s status=%d", path, response.StatusCode)
+		}
+	}
+	if _, err := store.GetCargoGroupVersion(ctx, group.ID, "demo", "1.0.0"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("conflicting coordinate acquired an owner: %v", err)
 	}
 }
 

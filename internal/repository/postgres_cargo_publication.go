@@ -100,6 +100,28 @@ func (s *PostgresStore) CommitCargoPublication(ctx context.Context, incoming Car
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return CargoPublication{}, false, err
 		}
+		memberRows, err := tx.QueryContext(ctx, `SELECT repository_id::text FROM hosted_group_members WHERE group_id::text=$1`, groupID)
+		if err != nil {
+			return CargoPublication{}, false, err
+		}
+		members := make([]GroupMember, 0)
+		for memberRows.Next() {
+			var member GroupMember
+			if err := memberRows.Scan(&member.RepositoryID); err != nil {
+				_ = memberRows.Close()
+				return CargoPublication{}, false, err
+			}
+			members = append(members, member)
+		}
+		err = memberRows.Err()
+		_ = memberRows.Close()
+		if err != nil {
+			return CargoPublication{}, false, err
+		}
+		if err := preflightPostgresCargoGroupMembers(ctx, tx, groupID, members,
+			cargoGroupKnownIndex{RepositoryID: publication.RepositoryID, Body: publication.IndexRow}); err != nil {
+			return CargoPublication{}, false, err
+		}
 	}
 	var quota, used int64
 	err = tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT quota_bytes FROM repository_capacity_quotas WHERE repository_id=h.id),0),

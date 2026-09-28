@@ -128,6 +128,10 @@ func (h generatedRepositoryAPIAdapter) CreateGroup(w http.ResponseWriter, r *htt
 		writeHostedProblem(w, http.StatusConflict, "version_conflict", "group name already exists")
 		return
 	}
+	if errors.Is(err, repository.ErrCargoGroupConflict) {
+		writeHostedProblem(w, http.StatusConflict, "cargo_group_conflict", "Cargo group members contain conflicting crate versions")
+		return
+	}
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create group failed")
 		return
@@ -296,6 +300,10 @@ func (h generatedRepositoryAPIAdapter) writeGroupMutation(w http.ResponseWriter,
 	}
 	if errors.Is(err, repository.ErrVersionConflict) {
 		writeHostedProblem(w, 412, "version_conflict", "If-Match does not match current version")
+		return
+	}
+	if errors.Is(err, repository.ErrCargoGroupConflict) {
+		writeHostedProblem(w, http.StatusConflict, "cargo_group_conflict", "Cargo group members contain conflicting crate versions")
 		return
 	}
 	if err != nil {
