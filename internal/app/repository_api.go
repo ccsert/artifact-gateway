@@ -134,6 +134,7 @@ type GatewayStore interface {
 	repository.NativeNPMStore
 	repository.NativePyPIStore
 	repository.NativeGoStore
+	repository.NativeCargoStore
 	repository.NativeAPTStore
 	repository.NativeAPTPublicationStore
 	repository.APIKeyStore
@@ -272,6 +273,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		nativeGoObjects = NewMemoryOCIObjectStore()
 	}
 	nativeGo := newNativeGoHandler(store, nativeGoObjects, authenticator).withMetrics(metrics).withProxy(goClient).withPublicationScanner(publicationScanner)
+	nativeCargo := newNativeCargoHandler(store, dependencies.NativeCargoObjectStore, authenticator)
 	nativeAPTObjects := dependencies.NativeAPTObjectStore
 	if nativeAPTObjects == nil {
 		nativeAPTObjects = NewMemoryOCIObjectStore()
@@ -368,6 +370,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		goModules:  &v2GroupGoHandler{native: &nativeGo},
 		next:       nativeGo}
 	mux.Handle("/go/", goGroupRouter)
+	mux.Handle("/cargo/", nativeCargo)
 	aptGroupRouter := v2GroupRouter{format: repository.FormatAPT, groups: store, repos: store, audit: store, auth: authenticator,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
 		apt:        &v2GroupAPTHandler{native: &nativeAPT},

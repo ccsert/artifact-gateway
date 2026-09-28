@@ -38,6 +38,7 @@ type Dependencies struct {
 	NativeNPMObjectStore          OCIObjectStore
 	NativePyPIObjectStore         OCIObjectStore
 	NativeGoObjectStore           OCIObjectStore
+	NativeCargoObjectStore        OCIObjectStore
 	NativeAPTObjectStore          OCIObjectStore
 	APTArchiveTrust               aptpublication.SnapshotArchiveTrustVerifier
 	APTSigner                     aptpublication.Signer

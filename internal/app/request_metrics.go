@@ -28,13 +28,14 @@ const (
 	requestClassNPM
 	requestClassPyPI
 	requestClassGo
+	requestClassCargo
 	requestClassHealth
 	requestClassMetrics
 	requestClassOther
 	requestClassCount
 )
 
-var requestClassNames = [...]string{"management", "oci", "maven", "raw", "conan", "npm", "pypi", "go", "health", "metrics", "other"}
+var requestClassNames = [...]string{"management", "oci", "maven", "raw", "conan", "npm", "pypi", "go", "cargo", "health", "metrics", "other"}
 var requestStatusNames = [...]string{"1xx", "2xx", "3xx", "4xx", "5xx", "other"}
 var requestDurationBuckets = [...]time.Duration{5 * time.Millisecond, 10 * time.Millisecond, 25 * time.Millisecond, 50 * time.Millisecond, 100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, time.Second, 2500 * time.Millisecond, 5 * time.Second, 10 * time.Second}
 
@@ -137,6 +138,8 @@ func requestClassForRepositoryFormat(format repository.Format) (requestClass, bo
 		return requestClassPyPI, true
 	case repository.FormatGo:
 		return requestClassGo, true
+	case repository.FormatCargo:
+		return requestClassCargo, true
 	default:
 		return requestClassOther, false
 	}
@@ -175,6 +178,8 @@ func classifyRequest(path string) requestClass {
 		return requestClassPyPI
 	case strings.HasPrefix(path, "/go/"):
 		return requestClassGo
+	case strings.HasPrefix(path, "/cargo/"):
+		return requestClassCargo
 	default:
 		return requestClassOther
 	}

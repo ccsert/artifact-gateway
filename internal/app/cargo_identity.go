@@ -18,33 +18,43 @@ func ReserveCargoPublicationIdentity(ctx context.Context, store repository.Cargo
 	if store == nil {
 		return repository.CargoIdentityReservation{}, false, errors.New("cargo identity store is unavailable")
 	}
-	envelope, err := cargo.ParsePublishEnvelope(ctx, body, size)
+	inspection, err := inspectCargoPublicationIdentity(ctx, repositoryID, body, size)
 	if err != nil {
 		return repository.CargoIdentityReservation{}, false, err
+	}
+	return store.ReserveCargoIdentity(ctx, inspection.Claim)
+}
+
+type cargoPublicationInspection struct {
+	Claim    repository.CargoIdentityClaim
+	Envelope cargo.PublishEnvelope
+}
+
+func inspectCargoPublicationIdentity(ctx context.Context, repositoryID string, body io.ReaderAt, size int64) (cargoPublicationInspection, error) {
+	envelope, err := cargo.ParsePublishEnvelope(ctx, body, size)
+	if err != nil {
+		return cargoPublicationInspection{}, err
 	}
 	crateReader := io.NewSectionReader(body, envelope.CrateOffset, envelope.CrateSize)
 	crate, err := cargo.ParseCrate(ctx, crateReader, envelope.CrateSize)
 	if err != nil {
-		return repository.CargoIdentityReservation{}, false, err
+		return cargoPublicationInspection{}, err
 	}
 	if err = cargo.CrossCheckPublishIdentity(envelope.Metadata, crate); err != nil {
-		return repository.CargoIdentityReservation{}, false, err
+		return cargoPublicationInspection{}, err
 	}
 	crateDigest, err := digestCargoSection(ctx, body, envelope.CrateOffset, envelope.CrateSize)
 	if err != nil {
-		return repository.CargoIdentityReservation{}, false, err
+		return cargoPublicationInspection{}, err
 	}
 	metadataDigest, err := digestCargoSection(ctx, body, 4, envelope.CrateOffset-8)
 	if err != nil {
-		return repository.CargoIdentityReservation{}, false, err
+		return cargoPublicationInspection{}, err
 	}
-	return store.ReserveCargoIdentity(ctx, repository.CargoIdentityClaim{
-		RepositoryID:   repositoryID,
-		Name:           crate.Name,
-		Version:        crate.Version,
-		Digest:         crateDigest,
-		MetadataDigest: metadataDigest,
-	})
+	return cargoPublicationInspection{Envelope: envelope, Claim: repository.CargoIdentityClaim{
+		RepositoryID: repositoryID, Name: crate.Name, Version: crate.Version,
+		Digest: crateDigest, MetadataDigest: metadataDigest,
+	}}, nil
 }
 
 func digestCargoSection(ctx context.Context, body io.ReaderAt, offset, size int64) (string, error) {

@@ -2,9 +2,9 @@
 
 [English](cargo-repository-research.md) | [文档索引](README.zh-CN.md)
 
-状态：研究建议，不是已实现协议或已接纳格式。非公开 C0 基础已实现严格有界 publish framing、完整 `.crate` 校验、规范 manifest 身份、sparse index 路径/行转换、官方 `cargo package`/`cargo publish` 契约测试，以及 Memory/PostgreSQL 的持久身份预留。
+状态：研究建议与分阶段实施记录，Cargo 尚未通过公开格式准入。非公开 C0 基础已实现严格有界 publish framing、完整 `.crate` 校验、规范 manifest 身份、sparse index 路径/行转换，以及 Memory/PostgreSQL 的持久身份预留。C1 Hosted 主路径增加 `/cargo/{repository}/` 路由：官方客户端发布、依赖解析和安装，服务端原子提交索引行与不可变下载，私有/匿名读取策略、容量和审计，以及未提交对象的持久回收。Memory 与 PostgreSQL/RustFS 的故障恢复均有测试覆盖。
 
-持久预留覆盖大小写与 `-`/`_` 碰撞、并发 claim 和精确重试；预留不代表发布完成，也不是可见 sparse index 行。目前不公开 Cargo 路由、格式、OpenAPI 或 Console 选项。运行 `make cargo-contract` 需要固定 Rust/Cargo 1.96.0；缺少 Cargo 时门禁失败。
+持久预留覆盖大小写与 `-`/`_` 碰撞、并发 claim 和精确重试；预留不代表发布完成，也不是可见 sparse index 行。Cargo 路由仅能用于内部创建的 Hosted 仓库；对外格式目录、OpenAPI 和 Console 选项尚不声明 Cargo。搜索、yank/unyank、Proxy、Group、完整生命周期及公开准入仍在后续 issue。运行 `make cargo-contract` 需要固定 Rust/Cargo 1.96.0；缺少 Cargo 时门禁失败。
 
 ## 决策
 
@@ -98,7 +98,7 @@ Parser、官方 client 契约和非公开持久 identity reservation 已实现�
 
 ### C1：Hosted sparse registry
 
-实现原子 publish、config/index、download、search、yank/unyank、私有/公开读、容量、配额、审计、browse 和深链接，并支持对象上传与 metadata publication 间失败的精确恢复。
+Hosted 主路径已实现原子 publish、config/index、download、私有/公开读、容量、配额、审计及对象上传与 metadata publication 间的恢复；搜索、yank/unyank、browse 和深链接由后续 issue 完成。
 
 退出：官方 Rust 镜像完成 publish/add/install/search/yank/undo；staged 不可见，既有 lockfile 仍下载 yanked version。
 
