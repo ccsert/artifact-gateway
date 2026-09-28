@@ -49,6 +49,7 @@ func (r backgroundRuntime) startSchedulers(ctx context.Context, retention app.Na
 	app.NativeNPMMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativePyPIMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativeGoMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
+	app.NativeCargoMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	aptpublication.Maintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	retention.StartScheduler(ctx, time.Hour)
 }
@@ -87,7 +88,7 @@ func (r backgroundRuntime) startWorkers(ctx context.Context, cfg config.Config, 
 	r.startPyPIWorkers(ctx, cfg)
 	r.startGoWorkers(ctx, cfg)
 	if cfg.WorkerEnabled("cargo", "reclaim") {
-		app.NativeCargoMaintenance{Store: r.store, Objects: r.objects}.StartWorker(ctx, time.Minute)
+		app.NativeCargoMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
 	}
 	r.startAPTWorkers(ctx, cfg)
 }

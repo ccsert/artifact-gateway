@@ -29,6 +29,7 @@ type CargoGroupVersion struct {
 type CargoGroupStore interface {
 	ReconcileCargoGroupIndex(context.Context, string, string, []CargoGroupVersion) ([]CargoGroupVersion, error)
 	GetCargoGroupVersion(context.Context, string, string, string) (CargoGroupVersion, error)
+	ListCargoGroupVersions(context.Context, string, string) ([]CargoGroupVersion, error)
 }
 
 func cargoGroupPublicationCompatible(owner CargoGroupVersion, publication CargoPublication) bool {

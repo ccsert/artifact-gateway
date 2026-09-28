@@ -16,15 +16,17 @@ import (
 // objects are deliberately absent from sparse-index and download reads.
 type CargoPublication struct {
 	CargoIdentityClaim
-	ObjectKey   string
-	Size        int64
-	IndexRow    []byte
-	Description string
-	Publisher   string
-	PublishedAt time.Time
-	CreatedAt   time.Time
-	Yanked      bool
-	UpdatedAt   time.Time
+	ObjectKey    string
+	Size         int64
+	IndexRow     []byte
+	Description  string
+	Publisher    string
+	PublishedAt  time.Time
+	CreatedAt    time.Time
+	Yanked       bool
+	UpdatedAt    time.Time
+	CollectingAt time.Time
+	CollectedAt  time.Time
 }
 
 type NativeCargoStore interface {
@@ -33,9 +35,34 @@ type NativeCargoStore interface {
 	GetCargoPublication(context.Context, string, string, string) (CargoPublication, error)
 	ListCargoPublications(context.Context, string, string) ([]CargoPublication, error)
 	SetCargoYanked(context.Context, string, string, string, bool) (CargoPublication, bool, error)
+	TombstoneCargoPublication(context.Context, string, string, string) (CargoPublication, error)
+	RestoreCargoPublication(context.Context, string, string, string) (CargoPublication, error)
+	ListReclaimableCargoObjects(context.Context, time.Time, int, string) ([]CargoReclaimableObject, error)
+	CargoObjectHasVisibleReference(context.Context, string) (bool, error)
+	CargoObjectMatchesTombstone(context.Context, string, time.Time) (bool, error)
+	MarkCargoObjectCollecting(context.Context, string) error
+	MarkCargoObjectCollected(context.Context, string) error
 	SearchCargoCrates(context.Context, string, string, int, string, bool) ([]CargoCrateSummary, int, error)
 	CargoObjectHasReference(context.Context, string) (bool, error)
 	LockCargoObject(context.Context, string) (func(), error)
+}
+
+type CargoReclaimableObject struct {
+	RepositoryID string
+	ObjectKey    string
+	Digest       string
+	Size         int64
+	TombstonedAt time.Time
+}
+
+func cargoPublicationCoordinate(name, version string) string { return name + "@" + version }
+
+func cargoTombstoneKey(repositoryID, name, version string) string {
+	return repositoryID + "\x00" + string(FormatCargo) + "\x00" + cargoPublicationCoordinate(name, version)
+}
+
+func CargoTombstoneReclaimKey(objectKey string, generation time.Time) string {
+	return "cargo-tombstone-object:" + objectKey + ":" + generation.UTC().Format(time.RFC3339Nano)
 }
 
 type CargoCrateSummary struct {
@@ -48,6 +75,7 @@ type CargoCrateSummary struct {
 func normalizeCargoPublication(in CargoPublication) (CargoPublication, CargoIdentityReservation, error) {
 	reservation, err := normalizeCargoIdentityClaim(in.CargoIdentityClaim)
 	if err != nil || in.Size <= 0 || in.Publisher == "" || in.PublishedAt.IsZero() || in.Yanked || !in.UpdatedAt.IsZero() ||
+		!in.CollectingAt.IsZero() || !in.CollectedAt.IsZero() ||
 		in.ObjectKey != "native/cargo/sha256/"+strings.TrimPrefix(in.Digest, "sha256:") || len(in.IndexRow) == 0 {
 		return CargoPublication{}, CargoIdentityReservation{}, ErrInvalidCargoIdentity
 	}

@@ -11,6 +11,7 @@ import (
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
+	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
 	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
 	npmprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/npm"
@@ -444,11 +445,11 @@ func toOpenAPIReplicationPlanDetail(plan repository.ReplicationPlan, checkpoints
 }
 
 func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, repo repository.HostedRepository) {
 		var request adminopenapi.RestoreArtifact
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || (repo.Format == repository.FormatConan && !validConanRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (repo.Format == repository.FormatOCI && !validOCIRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatRaw && (strings.Trim(request.Coordinate, "/") == "" || !validRawAssetPrefix(request.Coordinate))) || (repo.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (repo.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (repo.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) {
+		if err := decoder.Decode(&request); err != nil || (repo.Format == repository.FormatConan && !validConanRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (repo.Format == repository.FormatOCI && !validOCIRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatRaw && (strings.Trim(request.Coordinate, "/") == "" || !validRawAssetPrefix(request.Coordinate))) || (repo.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (repo.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (repo.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) || (repo.Format == repository.FormatCargo && !validCargoVersionCoordinate(request.Coordinate)) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "coordinate must identify a supported artifact tombstone")
 			return
 		}
@@ -486,6 +487,28 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 		case repository.FormatGo:
 			modulePath, version, _ := parseGoModuleVersionCoordinate(request.Coordinate)
 			_, err = h.sessions.store.RestoreGoModuleVersion(r.Context(), repo.ID, modulePath, version)
+		case repository.FormatCargo:
+			name, version, _ := splitVersionCoordinate(request.Coordinate)
+			if h.diagnostics.NativeCargoObjectStore == nil {
+				err = repository.ErrDisabled
+				break
+			}
+			reservation, lookupErr := h.cargo.GetCargoIdentityReservation(r.Context(), repo.ID, name, version)
+			if lookupErr != nil {
+				err = lookupErr
+				break
+			}
+			objectKey := "native/cargo/sha256/" + strings.TrimPrefix(reservation.Digest, "sha256:")
+			stored, statErr := h.diagnostics.NativeCargoObjectStore.Stat(r.Context(), objectKey)
+			if errors.Is(statErr, objectstore.ErrNotFound) {
+				err = repository.ErrDisabled
+			} else if statErr != nil {
+				err = statErr
+			} else if stored.Digest != reservation.Digest {
+				err = repository.ErrDisabled
+			} else {
+				_, err = h.cargo.RestoreCargoPublication(r.Context(), repo.ID, name, version)
+			}
 		default:
 			_, err = h.sessions.store.RestoreRawAsset(r.Context(), repo.ID, request.Coordinate)
 		}
@@ -496,6 +519,12 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 		if err != nil {
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "restore artifact failed")
 			return
+		}
+		if repo.Format == repository.FormatCargo && h.audit != nil {
+			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{GroupName: repo.Name, Repository: repo.Name,
+				Actor: principal.Actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(),
+				Format: "management", Resource: request.Coordinate, Operation: "artifact.restore",
+				Status: http.StatusNoContent, CacheDisposition: "bypass"})
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})

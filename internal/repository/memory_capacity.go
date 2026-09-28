@@ -75,7 +75,7 @@ func (s *MemoryStore) repositoryCapacityLocked(id string) (RepositoryCapacity, e
 		}
 	case FormatCargo:
 		for _, publication := range s.cargoPublications {
-			if publication.RepositoryID == id {
+			if publication.RepositoryID == id && publication.CollectedAt.IsZero() {
 				capacity.UsedBytes += publication.Size
 				capacity.ObjectCount++
 			}

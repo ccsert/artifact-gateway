@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/protocol/cargo"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/felixge/httpsnoop"
 	"golang.org/x/mod/semver"
@@ -106,6 +107,13 @@ func (h v2GroupCargoHandler) readableVersions(r *http.Request, resolver v2GroupR
 		}
 		if repo.Type == repository.RepositoryTypeHosted {
 			publication, err := h.native.store.GetCargoPublication(r.Context(), repo.ID, version.Name, version.Version)
+			if errors.Is(err, repository.ErrNotFound) {
+				tombstone, tombstoneErr := h.native.tombstones.GetArtifactTombstone(r.Context(), repo.ID, repository.FormatCargo,
+					version.Name+"@"+version.Version)
+				if tombstoneErr == nil && tombstone.Digest == "sha256:"+version.Checksum {
+					continue
+				}
+			}
 			if err != nil || publication.Digest != "sha256:"+version.Checksum {
 				return nil, repository.ErrUpstreamChanged
 			}
@@ -181,6 +189,32 @@ func (h v2GroupCargoHandler) reconcileIndex(r *http.Request, resolver v2GroupRes
 				Checksum: identity.Checksum, IndexRow: bytes.Clone(row)})
 		}
 	}
+	prior, err := h.owners.ListCargoGroupVersions(r.Context(), group.ID, name)
+	if err != nil {
+		return nil, err
+	}
+	for _, owner := range prior {
+		tombstone, err := h.native.tombstones.GetArtifactTombstone(r.Context(), owner.SourceRepositoryID,
+			repository.FormatCargo, owner.Name+"@"+owner.Version)
+		if errors.Is(err, repository.ErrNotFound) {
+			continue
+		}
+		if err != nil || tombstone.Digest != "sha256:"+owner.Checksum {
+			return nil, repository.ErrUpstreamChanged
+		}
+		identity, err := cargo.NormalizeIdentity(owner.Name, owner.Version)
+		if err != nil {
+			return nil, err
+		}
+		kept := candidates[:0]
+		for _, candidate := range candidates {
+			candidateIdentity, candidateErr := cargo.NormalizeIdentity(candidate.Name, candidate.Version)
+			if candidateErr != nil || candidateIdentity.CollisionKey != identity.CollisionKey || candidateIdentity.VersionKey != identity.VersionKey {
+				kept = append(kept, candidate)
+			}
+		}
+		candidates = append(kept, owner)
+	}
 	return h.owners.ReconcileCargoGroupIndex(r.Context(), group.ID, name, candidates)
 }
 
@@ -249,6 +283,13 @@ func (h v2GroupCargoHandler) download(w http.ResponseWriter, r *http.Request, re
 		}
 	} else {
 		publication, err := h.native.store.GetCargoPublication(r.Context(), source.ID, route.name, route.version)
+		if errors.Is(err, repository.ErrNotFound) {
+			if tombstone, tombstoneErr := h.native.tombstones.GetArtifactTombstone(r.Context(), source.ID,
+				repository.FormatCargo, route.name+"@"+route.version); tombstoneErr == nil && tombstone.Digest == "sha256:"+owner.Checksum {
+				h.native.writeError(w, http.StatusNotFound, "Cargo group version is tombstoned")
+				return
+			}
+		}
 		if err != nil || publication.Digest != "sha256:"+owner.Checksum {
 			h.native.writeError(w, http.StatusServiceUnavailable, "Cargo group version checksum changed")
 			return

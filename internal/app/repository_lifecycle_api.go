@@ -248,6 +248,9 @@ func (h generatedRepositoryAPIAdapter) TombstoneRepositoryArtifact(w http.Respon
 		case repository.FormatGo:
 			modulePath, version, _ := parseGoModuleVersionCoordinate(request.Coordinate)
 			_, err = h.sessions.store.TombstoneGoModuleVersion(r.Context(), repo.ID, modulePath, version)
+		case repository.FormatCargo:
+			name, version, _ := splitVersionCoordinate(request.Coordinate)
+			_, err = h.cargo.TombstoneCargoPublication(r.Context(), repo.ID, name, version)
 		}
 		if errors.Is(err, repository.ErrNotFound) {
 			writeHostedProblem(w, http.StatusNotFound, "not_found", "artifact not found")
@@ -280,6 +283,8 @@ func validTombstoneCoordinate(format repository.Format, coordinate string) bool 
 		return validPyPIVersionCoordinate(coordinate)
 	case repository.FormatGo:
 		return validGoModuleVersionCoordinate(coordinate)
+	case repository.FormatCargo:
+		return validCargoVersionCoordinate(coordinate)
 	default:
 		return false
 	}

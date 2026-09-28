@@ -5,7 +5,10 @@ import "context"
 const cargoSearchPredicate = `n.repository_id::text=$1 AND position(lower($2) in lower(n.name))>0
 	AND EXISTS (SELECT 1 FROM native_cargo_publications visible
 		WHERE visible.repository_id=n.repository_id AND visible.collision_key=n.collision_key
-		AND ($3 OR NOT visible.yanked))`
+		AND visible.collected_at IS NULL AND ($3 OR NOT visible.yanked)
+		AND NOT EXISTS (SELECT 1 FROM artifact_tombstones t WHERE t.repository_id=visible.repository_id AND t.format='cargo'
+			AND t.coordinate=n.name || '@' || (SELECT r.version FROM native_cargo_identity_reservations r
+				WHERE r.repository_id=visible.repository_id AND r.collision_key=visible.collision_key AND r.version_key=visible.version_key)))`
 
 func (s *PostgresStore) SearchCargoCrates(ctx context.Context, repositoryID, query string, limit int, after string, includeYanked bool) ([]CargoCrateSummary, int, error) {
 	if limit <= 0 || limit > 201 {
@@ -28,7 +31,9 @@ func (s *PostgresStore) SearchCargoCrates(ctx context.Context, repositoryID, que
 	) SELECT n.collision_key,n.name,r.version,p.description
 	FROM selected n JOIN native_cargo_publications p USING (repository_id,collision_key)
 	JOIN native_cargo_identity_reservations r USING (repository_id,collision_key,version_key)
-	WHERE ($3 OR NOT p.yanked) ORDER BY n.collision_key`, repositoryID, query, includeYanked, limit, afterKey)
+	WHERE p.collected_at IS NULL AND ($3 OR NOT p.yanked)
+	  AND NOT EXISTS (SELECT 1 FROM artifact_tombstones t WHERE t.repository_id=p.repository_id AND t.format='cargo' AND t.coordinate=n.name || '@' || r.version)
+	ORDER BY n.collision_key`, repositoryID, query, includeYanked, limit, afterKey)
 	if err != nil {
 		return nil, 0, err
 	}

@@ -21,7 +21,8 @@ func (s *MemoryStore) SearchCargoCrates(ctx context.Context, repositoryID, query
 	defer s.mu.RUnlock()
 	byName := make(map[string]CargoCrateSummary)
 	for _, publication := range s.cargoPublications {
-		if publication.RepositoryID != repositoryID || (publication.Yanked && !includeYanked) || !strings.Contains(strings.ToLower(publication.Name), needle) {
+		if publication.RepositoryID != repositoryID || !publication.CollectedAt.IsZero() || s.cargoPublicationTombstonedLocked(publication) ||
+			(publication.Yanked && !includeYanked) || !strings.Contains(strings.ToLower(publication.Name), needle) {
 			continue
 		}
 		identity, err := normalizeCargoIdentityClaim(publication.CargoIdentityClaim)
