@@ -206,7 +206,7 @@ func (w Worker) runPlan(ctx context.Context, plan repository.ReplicationPlan) er
 		snapshotUnchanged := true
 		var admissionCtx context.Context
 		var releaseAdmission func()
-		if plan.Format == repository.FormatPyPI || plan.Format == repository.FormatGo {
+		if plan.Format == repository.FormatPyPI || plan.Format == repository.FormatGo || plan.Format == repository.FormatCargo {
 			admissionCtx, releaseAdmission, admissionErr = repository.LockArtifactDistributionCoordinates(ctx, w.Store, []repository.ArtifactDistributionCoordinate{
 				{RepositoryID: plan.SourceRepositoryID, Format: plan.Format, Coordinate: plan.Coordinate},
 				{RepositoryID: plan.TargetRepositoryID, Format: plan.Format, Coordinate: plan.Coordinate},

@@ -30,7 +30,13 @@ tombstones separately from yank, a recoverable window, explicit retention
 preview, and delayed reclamation gated by object references. The original
 crate identity and quota usage remain until collection; a collected version
 cannot be restored. Group ownership remains with the tombstoned member.
-Promotion, replication, and public format admission remain open.
+The distribution slice adds idempotent same-digest promotion and durable
+checkpoint replication. It verifies target `.crate` bytes before publishing
+the source index identity and initial yank state; a target can then manage its
+own yank state. Each operation copies only the requested crate/version. Direct
+same-registry dependencies must already have a matching, non-yanked, readable
+target version; external-registry dependencies remain with that registry.
+The full backup/restore drill and public format admission remain open.
 `make integration-test` also drives an official Cargo client through a
 PostgreSQL/RustFS Proxy replay after the upstream is shut down. This document
 uses only Gitea and Cargo-owned documentation as protocol evidence.

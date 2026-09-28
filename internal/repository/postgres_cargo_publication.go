@@ -145,10 +145,10 @@ func (s *PostgresStore) CommitCargoPublication(ctx context.Context, incoming Car
 		return CargoPublication{}, false, ErrQuotaExceeded
 	}
 	err = tx.QueryRowContext(ctx, `INSERT INTO native_cargo_publications
-		(repository_id,collision_key,version_key,object_key,size,index_row,description,publisher,published_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING created_at,yanked,updated_at`, publication.RepositoryID,
+		(repository_id,collision_key,version_key,object_key,size,index_row,description,publisher,published_at,yanked)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING created_at,yanked,updated_at`, publication.RepositoryID,
 		normalized.CollisionKey, normalized.VersionKey, publication.ObjectKey, publication.Size,
-		string(publication.IndexRow), publication.Description, publication.Publisher, publication.PublishedAt).
+		string(publication.IndexRow), publication.Description, publication.Publisher, publication.PublishedAt, publication.Yanked).
 		Scan(&publication.CreatedAt, &publication.Yanked, &publication.UpdatedAt)
 	if IsQuotaExceeded(err) {
 		return CargoPublication{}, false, ErrQuotaExceeded

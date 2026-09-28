@@ -74,7 +74,7 @@ type CargoCrateSummary struct {
 
 func normalizeCargoPublication(in CargoPublication) (CargoPublication, CargoIdentityReservation, error) {
 	reservation, err := normalizeCargoIdentityClaim(in.CargoIdentityClaim)
-	if err != nil || in.Size <= 0 || in.Publisher == "" || in.PublishedAt.IsZero() || in.Yanked || !in.UpdatedAt.IsZero() ||
+	if err != nil || in.Size <= 0 || in.Publisher == "" || in.PublishedAt.IsZero() || !in.UpdatedAt.IsZero() ||
 		!in.CollectingAt.IsZero() || !in.CollectedAt.IsZero() ||
 		in.ObjectKey != "native/cargo/sha256/"+strings.TrimPrefix(in.Digest, "sha256:") || len(in.IndexRow) == 0 {
 		return CargoPublication{}, CargoIdentityReservation{}, ErrInvalidCargoIdentity
@@ -104,9 +104,10 @@ func cargoPublicationMatches(existing, incoming CargoPublication) bool {
 }
 
 func cargoReservationMatches(reservation CargoIdentityReservation, publication CargoPublication) bool {
+	// A distribution import preserves the source index timestamp, which may
+	// predate the target repository's identity reservation.
 	return reservation.Name == publication.Name && reservation.Version == publication.Version &&
-		reservation.Digest == publication.Digest && reservation.MetadataDigest == publication.MetadataDigest &&
-		reservation.CreatedAt.UTC().Truncate(time.Second).Equal(publication.PublishedAt)
+		reservation.Digest == publication.Digest && reservation.MetadataDigest == publication.MetadataDigest
 }
 
 var ErrCargoPublicationConflict = errors.New("cargo version is already published with different content")
