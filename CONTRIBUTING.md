@@ -89,7 +89,7 @@ exactly that workstream.
 | --- | --- | --- |
 | Type | `type: feature`, `type: bug`, `type: design`, `type: docs`, `type: chore` | `feature` extends user-visible capability; `bug` is behavior contradicting the intended outcome or the contract; `design` produces a decision recorded in an ADR or document rather than code; `docs` changes documentation only; `chore` covers CI, dependencies, refactors, and tooling with no behavior change. |
 | Area | `area: console`, `area: api`, `area: cli`, `area: auth`, `area: audit`, `area: platform`, `area: ops` | `console` is the web UI; `api` is the management contract, its OpenAPI sources, and generated clients; `cli` is `agctl`; `auth` covers identity, authorization, accounts, and service credentials; `audit` covers audit records, retention, and forensics; `platform` is the server-side data plane — artifacts and repositories, lifecycle and retention, promotion and replication, capacity, cache, quarantine, scanning; `ops` covers deployment, runtime, diagnostics, logs, backup, and upgrade. |
-| Format | `format: maven`, `format: oci`, `format: npm`, `format: pypi`, `format: go`, `format: apt`, `format: conan`, `format: cargo`, `format: raw` | Orthogonal to area; applied to Issues about one protocol's behavior. |
+| Format | `format: maven`, `format: oci`, `format: npm`, `format: pypi`, `format: go`, `format: apt`, `format: conan`, `format: cargo`, `format: nuget`, `format: raw` | Orthogonal to area; applied to Issues about one protocol's behavior. |
 
 Titles start with the area: `Console:`, `API:` and `CLI:` for the technical
 surfaces, and the Chinese area word (`授权:`, `审计:`, `平台:`, `运维:`) for the

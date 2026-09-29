@@ -77,7 +77,7 @@ CI、隔离协议 fixture、本地运行时检查和发布验收属于不同证�
 | --- | --- | --- |
 | 类型 | `type: feature`、`type: bug`、`type: design`、`type: docs`、`type: chore` | `feature` 新增或扩展用户可见能力；`bug` 行为与预期或契约不符；`design` 产出是决策（落在 ADR 或文档）而非代码；`docs` 纯文档变更；`chore` 覆盖 CI、依赖、重构与工具链，无行为变化。 |
 | 领域 | `area: console`、`area: api`、`area: cli`、`area: auth`、`area: audit`、`area: platform`、`area: ops` | `console` 控制台界面；`api` 管理契约、OpenAPI 源与生成客户端；`cli` agctl；`auth` 身份、授权、账号与服务端凭据；`audit` 审计、保留与取证；`platform` 服务端数据面——制品与仓库、生命周期与保留、晋升复制、容量、缓存、隔离、扫描；`ops` 部署、运行、诊断、日志、备份与升级。 |
-| 格式 | `format: maven`、`format: oci`、`format: npm`、`format: pypi`、`format: go`、`format: apt`、`format: conan`、`format: cargo`、`format: raw` | 与领域正交，用于涉及某协议行为的单。 |
+| 格式 | `format: maven`、`format: oci`、`format: npm`、`format: pypi`、`format: go`、`format: apt`、`format: conan`、`format: cargo`、`format: nuget`、`format: raw` | 与领域正交，用于涉及某协议行为的单。 |
 
 标题以领域开头：技术面用 `Console:`、`API:`、`CLI:`，其余用中文领域词（`授权:`、
 `审计:`、`平台:`、`运维:`），后接结论或要求的结果，而不是动作。跨领域的工程性工作
