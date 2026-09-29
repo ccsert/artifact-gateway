@@ -496,8 +496,8 @@ export function RepositoryDistributionTab({
           </div>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-zinc-500">
             {text(
-              "先从当前仓库选择一个不可变制品，再选择同格式的目标 Hosted 仓库。坐标和摘要会自动锁定。",
-              "Select an immutable artifact from this repository, then choose a target Hosted repository with the same format. Its coordinate and digest are locked automatically.",
+              "选择不可变制品和同格式目标仓库。晋升经目标仓安全准入后发布副本；复制创建可续传计划，不代表通过安全准入。",
+              "Select an immutable artifact and a target repository of the same format. Promotion publishes a copy after target admission; replication creates a resumable plan without security approval.",
             )}
           </p>
         </div>
@@ -672,13 +672,7 @@ export function RepositoryDistributionTab({
           </div>
         )}
 
-        <div className="mt-4 grid gap-3 border-t border-zinc-800/70 pt-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-          <p className="max-w-3xl text-xs leading-5 text-zinc-500">
-            {text(
-              "晋升用于环境或成熟度流转：目标仓安全准入通过后发布可见副本；复制用于镜像或分发：创建可续传计划，但不代表通过普通安全策略。",
-              "Promotion advances an artifact between environments or maturity stages and publishes a visible copy after target admission. Replication creates a resumable mirror or distribution plan and does not represent ordinary security-policy approval.",
-            )}
-          </p>
+        <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-zinc-800/70 pt-3">
           <div className="flex flex-wrap justify-end gap-2">
             <Button
               loading={evaluating}

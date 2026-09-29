@@ -878,6 +878,8 @@ test("repository settings live in a tab and keep the update workflow", async ({
 test("scanning uses a frameless responsive workspace", async ({
   page,
 }, testInfo) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockRepositoryDetail(page);
 
@@ -891,19 +893,8 @@ test("scanning uses a frameless responsive workspace", async ({
   const scannerWarning = page
     .getByRole("alert")
     .filter({ hasText: "当前仓库未配置可用扫描器" });
-  const enforcementNotice = page
-    .getByRole("alert")
-    .filter({ hasText: "扫描与处置是两个步骤" });
-  const [warningBox, noticeBox] = await Promise.all([
-    scannerWarning.boundingBox(),
-    enforcementNotice.boundingBox(),
-  ]);
-  expect(warningBox).not.toBeNull();
-  expect(noticeBox).not.toBeNull();
-  expect(Math.abs((warningBox?.y ?? 0) - (noticeBox?.y ?? 0))).toBeLessThan(2);
-  expect(noticeBox?.x ?? 0).toBeGreaterThan(
-    (warningBox?.x ?? 0) + (warningBox?.width ?? 0),
-  );
+  await expect(scannerWarning).toBeVisible();
+  await expect(page.getByText("扫描与处置是两个步骤")).toHaveCount(0);
 
   const artifactScanHeading = page.getByRole("heading", {
     name: "选择并扫描不可变制品",
@@ -930,6 +921,13 @@ test("scanning uses a frameless responsive workspace", async ({
   expect(pickerBox).not.toBeNull();
   expect(hintBox).not.toBeNull();
   expect(submitBox).not.toBeNull();
+
+  const warningBox = await scannerWarning.boundingBox();
+  const desktopGap =
+    (artifactCardBox?.y ?? 0) -
+    ((warningBox?.y ?? 0) + (warningBox?.height ?? 0));
+  expect(desktopGap).toBeGreaterThanOrEqual(15);
+  expect(desktopGap).toBeLessThanOrEqual(17);
 
   const cardLeft = artifactCardBox?.x ?? 0;
   const cardRight = cardLeft + (artifactCardBox?.width ?? 0);
@@ -988,22 +986,26 @@ test("scanning uses a frameless responsive workspace", async ({
     });
   }
 
-  await page.setViewportSize({ width: 1024, height: 900 });
-  const [narrowWarningBox, narrowNoticeBox] = await Promise.all([
-    scannerWarning.boundingBox(),
-    enforcementNotice.boundingBox(),
-  ]);
-  expect(
-    Math.abs((narrowWarningBox?.x ?? 0) - (narrowNoticeBox?.x ?? 0)),
-  ).toBeLessThan(2);
-  expect(narrowNoticeBox?.y ?? 0).toBeGreaterThanOrEqual(
-    (narrowWarningBox?.y ?? 0) + (narrowWarningBox?.height ?? 0) + 12,
-  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  const narrowWarningBox = await scannerWarning.boundingBox();
+  const narrowCardBox = await artifactScanCard.boundingBox();
+  const mobileGap =
+    (narrowCardBox?.y ?? 0) -
+    ((narrowWarningBox?.y ?? 0) + (narrowWarningBox?.height ?? 0));
+  expect(mobileGap).toBeGreaterThanOrEqual(15);
+  expect(mobileGap).toBeLessThanOrEqual(17);
   expect(
     await page.evaluate(
       () => document.body.scrollWidth - document.body.clientWidth,
     ),
   ).toBe(0);
+  expect(pageErrors).toEqual([]);
+  if (process.env.CAPTURE_REPOSITORY_DETAIL) {
+    await page.screenshot({
+      path: testInfo.outputPath("repository-scanning-mobile.png"),
+      fullPage: true,
+    });
+  }
 });
 
 test("scanning selects a searchable immutable artifact before queuing", async ({
@@ -1047,6 +1049,9 @@ test("scanning selects a searchable immutable artifact before queuing", async ({
 test("promotion selects a source artifact and a compatible Hosted target", async ({
   page,
 }, testInfo) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 900 });
   const coordinate = "releases/example-1.zip";
   const digest = `sha256:${"0".repeat(64)}`;
   await mockRepositoryDetail(page, { distributionEnabled: true });
@@ -1059,6 +1064,9 @@ test("promotion selects a source artifact and a compatible Hosted target", async
   );
 
   await page.goto(`/repositories/${repositoryId}?tab=distribute`);
+  await expect(page.locator(".ag-distribution").getByRole("alert")).toHaveCount(
+    0,
+  );
   const sourcePicker = page.getByRole("combobox", {
     name: "搜索并选择源制品",
   });
@@ -1099,6 +1107,22 @@ test("promotion selects a source artifact and a compatible Hosted target", async
   if (process.env.CAPTURE_REPOSITORY_DETAIL) {
     await page.screenshot({
       path: testInfo.outputPath("repository-promotion.png"),
+      fullPage: true,
+    });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(sourcePicker).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    ),
+  ).toBeLessThanOrEqual(0);
+  expect(pageErrors).toEqual([]);
+  if (process.env.CAPTURE_REPOSITORY_DETAIL) {
+    await page.screenshot({
+      path: testInfo.outputPath("repository-promotion-mobile.png"),
       fullPage: true,
     });
   }

@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  CloudDownloadOutlined,
-  DatabaseOutlined,
-  FileSearchOutlined,
-  InboxOutlined,
-  RocketOutlined,
-  SafetyCertificateOutlined,
-} from "@ant-design/icons";
-import { Button, Grid, Steps } from "antd";
+import { DatabaseOutlined } from "@ant-design/icons";
+import { Button } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -44,7 +37,6 @@ import { usePreferences } from "../../lib/preferences";
 export function DashboardPage() {
   const { locale, text } = usePreferences();
   const navigate = useNavigate();
-  const screens = Grid.useBreakpoint();
   const [repos, setRepos] = useState<Repository[] | null>(null);
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [audits, setAudits] = useState<AuditRecord[] | null>(null);
@@ -131,102 +123,6 @@ export function DashboardPage() {
   }
 
   const active = repos.filter((r) => r.state === "active").length;
-  const inactive = repos.length - active;
-  const healthTone =
-    inactive > 0
-      ? "text-[var(--ag-status-warning)]"
-      : "text-[var(--ag-status-success)]";
-  const lifecycleStages = [
-    {
-      key: "source",
-      icon: <InboxOutlined />,
-      title: text("来源", "Source"),
-      eyebrow: text("仓库入口", "Repository entry"),
-      description: text(
-        "托管、代理与分组仓库定义可信来源。",
-        "Hosted, proxy, and group repositories define trusted sources.",
-      ),
-      meta: text(`${active} 个活跃仓库`, `${active} active repositories`),
-      to: "/repositories",
-    },
-    {
-      key: "scan",
-      icon: <FileSearchOutlined />,
-      title: text("扫描", "Scan"),
-      eyebrow: text("摘要与风险", "Digest and risk"),
-      description: text(
-        "按坐标和摘要定位制品，在仓库详情中执行扫描与重检。",
-        "Resolve artifacts by coordinate and digest, then scan or rescan from repository details.",
-      ),
-      to: "/search",
-    },
-    {
-      key: "quarantine",
-      icon: <SafetyCertificateOutlined />,
-      title: text("隔离闸门", "Quarantine gate"),
-      eyebrow: text("仅风险命中时", "Only when risk matches"),
-      description: text(
-        "风险制品进入条件隔离；未命中的可信制品继续流转。",
-        "Risky artifacts enter conditional quarantine; trusted artifacts continue.",
-      ),
-      to: "/repositories",
-      conditional: true,
-    },
-    {
-      key: "promote",
-      icon: <RocketOutlined />,
-      title: text("晋级与复制", "Promote and replicate"),
-      eyebrow: text("生命周期任务", "Lifecycle jobs"),
-      description: text(
-        "通过可审计任务把可信版本推进到目标仓库。",
-        "Move trusted versions to target repositories through auditable jobs.",
-      ),
-      to: "/operations",
-    },
-    {
-      key: "distribute",
-      icon: <CloudDownloadOutlined />,
-      title: text("分发", "Distribute"),
-      eyebrow: text("原生协议", "Native protocols"),
-      description: text(
-        "通过原生客户端和公开目录提供受控读取。",
-        "Provide governed reads through native clients and the public catalog.",
-      ),
-      to: "/browse",
-    },
-  ];
-  const wideLifecycle = screens.lg === true;
-  const lifecycleItems = lifecycleStages.map((stage, index) => ({
-    key: stage.key,
-    className: stage.conditional ? "ag-lifecycle-step-conditional" : undefined,
-    status: "wait" as const,
-    icon: (
-      <span className="ag-lifecycle-stage-icon" aria-hidden="true">
-        {stage.icon}
-      </span>
-    ),
-    title: (
-      <span className="ag-lifecycle-step-heading">
-        <span className="ag-lifecycle-stage-eyebrow">
-          <span className="ag-lifecycle-stage-index" aria-hidden="true">
-            {String(index + 1).padStart(2, "0")}
-          </span>
-          {stage.eyebrow}
-        </span>
-        <span className="ag-lifecycle-stage-title">{stage.title}</span>
-      </span>
-    ),
-    content: (
-      <span className="ag-lifecycle-step-copy">
-        <span className="ag-lifecycle-stage-description">
-          {stage.description}
-        </span>
-        {stage.meta && (
-          <span className="ag-lifecycle-stage-meta">{stage.meta}</span>
-        )}
-      </span>
-    ),
-  }));
   const repositoryColumns: ColumnsType<Repository> = [
     {
       title: text("名称", "Name"),
@@ -329,88 +225,6 @@ export function DashboardPage() {
         }
       />
       {error ? <ErrorBanner error={error} onRetry={load} /> : null}
-      <div className="ag-health-strip flex items-center justify-between gap-6 border-y border-zinc-800/80 py-3">
-        <div className="flex items-center gap-3">
-          <span
-            className={`flex h-7 w-7 items-center justify-center rounded-full ${inactive > 0 ? "bg-[var(--ag-status-warning-soft)]" : "bg-[var(--ag-status-success-soft)]"} ${healthTone}`}
-          >
-            <span className="h-2 w-2 rounded-full bg-current" />
-          </span>
-          <div>
-            <div className="text-sm font-semibold text-zinc-100">
-              {inactive > 0
-                ? text("平台需要关注", "Platform needs attention")
-                : text("平台运行正常", "Platform is healthy")}
-            </div>
-            <div className="mt-0.5 text-xs text-zinc-500">
-              {text(`${active} 个活跃仓库`, `${active} active repositories`)}
-              {inactive > 0
-                ? text(
-                    `，${inactive} 个需要关注`,
-                    `, ${inactive} need attention`,
-                  )
-                : text("，暂无待处理异常", ", no pending issues")}
-            </div>
-          </div>
-        </div>
-        <div className="ag-health-meta flex items-center gap-5 text-xs text-zinc-500">
-          <span>
-            <span className="mr-1.5 text-zinc-300">API</span>v2
-          </span>
-          <span>
-            <span className="mr-1.5 text-zinc-300">
-              {text("采样", "Sampled")}
-            </span>
-            {formatDate(new Date().toISOString(), locale)}
-          </span>
-        </div>
-      </div>
-      <section
-        className="ag-lifecycle"
-        aria-labelledby="artifact-lifecycle-title"
-      >
-        <div className="ag-lifecycle-heading">
-          <div>
-            <h2
-              id="artifact-lifecycle-title"
-              className="text-base font-semibold tracking-tight text-zinc-100"
-            >
-              {text("可信制品路径", "Trusted artifact path")}
-            </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">
-              {text(
-                "从来源接入到受控分发，按运营任务组织治理入口。",
-                "Govern artifacts from source intake to controlled distribution through operational entry points.",
-              )}
-            </p>
-          </div>
-          <span className="ag-lifecycle-legend text-xs text-zinc-500">
-            <span aria-hidden="true" />
-            {text("条件闸门", "Conditional gate")}
-          </span>
-        </div>
-        <Steps
-          className="ag-lifecycle-steps"
-          type={wideLifecycle ? "navigation" : "default"}
-          orientation={wideLifecycle ? "horizontal" : "vertical"}
-          variant="outlined"
-          responsive={false}
-          current={-1}
-          items={lifecycleItems}
-          onChange={(index) => navigate(lifecycleStages[index].to)}
-          classNames={{
-            item: "ag-lifecycle-step",
-            itemWrapper: "ag-lifecycle-step-wrapper",
-            itemIcon: "ag-lifecycle-step-icon",
-            itemSection: "ag-lifecycle-step-section",
-            itemHeader: "ag-lifecycle-step-header",
-            itemTitle: "ag-lifecycle-step-title-slot",
-            itemContent: "ag-lifecycle-step-content",
-            itemRail: "ag-lifecycle-step-rail",
-          }}
-          style={{ alignItems: "stretch" }}
-        />
-      </section>
       <MetricStrip
         items={[
           {
