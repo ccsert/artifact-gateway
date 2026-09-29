@@ -23,6 +23,7 @@ import {
   repositoryPermissions,
 } from "../../lib/authorization";
 import {
+  CargoPublishGuide,
   NpmPublishGuide,
   OCIPublishGuide,
   PyPIPublishGuide,
@@ -301,6 +302,9 @@ export function RepositoryDetailPage() {
           {activeTab === "publish" &&
             repo.format === "pypi" &&
             repo.type !== "proxy" && <PyPIPublishGuide repoName={repo.name} />}
+          {activeTab === "publish" &&
+            repo.format === "cargo" &&
+            repo.type !== "proxy" && <CargoPublishGuide repoName={repo.name} />}
           {activeTab === "grants" && (
             <>
               {effectiveAccess && (

@@ -7,12 +7,13 @@ const visualizationSlots = {
   conan: 5,
   raw: 6,
   apt: 7,
+  cargo: 8,
 } as const;
 
 type VisualizationSlot =
   (typeof visualizationSlots)[keyof typeof visualizationSlots];
 export type ArtifactFormatVisualizationTone =
-  `visualization-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8}`;
+  `visualization-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`;
 
 export function artifactFormatVisualizationSlot(
   format: string,

@@ -60,7 +60,7 @@ export type BrowseNodePage = {
 };
 
 export type Format =
-  "raw" | "oci" | "maven" | "conan" | "npm" | "pypi" | "go" | "apt";
+  "raw" | "oci" | "maven" | "conan" | "npm" | "pypi" | "go" | "cargo" | "apt";
 
 export type FormatProfile = {
   format: Format;

@@ -4,8 +4,8 @@ import "testing"
 
 func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 	profiles := SupportedFormatProfiles()
-	if len(profiles) != 8 {
-		t.Fatalf("profiles=%d want=8", len(profiles))
+	if len(profiles) != 9 {
+		t.Fatalf("profiles=%d want=9", len(profiles))
 	}
 	seen := make(map[Format]bool, len(profiles))
 	for _, profile := range profiles {
@@ -28,26 +28,26 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			}
 			continue
 		}
-		if profile.Format == FormatGo {
+		if profile.Format == FormatGo || profile.Format == FormatCargo {
 			if !profile.PublicationScanning || !FormatSupportsPublicationScanning(profile.Format, RepositoryTypeHosted) {
-				t.Errorf("Go Hosted publication scanning is missing: %#v", profile)
+				t.Errorf("%s Hosted publication scanning is missing: %#v", profile.Format, profile)
 			}
 			if len(profile.RepositoryTypes) != 2 || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeHosted) || !FormatSupportsRepositoryType(profile.Format, RepositoryTypeProxy) || !profile.GroupSupported {
-				t.Errorf("Go must expose Hosted, Proxy, and Group: %#v", profile)
+				t.Errorf("%s must expose Hosted, Proxy, and Group: %#v", profile.Format, profile)
 			}
 			for _, operation := range []RepositoryOperation{RepositoryOperationRead, RepositoryOperationPublish, RepositoryOperationBrowse, RepositoryOperationDelete, RepositoryOperationRestore, RepositoryOperationRetain, RepositoryOperationReclaim, RepositoryOperationPromote, RepositoryOperationReplicate} {
 				if !FormatSupportsOperation(profile.Format, RepositoryTypeHosted, operation) {
-					t.Errorf("Go Hosted missing operation %q", operation)
+					t.Errorf("%s Hosted missing operation %q", profile.Format, operation)
 				}
 			}
 			for _, operation := range []RepositoryOperation{RepositoryOperationRead, RepositoryOperationBrowse} {
 				if !FormatSupportsOperation(profile.Format, RepositoryTypeProxy, operation) {
-					t.Errorf("Go Proxy missing operation %q", operation)
+					t.Errorf("%s Proxy missing operation %q", profile.Format, operation)
 				}
 			}
 			for _, operation := range []RepositoryOperation{RepositoryOperationPublish, RepositoryOperationDelete, RepositoryOperationRestore, RepositoryOperationRetain, RepositoryOperationReclaim, RepositoryOperationPromote, RepositoryOperationReplicate} {
 				if FormatSupportsOperation(profile.Format, RepositoryTypeProxy, operation) {
-					t.Errorf("Go Proxy advertises unsupported operation %q", operation)
+					t.Errorf("%s Proxy advertises unsupported operation %q", profile.Format, operation)
 				}
 			}
 			continue
@@ -103,7 +103,7 @@ func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 			}
 		}
 	}
-	for _, format := range []Format{FormatOCI, FormatMaven, FormatConan, FormatRaw, FormatNPM, FormatPyPI, FormatGo, FormatAPT} {
+	for _, format := range []Format{FormatOCI, FormatMaven, FormatConan, FormatRaw, FormatNPM, FormatPyPI, FormatGo, FormatCargo, FormatAPT} {
 		if !seen[format] || !IsSupportedFormat(format) {
 			t.Errorf("format %q is missing", format)
 		}
@@ -147,7 +147,7 @@ func TestWorkerFormatsReflectExecutableBackgroundWork(t *testing.T) {
 	for _, format := range WorkerFormats() {
 		found[format] = true
 	}
-	for _, format := range []Format{FormatNPM, FormatPyPI, FormatGo, FormatAPT} {
+	for _, format := range []Format{FormatNPM, FormatPyPI, FormatGo, FormatCargo, FormatAPT} {
 		if !found[format] {
 			t.Fatalf("%s lifecycle workers are missing", format)
 		}

@@ -116,7 +116,13 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 		if query.Mode != repository.ArtifactSearchByCoordinate {
 			return items, nil
 		}
-		crates, _, err := h.cargo.SearchCargoCrates(r.Context(), repo.ID, query.Value, limit, after.Coordinate, true)
+		var crates []repository.CargoCrateSummary
+		var err error
+		if repo.Type == repository.RepositoryTypeProxy {
+			crates, err = h.cargoProxy.SearchCargoProxyCrates(r.Context(), repo.ID, query.Value, limit, after.Coordinate)
+		} else {
+			crates, _, err = h.cargo.SearchCargoCrates(r.Context(), repo.ID, query.Value, limit, after.Coordinate, true)
+		}
 		if err != nil {
 			return nil, err
 		}

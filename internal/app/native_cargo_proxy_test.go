@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 func TestCargoProxyVerifiedCacheAndOfflineReplay(t *testing.T) {
@@ -52,7 +53,7 @@ func TestCargoProxyVerifiedCacheAndOfflineReplay(t *testing.T) {
 	}))
 	store := repository.NewMemoryStore()
 	u, _ := url.Parse(upstream.URL)
-	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: "cargo-proxy", Name: "cargo-proxy",
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cargo-proxy",
 		Format: repository.FormatCargo, Type: repository.RepositoryTypeProxy, Endpoint: upstream.URL, AllowedHosts: []string{u.Hostname()}})
 	if err != nil {
 		t.Fatal(err)
@@ -85,6 +86,20 @@ func TestCargoProxyVerifiedCacheAndOfflineReplay(t *testing.T) {
 	}
 	if status, body := get(base + "/de/mo/demo"); status != 200 || string(body) != row {
 		t.Fatalf("index status=%d body=%s", status, body)
+	}
+	managementRequest, err := http.NewRequest(http.MethodGet, gateway.URL+"/api/v2/repositories/"+repo.ID+"/artifact-search?q=demo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorize(managementRequest, "admin-secret")
+	managementResponse, err := gateway.Client().Do(managementRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	managementBody, err := io.ReadAll(managementResponse.Body)
+	_ = managementResponse.Body.Close()
+	if err != nil || managementResponse.StatusCode != http.StatusOK || !bytes.Contains(managementBody, []byte(`"coordinate":"demo"`)) {
+		t.Fatalf("cached Proxy browse=%d body=%s err=%v", managementResponse.StatusCode, managementBody, err)
 	}
 	mu.Lock()
 	archiveBody = []byte("corrupt")

@@ -12,6 +12,7 @@ export const RESOURCE_PREFIX_EXAMPLES: Record<Format, string[]> = {
   npm: ["@scope/", "@scope/package"],
   pypi: ["gateway-", "internal-"],
   go: ["example.com/team/", "git.example.com/platform/"],
+  cargo: ["team-", "demo-crate"],
   apt: ["dists/bookworm/", "pool/main/"],
 };
 

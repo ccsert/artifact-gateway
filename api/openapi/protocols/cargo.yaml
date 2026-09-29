@@ -1,0 +1,96 @@
+---
+x-gateway-protocol-overlay:
+  officialSpecification: https://doc.rust-lang.org/cargo/reference/registry-index.html
+  gatewayDecision: >
+    Sparse HTTP registries are supported. Hosted publishes an immutable crate
+    and its server-generated index row atomically; Proxy verifies cached bytes;
+    Group resolves one durable owner for each crate version. A Git index and
+    cargo owner are outside this contract.
+cargo_repository_path:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  - name: path
+    in: path
+    required: true
+    allowReserved: true
+    description: >
+      Catch-all below /cargo/{repository}/. Reads accept config.json,
+      canonical sparse-index paths, api/v1/crates search, and
+      api/v1/crates/{crate}/{version}/download. Hosted writes accept
+      api/v1/crates/new for PUT publication, api/v1/crates/{crate}/{version}/yank
+      for DELETE, and api/v1/crates/{crate}/{version}/unyank for PUT.
+    schema:
+      type: string
+      minLength: 1
+  get:
+    operationId: getCargoRegistryRepresentation
+    summary: Read a Cargo sparse registry representation
+    security:
+    - protocolBearerAuth: []
+    - protocolBasicAuth: []
+    - {}
+    responses:
+      '200':
+        description: Registry configuration, index row set, search result, or crate bytes
+      '304':
+        description: The cached index representation is still current
+      '401':
+        description: Cargo JSON authentication error
+      '404':
+        description: Registry target or crate version not found
+  head:
+    operationId: headCargoRegistryRepresentation
+    summary: Read Cargo representation headers
+    security:
+    - protocolBearerAuth: []
+    - protocolBasicAuth: []
+    - {}
+    responses:
+      '200':
+        description: Headers for a supported read representation
+      '401':
+        description: Cargo JSON authentication error
+      '404':
+        description: Registry target or crate version not found
+  put:
+    operationId: putCargoHostedRegistryMutation
+    summary: Publish or unyank a Hosted Cargo crate version
+    description: >
+      PUT api/v1/crates/new accepts the Cargo length-prefixed publication frame.
+      PUT api/v1/crates/{crate}/{version}/unyank restores version selection.
+      Proxy and Group reject both mutations.
+    security:
+    - protocolBearerAuth: []
+    - protocolBasicAuth: []
+    responses:
+      '200':
+        description: Crate version published or replayed, or version unyanked
+      '401':
+        description: Cargo JSON authentication error
+      '403':
+        description: Repository grant denied
+      '409':
+        description: Immutable version or identity collision
+      '413':
+        description: Publication frame exceeds configured limits
+  delete:
+    operationId: yankCargoHostedCrateVersion
+    summary: Yank a Hosted Cargo crate version
+    description: DELETE api/v1/crates/{crate}/{version}/yank; Proxy and Group reject writes.
+    security:
+    - protocolBearerAuth: []
+    - protocolBasicAuth: []
+    responses:
+      '200':
+        description: Crate version yanked
+      '401':
+        description: Cargo JSON authentication error
+      '403':
+        description: Repository grant denied
+      '404':
+        description: Crate version not found
+  x-gateway-catchAll: path
+  x-gateway-index: sparse_only
+  x-gateway-publication: hosted_atomic_crate_and_index

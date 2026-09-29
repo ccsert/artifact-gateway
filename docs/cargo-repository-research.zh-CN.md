@@ -2,11 +2,11 @@
 
 [English](cargo-repository-research.md) | [文档索引](README.zh-CN.md)
 
-状态：研究建议与分阶段实施记录，Cargo 尚未通过公开格式准入。非公开 C0 基础已实现严格有界 publish framing、完整 `.crate` 校验、规范 manifest 身份、sparse index 路径/行转换，以及 Memory/PostgreSQL 的持久身份预留。C1 Hosted 主路径增加 `/cargo/{repository}/` 路由：官方客户端发布、依赖解析和安装，服务端原子提交索引行与不可变下载，私有/匿名读取策略、容量和审计，以及未提交对象的持久回收。Memory 与 PostgreSQL/RustFS 的故障恢复均有测试覆盖。
+状态：研究决策与分阶段实施记录。Cargo 已在源码中加入公开 Hosted、Proxy、Group 格式能力目录；使用方式见[客户端配置](cargo-usage.zh-CN.md)与[协议兼容性基线](protocol-compatibility.zh-CN.md)。初始 C0 基础已实现严格有界 publish framing、完整 `.crate` 校验、规范 manifest 身份、sparse index 路径/行转换，以及 Memory/PostgreSQL 的持久身份预留。C1 Hosted 主路径增加 `/cargo/{repository}/` 路由：官方客户端发布、依赖解析和安装，服务端原子提交索引行与不可变下载，私有/匿名读取策略、容量和审计，以及未提交对象的持久回收。Memory 与 PostgreSQL/RustFS 的故障恢复均有测试覆盖。
 
-持久预留覆盖大小写与 `-`/`_` 碰撞、并发 claim 和精确重试；预留不代表发布完成，也不是可见 sparse index 行。Cargo 路由仅能用于内部创建的仓库与 Group；对外格式目录、OpenAPI 和 Console 创建选项尚不声明 Cargo。Hosted 已有官方客户端搜索、yank/unyank、管理搜索与浏览、版本深链接及索引缓存校验。C2 Proxy 的 sparse 缓存、checksum 校验和 PostgreSQL/RustFS 离线重放已由 #156、#158 验收；C3 Group 的持久 owner、成员冲突预检及首次读取冲突拒绝已由 #157、#159 验收。Cargo 生命周期、安全准入与公开能力仍由 #147–#149 跟踪。运行 `make cargo-contract` 需要固定 Rust/Cargo 1.96.0；缺少 Cargo 时门禁失败。`make integration-test` 另用官方 Cargo 验证 PostgreSQL/RustFS 上的 Proxy 离线重放。
+持久预留覆盖大小写与 `-`/`_` 碰撞、并发 claim 和精确重试；预留不代表发布完成，也不是可见 sparse index 行。Hosted 已有官方客户端搜索、yank/unyank、管理搜索与浏览、版本深链接及索引缓存校验。C2 Proxy 的 sparse 缓存、checksum 校验和 PostgreSQL/RustFS 离线重放已由 #156、#158 验收；C3 Group 的持久 owner、成员冲突预检及首次读取冲突拒绝已由 #157、#159 验收。Cargo 生命周期与安全准入由 #147–#148 跟踪，公开格式准入由 #149 跟踪。运行 `make cargo-contract` 需要固定 Rust/Cargo 1.96.0；缺少 Cargo 时门禁失败。`make integration-test` 另用官方 Cargo 验证 PostgreSQL/RustFS 上的 Proxy 离线重放。
 
-C4 首段将 Hosted 扫描作业绑定到已提交的 crate/version 和 SHA-256 身份。显式配置的外部扫描服务可读取并校验精确的 `.crate` 字节；内置参考扫描器尚不声明 Cargo 覆盖。版本化隔离记录与需显式开启的读取策略可从 Hosted、Group 的 sparse index 和搜索中隐藏隔离版本，并拒绝 GET/HEAD 下载；解除隔离后恢复读取。C4 下一段为 Hosted 版本增加独立于 yank 的墓碑、可恢复窗口、显式保留预演和按对象引用延迟回收；回收前保留原 crate 身份与容量占用，回收后不可恢复，Group 保留原 owner 而不切换成员。分发阶段增加同摘要幂等晋级与持久检查点复制：目标端先验证 `.crate` 字节，再提交原始索引身份和 yank 状态；已存在的目标版本可独立变更 yank。晋级与复制只搬运请求的 crate/version，不自动搬运依赖；同 registry 的直接依赖必须已在目标仓库中有符合版本要求、未 yank 且按读取策略可见的版本，外部 registry 依赖由其原仓库负责。隔离的 `make backup-restore-readiness` 已用 Cargo 1.96.0 发布、固定 Group owner、晋级和复制，备份后执行 yank，再恢复 PostgreSQL/RustFS；全新 Cargo 客户端读回源仓、Group 和目标仓，索引行及对象摘要保持一致。`make cargo-upgrade-readiness` 从固定的旧 Cargo schema（#162）启动隔离 PostgreSQL/RustFS，升级前后使用全新 Cargo 1.96.0 客户端从 Hosted 和 Group 安装，并核对索引、归档摘要、Group owner、成员顺序和迁移重放。分发结果 Webhook 已覆盖晋级和复制的最终成功/失败状态，并与操作状态在同一事务内持久化；故障注入已覆盖 Hosted 上传后提交前、复制中断及恢复重放；隔离 PostgreSQL/RustFS 演练复核了源端与目标端各自的隔离读取策略。公开格式准入仍待验收。
+C4 首段将 Hosted 扫描作业绑定到已提交的 crate/version 和 SHA-256 身份。显式配置的外部扫描服务可读取并校验精确的 `.crate` 字节；内置参考扫描器尚不声明 Cargo 覆盖。版本化隔离记录与需显式开启的读取策略可从 Hosted、Group 的 sparse index 和搜索中隐藏隔离版本，并拒绝 GET/HEAD 下载；解除隔离后恢复读取。C4 下一段为 Hosted 版本增加独立于 yank 的墓碑、可恢复窗口、显式保留预演和按对象引用延迟回收；回收前保留原 crate 身份与容量占用，回收后不可恢复，Group 保留原 owner 而不切换成员。分发阶段增加同摘要幂等晋级与持久检查点复制：目标端先验证 `.crate` 字节，再提交原始索引身份和 yank 状态；已存在的目标版本可独立变更 yank。晋级与复制只搬运请求的 crate/version，不自动搬运依赖；同 registry 的直接依赖必须已在目标仓库中有符合版本要求、未 yank 且按读取策略可见的版本，外部 registry 依赖由其原仓库负责。隔离的 `make backup-restore-readiness` 已用 Cargo 1.96.0 发布、固定 Group owner、晋级和复制，备份后执行 yank，再恢复 PostgreSQL/RustFS；全新 Cargo 客户端读回源仓、Group 和目标仓，索引行及对象摘要保持一致。`make cargo-upgrade-readiness` 从固定的旧 Cargo schema（#162）启动隔离 PostgreSQL/RustFS，升级前后使用全新 Cargo 1.96.0 客户端从 Hosted 和 Group 安装，并核对索引、归档摘要、Group owner、成员顺序和迁移重放。分发结果 Webhook 已覆盖晋级和复制的最终成功/失败状态，并与操作状态在同一事务内持久化；故障注入已覆盖 Hosted 上传后提交前、复制中断及恢复重放；隔离 PostgreSQL/RustFS 演练复核了源端与目标端各自的隔离读取策略。公开格式准入由 #149 的同版本门禁验收。
 
 ## 决策
 
@@ -14,7 +14,7 @@ Cargo 值得在 APT H3 后成为下一个新生态，优先于 NuGet；APT 生�
 
 理由：Cargo 有原生 publish、download、search、yank 和两种文档化 index 协议，不需自创 companion；一个版本拥有一个不可变 `.crate` 与一条 index row，SHA-256 由服务端计算；Gitea 证明官方 client 可 publish/add/install/yank/search；不可变归档与 Gateway digest、扫描、隔离、晋级、复制和 RustFS 模型匹配。
 
-真正成本不在上传，而是让 sparse index、Proxy source identity 和 Group ownership 对每个 crate/version 一致。在[格式扩展门禁](format-extension-guide.zh-CN.md)通过前，Cargo 必须保持不可发现。
+真正成本不在上传，而是让 sparse index、Proxy source identity 和 Group ownership 对每个 crate/version 一致。Cargo 的公开格式能力须与[格式扩展门禁](format-extension-guide.zh-CN.md)的可执行证据保持一致。
 
 ## 规范协议基线
 

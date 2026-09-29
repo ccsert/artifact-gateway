@@ -13,7 +13,7 @@ async function mockRepositoryDetail(
   }: {
     scannerEnabled?: boolean;
     distributionEnabled?: boolean;
-    format?: "raw" | "npm" | "maven";
+    format?: "raw" | "npm" | "maven" | "cargo";
   } = {},
 ) {
   await authenticateAsAdmin(page);
@@ -25,7 +25,9 @@ async function mockRepositoryDetail(
       ? "npm-hosted"
       : format === "maven"
         ? "maven-hosted"
-        : "release-files";
+        : format === "cargo"
+          ? "cargo-hosted"
+          : "release-files";
   const npmPackage = "pipeone-npm-frontend-validation-v2-beta";
   const npmDigest = `sha256:${"8".repeat(64)}`;
 
@@ -337,6 +339,59 @@ async function mockRepositoryDetail(
     });
   });
 }
+
+test("Cargo publish guide stays readable at desktop and mobile widths", async ({
+  page,
+}, testInfo) => {
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  await mockRepositoryDetail(page, { format: "cargo" });
+
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/repositories/${repositoryId}?tab=publish`);
+    const guide = page.getByRole("heading", { name: "配置 Cargo 仓库" });
+    await expect(guide).toBeVisible();
+    await expect(
+      page.getByText("cargo publish --registry gateway", { exact: false }),
+    ).toBeVisible();
+    const explanationBox = await guide.locator("..").boundingBox();
+    const snippetsBox = await page
+      .getByText("credential-provider =", { exact: false })
+      .locator("../..")
+      .boundingBox();
+    expect(explanationBox).not.toBeNull();
+    expect(snippetsBox).not.toBeNull();
+    if (width > 600) {
+      const gap =
+        (snippetsBox?.x ?? 0) -
+        ((explanationBox?.x ?? 0) + (explanationBox?.width ?? 0));
+      expect(gap).toBeGreaterThanOrEqual(14);
+      expect(gap).toBeLessThanOrEqual(18);
+    } else {
+      const gap =
+        (snippetsBox?.y ?? 0) -
+        ((explanationBox?.y ?? 0) + (explanationBox?.height ?? 0));
+      expect(gap).toBeGreaterThanOrEqual(14);
+      expect(gap).toBeLessThanOrEqual(18);
+    }
+    expect(
+      await page.evaluate(
+        () => document.body.scrollWidth - document.body.clientWidth,
+      ),
+    ).toBe(0);
+    await page.screenshot({
+      path: testInfo.outputPath(`cargo-publish-${width}.png`),
+      fullPage: true,
+    });
+  }
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+});
 
 test("npm detail keeps version selection and package content aligned when intelligence is absent", async ({
   page,

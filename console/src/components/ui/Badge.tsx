@@ -20,6 +20,7 @@ const toneClasses = {
   "visualization-6": "ag-visualization-tone ag-visualization-tone-6",
   "visualization-7": "ag-visualization-tone ag-visualization-tone-7",
   "visualization-8": "ag-visualization-tone ag-visualization-tone-8",
+  "visualization-9": "ag-visualization-tone ag-visualization-tone-9",
 } as const;
 
 export type BadgeTone = keyof typeof toneClasses;

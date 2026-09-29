@@ -677,6 +677,13 @@ export function GroupsPage() {
               className="mt-1 max-w-full text-xs text-zinc-500"
             />
           )}
+          {group.format === "cargo" && (
+            <CopyableValue
+              value={`sparse+${window.location.origin}/cargo/${name}/`}
+              label={`/cargo/${name}/`}
+              className="mt-1 max-w-full text-xs text-zinc-500"
+            />
+          )}
         </div>
       ),
     },

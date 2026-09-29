@@ -33,8 +33,8 @@ func TestPostgresCargoPublicationAtomicVisibilityAndQuota(t *testing.T) {
 		_, _ = store.db.ExecContext(context.Background(), `DELETE FROM hosted_repositories WHERE id=$1`, repo.ID)
 		_ = store.Close()
 	})
-	if _, public := FormatProfileFor(FormatCargo); public {
-		t.Fatal("C1 storage target was advertised before format admission")
+	if _, public := FormatProfileFor(FormatCargo); !public {
+		t.Fatal("Cargo format profile is missing")
 	}
 	claims := []CargoIdentityClaim{
 		cargoTestClaim(repo.ID, "1.0.0", "a"),

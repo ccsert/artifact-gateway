@@ -80,6 +80,7 @@ export function RepositorySettingsTab({
     repo.format === "npm" ||
     repo.format === "pypi" ||
     repo.format === "go" ||
+    repo.format === "cargo" ||
     repo.format === "apt";
 
   const resetForm = () => {
@@ -279,8 +280,8 @@ export function RepositorySettingsTab({
               hint={
                 requiresHosts
                   ? text(
-                      "逗号分隔，Raw / Conan / npm / PyPI / Go 代理必填。",
-                      "Comma-separated. Required for Raw, Conan, npm, PyPI, and Go proxies.",
+                      "逗号分隔，Raw / Conan / npm / PyPI / Go / Cargo / APT 代理必填。Cargo 通常需要 index.crates.io 和 static.crates.io。",
+                      "Comma-separated. Required for Raw, Conan, npm, PyPI, Go, Cargo, and APT proxies. Cargo normally needs index.crates.io and static.crates.io.",
                     )
                   : text(
                       "逗号分隔；OCI / Maven 代理可留空。",

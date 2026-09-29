@@ -65,11 +65,10 @@ byte plane, and Gateway connects the two without adding a middleware fleet.
 | npm | ✓ | ✓ | ✓ | Native publication, verified cache, merged packuments |
 | PyPI | ✓ | ✓ | ✓ | Nexus-root twine upload plus PEP 503/691 reads |
 | Go modules | ✓ | ✓ | ✓ | Standard GOPROXY reads; Nexus-compatible version-ZIP publication |
+| Cargo | ✓ | ✓ | ✓ | Sparse registry; Hosted publish/yank, verified Proxy cache, ordered Group ownership; [client setup](docs/cargo-usage.md) |
 | APT | Preview only | ✓ | ✓ | Hosted signing remains unadvertised until production custody gates pass |
 
-Cargo is a staged parser/identity foundation and NuGet remains roadmap work;
-neither is advertised as a usable repository format. The detailed, test-bound
-compatibility statement lives in the
+NuGet remains roadmap work. The detailed, test-bound compatibility statement lives in the
 [protocol compatibility baseline](docs/protocol-compatibility.md).
 
 Maven Hosted defaults to Nexus-compatible direct publication, so ordinary

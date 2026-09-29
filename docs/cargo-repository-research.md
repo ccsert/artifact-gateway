@@ -2,8 +2,10 @@
 
 [简体中文](cargo-repository-research.zh-CN.md) | [Documentation index](README.md)
 
-Status: research recommendation and phased implementation record; Cargo is not
-an admitted public format profile. The non-public C0 foundation includes strict
+Status: research decisions and phased implementation record. Cargo now has an
+admitted Hosted, Proxy, and Group format profile in source; see the
+[client setup](cargo-usage.md) and [compatibility baseline](protocol-compatibility.md).
+The initial C0 foundation includes strict
 bounded publish framing, complete `.crate` validation, normalized manifest
 identity, sparse-index path/row translation, and durable identity reservations
 in Memory and PostgreSQL. The C1 Hosted core adds an internal
@@ -13,13 +15,11 @@ private/anonymous read policy, capacity, audit, and durable orphan recovery.
 The Hosted search and yank increment adds official-client search/yank/unyank,
 index cache validation, management search/browse, and crate version deep links.
 Memory and PostgreSQL/RustFS recovery paths are tested. A reservation remains
-invisible until publication. Cargo repositories and Groups require internal
-creation; the public format catalog, OpenAPI, and Console do not advertise
-Cargo. The C2 sparse Proxy cache, checksum gate, and PostgreSQL/RustFS offline
+invisible until publication. The C2 sparse Proxy cache, checksum gate, and PostgreSQL/RustFS offline
 replay were accepted in #156 and #158. The C3 durable Group owner, member
 collision preflight, and first-read conflict rejection were accepted in #157
-and #159. Lifecycle, security admission, and public capabilities remain in
-#147–#149.
+and #159. Lifecycle and security admission are tracked in #147–#148; public
+format admission is tracked in #149.
 The first C4 slice binds Hosted scan jobs to the committed crate/version and
 SHA-256 identity. Explicitly configured external scanners can scan the exact
 `.crate` bytes; the bundled reference scanner does not yet claim Cargo
@@ -47,8 +47,7 @@ migration and migration replay. Distribution outcome webhooks now persist
 final promotion and replication success/failure events with the operation state.
 Fault-injection checks cover Hosted upload-before-commit and replication
 copy/admission interruption and replay. An isolated PostgreSQL/RustFS recovery
-drill verifies independent source and target quarantine read policies. Public
-format admission remains open.
+drill verifies independent source and target quarantine read policies.
 `make integration-test` also drives an official Cargo client through a
 PostgreSQL/RustFS Proxy replay after the upstream is shut down. This document
 uses only Gitea and Cargo-owned documentation as protocol evidence.
@@ -82,9 +81,9 @@ customer demand. The reasons are:
 
 The main cost is not the `.crate` upload. It is making sparse-index generation,
 Proxy source identity, and ordered Group ownership agree for every crate
-version. Cargo must remain absent from `Format`, OpenAPI, repository creation,
-and the Console until the declared capabilities pass the repository admission
-gate in [the format extension guide](format-extension-guide.md).
+version. The public profile was added only after the declared capabilities
+passed the repository admission gate in
+[the format extension guide](format-extension-guide.md).
 
 Primary evidence:
 
