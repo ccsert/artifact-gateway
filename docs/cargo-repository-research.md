@@ -40,8 +40,11 @@ The isolated `make backup-restore-readiness` drill now publishes with Cargo
 1.96.0, pins a Group owner, promotes and replicates the version, then restores
 PostgreSQL and RustFS after a post-backup yank. Fresh Cargo homes read the
 restored source, Group, and targets with unchanged index rows and archive
-digest. An upgrade from an older deployed schema, distribution outcome
-webhooks, and public format admission remain open.
+digest. `make cargo-upgrade-readiness` starts from the pinned pre-distribution
+Cargo schema in #162 and verifies fresh Cargo 1.96.0 Hosted/Group installs,
+index rows, archive digests, Group ownership and member order after a forward
+migration and migration replay. Distribution outcome webhooks, source/target
+read-policy checks after fault injection, and public format admission remain open.
 `make integration-test` also drives an official Cargo client through a
 PostgreSQL/RustFS Proxy replay after the upstream is shut down. This document
 uses only Gitea and Cargo-owned documentation as protocol evidence.
