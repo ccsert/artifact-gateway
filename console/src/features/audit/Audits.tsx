@@ -26,6 +26,7 @@ import {
   FilterField,
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
+import { Link } from "react-router-dom";
 import { auditOperationLabel } from "./auditOperations";
 import { auditOutcomeLabel, auditOutcomeTone } from "./auditOutcomes";
 
@@ -364,9 +365,18 @@ export function AuditsPage() {
       ).map(([label, value]) => (
         <div key={label} className="flex min-w-0 gap-2">
           <span className="w-20 shrink-0 text-zinc-600">{label}</span>
-          <span className="min-w-0 break-all font-mono text-zinc-400">
-            {value ?? "—"}
-          </span>
+          {value && (label === "Request ID" || label === "Trace ID") ? (
+            <Link
+              className="min-w-0 break-all font-mono"
+              to={`/operations?tab=logs&${label === "Request ID" ? "requestId" : "traceId"}=${encodeURIComponent(value)}`}
+            >
+              {value}
+            </Link>
+          ) : (
+            <span className="min-w-0 break-all font-mono text-zinc-400">
+              {value ?? "—"}
+            </span>
+          )}
         </div>
       ))}
     </div>

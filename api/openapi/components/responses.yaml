@@ -23,6 +23,12 @@ Diagnostics:
     application/json:
       schema:
         "$ref": "../components/schemas.yaml#/Diagnostics"
+RuntimeLogPage:
+  description: Bounded process-local runtime log query result
+  content:
+    application/json:
+      schema:
+        "$ref": "../components/schemas.yaml#/RuntimeLogPage"
 APIKey:
   description: Revocable API key metadata
   content:

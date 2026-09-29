@@ -17,3 +17,68 @@ diagnostics:
         "$ref": "../components/responses.yaml#/Diagnostics"
       '401':
         "$ref": "../components/responses.yaml#/Problem"
+runtime_logs:
+  get:
+    operationId: listRuntimeLogs
+    summary: Query this process's bounded, redacted runtime log buffer
+    description: Results are local to the process and are lost on restart. The response identifies its instance and session; it is not a cluster-wide log query.
+    parameters:
+    - name: from
+      in: query
+      schema:
+        type: string
+        format: date-time
+    - name: to
+      in: query
+      schema:
+        type: string
+        format: date-time
+    - name: instanceId
+      in: query
+      schema:
+        type: string
+    - name: level
+      in: query
+      schema:
+        type: string
+    - name: component
+      in: query
+      schema:
+        type: string
+    - name: requestId
+      in: query
+      schema:
+        type: string
+    - name: traceId
+      in: query
+      schema:
+        type: string
+    - name: keyword
+      in: query
+      schema:
+        type: string
+    - name: beforeSequence
+      in: query
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/RuntimeLogPage"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '504':
+        "$ref": "../components/responses.yaml#/Problem"

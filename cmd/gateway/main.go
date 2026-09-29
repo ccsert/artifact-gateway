@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -50,10 +51,16 @@ func main() {
 		slog.Error("invalid configuration", "error", err)
 		os.Exit(1)
 	}
-	slog.SetDefault(operationalog.NewLogger(os.Stdout, cfg.InstanceID, runtimeSessionID))
+	logBuffer := operationalog.NewBuffer(cfg.LogBufferLines)
+	output := io.Writer(os.Stdout)
+	if logBuffer != nil {
+		output = io.MultiWriter(os.Stdout, logBuffer)
+	}
+	slog.SetDefault(operationalog.NewLogger(output, cfg.InstanceID, runtimeSessionID))
 
 	dependencies := app.NewDependencies(cfg)
 	dependencies.Runtime.SessionID = runtimeSessionID
+	dependencies.LogBuffer = logBuffer
 	if _, err := dependencies.ConsoleThemes.List(); err != nil {
 		slog.Error("load Console themes", "error", err)
 		os.Exit(1)

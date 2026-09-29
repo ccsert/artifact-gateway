@@ -1461,7 +1461,11 @@ test("the grant dialog keeps every field reachable at both widths", async ({
         dialogBox!.x + dialogBox!.width + 1,
       );
 
-      if (width === 1440) expect(overflow.width).toBe(632);
+      if (width === 1440) {
+        // Browser font metrics can round the same modal by one CSS pixel.
+        expect(overflow.width).toBeGreaterThanOrEqual(630);
+        expect(overflow.width).toBeLessThanOrEqual(634);
+      }
       if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
         await page.screenshot({
           path: testInfo.outputPath(`grant-dialog-${width}-${mode}.png`),

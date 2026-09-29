@@ -31,6 +31,7 @@ import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { StateBadge } from "../../components/ui/Badge";
 import { formatDate } from "../../lib/format";
 import { RuntimeNodesPanel } from "./RuntimeNodesPanel";
+import { RuntimeLogsPanel } from "./RuntimeLogsPanel";
 import { ScheduledTasksPanel } from "./ScheduledTasksPanel";
 import { SystemDiagnosticsPanel } from "./SystemDiagnosticsPanel";
 import { WebhookDeliveriesPanel } from "./WebhookDeliveriesPanel";
@@ -414,7 +415,9 @@ export function OperationsPage() {
   const requestedTab = searchParams.get("tab");
   const activeTab =
     requestedTab &&
-    ["schedules", "webhooks", "jobs", "diagnostics"].includes(requestedTab)
+    ["schedules", "webhooks", "jobs", "diagnostics", "logs"].includes(
+      requestedTab,
+    )
       ? requestedTab
       : "schedules";
 
@@ -825,6 +828,11 @@ export function OperationsPage() {
                 </Card>
               </div>
             ),
+          },
+          {
+            key: "logs",
+            label: text("运行日志", "Runtime logs"),
+            children: <RuntimeLogsPanel />,
           },
           {
             key: "diagnostics",

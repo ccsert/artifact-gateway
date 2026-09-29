@@ -695,6 +695,111 @@
         }
       }
     },
+    "/runtime/logs": {
+      "get": {
+        "operationId": "listRuntimeLogs",
+        "summary": "Query this process's bounded, redacted runtime log buffer",
+        "description": "Results are local to the process and are lost on restart. The response identifies its instance and session; it is not a cluster-wide log query.",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "instanceId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "component",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "traceId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "beforeSequence",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RuntimeLogPage"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/api-keys": {
       "get": {
         "operationId": "listApiKeys",
@@ -9776,6 +9881,88 @@
           }
         }
       },
+      "RuntimeLogEntry": {
+        "type": "object",
+        "required": [
+          "sequence",
+          "time",
+          "level",
+          "message",
+          "instanceId",
+          "sessionId",
+          "component",
+          "operation",
+          "requestId",
+          "traceId"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "level": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "instanceId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "component": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          }
+        }
+      },
+      "RuntimeLogPage": {
+        "type": "object",
+        "required": [
+          "scope",
+          "instanceId",
+          "sessionId",
+          "items"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "local"
+            ]
+          },
+          "instanceId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeLogEntry"
+            }
+          },
+          "nextSequence": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "UserSession": {
         "type": "object",
         "required": [
@@ -13125,6 +13312,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/Diagnostics"
+            }
+          }
+        }
+      },
+      "RuntimeLogPage": {
+        "description": "Bounded process-local runtime log query result",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RuntimeLogPage"
             }
           }
         }

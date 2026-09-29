@@ -17,6 +17,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
 	"github.com/artifact-gateway/artifact-gateway/internal/egress"
+	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 	"github.com/artifact-gateway/artifact-gateway/internal/secrets"
@@ -299,6 +300,7 @@ type generatedRepositoryAPIAdapter struct {
 	queueStats             repository.BackgroundOperationQueueStore
 	browse                 repository.ArtifactBrowseStore
 	diagnostics            Dependencies
+	logBuffer              *operationalog.Buffer
 	artifactScanner        scanning.Scanner
 	artifactScanFormats    []repository.Format
 }

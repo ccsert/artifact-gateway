@@ -346,6 +346,65 @@ Diagnostics:
         "$ref": "#/DiagnosticQueueStat"
     nodes:
       "$ref": "#/RuntimeNodeHealth"
+RuntimeLogEntry:
+  type: object
+  required:
+  - sequence
+  - time
+  - level
+  - message
+  - instanceId
+  - sessionId
+  - component
+  - operation
+  - requestId
+  - traceId
+  properties:
+    sequence:
+      type: integer
+      format: int64
+    time:
+      type: string
+      format: date-time
+    level:
+      type: string
+    message:
+      type: string
+    instanceId:
+      type: string
+    sessionId:
+      type: string
+    component:
+      type: string
+    operation:
+      type: string
+    requestId:
+      type: string
+    traceId:
+      type: string
+RuntimeLogPage:
+  type: object
+  required:
+  - scope
+  - instanceId
+  - sessionId
+  - items
+  properties:
+    scope:
+      type: string
+      enum:
+      - local
+    instanceId:
+      type: string
+    sessionId:
+      type: string
+    items:
+      type: array
+      items:
+        "$ref": "#/RuntimeLogEntry"
+    nextSequence:
+      type: integer
+      format: int64
 EgressProxy:
   type: object
   description: Per-Proxy-Repository egress network proxy configuration. Only

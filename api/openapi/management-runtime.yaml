@@ -43,6 +43,8 @@ paths:
     "$ref": "./management/runtime.yaml#/runtime_nodes"
   "/diagnostics":
     "$ref": "./management/runtime.yaml#/diagnostics"
+  "/runtime/logs":
+    "$ref": "./management/runtime.yaml#/runtime_logs"
   "/api-keys":
     "$ref": "./management/api-keys.yaml#/api_keys"
   "/api-keys/{apiKeyId}":

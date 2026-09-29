@@ -1357,6 +1357,27 @@ export type Diagnostics = {
   nodes: RuntimeNodeHealth;
 };
 
+export type RuntimeLogEntry = {
+  sequence: number;
+  time: string;
+  level: string;
+  message: string;
+  instanceId: string;
+  sessionId: string;
+  component: string;
+  operation: string;
+  requestId: string;
+  traceId: string;
+};
+
+export type RuntimeLogPage = {
+  scope: "local";
+  instanceId: string;
+  sessionId: string;
+  items: Array<RuntimeLogEntry>;
+  nextSequence?: number;
+};
+
 export type UserSession = {
   id: string;
   userId: string;
@@ -3140,6 +3161,60 @@ export type GetDiagnosticsResponses = {
 
 export type GetDiagnosticsResponse =
   GetDiagnosticsResponses[keyof GetDiagnosticsResponses];
+
+export type ListRuntimeLogsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    from?: string;
+    to?: string;
+    instanceId?: string;
+    level?: string;
+    component?: string;
+    requestId?: string;
+    traceId?: string;
+    keyword?: string;
+    beforeSequence?: number;
+    limit?: number;
+  };
+  url: "/runtime/logs";
+};
+
+export type ListRuntimeLogsErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  504: Problem;
+};
+
+export type ListRuntimeLogsError =
+  ListRuntimeLogsErrors[keyof ListRuntimeLogsErrors];
+
+export type ListRuntimeLogsResponses = {
+  /**
+   * Bounded process-local runtime log query result
+   */
+  200: RuntimeLogPage;
+};
+
+export type ListRuntimeLogsResponse =
+  ListRuntimeLogsResponses[keyof ListRuntimeLogsResponses];
 
 export type ListApiKeysData = {
   body?: never;
