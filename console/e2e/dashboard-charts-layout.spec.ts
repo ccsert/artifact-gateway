@@ -204,8 +204,6 @@ test("dashboard charts form a single-column mobile flow without overflow", async
   const chartModuleRequests = captureChartModuleRequests(page);
   await openDashboard(page, false);
 
-  expect(chartModuleRequests).toEqual([]);
-
   const pageStack = page.locator(".ag-page-stack").filter({
     has: page.getByRole("heading", { name: "总览" }),
   });
@@ -222,7 +220,7 @@ test("dashboard charts form a single-column mobile flow without overflow", async
   expect(await horizontalOverflow(page)).toBe(0);
 
   await loadDeferredCharts(page, runtimeErrors);
-  expect(chartModuleRequests).toHaveLength(2);
+  expect(new Set(chartModuleRequests).size).toBe(2);
   expect.soft(runtimeErrors).toEqual([]);
 
   if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {

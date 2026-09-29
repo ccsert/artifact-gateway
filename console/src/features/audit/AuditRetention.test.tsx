@@ -30,7 +30,7 @@ function renderPage() {
 }
 
 describe("AuditRetentionPage", () => {
-  it("reads the standing cleanup note as information until the policy is dirty", async () => {
+  it("keeps policy controls clear when there are unsaved changes", async () => {
     const user = userEvent.setup();
     mockPolicy.mockResolvedValue({
       data: { version: "3", enabled: true, keepDays: 90 },
@@ -39,14 +39,17 @@ describe("AuditRetentionPage", () => {
 
     renderPage();
 
-    const note = await screen.findByText("清理说明");
-    const alert = note.closest(".ant-alert");
-    expect(alert).toHaveClass("ant-alert-info");
-    expect(alert).not.toHaveClass("ant-alert-warning");
+    expect(await screen.findByText("策略设置")).toBeInTheDocument();
+    expect(screen.getByText("清理任务（0）")).toBeInTheDocument();
+    expect(screen.queryByText("清理说明")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("group", { name: "页面摘要" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存策略" })).toBeDisabled();
 
     await user.click(screen.getByRole("switch", { name: /切换自动清理/ }));
 
-    expect(alert).toHaveClass("ant-alert-warning");
-    expect(alert).not.toHaveClass("ant-alert-info");
+    expect(screen.getByRole("button", { name: "保存策略" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "立即执行清理" })).toBeDisabled();
   });
 });

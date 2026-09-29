@@ -13,10 +13,7 @@ import { PageHeader, Card, CardHeader } from "../../components/ui/Layout";
 import { ErrorBanner, Loading, Notice } from "../../components/ui/Feedback";
 import { StateBadge } from "../../components/ui/Badge";
 import { formatDate, formatNumber } from "../../lib/format";
-import {
-  ConsoleTable,
-  MetricStrip,
-} from "../../components/ui/ConsolePrimitives";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 
 export function AuditRetentionPage() {
@@ -199,139 +196,78 @@ export function AuditRetentionPage() {
       {notice && (
         <Notice tone="success" title={notice} onClose={() => setNotice("")} />
       )}
-      <MetricStrip
-        items={[
-          {
-            label: text("自动清理", "Automatic cleanup"),
-            value: enabled
-              ? text("已启用", "Enabled")
-              : text("未启用", "Disabled"),
-            hint: enabled
-              ? text(`保留 ${keepDays} 天`, `Keep for ${keepDays} days`)
-              : text(
-                  "仅保留策略，不会自动删除",
-                  "Policy is retained; records are not deleted automatically",
-                ),
-            tone: enabled ? "success" : "default",
-          },
-          {
-            label: text("保留周期", "Retention period"),
-            value: text(`${keepDays} 天`, `${keepDays} days`),
-            hint: text(
-              "超过截止时间的审计记录可被清理",
-              "Records older than the cutoff can be removed",
-            ),
-          },
-          {
-            label: text("最近任务", "Recent jobs"),
-            value: jobs.length,
-            hint: text(
-              "含已完成与失败的历史任务",
-              "Includes completed and failed history",
-            ),
-          },
-        ]}
-      />
       <Card>
-        <div className="grid max-w-5xl grid-cols-[minmax(0,1fr)_300px] gap-6 p-5">
-          <div className="min-w-0">
-            <div className="mb-4">
-              <h2 className="text-sm font-semibold text-zinc-200">
-                {text("策略设置", "Policy settings")}
-              </h2>
-              <p className="mt-1 text-xs text-zinc-500">
-                {text(
-                  "控制审计日志的自动保留周期，保存后由后台任务异步处理。",
-                  "Control the automatic audit retention window. Changes are processed asynchronously.",
-                )}
-              </p>
-            </div>
-            <Form layout="vertical">
-              <Form.Item
-                label={text("启用自动清理", "Enable automatic cleanup")}
-                extra={text(
-                  "关闭后不会自动删除记录，但已保存的保留周期仍会保留。",
-                  "Disabling stops automatic deletion while retaining the saved period.",
-                )}
+        <div className="max-w-3xl p-5">
+          <div className="mb-4">
+            <h2 className="text-sm font-semibold text-zinc-200">
+              {text("策略设置", "Policy settings")}
+            </h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              {text(
+                "控制审计日志的自动保留周期，保存后由后台任务异步处理。",
+                "Control the automatic audit retention window. Changes are processed asynchronously.",
+              )}
+            </p>
+          </div>
+          <Form layout="vertical">
+            <Form.Item
+              label={text("启用自动清理", "Enable automatic cleanup")}
+              extra={text(
+                "关闭后不会自动删除记录，但已保存的保留周期仍会保留。",
+                "Disabling stops automatic deletion while retaining the saved period.",
+              )}
+            >
+              <Switch
+                checked={enabled}
+                onChange={(checked) => {
+                  setEnabled(checked);
+                  if (checked && keepDays < 1) setKeepDays(90);
+                }}
+                aria-label={text("切换自动清理", "Toggle automatic cleanup")}
+              />
+            </Form.Item>
+            <Form.Item
+              label={text("保留天数", "Retention days")}
+              extra={text(
+                "超过该天数的审计记录将被清理。",
+                "Audit records older than this are eligible for cleanup.",
+              )}
+            >
+              <InputNumber
+                min={enabled ? 1 : 0}
+                precision={0}
+                className="w-full"
+                value={keepDays}
+                onChange={(value) => setKeepDays(value ?? (enabled ? 1 : 0))}
+              />
+            </Form.Item>
+            <Space>
+              <Button
+                type="primary"
+                onClick={save}
+                loading={saving}
+                disabled={!policyDirty}
               >
-                <Switch
-                  checked={enabled}
-                  onChange={(checked) => {
-                    setEnabled(checked);
-                    if (checked && keepDays < 1) setKeepDays(90);
-                  }}
-                  aria-label={text("切换自动清理", "Toggle automatic cleanup")}
-                />
-              </Form.Item>
-              <Form.Item
-                label={text("保留天数", "Retention days")}
-                extra={text(
-                  "超过该天数的审计记录将被清理。",
-                  "Audit records older than this are eligible for cleanup.",
+                {text("保存策略", "Save policy")}
+              </Button>
+              <Popconfirm
+                disabled={!canExecute}
+                title={text("确认立即执行审计清理？", "Run audit cleanup now?")}
+                description={text(
+                  "将提交异步删除任务，并按当前保留天数处理符合条件的记录。",
+                  "Submit an asynchronous deletion job for records outside the saved retention window.",
                 )}
+                okText={text("执行清理", "Run cleanup")}
+                cancelText={text("取消", "Cancel")}
+                okButtonProps={{ danger: true, loading: executing }}
+                onConfirm={execute}
               >
-                <InputNumber
-                  min={enabled ? 1 : 0}
-                  precision={0}
-                  className="w-full"
-                  value={keepDays}
-                  onChange={(value) => setKeepDays(value ?? (enabled ? 1 : 0))}
-                />
-              </Form.Item>
-              <Space>
-                <Button
-                  type="primary"
-                  onClick={save}
-                  loading={saving}
-                  disabled={!policyDirty}
-                >
-                  {text("保存策略", "Save policy")}
+                <Button danger loading={executing} disabled={!canExecute}>
+                  {text("立即执行清理", "Run cleanup now")}
                 </Button>
-                <Popconfirm
-                  disabled={!canExecute}
-                  title={text(
-                    "确认立即执行审计清理？",
-                    "Run audit cleanup now?",
-                  )}
-                  description={text(
-                    "将提交异步删除任务，并按当前保留天数处理符合条件的记录。",
-                    "Submit an asynchronous deletion job for records outside the saved retention window.",
-                  )}
-                  okText={text("执行清理", "Run cleanup")}
-                  cancelText={text("取消", "Cancel")}
-                  okButtonProps={{ danger: true, loading: executing }}
-                  onConfirm={execute}
-                >
-                  <Button danger loading={executing} disabled={!canExecute}>
-                    {text("立即执行清理", "Run cleanup now")}
-                  </Button>
-                </Popconfirm>
-              </Space>
-            </Form>
-          </div>
-          <div className="h-fit">
-            <Notice
-              tone={policyDirty ? "warning" : "info"}
-              closable={false}
-              title={text("清理说明", "Cleanup notes")}
-              description={
-                policyDirty
-                  ? text(
-                      "请先保存当前策略；立即执行只会使用已经保存并启用的策略。",
-                      "Save the current policy first; manual cleanup uses only the saved enabled policy.",
-                    )
-                  : policy.enabled
-                    ? text(
-                        "立即执行会提交异步删除任务；保存策略不会立即删除记录。",
-                        "Run cleanup submits an asynchronous deletion job; saving does not delete records immediately.",
-                      )
-                    : text(
-                        "启用自动清理并保存策略后，才能提交清理任务。",
-                        "Enable and save automatic cleanup before submitting a cleanup job.",
-                      )
-              }
-            />
-          </div>
+              </Popconfirm>
+            </Space>
+          </Form>
         </div>
       </Card>
 
