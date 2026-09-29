@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { DatabaseOutlined } from "@ant-design/icons";
-import { Button } from "antd";
+import { Button, Segmented } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  listRepositories,
-  listGroups,
-  listAudits,
-  listRepositoryCapacities,
+import { listGroups, listAudits, getOverviewStatistics } from "../../client";
+import type {
+  Group,
+  AuditRecord,
+  OverviewStatistics,
+  OverviewRepositoryStatistics,
+  OverviewWindowCounts,
 } from "../../client";
-import type { Repository, Group, AuditRecord } from "../../client";
 import { PageHeader, Card, CardHeader } from "../../components/ui/Layout";
 import {
   Loading,
@@ -20,87 +21,49 @@ import {
 import { FormatBadge, StateBadge } from "../../components/ui/Badge";
 import { formatBytes, formatDate, formatNumber } from "../../lib/format";
 import {
-  loadDashboardHistory,
-  recordDashboardSample,
-  type DashboardSample,
-} from "../../lib/history";
-import {
   ConsoleTable,
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
-import {
-  DashboardTrendCharts,
-  StorageByFormatChart,
-} from "../../components/ui/DashboardCharts";
+import { StorageByFormatChart } from "../../components/ui/DashboardCharts";
 import { usePreferences } from "../../lib/preferences";
+
+type StatisticsWindow = keyof OverviewWindowCounts;
+
+export function sortRepositoryStatistics(
+  repositories: OverviewRepositoryStatistics[],
+  window: StatisticsWindow,
+) {
+  return [...repositories].sort(
+    (left, right) =>
+      right.requests[window] - left.requests[window] ||
+      left.name.localeCompare(right.name),
+  );
+}
 
 export function DashboardPage() {
   const { locale, text } = usePreferences();
   const navigate = useNavigate();
-  const [repos, setRepos] = useState<Repository[] | null>(null);
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [audits, setAudits] = useState<AuditRecord[] | null>(null);
-  const [totalBytes, setTotalBytes] = useState<number | null>(null);
-  const [totalObjects, setTotalObjects] = useState<number | null>(null);
-  const [bytesByFormat, setBytesByFormat] = useState<Record<
-    string,
-    number
-  > | null>(null);
-  const [history, setHistory] = useState<DashboardSample[]>(() =>
-    loadDashboardHistory(),
-  );
+  const [statistics, setStatistics] = useState<OverviewStatistics | null>(null);
+  const [window, setWindow] = useState<StatisticsWindow>("sevenDays");
   const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [r, g, a, c] = await Promise.all([
-        listRepositories({ query: { pageSize: 200 } }),
+      const [g, a, s] = await Promise.all([
         listGroups({ query: { pageSize: 200 } }),
         listAudits({ query: { limit: 8 } }),
-        listRepositoryCapacities(),
+        getOverviewStatistics(),
       ]);
-      if (r.error) throw r.error;
       // groups / audits 在当前后端构建中可能未启用（404），降级为空数据
       if (g.error && !isNotFound(g.error)) throw g.error;
       if (a.error && !isNotFound(a.error)) throw a.error;
-      const repoList = r.data?.items ?? [];
-      const operationalRepos = repoList.filter(
-        (repository) => repository.state !== "deleted",
-      );
-      setRepos(operationalRepos);
+      if (s.error) throw s.error;
       setGroups(g.data?.items ?? []);
       setAudits(a.data ?? []);
-
-      // 汇总各 active 仓库容量（失败/404 的仓库跳过）
-      const activeRepos = operationalRepos.filter(
-        (repository) => repository.state === "active",
-      );
-      const activeRepositoryIds = new Set(activeRepos.map((repo) => repo.id));
-      let bytes = 0;
-      let objects = 0;
-      let any = false;
-      const byFormat: Record<string, number> = {};
-      for (const capacity of c.data ?? []) {
-        if (activeRepositoryIds.has(capacity.repositoryId)) {
-          bytes += capacity.usedBytes;
-          objects += capacity.objectCount;
-          any = true;
-          byFormat[capacity.format] =
-            (byFormat[capacity.format] ?? 0) + capacity.usedBytes;
-        }
-      }
-      setTotalBytes(any ? bytes : null);
-      setTotalObjects(any ? objects : null);
-      setBytesByFormat(any ? byFormat : null);
-      setHistory(
-        recordDashboardSample({
-          t: Date.now(),
-          repos: operationalRepos.length,
-          bytes: any ? bytes : null,
-          objects: any ? objects : null,
-        }),
-      );
+      setStatistics(s.data ?? null);
     } catch (e) {
       setError(e);
     }
@@ -112,7 +75,7 @@ export function DashboardPage() {
 
   // A refresh failure keeps the loaded overview on screen and says what
   // happened above it; only a first load has nothing to fall back to.
-  const firstLoad = !repos || !groups || !audits;
+  const firstLoad = !groups || !audits || !statistics;
   if (firstLoad) {
     return (
       <div className="ag-page-stack">
@@ -122,15 +85,25 @@ export function DashboardPage() {
     );
   }
 
-  const active = repos.filter((r) => r.state === "active").length;
-  const repositoryColumns: ColumnsType<Repository> = [
+  const bytesByFormat = statistics.repositories.reduce<Record<string, number>>(
+    (byFormat, item) => {
+      byFormat[item.format] = (byFormat[item.format] ?? 0) + item.usedBytes;
+      return byFormat;
+    },
+    {},
+  );
+  const rankedRepositories = sortRepositoryStatistics(
+    statistics.repositories,
+    window,
+  );
+  const repositoryColumns: ColumnsType<OverviewRepositoryStatistics> = [
     {
       title: text("名称", "Name"),
       dataIndex: "name",
       key: "name",
       render: (value: string, repository) => (
         <Link
-          to={`/repositories/${repository.id}`}
+          to={`/repositories/${repository.repositoryId}`}
           className="font-medium text-[var(--ag-content-strong)] hover:text-[var(--ag-link-hover)]"
         >
           {value}
@@ -142,25 +115,41 @@ export function DashboardPage() {
       dataIndex: "format",
       key: "format",
       width: 100,
-      render: (value: Repository["format"]) => <FormatBadge format={value} />,
+      render: (value: OverviewRepositoryStatistics["format"]) => (
+        <FormatBadge format={value} />
+      ),
     },
     {
-      title: text("状态", "Status"),
-      dataIndex: "state",
-      key: "state",
+      title: text("对象数", "Objects"),
+      dataIndex: "objectCount",
+      key: "objectCount",
       width: 120,
-      render: (value: string) => <StateBadge state={value} />,
+      render: (value: number) => formatNumber(value, locale),
     },
     {
-      title: "ID",
-      dataIndex: "id",
-      key: "id",
-      width: 130,
-      render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-500" title={value}>
-          {value.slice(0, 8)}…
+      title: text("请求量", "Requests"),
+      key: "requests",
+      width: 165,
+      render: (_, repository) => (
+        <span>
+          {formatNumber(repository.requests[window], locale)}
+          {repository.denied[window] > 0 && (
+            <span className="ml-2 text-xs text-[var(--ag-status-warning)]">
+              {text(
+                `拒绝 ${formatNumber(repository.denied[window], locale)}`,
+                `${formatNumber(repository.denied[window], locale)} denied`,
+              )}
+            </span>
+          )}
         </span>
       ),
+    },
+    {
+      title: text("存储", "Storage"),
+      dataIndex: "usedBytes",
+      key: "usedBytes",
+      width: 125,
+      render: (value: number) => formatBytes(value),
     },
   ];
   const auditColumns: ColumnsType<AuditRecord> = [
@@ -215,22 +204,50 @@ export function DashboardPage() {
           "Artifact Gateway runtime at a glance",
         )}
         actions={
-          <Button
-            type="primary"
-            icon={<DatabaseOutlined />}
-            onClick={() => navigate("/repositories")}
-          >
-            {text("管理仓库", "Manage repositories")}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented
+              aria-label={text("统计窗口", "Statistics window")}
+              value={window}
+              onChange={(value) => setWindow(value as StatisticsWindow)}
+              options={[
+                { label: text("1 天", "1 day"), value: "oneDay" },
+                { label: text("7 天", "7 days"), value: "sevenDays" },
+                { label: text("30 天", "30 days"), value: "thirtyDays" },
+              ]}
+            />
+            <Button
+              type="primary"
+              icon={<DatabaseOutlined />}
+              onClick={() => navigate("/repositories")}
+            >
+              {text("管理仓库", "Manage repositories")}
+            </Button>
+          </div>
         }
       />
       {error ? <ErrorBanner error={error} onRetry={load} /> : null}
       <MetricStrip
         items={[
           {
+            label: text("总请求量", "Total requests"),
+            value: formatNumber(statistics.totals.requests[window], locale),
+            hint: text(
+              `其中拒绝 ${formatNumber(statistics.totals.denied[window], locale)}`,
+              `${formatNumber(statistics.totals.denied[window], locale)} denied`,
+            ),
+          },
+          {
+            label: text("总对象数", "Total objects"),
+            value: formatNumber(statistics.totals.objectCount, locale),
+            hint: text("当前仓库容量口径", "Current repository capacity basis"),
+          },
+          {
+            label: text("存储占用", "Storage used"),
+            value: formatBytes(statistics.totals.usedBytes),
+          },
+          {
             label: text("仓库总数", "Repositories"),
-            value: repos.length,
-            hint: text(`${active} 个活跃`, `${active} active`),
+            value: statistics.repositories.length,
           },
           {
             label: text("分组", "Groups"),
@@ -240,22 +257,43 @@ export function DashboardPage() {
               `${groups.reduce((n, g) => n + (g.members?.length ?? 0), 0)} member references`,
             ),
           },
-          {
-            label: text("存储占用", "Storage used"),
-            value: totalBytes !== null ? formatBytes(totalBytes) : "—",
-            hint:
-              totalObjects !== null
-                ? text(
-                    `${formatNumber(totalObjects, locale)} 个对象`,
-                    `${formatNumber(totalObjects, locale)} objects`,
-                  )
-                : text("容量未启用", "Capacity unavailable"),
-          },
         ]}
       />
 
-      <div className="ag-page-primary grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-5 xl:items-stretch">
-        <Card className="xl:col-span-2 xl:h-full">
+      <Card className="ag-page-primary">
+        <CardHeader
+          title={text("仓库活动", "Repository activity")}
+          extra={
+            <Link
+              to="/repositories"
+              className="text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
+            >
+              {text("查看全部 →", "View all →")}
+            </Link>
+          }
+        />
+        <ConsoleTable<OverviewRepositoryStatistics>
+          rowKey="repositoryId"
+          dataSource={rankedRepositories.slice(0, 10)}
+          columns={repositoryColumns}
+          pagination={false}
+          locale={{
+            emptyText: (
+              <EmptyState
+                title={text("暂无仓库", "No repositories")}
+                hint={text(
+                  "创建仓库后，这里会展示请求量、对象数与存储占用。",
+                  "Create a repository to see requests, objects, and storage here.",
+                )}
+              />
+            ),
+          }}
+          scroll={{ x: 700 }}
+        />
+      </Card>
+
+      <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-2">
+        <Card>
           <CardHeader
             title={text("存储占用（按格式）", "Storage by format")}
             extra={
@@ -270,64 +308,9 @@ export function DashboardPage() {
           <div className="px-5 py-6">
             <StorageByFormatChart
               bytesByFormat={bytesByFormat}
-              totalBytes={totalBytes}
+              totalBytes={statistics.totals.usedBytes}
             />
           </div>
-        </Card>
-
-        <Card className="xl:col-span-3 xl:h-full">
-          <CardHeader
-            title={text("近期趋势", "Recent trend")}
-            extra={
-              history.length > 0 ? (
-                <span className="text-xs text-zinc-600">
-                  {text("自", "Since")}{" "}
-                  {formatDate(new Date(history[0].t).toISOString(), locale)}
-                </span>
-              ) : undefined
-            }
-          />
-          <DashboardTrendCharts history={history} />
-          <p className="border-t border-zinc-800/60 px-5 py-3 text-xs leading-5 text-zinc-600">
-            {text(
-              "基于浏览器本地的访问采样，仅反映本机记录的近期变化；完整时序需后端 metrics 端点。",
-              "Browser-local samples only reflect recent changes recorded on this device. Full time series require a backend metrics endpoint.",
-            )}
-          </p>
-        </Card>
-      </div>
-
-      <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-2">
-        <Card>
-          <CardHeader
-            title={text("仓库", "Repositories")}
-            extra={
-              <Link
-                to="/repositories"
-                className="text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
-              >
-                {text("查看全部 →", "View all →")}
-              </Link>
-            }
-          />
-          <ConsoleTable<Repository>
-            rowKey="id"
-            dataSource={repos.slice(0, 6)}
-            columns={repositoryColumns}
-            pagination={false}
-            locale={{
-              emptyText: (
-                <EmptyState
-                  title={text("暂无仓库", "No repositories")}
-                  hint={text(
-                    "创建第一个仓库后，这里会显示发布与下载概况。",
-                    "Create the first repository to see publishing and downloads here.",
-                  )}
-                />
-              ),
-            }}
-            scroll={{ x: 520 }}
-          />
         </Card>
 
         <Card>

@@ -1,0 +1,28 @@
+---
+overview_statistics:
+  get:
+    operationId: getOverviewStatistics
+    summary: Repository protocol request and capacity statistics for the Console
+    description: >-
+      Returns one snapshot containing rolling 24-hour, 7-day, and 30-day request
+      counts and logical capacity for current repositories administered by the
+      caller. Requests are resolver_audit_log rows with a nonempty repository,
+      excluding format=management, regardless of outcome. Denied counts include
+      access_denied, proxy_denied, and legacy denied outcomes and are a subset of
+      requests. The windows include their lower bound and end at generatedAt.
+      Ordinary Console and management GET requests are not audited and therefore
+      are not counted. Deleted repositories and audit rows for repositories that
+      no longer exist are excluded. Totals are sums of returned repository rows.
+      If audit retention is enabled with keepDays below 30, the 30-day count is
+      incomplete; the default retention policy is disabled.
+    responses:
+      '200':
+        description: Current repository statistics and sums over visible rows.
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/OverviewStatistics"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"

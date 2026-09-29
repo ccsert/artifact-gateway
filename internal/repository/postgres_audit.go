@@ -61,6 +61,35 @@ func (s *PostgresStore) ListAudits(ctx context.Context, query AuditQuery) ([]Aud
 	return page.Items, err
 }
 
+func (s *PostgresStore) ListRepositoryRequestStatistics(ctx context.Context, now time.Time) ([]RepositoryRequestStatistics, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT repository,
+		COUNT(*) FILTER (WHERE occurred_at >= $1::timestamptz - INTERVAL '1 day'),
+		COUNT(*) FILTER (WHERE occurred_at >= $1::timestamptz - INTERVAL '7 days'),
+		COUNT(*),
+		COUNT(*) FILTER (WHERE outcome IN ('access_denied', 'proxy_denied', 'denied') AND occurred_at >= $1::timestamptz - INTERVAL '1 day'),
+		COUNT(*) FILTER (WHERE outcome IN ('access_denied', 'proxy_denied', 'denied') AND occurred_at >= $1::timestamptz - INTERVAL '7 days'),
+		COUNT(*) FILTER (WHERE outcome IN ('access_denied', 'proxy_denied', 'denied'))
+		FROM resolver_audit_log
+		WHERE repository <> '' AND format IS DISTINCT FROM 'management'
+		  AND occurred_at >= $1::timestamptz - INTERVAL '30 days' AND occurred_at <= $1
+		GROUP BY repository ORDER BY repository`, now.UTC())
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	result := []RepositoryRequestStatistics{}
+	for rows.Next() {
+		var item RepositoryRequestStatistics
+		if err := rows.Scan(&item.Repository,
+			&item.Requests.OneDay, &item.Requests.SevenDays, &item.Requests.ThirtyDays,
+			&item.Denied.OneDay, &item.Denied.SevenDays, &item.Denied.ThirtyDays); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	return result, rows.Err()
+}
+
 func (s *PostgresStore) ListAuditPage(ctx context.Context, query AuditQuery) (AuditPage, error) {
 	limit := query.Limit
 	if limit <= 0 || limit > 500 {

@@ -18,13 +18,13 @@ test("administrator dashboard loads management data through the Console proxy", 
     [token!, "admin"],
   );
 
-  const repositories = page.waitForResponse(
+  const statistics = page.waitForResponse(
     (response) =>
-      response.url().includes("/api/v2/repositories") &&
+      response.url().includes("/api/v2/overview-statistics") &&
       response.status() === 200,
   );
   await page.goto("/");
-  await repositories;
+  await statistics;
   await expect(page.getByRole("heading", { name: "总览" })).toBeVisible();
   await expect(page.getByText("仓库总数")).toBeVisible();
 });

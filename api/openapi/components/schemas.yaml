@@ -1230,6 +1230,41 @@ RepositoryCapacityList:
   type: array
   items:
     "$ref": "#/RepositoryCapacity"
+OverviewWindowCounts:
+  type: object
+  required: [oneDay, sevenDays, thirtyDays]
+  properties:
+    oneDay: {type: integer, format: int64, minimum: 0}
+    sevenDays: {type: integer, format: int64, minimum: 0}
+    thirtyDays: {type: integer, format: int64, minimum: 0}
+OverviewStatisticsTotals:
+  type: object
+  required: [requests, denied, objectCount, usedBytes]
+  properties:
+    requests: {"$ref": "#/OverviewWindowCounts"}
+    denied: {"$ref": "#/OverviewWindowCounts"}
+    objectCount: {type: integer, format: int64, minimum: 0}
+    usedBytes: {type: integer, format: int64, minimum: 0}
+OverviewRepositoryStatistics:
+  type: object
+  required: [repositoryId, name, format, requests, denied, objectCount, usedBytes]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    name: {type: string}
+    format: {"$ref": "#/Format"}
+    requests: {"$ref": "#/OverviewWindowCounts"}
+    denied: {"$ref": "#/OverviewWindowCounts"}
+    objectCount: {type: integer, format: int64, minimum: 0}
+    usedBytes: {type: integer, format: int64, minimum: 0}
+OverviewStatistics:
+  type: object
+  required: [generatedAt, totals, repositories]
+  properties:
+    generatedAt: {type: string, format: date-time}
+    totals: {"$ref": "#/OverviewStatisticsTotals"}
+    repositories:
+      type: array
+      items: {"$ref": "#/OverviewRepositoryStatistics"}
 RepositoryCapacityQuota:
   type: object
   required: [quotaBytes]

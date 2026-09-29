@@ -393,6 +393,90 @@ test("Cargo publish guide stays readable at desktop and mobile widths", async ({
   expect(consoleErrors).toEqual([]);
 });
 
+for (const width of [1440, 390]) {
+  test(`repository usage and capacity keep a compact layout at ${width}px`, async ({
+    page,
+  }, testInfo) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => {
+      if (message.type() === "error") errors.push(message.text());
+    });
+    await page.setViewportSize({ width, height: 900 });
+    await mockRepositoryDetail(page);
+    await page.route(
+      `**/api/v2/repositories/${repositoryId}/capacity`,
+      (route) =>
+        route.fulfill({
+          json: {
+            repositoryId,
+            format: "raw",
+            usedBytes: 1024 * 1024,
+            objectCount: 20,
+            quotaBytes: 10 * 1024 * 1024,
+          },
+        }),
+    );
+    await page.route(
+      `**/api/v2/repositories/${repositoryId}/artifact-usage**`,
+      (route) =>
+        route.fulfill({
+          json: {
+            repositoryId,
+            generatedAt: "2026-09-30T12:00:00Z",
+            totals: { downloadCount: 1, totalBytes: 1024, resources: 1 },
+            items: [
+              {
+                format: "raw",
+                resource: "releases/widget.zip",
+                downloadCount: 1,
+                totalBytes: 1024,
+                firstDownloadedAt: "2026-09-29T12:00:00Z",
+                lastDownloadedAt: "2026-09-30T12:00:00Z",
+              },
+            ],
+          },
+        }),
+    );
+
+    await page.goto(`/repositories/${repositoryId}?tab=capacity`);
+    const metrics = page.getByRole("group", { name: "页面摘要" });
+    await expect(metrics).toBeVisible();
+    await expect(metrics.locator(":scope > div")).toHaveCount(3);
+    await expect(page.getByText("主资产缓存")).toHaveCount(0);
+    await expect(page.getByText("Hosted 仓库的容量来自")).toHaveCount(0);
+    await expect(page.getByText("使用率")).toBeVisible();
+    const capacityStack = metrics.locator("..");
+    await expect(capacityStack).toHaveClass(/ag-page-stack/);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+      await page.screenshot({
+        path: testInfo.outputPath(`repository-capacity-${width}.png`),
+        fullPage: true,
+      });
+    }
+    await page.goto(`/repositories/${repositoryId}?tab=usage`);
+    await expect(page.getByText("releases/widget.zip")).toBeVisible();
+    await expect(page.getByText("累计下载")).toHaveCount(0);
+    await expect(
+      page.getByRole("table").getByRole("columnheader", { name: "累计流量" }),
+    ).toHaveCount(1);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    expect(
+      await page
+        .locator("html")
+        .evaluate((element) => element.scrollWidth - element.clientWidth),
+    ).toBeLessThanOrEqual(0);
+    expect(errors).toEqual([]);
+    if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+      await page.screenshot({
+        path: testInfo.outputPath(`repository-usage-${width}.png`),
+        fullPage: true,
+      });
+    }
+  });
+}
+
 test("npm detail keeps version selection and package content aligned when intelligence is absent", async ({
   page,
 }) => {

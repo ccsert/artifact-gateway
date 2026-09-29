@@ -59,7 +59,7 @@ const repositoryCapacityRecordsQuery = `WITH usage AS (
 	SELECT repository_id,SUM(used_bytes)::bigint AS used_bytes,SUM(object_count)::bigint AS object_count
 	FROM usage GROUP BY repository_id
 )
-SELECT h.id::text,h.name,h.format,h.repo_type,h.endpoint,
+SELECT h.id::text,h.name,h.format,h.repo_type,h.endpoint,h.state,
 	COALESCE(q.quota_bytes,0),COALESCE(t.used_bytes,0),COALESCE(t.object_count,0)
 FROM hosted_repositories h
 LEFT JOIN repository_capacity_quotas q ON q.repository_id=h.id
@@ -121,6 +121,7 @@ func (s *PostgresStore) ListRepositoryCapacityRecords(ctx context.Context) ([]Re
 			&record.Repository.Format,
 			&record.Repository.Type,
 			&record.Repository.Endpoint,
+			&record.Repository.State,
 			&record.Capacity.QuotaBytes,
 			&record.Capacity.UsedBytes,
 			&record.Capacity.ObjectCount,
