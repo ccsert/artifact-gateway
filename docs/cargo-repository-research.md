@@ -45,8 +45,10 @@ Cargo schema in #162 and verifies fresh Cargo 1.96.0 Hosted/Group installs,
 index rows, archive digests, Group ownership and member order after a forward
 migration and migration replay. Distribution outcome webhooks now persist
 final promotion and replication success/failure events with the operation state.
-Source/target read-policy checks after fault injection and public format
-admission remain open.
+Fault-injection checks cover Hosted upload-before-commit and replication
+copy/admission interruption and replay. An isolated PostgreSQL/RustFS recovery
+drill verifies independent source and target quarantine read policies. Public
+format admission remains open.
 `make integration-test` also drives an official Cargo client through a
 PostgreSQL/RustFS Proxy replay after the upstream is shut down. This document
 uses only Gitea and Cargo-owned documentation as protocol evidence.
