@@ -653,6 +653,8 @@ type OCIUpload struct {
 type RuntimeNode struct {
 	InstanceID    string
 	SessionID     string
+	BuildVersion  string
+	BuildRevision string
 	Roles         []string
 	WorkerFormats []string
 	WorkerKinds   []string

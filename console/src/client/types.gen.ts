@@ -1245,6 +1245,14 @@ export type WebhookDeliveryList = Array<WebhookDelivery>;
 export type RuntimeNode = {
   instanceId: string;
   sessionId: string;
+  /**
+   * Build version reported by this node; absent for legacy records.
+   */
+  version?: string;
+  /**
+   * Build revision reported by this node; absent for legacy records.
+   */
+  revision?: string;
   roles: Array<string>;
   workerFormats: Array<Format>;
   workerKinds: Array<string>;
@@ -1258,6 +1266,10 @@ export type RuntimeNodeHealthIssue = {
   code: string;
   severity: "warning" | "error";
   message: string;
+  /**
+   * Session IDs of nodes involved in this issue.
+   */
+  affectedNodes?: Array<string>;
 };
 
 export type RuntimeNodeHealth = {
@@ -1271,6 +1283,14 @@ export type RuntimeNodeHealth = {
 export type RuntimeNodeList = {
   items: Array<RuntimeNode>;
   health: RuntimeNodeHealth;
+  /**
+   * Session of the API process that answered this request; absent in older deployments.
+   */
+  currentSessionId?: string;
+  /**
+   * No GitHub Release or desired-version source is connected. This does not assert that the running build is latest.
+   */
+  releaseSource: "not_configured";
 };
 
 export type DiagnosticBuild = {
@@ -1282,6 +1302,10 @@ export type DiagnosticBuild = {
 
 export type DiagnosticRuntime = {
   instanceId: string;
+  /**
+   * Session of the process that answered this diagnostics request.
+   */
+  sessionId?: string;
   roles: Array<string>;
   workerFormats: Array<Format>;
   workerKinds: Array<string>;

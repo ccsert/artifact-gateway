@@ -199,11 +199,14 @@ func main() {
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
 	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_health_enabled", cfg.ScannerHealthEndpoint != "", "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats, "scanner_database_max_age", cfg.ScannerDatabaseMaxAge, "apt_signer_enabled", cfg.APTSignerEnabled(), "apt_signer_trusted_fingerprint_count", len(cfg.APTSignerTrustedFingerprints), "raw_cache_max_object_bytes", cfg.RawCacheMaxObjectBytes, "raw_cache_max_concurrent_spools", cfg.RawCacheMaxConcurrentSpools)
 	runtimeSessionID := uuid.NewString()
+	dependencies.Runtime.SessionID = runtimeSessionID
 	heartbeat := &app.RuntimeNodeHeartbeat{
 		Store: store,
 		Node: repository.RuntimeNode{
 			InstanceID:    cfg.InstanceID,
 			SessionID:     runtimeSessionID,
+			BuildVersion:  dependencies.BuildVersion,
+			BuildRevision: dependencies.BuildRevision,
 			Roles:         nodeRoleStrings(cfg.NodeRoles),
 			WorkerFormats: append([]string(nil), cfg.WorkerFormats...),
 			WorkerKinds:   append([]string(nil), cfg.WorkerKinds...),

@@ -7,7 +7,11 @@ import (
 	"time"
 )
 
-const runtimeNodeSessionColumns = `session_id,instance_id,roles,worker_formats,worker_kinds,started_at,last_seen_at,stopped_at`
+const runtimeNodeSessionColumns = `session_id,instance_id,roles,worker_formats,worker_kinds,build_version,build_revision,started_at,last_seen_at,stopped_at`
+
+func nullableBuildIdentity(value string) sql.NullString {
+	return sql.NullString{String: value, Valid: value != ""}
+}
 
 func encodeRuntimeNodeValues(node RuntimeNode) ([]byte, []byte, []byte, error) {
 	roles, err := json.Marshal(node.Roles)
@@ -28,10 +32,13 @@ func encodeRuntimeNodeValues(node RuntimeNode) ([]byte, []byte, []byte, error) {
 func scanRuntimeNode(scanner interface{ Scan(...any) error }) (RuntimeNode, error) {
 	var node RuntimeNode
 	var roles, formats, kinds []byte
+	var buildVersion, buildRevision sql.NullString
 	var stoppedAt sql.NullTime
-	if err := scanner.Scan(&node.SessionID, &node.InstanceID, &roles, &formats, &kinds, &node.StartedAt, &node.LastSeenAt, &stoppedAt); err != nil {
+	if err := scanner.Scan(&node.SessionID, &node.InstanceID, &roles, &formats, &kinds, &buildVersion, &buildRevision, &node.StartedAt, &node.LastSeenAt, &stoppedAt); err != nil {
 		return RuntimeNode{}, err
 	}
+	node.BuildVersion = buildVersion.String
+	node.BuildRevision = buildRevision.String
 	if err := json.Unmarshal(roles, &node.Roles); err != nil {
 		return RuntimeNode{}, err
 	}
@@ -70,18 +77,18 @@ func (s *PostgresStore) UpsertRuntimeNodeHeartbeat(ctx context.Context, node Run
 	}
 	defer func() { _ = tx.Rollback() }()
 	result, err := tx.ExecContext(ctx, `INSERT INTO runtime_node_sessions (`+runtimeNodeSessionColumns+`)
-VALUES ($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,$6,$7,NULL)
-ON CONFLICT (session_id) DO UPDATE SET roles=EXCLUDED.roles,worker_formats=EXCLUDED.worker_formats,worker_kinds=EXCLUDED.worker_kinds,last_seen_at=EXCLUDED.last_seen_at,stopped_at=NULL
-WHERE runtime_node_sessions.instance_id=EXCLUDED.instance_id AND runtime_node_sessions.started_at=EXCLUDED.started_at`, node.SessionID, node.InstanceID, roles, formats, kinds, node.StartedAt, node.LastSeenAt)
+VALUES ($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,$6,$7,$8,$9,NULL)
+ON CONFLICT (session_id) DO UPDATE SET roles=EXCLUDED.roles,worker_formats=EXCLUDED.worker_formats,worker_kinds=EXCLUDED.worker_kinds,build_version=EXCLUDED.build_version,build_revision=EXCLUDED.build_revision,last_seen_at=EXCLUDED.last_seen_at,stopped_at=NULL
+WHERE runtime_node_sessions.instance_id=EXCLUDED.instance_id AND runtime_node_sessions.started_at=EXCLUDED.started_at`, node.SessionID, node.InstanceID, roles, formats, kinds, nullableBuildIdentity(node.BuildVersion), nullableBuildIdentity(node.BuildRevision), node.StartedAt, node.LastSeenAt)
 	if err != nil {
 		return err
 	}
 	if count, _ := result.RowsAffected(); count != 1 {
 		return ErrInvalidRuntimeNode
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO runtime_nodes (instance_id,roles,worker_formats,worker_kinds,started_at,last_seen_at)
-VALUES ($1,$2::jsonb,$3::jsonb,$4::jsonb,$5,$6)
-ON CONFLICT (instance_id) DO UPDATE SET roles=EXCLUDED.roles,worker_formats=EXCLUDED.worker_formats,worker_kinds=EXCLUDED.worker_kinds,started_at=EXCLUDED.started_at,last_seen_at=EXCLUDED.last_seen_at`, node.InstanceID, roles, formats, kinds, node.StartedAt, node.LastSeenAt)
+	_, err = tx.ExecContext(ctx, `INSERT INTO runtime_nodes (instance_id,roles,worker_formats,worker_kinds,build_version,build_revision,started_at,last_seen_at)
+VALUES ($1,$2::jsonb,$3::jsonb,$4::jsonb,$5,$6,$7,$8)
+ON CONFLICT (instance_id) DO UPDATE SET roles=EXCLUDED.roles,worker_formats=EXCLUDED.worker_formats,worker_kinds=EXCLUDED.worker_kinds,build_version=EXCLUDED.build_version,build_revision=EXCLUDED.build_revision,started_at=EXCLUDED.started_at,last_seen_at=EXCLUDED.last_seen_at`, node.InstanceID, roles, formats, kinds, nullableBuildIdentity(node.BuildVersion), nullableBuildIdentity(node.BuildRevision), node.StartedAt, node.LastSeenAt)
 	if err != nil {
 		return err
 	}
@@ -115,7 +122,7 @@ AND legacy.instance_id=session.instance_id AND legacy.started_at=session.started
 func (s *PostgresStore) ListRuntimeNodes(ctx context.Context) ([]RuntimeNode, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+runtimeNodeSessionColumns+` FROM runtime_node_sessions
 UNION ALL
-SELECT 'legacy:'||legacy.instance_id,legacy.instance_id,legacy.roles,legacy.worker_formats,legacy.worker_kinds,legacy.started_at,legacy.last_seen_at,NULL
+SELECT 'legacy:'||legacy.instance_id,legacy.instance_id,legacy.roles,legacy.worker_formats,legacy.worker_kinds,legacy.build_version,legacy.build_revision,legacy.started_at,legacy.last_seen_at,NULL
 FROM runtime_nodes AS legacy
 WHERE NOT EXISTS (
     SELECT 1 FROM runtime_node_sessions AS session

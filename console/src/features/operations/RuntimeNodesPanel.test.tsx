@@ -31,6 +31,8 @@ function runtimeNode(status: RuntimeNode["status"]): RuntimeNode {
   return {
     instanceId: "worker-01",
     sessionId: "session-worker-01",
+    version: "v0.4.3",
+    revision: "abc123",
     roles: ["worker"],
     workerFormats: ["oci"],
     workerKinds: ["reclaim"],
@@ -49,7 +51,12 @@ afterEach(() => {
 describe("RuntimeNodesPanel", () => {
   it("loads and renders runtime capabilities independently", async () => {
     mockListRuntimeNodes.mockResolvedValue({
-      data: { items: [runtimeNode("online")], health: healthy },
+      data: {
+        items: [runtimeNode("online")],
+        health: healthy,
+        currentSessionId: "session-worker-01",
+        releaseSource: "not_configured",
+      },
     } as never);
 
     renderPanel();
@@ -60,6 +67,12 @@ describe("RuntimeNodesPanel", () => {
     expect(screen.getByText("reclaim")).toBeInTheDocument();
     expect(screen.getByText("1 个实例")).toBeInTheDocument();
     expect(screen.getByText("健康")).toBeInTheDocument();
+    expect(screen.getByText("当前连接节点")).toBeInTheDocument();
+    expect(screen.getByText("v0.4.3")).toBeInTheDocument();
+    expect(screen.getByText("abc123")).toBeInTheDocument();
+    expect(
+      screen.getByText(/无法判断当前构建是否为最新版本/),
+    ).toBeInTheDocument();
   });
 
   it("keeps polling while no lifecycle task is active", async () => {
@@ -132,6 +145,8 @@ describe("RuntimeNodesPanel", () => {
             roles: null,
             workerFormats: null,
             workerKinds: null,
+            version: null,
+            revision: null,
           },
         ],
         health: { ...healthy, issues: null },
@@ -142,5 +157,6 @@ describe("RuntimeNodesPanel", () => {
 
     expect(await screen.findByText("worker-01")).toBeInTheDocument();
     expect(screen.getByText("无格式 Worker")).toBeInTheDocument();
+    expect(screen.getByText("版本未知")).toBeInTheDocument();
   });
 });

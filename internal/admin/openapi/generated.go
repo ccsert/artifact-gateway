@@ -1879,6 +1879,21 @@ func (e RuntimeNodeHealthIssueSeverity) Valid() bool {
 	}
 }
 
+// Defines values for RuntimeNodeListReleaseSource.
+const (
+	RuntimeNodeListReleaseSourceNotConfigured RuntimeNodeListReleaseSource = "not_configured"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeNodeListReleaseSource enum.
+func (e RuntimeNodeListReleaseSource) Valid() bool {
+	switch e {
+	case RuntimeNodeListReleaseSourceNotConfigured:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScheduledTaskKind.
 const (
 	ScheduledTaskKindAuditRetention      ScheduledTaskKind = "audit-retention"
@@ -3343,8 +3358,11 @@ type DiagnosticQueueStatState string
 
 // DiagnosticRuntime defines model for DiagnosticRuntime.
 type DiagnosticRuntime struct {
-	InstanceId    string   `json:"instanceId"`
-	Roles         []string `json:"roles"`
+	InstanceId string   `json:"instanceId"`
+	Roles      []string `json:"roles"`
+
+	// SessionId Session of the process that answered this diagnostics request.
+	SessionId     *string  `json:"sessionId,omitempty"`
 	WorkerFormats []Format `json:"workerFormats"`
 	WorkerKinds   []string `json:"workerKinds"`
 }
@@ -4291,15 +4309,21 @@ type RetentionVersionTypeCounts struct {
 
 // RuntimeNode defines model for RuntimeNode.
 type RuntimeNode struct {
-	InstanceId    string            `json:"instanceId"`
-	LastSeenAt    time.Time         `json:"lastSeenAt"`
-	Roles         []string          `json:"roles"`
-	SessionId     string            `json:"sessionId"`
-	StartedAt     time.Time         `json:"startedAt"`
-	Status        RuntimeNodeStatus `json:"status"`
-	StoppedAt     *time.Time        `json:"stoppedAt,omitempty"`
-	WorkerFormats []Format          `json:"workerFormats"`
-	WorkerKinds   []string          `json:"workerKinds"`
+	InstanceId string    `json:"instanceId"`
+	LastSeenAt time.Time `json:"lastSeenAt"`
+
+	// Revision Build revision reported by this node; absent for legacy records.
+	Revision  *string           `json:"revision,omitempty"`
+	Roles     []string          `json:"roles"`
+	SessionId string            `json:"sessionId"`
+	StartedAt time.Time         `json:"startedAt"`
+	Status    RuntimeNodeStatus `json:"status"`
+	StoppedAt *time.Time        `json:"stoppedAt,omitempty"`
+
+	// Version Build version reported by this node; absent for legacy records.
+	Version       *string  `json:"version,omitempty"`
+	WorkerFormats []Format `json:"workerFormats"`
+	WorkerKinds   []string `json:"workerKinds"`
 }
 
 // RuntimeNodeStatus defines model for RuntimeNode.Status.
@@ -4319,9 +4343,11 @@ type RuntimeNodeHealthStatus string
 
 // RuntimeNodeHealthIssue defines model for RuntimeNodeHealthIssue.
 type RuntimeNodeHealthIssue struct {
-	Code     string                         `json:"code"`
-	Message  string                         `json:"message"`
-	Severity RuntimeNodeHealthIssueSeverity `json:"severity"`
+	// AffectedNodes Session IDs of nodes involved in this issue.
+	AffectedNodes *[]string                      `json:"affectedNodes,omitempty"`
+	Code          string                         `json:"code"`
+	Message       string                         `json:"message"`
+	Severity      RuntimeNodeHealthIssueSeverity `json:"severity"`
 }
 
 // RuntimeNodeHealthIssueSeverity defines model for RuntimeNodeHealthIssue.Severity.
@@ -4329,9 +4355,17 @@ type RuntimeNodeHealthIssueSeverity string
 
 // RuntimeNodeList defines model for RuntimeNodeList.
 type RuntimeNodeList struct {
-	Health RuntimeNodeHealth `json:"health"`
-	Items  []RuntimeNode     `json:"items"`
+	// CurrentSessionId Session of the API process that answered this request; absent in older deployments.
+	CurrentSessionId *string           `json:"currentSessionId,omitempty"`
+	Health           RuntimeNodeHealth `json:"health"`
+	Items            []RuntimeNode     `json:"items"`
+
+	// ReleaseSource No GitHub Release or desired-version source is connected. This does not assert that the running build is latest.
+	ReleaseSource RuntimeNodeListReleaseSource `json:"releaseSource"`
 }
+
+// RuntimeNodeListReleaseSource No GitHub Release or desired-version source is connected. This does not assert that the running build is latest.
+type RuntimeNodeListReleaseSource string
 
 // ScheduledTask defines model for ScheduledTask.
 type ScheduledTask struct {

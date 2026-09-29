@@ -75,6 +75,7 @@ type APTSigningRuntime struct {
 
 type DiagnosticRuntime struct {
 	InstanceID    string
+	SessionID     string
 	Roles         []string
 	WorkerFormats []repository.Format
 	WorkerKinds   []string

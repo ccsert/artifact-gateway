@@ -20,7 +20,7 @@ func TestDiagnosticsRequiresAdministratorAndRedactsDependencyErrors(t *testing.T
 	ctx := context.Background()
 	now := time.Date(2026, 8, 10, 8, 0, 0, 0, time.UTC)
 	if err := store.UpsertRuntimeNodeHeartbeat(ctx, repository.RuntimeNode{
-		InstanceID: "gateway-01", SessionID: "session-01", Roles: []string{"standalone"},
+		InstanceID: "gateway-01", SessionID: "session-01", BuildVersion: "v1.2.3", BuildRevision: "abc123", Roles: []string{"standalone"},
 		WorkerFormats: []string{"maven"}, WorkerKinds: []string{"retention"},
 		StartedAt: now, LastSeenAt: time.Now().UTC(),
 	}); err != nil {
@@ -42,7 +42,7 @@ func TestDiagnosticsRequiresAdministratorAndRedactsDependencyErrors(t *testing.T
 		ArtifactScannerDatabaseMaxAge: 24 * time.Hour,
 		ArtifactScannerFormats:        []repository.Format{repository.FormatMaven},
 		Runtime: DiagnosticRuntime{
-			InstanceID: "gateway-01", Roles: []string{"standalone"},
+			InstanceID: "gateway-01", SessionID: "session-01", Roles: []string{"standalone"},
 			WorkerFormats: []repository.Format{repository.FormatMaven}, WorkerKinds: []string{"retention"},
 		},
 	}
@@ -72,6 +72,9 @@ func TestDiagnosticsRequiresAdministratorAndRedactsDependencyErrors(t *testing.T
 	}
 	if diagnostics.Build.Version != "v1.2.3" || diagnostics.Build.Revision != "abc123" || diagnostics.Runtime.InstanceId != "gateway-01" {
 		t.Fatalf("identity = %#v %#v", diagnostics.Build, diagnostics.Runtime)
+	}
+	if diagnostics.Runtime.SessionId == nil || *diagnostics.Runtime.SessionId != "session-01" {
+		t.Fatalf("connected session=%#v", diagnostics.Runtime.SessionId)
 	}
 	if len(diagnostics.Dependencies) != 1 || diagnostics.Dependencies[0].Status != adminopenapi.DiagnosticDependencyStatusUnreachable || diagnostics.Dependencies[0].Detail == nil || *diagnostics.Dependencies[0].Detail != "health check failed" {
 		t.Fatalf("dependencies = %#v", diagnostics.Dependencies)

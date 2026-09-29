@@ -36,6 +36,7 @@ import { Loading } from "../components/ui/Feedback";
 import { PreferenceControls } from "../components/ui/PreferenceControls";
 import { usePreferences } from "../lib/preferences";
 import { SiteBrandMark, SiteName } from "../components/ui/SiteBrand";
+import { getDiagnostics } from "../client";
 
 const navItems = [
   {
@@ -247,6 +248,58 @@ function TokenDialog() {
   );
 }
 
+function ConnectedVersion() {
+  const { text } = usePreferences();
+  const [build, setBuild] = useState<{
+    version: string;
+    revision: string;
+  } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const result = await getDiagnostics();
+        if (mounted)
+          setBuild(result.error ? null : (result.data?.build ?? null));
+      } catch {
+        if (mounted) setBuild(null);
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 60_000);
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const version =
+    build?.version && build.version !== "unknown"
+      ? build.version === "dev"
+        ? text("开发构建", "Development build")
+        : build.version
+      : text("版本未知", "Version unknown");
+  const revision =
+    build?.revision && build.revision !== "unknown"
+      ? ` · ${build.revision.slice(0, 12)}`
+      : "";
+
+  return (
+    <Link
+      to="/operations?tab=diagnostics"
+      className="ag-sider-meta text-xs leading-4 text-zinc-500 hover:text-zinc-200"
+      title={text(
+        "查看当前连接节点的系统诊断",
+        "View diagnostics for the connected node",
+      )}
+    >
+      {text("当前节点", "Connected node")} · {version}
+      {revision}
+    </Link>
+  );
+}
+
 export function AppLayout() {
   const { authenticated, identity, identityLoading, clearToken } = useAuth();
   const { colorMode, t } = usePreferences();
@@ -430,9 +483,7 @@ export function AppLayout() {
           className="ag-sider-footer border-t border-zinc-800/60 py-2"
           data-collapsed={collapsed ? "true" : "false"}
         >
-          <span className="ag-sider-meta text-xs leading-4 text-zinc-600">
-            Native Hosted API v2
-          </span>
+          {capabilities.platformAdmin && <ConnectedVersion />}
           <Tooltip
             title={collapsed ? t("nav.expand") : t("nav.collapse")}
             placement="right"
@@ -471,7 +522,7 @@ export function AppLayout() {
           onClick={() => setMobileNavOpen(false)}
         />
         <div className="ag-mobile-nav-footer text-xs text-zinc-600">
-          Native Hosted API v2
+          {capabilities.platformAdmin && <ConnectedVersion />}
         </div>
       </Drawer>
       <div className="ag-shell-main flex min-h-screen min-w-0 flex-1 flex-col">

@@ -42,6 +42,7 @@ import {
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
+import { useSearchParams } from "react-router-dom";
 
 type OperationRow = {
   id: string;
@@ -409,7 +410,13 @@ export function OperationsPage() {
   const [repositoryFilter, setRepositoryFilter] = useState("all");
   const [actingJob, setActingJob] = useState<string | null>(null);
   const [expandedJobKey, setExpandedJobKey] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("schedules");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const activeTab =
+    requestedTab &&
+    ["schedules", "webhooks", "jobs", "diagnostics"].includes(requestedTab)
+      ? requestedTab
+      : "schedules";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -599,7 +606,9 @@ export function OperationsPage() {
         tabBarGutter={24}
         activeKey={activeTab}
         onChange={(key) => {
-          setActiveTab(key);
+          const nextParams = new URLSearchParams(searchParams);
+          nextParams.set("tab", key);
+          setSearchParams(nextParams);
           if (key === "jobs" && rows === null && !loading) void load();
         }}
         items={[

@@ -2,6 +2,8 @@ package app
 
 import (
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
@@ -87,6 +89,44 @@ func runtimeNodeHealth(items []adminopenapi.RuntimeNode) adminopenapi.RuntimeNod
 	if health.Stale > 0 {
 		addIssue("stale_nodes", "warning", "存在心跳过期的运行节点")
 	}
+	builds := make(map[string][]string)
+	unknownBuild := make([]string, 0)
+	for _, node := range items {
+		if node.Status == adminopenapi.RuntimeNodeStatusOffline {
+			continue
+		}
+		version, revision := "", ""
+		if node.Version != nil {
+			version = strings.TrimSpace(*node.Version)
+		}
+		if node.Revision != nil {
+			revision = strings.TrimSpace(*node.Revision)
+		}
+		if version == "" || revision == "" || revision == "unknown" {
+			unknownBuild = append(unknownBuild, node.SessionId)
+			continue
+		}
+		builds[version+"\x00"+revision] = append(builds[version+"\x00"+revision], node.SessionId)
+	}
+	if len(unknownBuild) > 0 {
+		sort.Strings(unknownBuild)
+		affected := unknownBuild
+		health.Issues = append(health.Issues, adminopenapi.RuntimeNodeHealthIssue{
+			Code: "build_identity_unknown", Severity: adminopenapi.RuntimeNodeHealthIssueSeverityWarning,
+			Message: "部分在线节点未报告完整构建身份，无法确认版本一致", AffectedNodes: &affected,
+		})
+	}
+	if len(builds) > 1 {
+		affected := make([]string, 0)
+		for _, sessions := range builds {
+			affected = append(affected, sessions...)
+		}
+		sort.Strings(affected)
+		health.Issues = append(health.Issues, adminopenapi.RuntimeNodeHealthIssue{
+			Code: "mixed_build", Severity: adminopenapi.RuntimeNodeHealthIssueSeverityWarning,
+			Message: "在线节点运行不同的版本或修订号，可能正在滚动升级", AffectedNodes: &affected,
+		})
+	}
 	health.Status = adminopenapi.RuntimeNodeHealthStatusHealthy
 	for _, issue := range health.Issues {
 		if issue.Severity == adminopenapi.RuntimeNodeHealthIssueSeverityError {
@@ -108,7 +148,11 @@ func (h generatedRepositoryAPIAdapter) ListRuntimeNodes(w http.ResponseWriter, r
 		return
 	}
 	items := runtimeNodeResponses(nodes, time.Now().UTC())
-	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.RuntimeNodeList{Items: items, Health: runtimeNodeHealth(items)})
+	response := adminopenapi.RuntimeNodeList{Items: items, Health: runtimeNodeHealth(items), ReleaseSource: adminopenapi.RuntimeNodeListReleaseSourceNotConfigured}
+	if sessionID := h.diagnostics.Runtime.SessionID; sessionID != "" {
+		response.CurrentSessionId = &sessionID
+	}
+	writeNativeMavenJSON(w, http.StatusOK, response)
 }
 
 func runtimeNodeResponses(nodes []repository.RuntimeNode, now time.Time) []adminopenapi.RuntimeNode {
@@ -131,6 +175,14 @@ func runtimeNodeResponses(nodes []repository.RuntimeNode, now time.Time) []admin
 			StartedAt:     node.StartedAt,
 			LastSeenAt:    node.LastSeenAt,
 			Status:        status,
+		}
+		if node.BuildVersion != "" {
+			version := node.BuildVersion
+			item.Version = &version
+		}
+		if node.BuildRevision != "" {
+			revision := node.BuildRevision
+			item.Revision = &revision
 		}
 		if !node.StoppedAt.IsZero() {
 			stoppedAt := node.StoppedAt

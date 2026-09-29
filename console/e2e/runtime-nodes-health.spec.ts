@@ -108,6 +108,7 @@ test("operations survives legacy runtime node null arrays", async ({
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "运行节点" })).toBeVisible();
   await expect(page.getByText("legacy-worker", { exact: true })).toBeVisible();
+  await expect(page.getByText("版本未知", { exact: true })).toBeVisible();
   await expect(page.getByText("无格式 Worker", { exact: true })).toBeVisible();
   const backgroundQueues = page
     .getByRole("heading", { name: "后台队列" })
@@ -138,6 +139,141 @@ test("operations survives legacy runtime node null arrays", async ({
   await expect(
     page.getByText("Unexpected Application Error!", { exact: true }),
   ).not.toBeVisible();
+});
+
+test("connected version links to diagnostics and reports a rolling upgrade", async ({
+  page,
+}, testInfo) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await authenticateAsAdmin(page);
+  await page.route("**/api/v2/diagnostics", (route) =>
+    route.fulfill({
+      json: {
+        generatedAt: "2026-09-30T08:00:00Z",
+        build: {
+          version: "v0.4.3",
+          revision: "def456",
+          goVersion: "go1.26",
+          modified: false,
+        },
+        runtime: {
+          instanceId: "api-new",
+          sessionId: "session-new",
+          roles: ["api"],
+          workerFormats: [],
+          workerKinds: [],
+        },
+        dependencies: [],
+        queues: [],
+        nodes: {
+          status: "degraded",
+          online: 2,
+          stale: 0,
+          offline: 0,
+          issues: [],
+        },
+      },
+    }),
+  );
+  await page.route("**/api/v2/runtime/nodes", (route) =>
+    route.fulfill({
+      json: {
+        currentSessionId: "session-new",
+        releaseSource: "not_configured",
+        items: [
+          {
+            instanceId: "api-new",
+            sessionId: "session-new",
+            version: "v0.4.3",
+            revision: "def456",
+            roles: ["api"],
+            workerFormats: [],
+            workerKinds: [],
+            startedAt: "2026-09-30T08:00:00Z",
+            lastSeenAt: "2026-09-30T08:01:00Z",
+            status: "online",
+          },
+          {
+            instanceId: "worker-old",
+            sessionId: "session-old",
+            version: "v0.4.2",
+            revision: "abc123",
+            roles: ["worker"],
+            workerFormats: ["oci"],
+            workerKinds: ["reclaim"],
+            startedAt: "2026-09-29T08:00:00Z",
+            lastSeenAt: "2026-09-30T08:01:00Z",
+            status: "online",
+          },
+        ],
+        health: {
+          status: "degraded",
+          online: 2,
+          stale: 0,
+          offline: 0,
+          issues: [
+            {
+              code: "mixed_build",
+              severity: "warning",
+              message: "在线节点运行不同的版本或修订号，可能正在滚动升级",
+              affectedNodes: ["session-new", "session-old"],
+            },
+          ],
+        },
+      },
+    }),
+  );
+  await page.goto("/repositories");
+  await page
+    .locator(".ag-sider-desktop")
+    .getByRole("link", { name: /当前节点 · v0.4.3 · def456/ })
+    .click();
+  await expect(page).toHaveURL(/\/operations\?tab=diagnostics$/);
+  await expect(page.getByRole("tab", { name: "系统诊断" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByText("当前连接节点", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("涉及会话: session-new, session-old"),
+  ).toBeVisible();
+  await expect(page.getByText(/无法判断当前构建是否为最新版本/)).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      ),
+    )
+    .toBeLessThanOrEqual(1);
+  await page.screenshot({
+    path: testInfo.outputPath("runtime-version-desktop.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("heading", { name: "运行节点" })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      ),
+    )
+    .toBeLessThanOrEqual(1);
+  await page.screenshot({
+    path: testInfo.outputPath("runtime-version-mobile.png"),
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "打开导航" }).click();
+  await expect(
+    page
+      .locator(".ag-mobile-nav-drawer")
+      .getByRole("link", { name: /当前节点 · v0.4.3 · def456/ }),
+  ).toBeVisible();
+  expect(pageErrors).toEqual([]);
 });
 
 test("job history uses one compact and consistent detail path", async ({
