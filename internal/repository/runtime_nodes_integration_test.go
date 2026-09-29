@@ -24,11 +24,13 @@ func TestPostgresRuntimeNodeHeartbeatUpsertsCapabilities(t *testing.T) {
 	ctx := context.Background()
 	started := time.Date(2026, 8, 8, 8, 0, 0, 0, time.UTC)
 	instanceID := "integration-" + uuid.NewString()
-	node := RuntimeNode{InstanceID: instanceID, SessionID: "session-" + uuid.NewString(), Roles: []string{"worker"}, WorkerFormats: []string{"oci"}, WorkerKinds: []string{"reclaim"}, StartedAt: started, LastSeenAt: started}
+	node := RuntimeNode{InstanceID: instanceID, SessionID: "session-" + uuid.NewString(), BuildVersion: "v0.4.2", BuildRevision: "abc123", Roles: []string{"worker"}, WorkerFormats: []string{"oci"}, WorkerKinds: []string{"reclaim"}, StartedAt: started, LastSeenAt: started}
 	if err := store.UpsertRuntimeNodeHeartbeat(ctx, node); err != nil {
 		t.Fatal(err)
 	}
 	node.LastSeenAt = started.Add(time.Minute)
+	node.BuildVersion = "v0.4.3"
+	node.BuildRevision = "def456"
 	node.WorkerKinds = []string{"reclaim", "replication"}
 	if err := store.UpsertRuntimeNodeHeartbeat(ctx, node); err != nil {
 		t.Fatal(err)
@@ -44,7 +46,7 @@ func TestPostgresRuntimeNodeHeartbeatUpsertsCapabilities(t *testing.T) {
 			break
 		}
 	}
-	if got.InstanceID == "" || !got.StartedAt.Equal(started) || !got.LastSeenAt.Equal(started.Add(time.Minute)) || len(got.WorkerKinds) != 2 || got.WorkerKinds[1] != "replication" {
+	if got.InstanceID == "" || !got.StartedAt.Equal(started) || !got.LastSeenAt.Equal(started.Add(time.Minute)) || len(got.WorkerKinds) != 2 || got.WorkerKinds[1] != "replication" || got.BuildVersion != "v0.4.3" || got.BuildRevision != "def456" {
 		t.Fatalf("runtime node=%#v", got)
 	}
 	second := RuntimeNode{InstanceID: instanceID, SessionID: "integration-second-" + uuid.NewString(), Roles: []string{"worker"}, StartedAt: started.Add(time.Hour), LastSeenAt: started.Add(time.Hour)}
@@ -59,6 +61,9 @@ func TestPostgresRuntimeNodeHeartbeatUpsertsCapabilities(t *testing.T) {
 	for _, candidate := range nodes {
 		if candidate.InstanceID == instanceID {
 			sessions++
+			if candidate.SessionID == second.SessionID && (candidate.BuildVersion != "" || candidate.BuildRevision != "") {
+				t.Fatalf("legacy session build identity=%#v", candidate)
+			}
 		}
 	}
 	if sessions != 2 {

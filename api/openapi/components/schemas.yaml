@@ -82,6 +82,12 @@ RuntimeNode:
       type: string
     sessionId:
       type: string
+    version:
+      type: string
+      description: Build version reported by this node; absent for legacy records.
+    revision:
+      type: string
+      description: Build revision reported by this node; absent for legacy records.
     roles:
       type: array
       items:
@@ -125,6 +131,11 @@ RuntimeNodeHealthIssue:
       - error
     message:
       type: string
+    affectedNodes:
+      type: array
+      description: Session IDs of nodes involved in this issue.
+      items:
+        type: string
 RuntimeNodeHealth:
   type: object
   required:
@@ -158,6 +169,7 @@ RuntimeNodeList:
   required:
   - items
   - health
+  - releaseSource
   properties:
     items:
       type: array
@@ -165,6 +177,13 @@ RuntimeNodeList:
         "$ref": "#/RuntimeNode"
     health:
       "$ref": "#/RuntimeNodeHealth"
+    currentSessionId:
+      type: string
+      description: Session of the API process that answered this request; absent in older deployments.
+    releaseSource:
+      type: string
+      enum: [not_configured]
+      description: No GitHub Release or desired-version source is connected. This does not assert that the running build is latest.
 DiagnosticDependency:
   type: object
   required:
@@ -206,6 +225,9 @@ DiagnosticRuntime:
   properties:
     instanceId:
       type: string
+    sessionId:
+      type: string
+      description: Session of the process that answered this diagnostics request.
     roles:
       type: array
       items:

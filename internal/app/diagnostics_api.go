@@ -49,7 +49,7 @@ func (h generatedRepositoryAPIAdapter) GetDiagnostics(w http.ResponseWriter, r *
 		h.diagnostics.ArtifactScannerFormats, h.diagnostics.ArtifactScannerHealthTimeout,
 		h.diagnostics.ArtifactScannerDatabaseMaxAge, now,
 	)
-	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.Diagnostics{
+	diagnostics := adminopenapi.Diagnostics{
 		GeneratedAt: now,
 		Build: adminopenapi.DiagnosticBuild{
 			Version: h.diagnostics.BuildVersion, Revision: h.diagnostics.BuildRevision,
@@ -65,7 +65,11 @@ func (h generatedRepositoryAPIAdapter) GetDiagnostics(w http.ResponseWriter, r *
 		Scanner:      &scanner,
 		Queues:       queues,
 		Nodes:        runtimeNodeHealth(responseNodes),
-	})
+	}
+	if sessionID := h.diagnostics.Runtime.SessionID; sessionID != "" {
+		diagnostics.Runtime.SessionId = &sessionID
+	}
+	writeNativeMavenJSON(w, http.StatusOK, diagnostics)
 }
 
 const defaultScannerDatabaseMaxAge = 24 * time.Hour
