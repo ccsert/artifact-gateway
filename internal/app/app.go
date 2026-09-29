@@ -14,6 +14,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/buildinfo"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
+	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 	"github.com/jackc/pgx/v5"
@@ -31,6 +32,7 @@ type Dependencies struct {
 	BuildGoVersion string
 	Runtime        DiagnosticRuntime
 	AccessLog      AccessLogOptions
+	LogBuffer      *operationalog.Buffer
 	// NativeMavenObjectStore is supplied by the runtime after RustFS is initialized.
 	// Tests omit it and receive an isolated in-memory store.
 	NativeMavenObjectStore        OCIObjectStore

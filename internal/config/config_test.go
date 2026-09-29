@@ -64,6 +64,7 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	t.Setenv("GATEWAY_LOCAL_AUTH_LOCKOUT_DURATION", "20m")
 	t.Setenv("GATEWAY_ACCESS_LOG", "full")
 	t.Setenv("GATEWAY_ACCESS_LOG_SLOW_MS", "2500")
+	t.Setenv("GATEWAY_LOG_BUFFER_LINES", "1200")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -97,6 +98,24 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	}
 	if cfg.AccessLogMode != "full" || cfg.AccessLogSlowMS != 2500 {
 		t.Fatalf("access log policy = mode %q slow %d", cfg.AccessLogMode, cfg.AccessLogSlowMS)
+	}
+	if cfg.LogBufferLines != 1200 {
+		t.Fatalf("log buffer lines = %d", cfg.LogBufferLines)
+	}
+}
+
+func TestLoadBoundsRuntimeLogBuffer(t *testing.T) {
+	for _, value := range []string{"-1", "5001", "many"} {
+		setCompleteConfiguration(t)
+		t.Setenv("GATEWAY_LOG_BUFFER_LINES", value)
+		if _, err := Load(); err == nil {
+			t.Fatalf("accepted GATEWAY_LOG_BUFFER_LINES=%q", value)
+		}
+	}
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_LOG_BUFFER_LINES", "0")
+	if cfg, err := Load(); err != nil || cfg.LogBufferLines != 0 {
+		t.Fatalf("disabled buffer = %d, %v", cfg.LogBufferLines, err)
 	}
 }
 

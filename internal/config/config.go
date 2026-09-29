@@ -64,6 +64,7 @@ type Config struct {
 	InstanceID                      string
 	AccessLogMode                   string
 	AccessLogSlowMS                 int
+	LogBufferLines                  int
 	WorkerFormats                   []string
 	WorkerKinds                     []string
 	ScannerEndpoint                 string
@@ -142,6 +143,7 @@ func Load() (Config, error) {
 		InstanceID:                      value("GATEWAY_INSTANCE_ID", "gateway-"+hostname()),
 		AccessLogMode:                   value("GATEWAY_ACCESS_LOG", "limited"),
 		AccessLogSlowMS:                 1000,
+		LogBufferLines:                  1000,
 		WorkerFormats:                   parseFilter(os.Getenv("GATEWAY_WORKER_FORMATS"), supportedWorkerFormats),
 		WorkerKinds:                     parseFilter(os.Getenv("GATEWAY_WORKER_KINDS"), supportedWorkerKinds),
 		ScannerEndpoint:                 strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_ENDPOINT")),
@@ -222,6 +224,13 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("GATEWAY_ACCESS_LOG_SLOW_MS must be at most 60000")
 	} else {
 		cfg.AccessLogSlowMS = slowMS
+	}
+	if lines, err := positiveIntEnv("GATEWAY_LOG_BUFFER_LINES", cfg.LogBufferLines, true); err != nil {
+		return Config{}, err
+	} else if lines > 5000 {
+		return Config{}, fmt.Errorf("GATEWAY_LOG_BUFFER_LINES must be at most 5000")
+	} else {
+		cfg.LogBufferLines = lines
 	}
 
 	if cfg.DatabaseURL == "" || cfg.RustFSEndpoint == "" || cfg.RustFSBucket == "" || cfg.RustFSAccessKey == "" || cfg.RustFSSecretKey == "" || cfg.AdminToken == "" || cfg.ResolverToken == "" {
