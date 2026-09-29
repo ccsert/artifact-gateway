@@ -437,5 +437,5 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.HandleFunc("GET /auth/oidc/callback", oidcLogin.callback)
 	mux.HandleFunc("GET /auth/session", oidcLogin.session)
 	mux.HandleFunc("POST /auth/logout", oidcLogin.logout)
-	return sessionCookieAuthentication(tracedHTTPHandler(mux))
+	return sessionCookieAuthentication(tracedHTTPHandler(dependencies.requestObservability(mux)))
 }

@@ -4,7 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"time"
+
+	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
 )
 
 const lifecycleJobColumns = `id::text,repository_id::text,kind,idempotency_key,payload,state,created_at,started_at,completed_at,last_error,attempts,max_attempts,next_attempt_at,lease_expires_at,lease_token,progress_current,progress_total,progress_message`
@@ -51,7 +54,18 @@ func (s *PostgresStore) ListLifecycleJobs(ctx context.Context, repositoryID stri
 		}
 		jobs = append(jobs, job)
 	}
-	return jobs, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, job := range jobs {
+		jobCtx, ids := requestcontext.WithRequest(ctx, job.ID)
+		slog.LogAttrs(jobCtx, slog.LevelInfo, "lifecycle job claimed",
+			slog.String("component", "lifecycle_worker"), slog.String("operation", "lifecycle.claim"),
+			slog.String("requestId", ids.RequestID), slog.String("traceId", ids.TraceID),
+			slog.String("jobId", job.ID), slog.String("kind", string(job.Kind)), slog.String("repositoryId", job.RepositoryID), slog.Int("attempt", job.Attempts),
+		)
+	}
+	return jobs, nil
 }
 
 func (s *PostgresStore) ListAllLifecycleJobs(ctx context.Context, limit int) ([]RepositoryLifecycleJob, error) {
@@ -281,6 +295,11 @@ func (s *PostgresStore) CompleteLifecycleJob(ctx context.Context, id, leaseToken
 	if count, _ := result.RowsAffected(); count != 1 {
 		return ErrNotFound
 	}
+	jobCtx, ids := requestcontext.WithRequest(ctx, id)
+	slog.LogAttrs(jobCtx, slog.LevelInfo, "lifecycle job completed",
+		slog.String("component", "lifecycle_worker"), slog.String("operation", "lifecycle.complete"),
+		slog.String("requestId", ids.RequestID), slog.String("traceId", ids.TraceID), slog.String("jobId", id),
+	)
 	return nil
 }
 
@@ -297,6 +316,11 @@ func (s *PostgresStore) FailLifecycleJob(ctx context.Context, id, leaseToken, me
 	if count, _ := result.RowsAffected(); count != 1 {
 		return ErrNotFound
 	}
+	jobCtx, ids := requestcontext.WithRequest(ctx, id)
+	slog.LogAttrs(jobCtx, slog.LevelWarn, "lifecycle job failed or queued for retry",
+		slog.String("component", "lifecycle_worker"), slog.String("operation", "lifecycle.fail"),
+		slog.String("requestId", ids.RequestID), slog.String("traceId", ids.TraceID), slog.String("jobId", id),
+	)
 	return nil
 }
 

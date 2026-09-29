@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
+
+	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
 )
 
 func (s *PostgresStore) RecordAudit(ctx context.Context, audit AuditRecord) error {
@@ -27,6 +29,14 @@ type auditExecer interface {
 }
 
 func insertAudit(ctx context.Context, execer auditExecer, audit AuditRecord) error {
+	if ids, ok := requestcontext.FromContext(ctx); ok {
+		if audit.RequestID == "" {
+			audit.RequestID = ids.RequestID
+		}
+		if audit.TraceID == "" {
+			audit.TraceID = ids.TraceID
+		}
+	}
 	if audit.OccurredAt.IsZero() {
 		audit.OccurredAt = time.Now().UTC()
 	}

@@ -12,8 +12,8 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/egress"
 	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
 	"github.com/google/uuid"
-	"go.opentelemetry.io/otel/trace"
 )
 
 var rawProxyLookupIP = net.DefaultResolver.LookupIP
@@ -82,43 +82,21 @@ func rawProxyEgressClient(client *http.Client) *http.Client {
 	return egress.EnvironmentClient(client, rawEgressHooks())
 }
 
-type rawAuditCorrelation struct{ requestID, traceID string }
-type rawAuditCorrelationKey struct{}
-
 func withRawAuditCorrelation(ctx context.Context, headerRequestID string) context.Context {
-	requestID := safeRawCorrelationID(headerRequestID)
-	if requestID == "" {
-		requestID = uuid.NewString()
-	}
-	traceID := trace.SpanContextFromContext(ctx).TraceID().String()
-	if traceID == "00000000000000000000000000000000" || traceID == "" {
-		traceID = strings.ReplaceAll(uuid.NewString(), "-", "")
-	}
-	return context.WithValue(ctx, rawAuditCorrelationKey{}, rawAuditCorrelation{requestID: requestID, traceID: traceID})
-}
-
-func safeRawCorrelationID(value string) string {
-	if len(value) == 0 || len(value) > 128 {
-		return ""
-	}
-	for _, r := range value {
-		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '.' && r != '_' && r != '-' {
-			return ""
-		}
-	}
-	return value
+	correlated, _ := requestcontext.WithRequest(ctx, headerRequestID)
+	return correlated
 }
 
 func rawAuditRequestID(ctx context.Context) string {
-	if correlation, ok := ctx.Value(rawAuditCorrelationKey{}).(rawAuditCorrelation); ok {
-		return correlation.requestID
+	if correlation, ok := requestcontext.FromContext(ctx); ok {
+		return correlation.RequestID
 	}
 	return uuid.NewString()
 }
 
 func rawAuditTraceID(ctx context.Context) string {
-	if correlation, ok := ctx.Value(rawAuditCorrelationKey{}).(rawAuditCorrelation); ok {
-		return correlation.traceID
+	if correlation, ok := requestcontext.FromContext(ctx); ok {
+		return correlation.TraceID
 	}
 	return strings.ReplaceAll(uuid.NewString(), "-", "")
 }

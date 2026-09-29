@@ -4,9 +4,19 @@ import (
 	"context"
 	"sort"
 	"time"
+
+	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
 )
 
-func (s *MemoryStore) RecordAudit(_ context.Context, record AuditRecord) error {
+func (s *MemoryStore) RecordAudit(ctx context.Context, record AuditRecord) error {
+	if ids, ok := requestcontext.FromContext(ctx); ok {
+		if record.RequestID == "" {
+			record.RequestID = ids.RequestID
+		}
+		if record.TraceID == "" {
+			record.TraceID = ids.TraceID
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.appendAuditLocked(record)
