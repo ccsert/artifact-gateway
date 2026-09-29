@@ -1112,13 +1112,16 @@ test("promotion selects a source artifact and a compatible Hosted target", async
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(sourcePicker).toBeVisible();
-  expect(
-    await page.evaluate(
-      () =>
-        document.documentElement.scrollWidth -
-        document.documentElement.clientWidth,
-    ),
-  ).toBeLessThanOrEqual(0);
+  // The select portal can briefly keep its desktop position while closing.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      ),
+    )
+    .toBeLessThanOrEqual(0);
   expect(pageErrors).toEqual([]);
   if (process.env.CAPTURE_REPOSITORY_DETAIL) {
     await page.screenshot({
