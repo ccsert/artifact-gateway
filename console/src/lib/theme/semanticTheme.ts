@@ -82,6 +82,7 @@ export interface ConsoleThemeRoles {
       string,
       string,
       string,
+      string,
     ];
     readonly fallback: string;
     readonly trendPrimary: string;
@@ -438,6 +439,7 @@ function buildSemanticRoles(
         token.purple,
         token.geekblue,
         token.volcano,
+        token.lime,
       ],
       fallback: token.colorTextQuaternary,
       trendPrimary: token.blue,
@@ -608,6 +610,7 @@ function buildCSSVariables(
     "--ag-visualization-6": roles.visualization.categorical[5],
     "--ag-visualization-7": roles.visualization.categorical[6],
     "--ag-visualization-8": roles.visualization.categorical[7],
+    "--ag-visualization-9": roles.visualization.categorical[8],
     "--ag-visualization-fallback": roles.visualization.fallback,
     "--ag-visualization-trend-primary": roles.visualization.trendPrimary,
     "--ag-visualization-trend-secondary": roles.visualization.trendSecondary,

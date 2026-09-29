@@ -170,7 +170,13 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = items[len(items)-1].Coordinate
 			}
 		case repository.FormatCargo:
-			crates, _, err := h.cargo.SearchCargoCrates(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, true)
+			var crates []repository.CargoCrateSummary
+			var err error
+			if repo.Type == repository.RepositoryTypeProxy {
+				crates, err = h.cargoProxy.SearchCargoProxyCrates(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
+			} else {
+				crates, _, err = h.cargo.SearchCargoCrates(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, true)
+			}
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search Cargo crates failed")
 				return

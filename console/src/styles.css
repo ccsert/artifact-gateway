@@ -78,6 +78,7 @@
   --ag-visualization-6: #722ed1;
   --ag-visualization-7: #2f54eb;
   --ag-visualization-8: #fa541c;
+  --ag-visualization-9: #a0d911;
   --ag-visualization-fallback: #85858f;
   --ag-visualization-trend-primary: #1677ff;
   --ag-visualization-trend-secondary: #faad14;
@@ -161,6 +162,7 @@ html[data-theme="light"] {
   --ag-visualization-6: #722ed1;
   --ag-visualization-7: #2f54eb;
   --ag-visualization-8: #fa541c;
+  --ag-visualization-9: #a0d911;
   --ag-visualization-fallback: #6b6b74;
   --ag-visualization-trend-primary: #1677ff;
   --ag-visualization-trend-secondary: #faad14;
@@ -301,6 +303,9 @@ html .text-zinc-700 {
 }
 .ag-visualization-tone-8 {
   --ag-visualization-tone: var(--ag-visualization-8);
+}
+.ag-visualization-tone-9 {
+  --ag-visualization-tone: var(--ag-visualization-9);
 }
 html .border-zinc-700,
 html .border-zinc-800,

@@ -128,6 +128,7 @@ export function RepositoryArtifactsTab({
 
   const format = repo.format;
   const cargoHosted = String(format) === "cargo" && repo.type === "hosted";
+  const cargoRepository = format === "cargo";
   const proxyMaven = format === "maven" && repo.type === "proxy";
   const proxyNpm = format === "npm" && repo.type === "proxy";
   const proxyPyPI = format === "pypi" && repo.type === "proxy";
@@ -278,7 +279,7 @@ export function RepositoryArtifactsTab({
         format === "npm" ||
         format === "pypi" ||
         format === "go" ||
-        cargoHosted
+        cargoRepository
       ) {
         const r = await searchRepositoryArtifacts({
           path: { repositoryId: repo.id },
@@ -355,7 +356,7 @@ export function RepositoryArtifactsTab({
     [
       repo.id,
       format,
-      cargoHosted,
+      cargoRepository,
       proxyMaven,
       proxyAssetFilter,
       artifactTarget,
@@ -544,7 +545,7 @@ export function RepositoryArtifactsTab({
               format === "npm" ||
               format === "pypi" ||
               format === "go" ||
-              cargoHosted
+              cargoRepository
             ? [
                 {
                   title:
@@ -554,7 +555,7 @@ export function RepositoryArtifactsTab({
                         ? text("项目", "Project")
                         : format === "go"
                           ? text("模块", "Module")
-                          : cargoHosted
+                          : cargoRepository
                             ? "Crate"
                             : text("制品", "Artifact"),
                   dataIndex: "coordinate",
@@ -754,7 +755,7 @@ export function RepositoryArtifactsTab({
         />
       );
     }
-    if (cargoHosted) {
+    if (cargoRepository) {
       return (
         <CargoCrateDetail
           repoName={repo.name}

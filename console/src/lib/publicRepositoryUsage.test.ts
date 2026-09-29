@@ -49,6 +49,7 @@ describe("public repository usage", () => {
     ["npm", "https://gateway.test/npm/releases/"],
     ["pypi", "https://gateway.test/pypi/releases/simple/"],
     ["go", "go env -w GOPROXY=https://gateway.test/go/releases"],
+    ["cargo", "sparse+https://gateway.test/cargo/releases/"],
     ["apt", "https://gateway.test/apt/releases"],
     ["raw", "https://gateway.test/raw/releases/"],
   ] as const)("builds the %s repository entry point", (format, expected) => {
@@ -65,5 +66,16 @@ describe("public repository usage", () => {
         text: (chinese) => chinese,
       })[1].label,
     ).toBe("临时使用");
+  });
+
+  it("shows Cargo's alternate registry and uses no embedded credential", () => {
+    const snippets = usage("cargo");
+    expect(snippets[1].code).toContain(
+      'index = "sparse+https://gateway.test/cargo/releases/"',
+    );
+    expect(snippets[1].code).toContain('credential-provider = "cargo:token"');
+    expect(snippets.map((snippet) => snippet.code).join("\n")).not.toContain(
+      "Bearer ",
+    );
   });
 });

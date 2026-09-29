@@ -20,6 +20,7 @@ import { OciImageDetail } from "../artifact-detail/OciImageDetail";
 import { NpmPackageDetail } from "../artifact-detail/NpmPackageDetail";
 import { PyPIProjectDetail } from "../artifact-detail/PyPIProjectDetail";
 import { GoModuleDetail } from "../artifact-detail/GoModuleDetail";
+import { CargoCrateDetail } from "../artifact-detail/CargoCrateDetail";
 import {
   ConsoleTable,
   CopyableValue,
@@ -57,7 +58,10 @@ export function artifactTarget(hit: GlobalArtifactSearchHit): string {
     params.set("build", String(hit.buildNumber));
   if (hit.format === "oci" && hit.digest) params.set("reference", hit.digest);
   if (
-    (hit.format === "npm" || hit.format === "pypi" || hit.format === "go") &&
+    (hit.format === "npm" ||
+      hit.format === "pypi" ||
+      hit.format === "go" ||
+      hit.format === "cargo") &&
     hit.version
   )
     params.set("version", hit.version);
@@ -68,7 +72,8 @@ export function artifactVersionSizeLabel(hit: GlobalArtifactSearchHit): string {
   const size = formatBytes(hit.size);
   return (hit.format === "npm" ||
     hit.format === "pypi" ||
-    hit.format === "go") &&
+    hit.format === "go" ||
+    hit.format === "cargo") &&
     hit.version
     ? `${hit.version} · ${size}`
     : size;
@@ -658,6 +663,13 @@ export function SearchPage() {
             initialVersion={row.version}
             size={row.size}
             publisher={row.publisher}
+          />
+        )}
+        {row.format === "cargo" && (
+          <CargoCrateDetail
+            repoName={row.repositoryName}
+            crateName={row.coordinate}
+            initialVersion={row.version}
           />
         )}
         <div className="mt-4 flex justify-end">

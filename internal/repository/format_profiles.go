@@ -101,6 +101,28 @@ var supportedFormatProfiles = []FormatProfile{
 		},
 	},
 	{
+		Format:              FormatCargo,
+		RepositoryTypes:     []RepositoryType{RepositoryTypeHosted, RepositoryTypeProxy},
+		GroupSupported:      true,
+		AnonymousRead:       true,
+		PublicationScanning: true,
+		HostedOperations: []RepositoryOperation{
+			RepositoryOperationRead,
+			RepositoryOperationPublish,
+			RepositoryOperationBrowse,
+			RepositoryOperationDelete,
+			RepositoryOperationRestore,
+			RepositoryOperationRetain,
+			RepositoryOperationReclaim,
+			RepositoryOperationPromote,
+			RepositoryOperationReplicate,
+		},
+		ProxyOperations: []RepositoryOperation{
+			RepositoryOperationRead,
+			RepositoryOperationBrowse,
+		},
+	},
+	{
 		Format:              FormatAPT,
 		PublicationScanning: true,
 		RepositoryTypes:     []RepositoryType{RepositoryTypeProxy},
@@ -161,14 +183,12 @@ func SupportedFormats() []Format {
 // are included for internal recovery/reclaim workers even though those
 // operations are not advertised as user-facing lifecycle capabilities.
 func WorkerFormats() []Format {
-	formats := make([]Format, 0, len(supportedFormatProfiles)+1)
+	formats := make([]Format, 0, len(supportedFormatProfiles))
 	for _, profile := range supportedFormatProfiles {
 		if profile.Format == FormatAPT || profile.Format == FormatGo || hasBackgroundOperation(profile.HostedOperations) || hasBackgroundOperation(profile.ProxyOperations) {
 			formats = append(formats, profile.Format)
 		}
 	}
-	// Cargo's pre-admission Hosted path still needs durable orphan recovery.
-	formats = append(formats, FormatCargo)
 	return formats
 }
 
@@ -220,13 +240,6 @@ func FormatSupportsRepositoryProvisioning(format Format, repositoryType Reposito
 }
 
 func FormatSupportsOperation(format Format, repositoryType RepositoryType, operation RepositoryOperation) bool {
-	if format == FormatCargo && repositoryType == RepositoryTypeHosted {
-		switch operation {
-		case RepositoryOperationDelete, RepositoryOperationRestore, RepositoryOperationRetain, RepositoryOperationReclaim,
-			RepositoryOperationPromote, RepositoryOperationReplicate:
-			return true
-		}
-	}
 	profile, ok := FormatProfileFor(format)
 	if !ok {
 		return false
@@ -248,11 +261,6 @@ func FormatSupportsOperation(format Format, repositoryType RepositoryType, opera
 // FormatSupportsPublicationScanning reports whether a Hosted publication has a
 // native immutable-asset resolver and can participate in scan reconciliation.
 func FormatSupportsPublicationScanning(format Format, repositoryType RepositoryType) bool {
-	// Cargo is available to internal Hosted repositories before its public
-	// format profile is admitted. Its immutable crate is already scanable.
-	if format == FormatCargo {
-		return repositoryType == RepositoryTypeHosted
-	}
 	profile, ok := FormatProfileFor(format)
 	return ok && repositoryType == RepositoryTypeHosted && profile.PublicationScanning
 }

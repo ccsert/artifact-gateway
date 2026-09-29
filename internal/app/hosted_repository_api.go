@@ -279,6 +279,7 @@ type generatedRepositoryAPIAdapter struct {
 	replication            repository.ReplicationStore
 	oci                    repository.NativeOCIStore
 	cargo                  repository.NativeCargoStore
+	cargoProxy             repository.CargoProxyStore
 	conan                  repository.NativeConanStore
 	apiKeys                repository.APIKeyStore
 	serviceAccounts        repository.ServiceAccountStore
@@ -874,7 +875,7 @@ func validProxyConfiguration(format repository.Format, endpoint string, allowedH
 
 func proxyAllowedHostsRequired(format repository.Format) bool {
 	switch format {
-	case repository.FormatRaw, repository.FormatConan, repository.FormatNPM, repository.FormatPyPI, repository.FormatGo, repository.FormatAPT:
+	case repository.FormatRaw, repository.FormatConan, repository.FormatNPM, repository.FormatPyPI, repository.FormatGo, repository.FormatCargo, repository.FormatAPT:
 		return true
 	default:
 		return false

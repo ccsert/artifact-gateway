@@ -48,6 +48,7 @@ type CargoProxyStore interface {
 	PutCargoProxyConfig(context.Context, CargoProxyConfig) error
 	GetCargoProxyIndex(context.Context, string, string) (CargoProxyIndex, error)
 	PutCargoProxyIndex(context.Context, CargoProxyIndex) error
+	SearchCargoProxyCrates(context.Context, string, string, int, string) ([]CargoCrateSummary, error)
 	GetCargoProxyCrate(context.Context, string, string, string) (CargoProxyCrate, error)
 	PutCargoProxyCrate(context.Context, CargoProxyCrate) error
 }

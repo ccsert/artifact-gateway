@@ -1054,6 +1054,7 @@ func (e EgressProxyTestResultEgressMode) Valid() bool {
 // Defines values for Format.
 const (
 	FormatApt   Format = "apt"
+	FormatCargo Format = "cargo"
 	FormatConan Format = "conan"
 	FormatGo    Format = "go"
 	FormatMaven Format = "maven"
@@ -1067,6 +1068,8 @@ const (
 func (e Format) Valid() bool {
 	switch e {
 	case FormatApt:
+		return true
+	case FormatCargo:
 		return true
 	case FormatConan:
 		return true

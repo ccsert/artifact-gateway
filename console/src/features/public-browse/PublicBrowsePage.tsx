@@ -56,6 +56,7 @@ import {
 import { NpmPackageDetail } from "../artifact-detail/NpmPackageDetail";
 import { PyPIProjectDetail } from "../artifact-detail/PyPIProjectDetail";
 import { GoModuleDetail } from "../artifact-detail/GoModuleDetail";
+import { CargoCrateDetail } from "../artifact-detail/CargoCrateDetail";
 import { APTAssetDetail } from "../artifact-detail/APTAssetDetail";
 import {
   ConsoleTable,
@@ -113,6 +114,7 @@ const PUBLIC_FORMAT_ORDER: PublicRepositoryFormat[] = [
   "npm",
   "pypi",
   "go",
+  "cargo",
   "apt",
   "conan",
   "raw",
@@ -133,6 +135,9 @@ const PUBLIC_FORMAT_STYLE: Record<PublicRepositoryFormat, { icon: string }> = {
   },
   go: {
     icon: "GO",
+  },
+  cargo: {
+    icon: "CRG",
   },
   apt: {
     icon: "APT",
@@ -629,9 +634,11 @@ export function PublicBrowsePage() {
               ? text("注册 PyPI 仓库源", "Register a PyPI repository")
               : selectedRepository?.format === "go"
                 ? text("注册 Go Module Proxy", "Register a Go module proxy")
-                : selectedRepository?.format === "apt"
-                  ? text("注册 APT 软件源", "Register an APT source")
-                  : text("注册 Raw 源地址", "Register a Raw source");
+                : selectedRepository?.format === "cargo"
+                  ? text("注册 Cargo 仓库源", "Register a Cargo registry")
+                  : selectedRepository?.format === "apt"
+                    ? text("注册 APT 软件源", "Register an APT source")
+                    : text("注册 Raw 源地址", "Register a Raw source");
 
   const artifactTableRows: PublicArtifactTableRow[] = (items ?? []).map(
     (item, index) => {
@@ -898,7 +905,8 @@ export function PublicBrowsePage() {
                     undefined,
                     selectedRepository?.format === "npm" ||
                       selectedRepository?.format === "pypi" ||
-                      selectedRepository?.format === "go"
+                      selectedRepository?.format === "go" ||
+                      selectedRepository?.format === "cargo"
                       ? (row.item.version ?? versionParam)
                       : undefined,
                   )
@@ -998,6 +1006,28 @@ export function PublicBrowsePage() {
           }
           size={row.item.size}
           publisher={row.item.publisher}
+          onVersionChange={(version) =>
+            openArtifact(
+              row.item.coordinate,
+              undefined,
+              undefined,
+              undefined,
+              version,
+            )
+          }
+        />
+      );
+    }
+    if (selectedRepository?.format === "cargo") {
+      return (
+        <CargoCrateDetail
+          repoName={selectedRepository.name}
+          crateName={row.item.coordinate}
+          initialVersion={
+            artifactParam === row.item.coordinate
+              ? versionParam || row.item.version
+              : row.item.version
+          }
           onVersionChange={(version) =>
             openArtifact(
               row.item.coordinate,

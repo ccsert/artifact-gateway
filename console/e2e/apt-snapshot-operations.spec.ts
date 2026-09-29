@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { defaultSiteSettings } from "../src/lib/siteSettings";
 import { authenticateAsAdmin } from "./support/auth";
 import { expectTabGutter } from "./support/tabs";
 
@@ -58,6 +59,9 @@ for (const [width, theme, locale] of [
     await page.setViewportSize({ width, height: 1000 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await authenticateAsAdmin(page);
+    await page.route("**/api/v2/site-settings", (route) =>
+      route.fulfill({ json: defaultSiteSettings }),
+    );
     await page.addInitScript(
       ({ theme, locale }) => {
         localStorage.setItem("ag.console.theme", theme);

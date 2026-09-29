@@ -12,6 +12,9 @@ describe("artifact format visualization roles", () => {
     expect(artifactFormatVisualizationClass("apt")).toBe(
       "ag-visualization-tone ag-visualization-tone-8",
     );
+    expect(artifactFormatVisualizationClass("cargo")).toBe(
+      "ag-visualization-tone ag-visualization-tone-9",
+    );
   });
 
   it("does not assign an operational color to an unknown format", () => {

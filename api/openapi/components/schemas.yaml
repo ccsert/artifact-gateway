@@ -9,6 +9,7 @@ Format:
   - npm
   - pypi
   - go
+  - cargo
   - apt
 RepositoryOperation:
   type: string

@@ -184,6 +184,25 @@ func TestFormatProfileContractMatchesRepositoryProfiles(t *testing.T) {
 	}
 }
 
+func TestCargoSparseRegistryContractDocumentsNativeMethods(t *testing.T) {
+	spec := loadNativeHostedSpec(t)
+	path := "/cargo/{repository}/{path}"
+	for method, operationID := range map[string]string{
+		"GET":    "getCargoRegistryRepresentation",
+		"HEAD":   "headCargoRegistryRepresentation",
+		"PUT":    "putCargoHostedRegistryMutation",
+		"DELETE": "yankCargoHostedCrateVersion",
+	} {
+		operation := operation(t, spec, path, method)
+		if operation.OperationID != operationID {
+			t.Fatalf("%s operationId=%q want=%q", method, operation.OperationID, operationID)
+		}
+		for _, status := range []string{"200", "401"} {
+			requireResponse(t, operation, status)
+		}
+	}
+}
+
 func TestNativeHostedSourceBundlesToThePublishedContract(t *testing.T) {
 	source := loadNativeHostedSource(t)
 	bundle := loadNativeHostedSpec(t)

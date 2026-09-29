@@ -5370,6 +5370,7 @@
           "npm",
           "pypi",
           "go",
+          "cargo",
           "apt"
         ]
       },
