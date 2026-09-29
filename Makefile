@@ -238,6 +238,10 @@ backup-restore-readiness:
 upgrade-readiness:
 	@./scripts/upgrade-readiness.sh
 
+.PHONY: cargo-upgrade-readiness
+cargo-upgrade-readiness:
+	@./scripts/cargo-upgrade-readiness.sh
+
 member-role-migration-report:
 	@./scripts/member-role-migration-report.sh
 
