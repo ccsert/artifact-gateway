@@ -153,6 +153,9 @@ func (s *MemoryStore) recoverExpiredReplicationPlansLocked(before time.Time) int
 			p.NextAttemptAt = before
 		}
 		s.replicationPlans[id] = p
+		if event, ok := cargoReplicationWebhookEvent(p); ok {
+			s.enqueueWebhookEventLocked(event)
+		}
 		count++
 	}
 	return count
@@ -262,6 +265,9 @@ func (s *MemoryStore) FailReplicationPlanWithLease(_ context.Context, id, msg, l
 		p.NextAttemptAt = now
 	}
 	s.replicationPlans[id] = p
+	if event, ok := cargoReplicationWebhookEvent(p); ok {
+		s.enqueueWebhookEventLocked(event)
+	}
 	return nil
 }
 func (s *MemoryStore) ParkReplicationPlanWithLease(_ context.Context, id, msg, leaseToken string) error {
@@ -281,6 +287,9 @@ func (s *MemoryStore) ParkReplicationPlanWithLease(_ context.Context, id, msg, l
 		p.Attempts--
 	}
 	s.replicationPlans[id] = p
+	if event, ok := cargoReplicationWebhookEvent(p); ok {
+		s.enqueueWebhookEventLocked(event)
+	}
 	return nil
 }
 func (s *MemoryStore) finishReplication(id, state, msg, leaseToken string) error {
@@ -294,6 +303,9 @@ func (s *MemoryStore) finishReplication(id, state, msg, leaseToken string) error
 	p.LeaseToken = ""
 	p.LeaseExpiresAt = time.Time{}
 	s.replicationPlans[id] = p
+	if event, ok := cargoReplicationWebhookEvent(p); ok {
+		s.enqueueWebhookEventLocked(event)
+	}
 	return nil
 }
 

@@ -1331,8 +1331,12 @@ type AuditCleanupJob struct {
 type WebhookEventType string
 
 const (
-	WebhookEventArtifactQuarantined WebhookEventType = "artifact.quarantined"
-	WebhookEventArtifactReleased    WebhookEventType = "artifact.released"
+	WebhookEventArtifactQuarantined       WebhookEventType = "artifact.quarantined"
+	WebhookEventArtifactReleased          WebhookEventType = "artifact.released"
+	WebhookEventCargoPromotionCompleted   WebhookEventType = "cargo.promotion.completed"
+	WebhookEventCargoPromotionFailed      WebhookEventType = "cargo.promotion.failed"
+	WebhookEventCargoReplicationCompleted WebhookEventType = "cargo.replication.completed"
+	WebhookEventCargoReplicationFailed    WebhookEventType = "cargo.replication.failed"
 )
 
 type WebhookSubscription struct {
@@ -1403,4 +1407,19 @@ type ArtifactQuarantineWebhookData struct {
 	Reason       string                  `json:"reason"`
 	Actor        string                  `json:"actor"`
 	Version      string                  `json:"version"`
+}
+
+// CargoDistributionWebhookData describes a durable operation state change.
+// Failure details remain in the authenticated management API rather than the
+// outbound payload, where they could contain dependency or storage context.
+type CargoDistributionWebhookData struct {
+	OperationID        string `json:"operationId"`
+	Kind               string `json:"kind"`
+	Format             Format `json:"format"`
+	SourceRepositoryID string `json:"sourceRepositoryId"`
+	TargetRepositoryID string `json:"targetRepositoryId"`
+	Coordinate         string `json:"coordinate"`
+	Digest             string `json:"digest"`
+	State              string `json:"state"`
+	Attempts           int    `json:"attempts"`
 }

@@ -74,7 +74,9 @@ func validateWebhookSubscriptionInput(name, endpoint, secret string, eventTypes 
 	seen := make(map[repository.WebhookEventType]bool, len(eventTypes))
 	for _, raw := range eventTypes {
 		value := repository.WebhookEventType(raw)
-		if value != repository.WebhookEventArtifactQuarantined && value != repository.WebhookEventArtifactReleased || seen[value] {
+		if value != repository.WebhookEventArtifactQuarantined && value != repository.WebhookEventArtifactReleased &&
+			value != repository.WebhookEventCargoPromotionCompleted && value != repository.WebhookEventCargoPromotionFailed &&
+			value != repository.WebhookEventCargoReplicationCompleted && value != repository.WebhookEventCargoReplicationFailed || seen[value] {
 			return nil, errors.New("webhook event types are invalid")
 		}
 		seen[value] = true

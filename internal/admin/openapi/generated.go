@@ -2190,8 +2190,12 @@ func (e WebhookDeliveryState) Valid() bool {
 
 // Defines values for WebhookEventType.
 const (
-	WebhookEventTypeArtifactQuarantined WebhookEventType = "artifact.quarantined"
-	WebhookEventTypeArtifactReleased    WebhookEventType = "artifact.released"
+	WebhookEventTypeArtifactQuarantined       WebhookEventType = "artifact.quarantined"
+	WebhookEventTypeArtifactReleased          WebhookEventType = "artifact.released"
+	WebhookEventTypeCargoPromotionCompleted   WebhookEventType = "cargo.promotion.completed"
+	WebhookEventTypeCargoPromotionFailed      WebhookEventType = "cargo.promotion.failed"
+	WebhookEventTypeCargoReplicationCompleted WebhookEventType = "cargo.replication.completed"
+	WebhookEventTypeCargoReplicationFailed    WebhookEventType = "cargo.replication.failed"
 )
 
 // Valid indicates whether the value is a known member of the WebhookEventType enum.
@@ -2200,6 +2204,14 @@ func (e WebhookEventType) Valid() bool {
 	case WebhookEventTypeArtifactQuarantined:
 		return true
 	case WebhookEventTypeArtifactReleased:
+		return true
+	case WebhookEventTypeCargoPromotionCompleted:
+		return true
+	case WebhookEventTypeCargoPromotionFailed:
+		return true
+	case WebhookEventTypeCargoReplicationCompleted:
+		return true
+	case WebhookEventTypeCargoReplicationFailed:
 		return true
 	default:
 		return false
