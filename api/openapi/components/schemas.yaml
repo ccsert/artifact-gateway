@@ -2925,6 +2925,10 @@ WebhookEventType:
   enum:
   - artifact.quarantined
   - artifact.released
+  - cargo.promotion.completed
+  - cargo.promotion.failed
+  - cargo.replication.completed
+  - cargo.replication.failed
 WebhookSubscription:
   type: object
   required: [id, name, endpointUrl, eventTypes, enabled, version, secretConfigured, createdAt, updatedAt]

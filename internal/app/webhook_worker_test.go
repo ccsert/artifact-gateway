@@ -98,6 +98,61 @@ func TestWebhookDeliveryWorkerSignsRetriesAndCompletes(t *testing.T) {
 	}
 }
 
+func TestWebhookDeliveryWorkerSendsCargoPromotionOutcome(t *testing.T) {
+	t.Setenv(secrets.KeyEnv, "0123456789abcdef0123456789abcdef")
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	var receivedBody []byte
+	var receivedType string
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedBody, _ = io.ReadAll(r.Body)
+		receivedType = r.Header.Get("X-Artifact-Gateway-Event-Type")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	subscriptionID := uuid.NewString()
+	ciphertext, err := secrets.Seal("webhook-subscription:"+subscriptionID, "webhook-signing-secret-32-bytes!!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateWebhookSubscription(ctx, repository.WebhookSubscription{
+		ID: subscriptionID, Name: "cargo-promotion", EndpointURL: server.URL,
+		SecretCiphertext: ciphertext, EventTypes: []repository.WebhookEventType{repository.WebhookEventCargoPromotionCompleted}, Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	targetID := uuid.NewString()
+	job, _, err := store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{
+		ID: uuid.NewString(), RepositoryID: targetID, Kind: repository.LifecycleJobPromotion,
+		IdempotencyKey: "cargo-promotion-outcome", MaxAttempts: 1,
+		Payload: []byte(`{"format":"cargo","sourceRepositoryId":"` + uuid.NewString() + `","name":"demo","version":"1.0.0","digest":"sha256:` + strings.Repeat("a", 64) + `"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobPromotion, repository.FormatCargo, 1)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim=%+v err=%v", claimed, err)
+	}
+	if err := store.CompleteLifecycleJob(ctx, job.ID, claimed[0].LeaseToken); err != nil {
+		t.Fatal(err)
+	}
+	worker := WebhookDeliveryWorker{
+		Store: store, InstanceID: "cargo-delivery", Now: func() time.Time { return time.Now().UTC() },
+		ClientFactory: func(string) (*http.Client, error) { return server.Client(), nil },
+	}
+	if count, err := worker.RunOnce(ctx); err != nil || count != 1 {
+		t.Fatalf("delivery count=%d err=%v", count, err)
+	}
+	deliveries, err := store.ListWebhookDeliveries(ctx, repository.WebhookDeliveryQuery{SubscriptionID: subscriptionID, Limit: 10})
+	if err != nil || len(deliveries) != 1 || deliveries[0].State != repository.WebhookDeliverySucceeded {
+		t.Fatalf("deliveries=%+v err=%v", deliveries, err)
+	}
+	if receivedType != string(repository.WebhookEventCargoPromotionCompleted) || !strings.Contains(string(receivedBody), `"operationId":"`+job.ID+`"`) || !strings.Contains(string(receivedBody), `"coordinate":"demo@1.0.0"`) {
+		t.Fatalf("type=%s body=%s", receivedType, receivedBody)
+	}
+}
+
 func TestWebhookDeliveryWorkerMarksAttemptEightDeadWithoutPersistingResponseBody(t *testing.T) {
 	t.Setenv(secrets.KeyEnv, "0123456789abcdef0123456789abcdef")
 	ctx := context.Background()

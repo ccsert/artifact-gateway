@@ -9136,7 +9136,11 @@
         "type": "string",
         "enum": [
           "artifact.quarantined",
-          "artifact.released"
+          "artifact.released",
+          "cargo.promotion.completed",
+          "cargo.promotion.failed",
+          "cargo.replication.completed",
+          "cargo.replication.failed"
         ]
       },
       "WebhookSubscription": {

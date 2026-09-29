@@ -1186,7 +1186,13 @@ export type ConsoleThemePackageValidation = {
   existingVersion?: string;
 };
 
-export type WebhookEventType = "artifact.quarantined" | "artifact.released";
+export type WebhookEventType =
+  | "artifact.quarantined"
+  | "artifact.released"
+  | "cargo.promotion.completed"
+  | "cargo.promotion.failed"
+  | "cargo.replication.completed"
+  | "cargo.replication.failed";
 
 export type WebhookSubscription = {
   id: string;

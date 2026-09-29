@@ -43,8 +43,10 @@ restored source, Group, and targets with unchanged index rows and archive
 digest. `make cargo-upgrade-readiness` starts from the pinned pre-distribution
 Cargo schema in #162 and verifies fresh Cargo 1.96.0 Hosted/Group installs,
 index rows, archive digests, Group ownership and member order after a forward
-migration and migration replay. Distribution outcome webhooks, source/target
-read-policy checks after fault injection, and public format admission remain open.
+migration and migration replay. Distribution outcome webhooks now persist
+final promotion and replication success/failure events with the operation state.
+Source/target read-policy checks after fault injection and public format
+admission remain open.
 `make integration-test` also drives an official Cargo client through a
 PostgreSQL/RustFS Proxy replay after the upstream is shut down. This document
 uses only Gitea and Cargo-owned documentation as protocol evidence.

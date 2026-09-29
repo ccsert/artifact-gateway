@@ -121,6 +121,8 @@ describe("WebhookDeliveriesPanel", () => {
       screen.getByPlaceholderText("至少 32 个字符"),
       "webhook-signing-secret-at-least-32-characters",
     );
+    await user.click(within(screen.getByRole("dialog")).getByRole("combobox"));
+    await user.click(await screen.findByText("cargo.promotion.completed"));
     await user.click(screen.getByRole("button", { name: "创建" }));
 
     expect(mockCreate).toHaveBeenCalledWith({
@@ -128,7 +130,11 @@ describe("WebhookDeliveriesPanel", () => {
         name: "Security automation",
         endpointUrl: "https://hooks.example.test/artifacts",
         secret: "webhook-signing-secret-at-least-32-characters",
-        eventTypes: ["artifact.quarantined", "artifact.released"],
+        eventTypes: [
+          "artifact.quarantined",
+          "artifact.released",
+          "cargo.promotion.completed",
+        ],
         enabled: true,
       },
     });
