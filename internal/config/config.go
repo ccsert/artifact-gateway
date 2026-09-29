@@ -62,6 +62,8 @@ type Config struct {
 	ConsoleThemeDir                 string
 	NodeRoles                       []NodeRole
 	InstanceID                      string
+	AccessLogMode                   string
+	AccessLogSlowMS                 int
 	WorkerFormats                   []string
 	WorkerKinds                     []string
 	ScannerEndpoint                 string
@@ -138,6 +140,8 @@ func Load() (Config, error) {
 		ConsoleThemeDir:                 strings.TrimSpace(os.Getenv("GATEWAY_CONSOLE_THEME_DIR")),
 		NodeRoles:                       parseNodeRoles(os.Getenv("GATEWAY_NODE_ROLES")),
 		InstanceID:                      value("GATEWAY_INSTANCE_ID", "gateway-"+hostname()),
+		AccessLogMode:                   value("GATEWAY_ACCESS_LOG", "limited"),
+		AccessLogSlowMS:                 1000,
 		WorkerFormats:                   parseFilter(os.Getenv("GATEWAY_WORKER_FORMATS"), supportedWorkerFormats),
 		WorkerKinds:                     parseFilter(os.Getenv("GATEWAY_WORKER_KINDS"), supportedWorkerKinds),
 		ScannerEndpoint:                 strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_ENDPOINT")),
@@ -208,6 +212,16 @@ func Load() (Config, error) {
 	}
 	if err := validateRuntimeConfig(cfg); err != nil {
 		return Config{}, err
+	}
+	if cfg.AccessLogMode != "limited" && cfg.AccessLogMode != "full" {
+		return Config{}, fmt.Errorf("GATEWAY_ACCESS_LOG must be limited or full")
+	}
+	if slowMS, err := positiveIntEnv("GATEWAY_ACCESS_LOG_SLOW_MS", cfg.AccessLogSlowMS, false); err != nil {
+		return Config{}, err
+	} else if slowMS > 60_000 {
+		return Config{}, fmt.Errorf("GATEWAY_ACCESS_LOG_SLOW_MS must be at most 60000")
+	} else {
+		cfg.AccessLogSlowMS = slowMS
 	}
 
 	if cfg.DatabaseURL == "" || cfg.RustFSEndpoint == "" || cfg.RustFSBucket == "" || cfg.RustFSAccessKey == "" || cfg.RustFSSecretKey == "" || cfg.AdminToken == "" || cfg.ResolverToken == "" {

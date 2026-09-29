@@ -30,6 +30,7 @@ type Dependencies struct {
 	BuildModified  bool
 	BuildGoVersion string
 	Runtime        DiagnosticRuntime
+	AccessLog      AccessLogOptions
 	// NativeMavenObjectStore is supplied by the runtime after RustFS is initialized.
 	// Tests omit it and receive an isolated in-memory store.
 	NativeMavenObjectStore        OCIObjectStore
@@ -96,10 +97,13 @@ func NewDependencies(cfg config.Config) Dependencies {
 			postgresChecker{databaseURL: cfg.DatabaseURL},
 			httpChecker{url: rustFSEndpointURL(cfg.RustFSEndpoint)},
 		},
-		BuildVersion:                  build.Version,
-		BuildRevision:                 build.Revision,
-		BuildModified:                 build.Modified,
-		BuildGoVersion:                build.GoVersion,
+		BuildVersion:   build.Version,
+		BuildRevision:  build.Revision,
+		BuildModified:  build.Modified,
+		BuildGoVersion: build.GoVersion,
+		AccessLog: AccessLogOptions{
+			Mode: cfg.AccessLogMode, SlowThreshold: time.Duration(cfg.AccessLogSlowMS) * time.Millisecond,
+		},
 		ArtifactScannerHealthTimeout:  2 * time.Second,
 		ArtifactScannerDatabaseMaxAge: 24 * time.Hour,
 		ConsoleThemes:                 consoletheme.NewRegistry(cfg.ConsoleThemeDir),
@@ -154,7 +158,7 @@ func NewOperationalHandler(dependencies Dependencies, metrics *Metrics) http.Han
 	if metrics != nil {
 		mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	}
-	return mux
+	return dependencies.requestObservability(mux)
 }
 
 func (d Dependencies) ready(w http.ResponseWriter, request *http.Request) {

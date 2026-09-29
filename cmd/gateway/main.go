@@ -18,6 +18,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
 	"github.com/artifact-gateway/artifact-gateway/internal/evidence"
+	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
 	"github.com/artifact-gateway/artifact-gateway/internal/preflight"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
@@ -42,13 +43,17 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "apt-snapshot" {
 		os.Exit(aptpublication.RunArchiveCLI(context.Background(), os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
 	}
+	runtimeSessionID := uuid.NewString()
+	slog.SetDefault(operationalog.NewLogger(os.Stdout, "unconfigured", runtimeSessionID))
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("invalid configuration", "error", err)
 		os.Exit(1)
 	}
+	slog.SetDefault(operationalog.NewLogger(os.Stdout, cfg.InstanceID, runtimeSessionID))
 
 	dependencies := app.NewDependencies(cfg)
+	dependencies.Runtime.SessionID = runtimeSessionID
 	if _, err := dependencies.ConsoleThemes.List(); err != nil {
 		slog.Error("load Console themes", "error", err)
 		os.Exit(1)
@@ -198,8 +203,6 @@ func main() {
 	runtimeContext := signalContext()
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
 	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_health_enabled", cfg.ScannerHealthEndpoint != "", "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats, "scanner_database_max_age", cfg.ScannerDatabaseMaxAge, "apt_signer_enabled", cfg.APTSignerEnabled(), "apt_signer_trusted_fingerprint_count", len(cfg.APTSignerTrustedFingerprints), "raw_cache_max_object_bytes", cfg.RawCacheMaxObjectBytes, "raw_cache_max_concurrent_spools", cfg.RawCacheMaxConcurrentSpools)
-	runtimeSessionID := uuid.NewString()
-	dependencies.Runtime.SessionID = runtimeSessionID
 	heartbeat := &app.RuntimeNodeHeartbeat{
 		Store: store,
 		Node: repository.RuntimeNode{

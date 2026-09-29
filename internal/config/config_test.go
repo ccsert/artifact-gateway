@@ -62,6 +62,8 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	t.Setenv("GATEWAY_NPM_PROXY_BREAKER_TTL", "12s")
 	t.Setenv("GATEWAY_LOCAL_AUTH_MAX_FAILED_ATTEMPTS", "7")
 	t.Setenv("GATEWAY_LOCAL_AUTH_LOCKOUT_DURATION", "20m")
+	t.Setenv("GATEWAY_ACCESS_LOG", "full")
+	t.Setenv("GATEWAY_ACCESS_LOG_SLOW_MS", "2500")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -92,6 +94,25 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	}
 	if cfg.RuntimeNodeRetention != 7*24*time.Hour || cfg.RuntimeNodePruneInterval != time.Hour {
 		t.Fatalf("runtime node cleanup defaults = retention %s interval %s", cfg.RuntimeNodeRetention, cfg.RuntimeNodePruneInterval)
+	}
+	if cfg.AccessLogMode != "full" || cfg.AccessLogSlowMS != 2500 {
+		t.Fatalf("access log policy = mode %q slow %d", cfg.AccessLogMode, cfg.AccessLogSlowMS)
+	}
+}
+
+func TestLoadRejectsUnsafeAccessLogPolicy(t *testing.T) {
+	for _, test := range []struct{ name, mode, slow string }{
+		{name: "unknown mode", mode: "everything"},
+		{name: "zero slow threshold", mode: "limited", slow: "0"},
+		{name: "unbounded slow threshold", mode: "limited", slow: "60001"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("GATEWAY_ACCESS_LOG", test.mode)
+			t.Setenv("GATEWAY_ACCESS_LOG_SLOW_MS", test.slow)
+			if _, err := Load(); err == nil {
+				t.Fatal("invalid access log configuration accepted")
+			}
+		})
 	}
 }
 
