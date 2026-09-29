@@ -3823,6 +3823,39 @@ type OIDCSettingsUpdateJitDefaultRole string
 // OIDCSettingsUpdateProvisioningMode defines model for OIDCSettingsUpdate.ProvisioningMode.
 type OIDCSettingsUpdateProvisioningMode string
 
+// OverviewRepositoryStatistics defines model for OverviewRepositoryStatistics.
+type OverviewRepositoryStatistics struct {
+	Denied       OverviewWindowCounts `json:"denied"`
+	Format       Format               `json:"format"`
+	Name         string               `json:"name"`
+	ObjectCount  int64                `json:"objectCount"`
+	RepositoryId openapi_types.UUID   `json:"repositoryId"`
+	Requests     OverviewWindowCounts `json:"requests"`
+	UsedBytes    int64                `json:"usedBytes"`
+}
+
+// OverviewStatistics defines model for OverviewStatistics.
+type OverviewStatistics struct {
+	GeneratedAt  time.Time                      `json:"generatedAt"`
+	Repositories []OverviewRepositoryStatistics `json:"repositories"`
+	Totals       OverviewStatisticsTotals       `json:"totals"`
+}
+
+// OverviewStatisticsTotals defines model for OverviewStatisticsTotals.
+type OverviewStatisticsTotals struct {
+	Denied      OverviewWindowCounts `json:"denied"`
+	ObjectCount int64                `json:"objectCount"`
+	Requests    OverviewWindowCounts `json:"requests"`
+	UsedBytes   int64                `json:"usedBytes"`
+}
+
+// OverviewWindowCounts defines model for OverviewWindowCounts.
+type OverviewWindowCounts struct {
+	OneDay     int64 `json:"oneDay"`
+	SevenDays  int64 `json:"sevenDays"`
+	ThirtyDays int64 `json:"thirtyDays"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
 	Code      ProblemCode `json:"code"`
@@ -5567,6 +5600,9 @@ type ServerInterface interface {
 
 	// (GET /lifecycle-jobs)
 	ListLifecycleJobs(w http.ResponseWriter, r *http.Request, params ListLifecycleJobsParams)
+	// GetOverviewStatistics Repository protocol request and capacity statistics for the Console
+	// (GET /overview-statistics)
+	GetOverviewStatistics(w http.ResponseWriter, r *http.Request)
 
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId)
@@ -7481,6 +7517,20 @@ func (siw *ServerInterfaceWrapper) ListLifecycleJobs(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListLifecycleJobs(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOverviewStatistics operation middleware
+func (siw *ServerInterfaceWrapper) GetOverviewStatistics(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOverviewStatistics(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12438,6 +12488,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/resolution", wrapper.GetGroupResolution)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/identity", wrapper.GetCurrentIdentity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/lifecycle-jobs", wrapper.ListLifecycleJobs)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/overview-statistics", wrapper.GetOverviewStatistics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/publish-sessions/{sessionId}", wrapper.GetPublishSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/publish-sessions/{sessionId}/objects/{objectName}", wrapper.UploadPublishObject)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/publish-sessions/{sessionId}:commit", wrapper.CommitPublishSession)
@@ -14905,6 +14956,57 @@ func (response ListLifecycleJobs401ApplicationProblemPlusJSONResponse) VisitList
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOverviewStatisticsRequestObject struct {
+}
+
+type GetOverviewStatisticsResponseObject interface {
+	VisitGetOverviewStatisticsResponse(w http.ResponseWriter) error
+}
+
+type GetOverviewStatistics200JSONResponse OverviewStatistics
+
+func (response GetOverviewStatistics200JSONResponse) VisitGetOverviewStatisticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOverviewStatistics401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetOverviewStatistics401ApplicationProblemPlusJSONResponse) VisitGetOverviewStatisticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOverviewStatistics403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOverviewStatistics403ApplicationProblemPlusJSONResponse) VisitGetOverviewStatisticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -22714,6 +22816,9 @@ type StrictServerInterface interface {
 
 	// (GET /lifecycle-jobs)
 	ListLifecycleJobs(ctx context.Context, request ListLifecycleJobsRequestObject) (ListLifecycleJobsResponseObject, error)
+	// GetOverviewStatistics Repository protocol request and capacity statistics for the Console
+	// (GET /overview-statistics)
+	GetOverviewStatistics(ctx context.Context, request GetOverviewStatisticsRequestObject) (GetOverviewStatisticsResponseObject, error)
 
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(ctx context.Context, request GetPublishSessionRequestObject) (GetPublishSessionResponseObject, error)
@@ -24318,6 +24423,30 @@ func (sh *strictHandler) ListLifecycleJobs(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListLifecycleJobsResponseObject); ok {
 		if err := validResponse.VisitListLifecycleJobsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOverviewStatistics operation middleware
+func (sh *strictHandler) GetOverviewStatistics(w http.ResponseWriter, r *http.Request) {
+	var request GetOverviewStatisticsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOverviewStatistics(ctx, request.(GetOverviewStatisticsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOverviewStatistics")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOverviewStatisticsResponseObject); ok {
+		if err := validResponse.VisitGetOverviewStatisticsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

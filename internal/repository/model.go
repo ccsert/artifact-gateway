@@ -221,6 +221,20 @@ type RepositoryCapacityRecord struct {
 	Capacity   RepositoryCapacity
 }
 
+// RequestWindowCounts counts audited protocol requests in rolling windows.
+// Windows are inclusive of their lower boundary and end at the snapshot time.
+type RequestWindowCounts struct {
+	OneDay     int64 `json:"oneDay"`
+	SevenDays  int64 `json:"sevenDays"`
+	ThirtyDays int64 `json:"thirtyDays"`
+}
+
+type RepositoryRequestStatistics struct {
+	Repository string
+	Requests   RequestWindowCounts
+	Denied     RequestWindowCounts
+}
+
 type HostedGroup struct {
 	ID            string        `json:"id"`
 	Name          string        `json:"name"`

@@ -1,4 +1,4 @@
-import type { LineConfig, PieConfig } from "@ant-design/plots";
+import type { PieConfig } from "@ant-design/plots";
 import {
   lazy,
   Suspense,
@@ -9,14 +9,10 @@ import {
 } from "react";
 import { formatBytes } from "../../lib/format";
 import { artifactFormatVisualizationSlot } from "../../lib/artifactFormatVisuals";
-import type { DashboardSample } from "../../lib/history";
 import { usePreferences } from "../../lib/preferences";
 
 const DashboardPiePlot = lazy(
   () => import("./dashboard-charts/DashboardPiePlot"),
-);
-const DashboardLinePlot = lazy(
-  () => import("./dashboard-charts/DashboardLinePlot"),
 );
 
 const FORMAT_ORDER = [
@@ -40,12 +36,6 @@ interface ThemedStorageChartDatum extends StorageChartDatum {
   color: string;
 }
 
-interface TrendDatum {
-  time: Date;
-  timeLabel: string;
-  value: number;
-}
-
 export function buildStorageChartData(
   bytesByFormat: Record<string, number>,
 ): StorageChartDatum[] {
@@ -64,17 +54,6 @@ export function buildStorageChartData(
       bytes: Math.max(0, bytesByFormat[format] ?? 0),
     }))
     .filter((datum) => datum.bytes > 0);
-}
-
-function formatChartTime(value: Date | number | string, locale: string) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat(locale, {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
 }
 
 function EmptyChart({ children }: { children: string }) {
@@ -269,156 +248,6 @@ export function StorageByFormatChart({
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-function TrendLineChart({
-  data,
-  color,
-  label,
-  valueFormatter,
-  emptyLabel,
-}: {
-  data: TrendDatum[];
-  color: string;
-  label: string;
-  valueFormatter: (value: number) => string;
-  emptyLabel: string;
-}) {
-  const { colorMode, locale, resolvedTheme, text } = usePreferences();
-
-  if (data.length === 0) return <EmptyChart>{emptyLabel}</EmptyChart>;
-
-  const surfaceColor = resolvedTheme.roles.surface.container;
-  const config: LineConfig = {
-    data,
-    xField: "time",
-    yField: "value",
-    height: 184,
-    autoFit: true,
-    theme: colorMode,
-    animate: false,
-    scale: {
-      x: { type: "time" },
-      y: { nice: true },
-    },
-    axis: {
-      x: {
-        title: false,
-        grid: false,
-        line: true,
-        tick: false,
-        tickCount: 3,
-        labelAutoHide: true,
-        labelAutoRotate: false,
-        labelFormatter: (value: Date | number | string) =>
-          formatChartTime(value, locale),
-      },
-      y: {
-        title: false,
-        line: false,
-        tick: false,
-        tickCount: 3,
-        labelFormatter: (value: number | string) =>
-          valueFormatter(Number(value)),
-      },
-    },
-    style: { stroke: color, lineWidth: 2 },
-    point: {
-      sizeField: 3,
-      style: { fill: color, stroke: surfaceColor, lineWidth: 1.5 },
-    },
-    tooltip: {
-      title: { field: "timeLabel" },
-      items: [
-        {
-          field: "value",
-          name: label,
-          valueFormatter: (value) => valueFormatter(Number(value)),
-        },
-      ],
-    },
-    interaction: {
-      tooltip: { shared: true, crosshairs: true },
-    },
-  };
-
-  return (
-    <div
-      className="min-w-0"
-      role="img"
-      aria-label={text(
-        `${label}近期趋势`,
-        `Recent ${label.toLowerCase()} trend`,
-      )}
-      data-testid="dashboard-trend-chart"
-    >
-      <DeferredChart
-        height={184}
-        label={text("正在加载图表…", "Loading chart…")}
-      >
-        <DashboardLinePlot key={`${colorMode}-${locale}`} config={config} />
-      </DeferredChart>
-    </div>
-  );
-}
-
-export function DashboardTrendCharts({
-  history,
-}: {
-  history: DashboardSample[];
-}) {
-  const { locale, resolvedTheme, text } = usePreferences();
-  const orderedHistory = [...history].sort((a, b) => a.t - b.t);
-  const repositoryData = orderedHistory.map((sample) => ({
-    time: new Date(sample.t),
-    timeLabel: formatChartTime(sample.t, locale),
-    value: sample.repos,
-  }));
-  const storageData = orderedHistory
-    .filter(
-      (sample): sample is DashboardSample & { bytes: number } =>
-        sample.bytes !== null,
-    )
-    .map((sample) => ({
-      time: new Date(sample.t),
-      timeLabel: formatChartTime(sample.t, locale),
-      value: sample.bytes,
-    }));
-
-  return (
-    <div className="grid min-w-0 grid-cols-1 gap-6 px-5 py-6 sm:grid-cols-2">
-      <section className="min-w-0" aria-labelledby="repository-trend-title">
-        <h3
-          id="repository-trend-title"
-          className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500"
-        >
-          {text("仓库数", "Repositories")}
-        </h3>
-        <TrendLineChart
-          data={repositoryData}
-          color={resolvedTheme.roles.visualization.trendPrimary}
-          label={text("仓库数", "Repositories")}
-          valueFormatter={(value) => String(Math.round(value))}
-          emptyLabel={text("暂无历史数据", "No history yet")}
-        />
-      </section>
-      <section className="min-w-0" aria-labelledby="storage-trend-title">
-        <h3
-          id="storage-trend-title"
-          className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500"
-        >
-          {text("存储占用", "Storage used")}
-        </h3>
-        <TrendLineChart
-          data={storageData}
-          color={resolvedTheme.roles.visualization.trendSecondary}
-          label={text("存储占用", "Storage used")}
-          valueFormatter={formatBytes}
-          emptyLabel={text("容量未启用", "Capacity unavailable")}
-        />
-      </section>
     </div>
   );
 }

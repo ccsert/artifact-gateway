@@ -1537,6 +1537,31 @@
         }
       }
     },
+    "/overview-statistics": {
+      "get": {
+        "operationId": "getOverviewStatistics",
+        "summary": "Repository protocol request and capacity statistics for the Console",
+        "description": "Returns one snapshot containing rolling 24-hour, 7-day, and 30-day request counts and logical capacity for current repositories administered by the caller. Requests are resolver_audit_log rows with a nonempty repository, excluding format=management, regardless of outcome. Denied counts include access_denied, proxy_denied, and legacy denied outcomes and are a subset of requests. The windows include their lower bound and end at generatedAt. Ordinary Console and management GET requests are not audited and therefore are not counted. Deleted repositories and audit rows for repositories that no longer exist are excluded. Totals are sums of returned repository rows. If audit retention is enabled with keepDays below 30, the 30-day count is incomplete; the default retention policy is disabled.",
+        "responses": {
+          "200": {
+            "description": "Current repository statistics and sums over visible rows.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewStatistics"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/audit-retention-policy": {
       "get": {
         "operationId": "getAuditRetentionPolicy",
@@ -9897,6 +9922,121 @@
           },
           "nextPageToken": {
             "type": "string"
+          }
+        }
+      },
+      "OverviewWindowCounts": {
+        "type": "object",
+        "required": [
+          "oneDay",
+          "sevenDays",
+          "thirtyDays"
+        ],
+        "properties": {
+          "oneDay": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "sevenDays": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "thirtyDays": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "OverviewStatisticsTotals": {
+        "type": "object",
+        "required": [
+          "requests",
+          "denied",
+          "objectCount",
+          "usedBytes"
+        ],
+        "properties": {
+          "requests": {
+            "$ref": "#/components/schemas/OverviewWindowCounts"
+          },
+          "denied": {
+            "$ref": "#/components/schemas/OverviewWindowCounts"
+          },
+          "objectCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "usedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "OverviewRepositoryStatistics": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "name",
+          "format",
+          "requests",
+          "denied",
+          "objectCount",
+          "usedBytes"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "requests": {
+            "$ref": "#/components/schemas/OverviewWindowCounts"
+          },
+          "denied": {
+            "$ref": "#/components/schemas/OverviewWindowCounts"
+          },
+          "objectCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "usedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "OverviewStatistics": {
+        "type": "object",
+        "required": [
+          "generatedAt",
+          "totals",
+          "repositories"
+        ],
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/OverviewStatisticsTotals"
+          },
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverviewRepositoryStatistics"
+            }
           }
         }
       },

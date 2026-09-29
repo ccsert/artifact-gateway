@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Space, Tag, Tooltip } from "antd";
+import { Button, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   listRepositoryArtifactUsage,
@@ -23,17 +23,17 @@ export function RepositoryUsageTab({ repo }: { repo: Repository }) {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: err } = await listRepositoryArtifactUsage({
-      path: { repositoryId: repo.id },
-      query: { limit: 200 },
-    });
-    setLoading(false);
-    if (err) {
-      setError(err);
-      return;
-    }
-    if (data) {
-      setUsage(data);
+    try {
+      const { data, error: err } = await listRepositoryArtifactUsage({
+        path: { repositoryId: repo.id },
+        query: { limit: 200 },
+      });
+      if (err) throw err;
+      if (data) setUsage(data);
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setLoading(false);
     }
   }, [repo.id]);
 
@@ -91,11 +91,8 @@ export function RepositoryUsageTab({ repo }: { repo: Repository }) {
     },
   ];
 
-  if (error) {
-    return <ErrorBanner error={error} onRetry={load} />;
-  }
   if (!usage) {
-    return <Loading />;
+    return error ? <ErrorBanner error={error} onRetry={load} /> : <Loading />;
   }
 
   const rows: UsageRow[] = usage.items.map((item) => ({
@@ -103,62 +100,34 @@ export function RepositoryUsageTab({ repo }: { repo: Repository }) {
     key: `${item.format}\u0000${item.resource}`,
   }));
 
-  const cards: Array<{ label: string; value: string }> = [
-    {
-      label: text("累计下载", "Lifetime downloads"),
-      value: formatNumber(usage.totals.downloadCount, locale),
-    },
-    {
-      label: text("制品地址", "Artifact addresses"),
-      value: formatNumber(usage.totals.resources, locale),
-    },
-    {
-      label: text("累计流量", "Total transferred"),
-      value: formatBytes(usage.totals.totalBytes),
-    },
-  ];
-
   return (
-    <Space orientation="vertical" size="large" style={{ width: "100%" }}>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {cards.map((card) => (
-          <div
-            key={card.label}
-            className="rounded-lg border border-zinc-800 px-4 py-3"
-          >
-            <div className="text-xs uppercase tracking-wider text-zinc-500">
-              {card.label}
-            </div>
-            <div className="mt-1 text-xl font-semibold text-zinc-100">
-              {card.value}
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className="ag-page-stack">
+      {error !== null && <ErrorBanner error={error} onRetry={load} />}
       <ConsoleTable<UsageRow>
         size="small"
         columns={columns}
         dataSource={rows}
         loading={loading}
         pagination={false}
+        scroll={{ x: 1000 }}
         locale={{
           emptyText: (
             <EmptyState
               compact
               title={text("暂无下载记录", "No downloads recorded yet")}
               hint={text(
-                "该窗口内没有来自此仓库的读取请求。",
-                "No reads from this repository were recorded in this window.",
+                "尚无来自此仓库的下载记录。",
+                "No downloads from this repository have been recorded yet.",
               )}
             />
           ),
         }}
       />
-      <div>
+      <div className="flex justify-end">
         <Button onClick={() => void load()} loading={loading}>
           {text("刷新", "Refresh")}
         </Button>
       </div>
-    </Space>
+    </div>
   );
 }

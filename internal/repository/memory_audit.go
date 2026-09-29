@@ -43,6 +43,47 @@ func (s *MemoryStore) ListAudits(_ context.Context, query AuditQuery) ([]AuditRe
 	return page.Items, err
 }
 
+func (s *MemoryStore) ListRepositoryRequestStatistics(_ context.Context, now time.Time) ([]RepositoryRequestStatistics, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	now = now.UTC()
+	cutoff1, cutoff7, cutoff30 := now.Add(-24*time.Hour), now.Add(-7*24*time.Hour), now.Add(-30*24*time.Hour)
+	byRepository := make(map[string]*RepositoryRequestStatistics)
+	for _, audit := range s.Audits {
+		if audit.Repository == "" || audit.Format == "management" || audit.OccurredAt.Before(cutoff30) || audit.OccurredAt.After(now) {
+			continue
+		}
+		item := byRepository[audit.Repository]
+		if item == nil {
+			item = &RepositoryRequestStatistics{Repository: audit.Repository}
+			byRepository[audit.Repository] = item
+		}
+		denied := audit.Outcome == AuditAccessDenied || audit.Outcome == AuditProxyDenied || audit.Outcome == "denied"
+		item.Requests.ThirtyDays++
+		if denied {
+			item.Denied.ThirtyDays++
+		}
+		if !audit.OccurredAt.Before(cutoff7) {
+			item.Requests.SevenDays++
+			if denied {
+				item.Denied.SevenDays++
+			}
+		}
+		if !audit.OccurredAt.Before(cutoff1) {
+			item.Requests.OneDay++
+			if denied {
+				item.Denied.OneDay++
+			}
+		}
+	}
+	result := make([]RepositoryRequestStatistics, 0, len(byRepository))
+	for _, item := range byRepository {
+		result = append(result, *item)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Repository < result[j].Repository })
+	return result, nil
+}
+
 func (s *MemoryStore) ListAuditPage(_ context.Context, query AuditQuery) (AuditPage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

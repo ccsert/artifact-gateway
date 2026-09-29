@@ -1380,6 +1380,35 @@ export type AuditPage = {
   nextPageToken?: string;
 };
 
+export type OverviewWindowCounts = {
+  oneDay: number;
+  sevenDays: number;
+  thirtyDays: number;
+};
+
+export type OverviewStatisticsTotals = {
+  requests: OverviewWindowCounts;
+  denied: OverviewWindowCounts;
+  objectCount: number;
+  usedBytes: number;
+};
+
+export type OverviewRepositoryStatistics = {
+  repositoryId: string;
+  name: string;
+  format: Format;
+  requests: OverviewWindowCounts;
+  denied: OverviewWindowCounts;
+  objectCount: number;
+  usedBytes: number;
+};
+
+export type OverviewStatistics = {
+  generatedAt: string;
+  totals: OverviewStatisticsTotals;
+  repositories: Array<OverviewRepositoryStatistics>;
+};
+
 /**
  * Per-Proxy-Repository egress network proxy configuration. Only meaningful when the repository type is proxy. `password` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
  */
@@ -3932,6 +3961,37 @@ export type ListAuditPageResponses = {
 
 export type ListAuditPageResponse =
   ListAuditPageResponses[keyof ListAuditPageResponses];
+
+export type GetOverviewStatisticsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/overview-statistics";
+};
+
+export type GetOverviewStatisticsErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+};
+
+export type GetOverviewStatisticsError =
+  GetOverviewStatisticsErrors[keyof GetOverviewStatisticsErrors];
+
+export type GetOverviewStatisticsResponses = {
+  /**
+   * Current repository statistics and sums over visible rows.
+   */
+  200: OverviewStatistics;
+};
+
+export type GetOverviewStatisticsResponse =
+  GetOverviewStatisticsResponses[keyof GetOverviewStatisticsResponses];
 
 export type GetAuditRetentionPolicyData = {
   body?: never;

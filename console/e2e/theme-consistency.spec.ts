@@ -738,19 +738,30 @@ test("dashboard keeps a compact overview without archived repositories", async (
   await page.route("**/api/v2/audits**", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
   );
-  await page.route("**/api/v2/repository-capacities**", (route) =>
+  await page.route("**/api/v2/overview-statistics", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify([
-        {
-          repositoryId: "repo-active",
-          format: "oci",
-          usedBytes: 1024,
+      body: JSON.stringify({
+        generatedAt: "2026-09-30T12:00:00Z",
+        totals: {
+          requests: { oneDay: 1, sevenDays: 1, thirtyDays: 1 },
+          denied: { oneDay: 0, sevenDays: 0, thirtyDays: 0 },
           objectCount: 1,
-          quotaBytes: 0,
+          usedBytes: 1024,
         },
-      ]),
+        repositories: [
+          {
+            repositoryId: "repo-active",
+            name: "active-repository",
+            format: "oci",
+            requests: { oneDay: 1, sevenDays: 1, thirtyDays: 1 },
+            denied: { oneDay: 0, sevenDays: 0, thirtyDays: 0 },
+            objectCount: 1,
+            usedBytes: 1024,
+          },
+        ],
+      }),
     }),
   );
 
@@ -759,7 +770,9 @@ test("dashboard keeps a compact overview without archived repositories", async (
   await expect(page.getByText("archived-repository")).not.toBeVisible();
   await expect(page.locator(".ag-health-strip, .ag-lifecycle")).toHaveCount(0);
   const metricStrip = page.getByRole("group", { name: "页面摘要" });
-  await expect(metricStrip.locator(":scope > div").first()).toContainText("1");
+  await expect(
+    metricStrip.locator(":scope > div").filter({ hasText: "仓库总数" }),
+  ).toContainText("1");
   const header = page.locator(".ag-page-header");
   const primary = page.locator(".ag-page-primary");
   const desktopHeader = await header.boundingBox();

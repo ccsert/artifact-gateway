@@ -12,17 +12,11 @@ import { Field } from "../../components/ui/Layout";
 import { formatBytes, formatNumber } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
+import { MetricStrip } from "../../components/ui/ConsolePrimitives";
 
 export function RepositoryCapacityTab({ repo }: { repo: Repository }) {
   const { resolvedTheme, text } = usePreferences();
-  type CapacityDetail = RepositoryCapacity & {
-    primaryBytes?: number;
-    sidecarBytes?: number;
-    negativeCount?: number;
-    expiredObjectCount?: number;
-    reclaimableBytes?: number;
-  };
-  const [capacity, setCapacity] = useState<CapacityDetail | null>(null);
+  const [capacity, setCapacity] = useState<RepositoryCapacity | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [quotaGiB, setQuotaGiB] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -31,16 +25,17 @@ export function RepositoryCapacityTab({ repo }: { repo: Repository }) {
 
   const load = useCallback(async () => {
     setError(null);
-    const { data, error: err } = await getRepositoryCapacity({
-      path: { repositoryId: repo.id },
-    });
-    if (err) {
-      setError(err);
-      return;
-    }
-    if (data) {
-      setCapacity(data);
-      setQuotaGiB(Math.round(data.quotaBytes / 2 ** 30));
+    try {
+      const { data, error: err } = await getRepositoryCapacity({
+        path: { repositoryId: repo.id },
+      });
+      if (err) throw err;
+      if (data) {
+        setCapacity(data);
+        setQuotaGiB(Math.round(data.quotaBytes / 2 ** 30));
+      }
+    } catch (nextError) {
+      setError(nextError);
     }
   }, [repo.id]);
 
@@ -70,7 +65,7 @@ export function RepositoryCapacityTab({ repo }: { repo: Repository }) {
     }
   };
 
-  if (error !== null)
+  if (error !== null && !capacity)
     return isNotFound(error) ? (
       <RepositoryFeatureUnavailable
         feature={text("容量管理", "Capacity management")}
@@ -87,88 +82,35 @@ export function RepositoryCapacityTab({ repo }: { repo: Repository }) {
   const proxy = repo.type === "proxy";
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-400">
-        {proxy
-          ? text(
-              "Proxy 仓库的容量来自 read-through cache：已缓存的上游响应会计入缓存用量；它不是 Hosted 发布制品。",
-              "A proxy repository's capacity comes from its read-through cache. Cached upstream responses count toward cache usage; they are not hosted published artifacts.",
-            )
-          : text(
-              "Hosted 仓库的容量来自已发布或可恢复的制品/资产引用，并受发布配额约束。",
-              "A hosted repository's capacity comes from published or recoverable artifact/asset references and is constrained by its publishing quota.",
-            )}
-      </div>
+    <div className="ag-page-stack">
+      {error !== null && <ErrorBanner error={error} onRetry={load} />}
       {saveError !== null && <ErrorBanner error={saveError} />}
       {notice && (
         <Notice tone="success" title={notice} onClose={() => setNotice("")} />
       )}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border border-zinc-800 px-4 py-3">
-          <div className="text-xs uppercase tracking-wider text-zinc-500">
-            {proxy
+      <MetricStrip
+        items={[
+          {
+            label: proxy
               ? text("缓存用量", "Cache usage")
-              : text("已用空间", "Used space")}
-          </div>
-          <div className="mt-1 text-xl font-semibold text-zinc-100">
-            {formatBytes(capacity.usedBytes)}
-          </div>
-        </div>
-        <div className="rounded-lg border border-zinc-800 px-4 py-3">
-          <div className="text-xs uppercase tracking-wider text-zinc-500">
-            {proxy
+              : text("已用空间", "Used space"),
+            value: formatBytes(capacity.usedBytes),
+          },
+          {
+            label: proxy
               ? text("缓存对象", "Cached objects")
-              : text("对象数量", "Object count")}
-          </div>
-          <div className="mt-1 text-xl font-semibold text-zinc-100">
-            {formatNumber(capacity.objectCount)}
-          </div>
-        </div>
-        <div className="rounded-lg border border-zinc-800 px-4 py-3">
-          <div className="text-xs uppercase tracking-wider text-zinc-500">
-            {text("配额", "Quota")}
-          </div>
-          <div className="mt-1 text-xl font-semibold text-zinc-100">
-            {capacity.quotaBytes > 0
-              ? formatBytes(capacity.quotaBytes)
-              : text("无限制", "Unlimited")}
-          </div>
-        </div>
-      </div>
-      {proxy && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-lg border border-zinc-800 px-4 py-3">
-            <div className="text-xs uppercase tracking-wider text-zinc-500">
-              {text("主资产缓存", "Primary asset cache")}
-            </div>
-            <div className="mt-1 text-lg font-semibold text-zinc-100">
-              {formatBytes(capacity.primaryBytes)}
-            </div>
-          </div>
-          <div className="rounded-lg border border-zinc-800 px-4 py-3">
-            <div className="text-xs uppercase tracking-wider text-zinc-500">
-              {text("校验/签名缓存", "Checksum/signature cache")}
-            </div>
-            <div className="mt-1 text-lg font-semibold text-zinc-100">
-              {formatBytes(capacity.sidecarBytes)}
-            </div>
-          </div>
-          <div className="rounded-lg border border-zinc-800 px-4 py-3">
-            <div className="text-xs uppercase tracking-wider text-zinc-500">
-              {text("可回收缓存", "Reclaimable cache")}
-            </div>
-            <div className="mt-1 text-lg font-semibold text-zinc-100">
-              {formatBytes(capacity.reclaimableBytes)}
-            </div>
-            <div className="mt-1 text-xs text-zinc-500">
-              {text(
-                `过期 ${formatNumber(capacity.expiredObjectCount)} 项 · negative ${formatNumber(capacity.negativeCount)} 项`,
-                `Expired ${formatNumber(capacity.expiredObjectCount)} · negative ${formatNumber(capacity.negativeCount)}`,
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+              : text("对象数量", "Object count"),
+            value: formatNumber(capacity.objectCount),
+          },
+          {
+            label: text("配额", "Quota"),
+            value:
+              capacity.quotaBytes > 0
+                ? formatBytes(capacity.quotaBytes)
+                : text("无限制", "Unlimited"),
+          },
+        ]}
+      />
       {capacity.quotaBytes > 0 && (
         <div>
           <div className="mb-1.5 flex justify-between text-xs text-zinc-500">

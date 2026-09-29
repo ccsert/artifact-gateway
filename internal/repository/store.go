@@ -181,6 +181,10 @@ type RepositoryCapacityRecordStore interface {
 	ListRepositoryCapacityRecords(context.Context) ([]RepositoryCapacityRecord, error)
 }
 
+type RepositoryRequestStatisticsStore interface {
+	ListRepositoryRequestStatistics(context.Context, time.Time) ([]RepositoryRequestStatistics, error)
+}
+
 // BackgroundOperationMetrics accepts only bounded operation dimensions. It is
 // deliberately independent of repository IDs and artifact coordinates.
 type BackgroundOperationMetrics interface {
