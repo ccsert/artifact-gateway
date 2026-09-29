@@ -78,6 +78,31 @@ CI, isolated protocol fixtures, local runtime checks, and release acceptance are
 separate evidence. Closing an implementation Issue does not declare a release
 ready; track upgrade, restore, and deployment acceptance explicitly.
 
+## Issue classification
+
+Every Issue carries exactly one type label and one primary area label; Issues
+about a specific package format also carry that format label. The label
+vocabulary is the classification: filtering on `label:"area: cli"` returns
+exactly that workstream.
+
+| Axis | Labels | Meaning |
+| --- | --- | --- |
+| Type | `type: feature`, `type: bug`, `type: design`, `type: docs`, `type: chore` | `feature` extends user-visible capability; `bug` is behavior contradicting the intended outcome or the contract; `design` produces a decision recorded in an ADR or document rather than code; `docs` changes documentation only; `chore` covers CI, dependencies, refactors, and tooling with no behavior change. |
+| Area | `area: console`, `area: api`, `area: cli`, `area: auth`, `area: audit`, `area: platform`, `area: ops` | `console` is the web UI; `api` is the management contract, its OpenAPI sources, and generated clients; `cli` is `agctl`; `auth` covers identity, authorization, accounts, and service credentials; `audit` covers audit records, retention, and forensics; `platform` is the server-side data plane — artifacts and repositories, lifecycle and retention, promotion and replication, capacity, cache, quarantine, scanning; `ops` covers deployment, runtime, diagnostics, logs, backup, and upgrade. |
+| Format | `format: maven`, `format: oci`, `format: npm`, `format: pypi`, `format: go`, `format: apt`, `format: conan`, `format: cargo`, `format: raw` | Orthogonal to area; applied to Issues about one protocol's behavior. |
+
+Titles start with the area: `Console:`, `API:` and `CLI:` for the technical
+surfaces, and the Chinese area word (`授权:`, `审计:`, `平台:`, `运维:`) for the
+domains, followed by the finding or the required outcome rather than the
+activity. Meta work that spans areas (process, tooling) may omit the area word
+and the area label.
+
+Every Issue states its background, scope, acceptance criteria, and an explicit
+out-of-scope; a series keeps a parent Issue whose body lists its children as a
+task list. Keep one Issue per independently mergeable change and reference it
+with `Closes #N`. The issue forms under `.github/ISSUE_TEMPLATE/` prefill these
+sections and apply the type label; add the area and format labels when filing.
+
 ## Required checks
 
 Run the matrix locally before pushing, so a push spends CI once instead of once

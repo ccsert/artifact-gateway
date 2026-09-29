@@ -1,0 +1,53 @@
+name: 缺陷报告
+description: 行为与预期或契约不符
+labels: ["type: bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先搜索已有 issue。创建后请补 `area:*` 标签（涉及时再加 `format:*`），标题用 `<区域>: <结论式短语>`（示例：`Console: 审计页统计条只统计已加载页`）。
+  - type: textarea
+    id: observed
+    attributes:
+      label: 现象
+      description: 实际发生了什么。有报错、审计操作码或 requestId 时请贴脱敏后的内容。
+      placeholder: |
+        实际行为：
+        报错 / 审计操作码 / requestId：
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期与契约依据
+      description: 期望行为，以及它“应该”如此的依据（`api/openapi` 契约、docs 或既有行为）。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 最小步骤或命令；涉及格式/协议时给出仓库与制品坐标。
+      placeholder: |
+        1.
+        2.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境
+      description: 版本与部署形态。网关版本见 Console 运维 → 系统诊断的构建信息（或 `gateway version`）。
+      placeholder: |
+        网关版本 / 修订：
+        前端（Console）版本（如有）：
+        部署形态（compose / k8s / 单机）：
+    validations:
+      required: false
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影响面
+      description: 谁受影响、是否阻塞发布或自动化、有无绕过办法。
+    validations:
+      required: false
