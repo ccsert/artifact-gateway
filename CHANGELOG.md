@@ -13,6 +13,8 @@ their meaning.
 
 - Cargo Hosted, Proxy, and Group now appear in the public format catalog, repository creation and capabilities APIs, OpenAPI contract, and Console. The Console provides sparse registry configuration and Hosted publish/yank guidance; public browsing and global search link to crate versions. Proxy creation requires an HTTPS upstream and allowed download hosts. Official Cargo 1.96.0, PostgreSQL/RustFS, backup/restore, and upgrade gates define the admission baseline; existing deployments require a separate release and rollout.
 
+- Runtime log redaction now applies the existing sensitive-name policy to ancestor groups as well as leaf attributes. Values nested under groups such as `credentials` or `Authorization` are masked before output and process-local keyword indexing; safe sibling groups retain their diagnostic fields.
+
 ## 0.4.2 - 2026-09-28
 
 - Every dialog that starts a write now stays put until that write settles. The create forms for repositories, API keys, service accounts, credentials, groups, scheduled tasks, and webhook subscriptions, plus the Raw upload dialog, no longer dismiss through Escape, the mask, or the close button while their request is in flight, so a half-applied change cannot be abandoned under a pending response and the same record cannot be submitted twice by reopening the form. Each of those save paths also releases its busy state in a `finally`, so a request that fails at the network level leaves the dialog dismissible again instead of locking the form open.

@@ -49,12 +49,26 @@ func (h handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 }
 func (h handler) WithGroup(name string) slog.Handler { return handler{inner: h.inner.WithGroup(name)} }
 
-func redactAttribute(_ []string, attr slog.Attr) slog.Attr {
-	key := strings.ToLower(attr.Key)
-	for _, sensitive := range []string{"password", "secret", "token", "credential", "authorization", "cookie", "body", "query", "url", "error", "err"} {
-		if strings.Contains(key, sensitive) {
+func redactAttribute(groups []string, attr slog.Attr) slog.Attr {
+	if sensitiveAttributeName(attr.Key) {
+		return slog.String(attr.Key, "[redacted]")
+	}
+	// slog passes group names separately and never calls ReplaceAttr on the
+	// group itself. Apply the same policy to every ancestor of a leaf value.
+	for _, group := range groups {
+		if sensitiveAttributeName(group) {
 			return slog.String(attr.Key, "[redacted]")
 		}
 	}
 	return attr
+}
+
+func sensitiveAttributeName(name string) bool {
+	key := strings.ToLower(name)
+	for _, sensitive := range []string{"password", "secret", "token", "credential", "authorization", "cookie", "body", "query", "url", "error", "err"} {
+		if strings.Contains(key, sensitive) {
+			return true
+		}
+	}
+	return false
 }
