@@ -368,7 +368,7 @@ export function AuditsPage() {
           {value && (label === "Request ID" || label === "Trace ID") ? (
             <Link
               className="min-w-0 break-all font-mono"
-              to={`/operations?tab=logs&${label === "Request ID" ? "requestId" : "traceId"}=${encodeURIComponent(value)}`}
+              to={`/system?tab=logs&${label === "Request ID" ? "requestId" : "traceId"}=${encodeURIComponent(value)}`}
             >
               {value}
             </Link>

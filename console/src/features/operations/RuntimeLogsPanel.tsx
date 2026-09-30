@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CopyOutlined,
+  InfoCircleOutlined,
   ReloadOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, DatePicker, Input, Select, Space, Tag } from "antd";
+import { Button, DatePicker, Input, Select, Space, Tag } from "antd";
 import type { Dayjs } from "dayjs";
 import { useSearchParams } from "react-router-dom";
 import { listRuntimeLogs } from "../../client";
@@ -13,7 +14,7 @@ import type {
   RuntimeLogEntry,
   RuntimeLogPage,
 } from "../../client";
-import { Card, CardHeader } from "../../components/ui/Layout";
+import { Card, CardHeader, Pagination } from "../../components/ui/Layout";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import {
   FilterBar,
@@ -47,13 +48,10 @@ export function RuntimeLogsPanel() {
     traceId: auditTraceId || undefined,
     limit: 50,
   }));
-  const [cursors, setCursors] = useState<Array<number | undefined>>([
-    undefined,
-  ]);
-  const [pageIndex, setPageIndex] = useState(0);
   const [page, setPage] = useState<RuntimeLogPage | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
+  const requestSequence = useRef(0);
   const { copiedValue, copy } = useClipboardAction();
 
   useEffect(() => {
@@ -67,34 +65,44 @@ export function RuntimeLogsPanel() {
       requestId: auditRequestId || undefined,
       traceId: auditTraceId || undefined,
     }));
-    setCursors([undefined]);
-    setPageIndex(0);
   }, [auditRequestId, auditTraceId]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await listRuntimeLogs({
-        query: { ...query, beforeSequence: cursors[pageIndex] },
-      });
-      if (result.error) throw result.error;
-      setPage(result.data ?? null);
-    } catch (nextError) {
-      setPage(null);
-      setError(nextError);
-    } finally {
-      setLoading(false);
-    }
-  }, [query, cursors, pageIndex]);
+  const load = useCallback(
+    async (beforeSequence?: number, append = false) => {
+      const sequence = ++requestSequence.current;
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await listRuntimeLogs({
+          query: { ...query, beforeSequence },
+        });
+        if (result.error) throw result.error;
+        if (sequence !== requestSequence.current) return;
+        const nextPage = result.data ?? null;
+        setPage((current) =>
+          append && current && nextPage
+            ? { ...nextPage, items: [...current.items, ...nextPage.items] }
+            : nextPage,
+        );
+      } catch (nextError) {
+        if (sequence !== requestSequence.current) return;
+        setError(nextError);
+      } finally {
+        if (sequence === requestSequence.current) setLoading(false);
+      }
+    },
+    [query],
+  );
 
   useEffect(() => {
+    setPage(null);
     void load();
+    return () => {
+      requestSequence.current += 1;
+    };
   }, [load]);
 
   const search = () => {
-    setCursors([undefined]);
-    setPageIndex(0);
     setQuery({
       from: range?.[0].toISOString(),
       to: range?.[1].toISOString(),
@@ -111,19 +119,15 @@ export function RuntimeLogsPanel() {
   return (
     <Card>
       <CardHeader title={text("运行日志", "Runtime logs")} />
-      <Alert
-        className="mb-4"
-        type="info"
-        showIcon
-        title={text(
-          "仅查询当前进程的内存缓冲区",
-          "Queries this process's in-memory buffer only",
-        )}
-        description={text(
-          "默认查询最近一小时。重启后记录会消失；其他节点及长期日志需使用部署的采集系统。查询结果会标明实例和运行会话。",
-          "The default window is the past hour. Records disappear after restart. Use the deployed collector for other nodes and retained history. Results identify the instance and session.",
-        )}
-      />
+      <div className="flex items-start gap-2 px-5 pt-4 text-xs leading-5 text-[var(--ag-content-secondary)]">
+        <InfoCircleOutlined className="mt-0.5 shrink-0" aria-hidden="true" />
+        <span>
+          {text(
+            "仅查询当前进程的内存日志，默认最近一小时；重启后记录会清空。其他节点及历史日志请使用部署的采集系统。",
+            "Searches this process's in-memory logs from the past hour by default. Restart clears them; use the deployed collector for other nodes and retained history.",
+          )}
+        </span>
+      </div>
       <FilterBar
         embedded
         actions={
@@ -214,7 +218,11 @@ export function RuntimeLogsPanel() {
       </FilterBar>
       {error ? (
         <div className="p-4">
-          <ErrorBanner error={error} onRetry={load} />
+          <ErrorBanner
+            error={error}
+            tone={page ? "warning" : "error"}
+            onRetry={() => void load()}
+          />
         </div>
       ) : null}
       {loading && !page ? (
@@ -223,15 +231,21 @@ export function RuntimeLogsPanel() {
         </div>
       ) : null}
       {page ? (
-        <div className="space-y-3 pt-4">
-          <div className="text-xs text-zinc-500">
-            {text("本地结果", "Local results")} · {page.instanceId} /{" "}
-            {page.sessionId} · {text("第", "Page ")}
-            {pageIndex + 1}
-            {locale.startsWith("zh") ? " 页" : ""}
+        <div className="border-t border-[var(--ag-border-subtle)]">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 px-5 py-3 text-xs text-[var(--ag-content-tertiary)]">
+            <span>
+              {text("当前进程", "Current process")}: {page.instanceId}
+            </span>
+            <span>
+              {text("会话", "Session")}: {page.sessionId}
+            </span>
+            <span>
+              {text(`${page.items.length} 条日志`, `${page.items.length} logs`)}
+            </span>
           </div>
           {page.items.length === 0 ? (
             <EmptyState
+              compact
               title={text("当前范围内没有日志", "No logs in this range")}
               hint={text(
                 "可扩大时间范围或调整筛选条件。",
@@ -239,74 +253,63 @@ export function RuntimeLogsPanel() {
               )}
             />
           ) : (
-            page.items.map((entry) => (
-              <div
-                key={`${entry.sessionId}-${entry.sequence}`}
-                className="rounded-lg border border-[var(--ag-border-subtle)] p-3"
-              >
-                <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-                  <span>{formatDate(entry.time, locale)}</span>
-                  <Tag
-                    color={
-                      entry.level === "ERROR"
-                        ? "error"
-                        : entry.level === "WARN"
-                          ? "warning"
-                          : "default"
-                    }
-                  >
-                    {entry.level}
-                  </Tag>
-                  <span>
-                    {entry.component} · {entry.operation}
-                  </span>
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<CopyOutlined />}
-                    onClick={() =>
-                      void copy(
-                        logCopy(entry),
-                        `${entry.sessionId}-${entry.sequence}`,
-                      )
-                    }
-                  >
-                    {copiedValue === `${entry.sessionId}-${entry.sequence}`
-                      ? text("已复制", "Copied")
-                      : text("复制", "Copy")}
-                  </Button>
+            <div className="space-y-2 px-5 pb-4">
+              {page.items.map((entry) => (
+                <div
+                  key={`${entry.sessionId}-${entry.sequence}`}
+                  className="rounded-lg border border-[var(--ag-border-subtle)] p-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+                    <span>{formatDate(entry.time, locale)}</span>
+                    <Tag
+                      color={
+                        entry.level === "ERROR"
+                          ? "error"
+                          : entry.level === "WARN"
+                            ? "warning"
+                            : "default"
+                      }
+                    >
+                      {entry.level}
+                    </Tag>
+                    <span>
+                      {entry.component} · {entry.operation}
+                    </span>
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<CopyOutlined />}
+                      onClick={() =>
+                        void copy(
+                          logCopy(entry),
+                          `${entry.sessionId}-${entry.sequence}`,
+                        )
+                      }
+                    >
+                      {copiedValue === `${entry.sessionId}-${entry.sequence}`
+                        ? text("已复制", "Copied")
+                        : text("复制", "Copy")}
+                    </Button>
+                  </div>
+                  <div className="mt-1 break-words text-sm text-zinc-200">
+                    {entry.message}
+                  </div>
+                  <div className="mt-2 break-all font-mono text-xs text-zinc-500">
+                    Request {entry.requestId || "—"} · Trace{" "}
+                    {entry.traceId || "—"}
+                  </div>
                 </div>
-                <div className="mt-1 break-words text-sm text-zinc-200">
-                  {entry.message}
-                </div>
-                <div className="mt-2 break-all font-mono text-xs text-zinc-500">
-                  Request {entry.requestId || "—"} · Trace{" "}
-                  {entry.traceId || "—"}
-                </div>
-              </div>
-            ))
+              ))}
+            </div>
           )}
-          <Space>
-            <Button
-              disabled={pageIndex === 0}
-              onClick={() => setPageIndex((current) => current - 1)}
-            >
-              {text("上一页", "Previous")}
-            </Button>
-            <Button
-              disabled={!page.nextSequence}
-              onClick={() => {
-                if (!page.nextSequence) return;
-                setCursors((current) => [
-                  ...current.slice(0, pageIndex + 1),
-                  page.nextSequence,
-                ]);
-                setPageIndex((current) => current + 1);
-              }}
-            >
-              {text("下一页", "Next")}
-            </Button>
-          </Space>
+          <Pagination
+            hasMore={Boolean(page.nextSequence)}
+            loading={loading}
+            label={text("加载更早日志", "Load older logs")}
+            onMore={() => {
+              if (page.nextSequence) void load(page.nextSequence, true);
+            }}
+          />
         </div>
       ) : null}
     </Card>

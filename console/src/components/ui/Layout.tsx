@@ -102,16 +102,18 @@ export function Pagination({
   hasMore,
   loading,
   onMore,
+  label = "加载更多",
 }: {
   hasMore: boolean;
   loading?: boolean;
   onMore: () => void;
+  label?: string;
 }) {
   if (!hasMore) return null;
   return (
     <div className="flex justify-center border-t border-zinc-800/60 px-4 py-3">
       <Button icon={<DownOutlined />} onClick={onMore} loading={loading}>
-        加载更多
+        {label}
       </Button>
     </div>
   );

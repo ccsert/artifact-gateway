@@ -55,6 +55,12 @@ export const router = createBrowserRouter([
         }),
       },
       {
+        path: "/system",
+        lazy: async () => ({
+          Component: (await import("../features/system/System")).SystemPage,
+        }),
+      },
+      {
         path: "/repositories",
         lazy: async () => ({
           Component: (await import("../features/repository/Repositories"))

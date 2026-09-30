@@ -100,8 +100,13 @@ test("operations survives legacy runtime node null arrays", async ({
       path: testInfo.outputPath("operations-tables.png"),
     });
   }
+  await page.getByRole("link", { name: "系统运行" }).click();
+  await expect(page.getByRole("heading", { name: "系统运行" })).toBeVisible();
   await expectTabGutter(page, ".ag-compact-tabs", ".ag-page-stack");
-  await page.getByRole("tab", { name: "系统诊断" }).click();
+  await expect(page.getByRole("tab", { name: "系统诊断" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await expect(page.getByRole("heading", { name: "构建信息" })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "运行身份", exact: true }),
@@ -229,7 +234,7 @@ test("connected version links to diagnostics and reports a rolling upgrade", asy
     .locator(".ag-sider-desktop")
     .getByRole("link", { name: /当前节点 · v0.4.3 · def456/ })
     .click();
-  await expect(page).toHaveURL(/\/operations\?tab=diagnostics$/);
+  await expect(page).toHaveURL(/\/system\?tab=diagnostics$/);
   await expect(page.getByRole("tab", { name: "系统诊断" })).toHaveAttribute(
     "aria-selected",
     "true",
