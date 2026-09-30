@@ -4,6 +4,8 @@
 
 Gateway 运行事件以每行一个 JSON 对象写入 stdout。每条记录包含 `time`、`level`、`msg`、`instanceId`、`sessionId`、`component`、`operation`、`requestId` 和 `traceId`。没有请求上下文的进程事件，其关联 ID 为空。HTTP 访问事件另含方法、路由模板、请求类别、状态码和毫秒耗时。访问日志不会记录原始 URL 路径、查询串、请求体、`Authorization` 或 `Cookie`。名称涉及密钥、凭据、token、请求体、URL、查询串或错误的属性在输出前遮蔽。
 
+运行日志具有显式的输出生命周期：写入、flush 和 close 串行执行；即使 flush 失败，close 仍会尝试两个清理回调各一次。默认 stdout 与内存 buffer 为借用输出，close 为 no-op，不等待正在写入的记录，也不会 flush、sync 或关闭 stdout。配置完成后的运行错误和优雅退出先完成既有 HTTP 与资源清理，再关闭日志输出。Worker 仍通过 context 取消；后续拥有资源的输出需要明确各自的清理时限和交付行为。
+
 每个 HTTP 响应都带 `X-Request-ID` 和 `X-Trace-ID`。安全的客户端请求 ID 可以沿用；缺失或不安全的 ID 由服务端生成。请求期间写入的审计记录（包括管理操作）使用同一组 ID。审计行仍留在 PostgreSQL，承担操作证据；运行 JSON 不写入业务表。生命周期任务的领取、完成和失败事件使用任务 ID 作为 `requestId`；Webhook 投递尝试使用投递 ID。运维人员可从任务或投递记录定位对应 worker 事件。
 
 默认 `GATEWAY_ACCESS_LOG=limited`：只记录 5xx 和超过 `GATEWAY_ACCESS_LOG_SLOW_MS`（默认 `1000` 毫秒）的请求。设为 `GATEWAY_ACCESS_LOG=full` 才记录全部请求。慢请求阈值必须是 1 到 60000 的整数。此策略限制运行日志量，不影响审计记录。

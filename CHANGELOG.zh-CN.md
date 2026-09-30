@@ -10,6 +10,8 @@
 
 - Cargo Hosted、Proxy、Group 进入公开格式目录、仓库创建与能力 API、OpenAPI 契约及 Console。Console 提供 sparse Registry 配置、Hosted 发布与 yank 指引，公开浏览和全局搜索可进入 crate 版本。创建 Proxy 必须配置 HTTPS 上游与下载主机允许列表。准入基线由官方 Cargo 1.96.0、PostgreSQL/RustFS、备份恢复和升级门禁验证；现有部署仍需另行发布与升级。
 
+- 运行日志输出增加显式、串行化的 flush/close 回调和幂等清理。Gateway 运行错误会先完成资源清理再退出进程，清理期间日志保持可用。默认 stdout 与本地 buffer 仍为借用输出；本批未增加文件持久化或协议 exporter。
+
 ## 0.4.2 - 2026-09-28
 
 - 弹窗在它发起的写请求落定前不再能被关掉。仓库、API 密钥、服务账号、凭据、分组、计划任务与 Webhook 订阅的创建表单，以及 Raw 上传弹窗，请求在途时不再通过 Esc、遮罩或右上角关闭按钮关闭：既不会在响应未返回时丢弃半完成的修改，也不会因为重新打开表单而把同一条记录提交两次。这些保存路径同时把 busy 状态的释放移入 `finally`，网络层失败后弹窗会恢复可关闭，而不会把表单永久锁死。
