@@ -69,6 +69,9 @@ function renderLayout(pathname: string) {
           <Route path="/operations" element={<AppLayout />}>
             <Route index element={<LocationProbe />} />
           </Route>
+          <Route path="/system" element={<AppLayout />}>
+            <Route index element={<LocationProbe />} />
+          </Route>
         </Routes>
       </MemoryRouter>
     </PreferencesProvider>,
@@ -288,7 +291,7 @@ describe("AppLayout", () => {
     });
     await user.click(versionLink);
     expect(await screen.findByTestId("location")).toHaveTextContent(
-      "/operations?tab=diagnostics",
+      "/system?tab=diagnostics",
     );
   });
 

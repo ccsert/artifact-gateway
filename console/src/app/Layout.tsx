@@ -9,6 +9,7 @@ import {
   MenuOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  MonitorOutlined,
   ReloadOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
@@ -63,6 +64,13 @@ const navItems = [
     to: "/operations",
     label: "nav.operations",
     icon: <SyncOutlined />,
+    group: "runtime",
+    admin: true,
+  },
+  {
+    to: "/system",
+    label: "nav.system",
+    icon: <MonitorOutlined />,
     group: "runtime",
     admin: true,
   },
@@ -287,7 +295,7 @@ function ConnectedVersion() {
 
   return (
     <Link
-      to="/operations?tab=diagnostics"
+      to="/system?tab=diagnostics"
       className="ag-sider-meta text-xs leading-4 text-zinc-500 hover:text-zinc-200"
       title={text(
         "查看当前连接节点的系统诊断",
@@ -377,6 +385,7 @@ export function AppLayout() {
   const adminOnlyPath = [
     "/",
     "/operations",
+    "/system",
     "/groups",
     "/access",
     "/audits",
@@ -389,6 +398,7 @@ export function AppLayout() {
   ].includes(location.pathname);
   const adminOnlySection = [
     "/operations",
+    "/system",
     "/groups",
     "/access",
     "/audits",

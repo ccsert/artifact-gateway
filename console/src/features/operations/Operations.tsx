@@ -30,10 +30,7 @@ import { Card, PageHeader } from "../../components/ui/Layout";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { StateBadge } from "../../components/ui/Badge";
 import { formatDate } from "../../lib/format";
-import { RuntimeNodesPanel } from "./RuntimeNodesPanel";
-import { RuntimeLogsPanel } from "./RuntimeLogsPanel";
 import { ScheduledTasksPanel } from "./ScheduledTasksPanel";
-import { SystemDiagnosticsPanel } from "./SystemDiagnosticsPanel";
 import { WebhookDeliveriesPanel } from "./WebhookDeliveriesPanel";
 import { LifecycleJobDetails } from "./LifecycleJobDetails";
 import {
@@ -43,7 +40,7 @@ import {
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 
 type OperationRow = {
   id: string;
@@ -414,10 +411,7 @@ export function OperationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const activeTab =
-    requestedTab &&
-    ["schedules", "webhooks", "jobs", "diagnostics", "logs"].includes(
-      requestedTab,
-    )
+    requestedTab && ["schedules", "webhooks", "jobs"].includes(requestedTab)
       ? requestedTab
       : "schedules";
 
@@ -594,6 +588,10 @@ export function OperationsPage() {
       ),
     },
   ];
+
+  if (requestedTab === "diagnostics" || requestedTab === "logs") {
+    return <Navigate to={`/system?${searchParams.toString()}`} replace />;
+  }
 
   return (
     <div className="ag-page-stack">
@@ -826,21 +824,6 @@ export function OperationsPage() {
                     />
                   )}
                 </Card>
-              </div>
-            ),
-          },
-          {
-            key: "logs",
-            label: text("运行日志", "Runtime logs"),
-            children: <RuntimeLogsPanel />,
-          },
-          {
-            key: "diagnostics",
-            label: text("系统诊断", "System diagnostics"),
-            children: (
-              <div className="ag-page-stack ag-diagnostics-tab">
-                <SystemDiagnosticsPanel />
-                <RuntimeNodesPanel />
               </div>
             ),
           },
