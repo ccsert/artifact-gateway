@@ -11,7 +11,7 @@ their meaning.
 
 ## Unreleased
 
-- Access control keeps the public-access count and confirmed switch with one concise read-only boundary notice; the repeated three-layer explanation and decorative styling are removed. Permission evaluation retains its single collapsed explanation.
+- Access control keeps the public-access count and confirmed switch with one concise read-only boundary notice; the repeated three-layer explanation and decorative styling are removed. Permission evaluation retains one collapsed explanation; repository grants keep their effective decision details without repeating the decision-order footnote.
 
 - System diagnostics shows the Console bundle's own build version beside the connected Gateway version and revision. Known differing versions warn about image tags or a cached bundle; development without injected Console metadata stays `dev` and does not infer a mismatch.
 

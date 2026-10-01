@@ -814,6 +814,15 @@ test("repository grants tab manages rows in a table", async ({
 
   await page.goto(`/repositories/${repositoryId}?tab=grants`);
 
+  const access = page
+    .locator(".ant-collapse-item")
+    .filter({ hasText: "当前访问判定" });
+  await access.getByRole("button").click();
+  await expect(access.getByText("mock-admin", { exact: true })).toBeVisible();
+  await expect(access.getByText("允许", { exact: true })).toHaveCount(5);
+  await expect(page.getByText(/判定顺序：/)).toHaveCount(0);
+  await access.getByRole("button").click();
+
   const addButton = page.getByRole("button", { name: /添加授权/ });
   await expect(addButton).toBeVisible();
   const table = page.locator(".ag-console-table");
