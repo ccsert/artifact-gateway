@@ -196,6 +196,9 @@ func (s *MemoryStore) recoverExpiredLifecycleJobsLocked(before time.Time) int {
 			job.State, job.NextAttemptAt, job.CompletedAt = LifecycleJobRetrying, before.Add(lifecycleRetryDelay(job.Attempts)), time.Time{}
 		}
 		s.lifecycleJobs[key] = job
+		if event, ok := cargoPromotionWebhookEvent(job); ok {
+			s.enqueueWebhookEventLocked(event)
+		}
 		recovered++
 	}
 	return recovered
@@ -367,6 +370,9 @@ func (s *MemoryStore) FailLifecycleJob(_ context.Context, id, leaseToken, messag
 			job.State, job.NextAttemptAt, job.CompletedAt = LifecycleJobRetrying, now.Add(lifecycleRetryDelay(job.Attempts)), time.Time{}
 		}
 		s.lifecycleJobs[key] = job
+		if event, ok := cargoPromotionWebhookEvent(job); ok {
+			s.enqueueWebhookEventLocked(event)
+		}
 		return nil
 	}
 	return ErrNotFound
@@ -387,6 +393,9 @@ func (s *MemoryStore) finishLifecycleJob(id, leaseToken string, state LifecycleJ
 			job.ProgressCurrent = job.ProgressTotal
 		}
 		s.lifecycleJobs[key] = job
+		if event, ok := cargoPromotionWebhookEvent(job); ok {
+			s.enqueueWebhookEventLocked(event)
+		}
 		return nil
 	}
 	return ErrNotFound

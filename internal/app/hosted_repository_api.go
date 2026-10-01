@@ -17,6 +17,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
 	"github.com/artifact-gateway/artifact-gateway/internal/egress"
+	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 	"github.com/artifact-gateway/artifact-gateway/internal/secrets"
@@ -278,6 +279,8 @@ type generatedRepositoryAPIAdapter struct {
 	oidcRuntime            *OIDCRuntime
 	replication            repository.ReplicationStore
 	oci                    repository.NativeOCIStore
+	cargo                  repository.NativeCargoStore
+	cargoProxy             repository.CargoProxyStore
 	conan                  repository.NativeConanStore
 	apiKeys                repository.APIKeyStore
 	serviceAccounts        repository.ServiceAccountStore
@@ -297,6 +300,7 @@ type generatedRepositoryAPIAdapter struct {
 	queueStats             repository.BackgroundOperationQueueStore
 	browse                 repository.ArtifactBrowseStore
 	diagnostics            Dependencies
+	logBuffer              *operationalog.Buffer
 	artifactScanner        scanning.Scanner
 	artifactScanFormats    []repository.Format
 }
@@ -873,7 +877,7 @@ func validProxyConfiguration(format repository.Format, endpoint string, allowedH
 
 func proxyAllowedHostsRequired(format repository.Format) bool {
 	switch format {
-	case repository.FormatRaw, repository.FormatConan, repository.FormatNPM, repository.FormatPyPI, repository.FormatGo, repository.FormatAPT:
+	case repository.FormatRaw, repository.FormatConan, repository.FormatNPM, repository.FormatPyPI, repository.FormatGo, repository.FormatCargo, repository.FormatAPT:
 		return true
 	default:
 		return false

@@ -61,10 +61,10 @@ Artifact Gateway 有意把运维控制面保持得足够精简：
 | npm | ✓ | ✓ | ✓ | 原生发布、可信缓存与 Packument 合并 |
 | PyPI | ✓ | ✓ | ✓ | Nexus 根路径 twine 上传与 PEP 503/691 读取 |
 | Go modules | ✓ | ✓ | ✓ | 标准 GOPROXY 读取；兼容 Nexus 的版本 ZIP 发布 |
+| Cargo | ✓ | ✓ | ✓ | Sparse Registry；Hosted 发布与 yank、可信 Proxy 缓存、有序 Group owner；[客户端配置](docs/cargo-usage.zh-CN.md) |
 | APT | 仅预览 | ✓ | ✓ | 生产密钥托管门禁通过前不公开声明 Hosted 能力 |
 
-Cargo 目前只是分阶段建设的解析与身份基础，NuGet 仍属于路线图工作；两者都不作为
-可用仓库格式对外声明。准确且受测试约束的说明以
+NuGet 仍属于路线图工作。准确且受测试约束的说明以
 [协议兼容性基线](docs/protocol-compatibility.zh-CN.md)为准。
 
 Maven Hosted 默认采用与 Nexus 兼容的直接发布，普通 `mvn deploy` 和 Gradle `publish`

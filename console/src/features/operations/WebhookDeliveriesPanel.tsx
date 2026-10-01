@@ -549,8 +549,8 @@ export function WebhookDeliveriesPanel() {
             group
             label={text("订阅事件", "Events")}
             hint={text(
-              "首个版本支持制品隔离与解除隔离。",
-              "The first version supports artifact quarantine and release events.",
+              "支持制品隔离、解除隔离，以及 Cargo 晋级和复制的最终结果。",
+              "Supports artifact quarantine and release, plus final Cargo promotion and replication outcomes.",
             )}
           >
             <Select<WebhookEventType[]>
@@ -563,6 +563,22 @@ export function WebhookDeliveriesPanel() {
                   label: "artifact.quarantined",
                 },
                 { value: "artifact.released", label: "artifact.released" },
+                {
+                  value: "cargo.promotion.completed",
+                  label: "cargo.promotion.completed",
+                },
+                {
+                  value: "cargo.promotion.failed",
+                  label: "cargo.promotion.failed",
+                },
+                {
+                  value: "cargo.replication.completed",
+                  label: "cargo.replication.completed",
+                },
+                {
+                  value: "cargo.replication.failed",
+                  label: "cargo.replication.failed",
+                },
               ]}
               onChange={(eventTypes) =>
                 setForm((current) => ({ ...current, eventTypes }))

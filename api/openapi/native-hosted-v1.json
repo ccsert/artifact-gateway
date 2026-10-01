@@ -3798,6 +3798,140 @@
       "x-gateway-catchAll": "modulePath",
       "x-gateway-visibility": "all_three_representations_committed_together",
       "x-gateway-publication": "gateway_specific_single_zip_put"
+    },
+    "/cargo/{repository}/{path}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryName"
+        },
+        {
+          "name": "path",
+          "in": "path",
+          "required": true,
+          "allowReserved": true,
+          "description": "Catch-all below /cargo/{repository}/. Reads accept config.json, canonical sparse-index paths, api/v1/crates search, and api/v1/crates/{crate}/{version}/download. Hosted writes accept api/v1/crates/new for PUT publication, api/v1/crates/{crate}/{version}/yank for DELETE, and api/v1/crates/{crate}/{version}/unyank for PUT.\n",
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getCargoRegistryRepresentation",
+        "summary": "Read a Cargo sparse registry representation",
+        "security": [
+          {
+            "protocolBearerAuth": []
+          },
+          {
+            "protocolBasicAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Registry configuration, index row set, search result, or crate bytes"
+          },
+          "304": {
+            "description": "The cached index representation is still current"
+          },
+          "401": {
+            "description": "Cargo JSON authentication error"
+          },
+          "404": {
+            "description": "Registry target or crate version not found"
+          }
+        }
+      },
+      "head": {
+        "operationId": "headCargoRegistryRepresentation",
+        "summary": "Read Cargo representation headers",
+        "security": [
+          {
+            "protocolBearerAuth": []
+          },
+          {
+            "protocolBasicAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Headers for a supported read representation"
+          },
+          "401": {
+            "description": "Cargo JSON authentication error"
+          },
+          "404": {
+            "description": "Registry target or crate version not found"
+          }
+        }
+      },
+      "put": {
+        "operationId": "putCargoHostedRegistryMutation",
+        "summary": "Publish or unyank a Hosted Cargo crate version",
+        "description": "PUT api/v1/crates/new accepts the Cargo length-prefixed publication frame. PUT api/v1/crates/{crate}/{version}/unyank restores version selection. Proxy and Group reject both mutations.\n",
+        "security": [
+          {
+            "protocolBearerAuth": []
+          },
+          {
+            "protocolBasicAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Crate version published or replayed, or version unyanked"
+          },
+          "401": {
+            "description": "Cargo JSON authentication error"
+          },
+          "403": {
+            "description": "Repository grant denied"
+          },
+          "409": {
+            "description": "Immutable version or identity collision"
+          },
+          "413": {
+            "description": "Publication frame exceeds configured limits"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "yankCargoHostedCrateVersion",
+        "summary": "Yank a Hosted Cargo crate version",
+        "description": "DELETE api/v1/crates/{crate}/{version}/yank; Proxy and Group reject writes.",
+        "security": [
+          {
+            "protocolBearerAuth": []
+          },
+          {
+            "protocolBasicAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Crate version yanked"
+          },
+          "401": {
+            "description": "Cargo JSON authentication error"
+          },
+          "403": {
+            "description": "Repository grant denied"
+          },
+          "404": {
+            "description": "Crate version not found"
+          }
+        }
+      },
+      "x-gateway-catchAll": "path",
+      "x-gateway-index": "sparse_only",
+      "x-gateway-publication": "hosted_atomic_crate_and_index"
     }
   },
   "components": {
@@ -3812,6 +3946,7 @@
           "npm",
           "pypi",
           "go",
+          "cargo",
           "apt"
         ]
       },
@@ -5464,7 +5599,11 @@
         "type": "string",
         "enum": [
           "artifact.quarantined",
-          "artifact.released"
+          "artifact.released",
+          "cargo.promotion.completed",
+          "cargo.promotion.failed",
+          "cargo.replication.completed",
+          "cargo.replication.failed"
         ]
       },
       "WebhookSubscription": {

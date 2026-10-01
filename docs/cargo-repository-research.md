@@ -2,18 +2,59 @@
 
 [简体中文](cargo-repository-research.zh-CN.md) | [Documentation index](README.md)
 
-Status: research recommendation, not an implemented protocol or an admitted
-format profile. The C0 byte foundation is now implemented: strict bounded
-publish framing, complete `.crate` validation, normalized manifest identity,
-sparse-index path/row translation, and official `cargo package`/`cargo publish`
-contract tests. Persisted collision reservation and Memory/PostgreSQL identity
-conformance remain before C0 exits; no Cargo route, repository format, OpenAPI
-surface, or Console option is advertised yet. This document uses only Gitea
-and Cargo-owned documentation as protocol evidence.
+Status: research decisions and phased implementation record. Cargo now has an
+admitted Hosted, Proxy, and Group format profile in source; see the
+[client setup](cargo-usage.md) and [compatibility baseline](protocol-compatibility.md).
+The initial C0 foundation includes strict
+bounded publish framing, complete `.crate` validation, normalized manifest
+identity, sparse-index path/row translation, and durable identity reservations
+in Memory and PostgreSQL. The C1 Hosted core adds an internal
+`/cargo/{repository}/` route for official-client publish, resolution, and
+install; atomic server-generated index publication and immutable downloads;
+private/anonymous read policy, capacity, audit, and durable orphan recovery.
+The Hosted search and yank increment adds official-client search/yank/unyank,
+index cache validation, management search/browse, and crate version deep links.
+Memory and PostgreSQL/RustFS recovery paths are tested. A reservation remains
+invisible until publication. The C2 sparse Proxy cache, checksum gate, and PostgreSQL/RustFS offline
+replay were accepted in #156 and #158. The C3 durable Group owner, member
+collision preflight, and first-read conflict rejection were accepted in #157
+and #159. Lifecycle and security admission are tracked in #147–#148; public
+format admission is tracked in #149.
+The first C4 slice binds Hosted scan jobs to the committed crate/version and
+SHA-256 identity. Explicitly configured external scanners can scan the exact
+`.crate` bytes; the bundled reference scanner does not yet claim Cargo
+coverage. A versioned Hosted quarantine record and an opt-in read policy hide
+quarantined versions from Hosted and Group sparse indexes and search, and deny
+GET/HEAD downloads. Release restores reads. The next C4 slice adds Hosted
+tombstones separately from yank, a recoverable window, explicit retention
+preview, and delayed reclamation gated by object references. The original
+crate identity and quota usage remain until collection; a collected version
+cannot be restored. Group ownership remains with the tombstoned member.
+The distribution slice adds idempotent same-digest promotion and durable
+checkpoint replication. It verifies target `.crate` bytes before publishing
+the source index identity and initial yank state; a target can then manage its
+own yank state. Each operation copies only the requested crate/version. Direct
+same-registry dependencies must already have a matching, non-yanked, readable
+target version; external-registry dependencies remain with that registry.
+The isolated `make backup-restore-readiness` drill now publishes with Cargo
+1.96.0, pins a Group owner, promotes and replicates the version, then restores
+PostgreSQL and RustFS after a post-backup yank. Fresh Cargo homes read the
+restored source, Group, and targets with unchanged index rows and archive
+digest. `make cargo-upgrade-readiness` starts from the pinned pre-distribution
+Cargo schema in #162 and verifies fresh Cargo 1.96.0 Hosted/Group installs,
+index rows, archive digests, Group ownership and member order after a forward
+migration and migration replay. Distribution outcome webhooks now persist
+final promotion and replication success/failure events with the operation state.
+Fault-injection checks cover Hosted upload-before-commit and replication
+copy/admission interruption and replay. An isolated PostgreSQL/RustFS recovery
+drill verifies independent source and target quarantine read policies.
+`make integration-test` also drives an official Cargo client through a
+PostgreSQL/RustFS Proxy replay after the upstream is shut down. This document
+uses only Gitea and Cargo-owned documentation as protocol evidence.
 
 Run `make cargo-contract` with the pinned Rust/Cargo 1.96.0 prerequisite. The
-gate fails when Cargo is absent and drives both `cargo package` and
-`cargo publish` through the staged parser contract.
+gate fails when Cargo is absent and drives `cargo package`/`cargo publish`
+through the parser contract plus a Hosted publish/add/check/install flow.
 
 ## Decision
 
@@ -40,9 +81,9 @@ customer demand. The reasons are:
 
 The main cost is not the `.crate` upload. It is making sparse-index generation,
 Proxy source identity, and ordered Group ownership agree for every crate
-version. Cargo must remain absent from `Format`, OpenAPI, repository creation,
-and the Console until the declared capabilities pass the repository admission
-gate in [the format extension guide](format-extension-guide.md).
+version. The public profile was added only after the declared capabilities
+passed the repository admission gate in
+[the format extension guide](format-extension-guide.md).
 
 Primary evidence:
 
@@ -226,6 +267,14 @@ replace-with = "gateway-crates-io"
 A mixed private Group is an alternate registry, not a valid crates.io source
 replacement.
 
+Configure a mixed Group under a distinct registry identity, for example
+`[registries.company]` with
+`index = "sparse+https://gateway.example/cargo/company/"`, and declare
+dependencies with `registry = "company"`. Do not set it as
+`[source.crates-io] replace-with`: private versions violate Cargo's exact
+source-replacement assumption. The Group contract checks that `Cargo.lock`
+retains the distinct registry source.
+
 ### Ordered Group
 
 A Group is a synthetic read-only registry. It generates its own `config.json`
@@ -235,6 +284,12 @@ members expose identical immutable index data and checksum, the Group may
 de-duplicate it. If their checksum or any immutable index field differs, Group
 creation/member replacement or the new publication must report a conflict; it
 must not select different bytes merely because member order changed.
+
+A sparse Proxy has no reliable way to enumerate every upstream crate. Member
+admission should preflight previously claimed Group versions, Hosted
+publications, and cached Proxy indexes. A previously unseen upstream version
+must fail with an explicit conflict on first read rather than silently
+selecting or falling back to a different member.
 
 The first successful exposure records an immutable Group claim containing the
 owner, index-row digest, and `.crate` digest. Reordering or adding members must
@@ -305,10 +360,11 @@ weaken Artifact Gateway's immutable-coordinate rule
 
 ### C0: frozen contract and byte parser
 
-Current state: the byte parser and official-client contract are complete. The
-remaining C0 slice is the non-public persisted identity reservation used to
-prove case-insensitive and `-`/`_` collision behavior across Memory and
-PostgreSQL before C1 starts.
+Current state: the byte parser, official-client contract, and non-public
+persisted identity reservation are implemented. Memory and PostgreSQL
+conformance covers case-insensitive and `-`/`_` collisions, concurrent claims,
+and exact retries. The reservation is not a completed publication or a visible
+sparse-index row.
 
 - Freeze the sparse-only route, canonical identity, collision policy, publish
   framing limits, Cargo error envelope, and private-auth behavior.

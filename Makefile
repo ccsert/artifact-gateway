@@ -51,6 +51,7 @@ reference-scanner-smoke:
 
 cargo-contract:
 	@CARGO_REQUIRED=1 CARGO_EXPECTED_VERSION=1.96.0 go test -count=1 ./internal/protocol/cargo ./internal/protocol/identity
+	@CARGO_REQUIRED=1 go test -count=1 ./internal/app -run 'TestNativeCargoOfficialClientHostedFlow|TestCargoProxyOfficialSourceReplacementOnlineAndOffline|TestCargoGroupOfficialAlternateRegistry'
 
 openapi-dependency-test:
 	@bash ./scripts/openapi-dependency-test.sh
@@ -236,6 +237,10 @@ backup-restore-readiness:
 
 upgrade-readiness:
 	@./scripts/upgrade-readiness.sh
+
+.PHONY: cargo-upgrade-readiness
+cargo-upgrade-readiness:
+	@./scripts/cargo-upgrade-readiness.sh
 
 member-role-migration-report:
 	@./scripts/member-role-migration-report.sh

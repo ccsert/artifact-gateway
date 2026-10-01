@@ -4,10 +4,9 @@
 
 Status: normative contract for durable operational webhook delivery.
 
-## First Slice
+## Event Catalog
 
-The first slice publishes the two security-governance transitions that already
-have a versioned Repository-local identity:
+Security-governance events:
 
 - `artifact.quarantined`
 - `artifact.released`
@@ -22,6 +21,24 @@ Each event carries a stable UUID and this immutable data:
 - canonical Artifact coordinate and digest
 - quarantine state, reason, actor, and version
 - event occurrence time
+
+Cargo distribution events:
+
+- `cargo.promotion.completed` and `cargo.promotion.failed`
+- `cargo.replication.completed` and `cargo.replication.failed`
+
+These are emitted only when a Cargo promotion job or replication plan reaches
+its final completed or failed state. An attempt scheduled for automatic retry
+does not emit a failure event. A parked replication plan emits a failed event;
+an explicit later replay is a new run of that plan and can emit a later outcome.
+The operation state, event, and matching deliveries commit together. An
+expired worker lease that exhausts attempts follows the same rule.
+
+Cargo event `data` includes `operationId`, `kind` (`promotion` or
+`replication`), `format` (`cargo`), `sourceRepositoryId`,
+`targetRepositoryId`, `coordinate` (`crate@version`), `digest`, final `state`,
+and `attempts`. It excludes raw worker error messages and credentials. The
+`occurredAt` envelope field records the final state transition time.
 
 Delivery is **at least once**. Consumers must deduplicate by event ID. Ordering
 between different Artifacts or subscriptions is not guaranteed.

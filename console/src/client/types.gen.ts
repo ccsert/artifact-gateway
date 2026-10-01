@@ -60,7 +60,7 @@ export type BrowseNodePage = {
 };
 
 export type Format =
-  "raw" | "oci" | "maven" | "conan" | "npm" | "pypi" | "go" | "apt";
+  "raw" | "oci" | "maven" | "conan" | "npm" | "pypi" | "go" | "cargo" | "apt";
 
 export type FormatProfile = {
   format: Format;
@@ -1186,7 +1186,13 @@ export type ConsoleThemePackageValidation = {
   existingVersion?: string;
 };
 
-export type WebhookEventType = "artifact.quarantined" | "artifact.released";
+export type WebhookEventType =
+  | "artifact.quarantined"
+  | "artifact.released"
+  | "cargo.promotion.completed"
+  | "cargo.promotion.failed"
+  | "cargo.replication.completed"
+  | "cargo.replication.failed";
 
 export type WebhookSubscription = {
   id: string;
@@ -1239,6 +1245,14 @@ export type WebhookDeliveryList = Array<WebhookDelivery>;
 export type RuntimeNode = {
   instanceId: string;
   sessionId: string;
+  /**
+   * Build version reported by this node; absent for legacy records.
+   */
+  version?: string;
+  /**
+   * Build revision reported by this node; absent for legacy records.
+   */
+  revision?: string;
   roles: Array<string>;
   workerFormats: Array<Format>;
   workerKinds: Array<string>;
@@ -1252,6 +1266,10 @@ export type RuntimeNodeHealthIssue = {
   code: string;
   severity: "warning" | "error";
   message: string;
+  /**
+   * Session IDs of nodes involved in this issue.
+   */
+  affectedNodes?: Array<string>;
 };
 
 export type RuntimeNodeHealth = {
@@ -1265,6 +1283,14 @@ export type RuntimeNodeHealth = {
 export type RuntimeNodeList = {
   items: Array<RuntimeNode>;
   health: RuntimeNodeHealth;
+  /**
+   * Session of the API process that answered this request; absent in older deployments.
+   */
+  currentSessionId?: string;
+  /**
+   * No GitHub Release or desired-version source is connected. This does not assert that the running build is latest.
+   */
+  releaseSource: "not_configured";
 };
 
 export type DiagnosticBuild = {
@@ -1276,6 +1302,10 @@ export type DiagnosticBuild = {
 
 export type DiagnosticRuntime = {
   instanceId: string;
+  /**
+   * Session of the process that answered this diagnostics request.
+   */
+  sessionId?: string;
   roles: Array<string>;
   workerFormats: Array<Format>;
   workerKinds: Array<string>;
@@ -1327,6 +1357,27 @@ export type Diagnostics = {
   nodes: RuntimeNodeHealth;
 };
 
+export type RuntimeLogEntry = {
+  sequence: number;
+  time: string;
+  level: string;
+  message: string;
+  instanceId: string;
+  sessionId: string;
+  component: string;
+  operation: string;
+  requestId: string;
+  traceId: string;
+};
+
+export type RuntimeLogPage = {
+  scope: "local";
+  instanceId: string;
+  sessionId: string;
+  items: Array<RuntimeLogEntry>;
+  nextSequence?: number;
+};
+
 export type UserSession = {
   id: string;
   userId: string;
@@ -1372,6 +1423,35 @@ export type CreateUserIdentity = {
 export type AuditPage = {
   items: Array<AuditRecord>;
   nextPageToken?: string;
+};
+
+export type OverviewWindowCounts = {
+  oneDay: number;
+  sevenDays: number;
+  thirtyDays: number;
+};
+
+export type OverviewStatisticsTotals = {
+  requests: OverviewWindowCounts;
+  denied: OverviewWindowCounts;
+  objectCount: number;
+  usedBytes: number;
+};
+
+export type OverviewRepositoryStatistics = {
+  repositoryId: string;
+  name: string;
+  format: Format;
+  requests: OverviewWindowCounts;
+  denied: OverviewWindowCounts;
+  objectCount: number;
+  usedBytes: number;
+};
+
+export type OverviewStatistics = {
+  generatedAt: string;
+  totals: OverviewStatisticsTotals;
+  repositories: Array<OverviewRepositoryStatistics>;
 };
 
 /**
@@ -3082,6 +3162,60 @@ export type GetDiagnosticsResponses = {
 export type GetDiagnosticsResponse =
   GetDiagnosticsResponses[keyof GetDiagnosticsResponses];
 
+export type ListRuntimeLogsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    from?: string;
+    to?: string;
+    instanceId?: string;
+    level?: string;
+    component?: string;
+    requestId?: string;
+    traceId?: string;
+    keyword?: string;
+    beforeSequence?: number;
+    limit?: number;
+  };
+  url: "/runtime/logs";
+};
+
+export type ListRuntimeLogsErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  504: Problem;
+};
+
+export type ListRuntimeLogsError =
+  ListRuntimeLogsErrors[keyof ListRuntimeLogsErrors];
+
+export type ListRuntimeLogsResponses = {
+  /**
+   * Bounded process-local runtime log query result
+   */
+  200: RuntimeLogPage;
+};
+
+export type ListRuntimeLogsResponse =
+  ListRuntimeLogsResponses[keyof ListRuntimeLogsResponses];
+
 export type ListApiKeysData = {
   body?: never;
   path?: never;
@@ -3926,6 +4060,37 @@ export type ListAuditPageResponses = {
 
 export type ListAuditPageResponse =
   ListAuditPageResponses[keyof ListAuditPageResponses];
+
+export type GetOverviewStatisticsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/overview-statistics";
+};
+
+export type GetOverviewStatisticsErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+};
+
+export type GetOverviewStatisticsError =
+  GetOverviewStatisticsErrors[keyof GetOverviewStatisticsErrors];
+
+export type GetOverviewStatisticsResponses = {
+  /**
+   * Current repository statistics and sums over visible rows.
+   */
+  200: OverviewStatistics;
+};
+
+export type GetOverviewStatisticsResponse =
+  GetOverviewStatisticsResponses[keyof GetOverviewStatisticsResponses];
 
 export type GetAuditRetentionPolicyData = {
   body?: never;

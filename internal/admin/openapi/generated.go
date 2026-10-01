@@ -1054,6 +1054,7 @@ func (e EgressProxyTestResultEgressMode) Valid() bool {
 // Defines values for Format.
 const (
 	FormatApt   Format = "apt"
+	FormatCargo Format = "cargo"
 	FormatConan Format = "conan"
 	FormatGo    Format = "go"
 	FormatMaven Format = "maven"
@@ -1067,6 +1068,8 @@ const (
 func (e Format) Valid() bool {
 	switch e {
 	case FormatApt:
+		return true
+	case FormatCargo:
 		return true
 	case FormatConan:
 		return true
@@ -1816,6 +1819,21 @@ func (e RetentionDryRunCandidatesVersionType) Valid() bool {
 	}
 }
 
+// Defines values for RuntimeLogPageScope.
+const (
+	Local RuntimeLogPageScope = "local"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeLogPageScope enum.
+func (e RuntimeLogPageScope) Valid() bool {
+	switch e {
+	case Local:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RuntimeNodeStatus.
 const (
 	RuntimeNodeStatusOffline RuntimeNodeStatus = "offline"
@@ -1870,6 +1888,21 @@ func (e RuntimeNodeHealthIssueSeverity) Valid() bool {
 	case RuntimeNodeHealthIssueSeverityError:
 		return true
 	case RuntimeNodeHealthIssueSeverityWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeNodeListReleaseSource.
+const (
+	RuntimeNodeListReleaseSourceNotConfigured RuntimeNodeListReleaseSource = "not_configured"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeNodeListReleaseSource enum.
+func (e RuntimeNodeListReleaseSource) Valid() bool {
+	switch e {
+	case RuntimeNodeListReleaseSourceNotConfigured:
 		return true
 	default:
 		return false
@@ -2190,8 +2223,12 @@ func (e WebhookDeliveryState) Valid() bool {
 
 // Defines values for WebhookEventType.
 const (
-	WebhookEventTypeArtifactQuarantined WebhookEventType = "artifact.quarantined"
-	WebhookEventTypeArtifactReleased    WebhookEventType = "artifact.released"
+	WebhookEventTypeArtifactQuarantined       WebhookEventType = "artifact.quarantined"
+	WebhookEventTypeArtifactReleased          WebhookEventType = "artifact.released"
+	WebhookEventTypeCargoPromotionCompleted   WebhookEventType = "cargo.promotion.completed"
+	WebhookEventTypeCargoPromotionFailed      WebhookEventType = "cargo.promotion.failed"
+	WebhookEventTypeCargoReplicationCompleted WebhookEventType = "cargo.replication.completed"
+	WebhookEventTypeCargoReplicationFailed    WebhookEventType = "cargo.replication.failed"
 )
 
 // Valid indicates whether the value is a known member of the WebhookEventType enum.
@@ -2200,6 +2237,14 @@ func (e WebhookEventType) Valid() bool {
 	case WebhookEventTypeArtifactQuarantined:
 		return true
 	case WebhookEventTypeArtifactReleased:
+		return true
+	case WebhookEventTypeCargoPromotionCompleted:
+		return true
+	case WebhookEventTypeCargoPromotionFailed:
+		return true
+	case WebhookEventTypeCargoReplicationCompleted:
+		return true
+	case WebhookEventTypeCargoReplicationFailed:
 		return true
 	default:
 		return false
@@ -3328,8 +3373,11 @@ type DiagnosticQueueStatState string
 
 // DiagnosticRuntime defines model for DiagnosticRuntime.
 type DiagnosticRuntime struct {
-	InstanceId    string   `json:"instanceId"`
-	Roles         []string `json:"roles"`
+	InstanceId string   `json:"instanceId"`
+	Roles      []string `json:"roles"`
+
+	// SessionId Session of the process that answered this diagnostics request.
+	SessionId     *string  `json:"sessionId,omitempty"`
 	WorkerFormats []Format `json:"workerFormats"`
 	WorkerKinds   []string `json:"workerKinds"`
 }
@@ -3808,6 +3856,39 @@ type OIDCSettingsUpdateJitDefaultRole string
 // OIDCSettingsUpdateProvisioningMode defines model for OIDCSettingsUpdate.ProvisioningMode.
 type OIDCSettingsUpdateProvisioningMode string
 
+// OverviewRepositoryStatistics defines model for OverviewRepositoryStatistics.
+type OverviewRepositoryStatistics struct {
+	Denied       OverviewWindowCounts `json:"denied"`
+	Format       Format               `json:"format"`
+	Name         string               `json:"name"`
+	ObjectCount  int64                `json:"objectCount"`
+	RepositoryId openapi_types.UUID   `json:"repositoryId"`
+	Requests     OverviewWindowCounts `json:"requests"`
+	UsedBytes    int64                `json:"usedBytes"`
+}
+
+// OverviewStatistics defines model for OverviewStatistics.
+type OverviewStatistics struct {
+	GeneratedAt  time.Time                      `json:"generatedAt"`
+	Repositories []OverviewRepositoryStatistics `json:"repositories"`
+	Totals       OverviewStatisticsTotals       `json:"totals"`
+}
+
+// OverviewStatisticsTotals defines model for OverviewStatisticsTotals.
+type OverviewStatisticsTotals struct {
+	Denied      OverviewWindowCounts `json:"denied"`
+	ObjectCount int64                `json:"objectCount"`
+	Requests    OverviewWindowCounts `json:"requests"`
+	UsedBytes   int64                `json:"usedBytes"`
+}
+
+// OverviewWindowCounts defines model for OverviewWindowCounts.
+type OverviewWindowCounts struct {
+	OneDay     int64 `json:"oneDay"`
+	SevenDays  int64 `json:"sevenDays"`
+	ThirtyDays int64 `json:"thirtyDays"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
 	Code      ProblemCode `json:"code"`
@@ -4241,17 +4322,49 @@ type RetentionVersionTypeCounts struct {
 	Version  int `json:"version"`
 }
 
+// RuntimeLogEntry defines model for RuntimeLogEntry.
+type RuntimeLogEntry struct {
+	Component  string    `json:"component"`
+	InstanceId string    `json:"instanceId"`
+	Level      string    `json:"level"`
+	Message    string    `json:"message"`
+	Operation  string    `json:"operation"`
+	RequestId  string    `json:"requestId"`
+	Sequence   int64     `json:"sequence"`
+	SessionId  string    `json:"sessionId"`
+	Time       time.Time `json:"time"`
+	TraceId    string    `json:"traceId"`
+}
+
+// RuntimeLogPage defines model for RuntimeLogPage.
+type RuntimeLogPage struct {
+	InstanceId   string              `json:"instanceId"`
+	Items        []RuntimeLogEntry   `json:"items"`
+	NextSequence *int64              `json:"nextSequence,omitempty"`
+	Scope        RuntimeLogPageScope `json:"scope"`
+	SessionId    string              `json:"sessionId"`
+}
+
+// RuntimeLogPageScope defines model for RuntimeLogPage.Scope.
+type RuntimeLogPageScope string
+
 // RuntimeNode defines model for RuntimeNode.
 type RuntimeNode struct {
-	InstanceId    string            `json:"instanceId"`
-	LastSeenAt    time.Time         `json:"lastSeenAt"`
-	Roles         []string          `json:"roles"`
-	SessionId     string            `json:"sessionId"`
-	StartedAt     time.Time         `json:"startedAt"`
-	Status        RuntimeNodeStatus `json:"status"`
-	StoppedAt     *time.Time        `json:"stoppedAt,omitempty"`
-	WorkerFormats []Format          `json:"workerFormats"`
-	WorkerKinds   []string          `json:"workerKinds"`
+	InstanceId string    `json:"instanceId"`
+	LastSeenAt time.Time `json:"lastSeenAt"`
+
+	// Revision Build revision reported by this node; absent for legacy records.
+	Revision  *string           `json:"revision,omitempty"`
+	Roles     []string          `json:"roles"`
+	SessionId string            `json:"sessionId"`
+	StartedAt time.Time         `json:"startedAt"`
+	Status    RuntimeNodeStatus `json:"status"`
+	StoppedAt *time.Time        `json:"stoppedAt,omitempty"`
+
+	// Version Build version reported by this node; absent for legacy records.
+	Version       *string  `json:"version,omitempty"`
+	WorkerFormats []Format `json:"workerFormats"`
+	WorkerKinds   []string `json:"workerKinds"`
 }
 
 // RuntimeNodeStatus defines model for RuntimeNode.Status.
@@ -4271,9 +4384,11 @@ type RuntimeNodeHealthStatus string
 
 // RuntimeNodeHealthIssue defines model for RuntimeNodeHealthIssue.
 type RuntimeNodeHealthIssue struct {
-	Code     string                         `json:"code"`
-	Message  string                         `json:"message"`
-	Severity RuntimeNodeHealthIssueSeverity `json:"severity"`
+	// AffectedNodes Session IDs of nodes involved in this issue.
+	AffectedNodes *[]string                      `json:"affectedNodes,omitempty"`
+	Code          string                         `json:"code"`
+	Message       string                         `json:"message"`
+	Severity      RuntimeNodeHealthIssueSeverity `json:"severity"`
 }
 
 // RuntimeNodeHealthIssueSeverity defines model for RuntimeNodeHealthIssue.Severity.
@@ -4281,9 +4396,17 @@ type RuntimeNodeHealthIssueSeverity string
 
 // RuntimeNodeList defines model for RuntimeNodeList.
 type RuntimeNodeList struct {
-	Health RuntimeNodeHealth `json:"health"`
-	Items  []RuntimeNode     `json:"items"`
+	// CurrentSessionId Session of the API process that answered this request; absent in older deployments.
+	CurrentSessionId *string           `json:"currentSessionId,omitempty"`
+	Health           RuntimeNodeHealth `json:"health"`
+	Items            []RuntimeNode     `json:"items"`
+
+	// ReleaseSource No GitHub Release or desired-version source is connected. This does not assert that the running build is latest.
+	ReleaseSource RuntimeNodeListReleaseSource `json:"releaseSource"`
 }
+
+// RuntimeNodeListReleaseSource No GitHub Release or desired-version source is connected. This does not assert that the running build is latest.
+type RuntimeNodeListReleaseSource string
 
 // ScheduledTask defines model for ScheduledTask.
 type ScheduledTask struct {
@@ -5147,6 +5270,20 @@ type ListRepositoryTombstonesParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ListRuntimeLogsParams defines parameters for ListRuntimeLogs.
+type ListRuntimeLogsParams struct {
+	From           *time.Time `form:"from,omitempty" json:"from,omitempty"`
+	To             *time.Time `form:"to,omitempty" json:"to,omitempty"`
+	InstanceId     *string    `form:"instanceId,omitempty" json:"instanceId,omitempty"`
+	Level          *string    `form:"level,omitempty" json:"level,omitempty"`
+	Component      *string    `form:"component,omitempty" json:"component,omitempty"`
+	RequestId      *string    `form:"requestId,omitempty" json:"requestId,omitempty"`
+	TraceId        *string    `form:"traceId,omitempty" json:"traceId,omitempty"`
+	Keyword        *string    `form:"keyword,omitempty" json:"keyword,omitempty"`
+	BeforeSequence *int64     `form:"beforeSequence,omitempty" json:"beforeSequence,omitempty"`
+	Limit          *int       `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // UpdateScheduledTaskParams defines parameters for UpdateScheduledTask.
 type UpdateScheduledTaskParams struct {
 	IfMatch IfMatch `json:"If-Match"`
@@ -5552,6 +5689,9 @@ type ServerInterface interface {
 
 	// (GET /lifecycle-jobs)
 	ListLifecycleJobs(w http.ResponseWriter, r *http.Request, params ListLifecycleJobsParams)
+	// GetOverviewStatistics Repository protocol request and capacity statistics for the Console
+	// (GET /overview-statistics)
+	GetOverviewStatistics(w http.ResponseWriter, r *http.Request)
 
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId)
@@ -5792,6 +5932,9 @@ type ServerInterface interface {
 
 	// (GET /repository-grants)
 	ListRepositoryGrants(w http.ResponseWriter, r *http.Request)
+	// ListRuntimeLogs Query this process's bounded, redacted runtime log buffer
+	// (GET /runtime/logs)
+	ListRuntimeLogs(w http.ResponseWriter, r *http.Request, params ListRuntimeLogsParams)
 	// ListRuntimeNodes List Gateway runtime nodes and worker capabilities
 	// (GET /runtime/nodes)
 	ListRuntimeNodes(w http.ResponseWriter, r *http.Request)
@@ -7466,6 +7609,20 @@ func (siw *ServerInterfaceWrapper) ListLifecycleJobs(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListLifecycleJobs(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOverviewStatistics operation middleware
+func (siw *ServerInterfaceWrapper) GetOverviewStatistics(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOverviewStatistics(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11058,6 +11215,156 @@ func (siw *ServerInterfaceWrapper) ListRepositoryGrants(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListRuntimeLogs operation middleware
+func (siw *ServerInterfaceWrapper) ListRuntimeLogs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRuntimeLogsParams
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "instanceId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "instanceId", r.URL.Query(), &params.InstanceId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "instanceId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instanceId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "level" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "level", r.URL.Query(), &params.Level, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "level"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "level", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "component" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "component", r.URL.Query(), &params.Component, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "component"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "component", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "requestId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "requestId", r.URL.Query(), &params.RequestId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "requestId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "requestId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "traceId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "traceId", r.URL.Query(), &params.TraceId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "traceId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "traceId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "keyword" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "keyword", r.URL.Query(), &params.Keyword, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "keyword"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "keyword", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "beforeSequence" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "beforeSequence", r.URL.Query(), &params.BeforeSequence, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "beforeSequence"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "beforeSequence", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRuntimeLogs(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRuntimeNodes operation middleware
 func (siw *ServerInterfaceWrapper) ListRuntimeNodes(w http.ResponseWriter, r *http.Request) {
 
@@ -12423,6 +12730,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/resolution", wrapper.GetGroupResolution)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/identity", wrapper.GetCurrentIdentity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/lifecycle-jobs", wrapper.ListLifecycleJobs)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/overview-statistics", wrapper.GetOverviewStatistics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/publish-sessions/{sessionId}", wrapper.GetPublishSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/publish-sessions/{sessionId}/objects/{objectName}", wrapper.UploadPublishObject)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/publish-sessions/{sessionId}:commit", wrapper.CommitPublishSession)
@@ -12503,6 +12811,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/tombstones", wrapper.TombstoneRepositoryArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-capacities", wrapper.ListRepositoryCapacities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-grants", wrapper.ListRepositoryGrants)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runtime/logs", wrapper.ListRuntimeLogs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runtime/nodes", wrapper.ListRuntimeNodes)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/scheduled-tasks", wrapper.ListScheduledTasks)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/scheduled-tasks", wrapper.CreateScheduledTask)
@@ -12692,6 +13001,8 @@ type RetentionDryRunTextcsvResponse struct {
 }
 
 type RetentionPolicyJSONResponse RetentionPolicy
+
+type RuntimeLogPageJSONResponse RuntimeLogPage
 
 type RuntimeNodeListJSONResponse RuntimeNodeList
 
@@ -14890,6 +15201,57 @@ func (response ListLifecycleJobs401ApplicationProblemPlusJSONResponse) VisitList
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOverviewStatisticsRequestObject struct {
+}
+
+type GetOverviewStatisticsResponseObject interface {
+	VisitGetOverviewStatisticsResponse(w http.ResponseWriter) error
+}
+
+type GetOverviewStatistics200JSONResponse OverviewStatistics
+
+func (response GetOverviewStatistics200JSONResponse) VisitGetOverviewStatisticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOverviewStatistics401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetOverviewStatistics401ApplicationProblemPlusJSONResponse) VisitGetOverviewStatisticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOverviewStatistics403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOverviewStatistics403ApplicationProblemPlusJSONResponse) VisitGetOverviewStatisticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -20194,6 +20556,100 @@ func (response ListRepositoryGrants401ApplicationProblemPlusJSONResponse) VisitL
 	return err
 }
 
+type ListRuntimeLogsRequestObject struct {
+	Params ListRuntimeLogsParams
+}
+
+type ListRuntimeLogsResponseObject interface {
+	VisitListRuntimeLogsResponse(w http.ResponseWriter) error
+}
+
+type ListRuntimeLogs200JSONResponse struct{ RuntimeLogPageJSONResponse }
+
+func (response ListRuntimeLogs200JSONResponse) VisitListRuntimeLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuntimeLogs400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRuntimeLogs400ApplicationProblemPlusJSONResponse) VisitListRuntimeLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuntimeLogs401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRuntimeLogs401ApplicationProblemPlusJSONResponse) VisitListRuntimeLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuntimeLogs403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRuntimeLogs403ApplicationProblemPlusJSONResponse) VisitListRuntimeLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuntimeLogs503ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRuntimeLogs503ApplicationProblemPlusJSONResponse) VisitListRuntimeLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuntimeLogs504ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRuntimeLogs504ApplicationProblemPlusJSONResponse) VisitListRuntimeLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(504)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRuntimeNodesRequestObject struct {
 }
 
@@ -22699,6 +23155,9 @@ type StrictServerInterface interface {
 
 	// (GET /lifecycle-jobs)
 	ListLifecycleJobs(ctx context.Context, request ListLifecycleJobsRequestObject) (ListLifecycleJobsResponseObject, error)
+	// GetOverviewStatistics Repository protocol request and capacity statistics for the Console
+	// (GET /overview-statistics)
+	GetOverviewStatistics(ctx context.Context, request GetOverviewStatisticsRequestObject) (GetOverviewStatisticsResponseObject, error)
 
 	// (GET /publish-sessions/{sessionId})
 	GetPublishSession(ctx context.Context, request GetPublishSessionRequestObject) (GetPublishSessionResponseObject, error)
@@ -22939,6 +23398,9 @@ type StrictServerInterface interface {
 
 	// (GET /repository-grants)
 	ListRepositoryGrants(ctx context.Context, request ListRepositoryGrantsRequestObject) (ListRepositoryGrantsResponseObject, error)
+	// ListRuntimeLogs Query this process's bounded, redacted runtime log buffer
+	// (GET /runtime/logs)
+	ListRuntimeLogs(ctx context.Context, request ListRuntimeLogsRequestObject) (ListRuntimeLogsResponseObject, error)
 	// ListRuntimeNodes List Gateway runtime nodes and worker capabilities
 	// (GET /runtime/nodes)
 	ListRuntimeNodes(ctx context.Context, request ListRuntimeNodesRequestObject) (ListRuntimeNodesResponseObject, error)
@@ -24303,6 +24765,30 @@ func (sh *strictHandler) ListLifecycleJobs(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListLifecycleJobsResponseObject); ok {
 		if err := validResponse.VisitListLifecycleJobsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOverviewStatistics operation middleware
+func (sh *strictHandler) GetOverviewStatistics(w http.ResponseWriter, r *http.Request) {
+	var request GetOverviewStatisticsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOverviewStatistics(ctx, request.(GetOverviewStatisticsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOverviewStatistics")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOverviewStatisticsResponseObject); ok {
+		if err := validResponse.VisitGetOverviewStatisticsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -26615,6 +27101,32 @@ func (sh *strictHandler) ListRepositoryGrants(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListRepositoryGrantsResponseObject); ok {
 		if err := validResponse.VisitListRepositoryGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRuntimeLogs operation middleware
+func (sh *strictHandler) ListRuntimeLogs(w http.ResponseWriter, r *http.Request, params ListRuntimeLogsParams) {
+	var request ListRuntimeLogsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRuntimeLogs(ctx, request.(ListRuntimeLogsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRuntimeLogs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRuntimeLogsResponseObject); ok {
+		if err := validResponse.VisitListRuntimeLogsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

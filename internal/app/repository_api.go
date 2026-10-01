@@ -134,6 +134,9 @@ type GatewayStore interface {
 	repository.NativeNPMStore
 	repository.NativePyPIStore
 	repository.NativeGoStore
+	repository.NativeCargoStore
+	repository.CargoProxyStore
+	repository.CargoGroupStore
 	repository.NativeAPTStore
 	repository.NativeAPTPublicationStore
 	repository.APIKeyStore
@@ -272,6 +275,8 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		nativeGoObjects = NewMemoryOCIObjectStore()
 	}
 	nativeGo := newNativeGoHandler(store, nativeGoObjects, authenticator).withMetrics(metrics).withProxy(goClient).withPublicationScanner(publicationScanner)
+	nativeCargo := newNativeCargoHandler(store, dependencies.NativeCargoObjectStore, authenticator).withPublicationScanner(publicationScanner)
+	nativeCargo.upstream = UpstreamClient{HTTPClient: dependencies.CargoUpstreamClient}
 	nativeAPTObjects := dependencies.NativeAPTObjectStore
 	if nativeAPTObjects == nil {
 		nativeAPTObjects = NewMemoryOCIObjectStore()
@@ -296,7 +301,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if candidate, ok := any(store).(repository.ArtifactSearchStore); ok {
 		searchProjection = candidate
 	}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptSnapshotImporter: aptSnapshotImporter, aptSnapshotExporter: aptpublication.SnapshotArchiveExporter{Store: store, Objects: nativeAPTObjects}, aptPublications: store, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemePackages: store, consoleThemes: dependencies.ConsoleThemes, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, conan: store, apiKeys: store, serviceAccounts: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, queueStats: store, browse: store, diagnostics: dependencies, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptSnapshotImporter: aptSnapshotImporter, aptSnapshotExporter: aptpublication.SnapshotArchiveExporter{Store: store, Objects: nativeAPTObjects}, aptPublications: store, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemePackages: store, consoleThemes: dependencies.ConsoleThemes, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, cargo: store, cargoProxy: store, conan: store, apiKeys: store, serviceAccounts: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, queueStats: store, browse: store, diagnostics: dependencies, logBuffer: dependencies.LogBuffer, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
@@ -368,6 +373,10 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		goModules:  &v2GroupGoHandler{native: &nativeGo},
 		next:       nativeGo}
 	mux.Handle("/go/", goGroupRouter)
+	cargoGroupRouter := v2GroupRouter{format: repository.FormatCargo, groups: store, repos: store, audit: store, auth: authenticator,
+		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
+		cargo:      &v2GroupCargoHandler{native: &nativeCargo, owners: store}, next: nativeCargo}
+	mux.Handle("/cargo/", cargoGroupRouter)
 	aptGroupRouter := v2GroupRouter{format: repository.FormatAPT, groups: store, repos: store, audit: store, auth: authenticator,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
 		apt:        &v2GroupAPTHandler{native: &nativeAPT},
@@ -428,5 +437,5 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	mux.HandleFunc("GET /auth/oidc/callback", oidcLogin.callback)
 	mux.HandleFunc("GET /auth/session", oidcLogin.session)
 	mux.HandleFunc("POST /auth/logout", oidcLogin.logout)
-	return sessionCookieAuthentication(tracedHTTPHandler(mux))
+	return sessionCookieAuthentication(tracedHTTPHandler(dependencies.requestObservability(mux)))
 }

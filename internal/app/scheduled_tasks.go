@@ -22,6 +22,7 @@ type scheduledTaskExecutionStore interface {
 	repository.NativeNPMStore
 	repository.NativePyPIStore
 	repository.NativeGoStore
+	repository.NativeCargoStore
 	repository.AuditRetentionStore
 }
 

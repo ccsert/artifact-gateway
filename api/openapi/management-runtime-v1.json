@@ -695,6 +695,111 @@
         }
       }
     },
+    "/runtime/logs": {
+      "get": {
+        "operationId": "listRuntimeLogs",
+        "summary": "Query this process's bounded, redacted runtime log buffer",
+        "description": "Results are local to the process and are lost on restart. The response identifies its instance and session; it is not a cluster-wide log query.",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "instanceId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "component",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "traceId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "beforeSequence",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RuntimeLogPage"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/api-keys": {
       "get": {
         "operationId": "listApiKeys",
@@ -1532,6 +1637,31 @@
             "$ref": "#/components/responses/Problem"
           },
           "401": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/overview-statistics": {
+      "get": {
+        "operationId": "getOverviewStatistics",
+        "summary": "Repository protocol request and capacity statistics for the Console",
+        "description": "Returns one snapshot containing rolling 24-hour, 7-day, and 30-day request counts and logical capacity for current repositories administered by the caller. Requests are resolver_audit_log rows with a nonempty repository, excluding format=management, regardless of outcome. Denied counts include access_denied, proxy_denied, and legacy denied outcomes and are a subset of requests. The windows include their lower bound and end at generatedAt. Ordinary Console and management GET requests are not audited and therefore are not counted. Deleted repositories and audit rows for repositories that no longer exist are excluded. Totals are sums of returned repository rows. If audit retention is enabled with keepDays below 30, the 30-day count is incomplete; the default retention policy is disabled.",
+        "responses": {
+          "200": {
+            "description": "Current repository statistics and sums over visible rows.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewStatistics"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -5370,6 +5500,7 @@
           "npm",
           "pypi",
           "go",
+          "cargo",
           "apt"
         ]
       },
@@ -9136,7 +9267,11 @@
         "type": "string",
         "enum": [
           "artifact.quarantined",
-          "artifact.released"
+          "artifact.released",
+          "cargo.promotion.completed",
+          "cargo.promotion.failed",
+          "cargo.replication.completed",
+          "cargo.replication.failed"
         ]
       },
       "WebhookSubscription": {
@@ -9375,6 +9510,14 @@
           "sessionId": {
             "type": "string"
           },
+          "version": {
+            "type": "string",
+            "description": "Build version reported by this node; absent for legacy records."
+          },
+          "revision": {
+            "type": "string",
+            "description": "Build revision reported by this node; absent for legacy records."
+          },
           "roles": {
             "type": "array",
             "items": {
@@ -9435,6 +9578,13 @@
           },
           "message": {
             "type": "string"
+          },
+          "affectedNodes": {
+            "type": "array",
+            "description": "Session IDs of nodes involved in this issue.",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -9480,7 +9630,8 @@
         "type": "object",
         "required": [
           "items",
-          "health"
+          "health",
+          "releaseSource"
         ],
         "properties": {
           "items": {
@@ -9491,6 +9642,17 @@
           },
           "health": {
             "$ref": "#/components/schemas/RuntimeNodeHealth"
+          },
+          "currentSessionId": {
+            "type": "string",
+            "description": "Session of the API process that answered this request; absent in older deployments."
+          },
+          "releaseSource": {
+            "type": "string",
+            "enum": [
+              "not_configured"
+            ],
+            "description": "No GitHub Release or desired-version source is connected. This does not assert that the running build is latest."
           }
         }
       },
@@ -9527,6 +9689,10 @@
         "properties": {
           "instanceId": {
             "type": "string"
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "Session of the process that answered this diagnostics request."
           },
           "roles": {
             "type": "array",
@@ -9715,6 +9881,88 @@
           }
         }
       },
+      "RuntimeLogEntry": {
+        "type": "object",
+        "required": [
+          "sequence",
+          "time",
+          "level",
+          "message",
+          "instanceId",
+          "sessionId",
+          "component",
+          "operation",
+          "requestId",
+          "traceId"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "level": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "instanceId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "component": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          }
+        }
+      },
+      "RuntimeLogPage": {
+        "type": "object",
+        "required": [
+          "scope",
+          "instanceId",
+          "sessionId",
+          "items"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "local"
+            ]
+          },
+          "instanceId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeLogEntry"
+            }
+          },
+          "nextSequence": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "UserSession": {
         "type": "object",
         "required": [
@@ -9892,6 +10140,121 @@
           },
           "nextPageToken": {
             "type": "string"
+          }
+        }
+      },
+      "OverviewWindowCounts": {
+        "type": "object",
+        "required": [
+          "oneDay",
+          "sevenDays",
+          "thirtyDays"
+        ],
+        "properties": {
+          "oneDay": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "sevenDays": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "thirtyDays": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "OverviewStatisticsTotals": {
+        "type": "object",
+        "required": [
+          "requests",
+          "denied",
+          "objectCount",
+          "usedBytes"
+        ],
+        "properties": {
+          "requests": {
+            "$ref": "#/components/schemas/OverviewWindowCounts"
+          },
+          "denied": {
+            "$ref": "#/components/schemas/OverviewWindowCounts"
+          },
+          "objectCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "usedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "OverviewRepositoryStatistics": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "name",
+          "format",
+          "requests",
+          "denied",
+          "objectCount",
+          "usedBytes"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "requests": {
+            "$ref": "#/components/schemas/OverviewWindowCounts"
+          },
+          "denied": {
+            "$ref": "#/components/schemas/OverviewWindowCounts"
+          },
+          "objectCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "usedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "OverviewStatistics": {
+        "type": "object",
+        "required": [
+          "generatedAt",
+          "totals",
+          "repositories"
+        ],
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/OverviewStatisticsTotals"
+          },
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverviewRepositoryStatistics"
+            }
           }
         }
       },
@@ -12949,6 +13312,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/Diagnostics"
+            }
+          }
+        }
+      },
+      "RuntimeLogPage": {
+        "description": "Bounded process-local runtime log query result",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RuntimeLogPage"
             }
           }
         }

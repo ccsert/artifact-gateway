@@ -28,6 +28,7 @@ import {
 import { NpmPackageDetail } from "../artifact-detail/NpmPackageDetail";
 import { PyPIProjectDetail } from "../artifact-detail/PyPIProjectDetail";
 import { GoModuleDetail } from "../artifact-detail/GoModuleDetail";
+import { CargoCrateDetail } from "../artifact-detail/CargoCrateDetail";
 import { APTAssetDetail } from "../artifact-detail/APTAssetDetail";
 import { RawUploadDialog } from "./RawUploadDialog";
 import { useAuth } from "../../lib/auth";
@@ -126,6 +127,8 @@ export function RepositoryArtifactsTab({
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   const format = repo.format;
+  const cargoHosted = String(format) === "cargo" && repo.type === "hosted";
+  const cargoRepository = format === "cargo";
   const proxyMaven = format === "maven" && repo.type === "proxy";
   const proxyNpm = format === "npm" && repo.type === "proxy";
   const proxyPyPI = format === "pypi" && repo.type === "proxy";
@@ -135,7 +138,7 @@ export function RepositoryArtifactsTab({
   const canUploadRaw = canWrite && format === "raw" && repo.type !== "proxy";
   const supportsDirectory =
     (repo.type === "hosted" || repo.type === "proxy") &&
-    (format === "maven" || format === "raw");
+    (format === "maven" || format === "raw" || cargoHosted);
 
   useEffect(() => {
     setView("list");
@@ -272,7 +275,12 @@ export function RepositoryArtifactsTab({
           });
           next = r.data?.nextPageToken;
         }
-      } else if (format === "npm" || format === "pypi" || format === "go") {
+      } else if (
+        format === "npm" ||
+        format === "pypi" ||
+        format === "go" ||
+        cargoRepository
+      ) {
         const r = await searchRepositoryArtifacts({
           path: { repositoryId: repo.id },
           query: { q: query || undefined, ...page },
@@ -348,6 +356,7 @@ export function RepositoryArtifactsTab({
     [
       repo.id,
       format,
+      cargoRepository,
       proxyMaven,
       proxyAssetFilter,
       artifactTarget,
@@ -375,6 +384,7 @@ export function RepositoryArtifactsTab({
     npm: text("按包名前缀过滤…", "Filter by package name prefix…"),
     pypi: text("按项目名前缀过滤…", "Filter by project name prefix…"),
     go: text("按模块路径前缀过滤…", "Filter by module path prefix…"),
+    cargo: text("搜索 crate 名称…", "Search crate names…"),
     apt: text(
       "按 dists/ 或 pool/ 路径过滤…",
       "Filter by dists/ or pool/ path…",
@@ -534,7 +544,8 @@ export function RepositoryArtifactsTab({
           : format === "maven" ||
               format === "npm" ||
               format === "pypi" ||
-              format === "go"
+              format === "go" ||
+              cargoRepository
             ? [
                 {
                   title:
@@ -544,7 +555,9 @@ export function RepositoryArtifactsTab({
                         ? text("项目", "Project")
                         : format === "go"
                           ? text("模块", "Module")
-                          : text("制品", "Artifact"),
+                          : cargoRepository
+                            ? "Crate"
+                            : text("制品", "Artifact"),
                   dataIndex: "coordinate",
                   key: "coordinate",
                   ellipsis: true,
@@ -736,6 +749,22 @@ export function RepositoryArtifactsTab({
           size={r.size}
           publisher={r.publisher}
           canQuarantine={canQuarantine}
+          onVersionChange={(version) =>
+            onVersionChange?.(r.coordinate, version)
+          }
+        />
+      );
+    }
+    if (cargoRepository) {
+      return (
+        <CargoCrateDetail
+          repoName={repo.name}
+          crateName={r.coordinate}
+          initialVersion={
+            artifactTarget === r.coordinate && versionTarget
+              ? versionTarget
+              : r.latestVersion
+          }
           onVersionChange={(version) =>
             onVersionChange?.(r.coordinate, version)
           }

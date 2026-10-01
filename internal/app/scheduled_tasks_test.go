@@ -93,15 +93,13 @@ func TestScheduledTaskSchedulerStartDispatchesImmediately(t *testing.T) {
 		if listErr != nil {
 			t.Fatal(listErr)
 		}
-		if len(runs) == 1 {
-			if runs[0].State != repository.ScheduledTaskSubmitted {
-				t.Fatalf("run = %#v", runs[0])
-			}
+		// Claiming records a failed placeholder until dispatch updates the run.
+		if len(runs) == 1 && runs[0].State == repository.ScheduledTaskSubmitted {
 			return
 		}
 		select {
 		case <-deadline.C:
-			t.Fatal("scheduler did not dispatch the due task on startup")
+			t.Fatalf("scheduler did not dispatch the due task on startup: runs = %#v", runs)
 		case <-time.After(5 * time.Millisecond):
 		}
 	}

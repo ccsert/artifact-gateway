@@ -1,22 +1,10 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PreferencesProvider } from "../../lib/preferences";
-import {
-  buildStorageChartData,
-  DashboardTrendCharts,
-  StorageByFormatChart,
-} from "./DashboardCharts";
+import { buildStorageChartData, StorageByFormatChart } from "./DashboardCharts";
 
 const chartSpies = vi.hoisted(() => ({
-  line: vi.fn(),
   pie: vi.fn(),
-}));
-
-vi.mock("./dashboard-charts/DashboardLinePlot", () => ({
-  default: ({ config }: { config: Record<string, unknown> }) => {
-    chartSpies.line(config);
-    return <div data-testid="ant-design-line" />;
-  },
 }));
 
 vi.mock("./dashboard-charts/DashboardPiePlot", () => ({
@@ -33,7 +21,6 @@ function renderWithPreferences(node: React.ReactNode) {
 describe("DashboardCharts", () => {
   beforeEach(() => {
     localStorage.clear();
-    chartSpies.line.mockClear();
     chartSpies.pie.mockClear();
   });
 
@@ -83,25 +70,6 @@ describe("DashboardCharts", () => {
           expect.objectContaining({ format: "apt", bytes: 512 }),
         ]),
       }),
-    );
-  });
-
-  it("renders repository and storage history with lazy Ant Design line charts", async () => {
-    renderWithPreferences(
-      <DashboardTrendCharts
-        history={[
-          { t: Date.UTC(2026, 7, 19, 8), repos: 2, bytes: 1024, objects: 1 },
-          { t: Date.UTC(2026, 7, 19, 9), repos: 3, bytes: 2048, objects: 2 },
-        ]}
-      />,
-    );
-
-    expect(await screen.findAllByTestId("ant-design-line")).toHaveLength(2);
-    expect(screen.getAllByRole("img")).toHaveLength(2);
-    expect(chartSpies.line).toHaveBeenCalledTimes(2);
-    expect(chartSpies.line).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ xField: "time", yField: "value" }),
     );
   });
 });

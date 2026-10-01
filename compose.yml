@@ -19,6 +19,9 @@ services:
       GATEWAY_CONSOLE_THEME_DIR: ${GATEWAY_CONSOLE_THEME_DIR:-/themes}
       GATEWAY_NODE_ROLES: ${GATEWAY_NODE_ROLES:-standalone}
       GATEWAY_INSTANCE_ID: ${GATEWAY_INSTANCE_ID:-gateway-local}
+      GATEWAY_ACCESS_LOG: ${GATEWAY_ACCESS_LOG:-limited}
+      GATEWAY_ACCESS_LOG_SLOW_MS: ${GATEWAY_ACCESS_LOG_SLOW_MS:-1000}
+      GATEWAY_LOG_BUFFER_LINES: ${GATEWAY_LOG_BUFFER_LINES:-1000}
       GATEWAY_WORKER_FORMATS: ${GATEWAY_WORKER_FORMATS:-}
       GATEWAY_WORKER_KINDS: ${GATEWAY_WORKER_KINDS:-}
       GATEWAY_SCANNER_ENDPOINT: ${GATEWAY_SCANNER_ENDPOINT:-}
@@ -92,6 +95,11 @@ services:
       NO_PROXY: postgres,rustfs,host.docker.internal,127.0.0.1,localhost
     ports:
       - "${GATEWAY_HTTP_PORT:-8080}:8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: ${GATEWAY_LOG_MAX_SIZE:-10m}
+        max-file: ${GATEWAY_LOG_MAX_FILES:-5}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

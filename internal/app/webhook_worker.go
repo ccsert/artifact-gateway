@@ -16,6 +16,7 @@ import (
 
 	"github.com/artifact-gateway/artifact-gateway/internal/egress"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
 	"github.com/artifact-gateway/artifact-gateway/internal/secrets"
 )
 
@@ -79,8 +80,19 @@ func (w WebhookDeliveryWorker) RunOnce(ctx context.Context) (int, error) {
 		factory = ProductionWebhookClient
 	}
 	for _, claim := range claims {
-		status, message, permanent := deliverWebhook(ctx, factory, claim, now)
+		jobCtx, ids := requestcontext.WithRequest(ctx, claim.Delivery.ID)
+		status, message, permanent := deliverWebhook(jobCtx, factory, claim, now)
 		finishedAt := w.now()
+		level := slog.LevelInfo
+		if status < 200 || status >= 300 || message != "" {
+			level = slog.LevelWarn
+		}
+		slog.LogAttrs(jobCtx, level, "webhook delivery attempt finished",
+			slog.String("component", "webhook_worker"), slog.String("operation", "webhook.deliver"),
+			slog.String("requestId", ids.RequestID), slog.String("traceId", ids.TraceID),
+			slog.String("deliveryId", claim.Delivery.ID), slog.Int("status", status),
+			slog.Int("attempt", claim.Delivery.Attempts),
+		)
 		if status >= 200 && status < 300 && message == "" {
 			if err = w.Store.CompleteWebhookDelivery(ctx, claim.Delivery.ID, claim.Delivery.LeaseToken, status, finishedAt); err != nil {
 				return len(claims), err

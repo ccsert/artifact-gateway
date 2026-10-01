@@ -14,6 +14,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/buildinfo"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
+	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 	"github.com/jackc/pgx/v5"
@@ -30,6 +31,8 @@ type Dependencies struct {
 	BuildModified  bool
 	BuildGoVersion string
 	Runtime        DiagnosticRuntime
+	AccessLog      AccessLogOptions
+	LogBuffer      *operationalog.Buffer
 	// NativeMavenObjectStore is supplied by the runtime after RustFS is initialized.
 	// Tests omit it and receive an isolated in-memory store.
 	NativeMavenObjectStore        OCIObjectStore
@@ -38,6 +41,8 @@ type Dependencies struct {
 	NativeNPMObjectStore          OCIObjectStore
 	NativePyPIObjectStore         OCIObjectStore
 	NativeGoObjectStore           OCIObjectStore
+	NativeCargoObjectStore        OCIObjectStore
+	CargoUpstreamClient           *http.Client
 	NativeAPTObjectStore          OCIObjectStore
 	APTArchiveTrust               aptpublication.SnapshotArchiveTrustVerifier
 	APTSigner                     aptpublication.Signer
@@ -73,6 +78,7 @@ type APTSigningRuntime struct {
 
 type DiagnosticRuntime struct {
 	InstanceID    string
+	SessionID     string
 	Roles         []string
 	WorkerFormats []repository.Format
 	WorkerKinds   []string
@@ -93,10 +99,13 @@ func NewDependencies(cfg config.Config) Dependencies {
 			postgresChecker{databaseURL: cfg.DatabaseURL},
 			httpChecker{url: rustFSEndpointURL(cfg.RustFSEndpoint)},
 		},
-		BuildVersion:                  build.Version,
-		BuildRevision:                 build.Revision,
-		BuildModified:                 build.Modified,
-		BuildGoVersion:                build.GoVersion,
+		BuildVersion:   build.Version,
+		BuildRevision:  build.Revision,
+		BuildModified:  build.Modified,
+		BuildGoVersion: build.GoVersion,
+		AccessLog: AccessLogOptions{
+			Mode: cfg.AccessLogMode, SlowThreshold: time.Duration(cfg.AccessLogSlowMS) * time.Millisecond,
+		},
 		ArtifactScannerHealthTimeout:  2 * time.Second,
 		ArtifactScannerDatabaseMaxAge: 24 * time.Hour,
 		ConsoleThemes:                 consoletheme.NewRegistry(cfg.ConsoleThemeDir),
@@ -151,7 +160,7 @@ func NewOperationalHandler(dependencies Dependencies, metrics *Metrics) http.Han
 	if metrics != nil {
 		mux.Handle("GET /metrics", http.HandlerFunc(metrics.Handler))
 	}
-	return mux
+	return dependencies.requestObservability(mux)
 }
 
 func (d Dependencies) ready(w http.ResponseWriter, request *http.Request) {

@@ -73,6 +73,13 @@ func (s *MemoryStore) repositoryCapacityLocked(id string) (RepositoryCapacity, e
 				capacity.ObjectCount++
 			}
 		}
+	case FormatCargo:
+		for _, publication := range s.cargoPublications {
+			if publication.RepositoryID == id && publication.CollectedAt.IsZero() {
+				capacity.UsedBytes += publication.Size
+				capacity.ObjectCount++
+			}
+		}
 	case FormatAPT:
 		capacity.UsedBytes, capacity.ObjectCount = s.aptBaseCapacityLocked(id)
 		generated := make(map[string]int64)

@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/google/uuid"
 )
 
 func TestFormatProfilesAPINeedsAnAuthenticatedCallerAndReturnsCapabilities(t *testing.T) {
@@ -55,9 +57,9 @@ func TestFormatProfilesAPINeedsAnAuthenticatedCallerAndReturnsCapabilities(t *te
 			}
 			continue
 		}
-		if item.Format == adminopenapi.Format("go") {
+		if item.Format == adminopenapi.FormatGo || item.Format == adminopenapi.FormatCargo {
 			if !item.GroupSupported || len(item.RepositoryTypes) != 2 || len(item.HostedOperations) != 9 || len(item.ProxyOperations) != 2 {
-				t.Errorf("Go must expose Hosted lifecycle plus Proxy and Group: %#v", item)
+				t.Errorf("%s must expose Hosted lifecycle plus Proxy and Group: %#v", item.Format, item)
 			}
 			continue
 		}
@@ -84,6 +86,74 @@ func TestFormatProfilesAPINeedsAnAuthenticatedCallerAndReturnsCapabilities(t *te
 				t.Errorf("format %q missing %q", item.Format, operation)
 			}
 		}
+	}
+}
+
+func TestCargoPublicAdmissionCreatesHostedProxyAndGroup(t *testing.T) {
+	store := repository.NewMemoryStore()
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	call := func(method, path, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		request := httptest.NewRequest(method, path, strings.NewReader(body))
+		authorize(request, "admin-secret")
+		if method == http.MethodPost {
+			request.Header.Set("Idempotency-Key", uuid.NewString())
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	create := func(body string) repository.HostedRepository {
+		t.Helper()
+		response := call(http.MethodPost, "/api/v2/repositories", body)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("create Cargo repository=%d %s", response.Code, response.Body.String())
+		}
+		var repo repository.HostedRepository
+		if err := json.Unmarshal(response.Body.Bytes(), &repo); err != nil {
+			t.Fatal(err)
+		}
+		return repo
+	}
+	hosted := create(`{"name":"cargo-public-hosted","format":"cargo"}`)
+	if hosted.Format != repository.FormatCargo || hosted.Type != repository.RepositoryTypeHosted {
+		t.Fatalf("Hosted=%+v", hosted)
+	}
+	if response := call(http.MethodPost, "/api/v2/repositories", `{"name":"cargo-no-hosts","format":"cargo","type":"proxy","endpoint":"https://index.crates.io"}`); response.Code != http.StatusBadRequest {
+		t.Fatalf("Proxy without egress allowlist=%d %s", response.Code, response.Body.String())
+	}
+	proxy := create(`{"name":"cargo-public-proxy","format":"cargo","type":"proxy","endpoint":"https://index.crates.io","allowedHosts":["index.crates.io","static.crates.io"]}`)
+	if proxy.Format != repository.FormatCargo || proxy.Type != repository.RepositoryTypeProxy {
+		t.Fatalf("Proxy=%+v", proxy)
+	}
+	for _, fixture := range []struct {
+		repo repository.HostedRepository
+		want []adminopenapi.RepositoryOperation
+	}{
+		{hosted, []adminopenapi.RepositoryOperation{adminopenapi.RepositoryOperationRead, adminopenapi.RepositoryOperationPublish, adminopenapi.RepositoryOperationRetain, adminopenapi.RepositoryOperationPromote, adminopenapi.RepositoryOperationReplicate}},
+		{proxy, []adminopenapi.RepositoryOperation{adminopenapi.RepositoryOperationRead, adminopenapi.RepositoryOperationBrowse}},
+	} {
+		response := call(http.MethodGet, "/api/v2/repositories/"+fixture.repo.ID+"/capabilities", "")
+		var capabilities adminopenapi.RepositoryCapabilities
+		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &capabilities) != nil {
+			t.Fatalf("capabilities=%d %s", response.Code, response.Body.String())
+		}
+		if capabilities.Format != adminopenapi.FormatCargo || len(capabilities.Operations) != len(fixture.want) && fixture.repo.Type == repository.RepositoryTypeProxy {
+			t.Fatalf("capabilities=%+v", capabilities)
+		}
+		for _, operation := range fixture.want {
+			found := false
+			for _, got := range capabilities.Operations {
+				found = found || got == operation
+			}
+			if !found {
+				t.Fatalf("%s missing %s: %+v", fixture.repo.Type, operation, capabilities)
+			}
+		}
+	}
+	groupBody := `{"name":"cargo-public-group","format":"cargo","members":[{"repositoryId":"` + hosted.ID + `","position":0},{"repositoryId":"` + proxy.ID + `","position":1}]}`
+	if response := call(http.MethodPost, "/api/v2/groups", groupBody); response.Code != http.StatusCreated {
+		t.Fatalf("Cargo group=%d %s", response.Code, response.Body.String())
 	}
 }
 

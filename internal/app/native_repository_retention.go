@@ -26,6 +26,7 @@ type repositoryRetentionStore interface {
 	repository.NativeNPMStore
 	repository.NativePyPIStore
 	repository.NativeGoStore
+	repository.NativeCargoStore
 }
 
 type NativeRepositoryRetention struct {
@@ -62,6 +63,8 @@ type RepositoryRetentionCandidate struct {
 	pypiVersion      string
 	goModule         string
 	goVersion        string
+	cargoName        string
+	cargoVersion     string
 }
 
 type repositoryRetentionPayload struct {
@@ -133,7 +136,7 @@ func (m NativeRepositoryRetention) RunJobs(ctx context.Context, limit int) error
 	}
 	var firstErr error
 	remaining := limit
-	for _, format := range repository.SupportedFormats() {
+	for _, format := range repository.WorkerFormats() {
 		if !m.handlesFormat(format) {
 			continue
 		}
@@ -235,6 +238,9 @@ func (m NativeRepositoryRetention) tombstone(ctx context.Context, repositoryID s
 	case repository.FormatGo:
 		_, err := m.Store.TombstoneGoModuleVersion(ctx, repositoryID, candidate.goModule, candidate.goVersion)
 		return err
+	case repository.FormatCargo:
+		_, err := m.Store.TombstoneCargoPublication(ctx, repositoryID, candidate.cargoName, candidate.cargoVersion)
+		return err
 	default:
 		return repository.ErrDisabled
 	}
@@ -279,6 +285,8 @@ func (m NativeRepositoryRetention) PlanRepositoryDetailed(ctx context.Context, r
 		candidates, err = m.planPyPI(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
 	case repository.FormatGo:
 		candidates, err = m.planGo(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
+	case repository.FormatCargo:
+		candidates, err = m.planCargo(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
 	default:
 		return nil, repository.ErrDisabled
 	}
@@ -419,6 +427,42 @@ func (m NativeRepositoryRetention) planGo(ctx context.Context, repositoryID stri
 			return candidates, nil
 		}
 		after = modules[len(modules)-1]
+	}
+}
+
+func (m NativeRepositoryRetention) planCargo(ctx context.Context, repositoryID string, policy repository.RepositoryRetentionPolicy, coordinatePatterns, protectedPatterns []*regexp.Regexp) ([]RepositoryRetentionCandidate, error) {
+	var candidates []RepositoryRetentionCandidate
+	after := ""
+	for {
+		crates, _, err := m.Store.SearchCargoCrates(ctx, repositoryID, "", 200, after, true)
+		if err != nil {
+			return nil, err
+		}
+		for _, crate := range crates {
+			versions, err := m.Store.ListCargoPublications(ctx, repositoryID, crate.Name)
+			if err != nil {
+				return nil, err
+			}
+			sort.SliceStable(versions, func(i, j int) bool {
+				if versions[i].CreatedAt.Equal(versions[j].CreatedAt) {
+					return versions[i].Version > versions[j].Version
+				}
+				return versions[i].CreatedAt.After(versions[j].CreatedAt)
+			})
+			for index, version := range versions {
+				coordinate := version.Name + "@" + version.Version
+				candidate, ok := m.versionedCandidate(repository.FormatCargo, coordinate, version.Digest, version.CreatedAt,
+					index, policy, []string{coordinate, version.Name}, coordinatePatterns, protectedPatterns)
+				if ok {
+					candidate.CursorID, candidate.cargoName, candidate.cargoVersion = coordinate, version.Name, version.Version
+					candidates = append(candidates, candidate)
+				}
+			}
+		}
+		if len(crates) < 200 {
+			return candidates, nil
+		}
+		after = crates[len(crates)-1].Name
 	}
 }
 

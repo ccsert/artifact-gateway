@@ -11,6 +11,16 @@ their meaning.
 
 ## Unreleased
 
+- Runtime logging can optionally mirror its redacted NDJSON to private session files with configurable complete-event size rotation, backup count and age retention. Default stdout and local query behavior remain unchanged; retention touches only the current output's sealed files, leaving previous sessions and user files for separate retention/history work.
+
+- Runtime log queries discard an oversized line through its newline even when writes split the line, preventing a valid-looking tail from becoming a separate event. Structured loggers preserve `component`, `operation`, `requestId`, and `traceId` bound with `With`; explicit record fields keep priority and group scopes remain independent.
+
+- Cargo Hosted, Proxy, and Group now appear in the public format catalog, repository creation and capabilities APIs, OpenAPI contract, and Console. The Console provides sparse registry configuration and Hosted publish/yank guidance; public browsing and global search link to crate versions. Proxy creation requires an HTTPS upstream and allowed download hosts. Official Cargo 1.96.0, PostgreSQL/RustFS, backup/restore, and upgrade gates define the admission baseline; existing deployments require a separate release and rollout.
+
+- Runtime log output now has explicit, serialized flush/close callbacks and idempotent cleanup. Gateway runtime errors return through resource cleanup before process exit, keeping logging available until cleanup finishes. The default stdout and local buffer remain borrowed destinations; this does not add file persistence or a protocol exporter.
+
+- Runtime log redaction now applies the existing sensitive-name policy to ancestor groups as well as leaf attributes. Values nested under groups such as `credentials` or `Authorization` are masked before output and process-local keyword indexing; safe sibling groups retain their diagnostic fields.
+
 ## 0.4.2 - 2026-09-28
 
 - Every dialog that starts a write now stays put until that write settles. The create forms for repositories, API keys, service accounts, credentials, groups, scheduled tasks, and webhook subscriptions, plus the Raw upload dialog, no longer dismiss through Escape, the mask, or the close button while their request is in flight, so a half-applied change cannot be abandoned under a pending response and the same record cannot be submitted twice by reopening the form. Each of those save paths also releases its busy state in a `finally`, so a request that fails at the network level leaves the dialog dismissible again instead of locking the form open.

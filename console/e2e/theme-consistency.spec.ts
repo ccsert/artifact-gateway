@@ -43,20 +43,6 @@ async function mockFormatProfiles(page: Page) {
   );
 }
 
-function measureLifecycleInsets(root: HTMLElement) {
-  const rootBox = root.getBoundingClientRect();
-  const itemBoxes = Array.from(
-    root.querySelectorAll<HTMLElement>(".ag-lifecycle-step"),
-    (item) => item.getBoundingClientRect(),
-  );
-  return {
-    top: Math.min(...itemBoxes.map((box) => box.top - rootBox.top)),
-    right: Math.min(...itemBoxes.map((box) => rootBox.right - box.right)),
-    bottom: Math.min(...itemBoxes.map((box) => rootBox.bottom - box.bottom)),
-    left: Math.min(...itemBoxes.map((box) => box.left - rootBox.left)),
-  };
-}
-
 async function measurePanelArtwork(panel: Locator) {
   return panel.evaluate(async (element) => {
     const style = getComputedStyle(element, "::before");
@@ -711,7 +697,7 @@ test("deleted repositories stay archived unless explicitly requested", async ({
   await expect(page.getByText("active-repository")).not.toBeVisible();
 });
 
-test("dashboard excludes archived repositories from operational status", async ({
+test("dashboard keeps a compact overview without archived repositories", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -752,109 +738,64 @@ test("dashboard excludes archived repositories from operational status", async (
   await page.route("**/api/v2/audits**", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
   );
-  await page.route("**/api/v2/repository-capacities**", (route) =>
+  await page.route("**/api/v2/overview-statistics", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify([
-        {
-          repositoryId: "repo-active",
-          format: "oci",
-          usedBytes: 1024,
+      body: JSON.stringify({
+        generatedAt: "2026-09-30T12:00:00Z",
+        totals: {
+          requests: { oneDay: 1, sevenDays: 1, thirtyDays: 1 },
+          denied: { oneDay: 0, sevenDays: 0, thirtyDays: 0 },
           objectCount: 1,
-          quotaBytes: 0,
+          usedBytes: 1024,
         },
-      ]),
+        repositories: [
+          {
+            repositoryId: "repo-active",
+            name: "active-repository",
+            format: "oci",
+            requests: { oneDay: 1, sevenDays: 1, thirtyDays: 1 },
+            denied: { oneDay: 0, sevenDays: 0, thirtyDays: 0 },
+            objectCount: 1,
+            usedBytes: 1024,
+          },
+        ],
+      }),
     }),
   );
 
   await page.goto("/");
-  await expect(page.getByText("平台运行正常")).toBeVisible();
   await expect(page.getByText("active-repository")).toBeVisible();
   await expect(page.getByText("archived-repository")).not.toBeVisible();
+  await expect(page.locator(".ag-health-strip, .ag-lifecycle")).toHaveCount(0);
+  const metricStrip = page.getByRole("group", { name: "页面摘要" });
   await expect(
-    page.getByRole("heading", { name: "可信制品路径" }),
-  ).toBeVisible();
-  await expect(page.locator(".ag-lifecycle-stage-title")).toHaveText([
-    "来源",
-    "扫描",
-    "隔离闸门",
-    "晋级与复制",
-    "分发",
-  ]);
-  await expect(
-    page.getByRole("button", { name: /仅风险命中时/ }),
-  ).toBeVisible();
-  const lifecycleSteps = page.locator(".ag-lifecycle-steps");
-  await expect(lifecycleSteps).toHaveClass(/ant-steps-navigation/);
-  await expect(lifecycleSteps.getByRole("button")).toHaveCount(5);
-  const desktopLifecycleInsets = await lifecycleSteps.evaluate(
-    measureLifecycleInsets,
-  );
-  for (const inset of Object.values(desktopLifecycleInsets)) {
-    expect(inset).toBeGreaterThanOrEqual(16);
-  }
-  const lifecycleArrowAlignments = await page
-    .locator(".ag-lifecycle-step:not(:last-child)")
-    .evaluateAll((stages) =>
-      stages.map((stage) => {
-        const stageBox = stage.getBoundingClientRect();
-        const arrowStyle = getComputedStyle(stage, "::after");
-        const arrowCenter = stageBox.top + Number.parseFloat(arrowStyle.top);
-        const stageCenter = stageBox.top + stageBox.height / 2;
-        return {
-          display: arrowStyle.display,
-          verticalDelta: Math.abs(arrowCenter - stageCenter),
-        };
-      }),
-    );
-  expect(lifecycleArrowAlignments).toHaveLength(4);
-  for (const alignment of lifecycleArrowAlignments) {
-    expect(alignment.display).not.toBe("none");
-    expect(alignment.verticalDelta).toBeLessThanOrEqual(1);
-  }
-  await expect
-    .poll(() =>
-      page
-        .locator(".ag-lifecycle-step-conditional")
-        .evaluate((stage) => getComputedStyle(stage, "::after").borderTopStyle),
-    )
-    .toBe("dashed");
-  const firstLifecycleStep = lifecycleSteps.getByRole("button").first();
-  const idleStepBackground = await firstLifecycleStep.evaluate(
-    (step) => getComputedStyle(step).backgroundColor,
-  );
-  await firstLifecycleStep.hover();
-  await expect
-    .poll(() =>
-      firstLifecycleStep.evaluate(
-        (step) => getComputedStyle(step).backgroundColor,
-      ),
-    )
-    .not.toBe(idleStepBackground);
+    metricStrip.locator(":scope > div").filter({ hasText: "仓库总数" }),
+  ).toContainText("1");
+  const header = page.locator(".ag-page-header");
+  const primary = page.locator(".ag-page-primary");
+  const desktopHeader = await header.boundingBox();
+  const desktopMetrics = await metricStrip.boundingBox();
+  const desktopPrimary = await primary.boundingBox();
+  expect(
+    desktopMetrics!.y - (desktopHeader!.y + desktopHeader!.height),
+  ).toBeGreaterThanOrEqual(23);
+  expect(
+    desktopMetrics!.y - (desktopHeader!.y + desktopHeader!.height),
+  ).toBeLessThanOrEqual(25);
+  expect(
+    desktopPrimary!.y - (desktopMetrics!.y + desktopMetrics!.height),
+  ).toBeGreaterThanOrEqual(23);
+  expect(
+    desktopPrimary!.y - (desktopMetrics!.y + desktopMetrics!.height),
+  ).toBeLessThanOrEqual(25);
   if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
     await page.screenshot({
-      path: testInfo.outputPath("dashboard-lifecycle-desktop.png"),
+      path: testInfo.outputPath("dashboard-compact-desktop.png"),
       fullPage: true,
     });
   }
-  await expect(
-    page
-      .getByRole("group", { name: "页面摘要" })
-      .locator(":scope > div")
-      .first(),
-  ).toContainText("1");
-
-  await page.setViewportSize({ width: 720, height: 900 });
-  await expect(lifecycleSteps).toHaveClass(/ant-steps-vertical/);
-  await expect(lifecycleSteps).not.toHaveClass(/ant-steps-navigation/);
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () => document.body.scrollWidth - document.body.clientWidth,
-      ),
-    )
-    .toBeLessThanOrEqual(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
   const openNavigation = page.getByRole("button", { name: "打开导航" });
@@ -862,46 +803,30 @@ test("dashboard excludes archived repositories from operational status", async (
   const triggerBox = await openNavigation.boundingBox();
   expect(triggerBox?.width).toBeGreaterThanOrEqual(44);
   expect(triggerBox?.height).toBeGreaterThanOrEqual(44);
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () => document.body.scrollWidth - document.body.clientWidth,
-      ),
-    )
-    .toBeLessThanOrEqual(0);
-  const firstMetricBox = await page
-    .getByRole("group", { name: "页面摘要" })
-    .locator(":scope > div")
-    .first()
-    .boundingBox();
-  expect(firstMetricBox?.width).toBeGreaterThan(300);
-  const mobileLifecycleInsets = await lifecycleSteps.evaluate(
-    measureLifecycleInsets,
-  );
-  for (const inset of Object.values(mobileLifecycleInsets)) {
-    expect(inset).toBeGreaterThanOrEqual(16);
-  }
+  const mobileHeader = await header.boundingBox();
+  const mobileMetrics = await metricStrip.boundingBox();
+  expect(
+    mobileMetrics!.y - (mobileHeader!.y + mobileHeader!.height),
+  ).toBeGreaterThanOrEqual(23);
+  expect(
+    mobileMetrics!.y - (mobileHeader!.y + mobileHeader!.height),
+  ).toBeLessThanOrEqual(25);
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    ),
+  ).toBeLessThanOrEqual(0);
   if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
     await page.screenshot({
-      path: testInfo.outputPath("dashboard-lifecycle-mobile.png"),
+      path: testInfo.outputPath("dashboard-compact-mobile.png"),
       fullPage: true,
     });
   }
-
   await openNavigation.click();
   const drawer = page.getByRole("dialog");
-  await expect(drawer).toBeVisible();
   await expect(drawer.getByRole("link", { name: /仓库/ })).toBeVisible();
-  const closeNavigationBox = await drawer
-    .getByRole("button", { name: "关闭导航" })
-    .boundingBox();
-  expect(closeNavigationBox?.width).toBeGreaterThanOrEqual(44);
-  expect(closeNavigationBox?.height).toBeGreaterThanOrEqual(44);
   await page.keyboard.press("Escape");
   await expect(drawer).toBeHidden();
-
-  const scanStep = lifecycleSteps.getByRole("button").nth(1);
-  await scanStep.focus();
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/search$/);
 });

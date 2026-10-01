@@ -43,6 +43,8 @@ paths:
     "$ref": "./management/runtime.yaml#/runtime_nodes"
   "/diagnostics":
     "$ref": "./management/runtime.yaml#/diagnostics"
+  "/runtime/logs":
+    "$ref": "./management/runtime.yaml#/runtime_logs"
   "/api-keys":
     "$ref": "./management/api-keys.yaml#/api_keys"
   "/api-keys/{apiKeyId}":
@@ -75,6 +77,8 @@ paths:
     "$ref": "./management/audits.yaml#/audits"
   "/audits/page":
     "$ref": "./management/audits.yaml#/audits_page"
+  "/overview-statistics":
+    "$ref": "./management/overview-statistics.yaml#/overview_statistics"
   "/audit-retention-policy":
     "$ref": "./management/audits.yaml#/audit_retention_policy"
   "/audit-retention:execute":

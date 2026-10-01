@@ -9,6 +9,7 @@ Format:
   - npm
   - pypi
   - go
+  - cargo
   - apt
 RepositoryOperation:
   type: string
@@ -81,6 +82,12 @@ RuntimeNode:
       type: string
     sessionId:
       type: string
+    version:
+      type: string
+      description: Build version reported by this node; absent for legacy records.
+    revision:
+      type: string
+      description: Build revision reported by this node; absent for legacy records.
     roles:
       type: array
       items:
@@ -124,6 +131,11 @@ RuntimeNodeHealthIssue:
       - error
     message:
       type: string
+    affectedNodes:
+      type: array
+      description: Session IDs of nodes involved in this issue.
+      items:
+        type: string
 RuntimeNodeHealth:
   type: object
   required:
@@ -157,6 +169,7 @@ RuntimeNodeList:
   required:
   - items
   - health
+  - releaseSource
   properties:
     items:
       type: array
@@ -164,6 +177,13 @@ RuntimeNodeList:
         "$ref": "#/RuntimeNode"
     health:
       "$ref": "#/RuntimeNodeHealth"
+    currentSessionId:
+      type: string
+      description: Session of the API process that answered this request; absent in older deployments.
+    releaseSource:
+      type: string
+      enum: [not_configured]
+      description: No GitHub Release or desired-version source is connected. This does not assert that the running build is latest.
 DiagnosticDependency:
   type: object
   required:
@@ -205,6 +225,9 @@ DiagnosticRuntime:
   properties:
     instanceId:
       type: string
+    sessionId:
+      type: string
+      description: Session of the process that answered this diagnostics request.
     roles:
       type: array
       items:
@@ -323,6 +346,65 @@ Diagnostics:
         "$ref": "#/DiagnosticQueueStat"
     nodes:
       "$ref": "#/RuntimeNodeHealth"
+RuntimeLogEntry:
+  type: object
+  required:
+  - sequence
+  - time
+  - level
+  - message
+  - instanceId
+  - sessionId
+  - component
+  - operation
+  - requestId
+  - traceId
+  properties:
+    sequence:
+      type: integer
+      format: int64
+    time:
+      type: string
+      format: date-time
+    level:
+      type: string
+    message:
+      type: string
+    instanceId:
+      type: string
+    sessionId:
+      type: string
+    component:
+      type: string
+    operation:
+      type: string
+    requestId:
+      type: string
+    traceId:
+      type: string
+RuntimeLogPage:
+  type: object
+  required:
+  - scope
+  - instanceId
+  - sessionId
+  - items
+  properties:
+    scope:
+      type: string
+      enum:
+      - local
+    instanceId:
+      type: string
+    sessionId:
+      type: string
+    items:
+      type: array
+      items:
+        "$ref": "#/RuntimeLogEntry"
+    nextSequence:
+      type: integer
+      format: int64
 EgressProxy:
   type: object
   description: Per-Proxy-Repository egress network proxy configuration. Only
@@ -1229,6 +1311,41 @@ RepositoryCapacityList:
   type: array
   items:
     "$ref": "#/RepositoryCapacity"
+OverviewWindowCounts:
+  type: object
+  required: [oneDay, sevenDays, thirtyDays]
+  properties:
+    oneDay: {type: integer, format: int64, minimum: 0}
+    sevenDays: {type: integer, format: int64, minimum: 0}
+    thirtyDays: {type: integer, format: int64, minimum: 0}
+OverviewStatisticsTotals:
+  type: object
+  required: [requests, denied, objectCount, usedBytes]
+  properties:
+    requests: {"$ref": "#/OverviewWindowCounts"}
+    denied: {"$ref": "#/OverviewWindowCounts"}
+    objectCount: {type: integer, format: int64, minimum: 0}
+    usedBytes: {type: integer, format: int64, minimum: 0}
+OverviewRepositoryStatistics:
+  type: object
+  required: [repositoryId, name, format, requests, denied, objectCount, usedBytes]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    name: {type: string}
+    format: {"$ref": "#/Format"}
+    requests: {"$ref": "#/OverviewWindowCounts"}
+    denied: {"$ref": "#/OverviewWindowCounts"}
+    objectCount: {type: integer, format: int64, minimum: 0}
+    usedBytes: {type: integer, format: int64, minimum: 0}
+OverviewStatistics:
+  type: object
+  required: [generatedAt, totals, repositories]
+  properties:
+    generatedAt: {type: string, format: date-time}
+    totals: {"$ref": "#/OverviewStatisticsTotals"}
+    repositories:
+      type: array
+      items: {"$ref": "#/OverviewRepositoryStatistics"}
 RepositoryCapacityQuota:
   type: object
   required: [quotaBytes]
@@ -2925,6 +3042,10 @@ WebhookEventType:
   enum:
   - artifact.quarantined
   - artifact.released
+  - cargo.promotion.completed
+  - cargo.promotion.failed
+  - cargo.replication.completed
+  - cargo.replication.failed
 WebhookSubscription:
   type: object
   required: [id, name, endpointUrl, eventTypes, enabled, version, secretConfigured, createdAt, updatedAt]

@@ -11,6 +11,7 @@ import (
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
+	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
 	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
 	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
 	npmprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/npm"
@@ -27,7 +28,7 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.Response
 			return
 		}
 		var request adminopenapi.PromotionRequest
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil || !validAPTDistributionScope(source.Format, request.Coordinate, request.AptTargetSuite) || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatOCI && (request.Coordinate == "" || strings.Contains(request.Coordinate, "@"))) || (source.Format == repository.FormatRaw && strings.Trim(request.Coordinate, "/") == "") || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil || !validAPTDistributionScope(source.Format, request.Coordinate, request.AptTargetSuite) || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatOCI && (request.Coordinate == "" || strings.Contains(request.Coordinate, "@"))) || (source.Format == repository.FormatRaw && strings.Trim(request.Coordinate, "/") == "") || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatCargo && !validCargoVersionCoordinate(request.Coordinate)) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "targetRepositoryId, immutable artifact coordinate, and digest are required")
 			return
 		}
@@ -83,6 +84,9 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryPromotion(w http.Response
 			case repository.FormatGo:
 				modulePath, version, _ := parseGoModuleVersionCoordinate(request.Coordinate)
 				job, _, err = (NativeGoPromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), GoPromotionPayload{SourceRepositoryID: source.ID, Module: modulePath, Version: version, Digest: request.Digest})
+			case repository.FormatCargo:
+				name, version, _ := splitVersionCoordinate(request.Coordinate)
+				job, _, err = (NativeCargoPromotion{Store: h.sessions.store}).Enqueue(r.Context(), target.ID, string(params.IdempotencyKey), CargoPromotionPayload{SourceRepositoryID: source.ID, Name: name, Version: version, Digest: request.Digest})
 			}
 			if errors.Is(err, repository.ErrIdempotencyConflict) {
 				writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key conflicts with an existing promotion job")
@@ -103,7 +107,7 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 		var request adminopenapi.ReplicationRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || !validAPTDistributionScope(source.Format, request.Coordinate, request.AptTargetSuite) || !supportsAPTDistributionPreview(source, h.aptSnapshotPublisher, repository.RepositoryOperationReplicate) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) {
+		if err := decoder.Decode(&request); err != nil || !validAPTDistributionScope(source.Format, request.Coordinate, request.AptTargetSuite) || !supportsAPTDistributionPreview(source, h.aptSnapshotPublisher, repository.RepositoryOperationReplicate) || strings.TrimSpace(request.Coordinate) == "" || !validRepositoryDigest(request.Digest) || (source.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (source.Format == repository.FormatConan && !validConanReplicationCoordinate(request.Coordinate)) || (source.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) || (source.Format == repository.FormatCargo && !validCargoVersionCoordinate(request.Coordinate)) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "replication requires a visible format-specific coordinate and sha256 digest")
 			return
 		}
@@ -207,6 +211,19 @@ func (h generatedRepositoryAPIAdapter) CreateRepositoryReplication(w http.Respon
 					writeHostedProblem(w, http.StatusNotFound, "not_found", "source PyPI version is unavailable")
 					return
 				}
+			} else if format == repository.FormatCargo {
+				name, version, _ := splitVersionCoordinate(request.Coordinate)
+				publication, lookupErr := h.cargo.GetCargoPublication(r.Context(), source.ID, name, version)
+				if errors.Is(lookupErr, repository.ErrNotFound) || publication.Digest != request.Digest {
+					writeHostedProblem(w, http.StatusNotFound, "not_found", "source Cargo version is unavailable")
+					return
+				}
+				if lookupErr != nil {
+					writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "lookup source Cargo version failed")
+					return
+				}
+				checkpoints = []repository.ReplicationCheckpoint{{SourceObjectKey: publication.ObjectKey,
+					ObjectKey: publication.ObjectKey, Digest: publication.Digest, Size: publication.Size}}
 			} else if format == repository.FormatGo {
 				modulePath, version, _ := parseGoModuleVersionCoordinate(request.Coordinate)
 				publication, lookupErr := loadGoDistributionPublication(r.Context(), h.sessions.store, source.ID, modulePath, version, request.Digest)
@@ -444,11 +461,11 @@ func toOpenAPIReplicationPlanDetail(plan repository.ReplicationPlan, checkpoints
 }
 
 func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
-	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
+	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(principal Principal, repo repository.HostedRepository) {
 		var request adminopenapi.RestoreArtifact
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil || (repo.Format == repository.FormatConan && !validConanRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (repo.Format == repository.FormatOCI && !validOCIRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatRaw && (strings.Trim(request.Coordinate, "/") == "" || !validRawAssetPrefix(request.Coordinate))) || (repo.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (repo.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (repo.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) {
+		if err := decoder.Decode(&request); err != nil || (repo.Format == repository.FormatConan && !validConanRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatMaven && !validMavenCoordinate(request.Coordinate)) || (repo.Format == repository.FormatOCI && !validOCIRestoreCoordinate(request.Coordinate)) || (repo.Format == repository.FormatRaw && (strings.Trim(request.Coordinate, "/") == "" || !validRawAssetPrefix(request.Coordinate))) || (repo.Format == repository.FormatNPM && !validNPMVersionCoordinate(request.Coordinate)) || (repo.Format == repository.FormatPyPI && !validPyPIVersionCoordinate(request.Coordinate)) || (repo.Format == repository.FormatGo && !validGoModuleVersionCoordinate(request.Coordinate)) || (repo.Format == repository.FormatCargo && !validCargoVersionCoordinate(request.Coordinate)) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "coordinate must identify a supported artifact tombstone")
 			return
 		}
@@ -486,6 +503,28 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 		case repository.FormatGo:
 			modulePath, version, _ := parseGoModuleVersionCoordinate(request.Coordinate)
 			_, err = h.sessions.store.RestoreGoModuleVersion(r.Context(), repo.ID, modulePath, version)
+		case repository.FormatCargo:
+			name, version, _ := splitVersionCoordinate(request.Coordinate)
+			if h.diagnostics.NativeCargoObjectStore == nil {
+				err = repository.ErrDisabled
+				break
+			}
+			reservation, lookupErr := h.cargo.GetCargoIdentityReservation(r.Context(), repo.ID, name, version)
+			if lookupErr != nil {
+				err = lookupErr
+				break
+			}
+			objectKey := "native/cargo/sha256/" + strings.TrimPrefix(reservation.Digest, "sha256:")
+			stored, statErr := h.diagnostics.NativeCargoObjectStore.Stat(r.Context(), objectKey)
+			if errors.Is(statErr, objectstore.ErrNotFound) {
+				err = repository.ErrDisabled
+			} else if statErr != nil {
+				err = statErr
+			} else if stored.Digest != reservation.Digest {
+				err = repository.ErrDisabled
+			} else {
+				_, err = h.cargo.RestoreCargoPublication(r.Context(), repo.ID, name, version)
+			}
 		default:
 			_, err = h.sessions.store.RestoreRawAsset(r.Context(), repo.ID, request.Coordinate)
 		}
@@ -496,6 +535,12 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 		if err != nil {
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "restore artifact failed")
 			return
+		}
+		if repo.Format == repository.FormatCargo && h.audit != nil {
+			_ = h.audit.RecordAudit(r.Context(), repository.AuditRecord{GroupName: repo.Name, Repository: repo.Name,
+				Actor: principal.Actor, Outcome: repository.AuditResolved, OccurredAt: time.Now().UTC(),
+				Format: "management", Resource: request.Coordinate, Operation: "artifact.restore",
+				Status: http.StatusNoContent, CacheDisposition: "bypass"})
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})

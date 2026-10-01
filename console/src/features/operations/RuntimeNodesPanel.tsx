@@ -14,6 +14,7 @@ import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 function runtimeNodeColumns(
   locale: string,
   text: (chinese: string, english: string) => string,
+  currentSessionId: string | null,
 ): ColumnsType<RuntimeNode> {
   return [
     {
@@ -24,11 +25,37 @@ function runtimeNodeColumns(
       render: (value: string, node) => (
         <div className="min-w-0">
           <div className="font-mono text-xs text-zinc-200">{value}</div>
+          {node.sessionId === currentSessionId && (
+            <div className="text-xs text-[var(--ag-status-success)]">
+              {text("当前连接节点", "Connected node")}
+            </div>
+          )}
           <div
             className="truncate text-xs text-zinc-600"
             title={node.sessionId}
           >
             {text("会话", "Session")} {node.sessionId.slice(0, 12)}…
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: text("构建版本", "Build version"),
+      key: "build",
+      width: 190,
+      render: (_, node) => (
+        <div className="text-xs">
+          <div className="text-zinc-200">
+            {node.version && node.version !== "unknown"
+              ? node.version === "dev"
+                ? text("开发构建", "Development build")
+                : node.version
+              : text("版本未知", "Version unknown")}
+          </div>
+          <div className="font-mono text-zinc-500">
+            {node.revision && node.revision !== "unknown"
+              ? node.revision.slice(0, 12)
+              : text("修订号未知", "Revision unknown")}
           </div>
         </div>
       ),
@@ -70,6 +97,17 @@ function runtimeNodeColumns(
             </span>
           )}
         </div>
+      ),
+    },
+    {
+      title: text("启动时间", "Started"),
+      dataIndex: "startedAt",
+      key: "startedAt",
+      width: 190,
+      render: (value: string) => (
+        <span className="whitespace-nowrap text-xs text-zinc-500">
+          {formatDate(value, locale)}
+        </span>
       ),
     },
     {
@@ -118,7 +156,8 @@ export function RuntimeNodesPanel({
   pollIntervalMs?: number;
 }) {
   const { locale, text } = usePreferences();
-  const nodeColumns = runtimeNodeColumns(locale, text);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const nodeColumns = runtimeNodeColumns(locale, text, currentSessionId);
   const [nodes, setNodes] = useState<RuntimeNode[] | null>(null);
   const [health, setHealth] = useState<RuntimeNodeList["health"] | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -139,6 +178,7 @@ export function RuntimeNodesPanel({
       }
       setError(null);
       setNodes((result.data?.items ?? []).map(normalizeRuntimeNode));
+      setCurrentSessionId(result.data?.currentSessionId ?? null);
       setHealth(
         result.data?.health
           ? {
@@ -207,12 +247,26 @@ export function RuntimeNodesPanel({
                       {issue.code}
                     </span>
                     <span className="ml-2">{issue.message}</span>
+                    {issue.affectedNodes?.length ? (
+                      <div className="break-all font-mono text-xs text-zinc-500">
+                        {text("涉及会话", "Sessions")}:{" "}
+                        {issue.affectedNodes.join(", ")}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>
             }
           />
         </div>
+      )}
+      {nodes !== null && (
+        <p className="px-5 pt-3 text-xs text-zinc-500">
+          {text(
+            "发布版本源未配置，无法判断当前构建是否为最新版本。",
+            "No release source is configured, so the latest version cannot be determined.",
+          )}
+        </p>
       )}
       {error ? (
         <ErrorBanner error={error} onRetry={load} />
@@ -236,7 +290,7 @@ export function RuntimeNodesPanel({
           dataSource={nodes}
           columns={nodeColumns}
           pagination={false}
-          scroll={{ x: 960, y: 260 }}
+          scroll={{ x: 1260, y: 260 }}
         />
       )}
     </Card>

@@ -13,7 +13,7 @@ async function mockRepositoryDetail(
   }: {
     scannerEnabled?: boolean;
     distributionEnabled?: boolean;
-    format?: "raw" | "npm" | "maven";
+    format?: "raw" | "npm" | "maven" | "cargo";
   } = {},
 ) {
   await authenticateAsAdmin(page);
@@ -25,7 +25,9 @@ async function mockRepositoryDetail(
       ? "npm-hosted"
       : format === "maven"
         ? "maven-hosted"
-        : "release-files";
+        : format === "cargo"
+          ? "cargo-hosted"
+          : "release-files";
   const npmPackage = "pipeone-npm-frontend-validation-v2-beta";
   const npmDigest = `sha256:${"8".repeat(64)}`;
 
@@ -335,6 +337,143 @@ async function mockRepositoryDetail(
         version: "1",
       },
     });
+  });
+}
+
+test("Cargo publish guide stays readable at desktop and mobile widths", async ({
+  page,
+}, testInfo) => {
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  await mockRepositoryDetail(page, { format: "cargo" });
+
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/repositories/${repositoryId}?tab=publish`);
+    const guide = page.getByRole("heading", { name: "配置 Cargo 仓库" });
+    await expect(guide).toBeVisible();
+    await expect(
+      page.getByText("cargo publish --registry gateway", { exact: false }),
+    ).toBeVisible();
+    const explanationBox = await guide.locator("..").boundingBox();
+    const snippetsBox = await page
+      .getByText("credential-provider =", { exact: false })
+      .locator("../..")
+      .boundingBox();
+    expect(explanationBox).not.toBeNull();
+    expect(snippetsBox).not.toBeNull();
+    if (width > 600) {
+      const gap =
+        (snippetsBox?.x ?? 0) -
+        ((explanationBox?.x ?? 0) + (explanationBox?.width ?? 0));
+      expect(gap).toBeGreaterThanOrEqual(14);
+      expect(gap).toBeLessThanOrEqual(18);
+    } else {
+      const gap =
+        (snippetsBox?.y ?? 0) -
+        ((explanationBox?.y ?? 0) + (explanationBox?.height ?? 0));
+      expect(gap).toBeGreaterThanOrEqual(14);
+      expect(gap).toBeLessThanOrEqual(18);
+    }
+    expect(
+      await page.evaluate(
+        () => document.body.scrollWidth - document.body.clientWidth,
+      ),
+    ).toBe(0);
+    await page.screenshot({
+      path: testInfo.outputPath(`cargo-publish-${width}.png`),
+      fullPage: true,
+    });
+  }
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+});
+
+for (const width of [1440, 390]) {
+  test(`repository usage and capacity keep a compact layout at ${width}px`, async ({
+    page,
+  }, testInfo) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => {
+      if (message.type() === "error") errors.push(message.text());
+    });
+    await page.setViewportSize({ width, height: 900 });
+    await mockRepositoryDetail(page);
+    await page.route(
+      `**/api/v2/repositories/${repositoryId}/capacity`,
+      (route) =>
+        route.fulfill({
+          json: {
+            repositoryId,
+            format: "raw",
+            usedBytes: 1024 * 1024,
+            objectCount: 20,
+            quotaBytes: 10 * 1024 * 1024,
+          },
+        }),
+    );
+    await page.route(
+      `**/api/v2/repositories/${repositoryId}/artifact-usage**`,
+      (route) =>
+        route.fulfill({
+          json: {
+            repositoryId,
+            generatedAt: "2026-09-30T12:00:00Z",
+            totals: { downloadCount: 1, totalBytes: 1024, resources: 1 },
+            items: [
+              {
+                format: "raw",
+                resource: "releases/widget.zip",
+                downloadCount: 1,
+                totalBytes: 1024,
+                firstDownloadedAt: "2026-09-29T12:00:00Z",
+                lastDownloadedAt: "2026-09-30T12:00:00Z",
+              },
+            ],
+          },
+        }),
+    );
+
+    await page.goto(`/repositories/${repositoryId}?tab=capacity`);
+    const metrics = page.getByRole("group", { name: "页面摘要" });
+    await expect(metrics).toBeVisible();
+    await expect(metrics.locator(":scope > div")).toHaveCount(3);
+    await expect(page.getByText("主资产缓存")).toHaveCount(0);
+    await expect(page.getByText("Hosted 仓库的容量来自")).toHaveCount(0);
+    await expect(page.getByText("使用率")).toBeVisible();
+    const capacityStack = metrics.locator("..");
+    await expect(capacityStack).toHaveClass(/ag-page-stack/);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+      await page.screenshot({
+        path: testInfo.outputPath(`repository-capacity-${width}.png`),
+        fullPage: true,
+      });
+    }
+    await page.goto(`/repositories/${repositoryId}?tab=usage`);
+    await expect(page.getByText("releases/widget.zip")).toBeVisible();
+    await expect(page.getByText("累计下载")).toHaveCount(0);
+    await expect(
+      page.getByRole("table").getByRole("columnheader", { name: "累计流量" }),
+    ).toHaveCount(1);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    expect(
+      await page
+        .locator("html")
+        .evaluate((element) => element.scrollWidth - element.clientWidth),
+    ).toBeLessThanOrEqual(0);
+    expect(errors).toEqual([]);
+    if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+      await page.screenshot({
+        path: testInfo.outputPath(`repository-usage-${width}.png`),
+        fullPage: true,
+      });
+    }
   });
 }
 
@@ -823,6 +962,8 @@ test("repository settings live in a tab and keep the update workflow", async ({
 test("scanning uses a frameless responsive workspace", async ({
   page,
 }, testInfo) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockRepositoryDetail(page);
 
@@ -836,19 +977,8 @@ test("scanning uses a frameless responsive workspace", async ({
   const scannerWarning = page
     .getByRole("alert")
     .filter({ hasText: "当前仓库未配置可用扫描器" });
-  const enforcementNotice = page
-    .getByRole("alert")
-    .filter({ hasText: "扫描与处置是两个步骤" });
-  const [warningBox, noticeBox] = await Promise.all([
-    scannerWarning.boundingBox(),
-    enforcementNotice.boundingBox(),
-  ]);
-  expect(warningBox).not.toBeNull();
-  expect(noticeBox).not.toBeNull();
-  expect(Math.abs((warningBox?.y ?? 0) - (noticeBox?.y ?? 0))).toBeLessThan(2);
-  expect(noticeBox?.x ?? 0).toBeGreaterThan(
-    (warningBox?.x ?? 0) + (warningBox?.width ?? 0),
-  );
+  await expect(scannerWarning).toBeVisible();
+  await expect(page.getByText("扫描与处置是两个步骤")).toHaveCount(0);
 
   const artifactScanHeading = page.getByRole("heading", {
     name: "选择并扫描不可变制品",
@@ -875,6 +1005,13 @@ test("scanning uses a frameless responsive workspace", async ({
   expect(pickerBox).not.toBeNull();
   expect(hintBox).not.toBeNull();
   expect(submitBox).not.toBeNull();
+
+  const warningBox = await scannerWarning.boundingBox();
+  const desktopGap =
+    (artifactCardBox?.y ?? 0) -
+    ((warningBox?.y ?? 0) + (warningBox?.height ?? 0));
+  expect(desktopGap).toBeGreaterThanOrEqual(15);
+  expect(desktopGap).toBeLessThanOrEqual(17);
 
   const cardLeft = artifactCardBox?.x ?? 0;
   const cardRight = cardLeft + (artifactCardBox?.width ?? 0);
@@ -933,22 +1070,26 @@ test("scanning uses a frameless responsive workspace", async ({
     });
   }
 
-  await page.setViewportSize({ width: 1024, height: 900 });
-  const [narrowWarningBox, narrowNoticeBox] = await Promise.all([
-    scannerWarning.boundingBox(),
-    enforcementNotice.boundingBox(),
-  ]);
-  expect(
-    Math.abs((narrowWarningBox?.x ?? 0) - (narrowNoticeBox?.x ?? 0)),
-  ).toBeLessThan(2);
-  expect(narrowNoticeBox?.y ?? 0).toBeGreaterThanOrEqual(
-    (narrowWarningBox?.y ?? 0) + (narrowWarningBox?.height ?? 0) + 12,
-  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  const narrowWarningBox = await scannerWarning.boundingBox();
+  const narrowCardBox = await artifactScanCard.boundingBox();
+  const mobileGap =
+    (narrowCardBox?.y ?? 0) -
+    ((narrowWarningBox?.y ?? 0) + (narrowWarningBox?.height ?? 0));
+  expect(mobileGap).toBeGreaterThanOrEqual(15);
+  expect(mobileGap).toBeLessThanOrEqual(17);
   expect(
     await page.evaluate(
       () => document.body.scrollWidth - document.body.clientWidth,
     ),
   ).toBe(0);
+  expect(pageErrors).toEqual([]);
+  if (process.env.CAPTURE_REPOSITORY_DETAIL) {
+    await page.screenshot({
+      path: testInfo.outputPath("repository-scanning-mobile.png"),
+      fullPage: true,
+    });
+  }
 });
 
 test("scanning selects a searchable immutable artifact before queuing", async ({
@@ -992,6 +1133,9 @@ test("scanning selects a searchable immutable artifact before queuing", async ({
 test("promotion selects a source artifact and a compatible Hosted target", async ({
   page,
 }, testInfo) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 900 });
   const coordinate = "releases/example-1.zip";
   const digest = `sha256:${"0".repeat(64)}`;
   await mockRepositoryDetail(page, { distributionEnabled: true });
@@ -1004,6 +1148,9 @@ test("promotion selects a source artifact and a compatible Hosted target", async
   );
 
   await page.goto(`/repositories/${repositoryId}?tab=distribute`);
+  await expect(page.locator(".ag-distribution").getByRole("alert")).toHaveCount(
+    0,
+  );
   const sourcePicker = page.getByRole("combobox", {
     name: "搜索并选择源制品",
   });
@@ -1044,6 +1191,25 @@ test("promotion selects a source artifact and a compatible Hosted target", async
   if (process.env.CAPTURE_REPOSITORY_DETAIL) {
     await page.screenshot({
       path: testInfo.outputPath("repository-promotion.png"),
+      fullPage: true,
+    });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(sourcePicker).toBeVisible();
+  // The select portal can briefly keep its desktop position while closing.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      ),
+    )
+    .toBeLessThanOrEqual(0);
+  expect(pageErrors).toEqual([]);
+  if (process.env.CAPTURE_REPOSITORY_DETAIL) {
+    await page.screenshot({
+      path: testInfo.outputPath("repository-promotion-mobile.png"),
       fullPage: true,
     });
   }
@@ -1295,7 +1461,11 @@ test("the grant dialog keeps every field reachable at both widths", async ({
         dialogBox!.x + dialogBox!.width + 1,
       );
 
-      if (width === 1440) expect(overflow.width).toBe(632);
+      if (width === 1440) {
+        // Browser font metrics can round the same modal by one CSS pixel.
+        expect(overflow.width).toBeGreaterThanOrEqual(630);
+        expect(overflow.width).toBeLessThanOrEqual(634);
+      }
       if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
         await page.screenshot({
           path: testInfo.outputPath(`grant-dialog-${width}-${mode}.png`),

@@ -47,6 +47,7 @@ var supportedScannerFormats = func() map[string]struct{} {
 	for _, format := range repository.SupportedFormats() {
 		formats[string(format)] = struct{}{}
 	}
+	formats[string(repository.FormatCargo)] = struct{}{}
 	return formats
 }()
 
@@ -61,6 +62,13 @@ type Config struct {
 	ConsoleThemeDir                 string
 	NodeRoles                       []NodeRole
 	InstanceID                      string
+	AccessLogMode                   string
+	AccessLogSlowMS                 int
+	LogBufferLines                  int
+	LogFileDirectory                string
+	LogFileMaxBytes                 int64
+	LogFileMaxBackups               int
+	LogFileMaxAge                   time.Duration
 	WorkerFormats                   []string
 	WorkerKinds                     []string
 	ScannerEndpoint                 string
@@ -137,6 +145,9 @@ func Load() (Config, error) {
 		ConsoleThemeDir:                 strings.TrimSpace(os.Getenv("GATEWAY_CONSOLE_THEME_DIR")),
 		NodeRoles:                       parseNodeRoles(os.Getenv("GATEWAY_NODE_ROLES")),
 		InstanceID:                      value("GATEWAY_INSTANCE_ID", "gateway-"+hostname()),
+		AccessLogMode:                   value("GATEWAY_ACCESS_LOG", "limited"),
+		AccessLogSlowMS:                 1000,
+		LogBufferLines:                  1000,
 		WorkerFormats:                   parseFilter(os.Getenv("GATEWAY_WORKER_FORMATS"), supportedWorkerFormats),
 		WorkerKinds:                     parseFilter(os.Getenv("GATEWAY_WORKER_KINDS"), supportedWorkerKinds),
 		ScannerEndpoint:                 strings.TrimSpace(os.Getenv("GATEWAY_SCANNER_ENDPOINT")),
@@ -208,7 +219,27 @@ func Load() (Config, error) {
 	if err := validateRuntimeConfig(cfg); err != nil {
 		return Config{}, err
 	}
+	if cfg.AccessLogMode != "limited" && cfg.AccessLogMode != "full" {
+		return Config{}, fmt.Errorf("GATEWAY_ACCESS_LOG must be limited or full")
+	}
+	if slowMS, err := positiveIntEnv("GATEWAY_ACCESS_LOG_SLOW_MS", cfg.AccessLogSlowMS, false); err != nil {
+		return Config{}, err
+	} else if slowMS > 60_000 {
+		return Config{}, fmt.Errorf("GATEWAY_ACCESS_LOG_SLOW_MS must be at most 60000")
+	} else {
+		cfg.AccessLogSlowMS = slowMS
+	}
+	if lines, err := positiveIntEnv("GATEWAY_LOG_BUFFER_LINES", cfg.LogBufferLines, true); err != nil {
+		return Config{}, err
+	} else if lines > 5000 {
+		return Config{}, fmt.Errorf("GATEWAY_LOG_BUFFER_LINES must be at most 5000")
+	} else {
+		cfg.LogBufferLines = lines
+	}
 
+	if err := configureLogFile(&cfg); err != nil {
+		return Config{}, err
+	}
 	if cfg.DatabaseURL == "" || cfg.RustFSEndpoint == "" || cfg.RustFSBucket == "" || cfg.RustFSAccessKey == "" || cfg.RustFSSecretKey == "" || cfg.AdminToken == "" || cfg.ResolverToken == "" {
 		return Config{}, fmt.Errorf("GATEWAY_DATABASE_URL, GATEWAY_RUSTFS_ENDPOINT, GATEWAY_RUSTFS_BUCKET, GATEWAY_RUSTFS_ACCESS_KEY, GATEWAY_RUSTFS_SECRET_KEY, GATEWAY_ADMIN_TOKEN, and GATEWAY_RESOLVER_TOKEN are required")
 	}

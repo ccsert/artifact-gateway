@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
 	"github.com/artifact-gateway/artifact-gateway/internal/evidence"
+	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
 	"github.com/artifact-gateway/artifact-gateway/internal/preflight"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
@@ -42,21 +44,54 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "apt-snapshot" {
 		os.Exit(aptpublication.RunArchiveCLI(context.Background(), os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
 	}
+	os.Exit(runGateway())
+}
+
+func runGateway() int {
+	runtimeSessionID := uuid.NewString()
+	slog.SetDefault(operationalog.NewLogger(os.Stdout, "unconfigured", runtimeSessionID))
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("invalid configuration", "error", err)
-		os.Exit(1)
+		return 1
 	}
+	logBuffer := operationalog.NewBuffer(cfg.LogBufferLines)
+	output := io.Writer(os.Stdout)
+	if logBuffer != nil {
+		output = io.MultiWriter(os.Stdout, logBuffer)
+	}
+	// The default stdout/buffer stay borrowed. A configured file owns its
+	// cleanup and receives the same JSON after the logger's shared redaction.
+	fallback := operationalog.NewLogger(os.Stderr, cfg.InstanceID, runtimeSessionID)
+	logOutput, err := newRuntimeLogOutput(cfg, output, fallback)
+	if err != nil {
+		fallback.Error("initialize runtime file log output", "error", err)
+		return 1
+	}
+	exitCode, cleanupErr := runWithLogOutput(logOutput, func() int {
+		slog.SetDefault(operationalog.NewLogger(logOutput, cfg.InstanceID, runtimeSessionID))
+		return runConfiguredGateway(cfg, runtimeSessionID, logBuffer)
+	})
+	if cleanupErr != nil {
+		// The managed output is already closed, so report through a borrowed
+		// fallback rather than recursively writing to the failed destination.
+		operationalog.NewLogger(os.Stderr, cfg.InstanceID, runtimeSessionID).Error("close runtime log output", "error", cleanupErr)
+	}
+	return exitCode
+}
 
+func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer *operationalog.Buffer) int {
 	dependencies := app.NewDependencies(cfg)
+	dependencies.Runtime.SessionID = runtimeSessionID
+	dependencies.LogBuffer = logBuffer
 	if _, err := dependencies.ConsoleThemes.List(); err != nil {
 		slog.Error("load Console themes", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	shutdownTracing, err := app.NewTracing(context.Background(), cfg)
 	if err != nil {
 		slog.Error("initialize tracing", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -68,11 +103,11 @@ func main() {
 	objectStore, err := app.NewRustFSOCIObjectStore(cfg.RustFSEndpoint, cfg.RustFSAccessKey, cfg.RustFSSecretKey, cfg.RustFSBucket)
 	if err != nil {
 		slog.Error("create OCI object store", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	if err := objectStore.EnsureBucket(context.Background()); err != nil {
 		slog.Error("ensure OCI cache bucket", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	dependencies.NativeMavenObjectStore = objectStore
 	dependencies.NativeOCIObjectStore = objectStore
@@ -80,13 +115,14 @@ func main() {
 	dependencies.NativeNPMObjectStore = objectStore
 	dependencies.NativePyPIObjectStore = objectStore
 	dependencies.NativeGoObjectStore = objectStore
+	dependencies.NativeCargoObjectStore = objectStore
 	dependencies.NativeAPTObjectStore = objectStore
 
 	if len(cfg.APTRestoreTrustedFingerprints) > 0 {
 		trust, err := aptpublication.NewTrustedSnapshotArchiveVerifier(cfg.APTRestoreTrustedFingerprints, cfg.APTRestoreTrustedPublicKeys)
 		if err != nil {
 			slog.Error("configure APT restore trust", "error", err)
-			os.Exit(1)
+			return 1
 		}
 		dependencies.APTArchiveTrust = trust
 	}
@@ -98,7 +134,7 @@ func main() {
 		})
 		if signerErr != nil {
 			slog.Error("initialize APT Release signer", "error", signerErr)
-			os.Exit(1)
+			return 1
 		}
 		dependencies.APTSigner = aptSigner
 	}
@@ -110,7 +146,7 @@ func main() {
 		})
 		if scannerErr != nil {
 			slog.Error("initialize artifact scanner", "error", scannerErr)
-			os.Exit(1)
+			return 1
 		}
 		dependencies.ArtifactScanner = artifactScanner
 		dependencies.ArtifactScannerName = cfg.ScannerName
@@ -123,26 +159,26 @@ func main() {
 	databasePool, err := database.OpenPostgres(cfg.DatabaseURL, cfg.DatabasePool)
 	if err != nil {
 		slog.Error("open PostgreSQL connection pool", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() { _ = databasePool.Close() }()
 	dependencies = dependencies.WithDatabasePool(databasePool)
 	notificationPool, err := database.OpenPostgres(cfg.DatabaseURL, database.NotificationPoolConfig())
 	if err != nil {
 		slog.Error("open PostgreSQL notification pool", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() { _ = notificationPool.Close() }()
 	artifactLockPool, err := database.OpenPostgres(cfg.DatabaseURL, cfg.DatabaseArtifactLockPool)
 	if err != nil {
 		slog.Error("open PostgreSQL artifact lock pool", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() { _ = artifactLockPool.Close() }()
 	store, err := repository.NewPostgresStoreWithPools(databasePool, notificationPool, artifactLockPool)
 	if err != nil {
 		slog.Error("open repository store", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() { _ = store.Close() }()
 	if dependencies.ArtifactScanner != nil {
@@ -158,13 +194,13 @@ func main() {
 	coordinatorPool, err := database.OpenPostgres(cfg.DatabaseURL, cfg.DatabaseCoordinatorPool)
 	if err != nil {
 		slog.Error("open PostgreSQL cache coordinator pool", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() { _ = coordinatorPool.Close() }()
 	coordinator, err := app.NewPostgresCacheCoordinatorWithPools(coordinatorPool, databasePool)
 	if err != nil {
 		slog.Error("open PostgreSQL cache coordinator", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() { _ = coordinator.Close() }()
 	dependencies.NPMMetadataTTL = cfg.NPMMetadataCacheTTL
@@ -174,13 +210,13 @@ func main() {
 	cacheStore, err := app.NewPostgresCacheControlStoreWithDB(objectStore, databasePool)
 	if err != nil {
 		slog.Error("open PostgreSQL cache control store", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() { _ = cacheStore.Close() }()
 	taskQueue, err := app.NewPostgresCacheTaskQueueWithPools(databasePool, notificationPool)
 	if err != nil {
 		slog.Error("open PostgreSQL cache task queue", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() { _ = taskQueue.Close() }()
 	quota := app.NewCacheQuota(cacheStore, cfg.RepositoryCacheQuotas).WithCoordinator(coordinator)
@@ -194,15 +230,17 @@ func main() {
 		WithDatabasePoolStats("coordinator", coordinatorPool.Stats).
 		WithDatabasePoolStats("notifications", notificationPool.Stats).
 		WithNodeIdentity(cfg.InstanceID, nodeRoleStrings(cfg.NodeRoles))
-	runtimeContext := signalContext()
+	runtimeContext, stopRuntime := signalContext()
+	defer stopRuntime()
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
 	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_health_enabled", cfg.ScannerHealthEndpoint != "", "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats, "scanner_database_max_age", cfg.ScannerDatabaseMaxAge, "apt_signer_enabled", cfg.APTSignerEnabled(), "apt_signer_trusted_fingerprint_count", len(cfg.APTSignerTrustedFingerprints), "raw_cache_max_object_bytes", cfg.RawCacheMaxObjectBytes, "raw_cache_max_concurrent_spools", cfg.RawCacheMaxConcurrentSpools)
-	runtimeSessionID := uuid.NewString()
 	heartbeat := &app.RuntimeNodeHeartbeat{
 		Store: store,
 		Node: repository.RuntimeNode{
 			InstanceID:    cfg.InstanceID,
 			SessionID:     runtimeSessionID,
+			BuildVersion:  dependencies.BuildVersion,
+			BuildRevision: dependencies.BuildRevision,
 			Roles:         nodeRoleStrings(cfg.NodeRoles),
 			WorkerFormats: append([]string(nil), cfg.WorkerFormats...),
 			WorkerKinds:   append([]string(nil), cfg.WorkerKinds...),
@@ -257,7 +295,7 @@ func main() {
 	case err := <-errs:
 		if !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("gateway stopped", "error", err)
-			os.Exit(1)
+			return 1
 		}
 	case <-runtimeContext.Done():
 		select {
@@ -276,12 +314,13 @@ func main() {
 			slog.Error("graceful shutdown failed", "error", err)
 		}
 	}
+	return 0
 }
 
-func signalContext() context.Context {
+func signalContext() (context.Context, context.CancelFunc) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	go func() { <-ctx.Done(); stop() }()
-	return ctx
+	return ctx, stop
 }
 
 func nodeRoleStrings(roles []config.NodeRole) []string {

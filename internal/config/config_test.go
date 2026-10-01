@@ -62,6 +62,9 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	t.Setenv("GATEWAY_NPM_PROXY_BREAKER_TTL", "12s")
 	t.Setenv("GATEWAY_LOCAL_AUTH_MAX_FAILED_ATTEMPTS", "7")
 	t.Setenv("GATEWAY_LOCAL_AUTH_LOCKOUT_DURATION", "20m")
+	t.Setenv("GATEWAY_ACCESS_LOG", "full")
+	t.Setenv("GATEWAY_ACCESS_LOG_SLOW_MS", "2500")
+	t.Setenv("GATEWAY_LOG_BUFFER_LINES", "1200")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -92,6 +95,43 @@ func TestLoadAcceptsNativeConfiguration(t *testing.T) {
 	}
 	if cfg.RuntimeNodeRetention != 7*24*time.Hour || cfg.RuntimeNodePruneInterval != time.Hour {
 		t.Fatalf("runtime node cleanup defaults = retention %s interval %s", cfg.RuntimeNodeRetention, cfg.RuntimeNodePruneInterval)
+	}
+	if cfg.AccessLogMode != "full" || cfg.AccessLogSlowMS != 2500 {
+		t.Fatalf("access log policy = mode %q slow %d", cfg.AccessLogMode, cfg.AccessLogSlowMS)
+	}
+	if cfg.LogBufferLines != 1200 {
+		t.Fatalf("log buffer lines = %d", cfg.LogBufferLines)
+	}
+}
+
+func TestLoadBoundsRuntimeLogBuffer(t *testing.T) {
+	for _, value := range []string{"-1", "5001", "many"} {
+		setCompleteConfiguration(t)
+		t.Setenv("GATEWAY_LOG_BUFFER_LINES", value)
+		if _, err := Load(); err == nil {
+			t.Fatalf("accepted GATEWAY_LOG_BUFFER_LINES=%q", value)
+		}
+	}
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_LOG_BUFFER_LINES", "0")
+	if cfg, err := Load(); err != nil || cfg.LogBufferLines != 0 {
+		t.Fatalf("disabled buffer = %d, %v", cfg.LogBufferLines, err)
+	}
+}
+
+func TestLoadRejectsUnsafeAccessLogPolicy(t *testing.T) {
+	for _, test := range []struct{ name, mode, slow string }{
+		{name: "unknown mode", mode: "everything"},
+		{name: "zero slow threshold", mode: "limited", slow: "0"},
+		{name: "unbounded slow threshold", mode: "limited", slow: "60001"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("GATEWAY_ACCESS_LOG", test.mode)
+			t.Setenv("GATEWAY_ACCESS_LOG_SLOW_MS", test.slow)
+			if _, err := Load(); err == nil {
+				t.Fatal("invalid access log configuration accepted")
+			}
+		})
 	}
 }
 

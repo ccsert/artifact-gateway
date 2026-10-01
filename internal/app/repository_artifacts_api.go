@@ -123,6 +123,9 @@ func validArtifactIntelligenceIdentity(format repository.Format, coordinate, dig
 	if coordinate == "" || len(coordinate) > 1024 || strings.ContainsRune(coordinate, '\x00') || !validSHA256Digest(digest) {
 		return false
 	}
+	if format == repository.FormatCargo {
+		return validCargoVersionCoordinate(coordinate)
+	}
 	return repository.IsSupportedFormat(format) && (format != repository.FormatAPT || repository.ValidAPTArtifactCoordinate(coordinate))
 }
 

@@ -45,7 +45,8 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [APT Hosted 生命周期](apt-hosted-lifecycle.zh-CN.md) — 签名删除、保留、恢复窗口与引用安全的快照清理。
 - [APT Hosted 分发](apt-hosted-distribution.zh-CN.md) — 目标签名晋级、验证复制与 Worker 恢复。
 - [APT Hosted 路线图](apt-hosted-roadmap.zh-CN.md) — H1-H4 有序验收门禁。
-- [Cargo 仓库研究](cargo-repository-research.zh-CN.md) — Sparse Registry 建议与 C0-C4 路线图。
+- [Cargo 客户端配置](cargo-usage.zh-CN.md) — Hosted、Proxy、Group 的仓库配置与命令。
+- [Cargo 仓库研究](cargo-repository-research.zh-CN.md) — Sparse Registry 设计决策与 C0-C4 实施记录。
 - [NuGet 路线图](nuget-roadmap.zh-CN.md) — 已延期的协议与生命周期计划。
 - [旧 Group 迁移](legacy-group-migration.zh-CN.md) — 兼容行为与迁移指引。
 - [Gitea 后端参考](gitea-backend-reference.zh-CN.md) — Preflight 和证据闭环设计参考。

@@ -34,7 +34,7 @@ afterEach(() => {
 });
 
 describe("RepositoryUsageTab", () => {
-  it("renders lifetime totals and per-artifact download counts", async () => {
+  it("shows per-artifact downloads without redundant summary cards", async () => {
     mockListRepositoryArtifactUsage.mockResolvedValue({
       data: {
         repositoryId: repository.id,
@@ -69,8 +69,8 @@ describe("RepositoryUsageTab", () => {
     );
 
     expect(await screen.findByText("@scope/widget@1.2.3")).toBeInTheDocument();
-    expect(screen.getByText("12")).toBeInTheDocument();
     expect(screen.getByText("10")).toBeInTheDocument();
+    expect(screen.queryByText("累计下载")).not.toBeInTheDocument();
     expect(screen.getByText("build-agent")).toBeInTheDocument();
     expect(screen.queryByText("暂无下载记录")).not.toBeInTheDocument();
   });
@@ -92,7 +92,7 @@ describe("RepositoryUsageTab", () => {
     );
 
     expect(await screen.findByText("暂无下载记录")).toBeInTheDocument();
-    expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("累计下载")).not.toBeInTheDocument();
   });
 
   it("reloads usage when refresh is clicked", async () => {
@@ -116,5 +116,37 @@ describe("RepositoryUsageTab", () => {
     await vi.waitFor(() => {
       expect(mockListRepositoryArtifactUsage).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("keeps loaded rows visible when refresh fails", async () => {
+    const user = userEvent.setup();
+    mockListRepositoryArtifactUsage
+      .mockResolvedValueOnce({
+        data: {
+          repositoryId: repository.id,
+          generatedAt: "2026-09-17T08:00:00Z",
+          totals: { downloadCount: 1, totalBytes: 512, resources: 1 },
+          items: [
+            {
+              format: "npm",
+              resource: "widget@1.0.0",
+              downloadCount: 1,
+              totalBytes: 512,
+              firstDownloadedAt: "2026-09-17T07:00:00Z",
+              lastDownloadedAt: "2026-09-17T08:00:00Z",
+            },
+          ],
+        },
+      } as never)
+      .mockRejectedValueOnce(new Error("temporary failure"));
+    render(
+      <PreferencesProvider>
+        <RepositoryUsageTab repo={repository} />
+      </PreferencesProvider>,
+    );
+    await screen.findByText("widget@1.0.0");
+    await user.click(screen.getByRole("button", { name: /刷\s*新/ }));
+    expect(await screen.findByText("temporary failure")).toBeVisible();
+    expect(screen.getByText("widget@1.0.0")).toBeVisible();
   });
 });

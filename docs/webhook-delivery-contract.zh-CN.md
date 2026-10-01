@@ -4,13 +4,19 @@
 
 状态：持久运维 Webhook 投递的规范契约。
 
-## 第一阶段
+## 事件目录
 
 第一阶段发布两个已具备版本化 Repository 本地身份的安全治理事件：`artifact.quarantined` 与 `artifact.released`。
 
 Artifact 隔离状态转换、不可变事件以及每个匹配且启用订阅的一次投递，必须在同一数据库事务中提交。禁止通过轮询审计日志事后重建事件。
 
 每个事件拥有稳定 UUID，并保存 Repository ID/格式、规范坐标与摘要、隔离状态/原因/操作者/版本，以及发生时间。
+
+Cargo 制品分发事件包括 `cargo.promotion.completed`、`cargo.promotion.failed`、`cargo.replication.completed` 和 `cargo.replication.failed`。
+
+仅当 Cargo 晋级作业或复制计划进入最终完成或失败状态时，才产生事件；等待自动重试的尝试不会提前产生失败事件。被暂停的复制计划会产生失败事件；之后显式重放同一计划可产生新的结果。操作最终状态、不可变事件和匹配订阅的投递在同一事务内提交。租约过期且尝试次数耗尽时遵循相同规则。
+
+Cargo 事件的 `data` 包含 `operationId`、`kind`（`promotion` 或 `replication`）、`format`（`cargo`）、`sourceRepositoryId`、`targetRepositoryId`、`coordinate`（`crate@version`）、`digest`、最终 `state` 和 `attempts`。不包含原始 Worker 错误消息或凭证；信封的 `occurredAt` 记录最终状态转换时间。
 
 投递语义为**至少一次**，消费方必须按事件 ID 去重。不同 Artifact 或订阅之间不保证顺序。
 

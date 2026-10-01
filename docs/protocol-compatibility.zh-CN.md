@@ -3,7 +3,7 @@
 [English detailed matrix](protocol-compatibility.md)
 
 状态：当前协议基线。本页覆盖 Artifact Gateway 已经存在的 OCI、Maven、Raw、Conan、
-npm、PyPI、Go 和 APT 协议，并用中文说明已实现行为、明确限制和回归门禁。英文页面保留
+npm、PyPI、Go、Cargo 和 APT 协议，并用中文说明已实现行为、明确限制和回归门禁。英文页面保留
 逐项的完整 Nexus 差异与规范链接；两页发生歧义时，以可执行测试和英文详细矩阵为准。
 
 ## 如何理解“兼容”
@@ -12,7 +12,7 @@ npm、PyPI、Go 和 APT 协议，并用中文说明已实现行为、明确限�
 - **Gateway 扩展**表示读取或基础上传沿用生态协议，但发布、删除或管理需要额外的 Gateway API。
 - **Proxy/Group 兼容**只覆盖明确列出的只读路径。它不自动继承 Hosted 的写入、Catalog、Referrer 或生命周期能力。
 - **回归门禁通过**证明当前 fixture 和真实客户端流程成立，不代表所有客户端版本、认证方式和扩展组合都经过测试。
-- **预览或研究**不得当作公开支持能力。APT Hosted、Cargo 和 NuGet 仍属于这一层级。
+- **预览或研究**不得当作公开支持能力。APT Hosted 和 NuGet 仍属于这一层级。
 
 ## Nexus 风格 Repository 根路径
 
@@ -48,6 +48,7 @@ Gateway Repository 名称前缀（或使用等价的 Ingress Rewrite），
 | npm Hosted / Proxy / Group | 标准 Packument、精确版本元数据和 Tarball；Hosted 支持 npm CLI 发布不可变 SemVer、scope、dist-tag、生命周期，以及基于 Gateway 主体标识回答的认证 `GET /npm/<repository>/-/whoami` 身份查询（不经过仓库授权）；Proxy 校验并缓存元数据/Tarball，支持条件重验、负缓存、stale 与分布式熔断；Group 按 Hosted 优先和成员顺序合并。 | 不支持需要认证的上游 Registry、发布后 dist-tag 修改、unpublish/deprecate 和漏洞数据库集成。 | `make native-npm-e2e`，协议、应用、Repository 测试及 PostgreSQL/RustFS 跨实例缓存、发布、Group 在线/离线安装测试。 |
 | PyPI Hosted / Proxy / Group | twine multipart 上传、PEP 503 HTML、PEP 691 JSON、Wheel/sdist 元数据校验、不可变 SHA-256 文件、真实 pip 安装与版本深链；Proxy 要求 SHA-256 上游链接并支持离线缓存；Group 采用 Hosted 优先冲突语义。 | 不支持认证上游、yank、Simple API 之外的项目元数据接口和漏洞数据库集成。 | `make native-pypi-e2e` 与 PostgreSQL/RustFS 跨实例发布、搜索、墓碑和恢复测试。 |
 | Go Hosted / Proxy / Group | `/go/<repository>/<escaped-module>/...` 下的标准 GOPROXY 读取，覆盖 `@v/list`、`@latest`、`.info`、`.mod`、`.zip`、转义、ETag/HEAD、stale/offline 与 Group 聚合。Proxy 支持 `none`/`basic`/`bearer` 认证上游凭据（以 `GATEWAY_SETTINGS_ENCRYPTION_KEY` 封装，只应用于 Go Proxy 抓取，并在跨主机重定向时剥离），并可镜像一个已列入 egress 允许列表的校验和数据库：`/go/<repository>/sumdb/<name>/supported` 探测仅对允许列表内的主机返回 `200`，`/latest`、`/lookup/`、`/tile/` 请求经允许列表内的 HTTPS egress 与仓库 egress 代理策略转发，原样透传上游状态码、内容类型与签名树字节，不缓存、不附带上游凭据。Hosted 同时接受 Gateway 显式模块/版本 ZIP 路径，以及 Nexus 3.93+ 的 `PUT /repository/<repository>/<version>.zip`；后者先从规范 ZIP 根目录推导模块，再执行资源授权。两条路径都原子派生三种表示，并支持扫描、墓碑/恢复、保留、晋升和复制。默认关闭的 Hosted 隔离读取策略会把被隔离的模块版本从 `@v/list` 与 `/@latest` 隐藏，阻断 `info`/`mod`/`zip` 全部表示，并阻止 Group fallback。 | Gateway 显式模块/版本上传仍是扩展；校验和数据库的可用性与 `GONOSUMDB`/`GOPRIVATE` 范围由操作者负责，镜像目标不可达时按 go 客户端自身的代理契约直接失败、不再回落。 | `make native-go-e2e`（含真实 go 客户端经镜像校验和数据库的签名验证）与 PostgreSQL/RustFS 跨实例发布、缓存、身份、恢复/回收串行化、晋升、复制、搜索和容量测试。 |
+| Cargo Hosted / Proxy / Group | `/cargo/<repository>/` 下的 sparse index 与 Cargo Registry API；Hosted 支持不可变 `.crate` 发布、搜索、yank/unyank、私有或匿名读取，以及管理墓碑/恢复、保留、隔离、晋升和持久检查点复制。Proxy 校验上游摘要后缓存，已缓存版本可离线重放。Group 持久保存 crate/version owner，拒绝成员冲突，重排或恢复不改变原 owner 字节。 | 不支持 Git index、`cargo owner`、Cargo Proxy 上游认证凭据或经 Proxy/Group 写入。混合私有 Group 不能作为 crates.io 源替换，必须使用独立 Registry 身份。 | `make cargo-contract`（Cargo 1.96.0）、PostgreSQL/RustFS 上的 `make integration-test`、`make backup-restore-readiness` 与 `make cargo-upgrade-readiness`；[Cargo 客户端配置](cargo-usage.zh-CN.md)。 |
 | APT Proxy / Group | `/apt/<repository>/...` 原样读取 Release/InRelease、签名、Index、by-hash 和 Pool 软件包；支持 SHA-256 缓存、ETag/HEAD、授权过滤、Group fallback、搜索与 Console 浏览。非公开 Hosted 预览支持暂存、原子签名快照、固定公钥验证、TLS、签名状态、Range 与真实 Debian 安装/轮换门禁，并在 Console 提供签名快照导出与离线归档完整性校验、同仓库受信任归档恢复、删除/保留/恢复/修剪、以及生成目标自身签名的晋升与复制。 | APT Hosted 尚缺生产 KMS/HSM 托管、密钥恢复、已安装告警、密钥分发、上游认证、通用定时保留策略执行器、Console 首次发布表单，以及 APT Group 聚合，因此不作为公开 Hosted 能力。 | `make native-apt-e2e`、`make apt-signer-rotation-e2e`，以及迁移、暂存清理、签名快照、归档导出/恢复、分发、容量与搜索测试。 |
 | Conan 2 | `/conan/v2/<repository>/...` 下的 Group/Proxy read-through 与原生 Hosted 解析；支持发布 Session、Recipe/Package revision 删除恢复、延迟引用安全回收、浏览搜索、晋升和复制。隔离读取以 Recipe revision 为分发锚点并阻止 Group 重新引入。 | 不支持 Conan 1、通用上游索引聚合、remote-to-remote 复制和不可变 revision 生命周期之外的包管理。 | `make conan-e2e`、Handler 测试及 PostgreSQL 生命周期、搜索、复制与回收 Worker 集成测试。 |
 
@@ -87,6 +88,7 @@ Gateway Repository 名称前缀（或使用等价的 Ingress Rewrite），
 - Go：[GOPROXY protocol](https://go.dev/ref/mod#goproxy-protocol) 与
   [Nexus Go CLI usage](https://help.sonatype.com/en/go-cli-usage.html)；读取保持标准，Hosted
   同时接受 Nexus 版本 ZIP 上传与 Gateway 显式模块/版本路径。
+- Cargo：[Cargo Registry Index](https://doc.rust-lang.org/cargo/reference/registry-index.html)；`api/openapi/protocols/cargo.yaml` 定义 sparse 路由，`make cargo-contract` 运行官方客户端流程；配置见[Cargo 客户端配置](cargo-usage.zh-CN.md)。
 - APT：[Debian Repository Format](https://wiki.debian.org/DebianRepository/Format)，Proxy 与
   Group 原样保留签名元数据和软件包字节。
 
@@ -97,4 +99,4 @@ README 只保留简明能力与入口，精确协议声明应更新本页及英�
 [格式扩展指南](format-extension-guide.zh-CN.md)中的完整准入门禁。
 
 任何协议能力变更都必须同步更新对应 OpenAPI 源、聚焦测试、真实客户端 E2E 和两种语言
-的兼容性说明。APT Hosted、Cargo 与 NuGet 等预览或研究能力不得混入公开支持矩阵。
+的兼容性说明。APT Hosted 与 NuGet 等预览或研究能力不得混入公开支持矩阵。

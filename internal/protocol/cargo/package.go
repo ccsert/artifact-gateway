@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/url"
 	"path"
 	"regexp"
@@ -546,8 +547,18 @@ func validOptionalURL(value *string) bool {
 
 func validSparseRegistryURL(value string) bool {
 	parsed, err := url.ParseRequestURI(value)
-	return err == nil && parsed.IsAbs() && parsed.Hostname() != "" && parsed.User == nil && parsed.RawQuery == "" && parsed.Fragment == "" &&
-		parsed.Scheme == "sparse+https" && strings.HasSuffix(parsed.Path, "/")
+	if err != nil || !parsed.IsAbs() || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
+		!strings.HasSuffix(parsed.Path, "/") {
+		return false
+	}
+	if parsed.Scheme == "sparse+https" {
+		return true
+	}
+	if parsed.Scheme != "sparse+http" {
+		return false
+	}
+	address := net.ParseIP(parsed.Hostname())
+	return parsed.Hostname() == "localhost" || address != nil && address.IsLoopback()
 }
 
 func validCargoVersionRequirement(value string) bool {

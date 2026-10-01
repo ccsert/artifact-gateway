@@ -15,6 +15,7 @@ const (
 	FormatNPM   Format = "npm"
 	FormatPyPI  Format = "pypi"
 	FormatGo    Format = "go"
+	FormatCargo Format = "cargo"
 	// FormatAPT is a protocol-only Debian repository proxy. APT publication
 	// requires trusted Release metadata and signing, so Hosted is intentionally
 	// not admitted until that workflow is implemented.
@@ -218,6 +219,20 @@ type RepositoryCapacity struct {
 type RepositoryCapacityRecord struct {
 	Repository HostedRepository
 	Capacity   RepositoryCapacity
+}
+
+// RequestWindowCounts counts audited protocol requests in rolling windows.
+// Windows are inclusive of their lower boundary and end at the snapshot time.
+type RequestWindowCounts struct {
+	OneDay     int64 `json:"oneDay"`
+	SevenDays  int64 `json:"sevenDays"`
+	ThirtyDays int64 `json:"thirtyDays"`
+}
+
+type RepositoryRequestStatistics struct {
+	Repository string
+	Requests   RequestWindowCounts
+	Denied     RequestWindowCounts
 }
 
 type HostedGroup struct {
@@ -638,6 +653,8 @@ type OCIUpload struct {
 type RuntimeNode struct {
 	InstanceID    string
 	SessionID     string
+	BuildVersion  string
+	BuildRevision string
 	Roles         []string
 	WorkerFormats []string
 	WorkerKinds   []string
@@ -1328,8 +1345,12 @@ type AuditCleanupJob struct {
 type WebhookEventType string
 
 const (
-	WebhookEventArtifactQuarantined WebhookEventType = "artifact.quarantined"
-	WebhookEventArtifactReleased    WebhookEventType = "artifact.released"
+	WebhookEventArtifactQuarantined       WebhookEventType = "artifact.quarantined"
+	WebhookEventArtifactReleased          WebhookEventType = "artifact.released"
+	WebhookEventCargoPromotionCompleted   WebhookEventType = "cargo.promotion.completed"
+	WebhookEventCargoPromotionFailed      WebhookEventType = "cargo.promotion.failed"
+	WebhookEventCargoReplicationCompleted WebhookEventType = "cargo.replication.completed"
+	WebhookEventCargoReplicationFailed    WebhookEventType = "cargo.replication.failed"
 )
 
 type WebhookSubscription struct {
@@ -1400,4 +1421,19 @@ type ArtifactQuarantineWebhookData struct {
 	Reason       string                  `json:"reason"`
 	Actor        string                  `json:"actor"`
 	Version      string                  `json:"version"`
+}
+
+// CargoDistributionWebhookData describes a durable operation state change.
+// Failure details remain in the authenticated management API rather than the
+// outbound payload, where they could contain dependency or storage context.
+type CargoDistributionWebhookData struct {
+	OperationID        string `json:"operationId"`
+	Kind               string `json:"kind"`
+	Format             Format `json:"format"`
+	SourceRepositoryID string `json:"sourceRepositoryId"`
+	TargetRepositoryID string `json:"targetRepositoryId"`
+	Coordinate         string `json:"coordinate"`
+	Digest             string `json:"digest"`
+	State              string `json:"state"`
+	Attempts           int    `json:"attempts"`
 }

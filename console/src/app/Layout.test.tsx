@@ -10,6 +10,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { PreferencesProvider } from "../lib/preferences";
 import { AppLayout } from "./Layout";
+import { getDiagnostics } from "../client";
+
+vi.mock("../client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../client")>()),
+  getDiagnostics: vi.fn(),
+}));
+
+const mockGetDiagnostics = vi.mocked(getDiagnostics);
 
 const auth = vi.hoisted(() => ({
   token: "operator-token",
@@ -58,6 +66,12 @@ function renderLayout(pathname: string) {
           <Route path="/service-accounts" element={<AppLayout />}>
             <Route index element={<div>service account management</div>} />
           </Route>
+          <Route path="/operations" element={<AppLayout />}>
+            <Route index element={<LocationProbe />} />
+          </Route>
+          <Route path="/system" element={<AppLayout />}>
+            <Route index element={<LocationProbe />} />
+          </Route>
         </Routes>
       </MemoryRouter>
     </PreferencesProvider>,
@@ -74,6 +88,10 @@ beforeEach(() => {
   });
   auth.setToken.mockReset();
   auth.clearToken.mockReset();
+  mockGetDiagnostics.mockReset();
+  mockGetDiagnostics.mockResolvedValue({
+    data: { build: { version: "v0.4.3", revision: "abc123" } },
+  } as never);
   window.localStorage.clear();
 });
 
@@ -253,11 +271,28 @@ describe("AppLayout", () => {
       within(desktopSider!).getByText("Artifact Gateway"),
     ).toBeInTheDocument();
     expect(
-      within(desktopSider!).getByText("Native Hosted API v2"),
+      within(desktopSider!).getByRole("link", {
+        name: /当前节点 · v0.4.3 · abc123/,
+      }),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /退出/ }));
     expect(auth.clearToken).toHaveBeenCalledOnce();
+  });
+
+  it("opens diagnostics from the connected build version", async () => {
+    const user = userEvent.setup();
+    renderLayout("/repositories");
+
+    const desktopSider =
+      document.querySelector<HTMLElement>(".ag-sider-desktop");
+    const versionLink = await within(desktopSider!).findByRole("link", {
+      name: /当前节点 · v0.4.3 · abc123/,
+    });
+    await user.click(versionLink);
+    expect(await screen.findByTestId("location")).toHaveTextContent(
+      "/system?tab=diagnostics",
+    );
   });
 
   it("discards token edits on cancel and clears credentials only on request", async () => {

@@ -40,6 +40,9 @@ const repositoryCapacityRecordsQuery = `WITH usage AS (
 	FROM native_go_assets WHERE collected_at IS NULL GROUP BY repository_id
 	UNION ALL
 	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
+	FROM native_cargo_publications GROUP BY repository_id
+	UNION ALL
+	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
 	FROM native_apt_assets GROUP BY repository_id
 	UNION ALL
 	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
@@ -56,7 +59,7 @@ const repositoryCapacityRecordsQuery = `WITH usage AS (
 	SELECT repository_id,SUM(used_bytes)::bigint AS used_bytes,SUM(object_count)::bigint AS object_count
 	FROM usage GROUP BY repository_id
 )
-SELECT h.id::text,h.name,h.format,h.repo_type,h.endpoint,
+SELECT h.id::text,h.name,h.format,h.repo_type,h.endpoint,h.state,
 	COALESCE(q.quota_bytes,0),COALESCE(t.used_bytes,0),COALESCE(t.object_count,0)
 FROM hosted_repositories h
 LEFT JOIN repository_capacity_quotas q ON q.repository_id=h.id
@@ -88,6 +91,7 @@ func (s *PostgresStore) GetRepositoryCapacity(ctx context.Context, id string) (R
 		FormatNPM:   `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_npm_versions WHERE repository_id::text=$1 AND object_key<>''`,
 		FormatPyPI:  `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_pypi_files WHERE repository_id::text=$1 AND object_key<>'' AND state='visible'`,
 		FormatGo:    `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_go_assets WHERE repository_id::text=$1 AND collected_at IS NULL`,
+		FormatCargo: `SELECT COALESCE(SUM(size),0),COUNT(*) FROM native_cargo_publications WHERE repository_id::text=$1 AND collected_at IS NULL`,
 		FormatAPT: `SELECT
 			COALESCE((SELECT SUM(size) FROM native_apt_assets WHERE repository_id::text=$1),0)+
 			COALESCE((SELECT SUM(size) FROM native_apt_package_revisions WHERE repository_id::text=$1),0)+
@@ -117,6 +121,7 @@ func (s *PostgresStore) ListRepositoryCapacityRecords(ctx context.Context) ([]Re
 			&record.Repository.Format,
 			&record.Repository.Type,
 			&record.Repository.Endpoint,
+			&record.Repository.State,
 			&record.Capacity.QuotaBytes,
 			&record.Capacity.UsedBytes,
 			&record.Capacity.ObjectCount,

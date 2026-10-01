@@ -23,6 +23,7 @@ import {
   repositoryPermissions,
 } from "../../lib/authorization";
 import {
+  CargoPublishGuide,
   NpmPublishGuide,
   OCIPublishGuide,
   PyPIPublishGuide,
@@ -246,7 +247,19 @@ export function RepositoryDetailPage() {
               onBrowseArtifact={(node) =>
                 setSearchParams((current) => {
                   const next = new URLSearchParams(current);
-                  next.set("artifact", node.coordinate ?? node.path ?? "");
+                  const cargoCoordinate =
+                    String(repo.format) === "cargo" &&
+                    (node.kind === "version" || node.kind === "asset")
+                      ? node.coordinate
+                      : undefined;
+                  if (cargoCoordinate?.includes("@")) {
+                    const separator = cargoCoordinate.lastIndexOf("@");
+                    next.set("artifact", cargoCoordinate.slice(0, separator));
+                    next.set("version", cargoCoordinate.slice(separator + 1));
+                  } else {
+                    next.set("artifact", node.coordinate ?? node.path ?? "");
+                    next.delete("version");
+                  }
                   if (node.buildNumber)
                     next.set("build", String(node.buildNumber));
                   else next.delete("build");
@@ -254,7 +267,6 @@ export function RepositoryDetailPage() {
                     next.set("asset", node.path);
                   else next.delete("asset");
                   next.delete("reference");
-                  next.delete("version");
                   return next;
                 })
               }
@@ -290,6 +302,9 @@ export function RepositoryDetailPage() {
           {activeTab === "publish" &&
             repo.format === "pypi" &&
             repo.type !== "proxy" && <PyPIPublishGuide repoName={repo.name} />}
+          {activeTab === "publish" &&
+            repo.format === "cargo" &&
+            repo.type !== "proxy" && <CargoPublishGuide repoName={repo.name} />}
           {activeTab === "grants" && (
             <>
               {effectiveAccess && (

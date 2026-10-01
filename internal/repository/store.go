@@ -16,6 +16,8 @@ var (
 	ErrQuotaExceeded                 = errors.New("repository capacity quota exceeded")
 	ErrUpstreamChanged               = errors.New("upstream immutable artifact metadata changed")
 	ErrInvalidGoModulePublication    = errors.New("go module publication is invalid")
+	ErrInvalidCargoIdentity          = errors.New("cargo identity reservation is invalid")
+	ErrCargoIdentityConflict         = errors.New("cargo identity is already reserved")
 	ErrArtifactTombstoned            = errors.New("artifact is tombstoned")
 	ErrInvalidRuntimeNode            = errors.New("runtime node identity is invalid")
 	ErrTemplateNameExists            = errors.New("authorization template name already exists")
@@ -177,6 +179,10 @@ type RepositoryCapacityStore interface {
 
 type RepositoryCapacityRecordStore interface {
 	ListRepositoryCapacityRecords(context.Context) ([]RepositoryCapacityRecord, error)
+}
+
+type RepositoryRequestStatisticsStore interface {
+	ListRepositoryRequestStatistics(context.Context, time.Time) ([]RepositoryRequestStatistics, error)
 }
 
 // BackgroundOperationMetrics accepts only bounded operation dimensions. It is

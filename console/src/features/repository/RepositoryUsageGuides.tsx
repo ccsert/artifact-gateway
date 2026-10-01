@@ -135,3 +135,41 @@ export function PyPIPublishGuide({ repoName }: { repoName: string }) {
     </div>
   );
 }
+
+export function CargoPublishGuide({ repoName }: { repoName: string }) {
+  const { text } = usePreferences();
+  const index = `sparse+${window.location.origin}/cargo/${repoName}/`;
+  return (
+    <div className="grid max-w-5xl gap-4 lg:grid-cols-2">
+      <div>
+        <h3 className="text-sm font-medium text-zinc-100">
+          {text("配置 Cargo 仓库", "Configure Cargo registry")}
+        </h3>
+        <p className="mt-1 text-xs leading-5 text-zinc-500">
+          {text(
+            "由管理员授予仓库写入权限。私有仓库和发布需要通过安全渠道注入 CARGO_REGISTRIES_GATEWAY_TOKEN，值为 Bearer 加 Gateway Token；不要写入配置文件。授权由仓库 Grant 管理，暂不支持 cargo owner。",
+            "Ask an administrator for repository write access. For private reads and publishing, inject CARGO_REGISTRIES_GATEWAY_TOKEN as Bearer followed by the Gateway token through a secret manager; never put it in the config file. Repository grants manage access; cargo owner is unsupported.",
+          )}
+        </p>
+      </div>
+      <div className="space-y-3">
+        <RepositorySnippetBlock
+          label=".cargo/config.toml"
+          code={`[registries.gateway]\nindex = "${index}"\ncredential-provider = "cargo:token"`}
+        />
+        <RepositorySnippetBlock
+          label={text("发布与读取", "Publish and read")}
+          code={
+            "cargo publish --registry gateway\ncargo search <crate> --registry gateway\ncargo add <crate> --registry gateway\ncargo install <crate> --registry gateway"
+          }
+        />
+        <RepositorySnippetBlock
+          label={text("撤回与恢复版本", "Yank and restore a version")}
+          code={
+            "cargo yank <crate>@<version> --registry gateway\ncargo yank --undo <crate>@<version> --registry gateway"
+          }
+        />
+      </div>
+    </div>
+  );
+}

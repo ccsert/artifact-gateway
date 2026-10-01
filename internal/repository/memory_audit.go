@@ -4,9 +4,19 @@ import (
 	"context"
 	"sort"
 	"time"
+
+	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
 )
 
-func (s *MemoryStore) RecordAudit(_ context.Context, record AuditRecord) error {
+func (s *MemoryStore) RecordAudit(ctx context.Context, record AuditRecord) error {
+	if ids, ok := requestcontext.FromContext(ctx); ok {
+		if record.RequestID == "" {
+			record.RequestID = ids.RequestID
+		}
+		if record.TraceID == "" {
+			record.TraceID = ids.TraceID
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.appendAuditLocked(record)
@@ -41,6 +51,47 @@ func cloneAuditEvidence(evidence map[string]string) map[string]string {
 func (s *MemoryStore) ListAudits(_ context.Context, query AuditQuery) ([]AuditRecord, error) {
 	page, err := s.ListAuditPage(context.Background(), query)
 	return page.Items, err
+}
+
+func (s *MemoryStore) ListRepositoryRequestStatistics(_ context.Context, now time.Time) ([]RepositoryRequestStatistics, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	now = now.UTC()
+	cutoff1, cutoff7, cutoff30 := now.Add(-24*time.Hour), now.Add(-7*24*time.Hour), now.Add(-30*24*time.Hour)
+	byRepository := make(map[string]*RepositoryRequestStatistics)
+	for _, audit := range s.Audits {
+		if audit.Repository == "" || audit.Format == "management" || audit.OccurredAt.Before(cutoff30) || audit.OccurredAt.After(now) {
+			continue
+		}
+		item := byRepository[audit.Repository]
+		if item == nil {
+			item = &RepositoryRequestStatistics{Repository: audit.Repository}
+			byRepository[audit.Repository] = item
+		}
+		denied := audit.Outcome == AuditAccessDenied || audit.Outcome == AuditProxyDenied || audit.Outcome == "denied"
+		item.Requests.ThirtyDays++
+		if denied {
+			item.Denied.ThirtyDays++
+		}
+		if !audit.OccurredAt.Before(cutoff7) {
+			item.Requests.SevenDays++
+			if denied {
+				item.Denied.SevenDays++
+			}
+		}
+		if !audit.OccurredAt.Before(cutoff1) {
+			item.Requests.OneDay++
+			if denied {
+				item.Denied.OneDay++
+			}
+		}
+	}
+	result := make([]RepositoryRequestStatistics, 0, len(byRepository))
+	for _, item := range byRepository {
+		result = append(result, *item)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Repository < result[j].Repository })
+	return result, nil
 }
 
 func (s *MemoryStore) ListAuditPage(_ context.Context, query AuditQuery) (AuditPage, error) {

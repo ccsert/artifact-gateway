@@ -73,6 +73,7 @@ function CreateRepositoryDialog({
       selectedFormat === "npm" ||
       selectedFormat === "pypi" ||
       selectedFormat === "go" ||
+      selectedFormat === "cargo" ||
       selectedFormat === "apt");
 
   const submit = async () => {
@@ -125,6 +126,7 @@ function CreateRepositoryDialog({
     npm: "https://registry.npmjs.org",
     pypi: "https://pypi.org",
     go: "https://proxy.golang.org",
+    cargo: "https://index.crates.io",
     apt: "https://deb.debian.org/debian",
   };
 
@@ -263,8 +265,8 @@ function CreateRepositoryDialog({
                   `Allowed hosts${needsHosts ? " (required)" : " (optional)"}`,
                 )}
                 hint={text(
-                  "逗号分隔的主机名；Raw、Conan、npm、PyPI、Go 和 APT 代理必填。PyPI 通常还需允许 files.pythonhosted.org",
-                  "Comma-separated hostnames; required for Raw, Conan, npm, PyPI, Go, and APT proxies. PyPI normally also requires files.pythonhosted.org",
+                  "逗号分隔的主机名；Raw、Conan、npm、PyPI、Go、Cargo 和 APT 代理必填。PyPI 通常还需允许 files.pythonhosted.org；Cargo 通常还需 static.crates.io。",
+                  "Comma-separated hostnames; required for Raw, Conan, npm, PyPI, Go, Cargo, and APT proxies. PyPI normally also requires files.pythonhosted.org; Cargo normally also requires static.crates.io.",
                 )}
               >
                 <Input
@@ -276,9 +278,11 @@ function CreateRepositoryDialog({
                         ? "files.pythonhosted.org"
                         : selectedFormat === "go"
                           ? "proxy.golang.org"
-                          : selectedFormat === "apt"
-                            ? "deb.debian.org"
-                            : "repo1.maven.org"
+                          : selectedFormat === "cargo"
+                            ? "index.crates.io, static.crates.io"
+                            : selectedFormat === "apt"
+                              ? "deb.debian.org"
+                              : "repo1.maven.org"
                   }
                   value={allowedHosts}
                   onChange={(e) => setAllowedHosts(e.target.value)}

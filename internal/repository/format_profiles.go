@@ -101,6 +101,28 @@ var supportedFormatProfiles = []FormatProfile{
 		},
 	},
 	{
+		Format:              FormatCargo,
+		RepositoryTypes:     []RepositoryType{RepositoryTypeHosted, RepositoryTypeProxy},
+		GroupSupported:      true,
+		AnonymousRead:       true,
+		PublicationScanning: true,
+		HostedOperations: []RepositoryOperation{
+			RepositoryOperationRead,
+			RepositoryOperationPublish,
+			RepositoryOperationBrowse,
+			RepositoryOperationDelete,
+			RepositoryOperationRestore,
+			RepositoryOperationRetain,
+			RepositoryOperationReclaim,
+			RepositoryOperationPromote,
+			RepositoryOperationReplicate,
+		},
+		ProxyOperations: []RepositoryOperation{
+			RepositoryOperationRead,
+			RepositoryOperationBrowse,
+		},
+	},
+	{
 		Format:              FormatAPT,
 		PublicationScanning: true,
 		RepositoryTypes:     []RepositoryType{RepositoryTypeProxy},

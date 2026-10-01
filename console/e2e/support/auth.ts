@@ -33,6 +33,39 @@ export async function authenticateWithIdentity(
       json: { authenticated: true, identity },
     }),
   );
+  // The app shell reads the connected build on every administrator page.
+  // Keep that common dependency authorized in mocked identity tests; a test
+  // exercising diagnostics can override this route with its own response.
+  if (identity.administrator) {
+    await page.route("**/api/v2/diagnostics", (route) =>
+      route.fulfill({
+        json: {
+          generatedAt: "2026-09-30T00:00:00Z",
+          build: {
+            version: "dev",
+            revision: "unknown",
+            goVersion: "go test",
+            modified: false,
+          },
+          runtime: {
+            instanceId: "test-gateway",
+            roles: ["api"],
+            workerFormats: [],
+            workerKinds: [],
+          },
+          dependencies: [],
+          queues: [],
+          nodes: {
+            status: "healthy",
+            online: 1,
+            stale: 0,
+            offline: 0,
+            issues: [],
+          },
+        },
+      }),
+    );
+  }
 }
 
 export function authenticateAsAdmin(page: Page) {

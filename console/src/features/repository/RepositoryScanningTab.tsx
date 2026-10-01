@@ -314,8 +314,8 @@ export function RepositoryScanningTab({
           </h2>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-zinc-500">
             {text(
-              "扫描不可变制品并将 SBOM、开源许可证和漏洞结果写入制品情报；签名与 Provenance 仍由发布流程提供。",
-              "Scan immutable artifacts and write SBOM, open-source license, and vulnerability results into artifact intelligence. Signatures and provenance still come from the publication pipeline.",
+              "扫描将 SBOM、许可证和漏洞结果写入制品情报；扫描失败不回滚上传，结果也不会自动隔离或阻断读取。",
+              "Scanning writes SBOM, license, and vulnerability results to artifact intelligence. Failures do not roll back uploads, and results do not automatically quarantine artifacts or block reads.",
             )}
           </p>
         </div>
@@ -335,61 +335,45 @@ export function RepositoryScanningTab({
         </Space>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        {!artifactScanning && (
-          <Alert
-            type="warning"
-            showIcon
-            title={text(
-              "当前仓库未配置可用扫描器",
-              "No scanner is configured for this repository",
-            )}
-            description={
-              <span>
-                {text(
-                  "请由平台管理员在 Gateway 部署环境中配置 ",
-                  "Ask a platform administrator to configure ",
-                )}
-                <code>GATEWAY_SCANNER_ENDPOINT</code>
-                {text(" 和 ", " and ")}
-                <code>GATEWAY_SCANNER_FORMATS</code>
-                {text(
-                  "，并确保 Worker 节点启用 scan 任务。Endpoint 与令牌不会在 Console 中暴露。",
-                  " in the Gateway deployment and enable scan jobs on worker nodes. The endpoint and token are not exposed in the Console.",
-                )}
-              </span>
-            }
-          />
-        )}
-        {artifactScanning && !canManage && (
-          <Alert
-            type="info"
-            showIcon
-            title={text(
-              "当前身份没有制品扫描权限",
-              "This identity cannot manage artifact scans",
-            )}
-            description={text(
-              "提交扫描和历史对账需要 repositories:intelligence 权限。",
-              "Queueing scans and historical reconciliation require repositories:intelligence.",
-            )}
-          />
-        )}
-        <div className={artifactScanning && canManage ? "xl:col-span-2" : ""}>
-          <Notice
-            tone="info"
-            closable={false}
-            title={text(
-              "扫描与处置是两个步骤",
-              "Scanning and enforcement are separate",
-            )}
-            description={text(
-              "扫描与发布后调度都是异步 best-effort：失败不会回滚已成功的上传。扫描结果不会自动隔离制品，也不会直接阻断读取；读取阻断需要管理员隔离制品并启用独立的隔离读取策略。",
-              "Scanning and scan-on-publish scheduling are asynchronous and best effort; failures do not roll back a successful upload. Results do not automatically quarantine artifacts or block reads. Read blocking requires an administrator to quarantine the artifact and enable the separate quarantine-read policy.",
-            )}
-          />
-        </div>
-      </div>
+      {!artifactScanning && (
+        <Alert
+          type="warning"
+          showIcon
+          title={text(
+            "当前仓库未配置可用扫描器",
+            "No scanner is configured for this repository",
+          )}
+          description={
+            <span>
+              {text(
+                "请由平台管理员在 Gateway 部署环境中配置 ",
+                "Ask a platform administrator to configure ",
+              )}
+              <code>GATEWAY_SCANNER_ENDPOINT</code>
+              {text(" 和 ", " and ")}
+              <code>GATEWAY_SCANNER_FORMATS</code>
+              {text(
+                "，并确保 Worker 节点启用 scan 任务。Endpoint 与令牌不会在 Console 中暴露。",
+                " in the Gateway deployment and enable scan jobs on worker nodes. The endpoint and token are not exposed in the Console.",
+              )}
+            </span>
+          }
+        />
+      )}
+      {artifactScanning && !canManage && (
+        <Alert
+          type="info"
+          showIcon
+          title={text(
+            "当前身份没有制品扫描权限",
+            "This identity cannot manage artifact scans",
+          )}
+          description={text(
+            "提交扫描和历史对账需要 repositories:intelligence 权限。",
+            "Queueing scans and historical reconciliation require repositories:intelligence.",
+          )}
+        />
+      )}
 
       {submittedJob && (
         <Notice

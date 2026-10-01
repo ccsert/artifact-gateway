@@ -1,7 +1,7 @@
 import type { UsageSnippet } from "./usage";
 
 export type PublicRepositoryFormat =
-  "oci" | "maven" | "conan" | "raw" | "npm" | "pypi" | "go" | "apt";
+  "oci" | "maven" | "conan" | "raw" | "npm" | "pypi" | "go" | "cargo" | "apt";
 
 export interface PublicRepositoryUsageContext {
   format: PublicRepositoryFormat;
@@ -73,6 +73,20 @@ export function publicRepositoryUsage({
       {
         label: text("临时使用", "One-off usage"),
         code: `GOPROXY=${proxy} go mod download`,
+      },
+    ];
+  }
+  if (format === "cargo") {
+    const index = `sparse+${origin}/cargo/${repositoryName}/`;
+    return [
+      { label: text("Cargo sparse 索引", "Cargo sparse index"), code: index },
+      {
+        label: ".cargo/config.toml",
+        code: `[registries.gateway]\nindex = "${index}"\ncredential-provider = "cargo:token"`,
+      },
+      {
+        label: text("查找与安装 crate", "Search and install a crate"),
+        code: "cargo search <crate> --registry gateway\ncargo add <crate> --registry gateway\ncargo install <crate> --registry gateway",
       },
     ];
   }

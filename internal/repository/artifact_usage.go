@@ -49,6 +49,7 @@ var artifactFormatsCountedForUsage = map[Format]bool{
 	FormatNPM:   true,
 	FormatPyPI:  true,
 	FormatGo:    true,
+	FormatCargo: true,
 	FormatAPT:   true,
 	FormatConan: true,
 }

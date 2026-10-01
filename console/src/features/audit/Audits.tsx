@@ -24,15 +24,11 @@ import {
   ConsoleTable,
   FilterBar,
   FilterField,
-  MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
+import { Link } from "react-router-dom";
 import { auditOperationLabel } from "./auditOperations";
-import {
-  auditOutcomeIsDenied,
-  auditOutcomeLabel,
-  auditOutcomeTone,
-} from "./auditOutcomes";
+import { auditOutcomeLabel, auditOutcomeTone } from "./auditOutcomes";
 
 const AUDIT_CSV_COLUMNS_ZH = [
   "时间",
@@ -234,17 +230,6 @@ export function AuditsPage() {
   )
     .sort()
     .map((value) => ({ value, label: value }));
-  const failedCount = filtered.filter(
-    (record) =>
-      !auditOutcomeIsDenied(record.outcome) &&
-      (record.outcome === "failed" || (record.status ?? 0) >= 400),
-  ).length;
-  const deniedCount = filtered.filter((record) =>
-    auditOutcomeIsDenied(record.outcome),
-  ).length;
-  const actorCount = new Set(
-    filtered.map((record) => record.actor).filter(Boolean),
-  ).size;
   const hasFilters = Boolean(
     repository ||
     group ||
@@ -380,9 +365,18 @@ export function AuditsPage() {
       ).map(([label, value]) => (
         <div key={label} className="flex min-w-0 gap-2">
           <span className="w-20 shrink-0 text-zinc-600">{label}</span>
-          <span className="min-w-0 break-all font-mono text-zinc-400">
-            {value ?? "—"}
-          </span>
+          {value && (label === "Request ID" || label === "Trace ID") ? (
+            <Link
+              className="min-w-0 break-all font-mono"
+              to={`/system?tab=logs&${label === "Request ID" ? "requestId" : "traceId"}=${encodeURIComponent(value)}`}
+            >
+              {value}
+            </Link>
+          ) : (
+            <span className="min-w-0 break-all font-mono text-zinc-400">
+              {value ?? "—"}
+            </span>
+          )}
         </div>
       ))}
     </div>
@@ -396,29 +390,6 @@ export function AuditsPage() {
           "网关访问与授权决策记录（最新在前）",
           "Gateway access and authorization decisions, newest first",
         )}
-      />
-      <MetricStrip
-        items={[
-          {
-            label: text("当前记录", "Current records"),
-            value: records ? filtered.length : "—",
-            hint: text(`当前页最多 ${limit} 条`, `Up to ${limit} on this page`),
-          },
-          {
-            label: text("失败请求", "Failed requests"),
-            value: failedCount,
-            hint: failedCount
-              ? text("建议优先检查失败原因", "Review failure details first")
-              : text("当前窗口未发现失败", "No failures in this window"),
-            tone: failedCount ? "danger" : "success",
-          },
-          {
-            label: text("拒绝访问", "Denied access"),
-            value: deniedCount,
-            hint: text(`${actorCount} 个操作主体`, `${actorCount} actors`),
-            tone: deniedCount ? "warning" : "default",
-          },
-        ]}
       />
       <Card>
         <FilterBar

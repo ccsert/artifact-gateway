@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/protocol/cargo"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
 )
@@ -25,6 +26,7 @@ type NativeArtifactScanResolver struct {
 	NPM     repository.NativeNPMStore
 	PyPI    repository.NativePyPIStore
 	Go      repository.NativeGoStore
+	Cargo   repository.NativeCargoStore
 	Conan   repository.NativeConanStore
 	APT     repository.APTArtifactStore
 	Objects OCIObjectStore
@@ -41,6 +43,7 @@ func NewNativeArtifactScanResolver(store any, bytes OCIObjectStore) *NativeArtif
 	resolver.NPM, _ = store.(repository.NativeNPMStore)
 	resolver.PyPI, _ = store.(repository.NativePyPIStore)
 	resolver.Go, _ = store.(repository.NativeGoStore)
+	resolver.Cargo, _ = store.(repository.NativeCargoStore)
 	resolver.Conan, _ = store.(repository.NativeConanStore)
 	resolver.APT, _ = store.(repository.APTArtifactStore)
 	return resolver
@@ -65,6 +68,8 @@ func (r *NativeArtifactScanResolver) ResolveArtifactScan(ctx context.Context, re
 		return r.resolvePyPI(ctx, repositoryID, payload)
 	case repository.FormatGo:
 		return r.resolveGo(ctx, repositoryID, payload)
+	case repository.FormatCargo:
+		return r.resolveCargo(ctx, repositoryID, payload)
 	case repository.FormatConan:
 		return r.resolveConan(ctx, repositoryID, payload)
 	default:
@@ -84,6 +89,28 @@ func (r *NativeArtifactScanResolver) resolveRaw(ctx context.Context, repositoryI
 		return scanning.Artifact{}, errors.New("raw asset digest changed")
 	}
 	return scanning.Artifact{RepositoryID: repositoryID, Format: payload.Format, Coordinate: payload.Coordinate, Digest: payload.Digest, Assets: []scanning.Asset{r.asset(asset.Path, asset.ObjectKey, asset.Digest, asset.Size, asset.ContentType)}}, nil
+}
+
+func (r *NativeArtifactScanResolver) resolveCargo(ctx context.Context, repositoryID string, payload repository.ArtifactScanPayload) (scanning.Artifact, error) {
+	if r.Cargo == nil {
+		return scanning.Artifact{}, errors.New("cargo repository store is unavailable")
+	}
+	name, version, ok := splitVersionCoordinate(payload.Coordinate)
+	if !ok {
+		return scanning.Artifact{}, errors.New("cargo coordinate must be crate@version")
+	}
+	if _, err := cargo.NormalizeIdentity(name, version); err != nil {
+		return scanning.Artifact{}, err
+	}
+	publication, err := r.Cargo.GetCargoPublication(ctx, repositoryID, name, version)
+	if err != nil {
+		return scanning.Artifact{}, err
+	}
+	if publication.Name+"@"+publication.Version != payload.Coordinate || publication.Digest != payload.Digest || publication.ObjectKey == "" {
+		return scanning.Artifact{}, repository.ErrNotFound
+	}
+	return singleAssetArtifact(repositoryID, payload, r.asset(publication.Name+"-"+publication.Version+".crate",
+		publication.ObjectKey, publication.Digest, publication.Size, "application/gzip")), nil
 }
 
 func (r *NativeArtifactScanResolver) resolveMaven(ctx context.Context, repositoryID string, payload repository.ArtifactScanPayload) (scanning.Artifact, error) {
