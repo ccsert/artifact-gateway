@@ -11,11 +11,15 @@ classification" (authoritative) and `gh label list` (live). Section structure:
 `.github/ISSUE_TEMPLATE/` forms. Issue text is written in Chinese, matching the
 existing corpus.
 
+Stay within the user's authorized scope. Read-only triage returns findings and
+links; a draft request returns a draft. Comment or create only when the request
+authorizes that action, without asking again for authorization already given.
+
 ## Steps
 
 1. **查重（search first）.** `gh issue list --state all --search "<keywords>"`,
-   then scan open series and roadmaps. A request that already has a home gets a
-   comment there, not a new issue — the log-viewer ask duplicated an existing
+   then scan open series and roadmaps. Reuse an existing home; when an update is
+   authorized, comment there rather than create a duplicate — the log-viewer ask duplicated an existing
    series this way: the duplicate was closed and its non-overlapping content
    moved into comments on the surviving issues. Done when no open issue covers
    the same outcome.
@@ -24,14 +28,21 @@ existing corpus.
    primary `area:*` (console / api / cli / auth / audit / platform / ops), plus
    `format:*` when one package protocol is at stake — the format set includes
    preview protocols, so list it with `gh label list` rather than recalling it.
+   Cross-area process/tooling work may omit the area label and title prefix,
+   as permitted by CONTRIBUTING; other Issues require one primary area.
 
 3. **Draft with evidence.** Every claim about current behavior cites its source
    — file path, contract path, or a command that was run. Follow the matching
-   form and fill 背景（含证据）→ 范围（可独立验证的交付物）→ 验收标准（可执行
-   的检查）→ 不在范围（明确排除）→ 依赖与顺序（如无依赖可省略）。An issue
+   form and state background, scope, acceptance, explicit exclusions and any
+   dependencies using its type-specific fields. For bugs, expected behavior and
+   contract evidence define acceptance, and impact states scope/exclusions.
+   For designs, problem/constraints state scope/exclusions and the decision plus
+   its recorded outcome define acceptance. An issue
    without acceptance criteria is not ready to file.
 
-4. **Create.** `gh issue create --label "type: …" --label "area: …"`. The
+4. **Create when authorized.** `gh issue create --label "type: …" --label "area: …"`
+   for Issues with a primary area; omit the area flag for the process/tooling
+   exception above. The
    title is `<area>: <结论>` — the finding or required outcome, not the task
    ("Console: the audit strip counts only the loaded page"). A series gets a
    parent issue whose body lists children as a task list, with per-child

@@ -33,7 +33,7 @@ body:
       label: 不在范围
       description: 明确排除的内容，避免评审时反复确认。
     validations:
-      required: false
+      required: true
   - type: textarea
     id: dependencies
     attributes:

@@ -10,7 +10,7 @@ body:
     id: problem
     attributes:
       label: 问题与约束
-      description: 要决策什么、约束是什么（兼容性、数据现实、部署形态）。
+      description: 要决策什么、范围和明确排除项、约束是什么（兼容性、数据现实、部署形态）。
     validations:
       required: true
   - type: textarea

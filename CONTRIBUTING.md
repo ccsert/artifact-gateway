@@ -100,8 +100,12 @@ and the area label.
 Every Issue states its background, scope, acceptance criteria, and an explicit
 out-of-scope; a series keeps a parent Issue whose body lists its children as a
 task list. Keep one Issue per independently mergeable change and reference it
-with `Closes #N`. The issue forms under `.github/ISSUE_TEMPLATE/` prefill these
-sections and apply the type label; add the area and format labels when filing.
+with `Closes #N`. The issue forms under `.github/ISSUE_TEMPLATE/` use type-specific
+fields for these elements and apply the type label; add the applicable area and
+format labels when filing. For bugs, expected behavior and contract evidence
+define acceptance, and impact states scope and exclusions. For designs,
+problem/constraints state scope and exclusions, and the decision with its
+recorded outcome defines acceptance. Feature forms name these elements directly.
 
 ## Required checks
 

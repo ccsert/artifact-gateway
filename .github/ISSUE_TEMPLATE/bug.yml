@@ -48,6 +48,6 @@ body:
     id: impact
     attributes:
       label: 影响面
-      description: 谁受影响、是否阻塞发布或自动化、有无绕过办法。
+      description: 谁受影响、变更范围和明确排除项；是否阻塞发布或自动化、有无绕过办法。
     validations:
-      required: false
+      required: true
