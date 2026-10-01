@@ -1,0 +1,36 @@
+name: 设计议题
+description: 产出是结论或 ADR 的决策类议题
+labels: ["type: design"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        设计议题的产出是决策与记录位置，不是代码；实施另开 `type: feature` 单。创建后请补 `area:*` 标签。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题与约束
+      description: 要决策什么、范围和明确排除项、约束是什么（兼容性、数据现实、部署形态）。
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: 备选方案与取舍
+      description: 至少两个方案，各自代价与收益。
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: 待决策点
+      description: 需要谁拍板什么；决策后在本 issue 记录结论。
+    validations:
+      required: true
+  - type: textarea
+    id: record
+    attributes:
+      label: 结论记录位置
+      description: ADR 编号（`docs/adr/`）或文档路径；无则说明只留在 issue。
+    validations:
+      required: false
