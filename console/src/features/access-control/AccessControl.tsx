@@ -10,13 +10,9 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
-  ApartmentOutlined,
   ClearOutlined,
-  DatabaseOutlined,
   ExperimentOutlined,
-  GlobalOutlined,
   ReloadOutlined,
-  SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -1218,179 +1214,97 @@ export function AccessControlPage() {
             label: text("策略与模板", "Policies & templates"),
             children: (
               <div className="ag-page-stack">
-                <Card
-                  className="ag-public-access-card"
-                  bodyClassName="overflow-hidden p-0"
-                >
-                  <div className="ag-public-access-header px-5 py-5">
-                    <div className="flex flex-wrap items-start justify-between gap-5">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-[var(--ag-border-default)] bg-[var(--ag-surface-hover)] text-lg text-[var(--ag-content-secondary)]">
-                          <GlobalOutlined />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-base font-semibold text-zinc-100">
-                              {text("公开访问边界", "Public access boundary")}
-                            </h2>
-                            <Badge
-                              tone={
-                                anonymousPolicy?.enabled ? "success" : "neutral"
-                              }
-                            >
-                              {anonymousPolicy?.enabled
-                                ? text("总闸已开启", "Global gate on")
-                                : text("总闸已关闭", "Global gate off")}
-                            </Badge>
-                          </div>
-                          <p className="mt-1 max-w-3xl text-xs leading-5 text-zinc-500">
-                            {text(
-                              "这里控制未登录客户端是否可以读取已明确公开的制品。开启总闸不会自动公开任何私有仓库，写入、删除与管理操作始终需要认证。",
-                              "This controls whether signed-out clients may read explicitly public artifacts. Enabling the global gate never publishes private repositories; writes, deletes, and management always require authentication.",
-                            )}
-                          </p>
-                        </div>
+                <Card className="ag-public-access-card" bodyClassName="p-5">
+                  <div className="grid gap-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                        <h2 className="text-sm font-semibold text-zinc-100">
+                          {text("公开访问边界", "Public access boundary")}
+                        </h2>
+                        <span className="text-xs text-zinc-500">
+                          {text(
+                            `${publicRepositoryCount} / ${repositories.length} 个仓库公开`,
+                            `${publicRepositoryCount} / ${repositories.length} repositories public`,
+                          )}
+                        </span>
                       </div>
-                      <div className="ag-public-access-summary flex items-center gap-3 rounded-xl px-4 py-3">
-                        <div className="text-right">
-                          <div className="text-xs uppercase tracking-wider text-zinc-600">
-                            {text("公开范围", "Public surface")}
-                          </div>
-                          <div className="mt-0.5 text-sm font-medium text-zinc-200">
-                            {text(
-                              `${publicRepositoryCount} / ${repositories.length} 个仓库公开`,
-                              `${publicRepositoryCount} / ${repositories.length} repositories public`,
+                      {anonymousPolicy && canManageAnonymousPolicy ? (
+                        <Popconfirm
+                          title={
+                            anonymousPolicy.enabled
+                              ? text(
+                                  "确认停用全局匿名读取？",
+                                  "Disable global anonymous reads?",
+                                )
+                              : text(
+                                  "确认启用全局匿名读取？",
+                                  "Enable global anonymous reads?",
+                                )
+                          }
+                          description={
+                            anonymousPolicy.enabled
+                              ? text(
+                                  "停用后所有未认证协议读取都会被拒绝。",
+                                  "All unauthenticated protocol reads will be rejected.",
+                                )
+                              : text(
+                                  "启用后满足仓库或组策略的制品可被未认证客户端读取。",
+                                  "Artifacts allowed by repository or group policy become readable without authentication.",
+                                )
+                          }
+                          okText={text("继续", "Continue")}
+                          cancelText={text("取消", "Cancel")}
+                          okButtonProps={{
+                            danger: anonymousPolicy.enabled,
+                            loading: savingAnonymousPolicy,
+                          }}
+                          onConfirm={() =>
+                            updateAnonymousPolicy(!anonymousPolicy.enabled)
+                          }
+                        >
+                          <Switch
+                            checked={anonymousPolicy.enabled}
+                            loading={savingAnonymousPolicy}
+                            aria-label={text(
+                              "切换全局匿名读取",
+                              "Toggle global anonymous reads",
                             )}
-                          </div>
-                        </div>
-                        {anonymousPolicy && canManageAnonymousPolicy ? (
-                          <Popconfirm
-                            title={
-                              anonymousPolicy.enabled
-                                ? text(
-                                    "确认停用全局匿名读取？",
-                                    "Disable global anonymous reads?",
-                                  )
-                                : text(
-                                    "确认启用全局匿名读取？",
-                                    "Enable global anonymous reads?",
-                                  )
-                            }
-                            description={
-                              anonymousPolicy.enabled
-                                ? text(
-                                    "停用后所有未认证协议读取都会被拒绝。",
-                                    "All unauthenticated protocol reads will be rejected.",
-                                  )
-                                : text(
-                                    "启用后满足仓库或组策略的制品可被未认证客户端读取。",
-                                    "Artifacts allowed by repository or group policy become readable without authentication.",
-                                  )
-                            }
-                            okText={text("继续", "Continue")}
-                            cancelText={text("取消", "Cancel")}
-                            okButtonProps={{
-                              danger: anonymousPolicy.enabled,
-                              loading: savingAnonymousPolicy,
-                            }}
-                            onConfirm={() =>
-                              updateAnonymousPolicy(!anonymousPolicy.enabled)
-                            }
-                          >
-                            <Switch
-                              checked={anonymousPolicy.enabled}
-                              loading={savingAnonymousPolicy}
-                              aria-label={text(
-                                "切换全局匿名读取",
-                                "Toggle global anonymous reads",
-                              )}
-                              onChange={() => undefined}
-                            />
-                          </Popconfirm>
-                        ) : canManageAnonymousPolicy ? (
+                            onChange={() => undefined}
+                          />
+                        </Popconfirm>
+                      ) : canManageAnonymousPolicy ? (
+                        anonymousPolicyError === null ? (
                           <span className="text-xs text-zinc-500">
                             {text("加载中…", "Loading…")}
                           </span>
-                        ) : (
-                          <Badge tone="neutral">
-                            {text("只读", "Read-only")}
-                          </Badge>
-                        )}
-                      </div>
+                        ) : null
+                      ) : (
+                        <Badge tone="neutral">
+                          {anonymousPolicy
+                            ? anonymousPolicy.enabled
+                              ? text(
+                                  "总闸已开启 · 只读",
+                                  "Global gate on · Read-only",
+                                )
+                              : text(
+                                  "总闸已关闭 · 只读",
+                                  "Global gate off · Read-only",
+                                )
+                            : text("只读", "Read-only")}
+                        </Badge>
+                      )}
                     </div>
-                  </div>
-                  <ol className="ag-public-access-layers grid lg:grid-cols-3">
-                    {[
-                      {
-                        icon: <SafetyCertificateOutlined />,
-                        title: text("全局总闸", "Global gate"),
-                        description: text(
-                          "管理员开启后，系统才会继续判断仓库或分组策略；关闭时所有匿名读取立即失效。",
-                          "The system evaluates repository or group policy only after an administrator enables this gate. Disabling it stops every anonymous read immediately.",
-                        ),
-                      },
-                      {
-                        icon: <DatabaseOutlined />,
-                        title: text(
-                          "仓库显式开启",
-                          "Explicit repository opt-in",
-                        ),
-                        description: text(
-                          "每个 Repository 默认保持私有，只有单独允许匿名读取的仓库才进入公开目录。",
-                          "Every repository stays private by default and appears publicly only after an explicit anonymous-read opt-in.",
-                        ),
-                      },
-                      {
-                        icon: <ApartmentOutlined />,
-                        title: text("分组双重同意", "Two-level group consent"),
-                        description: text(
-                          "Group 与成员 Repository 必须同时允许匿名读取，任意一层关闭都会拒绝访问。",
-                          "Both the group and its member repository must allow anonymous reads; either layer can deny access.",
-                        ),
-                      },
-                    ].map((layer, index) => (
-                      <li
-                        key={layer.title}
-                        className="ag-public-access-layer px-5 py-4"
-                      >
-                        <div className="flex items-center gap-2 text-sm font-medium text-zinc-200">
-                          <span className="ag-public-access-layer-icon flex size-7 items-center justify-center rounded-lg text-zinc-400">
-                            {layer.icon}
-                          </span>
-                          <span className="ag-public-access-step text-xs font-semibold text-zinc-600">
-                            0{index + 1}
-                          </span>
-                          {layer.title}
-                        </div>
-                        <p className="mt-2 text-xs leading-5 text-zinc-500">
-                          {layer.description}
-                        </p>
-                      </li>
-                    ))}
-                  </ol>
-                  <div className="ag-public-access-footer flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-                    <div className="flex items-center gap-2 text-xs text-zinc-500">
-                      <Badge tone="success">
-                        {text("只开放读取协议", "Read protocols only")}
-                      </Badge>
-                      <span>
-                        {text(
-                          "推送、删除、策略变更和管理 API 不受匿名策略影响。",
-                          "Pushes, deletes, policy changes, and management APIs are never opened by this policy.",
-                        )}
-                      </span>
-                    </div>
-                    <Button type="link" className="px-0">
-                      <Link to="/repositories">
-                        {text("检查仓库公开状态", "Review repository exposure")}
-                      </Link>
-                    </Button>
-                  </div>
-                  {anonymousPolicyError !== null && (
-                    <div className="border-t border-zinc-800 px-5 py-4">
+                    <Notice
+                      tone="info"
+                      title={text(
+                        "匿名读取须全局、仓库及适用的分组同时允许，写入、删除和管理仍需认证。",
+                        "Anonymous reads require global, repository, and applicable group opt-in; writes, deletes, and management still require authentication.",
+                      )}
+                    />
+                    {anonymousPolicyError !== null && (
                       <ErrorBanner error={anonymousPolicyError} />
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </Card>
                 <AuthorizationRolesPanel
                   onChanged={() => setRolesRevision((value) => value + 1)}

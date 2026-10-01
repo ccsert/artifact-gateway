@@ -241,12 +241,6 @@ export function EffectiveAccessPanel({
               <div className="mt-4">
                 <AccessDecisionSummary access={effectiveAccess} />
               </div>
-              <div className="mt-3 text-xs text-zinc-600">
-                {text(
-                  "判定顺序：管理员身份 → 全局角色 → 仓库授权 → 旧版静态策略。",
-                  "Decision order: administrator identity → global role → repository grant → legacy static policy.",
-                )}
-              </div>
             </div>
           ),
         },

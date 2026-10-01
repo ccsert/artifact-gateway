@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Access control keeps the public-access count and confirmed switch with one concise read-only boundary notice; the repeated three-layer explanation and decorative styling are removed. Permission evaluation retains one collapsed explanation; repository grants keep their effective decision details without repeating the decision-order footnote.
+
 - System diagnostics shows the Console bundle's own build version beside the connected Gateway version and revision. Known differing versions warn about image tags or a cached bundle; development without injected Console metadata stays `dev` and does not infer a mismatch.
 
 - Runtime logging can optionally export the same redacted structured events through OTLP/HTTP protobuf Logs alongside stdout and optional files. Logs configuration is separate from traces; bounded admission, finite retries, safe failure counters and bounded protocol cleanup make incomplete delivery visible. This does not add a durable retry journal, receiver storage or historical/cluster log queries.

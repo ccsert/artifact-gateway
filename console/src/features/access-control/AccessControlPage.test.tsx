@@ -317,76 +317,114 @@ describe("AccessControlPage", () => {
     expect(await screen.findByText("模拟结果")).toBeInTheDocument();
   });
 
-  it("explains anonymous access as a layered read-only boundary without changing policy semantics", async () => {
-    const user = userEvent.setup();
-    mockListRepositoryGrants.mockResolvedValue({ data: [] } as never);
-    mockGetAnonymousAccessPolicy.mockResolvedValue({
-      data: { enabled: true, version: "7" },
-    } as never);
-    mockListRepositories.mockResolvedValue({
-      data: {
-        items: [
-          {
-            id: "00000000-0000-4000-8000-000000000001",
-            name: "public-maven",
-            format: "maven",
-            type: "hosted",
-            state: "active",
-            anonymousRead: true,
-          },
-          {
-            id: "00000000-0000-4000-8000-000000000002",
-            name: "private-npm",
-            format: "npm",
-            type: "hosted",
-            state: "active",
-            anonymousRead: false,
-          },
-        ],
-      },
-    } as never);
-    mockListUsers.mockResolvedValue({ data: { items: [] } } as never);
-    mockListApiKeys.mockResolvedValue({ data: { items: [] } } as never);
-    mockListServiceAccounts.mockResolvedValue({ data: { items: [] } } as never);
-    mockReplaceAnonymousAccessPolicy.mockResolvedValue({
-      data: { enabled: false, version: "8" },
-    } as never);
+  it.each(["updated", "update-error", "load-error"])(
+    "keeps the compact anonymous boundary and policy state (%s)",
+    async (outcome) => {
+      const user = userEvent.setup();
+      mockListRepositoryGrants.mockResolvedValue({ data: [] } as never);
+      mockGetAnonymousAccessPolicy.mockResolvedValue(
+        (outcome === "load-error"
+          ? { error: { message: "synthetic policy unavailable", status: 503 } }
+          : { data: { enabled: true, version: "7" } }) as never,
+      );
+      mockListRepositories.mockResolvedValue({
+        data: {
+          items: [
+            {
+              id: "00000000-0000-4000-8000-000000000001",
+              name: "public-maven",
+              format: "maven",
+              type: "hosted",
+              state: "active",
+              anonymousRead: true,
+            },
+            {
+              id: "00000000-0000-4000-8000-000000000002",
+              name: "private-npm",
+              format: "npm",
+              type: "hosted",
+              state: "active",
+              anonymousRead: false,
+            },
+          ],
+        },
+      } as never);
+      mockListUsers.mockResolvedValue({ data: { items: [] } } as never);
+      mockListApiKeys.mockResolvedValue({ data: { items: [] } } as never);
+      mockListServiceAccounts.mockResolvedValue({
+        data: { items: [] },
+      } as never);
+      mockReplaceAnonymousAccessPolicy.mockResolvedValue(
+        (outcome === "update-error"
+          ? { error: { message: "synthetic policy conflict", status: 409 } }
+          : { data: { enabled: false, version: "8" } }) as never,
+      );
 
-    render(
-      <PreferencesProvider>
-        <AntdProvider>
-          <MemoryRouter initialEntries={["/access?tab=policies"]}>
-            <AccessControlPage />
-          </MemoryRouter>
-        </AntdProvider>
-      </PreferencesProvider>,
-    );
+      render(
+        <PreferencesProvider>
+          <AntdProvider>
+            <MemoryRouter initialEntries={["/access?tab=policies"]}>
+              <AccessControlPage />
+            </MemoryRouter>
+          </AntdProvider>
+        </PreferencesProvider>,
+      );
 
-    expect(await screen.findByText("公开访问边界")).toBeInTheDocument();
-    expect(screen.getByText("全局总闸")).toBeInTheDocument();
-    expect(screen.getByText("仓库显式开启")).toBeInTheDocument();
-    expect(screen.getByText("分组双重同意")).toBeInTheDocument();
-    expect(screen.getByText("只开放读取协议")).toBeInTheDocument();
-    expect(screen.getByText("1 / 2 个仓库公开")).toBeInTheDocument();
-    expect(
-      screen.getByRole("switch", { name: "切换全局匿名读取" }),
-    ).toBeChecked();
-    await user.click(screen.getByRole("switch", { name: "切换全局匿名读取" }));
-    await user.click(
-      within(await screen.findByRole("tooltip")).getByRole("button", {
-        name: /继\s*续/,
-      }),
-    );
-    await waitFor(() =>
-      expect(mockReplaceAnonymousAccessPolicy).toHaveBeenCalledWith({
-        body: { enabled: false, version: "7" },
-        headers: { "If-Match": "7" },
-      }),
-    );
-    expect(
-      await screen.findByRole("switch", { name: "切换全局匿名读取" }),
-    ).not.toBeChecked();
-  });
+      expect(await screen.findByText("公开访问边界")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "匿名读取须全局、仓库及适用的分组同时允许，写入、删除和管理仍需认证。",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("分组双重同意")).not.toBeInTheDocument();
+      expect(screen.getByText("1 / 2 个仓库公开")).toBeInTheDocument();
+      if (outcome === "load-error") {
+        expect(
+          await screen.findByText("synthetic policy unavailable"),
+        ).toBeInTheDocument();
+        const card = within(
+          screen
+            .getByRole("heading", { name: "公开访问边界" })
+            .closest(".ag-public-access-card")! as HTMLElement,
+        );
+        expect(card.queryByText("加载中…")).not.toBeInTheDocument();
+        expect(card.queryByRole("switch")).not.toBeInTheDocument();
+        expect(mockReplaceAnonymousAccessPolicy).not.toHaveBeenCalled();
+        return;
+      }
+      expect(
+        screen.getByRole("switch", { name: "切换全局匿名读取" }),
+      ).toBeChecked();
+      await user.click(
+        screen.getByRole("switch", { name: "切换全局匿名读取" }),
+      );
+      await user.click(
+        within(await screen.findByRole("tooltip")).getByRole("button", {
+          name: /继\s*续/,
+        }),
+      );
+      await waitFor(() =>
+        expect(mockReplaceAnonymousAccessPolicy).toHaveBeenCalledWith({
+          body: { enabled: false, version: "7" },
+          headers: { "If-Match": "7" },
+        }),
+      );
+      if (outcome === "update-error") {
+        expect(
+          await screen.findByText("synthetic policy conflict"),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("switch", { name: "切换全局匿名读取" }),
+        ).toBeChecked();
+      } else {
+        await waitFor(() =>
+          expect(
+            screen.getByRole("switch", { name: "切换全局匿名读取" }),
+          ).not.toBeChecked(),
+        );
+      }
+    },
+  );
 
   it("renders and filters user, service-account, API key, and custom repository grants", async () => {
     const user = userEvent.setup();
