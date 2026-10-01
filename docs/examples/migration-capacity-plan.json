@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "inventoryId": "synthetic-example",
+  "complete": true,
+  "targetId": "synthetic-target",
+  "references": [
+    {
+      "repositoryId": "synthetic-repository",
+      "logicalKey": "blob:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "objectKey": "native/oci/blobs/sha256/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size": 10
+    }
+  ],
+  "snapshot": {
+    "targetId": "synthetic-target",
+    "observedAt": "2026-10-01T00:00:00Z",
+    "validUntil": "2026-10-01T00:10:00Z",
+    "storagePoolId": "synthetic-pool",
+    "freeBytes": 100,
+    "repositories": [
+      { "repositoryId": "synthetic-repository", "usedBytes": 0, "quotaBytes": 100 }
+    ],
+    "objects": [
+      { "key": "native/oci/blobs/sha256/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "state": "absent" }
+    ],
+    "references": [
+      { "repositoryId": "synthetic-repository", "key": "blob:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "state": "absent" }
+    ]
+  },
+  "peak": {
+    "storagePoolId": "synthetic-pool",
+    "downloadBytes": 10,
+    "uploadBytes": 10,
+    "backupBytes": 20,
+    "restoreBytes": 20,
+    "headroomBytes": 10
+  }
+}
