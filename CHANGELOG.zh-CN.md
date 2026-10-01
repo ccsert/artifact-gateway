@@ -12,6 +12,8 @@
 
 - Cargo Hosted、Proxy、Group 进入公开格式目录、仓库创建与能力 API、OpenAPI 契约及 Console。Console 提供 sparse Registry 配置、Hosted 发布与 yank 指引，公开浏览和全局搜索可进入 crate 版本。创建 Proxy 必须配置 HTTPS 上游与下载主机允许列表。准入基线由官方 Cargo 1.96.0、PostgreSQL/RustFS、备份恢复和升级门禁验证；现有部署仍需另行发布与升级。
 
+- 运行日志输出增加显式、串行化的 flush/close 回调和幂等清理。Gateway 运行错误会先完成资源清理再退出进程，清理期间日志保持可用。默认 stdout 与本地 buffer 仍为借用输出；本批未增加文件持久化或协议 exporter。
+
 - 运行日志脱敏将既有敏感名称规则应用到父级 group 和叶子属性。位于 `credentials`、`Authorization` 等 group 内的值会在输出及进程内关键词索引前遮蔽；同级非敏感 group 的诊断字段保留。
 
 ## 0.4.2 - 2026-09-28
