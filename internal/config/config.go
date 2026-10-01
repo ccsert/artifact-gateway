@@ -136,6 +136,11 @@ type Config struct {
 	OIDCAdminSubjects               []string
 	OIDCRoles                       authorization.OIDCRoleMapping
 	OTLPHTTPEndpoint                string
+	OTLPLogsEndpoint                string
+	OTLPLogsHeaders                 map[string]string
+	OTLPLogsQueueSize               int
+	OTLPLogsTimeout                 time.Duration
+	OTLPLogsShutdownTimeout         time.Duration
 	OTELSamplingRatio               float64
 }
 
@@ -238,6 +243,9 @@ func Load() (Config, error) {
 	}
 
 	if err := configureLogFile(&cfg); err != nil {
+		return Config{}, err
+	}
+	if err := configureOTLPLogs(&cfg); err != nil {
 		return Config{}, err
 	}
 	if cfg.DatabaseURL == "" || cfg.RustFSEndpoint == "" || cfg.RustFSBucket == "" || cfg.RustFSAccessKey == "" || cfg.RustFSSecretKey == "" || cfg.AdminToken == "" || cfg.ResolverToken == "" {

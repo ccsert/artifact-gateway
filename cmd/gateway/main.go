@@ -63,9 +63,9 @@ func runGateway() int {
 	// The default stdout/buffer stay borrowed. A configured file owns its
 	// cleanup and receives the same JSON after the logger's shared redaction.
 	fallback := operationalog.NewLogger(os.Stderr, cfg.InstanceID, runtimeSessionID)
-	logOutput, err := newRuntimeLogOutput(cfg, output, fallback)
+	logOutput, err := newRuntimeLogOutput(cfg, runtimeSessionID, output, fallback)
 	if err != nil {
-		fallback.Error("initialize runtime file log output", "error", err)
+		fallback.Error("initialize runtime log output", "error", err)
 		return 1
 	}
 	exitCode, cleanupErr := runWithLogOutput(logOutput, func() int {
