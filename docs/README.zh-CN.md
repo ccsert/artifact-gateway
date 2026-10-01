@@ -53,6 +53,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 
 ## 运维与安全
 
+- [运行日志产品设计](runtime-log-product-design.zh-CN.md) — API/Worker 日志切分、查看、持久存储与部署验收提案。
 - [Kubernetes 部署](kubernetes-deployment.zh-CN.md) — 可执行本地基线与生产要求。
 - [恢复手册](recovery-runbook.zh-CN.md) — 备份、恢复、RPO/RTO 证据与回滚。
 - [匿名访问运维](anonymous-access-operations.zh-CN.md) — 默认拒绝的全局、Group、Repository 门禁。
