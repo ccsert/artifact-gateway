@@ -332,3 +332,59 @@ func TestOTLPOutputShutdownBudgetAndAccountingWithBufferedExports(t *testing.T) 
 		})
 	}
 }
+
+func TestOTLPOutputRejectsDuringCleanupWithoutBlockingShutdown(t *testing.T) {
+	started := make(chan struct{})
+	var once sync.Once
+	client := &http.Client{Transport: otlpSyntheticTransport(func(r *http.Request) (*http.Response, error) {
+		once.Do(func() { close(started) })
+		<-r.Context().Done()
+		return nil, r.Context().Err()
+	})}
+	options := otlpTestOptions("https://synthetic-concurrent-cleanup.invalid")
+	output, err := newOTLPOutput(options, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("{\"time\":\"2026-01-01T00:00:00Z\",\"level\":\"INFO\",\"msg\":\"synthetic cleanup admission\"}\n")
+	if _, err := output.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	flushed := make(chan error, 2)
+	flush := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 700*time.Millisecond)
+		defer cancel()
+		flushed <- output.ForceFlush(ctx)
+	}
+	go flush()
+	select {
+	case <-started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("cleanup did not enter export")
+	}
+	go flush()
+	begin := time.Now()
+	if n, err := output.Write(data); n != 0 || err == nil || time.Since(begin) > 300*time.Millisecond {
+		t.Errorf("cleanup admission was not rejected promptly: n=%d error=%v elapsed=%s", n, err, time.Since(begin))
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	begin = time.Now()
+	if err := output.Shutdown(ctx); !errors.Is(err, context.DeadlineExceeded) || time.Since(begin) > 300*time.Millisecond {
+		t.Errorf("shutdown with concurrent cleanup exceeded budget: elapsed=%s error=%v", time.Since(begin), err)
+	}
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-flushed:
+			if err == nil {
+				t.Error("interrupted cleanup reported success")
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("cleanup worker did not finish")
+		}
+	}
+	stats := output.Stats()
+	if stats.AcceptedRecords != 1 || stats.RejectedEvents != 1 || stats.PendingRecords != 0 || stats.UnconfirmedRecords != 1 || stats.ExportedRecords != 0 {
+		t.Errorf("concurrent cleanup counts = %+v", stats)
+	}
+}

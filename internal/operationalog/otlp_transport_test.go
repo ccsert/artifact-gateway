@@ -339,3 +339,37 @@ func TestOTLPOutputCompleteEventAndTimestampWireBounds(t *testing.T) {
 		t.Fatalf("wire bounds accounting: requests=%d stats=%+v", requests.Load(), output.Stats())
 	}
 }
+
+func TestOTLPOutputRejectsNonProtobufSuccessAndAllowsEmptyResponse(t *testing.T) {
+	for _, contentType := range []string{"text/html", "application/json", ""} {
+		t.Run(contentType, func(t *testing.T) {
+			client := &http.Client{Transport: otlpSyntheticTransport(func(r *http.Request) (*http.Response, error) {
+				response := otlpSyntheticResponse(r, http.StatusOK, []byte("synthetic-invalid-response-secret"))
+				response.Header.Set("Content-Type", contentType)
+				return response, nil
+			})}
+			output, err := newOTLPOutput(otlpTestOptions("https://synthetic-wrong-response.invalid"), client)
+			if err != nil {
+				t.Fatal(err)
+			}
+			NewLogger(output, "synthetic", "synthetic").Info("synthetic response event")
+			if err := output.Shutdown(context.Background()); err == nil || strings.Contains(err.Error(), "synthetic-invalid-response-secret") || output.Stats().ExportedRecords != 0 || output.Stats().UnconfirmedRecords != 1 {
+				t.Fatalf("invalid success response confirmed delivery: error=%v stats=%+v", err, output.Stats())
+			}
+		})
+	}
+	client := &http.Client{Transport: otlpSyntheticTransport(func(r *http.Request) (*http.Response, error) {
+		response := otlpSyntheticResponse(r, http.StatusOK, nil)
+		response.Header.Del("Content-Type")
+		return response, nil
+	})}
+	output, err := newOTLPOutput(otlpTestOptions("https://synthetic-empty-response.invalid"), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	NewLogger(output, "synthetic", "synthetic").Info("synthetic empty success event")
+	shutdownOTLP(t, output)
+	if output.Stats().ExportedRecords != 1 {
+		t.Error("empty serialized ExportLogsServiceResponse was rejected")
+	}
+}

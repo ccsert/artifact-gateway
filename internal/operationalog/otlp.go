@@ -51,6 +51,7 @@ type OTLPStats struct {
 // counters. The SDK queue cannot overflow this admission bound.
 type OTLPOutput struct {
 	mu        sync.RWMutex
+	sdkMu     sync.RWMutex
 	provider  *sdklog.LoggerProvider
 	logger    otellog.Logger
 	observed  *observedExporter
@@ -102,7 +103,7 @@ func newOTLPOutput(options OTLPOptions, client *http.Client) (*OTLPOutput, error
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
-	client.Transport = otlpRetryAfterTransport{base: transport, maximum: options.Timeout}
+	client.Transport = otlpHTTPTransport{base: transport, maximum: options.Timeout}
 	// A collector redirect must not move logs or credentials to another host.
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	exporter, err := otlploghttp.New(context.Background(),
@@ -148,13 +149,25 @@ func (o *OTLPOutput) Write(data []byte) (int, error) {
 		o.observed.notify(stats)
 		return 0, err
 	}
+	// SDK cleanup may hold its queue lock while waiting on an export barrier.
+	// Do not let Emit wait behind that lock with our close-state lock held.
+	// Runtime Output already serializes flush/write; direct callers receive an
+	// explicit admission rejection while private SDK cleanup is in progress.
+	if !o.sdkMu.TryRLock() {
+		stats := o.observed.reject()
+		o.mu.RUnlock()
+		o.observed.notify(stats)
+		return 0, errors.New("OTLP Logs cleanup in progress")
+	}
 	admitted, stats := o.observed.reserve()
 	if !admitted {
+		o.sdkMu.RUnlock()
 		o.mu.RUnlock()
 		o.observed.notify(stats)
 		return 0, errors.New("OTLP Logs capacity full")
 	}
 	o.logger.Emit(ctx, record)
+	o.sdkMu.RUnlock()
 	o.mu.RUnlock()
 	return len(data), nil
 }
@@ -166,7 +179,12 @@ func (o *OTLPOutput) ForceFlush(ctx context.Context) error {
 	if closed {
 		return io.ErrClosedPipe
 	}
-	err := awaitOTLPCleanup(ctx, o.provider.ForceFlush)
+	err := o.cleanup(ctx, func(ctx context.Context) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return o.provider.ForceFlush(ctx)
+	})
 	if err != nil {
 		o.observed.cleanupFailure()
 	}
@@ -186,7 +204,7 @@ func (o *OTLPOutput) Shutdown(ctx context.Context) error {
 	}
 	o.closed = true
 	o.mu.Unlock()
-	providerErr := awaitOTLPCleanup(ctx, o.provider.Shutdown)
+	providerErr := o.cleanup(ctx, o.provider.Shutdown)
 	// SDK cleanup can wait on an internal mutex beyond ctx. Cancel active
 	// requests and settle every remaining reservation when our budget expires;
 	// a late SDK no-op is not a receiver acknowledgement.
@@ -208,6 +226,16 @@ func (o *OTLPOutput) Shutdown(ctx context.Context) error {
 }
 
 func (o *OTLPOutput) Stats() OTLPStats { return o.observed.snapshot() }
+
+func (o *OTLPOutput) cleanup(ctx context.Context, cleanup func(context.Context) error) error {
+	return awaitOTLPCleanup(ctx, func(ctx context.Context) error {
+		o.sdkMu.Lock()
+		defer o.sdkMu.Unlock()
+		// Shutdown must still stop SDK workers if the budget expired while
+		// waiting on the gate. Its canceled context prevents further delivery.
+		return cleanup(ctx)
+	})
+}
 
 // The SDK otherwise sends raw Export errors to its global ErrorHandler. Track
 // failures privately and report counters instead; Flush/Shutdown return the

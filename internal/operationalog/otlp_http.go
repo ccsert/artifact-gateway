@@ -2,6 +2,8 @@ package operationalog
 
 import (
 	"errors"
+	"io"
+	"mime"
 	"net/http"
 	"strconv"
 	"time"
@@ -11,15 +13,40 @@ import (
 // nanoseconds instead of HTTP seconds and does not parse HTTP dates. Adapt
 // only its private response header; the official exporter still owns retries.
 // Delays beyond the export budget prevent retry instead of extending it.
-type otlpRetryAfterTransport struct {
+type otlpHTTPTransport struct {
 	base    http.RoundTripper
 	maximum time.Duration
 }
 
-func (t otlpRetryAfterTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+func (t otlpHTTPTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	response, err := t.base.RoundTrip(request)
 	if err != nil || response == nil {
 		return response, err
+	}
+	if response.StatusCode >= 200 && response.StatusCode <= 299 {
+		contentType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
+		if err != nil || contentType != "application/x-protobuf" {
+			// Empty protobuf success is valid. A nonempty HTML/JSON or unknown
+			// response must not bypass the official exporter's protobuf parser.
+			if response.Body != nil {
+				var first [1]byte
+				n, readErr := io.ReadFull(response.Body, first[:])
+				closeErr := response.Body.Close()
+				if n != 0 || readErr != io.EOF || closeErr != nil {
+					return nil, errors.New("invalid OTLP Logs success response")
+				}
+			}
+			copy := *response
+			copy.Body = http.NoBody
+			response = &copy
+		}
+		copy := *response
+		copy.Header = response.Header.Clone()
+		if copy.Header == nil {
+			copy.Header = make(http.Header)
+		}
+		copy.Header.Set("Content-Type", "application/x-protobuf")
+		return &copy, nil
 	}
 	raw := response.Header.Get("Retry-After")
 	var delay time.Duration
