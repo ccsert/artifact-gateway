@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- 运行日志可选将脱敏 NDJSON 同时保存到独立 session 文件，按完整事件轮转，并配置大小、备份数和期限。默认 stdout 和本地查询不变；清理仅处理当前输出器的封闭段，之前 session 和用户文件留待单独的保留/历史阶段。
+
 - 运行日志查询遇到超长行时，会跨多次写入持续丢弃到换行，避免看似合法 JSON 的行尾被当成独立事件。结构化日志器保留通过 `With` 绑定的 `component`、`operation`、`requestId` 和 `traceId`；单条记录的显式字段仍优先，各 group 的字段作用域保持独立。
 
 - Cargo Hosted、Proxy、Group 进入公开格式目录、仓库创建与能力 API、OpenAPI 契约及 Console。Console 提供 sparse Registry 配置、Hosted 发布与 yank 指引，公开浏览和全局搜索可进入 crate 版本。创建 Proxy 必须配置 HTTPS 上游与下载主机允许列表。准入基线由官方 Cargo 1.96.0、PostgreSQL/RustFS、备份恢复和升级门禁验证；现有部署仍需另行发布与升级。

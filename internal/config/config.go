@@ -65,6 +65,10 @@ type Config struct {
 	AccessLogMode                   string
 	AccessLogSlowMS                 int
 	LogBufferLines                  int
+	LogFileDirectory                string
+	LogFileMaxBytes                 int64
+	LogFileMaxBackups               int
+	LogFileMaxAge                   time.Duration
 	WorkerFormats                   []string
 	WorkerKinds                     []string
 	ScannerEndpoint                 string
@@ -233,6 +237,9 @@ func Load() (Config, error) {
 		cfg.LogBufferLines = lines
 	}
 
+	if err := configureLogFile(&cfg); err != nil {
+		return Config{}, err
+	}
 	if cfg.DatabaseURL == "" || cfg.RustFSEndpoint == "" || cfg.RustFSBucket == "" || cfg.RustFSAccessKey == "" || cfg.RustFSSecretKey == "" || cfg.AdminToken == "" || cfg.ResolverToken == "" {
 		return Config{}, fmt.Errorf("GATEWAY_DATABASE_URL, GATEWAY_RUSTFS_ENDPOINT, GATEWAY_RUSTFS_BUCKET, GATEWAY_RUSTFS_ACCESS_KEY, GATEWAY_RUSTFS_SECRET_KEY, GATEWAY_ADMIN_TOKEN, and GATEWAY_RESOLVER_TOKEN are required")
 	}
