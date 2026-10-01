@@ -1,8 +1,12 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { readFileSync } from "node:fs";
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
+  const { version } = JSON.parse(
+    readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+  );
   const env = loadEnv(mode, process.cwd(), "");
   const rootEnv = loadEnv(mode, "..", "");
   const target =
@@ -13,6 +17,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    define:
+      command === "build"
+        ? { __CONSOLE_BUILD_VERSION__: JSON.stringify(version) }
+        : {},
     resolve: {
       dedupe: ["react", "react-dom"],
     },

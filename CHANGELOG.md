@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- System diagnostics shows the Console bundle's own build version beside the connected Gateway version and revision. Known differing versions warn about image tags or a cached bundle; development without injected Console metadata stays `dev` and does not infer a mismatch.
+
 - Runtime logging can optionally export the same redacted structured events through OTLP/HTTP protobuf Logs alongside stdout and optional files. Logs configuration is separate from traces; bounded admission, finite retries, safe failure counters and bounded protocol cleanup make incomplete delivery visible. This does not add a durable retry journal, receiver storage or historical/cluster log queries.
 
 - Runtime logging can optionally mirror its redacted NDJSON to private session files with configurable complete-event size rotation, backup count and age retention. Default stdout and local query behavior remain unchanged; retention touches only the current output's sealed files, leaving previous sessions and user files for separate retention/history work.

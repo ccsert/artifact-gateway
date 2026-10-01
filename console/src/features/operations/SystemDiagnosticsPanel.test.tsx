@@ -65,9 +65,64 @@ const renderPanel = () =>
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("SystemDiagnosticsPanel", () => {
+  it("shows dev for a Console without build injection and does not report a mismatch", async () => {
+    mockGetDiagnostics.mockResolvedValue({ data: diagnostics } as never);
+    renderPanel();
+
+    const label = await screen.findByText("Console 版本");
+    expect(
+      within(label.parentElement as HTMLElement).getByText("dev"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Gateway 版本")).toBeInTheDocument();
+    expect(screen.queryByText("前后端版本不一致")).not.toBeInTheDocument();
+  });
+
+  it("shows the injected Console build and matching Gateway version without a warning", async () => {
+    vi.stubGlobal("__CONSOLE_BUILD_VERSION__", "1.2.3");
+    mockGetDiagnostics.mockResolvedValue({ data: diagnostics } as never);
+    renderPanel();
+
+    const label = await screen.findByText("Console 版本");
+    expect(
+      within(label.parentElement as HTMLElement).getByText("1.2.3"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("v1.2.3")).toBeInTheDocument();
+    expect(screen.queryByText("前后端版本不一致")).not.toBeInTheDocument();
+  });
+
+  it("explains a known build mismatch next to the identity fields", async () => {
+    vi.stubGlobal("__CONSOLE_BUILD_VERSION__", "1.2.2");
+    mockGetDiagnostics.mockResolvedValue({ data: diagnostics } as never);
+    renderPanel();
+
+    const identityHeading = await screen.findByRole("heading", {
+      name: "构建与运行身份",
+    });
+    const card = identityHeading.closest(".ag-card") as HTMLElement;
+    expect(within(card).getByText("1.2.2")).toBeInTheDocument();
+    expect(within(card).getByText("前后端版本不一致")).toBeInTheDocument();
+    expect(
+      within(card).getByText(/镜像 tag 不一致或浏览器缓存了旧 bundle/),
+    ).toBeInTheDocument();
+  });
+
+  it.each(["dev", "unknown", ""])(
+    "does not infer a mismatch from Gateway build %j",
+    async (version) => {
+      vi.stubGlobal("__CONSOLE_BUILD_VERSION__", "1.2.3");
+      mockGetDiagnostics.mockResolvedValue({
+        data: { ...diagnostics, build: { ...diagnostics.build, version } },
+      } as never);
+      renderPanel();
+      await screen.findByText("Console 版本");
+      expect(screen.queryByText("前后端版本不一致")).not.toBeInTheDocument();
+    },
+  );
+
   it("renders dependency, build, node, and queue diagnostics", async () => {
     mockGetDiagnostics.mockResolvedValue({ data: diagnostics } as never);
     renderPanel();

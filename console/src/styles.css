@@ -1763,6 +1763,7 @@ html[data-theme="light"] .ag-public-access-layer {
 @media (min-width: 1200px) {
   .ag-diagnostics-detail-grid {
     grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+    grid-template-rows: min-content minmax(0, 1fr);
     grid-template-areas:
       "dependencies identity"
       "queues identity";

@@ -148,6 +148,9 @@ jobs:
       - name: Install browser
         run: npx playwright install --with-deps chromium
         working-directory: console
+      - name: Verify built Console identity
+        run: npx playwright test --config playwright.build.config.ts
+        working-directory: console
       - name: Start gateway for Console E2E
         env:
           GATEWAY_ENV_FILE: ${{ runner.temp }}/artifact-gateway.env
