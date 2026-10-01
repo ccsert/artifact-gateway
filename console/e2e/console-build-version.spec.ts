@@ -132,12 +132,20 @@ for (const mismatch of [false, true]) {
           const dependencies = root
             .querySelector(".ag-diagnostics-dependencies-card")!
             .getBoundingClientRect();
+          const queues = root
+            .querySelector(".ag-diagnostics-queue-card")!
+            .getBoundingClientRect();
           const beside = identity.left >= dependencies.right;
           return {
             gap: beside
               ? identity.left - dependencies.right
               : identity.top - dependencies.bottom,
             beside,
+            relatedCardGap:
+              queues.top - (beside ? dependencies.bottom : identity.bottom),
+            contentOverflow:
+              Math.max(identity.bottom, queues.bottom) -
+              root.getBoundingClientRect().bottom,
             overflow:
               document.documentElement.scrollWidth -
               document.documentElement.clientWidth,
@@ -146,6 +154,9 @@ for (const mismatch of [false, true]) {
       expect(geometry.beside).toBe(width === 1440);
       expect(geometry.gap).toBeGreaterThanOrEqual(16);
       expect(geometry.gap).toBeLessThanOrEqual(18);
+      expect(geometry.relatedCardGap).toBeGreaterThanOrEqual(16);
+      expect(geometry.relatedCardGap).toBeLessThanOrEqual(18);
+      expect(geometry.contentOverflow).toBeLessThanOrEqual(1);
       expect(geometry.overflow).toBeLessThanOrEqual(1);
       if (width === 1440) {
         const navigation = await page
