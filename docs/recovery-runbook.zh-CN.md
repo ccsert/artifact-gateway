@@ -7,6 +7,10 @@
 
 ## 目标
 
+Unreleased [离线清单验证器](backup-manifest-verification.zh-CN.md) 仅验证私有本地
+字节与声明，不导出或恢复文件集、不证明快照一致性，也不替代此固定物理演练。
+正常的 unknown 结果不能作为备份成功。
+
 - RPO：两次成功执行 `scripts/backup-drill.sh` 的时间间隔。MVP 演练目标为 24 小时。
 - RTO：从宣布开始恢复，到 `/readyz` 返回 204，目标为 30 分钟。
 

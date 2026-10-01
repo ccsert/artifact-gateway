@@ -79,6 +79,7 @@ func TestCapacityCLIRejectsAmbiguousInvalidOrOversizedJSONWithoutEcho(t *testing
 		strings.Replace(capacityInput(), `"quotaBytes":100`, `"quotaBytes":9,"QUOTABYTES":100`, 1),
 		strings.Replace(capacityInput(), `"key":"blob/a"`, `"key":"blob/a","Key":"other"`, 1),
 		strings.Replace(capacityInput(), `"blob/a"`, "\"blob/\xff\"", 1),
+		strings.Replace(capacityInput(), `"blob/a"`, `"blob/\ud800"`, 1),
 		strings.Replace(capacityInput(), `"size":10`, `"size":1.5`, 1),
 		strings.Replace(capacityInput(), `"size":10`, `"size":9223372036854775808`, 1),
 		strings.Replace(capacityInput(), `"schemaVersion":1`, `"unexpected":"`+marker+`","schemaVersion":1`, 1),
@@ -120,5 +121,14 @@ func TestCapacityCLIReportsOutputFailureAndCancellation(t *testing.T) {
 	cancel()
 	if code := RunCLI(ctx, []string{"capacity", "--input", path}, &out, &errOut); code != 3 {
 		t.Fatalf("cancel code=%d", code)
+	}
+}
+
+func TestCapacityCLIPreservesUnambiguousASCIIFieldCaseVariants(t *testing.T) {
+	input := strings.Replace(capacityInput(), `"schemaVersion"`, `"SCHEMAVERSION"`, 1)
+	input = strings.Replace(input, `"quotaBytes"`, `"QUOTABYTES"`, 1)
+	code, out, errOut := runCapacityInput(t, input)
+	if code != 0 || errOut != "" || !strings.Contains(out, `"status":"sufficient"`) {
+		t.Fatalf("code=%d out=%s stderr=%s", code, out, errOut)
 	}
 }

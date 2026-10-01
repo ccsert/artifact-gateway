@@ -67,6 +67,7 @@
         { "id": "kubernetes", "title": { "en": "Kubernetes deployment", "zh-CN": "Kubernetes 部署" }, "en": "docs/kubernetes-deployment.md", "zh-CN": "docs/kubernetes-deployment.zh-CN.md" },
         { "id": "recovery", "title": { "en": "Recovery runbook", "zh-CN": "恢复手册" }, "en": "docs/recovery-runbook.md", "zh-CN": "docs/recovery-runbook.zh-CN.md" },
         { "id": "migration-capacity-preflight", "title": { "en": "Migration capacity preflight", "zh-CN": "迁移容量预检" }, "en": "docs/migration-capacity-preflight.md", "zh-CN": "docs/migration-capacity-preflight.zh-CN.md" },
+        { "id": "backup-manifest-verification", "title": { "en": "Offline backup manifest verification", "zh-CN": "离线备份清单验证" }, "en": "docs/backup-manifest-verification.md", "zh-CN": "docs/backup-manifest-verification.zh-CN.md" },
         { "id": "anonymous-access", "title": { "en": "Anonymous access operations", "zh-CN": "匿名访问运维" }, "en": "docs/anonymous-access-operations.md", "zh-CN": "docs/anonymous-access-operations.zh-CN.md" },
         { "id": "user-governance", "title": { "en": "User governance", "zh-CN": "用户治理" }, "en": "docs/user-governance.md", "zh-CN": "docs/user-governance.zh-CN.md" },
         { "id": "oidc-sso", "title": { "en": "OIDC SSO", "zh-CN": "OIDC 单点登录" }, "en": "docs/oidc-sso.md", "zh-CN": "docs/oidc-sso.zh-CN.md" },

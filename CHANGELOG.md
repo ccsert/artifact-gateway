@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Added read-only `gateway preflight backup --input manifest.json` for versioned private local bundles, full-byte SHA-256 verification and declared writer intervals. Integrity and writer declarations remain separate from snapshot consistency, which always stays unknown; no export, stop, restore or overall backup success is inferred.
+
 - Added offline `gateway preflight capacity --input plan.json` for fixed migration evidence. It separates repository logical quota growth from deduplicated physical object growth and temporary/backup/restore/headroom peaks, preserves missing quantities as unknown, and emits versioned JSON and distinct exit codes without contacting or modifying the target.
 
 ## 0.5.0 - 2026-10-01
