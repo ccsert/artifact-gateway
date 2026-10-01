@@ -254,3 +254,30 @@ func TestFileOutputInitializationFailureLeavesExistingFilesUntouched(t *testing.
 		t.Fatalf("initialization changed existing files: %v, %v", entries, err)
 	}
 }
+
+func TestFileOutputRotationLeavesReplacedActivePathUntouched(t *testing.T) {
+	options := fileOptions(t)
+	options.MaxSizeBytes = 3
+	output, err := NewFileOutput(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFileOutput(t, output)
+	if _, err := output.Write([]byte("{}\n")); err != nil {
+		t.Fatal(err)
+	}
+	active := managedFiles(t, options.Directory)[0]
+	moved := filepath.Join(options.Directory, "synthetic-moved-active.ndjson")
+	if err := os.Rename(active, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(active, []byte("synthetic-user-replacement"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := output.Write([]byte("{}\n")); n != 0 || err == nil {
+		t.Fatalf("rotated a replaced active file: %d, %v", n, err)
+	}
+	if string(readFile(t, active)) != "synthetic-user-replacement" || string(readFile(t, moved)) != "{}\n" || len(managedFiles(t, options.Directory)) != 1 {
+		t.Fatal("rotation moved or changed a replaced active file")
+	}
+}

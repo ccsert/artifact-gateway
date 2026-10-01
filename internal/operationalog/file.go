@@ -140,6 +140,13 @@ func (f *fileWriter) rotate() error {
 	if err != nil {
 		return err
 	}
+	activeIdentity, err := f.ops.lstat(f.activePath())
+	if err != nil {
+		return err
+	}
+	if !activeIdentity.Mode().IsRegular() || !os.SameFile(activeIdentity, identity) {
+		return errors.New("runtime log rotation refused a replaced active file")
+	}
 	if err := f.file.Sync(); err != nil {
 		return err
 	}

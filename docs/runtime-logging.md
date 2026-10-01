@@ -20,6 +20,8 @@ File writes and Sync are synchronous and can delay a logging caller; there is no
 
 ## Shared events and local queries
 
+The private session directory is exclusively managed by its output instance; administrators and same-UID/root tools must not concurrently replace its paths. Identity checks reject replacements observed before rotation or retention, but are not filesystem transactions against concurrent privileged path mutation.
+
 Gateway runtime events are newline-delimited JSON on stdout. Each record has `time`, `level`, `msg`, `instanceId`, `sessionId`, `component`, `operation`, `requestId`, and `traceId`. A process event without request context has empty correlation IDs. HTTP access events add `method`, the route pattern, request class, status, and duration in milliseconds. Raw URL paths, query strings, request bodies, `Authorization`, and `Cookie` are never access-log fields. Attributes named like secrets, credentials, tokens, bodies, URLs, queries, or errors are redacted before output.
 
 Runtime logging has an explicit output lifecycle: writes, flushes, and closes are serialized, and close attempts both cleanup callbacks once even if flush fails. The default stdout and memory buffer are borrowed destinations: close is a no-op that does not wait for writes, flush, sync, or close stdout. Configured runtime errors and graceful shutdown finish existing HTTP and resource cleanup before closing log output. Worker cancellation remains context-based; resource-owning destinations will need their own bounded cleanup and delivery behavior.

@@ -20,6 +20,8 @@ stdout 继续启用。将 `GATEWAY_LOG_FILE_DIRECTORY` 设为绝对且可写的�
 
 ## 共用事件与本地查询
 
+独立 session 目录由对应输出实例独占管理，管理员及同 UID/root 工具不能并发替换其路径。身份检查会拒绝轮转或保留操作之前观察到的替换，但不是抵御有权限并发路径变更的文件系统事务。
+
 Gateway 运行事件以每行一个 JSON 对象写入 stdout。每条记录包含 `time`、`level`、`msg`、`instanceId`、`sessionId`、`component`、`operation`、`requestId` 和 `traceId`。没有请求上下文的进程事件，其关联 ID 为空。HTTP 访问事件另含方法、路由模板、请求类别、状态码和毫秒耗时。访问日志不会记录原始 URL 路径、查询串、请求体、`Authorization` 或 `Cookie`。名称涉及密钥、凭据、token、请求体、URL、查询串或错误的属性在输出前遮蔽。
 
 运行日志具有显式的输出生命周期：写入、flush 和 close 串行执行；即使 flush 失败，close 仍会尝试两个清理回调各一次。默认 stdout 与内存 buffer 为借用输出，close 为 no-op，不等待正在写入的记录，也不会 flush、sync 或关闭 stdout。配置完成后的运行错误和优雅退出先完成既有 HTTP 与资源清理，再关闭日志输出。Worker 仍通过 context 取消；后续拥有资源的输出需要明确各自的清理时限和交付行为。
