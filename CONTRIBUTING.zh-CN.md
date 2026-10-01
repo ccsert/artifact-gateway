@@ -68,6 +68,27 @@ Console，安装依赖后再执行 `make dev`；在运行中的 Vite 进程下�
 CI、隔离协议 fixture、本地运行时检查和发布验收属于不同证据。关闭实现 Issue 不代表
 版本可以发布；升级、恢复和部署验收应明确跟踪。
 
+## Issue 分类
+
+每个 Issue 挂一个类型标签和一个主领域标签；涉及具体格式时再挂对应格式标签。标签词汇
+本身就是分类：按 `label:"area: cli"` 过滤即得到该工作流的全部单。
+
+| 轴 | 标签 | 含义 |
+| --- | --- | --- |
+| 类型 | `type: feature`、`type: bug`、`type: design`、`type: docs`、`type: chore` | `feature` 新增或扩展用户可见能力；`bug` 行为与预期或契约不符；`design` 产出是决策（落在 ADR 或文档）而非代码；`docs` 纯文档变更；`chore` 覆盖 CI、依赖、重构与工具链，无行为变化。 |
+| 领域 | `area: console`、`area: api`、`area: cli`、`area: auth`、`area: audit`、`area: platform`、`area: ops` | `console` 控制台界面；`api` 管理契约、OpenAPI 源与生成客户端；`cli` agctl；`auth` 身份、授权、账号与服务端凭据；`audit` 审计、保留与取证；`platform` 服务端数据面——制品与仓库、生命周期与保留、晋升复制、容量、缓存、隔离、扫描；`ops` 部署、运行、诊断、日志、备份与升级。 |
+| 格式 | `format: maven`、`format: oci`、`format: npm`、`format: pypi`、`format: go`、`format: apt`、`format: conan`、`format: cargo`、`format: nuget`、`format: raw` | 与领域正交，用于涉及某协议行为的单。 |
+
+标题以领域开头：技术面用 `Console:`、`API:`、`CLI:`，其余用中文领域词（`授权:`、
+`审计:`、`平台:`、`运维:`），后接结论或要求的结果，而不是动作。跨领域的工程性工作
+（流程、工具链）可以省略领域词与领域标签。
+
+每个 Issue 写清背景、范围、验收标准和明确的"不在范围"；系列需求保留一个总览 Issue，
+正文用任务清单列出子单。每个可独立合并的变更对应一个 Issue，PR 用 `Closes #N` 关联。
+`.github/ISSUE_TEMPLATE/` 下的表单以各类型字段表达这些要素并自动挂类型标签，提交时补
+适用的领域与格式标签。缺陷的预期与契约依据定义验收，影响面说明范围与排除项；设计的
+问题与约束说明范围与排除项，决策及其记录的结论定义验收。功能表单直接使用这些要素名。
+
 ## 必需检查
 
 推送前先在本地跑完矩阵，这样一次推送只花一次 CI，而不是每轮迭代都花一次：
