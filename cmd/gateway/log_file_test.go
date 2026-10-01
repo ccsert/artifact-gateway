@@ -14,7 +14,7 @@ import (
 
 func TestRuntimeFileOutputDisabledKeepsBorrowedDefault(t *testing.T) {
 	var primary, fallback bytes.Buffer
-	output, err := newRuntimeLogOutput(config.Config{}, &primary, operationalog.NewLogger(&fallback, "synthetic", "synthetic"))
+	output, err := newRuntimeLogOutput(config.Config{}, "synthetic-session", &primary, operationalog.NewLogger(&fallback, "synthetic", "synthetic"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestRuntimeFileMirrorKeepsPrimaryOnFileErrorsAndReportsWithoutRecursion(t *
 	failure := errors.New("synthetic-sensitive-error-marker")
 	secondary := writerFunc(func([]byte) (int, error) { return 0, failure })
 	logger := operationalog.NewLogger(&fallback, "synthetic", "synthetic")
-	mirror := &runtimeFileMirror{primary: &primary, file: secondary, report: logger, now: time.Now}
+	mirror := &runtimeLogMirror{primary: &primary, file: secondary, report: logger, now: time.Now}
 	output := operationalog.NewOutput(mirror, nil, nil)
 	for i := 0; i < 10; i++ {
 		if n, err := output.Write([]byte("{}\n")); n != 3 || !errors.Is(err, failure) {
@@ -46,7 +46,7 @@ func TestRuntimeFileMirrorKeepsPrimaryOnFileErrorsAndReportsWithoutRecursion(t *
 func TestRuntimeFileMirrorAttemptsFileEvenWhenPrimaryFails(t *testing.T) {
 	failure := errors.New("synthetic-primary-failure")
 	var file, fallback bytes.Buffer
-	mirror := &runtimeFileMirror{primary: writerFunc(func([]byte) (int, error) { return 1, failure }), file: &file, report: operationalog.NewLogger(&fallback, "synthetic", "synthetic"), now: time.Now}
+	mirror := &runtimeLogMirror{primary: writerFunc(func([]byte) (int, error) { return 1, failure }), file: &file, report: operationalog.NewLogger(&fallback, "synthetic", "synthetic"), now: time.Now}
 	if n, err := mirror.Write([]byte("{}\n")); n != 1 || !errors.Is(err, failure) || file.String() != "{}\n" {
 		t.Fatalf("primary failure = %d, %v, %q", n, err, file.String())
 	}
@@ -55,7 +55,7 @@ func TestRuntimeFileMirrorAttemptsFileEvenWhenPrimaryFails(t *testing.T) {
 func TestRuntimeFileOutputClosesAfterConfiguredRuntimeCleanup(t *testing.T) {
 	var primary, fallback bytes.Buffer
 	cfg := config.Config{LogFileDirectory: t.TempDir(), LogFileMaxBytes: 1024, LogFileMaxBackups: 2, LogFileMaxAge: time.Hour}
-	output, err := newRuntimeLogOutput(cfg, &primary, operationalog.NewLogger(&fallback, "synthetic", "synthetic"))
+	output, err := newRuntimeLogOutput(cfg, "synthetic-session", &primary, operationalog.NewLogger(&fallback, "synthetic", "synthetic"))
 	if err != nil {
 		t.Fatal(err)
 	}
