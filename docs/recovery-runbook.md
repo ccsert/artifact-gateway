@@ -8,6 +8,11 @@ the local stack started by `make up`. The scripts keep backups under
 
 ## Targets
 
+The Unreleased [offline manifest validator](backup-manifest-verification.md)
+verifies private local bytes and declarations only. It does not export or
+restore a bundle, prove snapshot consistency, or replace this pinned physical
+drill. Its normal unknown result must not be treated as backup success.
+
 - RPO: the interval between successful runs of `scripts/backup-drill.sh`.
   The MVP drill target is 24 hours.
 - RTO: 30 minutes from a declared recovery start until `/readyz` returns 204.

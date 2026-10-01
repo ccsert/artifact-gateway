@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- 新增只读 `gateway preflight backup --input manifest.json`，验证版本化私有本地文件集的完整字节 SHA-256 与 writer 停写声明。完整性及声明与快照一致性分开，后者始终 unknown；不导出、停写、恢复或推断整体备份成功。
+
 - 新增离线 `gateway preflight capacity --input plan.json`，处理固定迁移证据，分别计算仓库逻辑配额增长、去重后的物理对象增长及暂存/备份/恢复/余量峰值。缺失数值保留 unknown，输出版本化 JSON 与独立退出码，不访问或修改目标。
 
 ## 0.5.0 - 2026-10-01

@@ -57,6 +57,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [Kubernetes 部署](kubernetes-deployment.zh-CN.md) — 可执行本地基线与生产要求。
 - [恢复手册](recovery-runbook.zh-CN.md) — 备份、恢复、RPO/RTO 证据与回滚。
 - [迁移容量预检](migration-capacity-preflight.zh-CN.md) — 固定库存证据的离线逻辑与物理预算。
+- [离线备份清单验证](backup-manifest-verification.zh-CN.md) — 私有本地字节验证与明确未证实的快照一致性。
 - [匿名访问运维](anonymous-access-operations.zh-CN.md) — 默认拒绝的全局、Group、Repository 门禁。
 - [本地用户治理](user-governance.zh-CN.md) — 账户、Session、锁定、OIDC 关联与审计。
 - [OIDC 浏览器 SSO](oidc-sso.zh-CN.md) — Code+PKCE、运行时配置、角色映射和 Session。

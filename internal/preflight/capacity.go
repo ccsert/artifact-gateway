@@ -1,7 +1,6 @@
 package preflight
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,11 +10,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/capacityplan"
+	"github.com/artifact-gateway/artifact-gateway/internal/opsjson"
 )
 
 const maxCapacityInputBytes = 8 << 20
@@ -57,9 +55,7 @@ func runCapacity(ctx context.Context, args []string, stdout, stderr io.Writer) i
 		return 2
 	}
 	var plan *capacityplan.Plan
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if !utf8.Valid(data) || !uniqueJSONKeys(data) || decoder.Decode(&plan) != nil || plan == nil || decoder.Decode(new(any)) != io.EOF {
+	if opsjson.Decode(data, &plan) != nil || plan == nil {
 		// Never include parser errors, paths, or excerpts of operator evidence.
 		_, _ = fmt.Fprintln(stderr, "capacity input must be one valid, unambiguous versioned JSON plan")
 		return 2
@@ -87,57 +83,4 @@ func writeCapacityReport(stdout, stderr io.Writer, report capacityplan.Report) i
 	default:
 		return 3
 	}
-}
-
-// JSON permits duplicate keys in some decoders. They are ambiguous evidence and
-// are rejected here, including duplicates in nested capacity or object records.
-func uniqueJSONKeys(data []byte) bool {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	var consume func(int) bool
-	consume = func(depth int) bool {
-		if depth > 32 {
-			return false
-		}
-		token, err := decoder.Token()
-		if err != nil {
-			return false
-		}
-		delim, ok := token.(json.Delim)
-		if !ok {
-			return true
-		}
-		keys := make(map[string]bool)
-		for decoder.More() {
-			if delim == '{' {
-				key, keyErr := decoder.Token()
-				name, valid := key.(string)
-				// All schema field names are ASCII. The struct decoder matches
-				// ASCII names case-insensitively; reject its alias collisions too.
-				if keyErr != nil || !valid || !asciiField(name) || keys[strings.ToLower(name)] {
-					return false
-				}
-				keys[strings.ToLower(name)] = true
-			}
-			if !consume(depth + 1) {
-				return false
-			}
-		}
-		end, endErr := decoder.Token()
-		return endErr == nil && ((delim == '{' && end == json.Delim('}')) || (delim == '[' && end == json.Delim(']')))
-	}
-	if !consume(0) {
-		return false
-	}
-	_, err := decoder.Token()
-	return err == io.EOF
-}
-
-func asciiField(name string) bool {
-	for i := range len(name) {
-		if name[i] >= 128 {
-			return false
-		}
-	}
-	return true
 }
