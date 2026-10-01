@@ -59,6 +59,7 @@ agree with executable tests and the
 - [Runtime log product design](runtime-log-product-design.md) — proposal for API/Worker log classification, search, durable storage, and deployment acceptance.
 - [Kubernetes deployment](kubernetes-deployment.md) — local executable baseline and production requirements.
 - [Recovery runbook](recovery-runbook.md) — backup, restore, RPO/RTO evidence, and rollback.
+- [Migration capacity preflight](migration-capacity-preflight.md) — offline logical and physical budget calculation for fixed inventory evidence.
 - [Anonymous access operations](anonymous-access-operations.md) — default-deny global, Group, and Repository gates.
 - [Local user governance](user-governance.md) — accounts, sessions, lockout, OIDC linkage, and audit.
 - [OIDC browser SSO](oidc-sso.md) — Code + PKCE, runtime configuration, role mapping, and session behavior.

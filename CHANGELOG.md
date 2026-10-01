@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Added offline `gateway preflight capacity --input plan.json` for fixed migration evidence. It separates repository logical quota growth from deduplicated physical object growth and temporary/backup/restore/headroom peaks, preserves missing quantities as unknown, and emits versioned JSON and distinct exit codes without contacting or modifying the target.
+
 ## 0.5.0 - 2026-10-01
 
 - Access control keeps the public-access count and confirmed switch with one concise read-only boundary notice; the repeated three-layer explanation and decorative styling are removed. Permission evaluation retains one collapsed explanation; repository grants keep their effective decision details without repeating the decision-order footnote.

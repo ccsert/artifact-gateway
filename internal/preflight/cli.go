@@ -13,7 +13,7 @@ import (
 
 func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		_, _ = fmt.Fprintln(stdout, "usage: gateway preflight <list|run> [--check name] [--format json]")
+		_, _ = fmt.Fprintln(stdout, "usage: gateway preflight <list|run|capacity> [--check name] [--input plan.json] [--format json]")
 		return 0
 	}
 	switch args[0] {
@@ -24,6 +24,8 @@ func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 0
 	case "run":
 		return run(ctx, args[1:], stdout, stderr)
+	case "capacity":
+		return runCapacity(ctx, args[1:], stdout, stderr)
 	default:
 		_, _ = fmt.Fprintf(stderr, "unknown preflight command %q\n", args[0])
 		return 2
