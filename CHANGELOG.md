@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Runtime log queries discard an oversized line through its newline even when writes split the line, preventing a valid-looking tail from becoming a separate event. Structured loggers preserve `component`, `operation`, `requestId`, and `traceId` bound with `With`; explicit record fields keep priority and group scopes remain independent.
+
 - Cargo Hosted, Proxy, and Group now appear in the public format catalog, repository creation and capabilities APIs, OpenAPI contract, and Console. The Console provides sparse registry configuration and Hosted publish/yank guidance; public browsing and global search link to crate versions. Proxy creation requires an HTTPS upstream and allowed download hosts. Official Cargo 1.96.0, PostgreSQL/RustFS, backup/restore, and upgrade gates define the admission baseline; existing deployments require a separate release and rollout.
 
 - Runtime log redaction now applies the existing sensitive-name policy to ancestor groups as well as leaf attributes. Values nested under groups such as `credentials` or `Authorization` are masked before output and process-local keyword indexing; safe sibling groups retain their diagnostic fields.

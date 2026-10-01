@@ -45,6 +45,7 @@ type Buffer struct {
 	count   int
 	next    uint64
 	partial []byte
+	discard bool
 }
 
 func NewBuffer(lines int) *Buffer {
@@ -71,18 +72,21 @@ func (b *Buffer) Write(p []byte) (int, error) {
 			}
 		}
 		if newline < 0 {
-			if len(b.partial)+len(remaining) <= 16*1024 {
+			if !b.discard && len(b.partial)+len(remaining) <= 16*1024 {
 				b.partial = append(b.partial, remaining...)
 			} else {
 				b.partial = nil
+				// Keep discarding this line across writes until its newline.
+				b.discard = true
 			}
 			break
 		}
-		if len(b.partial)+newline <= 16*1024 {
+		if !b.discard && len(b.partial)+newline <= 16*1024 {
 			b.partial = append(b.partial, remaining[:newline]...)
 			b.appendLine(b.partial)
 		}
 		b.partial = nil
+		b.discard = false
 		remaining = remaining[newline+1:]
 	}
 	return len(p), nil
