@@ -999,59 +999,6 @@ button:not(:disabled):active,
   font-weight: 500;
 }
 
-.ag-public-access-header {
-  border-bottom: 1px solid var(--ag-border-subtle);
-  background-color: var(--ag-surface-container);
-  background-image: radial-gradient(
-    circle at top right,
-    var(--ag-status-success-soft),
-    transparent 38%
-  );
-}
-
-.ag-public-access-summary {
-  border: 1px solid var(--ag-border-subtle);
-  background-color: var(--ag-surface-container);
-}
-
-.ag-public-access-layers {
-  gap: 1px;
-  margin: 0;
-  padding: 0;
-  background: var(--ag-border-subtle);
-  list-style: none;
-}
-
-.ag-public-access-layer {
-  min-width: 0;
-  background-color: var(--ag-surface-container);
-}
-
-.ag-public-access-layer-icon {
-  background-color: var(--ag-surface-hover);
-}
-
-.ag-public-access-step {
-  font-variant-numeric: tabular-nums;
-}
-
-.ag-public-access-footer {
-  border-top: 1px solid var(--ag-border-subtle);
-  background-color: var(--ag-surface-container);
-}
-
-html[data-theme="light"] .ag-public-access-header {
-  background-image: linear-gradient(
-    115deg,
-    var(--ag-status-success-soft),
-    transparent 58%
-  );
-}
-
-html[data-theme="light"] .ag-public-access-layer {
-  background-color: var(--ag-surface-table-header);
-}
-
 .ag-repository-navigation {
   border-bottom: 1px solid var(--ag-border-subtle);
 }
