@@ -60,9 +60,14 @@ func runGateway() int {
 	if logBuffer != nil {
 		output = io.MultiWriter(os.Stdout, logBuffer)
 	}
-	// stdout and the memory buffer are borrowed; neither requires flushing or
-	// closing. Future owned destinations must supply their cleanup explicitly.
-	logOutput := operationalog.NewOutput(output, nil, nil)
+	// The default stdout/buffer stay borrowed. A configured file owns its
+	// cleanup and receives the same JSON after the logger's shared redaction.
+	fallback := operationalog.NewLogger(os.Stderr, cfg.InstanceID, runtimeSessionID)
+	logOutput, err := newRuntimeLogOutput(cfg, output, fallback)
+	if err != nil {
+		fallback.Error("initialize runtime file log output", "error", err)
+		return 1
+	}
 	exitCode, cleanupErr := runWithLogOutput(logOutput, func() int {
 		slog.SetDefault(operationalog.NewLogger(logOutput, cfg.InstanceID, runtimeSessionID))
 		return runConfiguredGateway(cfg, runtimeSessionID, logBuffer)
