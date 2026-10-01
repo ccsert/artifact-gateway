@@ -16,6 +16,10 @@ import type {
   Diagnostics,
 } from "../../client";
 import { formatDate } from "../../lib/format";
+import {
+  buildVersionsMismatch,
+  getConsoleBuildVersion,
+} from "../../lib/buildVersion";
 import { usePreferences } from "../../lib/preferences";
 import { FormatBadge, StateBadge } from "../../components/ui/Badge";
 import {
@@ -119,6 +123,7 @@ function scannerOperationalDetail(
 
 export function SystemDiagnosticsPanel() {
   const { locale, text } = usePreferences();
+  const consoleVersion = getConsoleBuildVersion();
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
@@ -449,30 +454,53 @@ export function SystemDiagnosticsPanel() {
           <div className="ag-diagnostic-identity-groups">
             <section className="ag-diagnostic-identity-group">
               <h3>{text("构建信息", "Build information")}</h3>
-              <dl>
-                <DiagnosticIdentityItem
-                  label={text("版本", "Version")}
-                  value={diagnostics.build.version}
-                />
-                <DiagnosticIdentityItem
-                  label={text("修订", "Revision")}
-                  value={diagnostics.build.revision}
-                  mono
-                />
-                <DiagnosticIdentityItem
-                  label="Go"
-                  value={diagnostics.build.goVersion}
-                  mono
-                />
-                <DiagnosticIdentityItem
-                  label={text("工作区", "Workspace")}
-                  value={
-                    diagnostics.build.modified
-                      ? text("有未提交修改", "Modified")
-                      : text("干净", "Clean")
-                  }
-                />
-              </dl>
+              <div className="grid gap-4">
+                <dl>
+                  <DiagnosticIdentityItem
+                    label={text("Console 版本", "Console version")}
+                    value={consoleVersion}
+                  />
+                  <DiagnosticIdentityItem
+                    label={text("Gateway 版本", "Gateway version")}
+                    value={diagnostics.build.version}
+                  />
+                  <DiagnosticIdentityItem
+                    label={text("Gateway 修订", "Gateway revision")}
+                    value={diagnostics.build.revision}
+                    mono
+                  />
+                  <DiagnosticIdentityItem
+                    label="Go"
+                    value={diagnostics.build.goVersion}
+                    mono
+                  />
+                  <DiagnosticIdentityItem
+                    label={text("工作区", "Workspace")}
+                    value={
+                      diagnostics.build.modified
+                        ? text("有未提交修改", "Modified")
+                        : text("干净", "Clean")
+                    }
+                  />
+                </dl>
+                {buildVersionsMismatch(
+                  consoleVersion,
+                  diagnostics.build.version,
+                ) && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    title={text(
+                      "前后端版本不一致",
+                      "Console and Gateway versions differ",
+                    )}
+                    description={text(
+                      "可能是镜像 tag 不一致或浏览器缓存了旧 bundle。请核对部署版本并刷新页面。",
+                      "Image tags may differ, or the browser may have cached an older bundle. Check the deployed versions and refresh the page.",
+                    )}
+                  />
+                )}
+              </div>
             </section>
             <section className="ag-diagnostic-identity-group">
               <h3>{text("运行身份", "Runtime identity")}</h3>
