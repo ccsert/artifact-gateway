@@ -30,7 +30,9 @@ func decodeOTLPRecord(data []byte) (context.Context, otellog.Record, error) {
 	}
 	timestampText, _ := fields["time"].(string)
 	timestamp, err := time.Parse(time.RFC3339Nano, timestampText)
-	if err != nil || timestamp.Before(time.Unix(0, 0)) {
+	// OTLP timestamps are unsigned nanoseconds since the epoch. Reject values
+	// outside that wire range rather than allowing UnixNano to wrap.
+	if err != nil || timestamp.Before(time.Unix(0, 0)) || timestamp.After(time.Unix(18446744073, 709551615)) {
 		return nil, record, errors.New("invalid OTLP Logs timestamp")
 	}
 	levelText, _ := fields["level"].(string)

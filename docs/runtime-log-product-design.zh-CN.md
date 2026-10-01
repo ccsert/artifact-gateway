@@ -2,7 +2,7 @@
 
 [English](runtime-log-product-design.md) | [当前日志行为](runtime-logging.zh-CN.md) | [文档索引](README.zh-CN.md)
 
-> 状态：2026-10-01 已确认输出方向为可选的**文件与 OTLP Logs**，保留 stdout。本文区分该方向与 [#151](https://github.com/ccsert/artifact-gateway/issues/151)、[#152](https://github.com/ccsert/artifact-gateway/issues/152) 中待定的历史/查询决策。文件输出实现在 [#194](https://github.com/ccsert/artifact-gateway/pull/194)；OTLP 仍在验证。两种输出都不增加 Console 历史，也不代表跨节点/重启部署验收完成。本文不选择日志后端或采集器产品。
+> 状态：2026-10-01 已确认输出方向为可选的**文件与 OTLP Logs**，保留 stdout。本文区分该方向与 [#151](https://github.com/ccsert/artifact-gateway/issues/151)、[#152](https://github.com/ccsert/artifact-gateway/issues/152) 中待定的历史/查询决策。文件输出实现在 [#194](https://github.com/ccsert/artifact-gateway/pull/194)；可选 OTLP/HTTP protobuf 配置及交付边界见[运行日志文档](runtime-logging.zh-CN.md)。两种输出都不增加 Console 历史，也不代表跨节点/重启部署验收完成。本文不选择日志后端或采集器产品。
 
 ## 1. 当前行为与共用事件
 
@@ -34,7 +34,7 @@ flowchart LR
 | 模式 | 交付与所有权 | 对查询的影响 |
 | --- | --- | --- |
 | 文件 | Gateway 将相同脱敏 NDJSON 写入部署提供的可写目录，仅管理自身私有 session 文件。 | 持久卷上的已写数据在进程重启后仍存在，但 Console 尚无文件历史读取器。 |
-| OTLP Logs | Gateway 通过标准协议向配置的接收端发送结构化记录；下一批采用 OTLP/HTTP protobuf，须验证有界队列、重试、退出清理和错误遮蔽。 | OTLP 是输出协议；接收端存储、保留和检索是独立能力，输出 endpoint 不是查询 endpoint。 |
+| OTLP Logs | Gateway 通过 OTLP/HTTP protobuf 向配置的接收端发送结构化记录，具有有界接纳/重试、安全诊断及明确协议清理预算。 | OTLP 是输出协议；接收端存储、保留和检索是独立能力，输出 endpoint 不是查询 endpoint。 |
 | stdout/本地 buffer | 既有默认行为与 Docker/节点轮转继续。 | buffer 为每个进程的临时数据；容器轮转不提供保留的集群检索。 |
 
 仓库不以内置 Loki、Alloy 或日志数据库作为基线。部署可使用现有接收端或可观测平台；未来 Gateway 查询适配器须先取得后端读取 API、认证、分页、保留和失败行为的证据，再做选择。写入与查询凭据分开，均由服务端配置。

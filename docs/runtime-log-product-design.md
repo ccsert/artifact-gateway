@@ -2,7 +2,7 @@
 
 [简体中文](runtime-log-product-design.zh-CN.md) | [Current logging behavior](runtime-logging.md) | [Documentation index](README.md)
 
-> Status: output direction agreed on 2026-10-01: optional **files and OTLP Logs**, with stdout preserved. This document separates that direction from the remaining history/query decisions tracked by [#151](https://github.com/ccsert/artifact-gateway/issues/151) and [#152](https://github.com/ccsert/artifact-gateway/issues/152). File output is implemented in [#194](https://github.com/ccsert/artifact-gateway/pull/194); OTLP work remains under validation. Neither output adds Console history or completes multi-node/restart deployment acceptance. No log backend or collector product is selected here.
+> Status: output direction agreed on 2026-10-01: optional **files and OTLP Logs**, with stdout preserved. This document separates that direction from the remaining history/query decisions tracked by [#151](https://github.com/ccsert/artifact-gateway/issues/151) and [#152](https://github.com/ccsert/artifact-gateway/issues/152). File output is implemented in [#194](https://github.com/ccsert/artifact-gateway/pull/194); optional OTLP/HTTP protobuf configuration and delivery bounds are documented in [runtime logging](runtime-logging.md). Neither output adds Console history or completes multi-node/restart deployment acceptance. No log backend or collector product is selected here.
 
 ## 1. Current behavior and shared events
 
@@ -34,7 +34,7 @@ Both modes are off by default and may be enabled independently or together. Stdo
 | Mode | Delivery and ownership | Query consequence |
 | --- | --- | --- |
 | Files | Gateway writes the same redacted NDJSON to a deployment-provided writable directory; it owns only its private session files. | Saved bytes remain after process restart on a durable volume, but the Console has no file-history reader yet. |
-| OTLP Logs | Gateway exports structured records through the standard protocol to a configured receiver. The next batch uses OTLP/HTTP protobuf and must validate bounded queueing, retry, shutdown and error masking. | OTLP is an export protocol. Receiver storage, retention and search are separate capabilities; an export endpoint is not a query endpoint. |
+| OTLP Logs | Gateway exports structured records through OTLP/HTTP protobuf to a configured receiver, with bounded admission/retries, safe diagnostics and explicit protocol cleanup budgets. | OTLP is an export protocol. Receiver storage, retention and search are separate capabilities; an export endpoint is not a query endpoint. |
 | Stdout/local buffer | Existing default behavior and Docker/node rotation continue. | The buffer is temporary and per process; container rotation is not retained cluster search. |
 
 The repository does not bundle Loki, Alloy, or a log database as the baseline. A deployment may use an existing receiver or observability platform. A future Gateway search adapter needs evidence for that backend's read API, authentication, pagination, retention and failure behavior before selection. Write and query credentials remain separate, server-side configuration.

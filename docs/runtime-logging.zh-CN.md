@@ -18,6 +18,28 @@ stdout 继续启用。将 `GATEWAY_LOG_FILE_DIRECTORY` 设为绝对且可写的�
 
 文件写入和 Sync 是同步操作，可能延迟日志调用方；没有队列或磁盘 I/O deadline。现有 stdout/buffer 目的地及文件都会尝试，任一失败不跳过另一个。运行中文件错误保留默认目的地、向 handler 返回错误，并通过独立 stderr 每分钟最多报告一次脱敏失败及计数；关闭错误也独立报告。失败记录不持久重试，Gateway 不因这些可选出口运行错误改变原退出码。部署负责卷权限、容量监控和旧 session 保留；只读 nonroot Kubernetes 镜像需要显式提供可写挂载，`/tmp` 不提供持久性。本批不配置卷或凭据，也不部署。
 
+## 可选 OTLP Logs 输出
+
+设置 `GATEWAY_OTLP_LOGS_ENDPOINT` 可将相同脱敏事件额外输出为标准 **OTLP/HTTP protobuf Logs**。默认不设置，与 trace 配置 `GATEWAY_OTLP_HTTP_ENDPOINT` 独立。文件与 OTLP 可分别或同时启用，stdout 继续启用。本批不配置接收端、日志数据库、卷或凭据。
+
+| 变量 | 默认值 | 可接受值 |
+| --- | --- | --- |
+| `GATEWAY_OTLP_LOGS_ENDPOINT` | 未设置（关闭） | 无用户凭据、query 或 fragment 的 HTTP(S) URL；空路径或根路径使用 `/v1/logs`，保留自定义路径 |
+| `GATEWAY_OTLP_LOGS_HEADERS` | 空 | 字符串 header 值组成的 JSON 对象；单值最多 4096 字节，传输/content header 为保留项 |
+| `GATEWAY_OTLP_LOGS_QUEUE_SIZE` | `256` | 1–1024 条未确认记录，包含排队及在途记录 |
+| `GATEWAY_OTLP_LOGS_TIMEOUT` | `3s` | Go duration 或整数秒，每次含重试的导出为 1 ms–30 s |
+| `GATEWAY_OTLP_LOGS_SHUTDOWN_TIMEOUT` | `5s` | Go duration 或整数秒，每次 flush 与 shutdown 尝试为 1 ms–10 s |
+
+这些可配置值是起点，未经部署容量测量。私有 Logs provider 使用官方 exporter，每批最多 64 条，通常每秒发送一次；不修改全局 tracing/logging provider，也不继承 `OTEL_EXPORTER_OTLP*` exporter 配置。共用的 `OTEL_RESOURCE_ATTRIBUTES` 元数据采用相同敏感名称脱敏策略，保留普通属性；语法或编码无效时，在 SDK 诊断之前以安全错误终止初始化。固定 Gateway service/instance/session 身份优先。HTTPS 通过私有 HTTP 客户端的系统信任验证证书；私有 CA 部署须在进程使用的系统证书配置中提供信任。没有不安全 TLS 模式，也不跟随重定向。认证 header 只进入请求 header，不进入日志字段或 fallback 诊断。
+
+时间、级别、正文及有效 trace ID 映射为 OTLP 原生字段；普通关联字段与嵌套 group 保留为属性。缺失或无效 trace ID 保留为属性，不伪造 span ID。有符号 int64 保持精确，更宽整数或超出 float64 的数值保留为文本。OTLP 接纳单个完整 NDJSON 对象，最多 64 KiB、属性嵌套最多 32 层；拒绝超限或无效事件，不截断。这些限制不改变 stdout、文件或本地 buffer 的接纳规则。
+
+写入成功表示接纳，**不表示交付或接收端持久存储**。接纳不等待：排队及在途记录达到容量时，拒绝新事件并提供安全失败计数，保留已接纳事件。官方 exporter 在导出时限内有限重试临时故障，遵守 `Retry-After` 的整数秒或 HTTP 日期；要求的等待超出预算时不重试。永久错误、无效响应和部分成功记为失败批次，部分成功保守地将整批计为未确认且不重试。失败批次释放容量，但不持久重排；后续成功不会清除之前失败的证据。退出预算耗尽时取消在途请求，将所有剩余预留保守地结算为未确认，包括 SDK 未导出便丢弃的记录。SIGKILL 和接收端中断也可留下未确认记录；没有持久重试日志或零丢失承诺。
+
+所有已配置目的地都会尝试，一项失败不跳过其他项。OTLP 通过独立脱敏 stderr 每分钟最多诊断一次，包含导出失败、未确认、拒绝、容量拒绝、待确认及清理失败计数，排除原始接收端错误、正文和凭据。初始化失败在打开业务资源之前终止启动，运行交付或清理失败保留原退出码。退出在既有业务资源清理后先 flush、再 shutdown Logs provider，并释放其私有闲置 HTTP 连接。每次协议清理有独立预算，默认最多 5 秒 + 5 秒；这不是整个进程的退出 deadline，同步 stdout/文件 I/O 仍分别没有时限。
+
+OTLP 是输出协议，不是日志查询 API。接收端存储、保留和检索需要部署配置及独立设计的 Gateway 查询适配器。`GET /api/v2/runtime/logs` 仍按既有管理员/改密门禁只查当前进程内存；合成接收端测试及 CI 不代替多节点、重启与出口中断部署验收。
+
 ## 共用事件与本地查询
 
 独立 session 目录由对应输出实例独占管理，管理员及同 UID/root 工具不能并发替换其路径。身份检查会拒绝轮转或保留操作之前观察到的替换，但不是抵御有权限并发路径变更的文件系统事务。

@@ -139,6 +139,8 @@ func newOTLPReporter(fallback *slog.Logger) func(operationalog.OTLPStats) {
 		}
 		last = time.Now()
 		fallback.Error("runtime OTLP log output failed", "export_failures", stats.ExportFailures,
-			"unconfirmed_records", stats.UnconfirmedRecords, "rejected_events", stats.RejectedEvents)
+			"unconfirmed_records", stats.UnconfirmedRecords, "rejected_events", stats.RejectedEvents,
+			"queue_rejected_events", stats.QueueRejectedEvents, "pending_records", stats.PendingRecords,
+			"cleanup_failures", stats.CleanupFailures)
 	}
 }

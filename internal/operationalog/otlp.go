@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -33,24 +34,30 @@ type OTLPOptions struct {
 }
 
 type OTLPStats struct {
-	ExportedRecords    uint64
-	ExportFailures     uint64
-	UnconfirmedRecords uint64
-	RejectedEvents     uint64
+	AcceptedRecords     uint64
+	ExportedRecords     uint64
+	PendingRecords      uint64
+	ExportFailures      uint64
+	UnconfirmedRecords  uint64
+	RejectedEvents      uint64
+	QueueRejectedEvents uint64
+	CleanupFailures     uint64
 }
 
 // OTLPOutput accepts complete, already redacted NDJSON from NewLogger. Emit is
 // asynchronous; a successful Write acknowledges SDK admission, not delivery.
-// The official bounded batch queue drops oldest records when full and reports
-// those drops through the SDK diagnostic logger. Shutdown prevents new emits.
+// QueueSize bounds all queued and in-flight records. A full capacity rejects
+// the new event without waiting, preserving admitted records and reporting safe
+// counters. The SDK queue cannot overflow this admission bound.
 type OTLPOutput struct {
-	mu       sync.RWMutex
-	provider *sdklog.LoggerProvider
-	logger   otellog.Logger
-	observed *observedExporter
-	closed   bool
-	done     chan struct{}
-	closeErr error
+	mu        sync.RWMutex
+	provider  *sdklog.LoggerProvider
+	logger    otellog.Logger
+	observed  *observedExporter
+	closed    bool
+	done      chan struct{}
+	closeErr  error
+	closeIdle func()
 }
 
 func NewOTLPOutput(options OTLPOptions) (*OTLPOutput, error) {
@@ -71,13 +78,19 @@ func newOTLPOutput(options OTLPOptions, client *http.Client) (*OTLPOutput, error
 			return nil, errors.New("reserved OTLP Logs header")
 		}
 	}
+	logResource, err := privateLogResource(options.InstanceID, options.SessionID)
+	if err != nil {
+		return nil, err
+	}
 	if endpoint.Path == "" || endpoint.Path == "/" {
 		endpoint.Path = "/v1/logs"
 	}
+	var closeIdle func()
 	if client == nil {
 		transport := http.DefaultTransport
 		if base, ok := transport.(*http.Transport); ok {
-			transport = base.Clone()
+			owned := base.Clone()
+			transport, closeIdle = owned, owned.CloseIdleConnections
 		}
 		client = &http.Client{Transport: transport}
 	} else {
@@ -85,53 +98,79 @@ func newOTLPOutput(options OTLPOptions, client *http.Client) (*OTLPOutput, error
 		client = &copy
 	}
 	client.Timeout = options.Timeout
+	transport := client.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	client.Transport = otlpRetryAfterTransport{base: transport, maximum: options.Timeout}
 	// A collector redirect must not move logs or credentials to another host.
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	exporter, err := otlploghttp.New(context.Background(),
 		otlploghttp.WithEndpointURL(endpoint.String()), otlploghttp.WithHeaders(options.Headers),
 		otlploghttp.WithHTTPClient(client), otlploghttp.WithTimeout(options.Timeout),
+		// The private client owns TLS trust. Explicit nil also prevents the SDK
+		// from parsing unrelated shared Trace certificate environment settings.
+		otlploghttp.WithTLSClientConfig(nil),
 		otlploghttp.WithCompression(otlploghttp.NoCompression), otlploghttp.WithMaxRequestSize(16<<20),
 		otlploghttp.WithRetry(otlploghttp.RetryConfig{Enabled: true, InitialInterval: 100 * time.Millisecond, MaxInterval: time.Second, MaxElapsedTime: options.Timeout}),
 	)
 	if err != nil {
+		if closeIdle != nil {
+			closeIdle()
+		}
 		return nil, err
 	}
-	observed := &observedExporter{Exporter: exporter, report: options.Report}
+	ctx, cancel := context.WithCancel(context.Background())
+	observed := &observedExporter{Exporter: exporter, report: options.Report, capacity: uint64(options.QueueSize), lifetime: ctx, cancel: cancel}
 	processor := sdklog.NewBatchProcessor(observed, sdklog.WithMaxQueueSize(options.QueueSize),
 		sdklog.WithExportMaxBatchSize(options.BatchSize), sdklog.WithExportBufferSize(1),
 		sdklog.WithExportInterval(options.ExportInterval), sdklog.WithExportTimeout(options.Timeout))
 	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(processor),
 		sdklog.WithAttributeCountLimit(-1), sdklog.WithAttributeValueLengthLimit(-1),
-		sdklog.WithResource(resource.NewSchemaless(attribute.String("service.name", "artifact-gateway"),
-			attribute.String("service.instance.id", options.InstanceID), attribute.String("gateway.runtime.session.id", options.SessionID))))
-	return &OTLPOutput{provider: provider, logger: provider.Logger("artifact-gateway/runtime"), observed: observed, done: make(chan struct{})}, nil
+		sdklog.WithResource(logResource))
+	return &OTLPOutput{provider: provider, logger: provider.Logger("artifact-gateway/runtime"), observed: observed, done: make(chan struct{}), closeIdle: closeIdle}, nil
 }
 
 func (o *OTLPOutput) Write(data []byte) (int, error) {
 	o.mu.RLock()
-	defer o.mu.RUnlock()
 	if o.closed {
+		o.mu.RUnlock()
 		return 0, io.ErrClosedPipe
 	}
 	if len(data) == 0 {
+		o.mu.RUnlock()
 		return 0, nil
 	}
 	ctx, record, err := decodeOTLPRecord(data)
 	if err != nil {
-		o.observed.reject()
+		stats := o.observed.reject()
+		o.mu.RUnlock()
+		o.observed.notify(stats)
 		return 0, err
 	}
+	admitted, stats := o.observed.reserve()
+	if !admitted {
+		o.mu.RUnlock()
+		o.observed.notify(stats)
+		return 0, errors.New("OTLP Logs capacity full")
+	}
 	o.logger.Emit(ctx, record)
+	o.mu.RUnlock()
 	return len(data), nil
 }
 
 func (o *OTLPOutput) ForceFlush(ctx context.Context) error {
 	o.mu.RLock()
-	defer o.mu.RUnlock()
-	if o.closed {
+	closed := o.closed
+	o.mu.RUnlock()
+	if closed {
 		return io.ErrClosedPipe
 	}
-	return errors.Join(o.provider.ForceFlush(ctx), o.observed.lastError())
+	err := awaitOTLPCleanup(ctx, o.provider.ForceFlush)
+	if err != nil {
+		o.observed.cleanupFailure()
+	}
+	return errors.Join(err, o.observed.lastError())
 }
 
 func (o *OTLPOutput) Shutdown(ctx context.Context) error {
@@ -147,7 +186,20 @@ func (o *OTLPOutput) Shutdown(ctx context.Context) error {
 	}
 	o.closed = true
 	o.mu.Unlock()
-	err := errors.Join(o.provider.Shutdown(ctx), o.observed.lastError())
+	providerErr := awaitOTLPCleanup(ctx, o.provider.Shutdown)
+	// SDK cleanup can wait on an internal mutex beyond ctx. Cancel active
+	// requests and settle every remaining reservation when our budget expires;
+	// a late SDK no-op is not a receiver acknowledgement.
+	if providerErr != nil {
+		o.observed.stop(providerErr)
+	}
+	if o.closeIdle != nil {
+		o.closeIdle()
+	}
+	if providerErr != nil {
+		o.observed.cleanupFailure()
+	}
+	err := errors.Join(providerErr, o.observed.lastError())
 	o.mu.Lock()
 	o.closeErr = err
 	close(o.done)
@@ -163,15 +215,33 @@ func (o *OTLPOutput) Stats() OTLPStats { return o.observed.snapshot() }
 // exporter handles bounded retries; failed batches are not requeued here.
 type observedExporter struct {
 	sdklog.Exporter
-	mu     sync.Mutex
-	stats  OTLPStats
-	err    error
-	report func(OTLPStats)
+	mu       sync.Mutex
+	stats    OTLPStats
+	err      error
+	report   func(OTLPStats)
+	capacity uint64
+	lifetime context.Context
+	cancel   context.CancelFunc
+	stopped  bool
 }
 
 func (e *observedExporter) Export(ctx context.Context, records []sdklog.Record) error {
+	e.mu.Lock()
+	stopped := e.stopped
+	e.mu.Unlock()
+	if stopped {
+		return nil // Stop already counted these unconfirmed reservations.
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	stop := context.AfterFunc(e.lifetime, cancel)
+	defer func() { stop(); cancel() }()
 	err := e.Exporter.Export(ctx, records)
 	e.mu.Lock()
+	if e.stopped {
+		e.mu.Unlock()
+		return nil
+	}
+	e.stats.PendingRecords -= uint64(len(records))
 	if err != nil {
 		e.err = err
 		e.stats.ExportFailures++
@@ -181,17 +251,109 @@ func (e *observedExporter) Export(ctx context.Context, records []sdklog.Record) 
 	}
 	stats := e.stats
 	e.mu.Unlock()
-	if err != nil && e.report != nil {
-		e.report(stats)
+	if err != nil {
+		e.notify(stats)
 	}
 	return nil
 }
 
-func (e *observedExporter) reject() {
+func (e *observedExporter) Shutdown(ctx context.Context) error {
+	e.stop(ctx.Err())
+	return e.Exporter.Shutdown(ctx)
+}
+
+func (e *observedExporter) stop(err error) {
+	e.mu.Lock()
+	if e.stopped {
+		e.mu.Unlock()
+		return
+	}
+	e.stopped = true
+	pending := e.stats.PendingRecords
+	e.stats.UnconfirmedRecords += pending
+	e.stats.PendingRecords = 0
+	if pending != 0 && err == nil {
+		err = io.ErrClosedPipe
+	}
+	if err != nil {
+		e.err = err
+	}
+	stats := e.stats
+	e.mu.Unlock()
+	e.cancel()
+	if pending != 0 {
+		e.notify(stats)
+	}
+}
+
+// SDK v0.20.0 cleanup has context-insensitive internal mutex waits. Keep the
+// public budget explicit; the SDK receives the same cancellation and its
+// buffered result lets the worker finish after a caller's deadline.
+func awaitOTLPCleanup(ctx context.Context, cleanup func(context.Context) error) error {
+	result := make(chan error, 1)
+	go func() { result <- cleanup(ctx) }()
+	select {
+	case err := <-result:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// WithResource merges OTEL_RESOURCE_ATTRIBUTES before applying our values.
+// Validate before the SDK can emit raw parse errors via its global handler,
+// and override sensitive values with the existing shared name policy. Safe
+// deployment metadata remains useful; fixed Gateway identity takes priority.
+func privateLogResource(instanceID, sessionID string) (*resource.Resource, error) {
+	var attrs []attribute.KeyValue
+	if raw := strings.TrimSpace(os.Getenv("OTEL_RESOURCE_ATTRIBUTES")); raw != "" {
+		for _, pair := range strings.Split(raw, ",") {
+			name, value, found := strings.Cut(pair, "=")
+			name = strings.TrimSpace(name)
+			decoded, err := url.PathUnescape(strings.TrimSpace(value))
+			if !found || name == "" || err != nil {
+				return nil, errors.New("invalid OTLP Logs resource configuration")
+			}
+			if sensitiveAttributeName(name) {
+				decoded = "[redacted]"
+			}
+			attrs = append(attrs, attribute.String(name, decoded))
+		}
+	}
+	attrs = append(attrs, attribute.String("service.name", "artifact-gateway"), attribute.String("service.instance.id", instanceID), attribute.String("gateway.runtime.session.id", sessionID))
+	return resource.NewSchemaless(attrs...), nil
+}
+
+func (e *observedExporter) reject() OTLPStats {
 	e.mu.Lock()
 	e.stats.RejectedEvents++
 	stats := e.stats
 	e.mu.Unlock()
+	return stats
+}
+
+func (e *observedExporter) reserve() (bool, OTLPStats) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.stats.PendingRecords >= e.capacity {
+		e.stats.RejectedEvents++
+		e.stats.QueueRejectedEvents++
+		return false, e.stats
+	}
+	e.stats.AcceptedRecords++
+	e.stats.PendingRecords++
+	return true, e.stats
+}
+
+func (e *observedExporter) cleanupFailure() {
+	e.mu.Lock()
+	e.stats.CleanupFailures++
+	stats := e.stats
+	e.mu.Unlock()
+	e.notify(stats)
+}
+
+func (e *observedExporter) notify(stats OTLPStats) {
 	if e.report != nil {
 		e.report(stats)
 	}
