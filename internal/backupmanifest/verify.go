@@ -40,12 +40,22 @@ type Manifest struct {
 	Schema        SchemaExport    `json:"schema"`
 	Objects       ObjectExport    `json:"objects"`
 	Writers       WriterEvidence  `json:"writers"`
+	Metadata      *File           `json:"metadata,omitempty"`
 }
 
 type GatewayIdentity struct {
-	Version     string `json:"version"`
-	Revision    string `json:"revision"`
-	ImageDigest string `json:"imageDigest"`
+	Version     string            `json:"version"`
+	Revision    string            `json:"revision"`
+	ImageDigest string            `json:"imageDigest,omitempty"`
+	Artifact    *SoftwareArtifact `json:"artifact,omitempty"`
+}
+
+// SoftwareArtifact identifies the actual deployment artifact. Version 1 keeps
+// its original imageDigest meaning; version 2 never treats a binary as an image.
+type SoftwareArtifact struct {
+	Kind     string `json:"kind"`
+	SHA256   string `json:"sha256"`
+	Platform string `json:"platform"`
 }
 
 type File struct {
@@ -129,6 +139,14 @@ func Verify(ctx context.Context, directory string, m Manifest) Report {
 	if err != nil || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
 		return reason(r, Invalid, "bundle_permissions_not_private")
 	}
+	if m.Metadata != nil {
+		if m.SchemaVersion != 2 {
+			return reason(r, Invalid, "metadata_profile_invalid")
+		}
+		if why := verifyFile(ctx, root, *m.Metadata, maxMetadataBytes, nil); why != "" {
+			return fileFailure(r, ctx, why)
+		}
+	}
 	if why := verifyFile(ctx, root, m.Database.File, 0, nil); why != "" {
 		return fileFailure(r, ctx, why)
 	}
@@ -194,13 +212,13 @@ func Verify(ctx context.Context, directory string, m Manifest) Report {
 }
 
 func validate(m Manifest, now time.Time) (Status, string) {
-	if m.SchemaVersion != 1 {
+	if m.SchemaVersion != 1 && m.SchemaVersion != 2 {
 		return Unknown, "manifest_version_unsupported"
 	}
 	if m.State != "complete" {
 		return Unknown, "backup_set_incomplete"
 	}
-	if !identity.MatchString(m.BackupID) || !identity.MatchString(m.Gateway.Version) || !revision.MatchString(m.Gateway.Revision) || !hash.MatchString(m.Gateway.ImageDigest) {
+	if !identity.MatchString(m.BackupID) || !ValidSoftwareIdentity(m.SchemaVersion, m.Gateway) {
 		return Unknown, "software_or_backup_identity_unknown"
 	}
 	if m.StartedAt.IsZero() || !m.CompletedAt.After(m.StartedAt) || m.CompletedAt.After(now) {
@@ -216,6 +234,22 @@ func validate(m Manifest, now time.Time) (Status, string) {
 		return Unknown, "artifact_quantities_unknown"
 	}
 	return Unknown, ""
+}
+
+// ValidSoftwareIdentity checks syntax only. It does not approve executable
+// software or compare a release with the database migration ledger.
+func ValidSoftwareIdentity(version int, g GatewayIdentity) bool {
+	if !identity.MatchString(g.Version) || !revision.MatchString(g.Revision) {
+		return false
+	}
+	if version == 1 {
+		return g.Artifact == nil && hash.MatchString(g.ImageDigest)
+	}
+	if version != 2 || g.ImageDigest != "" || g.Artifact == nil {
+		return false
+	}
+	a := g.Artifact
+	return (a.Kind == "binary" || a.Kind == "oci-image") && hash.MatchString(a.SHA256) && (a.Platform == "linux/amd64" || a.Platform == "linux/arm64")
 }
 
 func writerDeclarations(m Manifest, now time.Time, reasons []string) (string, []string) {

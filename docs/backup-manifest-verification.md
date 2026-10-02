@@ -35,8 +35,9 @@ not independently compared with source migration files.
 
 Even verified bytes and complete declarations return exit 3. Do not use this
 result to reopen writes, delete source data, mark a backup consistent, or
-authorize restore. A future exporter, trusted stop evidence and isolated
-restore acceptance are separate requirements; issue #200 remains partial.
+authorize restore. The separate [portable transfer entrypoints](recovery-runbook.md) observe stopped
+writers and perform real export/isolated recovery; their acceptance cannot be
+inferred from this validator.
 
 The JSON report contains `schemaVersion: 1`, opaque `backupId`, UTC `checkedAt`,
 SHA-256 of the exact manifest (`manifestSha256`), reason codes and verified
@@ -46,7 +47,7 @@ in controlled evidence storage. Reports omit file paths, object keys, writer
 IDs, raw parser/IO errors, source coordinates and content. Use nonsecret IDs;
 even an opaque ID and quantities may be private evidence.
 
-## Manifest version 1
+## Manifest versions 1 and 2
 
 All JSON field names are ASCII; values preserve valid Unicode. Duplicate fields
 (including case-alias collisions), unknown v1 fields, invalid UTF-8, isolated UTF-16 surrogate escapes,
@@ -61,7 +62,7 @@ Explicit negative v1 object totals are invalid, rather than missing evidence.
 
 | Field | Required contract |
 | --- | --- |
-| `schemaVersion`, `backupId`, `state` | Version 1; opaque identity; `complete` declaration. Unsupported versions/incomplete state return unknown. |
+| `schemaVersion`, `backupId`, `state` | Version 1 or 2; opaque identity; `complete` declaration. Unsupported versions/incomplete state return unknown. |
 | `startedAt`, `completedAt` | Nonzero RFC3339 timestamps; completion strictly after start and no later than verification. Record UTC. |
 | `gateway` | `version`, 40 lowercase hex `revision`, full `imageDigest: sha256:<64 lowercase hex digits>`. These identify declared software, not proven compatibility. |
 | `database` | `format: pg-custom-v1` and `file` reference to dump bytes. No connection, dump parsing or restore is performed. |
@@ -97,6 +98,15 @@ Ledger and inventory files are each limited to 64 MiB, with lines shorter than
 64 KiB. Object files use fixed-size read buffers. Cancellation is checked
 between local reads; it cannot guarantee interruption of a blocked filesystem
 or hostile concurrent file replacement.
+
+Version 2 also permits `metadata`, a private file reference containing the
+producer's pre-start table fingerprints. It replaces image-only `imageDigest`
+with `gateway.artifact: {kind, sha256, platform}`: kind is `binary` or
+`oci-image`, digest is full SHA-256 and platform is `linux/amd64` or
+`linux/arm64`. Supplying both identities is invalid. Version 1 remains
+image-only and must not carry `artifact`. The offline validator checks syntax
+and bytes only; the transfer adapter separately checks actual executable/build
+identity or local OCI digest/labels and exact migration compatibility.
 
 ## Writer declarations and filesystem boundary
 

@@ -133,6 +133,7 @@ run_contract() {
   run "native APT E2E" make native-apt-e2e
   run "APT signer rotation E2E" make apt-signer-rotation-e2e
   run "Conan E2E" make conan-e2e
+  run "isolated backup transfers" make backup-transfer-test
   run "integration tests" make integration-test
   run "release readiness entrypoints" make release-readiness-check
 }

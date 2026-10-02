@@ -30,8 +30,8 @@ gateway preflight backup --input /private/backup/manifest.json --format json
 PostgreSQL dump；ledger checksum 也没有与源 migration 文件独立比对。
 
 即使字节验证通过且声明完整，仍退出 3。不能据此重开写入、删除源数据、将备份标记
-consistent 或批准恢复。真实导出器、可信停写证据和隔离恢复验收属于后续要求；
-#200 整单仍未完成。
+consistent 或批准恢复。独立的[真实传输入口](recovery-runbook.zh-CN.md)执行停写观察、
+导出与隔离恢复；其验收不能从本验证器推断。
 
 JSON 报告包含 `schemaVersion: 1`、不含秘密的 `backupId`、UTC `checkedAt`、原始
 清单 SHA-256（`manifestSha256`）、原因码和已验证对象/字节/migration 数。
@@ -39,7 +39,7 @@ JSON 报告包含 `schemaVersion: 1`、不含秘密的 `backupId`、UTC `checked
 在受控证据目录。报告不回显路径、对象 key、writer ID、原始 parser/IO 错误、源坐标
 或内容。使用非秘密 ID；即使不透明 ID 和规模也可能属于私有证据。
 
-## Manifest 版本 1
+## Manifest 版本 1 与 2
 
 JSON 字段名限 ASCII，值保留合法 Unicode。重复字段（包括大小写别名碰撞）、v1 未知字段、非法
 UTF-8、孤立 UTF-16 surrogate 转义、尾随 JSON、小数/越界整数和根 `null` 均拒绝。
@@ -50,7 +50,7 @@ unknown；通用 JSON 语法/歧义及大小上限仍适用。显式负 v1 对�
 
 | 字段 | 必须满足的契约 |
 | --- | --- |
-| `schemaVersion`、`backupId`、`state` | 版本 1、不透明身份、`complete` 声明；不支持版本或未完成状态返回 unknown。 |
+| `schemaVersion`、`backupId`、`state` | 版本 1 或 2、不透明身份、`complete` 声明；不支持版本或未完成状态返回 unknown。 |
 | `startedAt`、`completedAt` | 非零 RFC3339 时间；完成严格晚于开始且不晚于验证，记录为 UTC。 |
 | `gateway` | `version`、40 位小写 hex `revision`、完整 `imageDigest: sha256:<64 位小写 hex>`；标识声明的软件，不证明兼容。 |
 | `database` | `format: pg-custom-v1` 和指向 dump 字节的 `file`；不连接、解析 dump 或恢复。 |
@@ -102,3 +102,13 @@ Compose 项目的 writer。
 
 既有物理演练及其破坏性的隔离恢复 helper 不变。本验证器不将其 `SHA256SUMS` 当作
 可移植 S3 manifest，不解压归档或修改数据库/对象。
+
+## v2 软件身份与真实传输入口
+
+v1 保留仅镜像 imageDigest，不接受 artifact。v2 使用 gateway.artifact：kind 为
+binary 或 oci-image，sha256 为完整摘要，platform 为 linux/amd64 或 linux/arm64；
+同时提供 imageDigest 与 artifact 明确拒绝。v2 还支持可选 metadata 私有文件引用，
+保存生产方的启动前表指纹。离线验证只检查格式与字节；真实软件/build/OCI 标签、完整
+migration 兼容、停写观察和隔离恢复由 [恢复 runbook](recovery-runbook.zh-CN.md) 的
+gateway backup export/restore 分别处理。preflight 整体一致性仍为 unknown，退出 3，
+不能从其结果推断真实导出/恢复已验收。

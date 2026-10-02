@@ -6,16 +6,12 @@ import (
 	"mime"
 	"net/http"
 	"strconv"
-	"time"
 )
 
-// The pinned official v0.20.0 exporter interprets Retry-After integers as
-// nanoseconds instead of HTTP seconds and does not parse HTTP dates. Adapt
-// only its private response header; the official exporter still owns retries.
-// Delays beyond the export budget prevent retry instead of extending it.
+// Validate success response content before it reaches the official exporter.
+// The patched exporter owns HTTP Retry-After parsing and bounded retries.
 type otlpHTTPTransport struct {
-	base    http.RoundTripper
-	maximum time.Duration
+	base http.RoundTripper
 }
 
 func (t otlpHTTPTransport) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -48,23 +44,14 @@ func (t otlpHTTPTransport) RoundTrip(request *http.Request) (*http.Response, err
 		copy.Header.Set("Content-Type", "application/x-protobuf")
 		return &copy, nil
 	}
-	raw := response.Header.Get("Retry-After")
-	var delay time.Duration
-	if seconds, err := strconv.ParseUint(raw, 10, 64); err == nil {
-		if seconds > uint64(t.maximum/time.Second) {
-			delay = t.maximum
-		} else {
-			delay = time.Duration(seconds) * time.Second
-		}
-	} else if errors.Is(err, strconv.ErrRange) {
-		delay = t.maximum
-	} else if date, err := http.ParseTime(raw); err == nil {
-		delay = max(0, min(time.Until(date), t.maximum))
-	} else {
-		return response, nil
+	// The patched SDK handles seconds and HTTP dates, but ParseInt ignores
+	// unsigned decimal values above int64. Saturate only that overflow case.
+	seconds, parseErr := strconv.ParseUint(response.Header.Get("Retry-After"), 10, 64)
+	if seconds > 1<<63-1 && (parseErr == nil || errors.Is(parseErr, strconv.ErrRange)) {
+		copy := *response
+		copy.Header = response.Header.Clone()
+		copy.Header.Set("Retry-After", "9223372036854775807")
+		return &copy, nil
 	}
-	copy := *response
-	copy.Header = response.Header.Clone()
-	copy.Header.Set("Retry-After", strconv.FormatInt(int64(delay), 10))
-	return &copy, nil
+	return response, nil
 }
