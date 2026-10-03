@@ -54,6 +54,12 @@ npm --prefix console ci --ignore-scripts --no-audit --no-fund
 Console，安装依赖后再执行 `make dev`；在运行中的 Vite 进程下替换 `node_modules` 会使
 优化后的依赖 URL 失效。
 
+Ant Design 辅助命令使用固定范围的本地 CLI 包装器。尚未修补的 `braces` 风险
+GHSA-vfj7-8cjw-p6xm 仅对 Console 限期接受至 2026-10-17 UTC：锁定 CLI 使用
+固定 glob 模式，并检查分发文件摘要、准确开发依赖链、消费者及产品/构建中无引用。
+这属于有界可达性例外，不能称为上游修复。范围变化、新 advisory、注册表故障或
+到期均使依赖审计失败。
+
 ## 从 Issue 到合并的追溯
 
 每个用户可见变更或缺陷都用 GitHub Issue 记录现象、目标行为、明确范围、验收条件和
