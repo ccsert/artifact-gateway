@@ -158,7 +158,7 @@ func NewHandler(dependencies Dependencies) http.Handler {
 // NewOperationalHandler exposes process health and metrics for scheduler or
 // worker-only nodes without exposing the artifact and management protocols.
 func NewOperationalHandler(dependencies Dependencies, metrics *Metrics) http.Handler {
-	mux := http.NewServeMux()
+	mux := newRuntimeLogMux(dependencies.LogBuffer)
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /readyz", dependencies.ready)
 	if metrics != nil {

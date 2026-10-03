@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -26,6 +27,15 @@ func (d Dependencies) requestObservability(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, ids := requestcontext.WithRequest(r.Context(), r.Header.Get("X-Request-ID"))
+		route := &runtimeLogRouteState{pattern: "unmatched"}
+		ctx = context.WithValue(ctx, runtimeLogRouteContextKey{}, route)
+		state, ok := ctx.Value(requestClassStateContextKey{}).(*requestClassState)
+		if !ok {
+			// Standalone handlers still share the resolved compatibility class,
+			// without creating or updating any metrics counters.
+			state = &requestClassState{class: classifyRequest(r.URL.Path)}
+			ctx = context.WithValue(ctx, requestClassStateContextKey{}, state)
+		}
 		r = r.WithContext(ctx)
 		w.Header().Set("X-Request-ID", ids.RequestID)
 		w.Header().Set("X-Trace-ID", ids.TraceID)
@@ -41,15 +51,11 @@ func (d Dependencies) requestObservability(next http.Handler) http.Handler {
 		case options.Mode != "full":
 			return
 		}
-		route := r.Pattern
-		if route == "" {
-			route = "unmatched"
-		}
 		logger.LogAttrs(ctx, level, "gateway HTTP request",
 			slog.String("component", "http"), slog.String("operation", "http.request"),
 			slog.String("requestId", ids.RequestID), slog.String("traceId", ids.TraceID),
-			slog.String("method", r.Method), slog.String("route", route),
-			slog.String("requestClass", requestClassNames[classifyRequest(r.URL.Path)]),
+			slog.String("method", r.Method), slog.String("route", route.current()),
+			slog.String("requestClass", requestClassNames[state.current()]),
 			slog.Int("status", captured.Code), slog.Int64("durationMs", duration.Milliseconds()),
 		)
 	})

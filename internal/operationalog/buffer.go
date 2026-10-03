@@ -27,6 +27,7 @@ type Entry struct {
 	DurationMS   *int64    `json:"durationMs,omitempty"`
 	Method       string    `json:"method,omitempty"`
 	RequestClass string    `json:"requestClass,omitempty"`
+	Route        string    `json:"route,omitempty"`
 	JobID        string    `json:"jobId,omitempty"`
 	Attempt      *int      `json:"attempt,omitempty"`
 }
@@ -67,15 +68,39 @@ type Buffer struct {
 	partial   []byte
 	discard   bool
 	cursorKey [32]byte
+	routes    map[string]bool
 }
 
 func NewBuffer(lines int) *Buffer {
 	if lines < 1 {
 		return nil
 	}
-	b := &Buffer{entries: make([]Entry, lines), search: make([]string, lines)}
+	b := &Buffer{entries: make([]Entry, lines), search: make([]string, lines), routes: make(map[string]bool)}
 	_, _ = rand.Read(b.cursorKey[:])
 	return b
+}
+
+// RegisterRouteTemplate is called only at server router construction, never
+// with request data. Projection requires membership in this buffer's registry.
+func (b *Buffer) RegisterRouteTemplate(pattern string) {
+	if b == nil || len(pattern) == 0 || len(pattern) > 256 || strings.ContainsAny(pattern, "?&#\\") {
+		return
+	}
+	for _, c := range pattern {
+		if c < 32 || c > 126 {
+			return
+		}
+	}
+	_, path, hasMethod := strings.Cut(pattern, " ")
+	if !hasMethod {
+		path = pattern
+	}
+	if !strings.HasPrefix(path, "/") {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.routes[pattern] = true
 }
 
 // Write receives already-redacted JSON lines from slog's output writer.
@@ -117,16 +142,16 @@ func (b *Buffer) Write(p []byte) (int, error) {
 
 func (b *Buffer) appendLine(line []byte) {
 	var value struct {
-		Time                                                     time.Time `json:"time"`
-		Level                                                    string    `json:"level"`
-		Message                                                  string    `json:"msg"`
-		InstanceID                                               string    `json:"instanceId"`
-		SessionID                                                string    `json:"sessionId"`
-		Component                                                string    `json:"component"`
-		Operation                                                string    `json:"operation"`
-		RequestID                                                string    `json:"requestId"`
-		TraceID                                                  string    `json:"traceId"`
-		Status, DurationMS, Method, RequestClass, JobID, Attempt json.RawMessage
+		Time                                                            time.Time `json:"time"`
+		Level                                                           string    `json:"level"`
+		Message                                                         string    `json:"msg"`
+		InstanceID                                                      string    `json:"instanceId"`
+		SessionID                                                       string    `json:"sessionId"`
+		Component                                                       string    `json:"component"`
+		Operation                                                       string    `json:"operation"`
+		RequestID                                                       string    `json:"requestId"`
+		TraceID                                                         string    `json:"traceId"`
+		Status, DurationMS, Method, RequestClass, Route, JobID, Attempt json.RawMessage
 	}
 	if json.Unmarshal(line, &value) != nil || value.Time.IsZero() || value.InstanceID == "" {
 		return
@@ -144,12 +169,33 @@ func (b *Buffer) appendLine(line []byte) {
 	}
 	entry.Method = allowedString(value.Method, "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "CONNECT", "TRACE")
 	entry.RequestClass = allowedString(value.RequestClass, "management", "oci", "maven", "raw", "conan", "npm", "pypi", "go", "cargo", "health", "metrics", "other")
+	var route string
+	if json.Unmarshal(value.Route, &route) == nil && (route == "unmatched" || b.routes[route]) {
+		entry.Route = route
+	}
 	var jobID string
 	if json.Unmarshal(value.JobID, &jobID) == nil && validOpaqueID(jobID) {
 		entry.JobID = jobID
 	}
 	b.entries[index] = entry
 	b.search[index] = string(line)
+	if len(value.Route) > 0 {
+		// Only the accepted template can become a keyword. Remove alternate
+		// JSON key casing too, matching encoding/json's field matching.
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(line, &fields) == nil {
+			for key := range fields {
+				if strings.EqualFold(key, "route") {
+					delete(fields, key)
+				}
+			}
+			if entry.Route != "" {
+				fields["route"], _ = json.Marshal(entry.Route)
+			}
+			search, _ := json.Marshal(fields)
+			b.search[index] = string(search)
+		}
+	}
 	if b.count < len(b.entries) {
 		b.count++
 	}

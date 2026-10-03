@@ -161,6 +161,9 @@ func TestRuntimeLogProjectionOfRealHTTPAccessEvent(t *testing.T) {
 		t.Fatalf("real HTTP event absent %#v", p)
 	}
 	e := p.Items[0]
+	if e.Route == nil || *e.Route != "GET /api/v2/repositories" {
+		t.Fatalf("registered HTTP template missing %#v", e)
+	}
 	if e.Status == nil || *e.Status != 200 || e.DurationMs == nil || *e.DurationMs < 0 || e.Method == nil || *e.Method != "GET" || e.RequestClass == nil || *e.RequestClass != "management" || e.Component != "http" || e.Operation != "http.request" || e.TraceId == "" {
 		t.Fatalf("lost HTTP diagnostics %#v", e)
 	}
@@ -168,7 +171,7 @@ func TestRuntimeLogProjectionOfRealHTTPAccessEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(encoded), marker) || strings.Contains(string(encoded), "admin-secret") || strings.Contains(string(encoded), `"route"`) || strings.Contains(string(encoded), `"headers"`) {
+	if strings.Contains(string(encoded), marker) || strings.Contains(string(encoded), "admin-secret") || strings.Contains(string(encoded), `"headers"`) {
 		t.Fatalf("raw HTTP payload projected %s", encoded)
 	}
 	if p = runtimeLogPage(t, h, url.Values{"keyword": {marker}}); len(p.Items) != 0 {
