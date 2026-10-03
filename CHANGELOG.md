@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Extended the isolated offline backup transfer fixture to public export/restore for binary and a fixed, digest-pinned OCI Gateway build, including unreferenced S3 bytes, actual image/build identity, wrong-identity rejection and Raw Group/grant/audit readback. This is scoped software-profile acceptance; broader #200/#201 recovery matrices remain open.
+
 - Console runtime logs now use literal monospace rows, source-aware filters, bounded incremental follow/pause and unread/gap notices, with safe selection/loaded copy and finite NDJSON export. The view stays limited to the connected process memory and caps client rows, bytes, display fields and polling.
 
 - Runtime log queries now project bounded safe diagnostic fields and report source/retention metadata; signed session/filter cursors support ascending incremental reads without skipping unread pages, while preserving descending history and administrator gates.

@@ -115,13 +115,35 @@ SIGINT/SIGTERM cancel the transfer and use a bounded independent cleanup context
 For a retry, choose a fresh project; this entry point does not adopt or overwrite
 an existing target. It does not reopen traffic, deploy, release or merge.
 
-Run `make backup-transfer-test` for real synthetic PG/S3/binary recovery. It
-checks current and pre-Cargo schema queries, full bytes, post-backup mutation
-exclusion, grant allow/deny, Group order, historical audit preservation,
-protected source/sentinel identities/data/health, invalid input and owned failure
-cleanup. `make backup-restore-readiness` remains the separate physical profile
-gate. Neither suite proves production fencing, every format, systemd controllers,
-cross-version upgrade, or recovery from a cloud-specific S3 implementation.
+Run `make backup-transfer-test` for real synthetic PG/S3 recovery through the
+public export/restore commands, separately for binary and OCI software profiles.
+Both use Raw Hosted/Group data: three objects / 54 bytes include an unreferenced
+object; the whole bucket, current and pre-Cargo reference queries, post-backup
+mutation exclusion, grant allow/deny, Group order, historical audits and protected
+source/sentinel identities/data/health are checked. Eleven rejection/startup
+failure scenarios per profile verify only invocation-owned target cleanup.
+
+The OCI fixture anonymously pulls the fixed public main build at revision
+`80fc113e1e8a908388ed8dc7af5e87424bcb9768`, version
+`0.5.0-main.80fc113e1e8a`, multi-platform digest
+`sha256:bbd62298c63520b58e82b858479fb77c0bf4fce61a1c3eaaf11b9fb01e0d0e18`.
+It uses an empty temporary Docker credential configuration, the explicitly
+validated local socket, and the host's supported Linux platform. The suite checks
+actual RepoDigest, platform, labels, running image ID, lack of binary mounts and
+public Gateway build diagnostics. Wrong digest/version/revision/platform, a
+mutable tag, an image ID alone and an unavailable local image fail public export
+and restore without publishing a bundle or creating a target. Shared public image
+cache remains; no registry, persistent credential or daemon setting is created.
+Updating this fixed fixture requires a reviewed compatible published build.
+
+OCI here describes the **Gateway software profile**, not OCI artifact protocol
+recovery. Raw is the only protocol exercised in this transfer fixture. The OCI
+image is the fixed base build; the binary profile builds the current checkout.
+`make backup-restore-readiness` remains the separate physical profile gate.
+These suites do not prove production fencing, every format or identity provider,
+systemd controllers, cross-version upgrade, a large-object interruption matrix,
+or recovery from a cloud-specific S3 implementation. #200/#201 remain broader
+acceptance work; neither preflight nor these scoped tests close that matrix.
 
 ## Pinned physical drill
 
