@@ -1,0 +1,100 @@
+.ag-runtime-log-toolbar {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 20px 16px;
+  color: var(--ag-content-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.ag-runtime-log-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ag-runtime-log-source {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ag-runtime-log-source > * {
+  min-width: 0;
+}
+
+.ag-runtime-log-stream {
+  max-height: 560px;
+  min-width: 0;
+  overflow: auto;
+  border-block: 1px solid var(--ag-border-subtle);
+  background: var(--ag-surface-container);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ag-content-primary);
+}
+
+.ag-runtime-log-row {
+  display: grid;
+  grid-template-columns:
+    150px 54px minmax(100px, 0.6fr) minmax(100px, 0.7fr)
+    minmax(0, 1.5fr) auto;
+  align-items: start;
+  gap: 4px 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--ag-border-subtle);
+  overflow-wrap: anywhere;
+}
+
+.ag-runtime-log-row > * {
+  min-width: 0;
+}
+.ag-runtime-log-time,
+.ag-runtime-log-scope,
+.ag-runtime-log-component,
+.ag-runtime-log-detail {
+  color: var(--ag-content-secondary);
+}
+.ag-runtime-log-message {
+  white-space: pre-wrap;
+}
+.ag-runtime-log-detail {
+  grid-column: 2 / -1;
+}
+.ag-runtime-log-level {
+  font-weight: 600;
+}
+.ag-runtime-log-level-error {
+  color: var(--ag-status-danger);
+}
+.ag-runtime-log-level-warn {
+  color: var(--ag-status-warning);
+}
+.ag-runtime-log-level-info {
+  color: var(--ag-content-primary);
+}
+.ag-runtime-log-level-debug {
+  color: var(--ag-content-secondary);
+}
+
+.ag-runtime-log-nowrap .ag-runtime-log-message {
+  white-space: pre;
+  overflow: auto;
+}
+
+@media (max-width: 900px) {
+  .ag-runtime-log-row {
+    grid-template-columns: minmax(0, 1fr) 54px auto;
+  }
+  .ag-runtime-log-scope,
+  .ag-runtime-log-component,
+  .ag-runtime-log-message,
+  .ag-runtime-log-detail {
+    grid-column: 1 / -1;
+  }
+  .ag-runtime-log-copy {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}

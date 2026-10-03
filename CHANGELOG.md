@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Console runtime logs now use literal monospace rows, source-aware filters, bounded incremental follow/pause and unread/gap notices, with safe selection/loaded copy and finite NDJSON export. The view stays limited to the connected process memory and caps client rows, bytes, display fields and polling.
+
 - Runtime log queries now project bounded safe diagnostic fields and report source/retention metadata; signed session/filter cursors support ascending incremental reads without skipping unread pages, while preserving descending history and administrator gates.
 
 - Added explicit private-spec offline S3 byte export and restore to fresh local Docker targets, with binary/OCI software identity, exact migration and metadata checks, full-byte readback, optional Raw/OCI grant probes and owned failure cleanup. Real synthetic PG/S3 recovery is separate from preflight and the pinned RustFS physical drill; consistency still depends on the operator's complete stopped-writer scope.
