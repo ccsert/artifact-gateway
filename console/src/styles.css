@@ -1636,6 +1636,50 @@ button:not(:disabled):active,
   gap: 16px;
 }
 
+.ag-local-capacity-content {
+  display: grid;
+  gap: 16px;
+  padding: 16px 20px 20px;
+}
+
+.ag-local-capacity-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 24px;
+}
+
+.ag-local-capacity-mount {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.ag-local-capacity-values {
+  display: grid;
+  gap: 8px;
+  color: var(--ag-content-secondary);
+  font-size: 12px;
+}
+
+.ag-local-capacity-values > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+}
+
+.ag-local-capacity-values dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .ag-local-capacity-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .ag-diagnostics-dependencies-card {
   grid-area: dependencies;
 }

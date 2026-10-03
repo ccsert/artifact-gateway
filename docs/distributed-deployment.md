@@ -102,6 +102,8 @@ node health, and repository queues inside the administrator boundary. It returns
 fixed states and sanitized detail, never database/S3 endpoints, environment
 variables, tokens, or credentials. Operators can copy it from Console system diagnostics.
 
+Optional explicit directory capacity is described in [operational signal sources](operational-signals.md). It observes the responding API process's mount namespace only; Worker/Scheduler-only processes do not expose diagnostics. The values do not represent S3/NAS physical pools.
+
 ## Standalone Fallback
 
 Local development and small installations continue to use:

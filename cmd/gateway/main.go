@@ -20,6 +20,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
 	"github.com/artifact-gateway/artifact-gateway/internal/evidence"
+	"github.com/artifact-gateway/artifact-gateway/internal/localcapacity"
 	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
 	"github.com/artifact-gateway/artifact-gateway/internal/preflight"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -89,6 +90,12 @@ func runGateway() int {
 
 func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer *operationalog.Buffer) int {
 	dependencies := app.NewDependencies(cfg)
+	capacityObserver, err := localcapacity.New(cfg.LocalCapacityMounts, localcapacity.Options{})
+	if err != nil {
+		slog.Error("initialize local capacity observer", "error", err)
+		return 1
+	}
+	dependencies.LocalCapacity = capacityObserver
 	dependencies.Runtime.SessionID = runtimeSessionID
 	dependencies.LogBuffer = logBuffer
 	if _, err := dependencies.ConsoleThemes.List(); err != nil {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   CheckCircleOutlined,
@@ -14,6 +14,7 @@ import type {
   DiagnosticQueueStat,
   DiagnosticScanner,
   Diagnostics,
+  Problem,
 } from "../../client";
 import { formatDate } from "../../lib/format";
 import {
@@ -29,6 +30,7 @@ import {
 } from "../../components/ui/ConsolePrimitives";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { Card, CardHeader } from "../../components/ui/Layout";
+import { LocalCapacityPanel } from "./LocalCapacityPanel";
 
 const dependencyLabels: Record<string, [string, string]> = {
   postgresql: ["PostgreSQL", "PostgreSQL"],
@@ -127,19 +129,42 @@ export function SystemDiagnosticsPanel() {
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
+  const requestPending = useRef(false);
   const { copiedValue, copy } = useClipboardAction();
   const copied = copiedValue === "diagnostics";
 
   const load = useCallback(async () => {
+    if (requestPending.current) return;
+    requestPending.current = true;
     setLoading(true);
     setError(null);
     try {
       const result = await getDiagnostics();
+      const status = result.response?.status;
+      if (status === 401 || status === 403) {
+        setDiagnostics(null);
+        throw (
+          result.error || {
+            status,
+            code: status === 401 ? "unauthorized" : "forbidden",
+          }
+        );
+      }
       if (result.error) throw result.error;
       setDiagnostics(result.data ?? null);
     } catch (nextError) {
+      const problem = nextError as Problem | undefined;
+      if (
+        problem?.status === 401 ||
+        problem?.status === 403 ||
+        ["unauthorized", "forbidden", "password_change_required"].includes(
+          problem?.code ?? "",
+        )
+      )
+        setDiagnostics(null);
       setError(nextError);
     } finally {
+      requestPending.current = false;
       setLoading(false);
     }
   }, []);
@@ -214,7 +239,8 @@ export function SystemDiagnosticsPanel() {
     },
   ];
 
-  if (error) return <ErrorBanner error={error} onRetry={load} />;
+  if (error && !diagnostics)
+    return <ErrorBanner error={error} onRetry={load} />;
   if (!diagnostics)
     return <Loading label={text("加载系统诊断…", "Loading diagnostics…")} />;
 
@@ -250,6 +276,17 @@ export function SystemDiagnosticsPanel() {
 
   return (
     <div className="ag-page-stack ag-system-diagnostics">
+      {error != null && (
+        <ErrorBanner
+          error={error}
+          onRetry={load}
+          tone="warning"
+          title={text(
+            "刷新失败，仍显示旧诊断快照",
+            "Refresh failed; showing the previous diagnostic snapshot",
+          )}
+        />
+      )}
       <Card className="ag-diagnostics-snapshot">
         <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
@@ -446,6 +483,7 @@ export function SystemDiagnosticsPanel() {
         </Card>
       )}
 
+      <LocalCapacityPanel capacity={diagnostics.localCapacity} />
       <div className="ag-diagnostics-detail-grid">
         <Card className="ag-diagnostics-identity-card">
           <CardHeader

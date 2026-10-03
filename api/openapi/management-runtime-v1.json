@@ -9824,6 +9824,145 @@
           }
         }
       },
+      "LocalCapacityAlias": {
+        "type": "string",
+        "enum": [
+          "temporary",
+          "logs",
+          "backups"
+        ]
+      },
+      "LocalCapacityStatus": {
+        "type": "string",
+        "enum": [
+          "available",
+          "unknown",
+          "not_configured",
+          "stale"
+        ]
+      },
+      "LocalCapacityReason": {
+        "type": "string",
+        "enum": [
+          "not_configured",
+          "remote_filesystem",
+          "unsupported_filesystem",
+          "unsupported_platform",
+          "read_failed",
+          "filesystem_identity_unknown",
+          "invalid_measurement",
+          "unit_overflow",
+          "timeout",
+          "cancelled"
+        ]
+      },
+      "DiagnosticLocalCapacityMount": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "alias",
+          "status",
+          "sharedWith"
+        ],
+        "description": "Explicit directory alias in the responding process's mount namespace. No path, device, filesystem ID or raw error is returned. Unknown, unconfigured and stale observations omit byte fields; zero available bytes is valid only for available observations. Different identities do not prove independent physical pools.",
+        "properties": {
+          "alias": {
+            "$ref": "#/components/schemas/LocalCapacityAlias"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LocalCapacityStatus"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/LocalCapacityReason"
+          },
+          "sampleAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Actual successful sample time; retained for stale samples, never refreshed by copying a snapshot."
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "availableBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "sharedWith": {
+            "type": "array",
+            "maxItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/LocalCapacityAlias"
+            }
+          }
+        }
+      },
+      "DiagnosticLocalCapacity": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "checkedAt",
+          "source",
+          "scope",
+          "unit",
+          "refreshIntervalSeconds",
+          "maxSampleAgeSeconds",
+          "timeoutMilliseconds",
+          "mounts"
+        ],
+        "description": "Read-only opt-in local filesystem metadata. Observes the responding process's namespace, not S3/RustFS/NAS physical pools or Repository logical quotas. Missing configuration performs no filesystem queries. The response wait is bounded; a blocked kernel call may remain outstanding, with at most one call per alias for this process.",
+        "properties": {
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "statfs"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "observer_mount_namespace"
+            ]
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "bytes"
+            ]
+          },
+          "refreshIntervalSeconds": {
+            "type": "integer",
+            "minimum": 15,
+            "maximum": 15
+          },
+          "maxSampleAgeSeconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 60
+          },
+          "timeoutMilliseconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "mounts": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Exactly temporary, logs and backups in that order. Shared aliases reference the same visible capacity and must not be summed.",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticLocalCapacityMount"
+            }
+          }
+        }
+      },
       "DiagnosticQueueStat": {
         "type": "object",
         "required": [
@@ -9892,6 +10031,9 @@
           },
           "scanner": {
             "$ref": "#/components/schemas/DiagnosticScanner"
+          },
+          "localCapacity": {
+            "$ref": "#/components/schemas/DiagnosticLocalCapacity"
           },
           "queues": {
             "type": "array",

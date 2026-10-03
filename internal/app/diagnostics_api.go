@@ -16,6 +16,7 @@ func (h generatedRepositoryAPIAdapter) GetDiagnostics(w http.ResponseWriter, r *
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	nodes, err := h.runtimeNodes.ListRuntimeNodes(r.Context())
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list runtime nodes failed")
@@ -57,14 +58,15 @@ func (h generatedRepositoryAPIAdapter) GetDiagnostics(w http.ResponseWriter, r *
 		},
 		Runtime: adminopenapi.DiagnosticRuntime{
 			InstanceId:    h.diagnostics.Runtime.InstanceID,
-			Roles:         append([]string(nil), h.diagnostics.Runtime.Roles...),
+			Roles:         append([]string{}, h.diagnostics.Runtime.Roles...),
 			WorkerFormats: workerFormats,
-			WorkerKinds:   append([]string(nil), h.diagnostics.Runtime.WorkerKinds...),
+			WorkerKinds:   append([]string{}, h.diagnostics.Runtime.WorkerKinds...),
 		},
-		Dependencies: diagnosticDependencies(r.Context(), h.diagnostics.checkers),
-		Scanner:      &scanner,
-		Queues:       queues,
-		Nodes:        runtimeNodeHealth(responseNodes),
+		Dependencies:  diagnosticDependencies(r.Context(), h.diagnostics.checkers),
+		Scanner:       &scanner,
+		LocalCapacity: diagnosticLocalCapacity(r.Context(), h.diagnostics.LocalCapacity),
+		Queues:        queues,
+		Nodes:         runtimeNodeHealth(responseNodes),
 	}
 	if sessionID := h.diagnostics.Runtime.SessionID; sessionID != "" {
 		diagnostics.Runtime.SessionId = &sessionID

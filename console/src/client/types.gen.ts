@@ -1349,6 +1349,60 @@ export type DiagnosticScanner = {
   databaseMaxAgeSeconds: number;
 };
 
+export type LocalCapacityAlias = "temporary" | "logs" | "backups";
+
+export type LocalCapacityStatus =
+  "available" | "unknown" | "not_configured" | "stale";
+
+export type LocalCapacityReason =
+  | "not_configured"
+  | "remote_filesystem"
+  | "unsupported_filesystem"
+  | "unsupported_platform"
+  | "read_failed"
+  | "filesystem_identity_unknown"
+  | "invalid_measurement"
+  | "unit_overflow"
+  | "timeout"
+  | "cancelled";
+
+/**
+ * Explicit directory alias in the responding process's mount namespace. No path, device, filesystem ID or raw error is returned. Unknown, unconfigured and stale observations omit byte fields; zero available bytes is valid only for available observations. Different identities do not prove independent physical pools.
+ */
+export type DiagnosticLocalCapacityMount = {
+  alias: LocalCapacityAlias;
+  status: LocalCapacityStatus;
+  reason?: LocalCapacityReason;
+  /**
+   * Actual successful sample time; retained for stale samples, never refreshed by copying a snapshot.
+   */
+  sampleAt?: string;
+  totalBytes?: number;
+  availableBytes?: number;
+  sharedWith: Array<LocalCapacityAlias>;
+};
+
+/**
+ * Read-only opt-in local filesystem metadata. Observes the responding process's namespace, not S3/RustFS/NAS physical pools or Repository logical quotas. Missing configuration performs no filesystem queries. The response wait is bounded; a blocked kernel call may remain outstanding, with at most one call per alias for this process.
+ */
+export type DiagnosticLocalCapacity = {
+  checkedAt: string;
+  source: "statfs";
+  scope: "observer_mount_namespace";
+  unit: "bytes";
+  refreshIntervalSeconds: number;
+  maxSampleAgeSeconds: number;
+  timeoutMilliseconds: number;
+  /**
+   * Exactly temporary, logs and backups in that order. Shared aliases reference the same visible capacity and must not be summed.
+   */
+  mounts: [
+    DiagnosticLocalCapacityMount,
+    DiagnosticLocalCapacityMount,
+    DiagnosticLocalCapacityMount,
+  ];
+};
+
 export type DiagnosticQueueStat = {
   kind: "lifecycle" | "promotion" | "replication";
   format: Format;
@@ -1363,6 +1417,7 @@ export type Diagnostics = {
   runtime: DiagnosticRuntime;
   dependencies: Array<DiagnosticDependency>;
   scanner?: DiagnosticScanner;
+  localCapacity?: DiagnosticLocalCapacity;
   queues: Array<DiagnosticQueueStat>;
   nodes: RuntimeNodeHealth;
 };
