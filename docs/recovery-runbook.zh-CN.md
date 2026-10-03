@@ -92,19 +92,21 @@ PG/S3 恢复，覆盖 binary 与 OCI 软件 profile。两者均使用 Raw Hosted
 备份后 mutation 排除、grant 允许/拒绝、Group 顺序、历史审计及受保护 source/sentinel
 的身份、数据和健康。每个 profile 的 11 项拒绝/启动失败场景只清理本次调用拥有的目标。
 
-OCI fixture 匿名拉取固定公开 main 构建：revision
-`80fc113e1e8a908388ed8dc7af5e87424bcb9768`、version
-`0.5.0-main.80fc113e1e8a`、多平台 digest
-`sha256:bbd62298c63520b58e82b858479fb77c0bf4fce61a1c3eaaf11b9fb01e0d0e18`。
-它使用显式声明匿名 registry 的临时 Docker 配置，并通过拒绝 helper 证明不调用主机
-凭据 helper；同时使用明确验证的本地 socket 和主机支持的 Linux 平台。
+OCI fixture 将当前 checkout binary 与已有 digest-pinned runtime 构建成镜像，匿名推送到
+随机命名的临时 registry，镜像固定为
+`registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373`。
+registry 只绑定已验证本地 daemon 内的 `127.0.0.1`（含 Docker Desktop VM），使用
+私有 tmpfs，不采用现有 network 或 volume。临时 Docker 配置显式声明匿名 registry，
+拒绝 helper 证明不调用主机凭据 helper。恢复使用实际推送所得 digest 及支持的 Linux 平台。
 测试核对实际 RepoDigest、平台、标签、运行 image ID、无 binary 挂载，以及公开 Gateway
 构建诊断。错误 digest/version/revision/platform、可变 tag、仅 image ID 和本地不可用
-image 在公开 export/restore 中失败，不发布备份集、不创建目标。共享公开镜像缓存保留；
-不创建 registry、持久凭据或 daemon 设置。更新固定 fixture 须使用已审查且兼容的公开构建。
+image 在公开 export/restore 中失败，不发布备份集、不创建目标。fixture 镜像和 registry
+只在核对捕获的精确 ID、名称、标签与绑定后移除；资源变动则保留并报告清理失败。
+共享固定 base image 与 build cache 保留。不创建持久凭据或 daemon 设置，
+不假设外部 Gateway 包的可见性或权限。
 
 这里 OCI 指 **Gateway 软件 profile**，不表示 OCI 制品协议恢复；此 transfer fixture
-只执行 Raw 协议。OCI image 是固定基线构建，binary profile 构建当前 checkout。
+只执行 Raw 协议。OCI 与 binary profile 均构建当前 checkout。
 `make backup-restore-readiness` 独立验收物理 profile。两者均不证明生产 fencing、所有
 格式或身份提供方、systemd controller、跨版本升级、大对象中断矩阵或云厂商特定 S3
 恢复。#200/#201 仍有更广验收工作，preflight 与这些限定测试均不能关闭完整矩阵。

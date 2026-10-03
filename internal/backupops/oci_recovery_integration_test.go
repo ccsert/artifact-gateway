@@ -4,30 +4,33 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/backupmanifest"
 	"github.com/google/uuid"
 )
 
-// Published by main CI run 37097080294 for the exact 80fc113 base. Tests pin
-// the multi-platform digest, version and revision; they never resolve a tag.
-// Update this fixture only after a reviewed compatible build is published.
-const ociFixtureDigest = "sha256:bbd62298c63520b58e82b858479fb77c0bf4fce61a1c3eaaf11b9fb01e0d0e18"
-const ociFixtureReference = "ghcr.io/ccsert/artifact-gateway@" + ociFixtureDigest
-const ociFixtureVersion = "0.5.0-main.80fc113e1e8a"
-const ociFixtureRevision = "80fc113e1e8a908388ed8dc7af5e87424bcb9768"
+const registryFixtureImage = "registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373"
+const registryFixtureLabel = "artifact-gateway.recovery-test-owner"
+
+type registryFixture struct {
+	docker                                               Docker
+	host, config, helpers, marker, owner, name, endpoint string
+	containerID, imageID, imageTag                       string
+}
 
 func integrationOCIRelease(t *testing.T, ctx context.Context, d Docker, release Release) Release {
 	t.Helper()
-	// Anonymous public-image pull through the already validated local socket.
-	// An explicit anonymous entry disables automatic native credential stores.
-	// The public image is shared cache, not a fixture-owned cleanup resource.
+	// Build the checkout binary into an actual OCI image and obtain its real
+	// repository digest from a disposable registry on the daemon's loopback.
+	// This also works with Docker Desktop's VM; host-published ports do not.
 	data, err := d.output(ctx, "context", "inspect", d.Context)
 	var contexts []struct {
 		Endpoints map[string]struct{ Host string }
@@ -39,50 +42,170 @@ func integrationOCIRelease(t *testing.T, ctx context.Context, d Docker, release 
 	if !strings.HasPrefix(host, "unix:///") {
 		t.Fatal("remote OCI fixture daemon refused")
 	}
-	platform := release.Identity.Artifact.Platform
-	config := t.TempDir()
-	if os.WriteFile(filepath.Join(config, "config.json"), []byte(`{"auths":{"ghcr.io":{}}}`), 0600) != nil {
+	f := &registryFixture{docker: d, host: host, config: t.TempDir(), helpers: t.TempDir(), owner: uuid.NewString()}
+	f.name = "ag-oci-fixture-" + strings.ReplaceAll(f.owner, "-", "")
+	f.endpoint = fmt.Sprintf("127.0.0.1:%d", 49152+uuid.New().ID()%16384)
+	f.imageTag = f.endpoint + "/" + f.name + ":fixture"
+	f.marker = filepath.Join(f.helpers, "invoked")
+	config, err := json.Marshal(map[string]any{"auths": map[string]any{f.endpoint: map[string]any{}, "gcr.io": map[string]any{}, "https://index.docker.io/v1/": map[string]any{}}})
+	if err != nil || os.WriteFile(filepath.Join(f.config, "config.json"), config, 0600) != nil {
 		t.Fatal("anonymous OCI fixture configuration unavailable")
 	}
 	// Docker auto-discovers a native credential helper for a wholly empty
 	// config. Trap every platform's default helper to prove none is consulted.
-	helpers := t.TempDir()
-	marker := filepath.Join(helpers, "invoked")
 	script := []byte("#!/bin/sh\n: > \"$AG_OCI_FIXTURE_HELPER_MARKER\"\nprintf '%s\\n' 'synthetic helper refuses credential access' >&2\nexit 1\n")
 	for _, name := range []string{"pass", "docker-credential-pass", "docker-credential-secretservice", "docker-credential-osxkeychain", "docker-credential-wincred"} {
-		if os.WriteFile(filepath.Join(helpers, name), script, 0700) != nil {
+		if os.WriteFile(filepath.Join(f.helpers, name), script, 0700) != nil {
 			t.Fatal("OCI fixture helper trap unavailable")
 		}
 	}
-	pull := exec.CommandContext(ctx, "docker", "--config", config, "--host", host, "pull", "--platform", platform, ociFixtureReference)
-	pull.Env = sanitizedEnvironment([]string{"PATH=" + helpers + string(os.PathListSeparator) + os.Getenv("PATH"), "AG_OCI_FIXTURE_HELPER_MARKER=" + marker})
-	_, err = pull.Output()
-	if _, markerErr := os.Stat(marker); !os.IsNotExist(markerErr) {
-		t.Fatal("OCI fixture credential-helper isolation failed")
-	}
-	if err != nil {
-		// Only fixed reason codes reach CI output; raw registry/network errors
-		// and host coordinates stay private.
-		reason := "docker_pull_failed"
-		if failure, ok := err.(*exec.ExitError); ok {
-			message := strings.ToLower(string(failure.Stderr))
-			for _, item := range []struct{ marker, code string }{{"credentials", "credential_helper_failed"}, {"denied", "anonymous_access_denied"}, {"unauthorized", "anonymous_access_denied"}, {"no matching manifest", "platform_unavailable"}, {"manifest unknown", "manifest_unavailable"}, {"not found", "manifest_unavailable"}, {"toomanyrequests", "registry_rate_limited"}, {"certificate", "registry_tls_failed"}, {"timeout", "registry_timeout"}, {"connection", "registry_connection_failed"}} {
-				if strings.Contains(message, item.marker) {
-					reason = item.code
-					break
-				}
-			}
+	for _, entry := range []struct{ kind, name string }{{"container", f.name}, {"image", f.imageTag}} {
+		if _, err := d.output(ctx, entry.kind, "inspect", entry.name); err == nil {
+			t.Fatal("OCI fixture resource already exists")
 		}
-		t.Fatalf("anonymous pinned public OCI fixture unavailable: %s", reason)
 	}
-	release.ImageReference = ociFixtureReference
-	release.Identity = backupmanifest.GatewayIdentity{Version: ociFixtureVersion, Revision: ociFixtureRevision,
-		Artifact: &backupmanifest.SoftwareArtifact{Kind: "oci-image", SHA256: ociFixtureDigest, Platform: platform}}
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		f.cleanup(t, cleanupCtx)
+	})
+	_, createErr := f.output(ctx, "create", "--name", f.name, "--label", registryFixtureLabel+"="+f.owner,
+		"--network", "host", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+		"--tmpfs", "/var/lib/registry:rw,noexec,nosuid,size=256m", "--env", "REGISTRY_HTTP_ADDR="+f.endpoint, registryFixtureImage)
+	// Register observed identity even if a create/build response was lost.
+	if c, ok := f.inspection(ctx, "container", f.name); ok && c.Config.Labels[registryFixtureLabel] == f.owner {
+		f.containerID = c.ID
+	}
+	if createErr != nil || f.containerID == "" {
+		t.Fatal("owned OCI fixture registry unavailable")
+	}
+	if _, err := f.output(ctx, "start", f.containerID); err != nil {
+		t.Fatal("owned OCI fixture registry startup failed")
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		logs, err := f.output(ctx, "logs", f.containerID)
+		if err == nil && strings.Contains(string(logs), "listening on "+f.endpoint) {
+			break
+		}
+		if ctx.Err() != nil || time.Now().After(deadline) {
+			t.Fatal("owned OCI registry did not bind daemon loopback")
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("owned OCI registry readiness cancelled")
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	dir := t.TempDir()
+	binary, err := os.ReadFile(filepath.Join(release.Directory, "gateway"))
+	if err != nil || os.WriteFile(filepath.Join(dir, "gateway"), binary, 0555) != nil {
+		t.Fatal("OCI fixture binary staging failed")
+	}
+	dockerfile := fmt.Sprintf("FROM %s\nLABEL %s=%q org.opencontainers.image.version=%q org.opencontainers.image.revision=%q\nCOPY gateway /gateway\nENTRYPOINT [\"/gateway\"]\n", binaryRuntimeImage, registryFixtureLabel, f.owner, release.Identity.Version, release.Identity.Revision)
+	if os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte(dockerfile), 0600) != nil {
+		t.Fatal("OCI fixture Dockerfile staging failed")
+	}
+	_, buildErr := f.output(ctx, "build", "--tag", f.imageTag, dir)
+	if image, ok := f.inspection(ctx, "image", f.imageTag); ok && image.Config.Labels[registryFixtureLabel] == f.owner {
+		f.imageID = image.ID
+	}
+	if buildErr != nil || f.imageID == "" {
+		t.Fatal("owned OCI fixture image build failed")
+	}
+	if _, err := f.output(ctx, "push", f.imageTag); err != nil {
+		t.Fatal("owned OCI fixture anonymous push failed")
+	}
+	image, ok := f.inspection(ctx, "image", f.imageID)
+	if !ok || len(image.RepoDigests) != 1 || !strings.HasPrefix(image.RepoDigests[0], f.endpoint+"/"+f.name+"@sha256:") {
+		t.Fatal("owned OCI fixture actual repository digest unavailable")
+	}
+	release.ImageReference = image.RepoDigests[0]
+	_, digest, _ := strings.Cut(release.ImageReference, "@")
+	release.Identity.Artifact = &backupmanifest.SoftwareArtifact{Kind: "oci-image", SHA256: digest, Platform: release.Identity.Artifact.Platform}
 	release, err = d.ObserveRelease(ctx, release)
 	if err != nil {
-		t.Fatal("actual public OCI fixture identity rejected")
+		t.Fatal("actual owned OCI fixture identity rejected")
 	}
 	return release
+}
+
+func (f *registryFixture) output(ctx context.Context, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "docker", append([]string{"--config", f.config, "--host", f.host}, args...)...)
+	cmd.Env = sanitizedEnvironment([]string{"PATH=" + f.helpers + string(os.PathListSeparator) + os.Getenv("PATH"), "AG_OCI_FIXTURE_HELPER_MARKER=" + f.marker})
+	data, err := cmd.CombinedOutput()
+	if _, markerErr := os.Stat(f.marker); !os.IsNotExist(markerErr) {
+		return nil, fmt.Errorf("OCI fixture credential-helper isolation failed")
+	}
+	if err != nil || len(data) > 8<<20 {
+		return nil, fmt.Errorf("owned OCI fixture Docker operation failed")
+	}
+	return data, nil
+}
+
+type registryFixtureInspection struct {
+	ID, Name              string
+	RepoDigests, RepoTags []string
+	Config                struct {
+		Image  string
+		Env    []string
+		Labels map[string]string
+	}
+	HostConfig struct {
+		NetworkMode string
+		Tmpfs       map[string]string
+	}
+	Mounts []json.RawMessage
+}
+
+func (f *registryFixture) inspection(ctx context.Context, kind, id string) (registryFixtureInspection, bool) {
+	data, err := f.docker.output(ctx, kind, "inspect", id)
+	var values []registryFixtureInspection
+	if err != nil || json.Unmarshal(data, &values) != nil || len(values) != 1 {
+		return registryFixtureInspection{}, false
+	}
+	return values[0], true
+}
+
+func (f *registryFixture) cleanup(t *testing.T, ctx context.Context) {
+	t.Helper()
+	// Only exact captured IDs with matching random names, labels and bindings
+	// are removed. Registry data is tmpfs; no shared network/volume is adopted.
+	// A timed-out create/build can lose its response and cancel its receipt
+	// inspection. Reacquire only missing receipts with this independent cleanup
+	// context, then apply the same full identity checks below before removal.
+	if f.imageID == "" {
+		if image, ok := f.inspection(ctx, "image", f.imageTag); ok && image.Config.Labels[registryFixtureLabel] == f.owner {
+			f.imageID = image.ID
+		}
+	}
+	if f.containerID == "" {
+		if c, ok := f.inspection(ctx, "container", f.name); ok && c.Config.Labels[registryFixtureLabel] == f.owner {
+			f.containerID = c.ID
+		}
+	}
+	if f.imageID != "" {
+		image, ok := f.inspection(ctx, "image", f.imageID)
+		if !ok || image.ID != f.imageID || image.Config.Labels[registryFixtureLabel] != f.owner || len(image.RepoTags) != 1 || image.RepoTags[0] != f.imageTag {
+			t.Error("OCI fixture image ownership changed; retained")
+		} else if _, err := f.docker.output(ctx, "image", "rm", f.imageID); err != nil {
+			t.Error("owned OCI fixture image cleanup failed")
+		}
+	}
+	if f.containerID != "" {
+		c, ok := f.inspection(ctx, "container", f.containerID)
+		bound := false
+		for _, e := range c.Config.Env {
+			if e == "REGISTRY_HTTP_ADDR="+f.endpoint {
+				bound = true
+			}
+		}
+		if !ok || c.ID != f.containerID || c.Name != "/"+f.name || c.Config.Image != registryFixtureImage || c.Config.Labels[registryFixtureLabel] != f.owner || c.HostConfig.NetworkMode != "host" || len(c.HostConfig.Tmpfs) != 1 || c.HostConfig.Tmpfs["/var/lib/registry"] != "rw,noexec,nosuid,size=256m" || len(c.Mounts) != 0 || !bound {
+			t.Error("OCI fixture registry ownership/binding changed; retained")
+		} else if _, err := f.docker.output(ctx, "container", "rm", "--force", f.containerID); err != nil {
+			t.Error("owned OCI fixture registry cleanup failed")
+		}
+	}
 }
 
 func fixtureContainerInspection(t *testing.T, ctx context.Context, d Docker, id string) struct {

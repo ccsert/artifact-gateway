@@ -103,7 +103,7 @@ Compose 项目的 writer。
 既有物理演练及其破坏性的隔离恢复 helper 不变。本验证器不将其 `SHA256SUMS` 当作
 可移植 S3 manifest，不解压归档或修改数据库/对象。
 
-`make backup-transfer-test` 通过公开 export/restore 入口执行真实 binary 与固定 OCI
+`make backup-transfer-test` 通过公开 export/restore 入口执行真实 binary 与 digest-pinned OCI
 **软件** profile，使用合成 PG/S3 和 Raw Group/grant 读回。固定镜像身份与剩余验收
 边界见[恢复 runbook](recovery-runbook.zh-CN.md)。这不增加离线验证器的恢复声明，
 也不表示 OCI 制品协议覆盖。

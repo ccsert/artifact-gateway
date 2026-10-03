@@ -123,24 +123,26 @@ mutation exclusion, grant allow/deny, Group order, historical audits and protect
 source/sentinel identities/data/health are checked. Eleven rejection/startup
 failure scenarios per profile verify only invocation-owned target cleanup.
 
-The OCI fixture anonymously pulls the fixed public main build at revision
-`80fc113e1e8a908388ed8dc7af5e87424bcb9768`, version
-`0.5.0-main.80fc113e1e8a`, multi-platform digest
-`sha256:bbd62298c63520b58e82b858479fb77c0bf4fce61a1c3eaaf11b9fb01e0d0e18`.
-It uses a temporary Docker configuration with an explicit anonymous registry
-entry and rejecting helper traps that prove host credential helpers are unused,
-the explicitly
-validated local socket, and the host's supported Linux platform. The suite checks
+The OCI fixture builds the checkout binary into an image with the existing
+digest-pinned runtime. It pushes anonymously to a randomly named disposable
+registry pinned at `registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373`,
+bound only to `127.0.0.1` inside the validated local daemon (including Docker
+Desktop's VM), with a private tmpfs and no adopted network or volume. A temporary
+Docker configuration explicitly declares anonymous registries; rejecting helper
+traps prove host credential helpers are unused. Restore uses the actual pushed
+digest and the host's supported Linux platform. The suite checks
 actual RepoDigest, platform, labels, running image ID, lack of binary mounts and
 public Gateway build diagnostics. Wrong digest/version/revision/platform, a
 mutable tag, an image ID alone and an unavailable local image fail public export
-and restore without publishing a bundle or creating a target. Shared public image
-cache remains; no registry, persistent credential or daemon setting is created.
-Updating this fixed fixture requires a reviewed compatible published build.
+and restore without publishing a bundle or creating a target. The fixture image
+and registry are removed only after exact captured ID, name, label and binding
+checks; altered resources are retained and fail cleanup. Shared pinned base image
+and build caches remain. No persistent credential or daemon setting is created,
+and no external Gateway package visibility or permissions are assumed.
 
 OCI here describes the **Gateway software profile**, not OCI artifact protocol
 recovery. Raw is the only protocol exercised in this transfer fixture. The OCI
-image is the fixed base build; the binary profile builds the current checkout.
+and binary profiles both build the current checkout.
 `make backup-restore-readiness` remains the separate physical profile gate.
 These suites do not prove production fencing, every format or identity provider,
 systemd controllers, cross-version upgrade, a large-object interruption matrix,
