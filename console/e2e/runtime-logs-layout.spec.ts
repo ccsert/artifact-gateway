@@ -105,6 +105,32 @@ async function geometry(page: Page) {
   }
 }
 
+test.describe("runtime log touch controls", () => {
+  test.use({ hasTouch: true });
+  for (const width of [320, 390]) {
+    test(`help disclosure has a 44px touch target at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await shell(page);
+      await page.route("**/api/v2/runtime/logs**", (route) =>
+        route.fulfill({ json: data([entry(1)]) }),
+      );
+      await page.goto("/system?tab=logs");
+      const help = page.locator(".ag-runtime-log-help summary");
+      await expect(help).toBeVisible();
+      const target = await help.boundingBox();
+      expect(target!.height).toBeGreaterThanOrEqual(44);
+      await help.click();
+      await expect(page.locator(".ag-runtime-log-help")).toHaveAttribute(
+        "open",
+        "",
+      );
+      await geometry(page);
+    });
+  }
+});
+
 for (const [width, locale, theme] of [
   [1440, "zh-CN", "dark"],
   [390, "en-US", "light"],

@@ -708,6 +708,12 @@ function runtimeLogError(
   error: unknown,
   text: (zh: string, en: string) => string,
 ): unknown {
+  // Let the shared banner retain its endpoint/version mismatch guidance.
+  if (
+    typeof error === "string" &&
+    /(?:^|\b)404(?:\b|$).*not found/i.test(error.trim())
+  )
+    return error;
   const problem =
     error && typeof error === "object"
       ? (error as { code?: string; message?: string })
@@ -764,12 +770,11 @@ function runtimeLogError(
         "Log query failed. Check the connection or permissions and retry.",
       ),
     };
-  if (error instanceof Error)
-    return {
-      message: text(
-        "日志查询失败，请检查连接后重试。",
-        "Log query failed. Check the connection and retry.",
-      ),
-    };
-  return error;
+  return {
+    ...problem,
+    message: text(
+      "日志查询失败，请检查连接后重试。",
+      "Log query failed. Check the connection and retry.",
+    ),
+  };
 }

@@ -160,6 +160,12 @@
 .ag-runtime-log-help p {
   margin: 8px 0 0;
 }
+@media (pointer: coarse) {
+  .ag-runtime-log-help summary {
+    min-height: 44px;
+    align-content: center;
+  }
+}
 .ag-runtime-log-filters .ant-picker,
 .ag-runtime-log-filters .ant-select {
   min-width: 0;
