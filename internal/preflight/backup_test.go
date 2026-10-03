@@ -177,7 +177,7 @@ func TestBackupCLIUnknownVersionDoesNotApplyV1BodySchema(t *testing.T) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	manifest["schemaVersion"] = 2
+	manifest["schemaVersion"] = 3
 	manifest["futureField"] = map[string]any{"synthetic": "future"}
 	manifest["database"] = "future-profile-without-v1-structure"
 	manifest["startedAt"] = "future-time-representation"

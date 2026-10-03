@@ -103,7 +103,7 @@ func newOTLPOutput(options OTLPOptions, client *http.Client) (*OTLPOutput, error
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
-	client.Transport = otlpHTTPTransport{base: transport, maximum: options.Timeout}
+	client.Transport = otlpHTTPTransport{base: transport}
 	// A collector redirect must not move logs or credentials to another host.
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	exporter, err := otlploghttp.New(context.Background(),
@@ -124,7 +124,7 @@ func newOTLPOutput(options OTLPOptions, client *http.Client) (*OTLPOutput, error
 	ctx, cancel := context.WithCancel(context.Background())
 	observed := &observedExporter{Exporter: exporter, report: options.Report, capacity: uint64(options.QueueSize), lifetime: ctx, cancel: cancel}
 	processor := sdklog.NewBatchProcessor(observed, sdklog.WithMaxQueueSize(options.QueueSize),
-		sdklog.WithExportMaxBatchSize(options.BatchSize), sdklog.WithExportBufferSize(1),
+		sdklog.WithExportMaxBatchSize(options.BatchSize),
 		sdklog.WithExportInterval(options.ExportInterval), sdklog.WithExportTimeout(options.Timeout))
 	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(processor),
 		sdklog.WithAttributeCountLimit(-1), sdklog.WithAttributeValueLengthLimit(-1),

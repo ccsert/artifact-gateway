@@ -66,7 +66,7 @@ func runBackup(ctx context.Context, args []string, stdout, stderr io.Writer) int
 			return 2
 		}
 	}
-	if manifest.SchemaVersion == 1 && opsjson.Decode(data, &manifest) != nil {
+	if (manifest.SchemaVersion == 1 || manifest.SchemaVersion == 2) && opsjson.Decode(data, &manifest) != nil {
 		_, _ = fmt.Fprintln(stderr, "backup input must be one valid, unambiguous versioned JSON manifest")
 		return 2
 	}

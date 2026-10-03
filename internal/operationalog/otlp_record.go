@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -48,7 +49,7 @@ func decodeOTLPRecord(data []byte) (context.Context, otellog.Record, error) {
 	record.SetObservedTimestamp(time.Now())
 	record.SetSeverity(otellog.Severity(max(-8, min(15, int(level))) + 9))
 	record.SetSeverityText(levelText)
-	record.SetBody(otellog.StringValue(message))
+	record.SetBody(attribute.StringValue(message))
 	ctx := context.Background()
 	if traceText, ok := fields["traceId"].(string); ok {
 		if id, err := trace.TraceIDFromHex(traceText); err == nil {
@@ -65,55 +66,55 @@ func decodeOTLPRecord(data []byte) (context.Context, otellog.Record, error) {
 		if err != nil {
 			return nil, record, err
 		}
-		record.AddAttributes(otellog.KeyValue{Key: name, Value: value})
+		record.AddAttributes(attribute.KeyValue{Key: attribute.Key(name), Value: value})
 	}
 	return ctx, record, nil
 }
 
-func otlpJSONValue(value any, depth int) (otellog.Value, error) {
+func otlpJSONValue(value any, depth int) (attribute.Value, error) {
 	if depth > 32 {
-		return otellog.Value{}, errors.New("OTLP Logs event nesting exceeds 32 levels")
+		return attribute.Value{}, errors.New("OTLP Logs event nesting exceeds 32 levels")
 	}
 	switch value := value.(type) {
 	case nil:
-		return otellog.Value{}, nil
+		return attribute.Value{}, nil
 	case string:
-		return otellog.StringValue(value), nil
+		return attribute.StringValue(value), nil
 	case bool:
-		return otellog.BoolValue(value), nil
+		return attribute.BoolValue(value), nil
 	case json.Number:
 		if !strings.ContainsAny(string(value), ".eE") {
 			if integer, err := value.Int64(); err == nil {
-				return otellog.Int64Value(integer), nil
+				return attribute.Int64Value(integer), nil
 			}
 		} else if number, err := value.Float64(); err == nil {
-			return otellog.Float64Value(number), nil
+			return attribute.Float64Value(number), nil
 		}
 		// OTLP integers are signed int64. Preserve wider integers and numbers
 		// outside float64 as text rather than silently losing their precision.
-		return otellog.StringValue(string(value)), nil
+		return attribute.StringValue(string(value)), nil
 	case []any:
-		values := make([]otellog.Value, 0, len(value))
+		values := make([]attribute.Value, 0, len(value))
 		for _, item := range value {
 			mapped, err := otlpJSONValue(item, depth+1)
 			if err != nil {
-				return otellog.Value{}, err
+				return attribute.Value{}, err
 			}
 			values = append(values, mapped)
 		}
-		return otellog.SliceValue(values...), nil
+		return attribute.SliceValue(values...), nil
 	case map[string]any:
-		values := make([]otellog.KeyValue, 0, len(value))
+		values := make([]attribute.KeyValue, 0, len(value))
 		for _, name := range sortedJSONKeys(value) {
 			mapped, err := otlpJSONValue(value[name], depth+1)
 			if err != nil {
-				return otellog.Value{}, err
+				return attribute.Value{}, err
 			}
-			values = append(values, otellog.KeyValue{Key: name, Value: mapped})
+			values = append(values, attribute.KeyValue{Key: attribute.Key(name), Value: mapped})
 		}
-		return otellog.MapValue(values...), nil
+		return attribute.MapValue(values...), nil
 	default:
-		return otellog.Value{}, errors.New("unsupported OTLP Logs attribute")
+		return attribute.Value{}, errors.New("unsupported OTLP Logs attribute")
 	}
 }
 

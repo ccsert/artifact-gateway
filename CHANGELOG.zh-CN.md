@@ -8,6 +8,9 @@
 
 ## Unreleased
 
+- 新增显式私有 spec 的离线 S3 字节导出和全新本地 Docker 隔离恢复，校验 binary/OCI 软件身份、完整 migration 与元数据、全字节读回，支持 Raw/OCI grant 断言和本次归属失败清理。真实合成 PG/S3 恢复独立于 preflight 与固定 RustFS 物理演练；一致性仍依赖操作者完整停写范围。
+- 将 OpenTelemetry 更新到依赖审计要求的最低已修复 trace/log 版本，保留结构化日志与显式 exporter 端点行为。
+
 - 新增只读 `gateway preflight backup --input manifest.json`，验证版本化私有本地文件集的完整字节 SHA-256 与 writer 停写声明。完整性及声明与快照一致性分开，后者始终 unknown；不导出、停写、恢复或推断整体备份成功。
 
 - 新增离线 `gateway preflight capacity --input plan.json`，处理固定迁移证据，分别计算仓库逻辑配额增长、去重后的物理对象增长及暂存/备份/恢复/余量峰值。缺失数值保留 unknown，输出版本化 JSON 与独立退出码，不访问或修改目标。

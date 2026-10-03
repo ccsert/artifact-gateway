@@ -80,6 +80,8 @@ jobs:
         run: make apt-signer-rotation-e2e
       - name: Run Conan E2E
         run: make conan-e2e
+      - name: Verify isolated S3 backup transfers
+        run: make backup-transfer-test
       - name: Run integration tests
         run: make integration-test
       - name: Check release readiness entrypoints
