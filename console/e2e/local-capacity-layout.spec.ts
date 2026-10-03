@@ -61,6 +61,17 @@ async function shell(page: Page, member = false) {
   await page.route("**/api/v2/site-settings", (route) =>
     route.fulfill({ json: defaultSiteSettings }),
   );
+  if (!member) {
+    await page.route("**/api/v2/runtime/nodes", (route) =>
+      route.fulfill({
+        json: {
+          items: [],
+          health: fixture.nodes,
+          releaseSource: "not_configured",
+        },
+      }),
+    );
+  }
 }
 
 for (const locale of ["zh-CN", "en-US"]) {
