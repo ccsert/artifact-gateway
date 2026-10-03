@@ -14,6 +14,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/buildinfo"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
+	"github.com/artifact-gateway/artifact-gateway/internal/httperrorrate"
 	"github.com/artifact-gateway/artifact-gateway/internal/localcapacity"
 	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -35,6 +36,7 @@ type Dependencies struct {
 	AccessLog      AccessLogOptions
 	LogBuffer      *operationalog.Buffer
 	LocalCapacity  *localcapacity.Observer
+	HTTPErrorRate  *httperrorrate.Observer
 	// NativeMavenObjectStore is supplied by the runtime after RustFS is initialized.
 	// Tests omit it and receive an isolated in-memory store.
 	NativeMavenObjectStore        OCIObjectStore

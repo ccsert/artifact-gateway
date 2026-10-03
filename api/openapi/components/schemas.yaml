@@ -362,6 +362,36 @@ DiagnosticLocalCapacity:
       maxItems: 3
       description: "Exactly temporary, logs and backups in that order. Shared aliases reference the same visible capacity and must not be summed."
       items: {"$ref": "#/DiagnosticLocalCapacityMount"}
+HTTPErrorRateState:
+  type: string
+  enum: [available, unknown, stale]
+HTTPErrorRateReason:
+  type: string
+  enum: [source_unavailable, warming_up, session_changed, counter_reset, sampling_gap, clock_invalid, count_overflow, no_traffic, low_sample, sample_stale]
+DiagnosticHTTPErrorRate:
+  type: object
+  additionalProperties: false
+  required: [checkedAt, instanceId, sessionId, source, scope, state, windowSeconds, minimumRequests, sampleIntervalSeconds, maxSampleAgeSeconds]
+  description: "Current responding process's business HTTP observation, not cluster health or an alert. Uses fixed non-probe request classes, including management and other, with 1xx-5xx as denominator and 5xx as numerator. Excludes health/metrics probes and other status. Counts are differences at actual sample boundaries; no interpolation. Safe counts may be retained during warmup or staleness. Ratio requires a fresh complete 300-second window and at least 20 requests; this minimum is not a statistical confidence guarantee. No delta crosses a session, counter reset, backwards clock or sampling gap."
+  properties:
+    checkedAt: {type: string, format: date-time}
+    instanceId: {type: string}
+    sessionId: {type: string}
+    source: {type: string, enum: [artifact_gateway_http_requests_total]}
+    scope: {type: string, enum: [responding_process_business_http]}
+    state: {"$ref": "#/HTTPErrorRateState"}
+    reason: {"$ref": "#/HTTPErrorRateReason"}
+    windowSeconds: {type: integer, minimum: 300, maximum: 300}
+    minimumRequests: {type: integer, minimum: 20, maximum: 20}
+    sampleIntervalSeconds: {type: integer, minimum: 15, maximum: 15}
+    maxSampleAgeSeconds: {type: integer, minimum: 30, maximum: 30}
+    sampleAt: {type: string, format: date-time, description: "Last actual counter sample; refreshing diagnostics does not refresh this timestamp."}
+    windowStart: {type: string, format: date-time}
+    windowEnd: {type: string, format: date-time}
+    coverageSeconds: {type: number, format: double, minimum: 0, maximum: 330, description: "Actual sample boundary span. A complete window covers 300-330 seconds depending on sampling alignment; partial windows are explicitly unknown."}
+    requests: {type: integer, format: int64, minimum: 0, maximum: 9007199254740991}
+    errors: {type: integer, format: int64, minimum: 0, maximum: 9007199254740991}
+    ratio: {type: number, format: double, minimum: 0, maximum: 1, description: "5xx/errors divided by all observed business 1xx-5xx requests. Present only when state is available; valid zero means zero observed 5xx, not a health judgment."}
 Diagnostics:
   type: object
   required:
@@ -387,6 +417,8 @@ Diagnostics:
       "$ref": "#/DiagnosticScanner"
     localCapacity:
       "$ref": "#/DiagnosticLocalCapacity"
+    httpErrorRate:
+      "$ref": "#/DiagnosticHTTPErrorRate"
     queues:
       type: array
       items:

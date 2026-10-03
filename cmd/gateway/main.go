@@ -247,6 +247,11 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 	runtimeContext, stopRuntime := signalContext()
 	defer stopRuntime()
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
+	if startAPI {
+		observer, done := metrics.StartHTTPErrorRateSampling(runtimeContext, cfg.InstanceID, runtimeSessionID)
+		dependencies.HTTPErrorRate = observer
+		defer func() { stopRuntime(); <-done }()
+	}
 	slog.Info("gateway runtime configured", "instance_id", cfg.InstanceID, "roles", cfg.NodeRoles, "worker_formats", cfg.WorkerFormats, "worker_kinds", cfg.WorkerKinds, "scanner_enabled", cfg.ScannerEnabled(), "scanner_health_enabled", cfg.ScannerHealthEndpoint != "", "scanner_name", cfg.ScannerName, "scanner_formats", cfg.ScannerFormats, "scanner_database_max_age", cfg.ScannerDatabaseMaxAge, "apt_signer_enabled", cfg.APTSignerEnabled(), "apt_signer_trusted_fingerprint_count", len(cfg.APTSignerTrustedFingerprints), "raw_cache_max_object_bytes", cfg.RawCacheMaxObjectBytes, "raw_cache_max_concurrent_spools", cfg.RawCacheMaxConcurrentSpools)
 	heartbeat := &app.RuntimeNodeHeartbeat{
 		Store: store,

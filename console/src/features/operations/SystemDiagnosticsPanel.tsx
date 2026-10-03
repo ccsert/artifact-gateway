@@ -31,6 +31,7 @@ import {
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { Card, CardHeader } from "../../components/ui/Layout";
 import { LocalCapacityPanel } from "./LocalCapacityPanel";
+import { HTTPErrorRatePanel } from "./HTTPErrorRatePanel";
 
 const dependencyLabels: Record<string, [string, string]> = {
   postgresql: ["PostgreSQL", "PostgreSQL"],
@@ -484,6 +485,7 @@ export function SystemDiagnosticsPanel() {
       )}
 
       <LocalCapacityPanel capacity={diagnostics.localCapacity} />
+      <HTTPErrorRatePanel rate={diagnostics.httpErrorRate} />
       <div className="ag-diagnostics-detail-grid">
         <Card className="ag-diagnostics-identity-card">
           <CardHeader

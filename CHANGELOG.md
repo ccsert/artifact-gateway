@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Added current-process business HTTP 5xx observation to administrator diagnostics and Console, with request/error counts, actual five-minute sample boundaries and node/session identity. Ratios require at least 20 requests and fresh complete data; warmup, resets, low traffic and stale samples remain explicit. Health/metrics probes are excluded; no health judgment or alert is introduced.
+
 - Added opt-in explicit local mount capacity to administrator diagnostics and Console, with process-namespace scope, actual sample times, shared alias identity, safe unknown/stale states and bounded queries. Defaults query no directories; no S3/NAS physical-capacity inference, capacity metric, quota, alert or deployment change is introduced.
 
 - Extended the isolated offline backup transfer fixture to public export/restore for binary and a digest-pinned OCI Gateway build from the checkout, including unreferenced S3 bytes, actual image/build identity, wrong-identity rejection and Raw Group/grant/audit readback. A disposable daemon-loopback registry avoids external Gateway package credentials or permissions. This is scoped software-profile acceptance; broader #200/#201 recovery matrices remain open.

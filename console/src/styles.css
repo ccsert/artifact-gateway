@@ -1642,6 +1642,55 @@ button:not(:disabled):active,
   padding: 16px 20px 20px;
 }
 
+.ag-http-error-rate-content {
+  display: grid;
+  gap: 16px;
+  padding: 16px 20px 20px;
+  min-width: 0;
+}
+
+.ag-http-error-rate-values {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.ag-http-error-rate-values > div {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.ag-http-error-rate-values dt,
+.ag-http-error-rate-metadata dt {
+  color: var(--ag-content-secondary);
+  font-size: 12px;
+}
+
+.ag-http-error-rate-values dd {
+  margin: 0;
+  font-size: 24px;
+  overflow-wrap: anywhere;
+}
+
+.ag-http-error-rate-metadata {
+  display: grid;
+  gap: 8px;
+}
+
+.ag-http-error-rate-metadata > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.ag-http-error-rate-metadata dd {
+  margin: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .ag-local-capacity-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1675,6 +1724,10 @@ button:not(:disabled):active,
 }
 
 @media (max-width: 767px) {
+  .ag-http-error-rate-values,
+  .ag-http-error-rate-metadata > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .ag-local-capacity-grid {
     grid-template-columns: minmax(0, 1fr);
   }
