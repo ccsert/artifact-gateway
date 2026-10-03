@@ -1395,28 +1395,38 @@ func (e OIDCSettingsUpdateProvisioningMode) Valid() bool {
 
 // Defines values for ProblemCode.
 const (
-	ProblemCodeAccessDenied             ProblemCode = "access_denied"
-	ProblemCodeArtifactQuarantined      ProblemCode = "artifact_quarantined"
-	ProblemCodeCoordinateExists         ProblemCode = "coordinate_exists"
-	ProblemCodeDigestMismatch           ProblemCode = "digest_mismatch"
-	ProblemCodeEncryptionKeyUnavailable ProblemCode = "encryption_key_unavailable"
-	ProblemCodeIdempotencyConflict      ProblemCode = "idempotency_conflict"
-	ProblemCodeIdentityMismatch         ProblemCode = "identity_mismatch"
-	ProblemCodeInternalError            ProblemCode = "internal_error"
-	ProblemCodeInvalidPageToken         ProblemCode = "invalid_page_token"
-	ProblemCodeInvalidRequest           ProblemCode = "invalid_request"
-	ProblemCodeInvalidState             ProblemCode = "invalid_state"
-	ProblemCodeNameExists               ProblemCode = "name_exists"
-	ProblemCodeNotFound                 ProblemCode = "not_found"
-	ProblemCodeQuotaExceeded            ProblemCode = "quota_exceeded"
-	ProblemCodeRetentionProtected       ProblemCode = "retention_protected"
-	ProblemCodeSecurityPolicyDenied     ProblemCode = "security_policy_denied"
-	ProblemCodeSessionClosed            ProblemCode = "session_closed"
-	ProblemCodeSignerUnavailable        ProblemCode = "signer_unavailable"
-	ProblemCodeSnapshotCorrupt          ProblemCode = "snapshot_corrupt"
-	ProblemCodeUnsupportedMediaType     ProblemCode = "unsupported_media_type"
-	ProblemCodeUntrustedArchive         ProblemCode = "untrusted_archive"
-	ProblemCodeVersionConflict          ProblemCode = "version_conflict"
+	ProblemCodeAccessDenied                 ProblemCode = "access_denied"
+	ProblemCodeArtifactQuarantined          ProblemCode = "artifact_quarantined"
+	ProblemCodeCoordinateExists             ProblemCode = "coordinate_exists"
+	ProblemCodeDigestMismatch               ProblemCode = "digest_mismatch"
+	ProblemCodeEncryptionKeyUnavailable     ProblemCode = "encryption_key_unavailable"
+	ProblemCodeIdempotencyConflict          ProblemCode = "idempotency_conflict"
+	ProblemCodeIdentityMismatch             ProblemCode = "identity_mismatch"
+	ProblemCodeInternalError                ProblemCode = "internal_error"
+	ProblemCodeInvalidCursor                ProblemCode = "invalid_cursor"
+	ProblemCodeInvalidFilter                ProblemCode = "invalid_filter"
+	ProblemCodeInvalidLimit                 ProblemCode = "invalid_limit"
+	ProblemCodeInvalidPageToken             ProblemCode = "invalid_page_token"
+	ProblemCodeInvalidRequest               ProblemCode = "invalid_request"
+	ProblemCodeInvalidState                 ProblemCode = "invalid_state"
+	ProblemCodeInvalidTimeWindow            ProblemCode = "invalid_time_window"
+	ProblemCodeLogBufferUnavailable         ProblemCode = "log_buffer_unavailable"
+	ProblemCodeLogCursorScopeChanged        ProblemCode = "log_cursor_scope_changed"
+	ProblemCodeLogQueryTimeout              ProblemCode = "log_query_timeout"
+	ProblemCodeLogSourceIdentityUnavailable ProblemCode = "log_source_identity_unavailable"
+	ProblemCodeNameExists                   ProblemCode = "name_exists"
+	ProblemCodeNotFound                     ProblemCode = "not_found"
+	ProblemCodePasswordChangeRequired       ProblemCode = "password_change_required"
+	ProblemCodeQuotaExceeded                ProblemCode = "quota_exceeded"
+	ProblemCodeRemoteLogQueryUnavailable    ProblemCode = "remote_log_query_unavailable"
+	ProblemCodeRetentionProtected           ProblemCode = "retention_protected"
+	ProblemCodeSecurityPolicyDenied         ProblemCode = "security_policy_denied"
+	ProblemCodeSessionClosed                ProblemCode = "session_closed"
+	ProblemCodeSignerUnavailable            ProblemCode = "signer_unavailable"
+	ProblemCodeSnapshotCorrupt              ProblemCode = "snapshot_corrupt"
+	ProblemCodeUnsupportedMediaType         ProblemCode = "unsupported_media_type"
+	ProblemCodeUntrustedArchive             ProblemCode = "untrusted_archive"
+	ProblemCodeVersionConflict              ProblemCode = "version_conflict"
 )
 
 // Valid indicates whether the value is a known member of the ProblemCode enum.
@@ -1438,17 +1448,37 @@ func (e ProblemCode) Valid() bool {
 		return true
 	case ProblemCodeInternalError:
 		return true
+	case ProblemCodeInvalidCursor:
+		return true
+	case ProblemCodeInvalidFilter:
+		return true
+	case ProblemCodeInvalidLimit:
+		return true
 	case ProblemCodeInvalidPageToken:
 		return true
 	case ProblemCodeInvalidRequest:
 		return true
 	case ProblemCodeInvalidState:
 		return true
+	case ProblemCodeInvalidTimeWindow:
+		return true
+	case ProblemCodeLogBufferUnavailable:
+		return true
+	case ProblemCodeLogCursorScopeChanged:
+		return true
+	case ProblemCodeLogQueryTimeout:
+		return true
+	case ProblemCodeLogSourceIdentityUnavailable:
+		return true
 	case ProblemCodeNameExists:
 		return true
 	case ProblemCodeNotFound:
 		return true
+	case ProblemCodePasswordChangeRequired:
+		return true
 	case ProblemCodeQuotaExceeded:
+		return true
+	case ProblemCodeRemoteLogQueryUnavailable:
 		return true
 	case ProblemCodeRetentionProtected:
 		return true

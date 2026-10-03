@@ -92,6 +92,9 @@ bounds remain fixed and must obey the 24-hour query limit. Ordering and that
 limit are checked again at the locked snapshot; if waiting for a writer makes
 the rolling bounds invalid, the query returns `400 invalid_time_window`
 without entries or a cursor.
+The OpenAPI Problem code enum includes the log query's validation, disabled
+buffer, source identity, remote scope, session change, timeout and forced
+password-change errors; clients can distinguish these declared responses.
 
 The opaque cursor is signed with an ephemeral buffer key and bound to the
 instance, session and filter specification. Preserve the same filters between
