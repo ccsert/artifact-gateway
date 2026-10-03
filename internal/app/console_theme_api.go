@@ -145,7 +145,7 @@ func (h generatedRepositoryAPIAdapter) ValidateConsoleThemePackage(w http.Respon
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "serialize Console theme failed")
 		return
 	}
-	validation := adminopenapi.ConsoleThemePackageValidation{Theme: packageResponse, Status: adminopenapi.Available}
+	validation := adminopenapi.ConsoleThemePackageValidation{Theme: packageResponse, Status: adminopenapi.ConsoleThemePackageValidationStatusAvailable}
 	catalog, err := h.availableConsoleThemes(r.Context())
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "load Console themes failed")
@@ -155,10 +155,10 @@ func (h generatedRepositoryAPIAdapter) ValidateConsoleThemePackage(w http.Respon
 		source := adminopenapi.ConsoleThemePackageValidationExistingSource(existing.Source)
 		validation.ExistingSource = &source
 		if existing.Source == adminopenapi.ConsoleThemeSourceManaged {
-			validation.Status = adminopenapi.Replaceable
+			validation.Status = adminopenapi.ConsoleThemePackageValidationStatusReplaceable
 			validation.ExistingVersion = &existing.Version
 		} else {
-			validation.Status = adminopenapi.Reserved
+			validation.Status = adminopenapi.ConsoleThemePackageValidationStatusReserved
 		}
 	}
 	writeNativeMavenJSON(w, http.StatusOK, validation)

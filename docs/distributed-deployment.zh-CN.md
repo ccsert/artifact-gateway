@@ -94,6 +94,9 @@ GATEWAY_RUNTIME_NODE_PRUNE_INTERVAL=1h
 节点健康和仓库后台队列。响应只包含固定状态与脱敏详情，不返回数据库/S3 地址、
 环境变量、令牌或凭据，可从 Console 的“任务中心 / 系统诊断”复制为支持材料。
 
+显式目录的可选本地容量观察见[运维信号来源](operational-signals.zh-CN.md)，仅观察当前 API
+进程的挂载 namespace；仅 Worker/Scheduler 的进程不提供诊断，数值不代表 S3/NAS 物理池。
+
 ## 单机回退
 
 本地开发和小规模安装继续使用：

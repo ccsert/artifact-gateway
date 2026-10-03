@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Added opt-in explicit local mount capacity to administrator diagnostics and Console, with process-namespace scope, actual sample times, shared alias identity, safe unknown/stale states and bounded queries. Defaults query no directories; no S3/NAS physical-capacity inference, capacity metric, quota, alert or deployment change is introduced.
+
 - Extended the isolated offline backup transfer fixture to public export/restore for binary and a digest-pinned OCI Gateway build from the checkout, including unreferenced S3 bytes, actual image/build identity, wrong-identity rejection and Raw Group/grant/audit readback. A disposable daemon-loopback registry avoids external Gateway package credentials or permissions. This is scoped software-profile acceptance; broader #200/#201 recovery matrices remain open.
 
 - Console runtime logs now use literal monospace rows, source-aware filters, bounded incremental follow/pause and unread/gap notices, with safe selection/loaded copy and finite NDJSON export. The view stays limited to the connected process memory and caps client rows, bytes, display fields and polling.

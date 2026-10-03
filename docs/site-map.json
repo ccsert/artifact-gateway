@@ -61,6 +61,7 @@
       "id": "operations",
       "title": { "en": "Operations and security", "zh-CN": "运维与安全" },
       "items": [
+        { "id": "operational-signals", "title": { "en": "Operational signal sources", "zh-CN": "运维信号来源" }, "en": "docs/operational-signals.md", "zh-CN": "docs/operational-signals.zh-CN.md" },
         { "id": "runtime-version", "title": { "en": "Runtime version", "zh-CN": "运行版本" }, "en": "docs/runtime-version.md", "zh-CN": "docs/runtime-version.zh-CN.md" },
         { "id": "runtime-logging", "title": { "en": "Runtime logging", "zh-CN": "运行日志" }, "en": "docs/runtime-logging.md", "zh-CN": "docs/runtime-logging.zh-CN.md" },
         { "id": "runtime-log-design", "title": { "en": "Runtime log product design", "zh-CN": "运行日志产品设计" }, "en": "docs/runtime-log-product-design.md", "zh-CN": "docs/runtime-log-product-design.zh-CN.md" },

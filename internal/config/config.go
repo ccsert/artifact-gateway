@@ -13,6 +13,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
+	"github.com/artifact-gateway/artifact-gateway/internal/localcapacity"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
@@ -69,6 +70,7 @@ type Config struct {
 	LogFileMaxBytes                 int64
 	LogFileMaxBackups               int
 	LogFileMaxAge                   time.Duration
+	LocalCapacityMounts             map[localcapacity.Alias]string
 	WorkerFormats                   []string
 	WorkerKinds                     []string
 	ScannerEndpoint                 string
@@ -245,6 +247,11 @@ func Load() (Config, error) {
 	if err := configureLogFile(&cfg); err != nil {
 		return Config{}, err
 	}
+	capacityMounts, err := localcapacity.ParsePaths(os.Getenv("GATEWAY_LOCAL_CAPACITY_MOUNTS"))
+	if err != nil {
+		return Config{}, fmt.Errorf("GATEWAY_LOCAL_CAPACITY_MOUNTS is invalid")
+	}
+	cfg.LocalCapacityMounts = capacityMounts
 	if err := configureOTLPLogs(&cfg); err != nil {
 		return Config{}, err
 	}

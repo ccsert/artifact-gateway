@@ -711,19 +711,19 @@ func (e ConsoleThemePackageValidationExistingSource) Valid() bool {
 
 // Defines values for ConsoleThemePackageValidationStatus.
 const (
-	Available   ConsoleThemePackageValidationStatus = "available"
-	Replaceable ConsoleThemePackageValidationStatus = "replaceable"
-	Reserved    ConsoleThemePackageValidationStatus = "reserved"
+	ConsoleThemePackageValidationStatusAvailable   ConsoleThemePackageValidationStatus = "available"
+	ConsoleThemePackageValidationStatusReplaceable ConsoleThemePackageValidationStatus = "replaceable"
+	ConsoleThemePackageValidationStatusReserved    ConsoleThemePackageValidationStatus = "reserved"
 )
 
 // Valid indicates whether the value is a known member of the ConsoleThemePackageValidationStatus enum.
 func (e ConsoleThemePackageValidationStatus) Valid() bool {
 	switch e {
-	case Available:
+	case ConsoleThemePackageValidationStatusAvailable:
 		return true
-	case Replaceable:
+	case ConsoleThemePackageValidationStatusReplaceable:
 		return true
-	case Reserved:
+	case ConsoleThemePackageValidationStatusReserved:
 		return true
 	default:
 		return false
@@ -889,6 +889,51 @@ func (e DiagnosticDependencyStatus) Valid() bool {
 	case DiagnosticDependencyStatusReachable:
 		return true
 	case DiagnosticDependencyStatusUnreachable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DiagnosticLocalCapacityScope.
+const (
+	ObserverMountNamespace DiagnosticLocalCapacityScope = "observer_mount_namespace"
+)
+
+// Valid indicates whether the value is a known member of the DiagnosticLocalCapacityScope enum.
+func (e DiagnosticLocalCapacityScope) Valid() bool {
+	switch e {
+	case ObserverMountNamespace:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DiagnosticLocalCapacitySource.
+const (
+	Statfs DiagnosticLocalCapacitySource = "statfs"
+)
+
+// Valid indicates whether the value is a known member of the DiagnosticLocalCapacitySource enum.
+func (e DiagnosticLocalCapacitySource) Valid() bool {
+	switch e {
+	case Statfs:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DiagnosticLocalCapacityUnit.
+const (
+	Bytes DiagnosticLocalCapacityUnit = "bytes"
+)
+
+// Valid indicates whether the value is a known member of the DiagnosticLocalCapacityUnit enum.
+func (e DiagnosticLocalCapacityUnit) Valid() bool {
+	switch e {
+	case Bytes:
 		return true
 	default:
 		return false
@@ -1273,6 +1318,93 @@ func (e LifecycleJobState) Valid() bool {
 	case LifecycleJobStateRetrying:
 		return true
 	case LifecycleJobStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LocalCapacityAlias.
+const (
+	Backups   LocalCapacityAlias = "backups"
+	Logs      LocalCapacityAlias = "logs"
+	Temporary LocalCapacityAlias = "temporary"
+)
+
+// Valid indicates whether the value is a known member of the LocalCapacityAlias enum.
+func (e LocalCapacityAlias) Valid() bool {
+	switch e {
+	case Backups:
+		return true
+	case Logs:
+		return true
+	case Temporary:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LocalCapacityReason.
+const (
+	LocalCapacityReasonCancelled                 LocalCapacityReason = "cancelled"
+	LocalCapacityReasonFilesystemIdentityUnknown LocalCapacityReason = "filesystem_identity_unknown"
+	LocalCapacityReasonInvalidMeasurement        LocalCapacityReason = "invalid_measurement"
+	LocalCapacityReasonNotConfigured             LocalCapacityReason = "not_configured"
+	LocalCapacityReasonReadFailed                LocalCapacityReason = "read_failed"
+	LocalCapacityReasonRemoteFilesystem          LocalCapacityReason = "remote_filesystem"
+	LocalCapacityReasonTimeout                   LocalCapacityReason = "timeout"
+	LocalCapacityReasonUnitOverflow              LocalCapacityReason = "unit_overflow"
+	LocalCapacityReasonUnsupportedFilesystem     LocalCapacityReason = "unsupported_filesystem"
+	LocalCapacityReasonUnsupportedPlatform       LocalCapacityReason = "unsupported_platform"
+)
+
+// Valid indicates whether the value is a known member of the LocalCapacityReason enum.
+func (e LocalCapacityReason) Valid() bool {
+	switch e {
+	case LocalCapacityReasonCancelled:
+		return true
+	case LocalCapacityReasonFilesystemIdentityUnknown:
+		return true
+	case LocalCapacityReasonInvalidMeasurement:
+		return true
+	case LocalCapacityReasonNotConfigured:
+		return true
+	case LocalCapacityReasonReadFailed:
+		return true
+	case LocalCapacityReasonRemoteFilesystem:
+		return true
+	case LocalCapacityReasonTimeout:
+		return true
+	case LocalCapacityReasonUnitOverflow:
+		return true
+	case LocalCapacityReasonUnsupportedFilesystem:
+		return true
+	case LocalCapacityReasonUnsupportedPlatform:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LocalCapacityStatus.
+const (
+	LocalCapacityStatusAvailable     LocalCapacityStatus = "available"
+	LocalCapacityStatusNotConfigured LocalCapacityStatus = "not_configured"
+	LocalCapacityStatusStale         LocalCapacityStatus = "stale"
+	LocalCapacityStatusUnknown       LocalCapacityStatus = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the LocalCapacityStatus enum.
+func (e LocalCapacityStatus) Valid() bool {
+	switch e {
+	case LocalCapacityStatusAvailable:
+		return true
+	case LocalCapacityStatusNotConfigured:
+		return true
+	case LocalCapacityStatusStale:
+		return true
+	case LocalCapacityStatusUnknown:
 		return true
 	default:
 		return false
@@ -3539,6 +3671,42 @@ type DiagnosticDependency struct {
 // DiagnosticDependencyStatus defines model for DiagnosticDependency.Status.
 type DiagnosticDependencyStatus string
 
+// DiagnosticLocalCapacity Read-only opt-in local filesystem metadata. Observes the responding process's namespace, not S3/RustFS/NAS physical pools or Repository logical quotas. Missing configuration performs no filesystem queries. The response wait is bounded; a blocked kernel call may remain outstanding, with at most one call per alias for this process.
+type DiagnosticLocalCapacity struct {
+	CheckedAt           time.Time `json:"checkedAt"`
+	MaxSampleAgeSeconds int       `json:"maxSampleAgeSeconds"`
+
+	// Mounts Exactly temporary, logs and backups in that order. Shared aliases reference the same visible capacity and must not be summed.
+	Mounts                 []DiagnosticLocalCapacityMount `json:"mounts"`
+	RefreshIntervalSeconds int                            `json:"refreshIntervalSeconds"`
+	Scope                  DiagnosticLocalCapacityScope   `json:"scope"`
+	Source                 DiagnosticLocalCapacitySource  `json:"source"`
+	TimeoutMilliseconds    int                            `json:"timeoutMilliseconds"`
+	Unit                   DiagnosticLocalCapacityUnit    `json:"unit"`
+}
+
+// DiagnosticLocalCapacityScope defines model for DiagnosticLocalCapacity.Scope.
+type DiagnosticLocalCapacityScope string
+
+// DiagnosticLocalCapacitySource defines model for DiagnosticLocalCapacity.Source.
+type DiagnosticLocalCapacitySource string
+
+// DiagnosticLocalCapacityUnit defines model for DiagnosticLocalCapacity.Unit.
+type DiagnosticLocalCapacityUnit string
+
+// DiagnosticLocalCapacityMount Explicit directory alias in the responding process's mount namespace. No path, device, filesystem ID or raw error is returned. Unknown, unconfigured and stale observations omit byte fields; zero available bytes is valid only for available observations. Different identities do not prove independent physical pools.
+type DiagnosticLocalCapacityMount struct {
+	Alias          LocalCapacityAlias   `json:"alias"`
+	AvailableBytes *int64               `json:"availableBytes,omitempty"`
+	Reason         *LocalCapacityReason `json:"reason,omitempty"`
+
+	// SampleAt Actual successful sample time; retained for stale samples, never refreshed by copying a snapshot.
+	SampleAt   *time.Time           `json:"sampleAt,omitempty"`
+	SharedWith []LocalCapacityAlias `json:"sharedWith"`
+	Status     LocalCapacityStatus  `json:"status"`
+	TotalBytes *int64               `json:"totalBytes,omitempty"`
+}
+
 // DiagnosticQueueStat defines model for DiagnosticQueueStat.
 type DiagnosticQueueStat struct {
 	Count           int                      `json:"count"`
@@ -3590,9 +3758,12 @@ type Diagnostics struct {
 	Build        DiagnosticBuild        `json:"build"`
 	Dependencies []DiagnosticDependency `json:"dependencies"`
 	GeneratedAt  time.Time              `json:"generatedAt"`
-	Nodes        RuntimeNodeHealth      `json:"nodes"`
-	Queues       []DiagnosticQueueStat  `json:"queues"`
-	Runtime      DiagnosticRuntime      `json:"runtime"`
+
+	// LocalCapacity Read-only opt-in local filesystem metadata. Observes the responding process's namespace, not S3/RustFS/NAS physical pools or Repository logical quotas. Missing configuration performs no filesystem queries. The response wait is bounded; a blocked kernel call may remain outstanding, with at most one call per alias for this process.
+	LocalCapacity *DiagnosticLocalCapacity `json:"localCapacity,omitempty"`
+	Nodes         RuntimeNodeHealth        `json:"nodes"`
+	Queues        []DiagnosticQueueStat    `json:"queues"`
+	Runtime       DiagnosticRuntime        `json:"runtime"`
 
 	// Scanner Sanitized scanner reachability and vulnerability database freshness.
 	Scanner *DiagnosticScanner `json:"scanner,omitempty"`
@@ -3868,6 +4039,15 @@ type LifecycleJobReconciliation struct {
 	Requeued       int                `json:"requeued"`
 	RequeuedJobIds []string           `json:"requeuedJobIds"`
 }
+
+// LocalCapacityAlias defines model for LocalCapacityAlias.
+type LocalCapacityAlias string
+
+// LocalCapacityReason defines model for LocalCapacityReason.
+type LocalCapacityReason string
+
+// LocalCapacityStatus defines model for LocalCapacityStatus.
+type LocalCapacityStatus string
 
 // MavenCacheRefreshRequest defines model for MavenCacheRefreshRequest.
 type MavenCacheRefreshRequest struct {

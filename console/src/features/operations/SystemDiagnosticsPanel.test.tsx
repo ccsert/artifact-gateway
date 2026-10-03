@@ -278,4 +278,55 @@ describe("SystemDiagnosticsPanel", () => {
     expect(await screen.findByText("PostgreSQL")).toBeInTheDocument();
     expect(screen.queryByText(/制品扫描器/)).not.toBeInTheDocument();
   });
+
+  it("retains the previous snapshot on a refresh failure and clears it when authorization is lost", async () => {
+    const user = userEvent.setup();
+    mockGetDiagnostics
+      .mockResolvedValueOnce({ data: diagnostics } as never)
+      .mockRejectedValueOnce({
+        status: 503,
+        code: "internal_error",
+        message: "Synthetic refresh unavailable",
+      })
+      .mockRejectedValueOnce({
+        status: 403,
+        code: "forbidden",
+        message: "Synthetic permission denied",
+      });
+    renderPanel();
+    await user.click(await screen.findByRole("button", { name: "刷新诊断" }));
+    expect(
+      await screen.findByText("刷新失败，仍显示旧诊断快照"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("gateway-01")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "刷新诊断" }));
+    expect(
+      await screen.findByText("Synthetic permission denied"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("gateway-01")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "本地挂载容量" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each(["Synthetic non-JSON denial", ""])(
+    "clears old capacity on HTTP 403 even with body %j",
+    async (body) => {
+      const user = userEvent.setup();
+      mockGetDiagnostics
+        .mockResolvedValueOnce({ data: diagnostics } as never)
+        .mockResolvedValueOnce({
+          error: body,
+          response: new Response(body, { status: 403 }),
+        } as never);
+      renderPanel();
+      await user.click(await screen.findByRole("button", { name: "刷新诊断" }));
+      await screen.findByText("请求出错");
+      expect(screen.queryByText("gateway-01")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: "本地挂载容量" }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText("加载系统诊断…")).not.toBeInTheDocument();
+    },
+  );
 });

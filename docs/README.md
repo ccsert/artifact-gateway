@@ -56,6 +56,7 @@ agree with executable tests and the
 
 ## Operations and security
 
+- [Operational signal sources](operational-signals.md) — existing signals and opt-in administrator local-capacity diagnostics with namespace, freshness and failure boundaries.
 - [Runtime log product design](runtime-log-product-design.md) — proposal for API/Worker log classification, search, durable storage, and deployment acceptance.
 - [Kubernetes deployment](kubernetes-deployment.md) — local executable baseline and production requirements.
 - [Recovery runbook](recovery-runbook.md) — backup, restore, RPO/RTO evidence, and rollback.
