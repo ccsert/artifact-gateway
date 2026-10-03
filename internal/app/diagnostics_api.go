@@ -65,6 +65,7 @@ func (h generatedRepositoryAPIAdapter) GetDiagnostics(w http.ResponseWriter, r *
 		Dependencies:  diagnosticDependencies(r.Context(), h.diagnostics.checkers),
 		Scanner:       &scanner,
 		LocalCapacity: diagnosticLocalCapacity(r.Context(), h.diagnostics.LocalCapacity),
+		HttpErrorRate: diagnosticHTTPErrorRate(h.diagnostics.HTTPErrorRate, h.diagnostics.Runtime, time.Now().UTC()),
 		Queues:        queues,
 		Nodes:         runtimeNodeHealth(responseNodes),
 	}

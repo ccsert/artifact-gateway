@@ -895,6 +895,36 @@ func (e DiagnosticDependencyStatus) Valid() bool {
 	}
 }
 
+// Defines values for DiagnosticHTTPErrorRateScope.
+const (
+	RespondingProcessBusinessHttp DiagnosticHTTPErrorRateScope = "responding_process_business_http"
+)
+
+// Valid indicates whether the value is a known member of the DiagnosticHTTPErrorRateScope enum.
+func (e DiagnosticHTTPErrorRateScope) Valid() bool {
+	switch e {
+	case RespondingProcessBusinessHttp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DiagnosticHTTPErrorRateSource.
+const (
+	ArtifactGatewayHttpRequestsTotal DiagnosticHTTPErrorRateSource = "artifact_gateway_http_requests_total"
+)
+
+// Valid indicates whether the value is a known member of the DiagnosticHTTPErrorRateSource enum.
+func (e DiagnosticHTTPErrorRateSource) Valid() bool {
+	switch e {
+	case ArtifactGatewayHttpRequestsTotal:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DiagnosticLocalCapacityScope.
 const (
 	ObserverMountNamespace DiagnosticLocalCapacityScope = "observer_mount_namespace"
@@ -1258,6 +1288,69 @@ func (e GroupResolutionMemberType) Valid() bool {
 	case GroupResolutionMemberTypeHosted:
 		return true
 	case GroupResolutionMemberTypeProxy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HTTPErrorRateReason.
+const (
+	ClockInvalid      HTTPErrorRateReason = "clock_invalid"
+	CountOverflow     HTTPErrorRateReason = "count_overflow"
+	CounterReset      HTTPErrorRateReason = "counter_reset"
+	LowSample         HTTPErrorRateReason = "low_sample"
+	NoTraffic         HTTPErrorRateReason = "no_traffic"
+	SampleStale       HTTPErrorRateReason = "sample_stale"
+	SamplingGap       HTTPErrorRateReason = "sampling_gap"
+	SessionChanged    HTTPErrorRateReason = "session_changed"
+	SourceUnavailable HTTPErrorRateReason = "source_unavailable"
+	WarmingUp         HTTPErrorRateReason = "warming_up"
+)
+
+// Valid indicates whether the value is a known member of the HTTPErrorRateReason enum.
+func (e HTTPErrorRateReason) Valid() bool {
+	switch e {
+	case ClockInvalid:
+		return true
+	case CountOverflow:
+		return true
+	case CounterReset:
+		return true
+	case LowSample:
+		return true
+	case NoTraffic:
+		return true
+	case SampleStale:
+		return true
+	case SamplingGap:
+		return true
+	case SessionChanged:
+		return true
+	case SourceUnavailable:
+		return true
+	case WarmingUp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HTTPErrorRateState.
+const (
+	HTTPErrorRateStateAvailable HTTPErrorRateState = "available"
+	HTTPErrorRateStateStale     HTTPErrorRateState = "stale"
+	HTTPErrorRateStateUnknown   HTTPErrorRateState = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the HTTPErrorRateState enum.
+func (e HTTPErrorRateState) Valid() bool {
+	switch e {
+	case HTTPErrorRateStateAvailable:
+		return true
+	case HTTPErrorRateStateStale:
+		return true
+	case HTTPErrorRateStateUnknown:
 		return true
 	default:
 		return false
@@ -3671,6 +3764,40 @@ type DiagnosticDependency struct {
 // DiagnosticDependencyStatus defines model for DiagnosticDependency.Status.
 type DiagnosticDependencyStatus string
 
+// DiagnosticHTTPErrorRate Current responding process's business HTTP observation, not cluster health or an alert. Uses fixed non-probe request classes, including management and other, with 1xx-5xx as denominator and 5xx as numerator. Excludes health/metrics probes and other status. Counts are differences at actual sample boundaries; no interpolation. Safe counts may be retained during warmup or staleness. Ratio requires a fresh complete 300-second window and at least 20 requests; this minimum is not a statistical confidence guarantee. No delta crosses a session, counter reset, backwards clock or sampling gap.
+type DiagnosticHTTPErrorRate struct {
+	CheckedAt time.Time `json:"checkedAt"`
+
+	// CoverageSeconds Actual sample boundary span. A complete window covers 300-330 seconds depending on sampling alignment; partial windows are explicitly unknown.
+	CoverageSeconds     *float64 `json:"coverageSeconds,omitempty"`
+	Errors              *int64   `json:"errors,omitempty"`
+	InstanceId          string   `json:"instanceId"`
+	MaxSampleAgeSeconds int      `json:"maxSampleAgeSeconds"`
+	MinimumRequests     int      `json:"minimumRequests"`
+
+	// Ratio 5xx/errors divided by all observed business 1xx-5xx requests. Present only when state is available; valid zero means zero observed 5xx, not a health judgment.
+	Ratio    *float64             `json:"ratio,omitempty"`
+	Reason   *HTTPErrorRateReason `json:"reason,omitempty"`
+	Requests *int64               `json:"requests,omitempty"`
+
+	// SampleAt Last actual counter sample; refreshing diagnostics does not refresh this timestamp.
+	SampleAt              *time.Time                    `json:"sampleAt,omitempty"`
+	SampleIntervalSeconds int                           `json:"sampleIntervalSeconds"`
+	Scope                 DiagnosticHTTPErrorRateScope  `json:"scope"`
+	SessionId             string                        `json:"sessionId"`
+	Source                DiagnosticHTTPErrorRateSource `json:"source"`
+	State                 HTTPErrorRateState            `json:"state"`
+	WindowEnd             *time.Time                    `json:"windowEnd,omitempty"`
+	WindowSeconds         int                           `json:"windowSeconds"`
+	WindowStart           *time.Time                    `json:"windowStart,omitempty"`
+}
+
+// DiagnosticHTTPErrorRateScope defines model for DiagnosticHTTPErrorRate.Scope.
+type DiagnosticHTTPErrorRateScope string
+
+// DiagnosticHTTPErrorRateSource defines model for DiagnosticHTTPErrorRate.Source.
+type DiagnosticHTTPErrorRateSource string
+
 // DiagnosticLocalCapacity Read-only opt-in local filesystem metadata. Observes the responding process's namespace, not S3/RustFS/NAS physical pools or Repository logical quotas. Missing configuration performs no filesystem queries. The response wait is bounded; a blocked kernel call may remain outstanding, with at most one call per alias for this process.
 type DiagnosticLocalCapacity struct {
 	CheckedAt           time.Time `json:"checkedAt"`
@@ -3758,6 +3885,9 @@ type Diagnostics struct {
 	Build        DiagnosticBuild        `json:"build"`
 	Dependencies []DiagnosticDependency `json:"dependencies"`
 	GeneratedAt  time.Time              `json:"generatedAt"`
+
+	// HttpErrorRate Current responding process's business HTTP observation, not cluster health or an alert. Uses fixed non-probe request classes, including management and other, with 1xx-5xx as denominator and 5xx as numerator. Excludes health/metrics probes and other status. Counts are differences at actual sample boundaries; no interpolation. Safe counts may be retained during warmup or staleness. Ratio requires a fresh complete 300-second window and at least 20 requests; this minimum is not a statistical confidence guarantee. No delta crosses a session, counter reset, backwards clock or sampling gap.
+	HttpErrorRate *DiagnosticHTTPErrorRate `json:"httpErrorRate,omitempty"`
 
 	// LocalCapacity Read-only opt-in local filesystem metadata. Observes the responding process's namespace, not S3/RustFS/NAS physical pools or Repository logical quotas. Missing configuration performs no filesystem queries. The response wait is bounded; a blocked kernel call may remain outstanding, with at most one call per alias for this process.
 	LocalCapacity *DiagnosticLocalCapacity `json:"localCapacity,omitempty"`
@@ -3999,6 +4129,12 @@ type GroupResolutionMember struct {
 
 // GroupResolutionMemberType defines model for GroupResolutionMember.Type.
 type GroupResolutionMemberType string
+
+// HTTPErrorRateReason defines model for HTTPErrorRateReason.
+type HTTPErrorRateReason string
+
+// HTTPErrorRateState defines model for HTTPErrorRateState.
+type HTTPErrorRateState string
 
 // LifecycleJob defines model for LifecycleJob.
 type LifecycleJob struct {

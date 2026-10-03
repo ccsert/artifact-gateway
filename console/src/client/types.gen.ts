@@ -1403,6 +1403,53 @@ export type DiagnosticLocalCapacity = {
   ];
 };
 
+export type HttpErrorRateState = "available" | "unknown" | "stale";
+
+export type HttpErrorRateReason =
+  | "source_unavailable"
+  | "warming_up"
+  | "session_changed"
+  | "counter_reset"
+  | "sampling_gap"
+  | "clock_invalid"
+  | "count_overflow"
+  | "no_traffic"
+  | "low_sample"
+  | "sample_stale";
+
+/**
+ * Current responding process's business HTTP observation, not cluster health or an alert. Uses fixed non-probe request classes, including management and other, with 1xx-5xx as denominator and 5xx as numerator. Excludes health/metrics probes and other status. Counts are differences at actual sample boundaries; no interpolation. Safe counts may be retained during warmup or staleness. Ratio requires a fresh complete 300-second window and at least 20 requests; this minimum is not a statistical confidence guarantee. No delta crosses a session, counter reset, backwards clock or sampling gap.
+ */
+export type DiagnosticHttpErrorRate = {
+  checkedAt: string;
+  instanceId: string;
+  sessionId: string;
+  source: "artifact_gateway_http_requests_total";
+  scope: "responding_process_business_http";
+  state: HttpErrorRateState;
+  reason?: HttpErrorRateReason;
+  windowSeconds: number;
+  minimumRequests: number;
+  sampleIntervalSeconds: number;
+  maxSampleAgeSeconds: number;
+  /**
+   * Last actual counter sample; refreshing diagnostics does not refresh this timestamp.
+   */
+  sampleAt?: string;
+  windowStart?: string;
+  windowEnd?: string;
+  /**
+   * Actual sample boundary span. A complete window covers 300-330 seconds depending on sampling alignment; partial windows are explicitly unknown.
+   */
+  coverageSeconds?: number;
+  requests?: number;
+  errors?: number;
+  /**
+   * 5xx/errors divided by all observed business 1xx-5xx requests. Present only when state is available; valid zero means zero observed 5xx, not a health judgment.
+   */
+  ratio?: number;
+};
+
 export type DiagnosticQueueStat = {
   kind: "lifecycle" | "promotion" | "replication";
   format: Format;
@@ -1418,6 +1465,7 @@ export type Diagnostics = {
   dependencies: Array<DiagnosticDependency>;
   scanner?: DiagnosticScanner;
   localCapacity?: DiagnosticLocalCapacity;
+  httpErrorRate?: DiagnosticHttpErrorRate;
   queues: Array<DiagnosticQueueStat>;
   nodes: RuntimeNodeHealth;
 };

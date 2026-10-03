@@ -1,4 +1,4 @@
-# Operational signal sources and capacity boundaries
+# Operational signal sources, HTTP windows and capacity boundaries
 
 [简体中文](operational-signals.zh-CN.md) · [Documentation index](README.md)
 
@@ -106,6 +106,59 @@ its deployment boundary have been chosen. No credentials or remote adapters are
 introduced by this observer. It does not promise to cancel a kernel syscall or
 wait for it during shutdown; process exit releases its OS resources.
 
+## Current-process HTTP 5xx observation
+
+Administrator diagnostics and the Console report optional `httpErrorRate` for
+the responding API/standalone process. The observation reuses
+`artifact_gateway_http_requests_total`: the ten fixed business classes
+`management`, `oci`, `maven`, `raw`, `conan`, `npm`, `pypi`, `go`, `cargo` and
+`other`. All recorded 1xx–5xx statuses contribute to requests; only 5xx contributes
+to errors. Health and metrics probe classes and the `other` status bucket are
+excluded. This is recorded handler HTTP status, not confirmation that a client
+received a complete artifact. It does not add labels, change metrics access,
+aggregate nodes, infer dependency health, or trigger alerts.
+
+One in-memory observer samples the same process counters every 15 seconds and
+stops with the API runtime context. It retains at most 22 samples; diagnostics
+reads never sample or advance the sample timestamp. No remote query, credential,
+filesystem operation or monitoring database is involved. Worker/Scheduler-only
+roles do not gain this management endpoint. Administrator and forced-password
+gates and `Cache-Control: no-store` remain in effect. Older nodes without the
+optional field display unknown.
+
+The target window is 300 seconds. The latest boundary at or before 300 seconds
+before the last sample is used, without interpolation; sampling alignment can
+produce an actual 300–330-second span. `windowStart`, `windowEnd` and
+`coverageSeconds` disclose that span. Startup/reset observations can report
+safe counts for a partial span while the ratio remains absent. A single baseline
+has no counts, rather than a made-up zero. Cumulative traffic before observation
+is excluded. The ratio becomes available only with a complete window, a last
+sample no older than 30 seconds, and at least 20 requests. Twenty requests is a
+display minimum, not a statistical confidence guarantee or a production policy.
+
+| Data state/reason | Counts | Ratio |
+| --- | --- | --- |
+| `available` | Safe actual-window requests and 5xx errors | Errors / requests, including a valid zero |
+| `unknown`: `no_traffic` / `low_sample` | Complete-window zero / 1–19 requests | Absent |
+| `unknown`: `warming_up`, `session_changed`, `counter_reset`, `sampling_gap`, `clock_invalid` after a new baseline | Safe partial-window counts when a second sample exists | Absent until a complete window |
+| `stale`: `sample_stale` | Last safe counts with their old sample/boundaries | Absent |
+| `unknown`: `source_unavailable`, future snapshot clock, `count_overflow` | Absent | Absent |
+
+An individual counter decrease resets the baseline even if other classes' growth
+hides it in the aggregate. Session changes, backwards sample clocks and gaps
+over 30 seconds also restart the window; no difference crosses these boundaries.
+Missing identity is unknown. Differences over JavaScript's exact integer limit
+`2^53 - 1` are omitted. Raw paths, Request IDs, error text and unbounded labels
+are not part of this signal. The node/session identity binds it to this response,
+not to all processes behind a load balancer.
+
+The Console shows current node/session, counts, sample/check times and actual
+window. It advances the server-reported sample age while displayed and hides the
+ratio when it expires, preserving explicitly old counts. Browser UTC age also
+guards delayed responses; a future browser sample clock is unknown. A normal refresh failure
+keeps the old snapshot with a warning; lost authorization clears it. A positive
+ratio below 0.01% displays `<0.01%`, not zero.
+
 ## Verification boundary
 
 Observer tests use synthetic providers for shared identities, full filesystems,
@@ -126,9 +179,16 @@ repeat refresh, refresh failure and permission loss. Linux native evidence uses
 owned disposable mounts; induced timeout uses a blocking synthetic provider,
 not an actual stuck kernel syscall.
 
+HTTP-window tests use controlled clocks for minimum counts, reset/session/gap,
+freshness, actual boundaries, safe integers and concurrency. Real loopback HTTP
+requests pass through the existing instrumentation to prove 5xx/4xx counting and
+probe exclusion; actual administrator diagnostics responses are validated against
+generated OpenAPI. Console tests cover bilingual desktop/mobile geometry,
+data states, browser expiry and refresh/authorization behavior.
+
 These tests do not validate a production mount, NAS/S3 physical capacity,
-quota enforcement, error-rate
-policies, expected deployment instances, or backup/migration completion. Those
+quota enforcement, alert policies, expected deployment instances, or
+backup/migration completion. Those
 remain separate acceptance work under #210. No alert, quota, deployment or
 notification setting is changed by this slice. #210 remains open for the broader
-signals; this slice closes only its explicit local-diagnostics child.
+signals; the capacity and HTTP-window slices close only their respective children.
