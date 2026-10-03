@@ -96,7 +96,8 @@ OCI fixture 匿名拉取固定公开 main 构建：revision
 `80fc113e1e8a908388ed8dc7af5e87424bcb9768`、version
 `0.5.0-main.80fc113e1e8a`、多平台 digest
 `sha256:bbd62298c63520b58e82b858479fb77c0bf4fce61a1c3eaaf11b9fb01e0d0e18`。
-它使用空的临时 Docker 凭据配置、明确验证的本地 socket 和主机支持的 Linux 平台。
+它使用显式声明匿名 registry 的临时 Docker 配置，并通过拒绝 helper 证明不调用主机
+凭据 helper；同时使用明确验证的本地 socket 和主机支持的 Linux 平台。
 测试核对实际 RepoDigest、平台、标签、运行 image ID、无 binary 挂载，以及公开 Gateway
 构建诊断。错误 digest/version/revision/platform、可变 tag、仅 image ID 和本地不可用
 image 在公开 export/restore 中失败，不发布备份集、不创建目标。共享公开镜像缓存保留；

@@ -26,7 +26,7 @@ const ociFixtureRevision = "80fc113e1e8a908388ed8dc7af5e87424bcb9768"
 func integrationOCIRelease(t *testing.T, ctx context.Context, d Docker, release Release) Release {
 	t.Helper()
 	// Anonymous public-image pull through the already validated local socket.
-	// An empty temporary config prevents Docker from reading host credentials.
+	// An explicit anonymous entry disables automatic native credential stores.
 	// The public image is shared cache, not a fixture-owned cleanup resource.
 	data, err := d.output(ctx, "context", "inspect", d.Context)
 	var contexts []struct {
@@ -40,10 +40,40 @@ func integrationOCIRelease(t *testing.T, ctx context.Context, d Docker, release 
 		t.Fatal("remote OCI fixture daemon refused")
 	}
 	platform := release.Identity.Artifact.Platform
-	pull := exec.CommandContext(ctx, "docker", "--config", t.TempDir(), "--host", host, "pull", "--platform", platform, ociFixtureReference)
-	pull.Env = sanitizedEnvironment(nil)
-	if _, err = pull.Output(); err != nil {
-		t.Fatal("anonymous pinned public OCI fixture unavailable; no daemon settings or credentials changed")
+	config := t.TempDir()
+	if os.WriteFile(filepath.Join(config, "config.json"), []byte(`{"auths":{"ghcr.io":{}}}`), 0600) != nil {
+		t.Fatal("anonymous OCI fixture configuration unavailable")
+	}
+	// Docker auto-discovers a native credential helper for a wholly empty
+	// config. Trap every platform's default helper to prove none is consulted.
+	helpers := t.TempDir()
+	marker := filepath.Join(helpers, "invoked")
+	script := []byte("#!/bin/sh\n: > \"$AG_OCI_FIXTURE_HELPER_MARKER\"\nprintf '%s\\n' 'synthetic helper refuses credential access' >&2\nexit 1\n")
+	for _, name := range []string{"pass", "docker-credential-pass", "docker-credential-secretservice", "docker-credential-osxkeychain", "docker-credential-wincred"} {
+		if os.WriteFile(filepath.Join(helpers, name), script, 0700) != nil {
+			t.Fatal("OCI fixture helper trap unavailable")
+		}
+	}
+	pull := exec.CommandContext(ctx, "docker", "--config", config, "--host", host, "pull", "--platform", platform, ociFixtureReference)
+	pull.Env = sanitizedEnvironment([]string{"PATH=" + helpers + string(os.PathListSeparator) + os.Getenv("PATH"), "AG_OCI_FIXTURE_HELPER_MARKER=" + marker})
+	_, err = pull.Output()
+	if _, markerErr := os.Stat(marker); !os.IsNotExist(markerErr) {
+		t.Fatal("OCI fixture credential-helper isolation failed")
+	}
+	if err != nil {
+		// Only fixed reason codes reach CI output; raw registry/network errors
+		// and host coordinates stay private.
+		reason := "docker_pull_failed"
+		if failure, ok := err.(*exec.ExitError); ok {
+			message := strings.ToLower(string(failure.Stderr))
+			for _, item := range []struct{ marker, code string }{{"credentials", "credential_helper_failed"}, {"denied", "anonymous_access_denied"}, {"unauthorized", "anonymous_access_denied"}, {"no matching manifest", "platform_unavailable"}, {"manifest unknown", "manifest_unavailable"}, {"not found", "manifest_unavailable"}, {"toomanyrequests", "registry_rate_limited"}, {"certificate", "registry_tls_failed"}, {"timeout", "registry_timeout"}, {"connection", "registry_connection_failed"}} {
+				if strings.Contains(message, item.marker) {
+					reason = item.code
+					break
+				}
+			}
+		}
+		t.Fatalf("anonymous pinned public OCI fixture unavailable: %s", reason)
 	}
 	release.ImageReference = ociFixtureReference
 	release.Identity = backupmanifest.GatewayIdentity{Version: ociFixtureVersion, Revision: ociFixtureRevision,

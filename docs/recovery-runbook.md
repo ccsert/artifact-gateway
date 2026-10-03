@@ -127,7 +127,9 @@ The OCI fixture anonymously pulls the fixed public main build at revision
 `80fc113e1e8a908388ed8dc7af5e87424bcb9768`, version
 `0.5.0-main.80fc113e1e8a`, multi-platform digest
 `sha256:bbd62298c63520b58e82b858479fb77c0bf4fce61a1c3eaaf11b9fb01e0d0e18`.
-It uses an empty temporary Docker credential configuration, the explicitly
+It uses a temporary Docker configuration with an explicit anonymous registry
+entry and rejecting helper traps that prove host credential helpers are unused,
+the explicitly
 validated local socket, and the host's supported Linux platform. The suite checks
 actual RepoDigest, platform, labels, running image ID, lack of binary mounts and
 public Gateway build diagnostics. Wrong digest/version/revision/platform, a
