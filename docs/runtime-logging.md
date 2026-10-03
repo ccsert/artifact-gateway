@@ -54,4 +54,61 @@ Each HTTP response carries `X-Request-ID` and `X-Trace-ID`. A safe client reques
 
 System Runtime → Runtime logs calls `GET /api/v2/runtime/logs` against the connected Gateway process's memory buffer. `GATEWAY_LOG_BUFFER_LINES` defaults to 1000 and accepts 0–5000; zero disables queries with HTTP 503. Only platform administrators can query. Filters include a time window of at most 24 hours, instance, level, component, request ID, trace ID, and keyword, with at most 100 results per page and a two-second execution timeout. Audit record correlation IDs link to this panel. Responses identify `scope=local`, `instanceId`, and `sessionId`; requesting another instance returns 503. The buffer is lost on process restart. File persistence and protocol export do not change this endpoint. File history and cross-node queries require separately designed readers or search adapters; see [output and history design](runtime-log-product-design.md).
 
+### Safe diagnostic projection
+
+The local API projects only the redacted core fields and a bounded top-level
+allowlist: HTTP `status` (100–599), `durationMs` (0–86400000), standard HTTP
+`method`, the known `requestClass`, an opaque ASCII `jobId` (at most 128 bytes),
+and `attempt` (0–1000000). Missing, incorrectly typed, out-of-range, redacted or
+nested diagnostic values are omitted without dropping the event. This does not
+open raw attributes, route/URL, headers, bodies or error payloads. The same
+sensitive-name and ancestor-group redaction runs before stdout, buffer search
+and this projection.
+
+Every successful page includes `source`: the INFO collection floor, actual
+limited/full access mode and slow threshold, buffer capacity, 16 KiB line
+admission bound, and up to 100 exact component names observed in the retained
+current instance/session. `componentsTruncated` identifies a capped component
+list. Names are observations, not supported wildcard filters or cross-node
+worker aggregation. An empty filtered page does not establish why an event was
+not emitted. Selecting DEBUG does not enable DEBUG collection. Disabled buffers
+return `log_buffer_unavailable` (503); missing runtime identity returns
+`log_source_identity_unavailable` (503). Administrator and forced-password-change
+gates apply before source availability or cursor validation. Responses use
+`Cache-Control: no-store`.
+
+### Session-bound incremental queries
+
+The default query and `beforeSequence` continue to return descending sequences
+for history. An initial/history page supplies `afterCursor` at the locked
+snapshot tail, for following events arriving after that snapshot. A follow
+request sends `afterCursor`, receives ascending sequences, and must continue
+the returned cursor while `hasMore` is true. A full page advances only through
+positions actually scanned; it never jumps to the latest sequence while
+matching unread pages remain. A short page also consumes nonmatching scanned
+positions. Newly appended records after the snapshot remain for the next read.
+The omitted time bounds roll over the last hour at each snapshot; explicit
+bounds remain fixed and must obey the 24-hour query limit. Ordering and that
+limit are checked again at the locked snapshot; if waiting for a writer makes
+the rolling bounds invalid, the query returns `400 invalid_time_window`
+without entries or a cursor.
+
+The opaque cursor is signed with an ephemeral buffer key and bound to the
+instance, session and filter specification. Preserve the same filters between
+follow reads; changing the page limit is allowed. Filters changing or malformed/
+modified cursors return `invalid_cursor` (400). `beforeSequence` and
+`afterCursor` cannot be combined. A cursor from a different instance or restarted
+session returns `log_cursor_scope_changed` (409), requiring a fresh query; an
+explicit request for another instance still returns 503. Do not reuse an older
+history page's tail as the active follow cursor.
+
+`retention.earliestSequence` and `latestSequence` describe the whole memory ring,
+independently of query filters (both zero when empty). `retention.gap` is true
+only when unread sequence positions were overwritten before a forward read;
+it does not claim those events matched the filters. Time/level/component gaps
+between returned records are not loss. Reset/restart is separately reported by
+the cursor scope error. The two-second query budget also bounds waiting for a
+contended writer. These cursors do not add files, durable history, other nodes,
+stdout readers, worker aggregators or a zero-loss delivery promise.
+
 The bundled Compose deployment uses Docker's `json-file` logging driver with `GATEWAY_LOG_MAX_SIZE` (default `10m`) and `GATEWAY_LOG_MAX_FILES` (default `5`). These bounds apply per container; recreating a container can remove its local history. For a cluster, collect stdout/stderr from every API, scheduler, and worker pod with the deployment's log collector. Configure the collector's durable storage and retention policy outside Gateway, preserving searchable `instanceId`, `sessionId`, `requestId`, and `traceId` fields. Do not use these high-cardinality fields directly as index labels in label-indexed backends such as Loki. Kubernetes node log rotation alone is insufficient for queries after a pod is replaced. Keep collector credentials outside the browser and outside log fields. Verify retention by querying one request ID after a pod restart and by querying a worker event from another node.

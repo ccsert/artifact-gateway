@@ -769,6 +769,16 @@
             }
           },
           {
+            "name": "afterCursor",
+            "in": "query",
+            "description": "Opaque session and filter bound cursor. Mutually exclusive with beforeSequence. Results use ascending sequence order; continue the returned cursor until hasMore is false. An initial reverse page provides a cursor at its snapshot tail for future follow.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "schema": {
@@ -789,6 +799,9 @@
             "$ref": "#/components/responses/Problem"
           },
           "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
             "$ref": "#/components/responses/Problem"
           },
           "503": {
@@ -9927,6 +9940,137 @@
           },
           "traceId": {
             "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 86400000
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "HEAD",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE",
+              "OPTIONS",
+              "CONNECT",
+              "TRACE"
+            ]
+          },
+          "requestClass": {
+            "type": "string",
+            "enum": [
+              "management",
+              "oci",
+              "maven",
+              "raw",
+              "conan",
+              "npm",
+              "pypi",
+              "go",
+              "cargo",
+              "health",
+              "metrics",
+              "other"
+            ]
+          },
+          "jobId": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9_.-]+$"
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          }
+        }
+      },
+      "RuntimeLogRetention": {
+        "type": "object",
+        "required": [
+          "earliestSequence",
+          "latestSequence",
+          "gap"
+        ],
+        "properties": {
+          "earliestSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Oldest sequence in this memory buffer, or zero if empty, independently of query filters."
+          },
+          "latestSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "gap": {
+            "type": "boolean",
+            "description": "True only when unread positions were overwritten in this session's ring buffer. Does not imply that overwritten events matched the filters."
+          }
+        }
+      },
+      "RuntimeLogSource": {
+        "type": "object",
+        "required": [
+          "minimumLevel",
+          "accessMode",
+          "slowThresholdMs",
+          "capacityLines",
+          "maxLineBytes",
+          "components",
+          "componentsTruncated"
+        ],
+        "properties": {
+          "minimumLevel": {
+            "type": "string",
+            "enum": [
+              "INFO"
+            ]
+          },
+          "accessMode": {
+            "type": "string",
+            "enum": [
+              "limited",
+              "full"
+            ]
+          },
+          "slowThresholdMs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "capacityLines": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "maxLineBytes": {
+            "type": "integer",
+            "enum": [
+              16384
+            ]
+          },
+          "components": {
+            "type": "array",
+            "maxItems": 100,
+            "description": "Exact component names observed in the retained current instance/session, independently of time and other filters. This is not a wildcard or worker aggregation.",
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          "componentsTruncated": {
+            "type": "boolean"
           }
         }
       },
@@ -9959,7 +10103,29 @@
           },
           "nextSequence": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Exclusive backward position for descending history pages."
+          },
+          "afterCursor": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "ascending",
+              "descending"
+            ]
+          },
+          "hasMore": {
+            "type": "boolean",
+            "description": "Additional matching entries remain in the current forward snapshot."
+          },
+          "retention": {
+            "$ref": "#/components/schemas/RuntimeLogRetention"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RuntimeLogSource"
           }
         }
       },

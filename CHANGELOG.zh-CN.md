@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- 运行日志查询补充有界安全诊断字段、来源与保留范围信息；绑定会话/筛选的签名游标支持不跳过未读页的正序增量读取，保留倒序历史与管理员门禁。
+
 - 新增显式私有 spec 的离线 S3 字节导出和全新本地 Docker 隔离恢复，校验 binary/OCI 软件身份、完整 migration 与元数据、全字节读回，支持 Raw/OCI grant 断言和本次归属失败清理。真实合成 PG/S3 恢复独立于 preflight 与固定 RustFS 物理演练；一致性仍依赖操作者完整停写范围。
 - 将 OpenTelemetry 更新到依赖审计要求的最低已修复 trace/log 版本，保留结构化日志与显式 exporter 端点行为。
 

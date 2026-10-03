@@ -1819,6 +1819,111 @@ func (e RetentionDryRunCandidatesVersionType) Valid() bool {
 	}
 }
 
+// Defines values for RuntimeLogEntryMethod.
+const (
+	CONNECT RuntimeLogEntryMethod = "CONNECT"
+	DELETE  RuntimeLogEntryMethod = "DELETE"
+	GET     RuntimeLogEntryMethod = "GET"
+	HEAD    RuntimeLogEntryMethod = "HEAD"
+	OPTIONS RuntimeLogEntryMethod = "OPTIONS"
+	PATCH   RuntimeLogEntryMethod = "PATCH"
+	POST    RuntimeLogEntryMethod = "POST"
+	PUT     RuntimeLogEntryMethod = "PUT"
+	TRACE   RuntimeLogEntryMethod = "TRACE"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeLogEntryMethod enum.
+func (e RuntimeLogEntryMethod) Valid() bool {
+	switch e {
+	case CONNECT:
+		return true
+	case DELETE:
+		return true
+	case GET:
+		return true
+	case HEAD:
+		return true
+	case OPTIONS:
+		return true
+	case PATCH:
+		return true
+	case POST:
+		return true
+	case PUT:
+		return true
+	case TRACE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeLogEntryRequestClass.
+const (
+	RuntimeLogEntryRequestClassCargo      RuntimeLogEntryRequestClass = "cargo"
+	RuntimeLogEntryRequestClassConan      RuntimeLogEntryRequestClass = "conan"
+	RuntimeLogEntryRequestClassGo         RuntimeLogEntryRequestClass = "go"
+	RuntimeLogEntryRequestClassHealth     RuntimeLogEntryRequestClass = "health"
+	RuntimeLogEntryRequestClassManagement RuntimeLogEntryRequestClass = "management"
+	RuntimeLogEntryRequestClassMaven      RuntimeLogEntryRequestClass = "maven"
+	RuntimeLogEntryRequestClassMetrics    RuntimeLogEntryRequestClass = "metrics"
+	RuntimeLogEntryRequestClassNpm        RuntimeLogEntryRequestClass = "npm"
+	RuntimeLogEntryRequestClassOci        RuntimeLogEntryRequestClass = "oci"
+	RuntimeLogEntryRequestClassOther      RuntimeLogEntryRequestClass = "other"
+	RuntimeLogEntryRequestClassPypi       RuntimeLogEntryRequestClass = "pypi"
+	RuntimeLogEntryRequestClassRaw        RuntimeLogEntryRequestClass = "raw"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeLogEntryRequestClass enum.
+func (e RuntimeLogEntryRequestClass) Valid() bool {
+	switch e {
+	case RuntimeLogEntryRequestClassCargo:
+		return true
+	case RuntimeLogEntryRequestClassConan:
+		return true
+	case RuntimeLogEntryRequestClassGo:
+		return true
+	case RuntimeLogEntryRequestClassHealth:
+		return true
+	case RuntimeLogEntryRequestClassManagement:
+		return true
+	case RuntimeLogEntryRequestClassMaven:
+		return true
+	case RuntimeLogEntryRequestClassMetrics:
+		return true
+	case RuntimeLogEntryRequestClassNpm:
+		return true
+	case RuntimeLogEntryRequestClassOci:
+		return true
+	case RuntimeLogEntryRequestClassOther:
+		return true
+	case RuntimeLogEntryRequestClassPypi:
+		return true
+	case RuntimeLogEntryRequestClassRaw:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeLogPageOrder.
+const (
+	Ascending  RuntimeLogPageOrder = "ascending"
+	Descending RuntimeLogPageOrder = "descending"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeLogPageOrder enum.
+func (e RuntimeLogPageOrder) Valid() bool {
+	switch e {
+	case Ascending:
+		return true
+	case Descending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RuntimeLogPageScope.
 const (
 	Local RuntimeLogPageScope = "local"
@@ -1828,6 +1933,54 @@ const (
 func (e RuntimeLogPageScope) Valid() bool {
 	switch e {
 	case Local:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeLogSourceAccessMode.
+const (
+	Full    RuntimeLogSourceAccessMode = "full"
+	Limited RuntimeLogSourceAccessMode = "limited"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeLogSourceAccessMode enum.
+func (e RuntimeLogSourceAccessMode) Valid() bool {
+	switch e {
+	case Full:
+		return true
+	case Limited:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeLogSourceMaxLineBytes.
+const (
+	N16384 RuntimeLogSourceMaxLineBytes = 16384
+)
+
+// Valid indicates whether the value is a known member of the RuntimeLogSourceMaxLineBytes enum.
+func (e RuntimeLogSourceMaxLineBytes) Valid() bool {
+	switch e {
+	case N16384:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeLogSourceMinimumLevel.
+const (
+	INFO RuntimeLogSourceMinimumLevel = "INFO"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeLogSourceMinimumLevel enum.
+func (e RuntimeLogSourceMinimumLevel) Valid() bool {
+	switch e {
+	case INFO:
 		return true
 	default:
 		return false
@@ -4324,29 +4477,85 @@ type RetentionVersionTypeCounts struct {
 
 // RuntimeLogEntry defines model for RuntimeLogEntry.
 type RuntimeLogEntry struct {
-	Component  string    `json:"component"`
-	InstanceId string    `json:"instanceId"`
-	Level      string    `json:"level"`
-	Message    string    `json:"message"`
-	Operation  string    `json:"operation"`
-	RequestId  string    `json:"requestId"`
-	Sequence   int64     `json:"sequence"`
-	SessionId  string    `json:"sessionId"`
-	Time       time.Time `json:"time"`
-	TraceId    string    `json:"traceId"`
+	Attempt      *int                         `json:"attempt,omitempty"`
+	Component    string                       `json:"component"`
+	DurationMs   *int64                       `json:"durationMs,omitempty"`
+	InstanceId   string                       `json:"instanceId"`
+	JobId        *string                      `json:"jobId,omitempty"`
+	Level        string                       `json:"level"`
+	Message      string                       `json:"message"`
+	Method       *RuntimeLogEntryMethod       `json:"method,omitempty"`
+	Operation    string                       `json:"operation"`
+	RequestClass *RuntimeLogEntryRequestClass `json:"requestClass,omitempty"`
+	RequestId    string                       `json:"requestId"`
+	Sequence     int64                        `json:"sequence"`
+	SessionId    string                       `json:"sessionId"`
+	Status       *int                         `json:"status,omitempty"`
+	Time         time.Time                    `json:"time"`
+	TraceId      string                       `json:"traceId"`
 }
+
+// RuntimeLogEntryMethod defines model for RuntimeLogEntry.Method.
+type RuntimeLogEntryMethod string
+
+// RuntimeLogEntryRequestClass defines model for RuntimeLogEntry.RequestClass.
+type RuntimeLogEntryRequestClass string
 
 // RuntimeLogPage defines model for RuntimeLogPage.
 type RuntimeLogPage struct {
-	InstanceId   string              `json:"instanceId"`
-	Items        []RuntimeLogEntry   `json:"items"`
-	NextSequence *int64              `json:"nextSequence,omitempty"`
-	Scope        RuntimeLogPageScope `json:"scope"`
-	SessionId    string              `json:"sessionId"`
+	AfterCursor *string `json:"afterCursor,omitempty"`
+
+	// HasMore Additional matching entries remain in the current forward snapshot.
+	HasMore    *bool             `json:"hasMore,omitempty"`
+	InstanceId string            `json:"instanceId"`
+	Items      []RuntimeLogEntry `json:"items"`
+
+	// NextSequence Exclusive backward position for descending history pages.
+	NextSequence *int64               `json:"nextSequence,omitempty"`
+	Order        *RuntimeLogPageOrder `json:"order,omitempty"`
+	Retention    *RuntimeLogRetention `json:"retention,omitempty"`
+	Scope        RuntimeLogPageScope  `json:"scope"`
+	SessionId    string               `json:"sessionId"`
+	Source       *RuntimeLogSource    `json:"source,omitempty"`
 }
+
+// RuntimeLogPageOrder defines model for RuntimeLogPage.Order.
+type RuntimeLogPageOrder string
 
 // RuntimeLogPageScope defines model for RuntimeLogPage.Scope.
 type RuntimeLogPageScope string
+
+// RuntimeLogRetention defines model for RuntimeLogRetention.
+type RuntimeLogRetention struct {
+	// EarliestSequence Oldest sequence in this memory buffer, or zero if empty, independently of query filters.
+	EarliestSequence int64 `json:"earliestSequence"`
+
+	// Gap True only when unread positions were overwritten in this session's ring buffer. Does not imply that overwritten events matched the filters.
+	Gap            bool  `json:"gap"`
+	LatestSequence int64 `json:"latestSequence"`
+}
+
+// RuntimeLogSource defines model for RuntimeLogSource.
+type RuntimeLogSource struct {
+	AccessMode    RuntimeLogSourceAccessMode `json:"accessMode"`
+	CapacityLines int                        `json:"capacityLines"`
+
+	// Components Exact component names observed in the retained current instance/session, independently of time and other filters. This is not a wildcard or worker aggregation.
+	Components          []string                     `json:"components"`
+	ComponentsTruncated bool                         `json:"componentsTruncated"`
+	MaxLineBytes        RuntimeLogSourceMaxLineBytes `json:"maxLineBytes"`
+	MinimumLevel        RuntimeLogSourceMinimumLevel `json:"minimumLevel"`
+	SlowThresholdMs     int64                        `json:"slowThresholdMs"`
+}
+
+// RuntimeLogSourceAccessMode defines model for RuntimeLogSource.AccessMode.
+type RuntimeLogSourceAccessMode string
+
+// RuntimeLogSourceMaxLineBytes defines model for RuntimeLogSource.MaxLineBytes.
+type RuntimeLogSourceMaxLineBytes int
+
+// RuntimeLogSourceMinimumLevel defines model for RuntimeLogSource.MinimumLevel.
+type RuntimeLogSourceMinimumLevel string
 
 // RuntimeNode defines model for RuntimeNode.
 type RuntimeNode struct {
@@ -5281,7 +5490,10 @@ type ListRuntimeLogsParams struct {
 	TraceId        *string    `form:"traceId,omitempty" json:"traceId,omitempty"`
 	Keyword        *string    `form:"keyword,omitempty" json:"keyword,omitempty"`
 	BeforeSequence *int64     `form:"beforeSequence,omitempty" json:"beforeSequence,omitempty"`
-	Limit          *int       `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// AfterCursor Opaque session and filter bound cursor. Mutually exclusive with beforeSequence. Results use ascending sequence order; continue the returned cursor until hasMore is false. An initial reverse page provides a cursor at its snapshot tail for future follow.
+	AfterCursor *string `form:"afterCursor,omitempty" json:"afterCursor,omitempty"`
+	Limit       *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // UpdateScheduledTaskParams defines parameters for UpdateScheduledTask.
@@ -11337,6 +11549,19 @@ func (siw *ServerInterfaceWrapper) ListRuntimeLogs(w http.ResponseWriter, r *htt
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "beforeSequence"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "beforeSequence", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "afterCursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "afterCursor", r.URL.Query(), &params.AfterCursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "afterCursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "afterCursor", Err: err})
 		}
 		return
 	}
@@ -20618,6 +20843,20 @@ func (response ListRuntimeLogs403ApplicationProblemPlusJSONResponse) VisitListRu
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuntimeLogs409ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRuntimeLogs409ApplicationProblemPlusJSONResponse) VisitListRuntimeLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
