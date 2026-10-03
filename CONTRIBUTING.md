@@ -60,6 +60,13 @@ the managed Console with `make dev-down`, install dependencies, then restart it
 with `make dev`; replacing `node_modules` under a live Vite process invalidates
 its optimized dependency URLs.
 
+The Ant Design helpers use a fixed-scope local CLI wrapper. The unpatched
+`braces` advisory GHSA-vfj7-8cjw-p6xm has a Console-only exception until
+2026-10-17 UTC: the pinned CLI uses fixed glob patterns, and guards verify its
+bytes, exact dev dependency chain, consumers, and absence from product/build
+imports. This is a limited reachability exception, not an upstream fix. Any
+scope drift, new advisory, registry failure, or expiry fails dependency audit.
+
 ## Issue-to-merge traceability
 
 Track each user-visible change or defect in a GitHub Issue with the observed

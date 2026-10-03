@@ -85,7 +85,7 @@ console-check:
 	@cd console && npm run format:check
 
 console-antd-lint:
-	@cd console && npx antd lint src
+	@npm --prefix console run antd:lint
 
 console-test:
 	@cd console && npm run test:coverage
@@ -151,6 +151,7 @@ coverage:
 	@./scripts/coverage-check.sh
 
 dependency-audit:
+	@node --test scripts/npm-audit-policy.test.mjs
 	@go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 	@node ./scripts/npm-audit-check.mjs console tools/openapi
 
