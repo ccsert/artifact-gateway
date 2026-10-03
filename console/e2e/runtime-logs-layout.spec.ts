@@ -127,6 +127,17 @@ test.describe("runtime log touch controls", () => {
         "",
       );
       await geometry(page);
+      await page
+        .getByRole("combobox", { name: "时间范围", exact: true })
+        .click();
+      await page.getByRole("option", { name: "自定义", exact: true }).click();
+      await page.getByPlaceholder("开始日期").click();
+      const calendar = page.locator(".ag-runtime-log-calendar:visible");
+      await expect(calendar).toBeVisible();
+      const popup = await calendar.boundingBox();
+      expect(popup!.x).toBeGreaterThanOrEqual(12);
+      expect(popup!.x + popup!.width).toBeLessThanOrEqual(width - 12);
+      await geometry(page);
     });
   }
 });

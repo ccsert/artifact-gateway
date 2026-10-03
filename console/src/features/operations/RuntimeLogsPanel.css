@@ -218,6 +218,9 @@
   .ag-runtime-log-custom-range .ant-picker-range-separator {
     display: none;
   }
+  .ag-runtime-log-calendar {
+    left: 12px !important;
+  }
 }
 
 .ag-runtime-log-calendar {
