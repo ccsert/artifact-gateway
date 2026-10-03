@@ -197,6 +197,7 @@ export function useRuntimeLogStream(query: LogQuery) {
   useEffect(() => {
     cancel();
     clear();
+    setFollowing(false);
     setScopeChanged(false);
     setError(null);
     atBottom.current = true;

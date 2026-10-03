@@ -16,6 +16,52 @@ afterEach(() => {
 });
 
 describe("RuntimeLogsPanel", () => {
+  it.each([
+    "Bad Gateway",
+    "<html><body>503 Service Unavailable</body></html>",
+    { message: "upstream transport failure", requestId: "gateway-error-1" },
+  ])(
+    "localizes unknown gateway errors and retains diagnostics: %j",
+    async (error) => {
+      mockListRuntimeLogs.mockResolvedValueOnce({ error } as never);
+      render(
+        <MemoryRouter initialEntries={["/system?tab=logs"]}>
+          <PreferencesProvider>
+            <App>
+              <RuntimeLogsPanel />
+            </App>
+          </PreferencesProvider>
+        </MemoryRouter>,
+      );
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "日志查询失败，请检查连接后重试。",
+      );
+      expect(screen.getByRole("alert")).not.toHaveTextContent(
+        /Bad Gateway|Service Unavailable|upstream transport failure/,
+      );
+      if (typeof error === "object")
+        expect(screen.getByRole("alert")).toHaveTextContent("gateway-error-1");
+    },
+  );
+
+  it("retains the shared endpoint version mismatch guidance", async () => {
+    mockListRuntimeLogs.mockResolvedValueOnce({
+      error: "404 page not found",
+    } as never);
+    render(
+      <MemoryRouter initialEntries={["/system?tab=logs"]}>
+        <PreferencesProvider>
+          <App>
+            <RuntimeLogsPanel />
+          </App>
+        </PreferencesProvider>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Console 与 Gateway 版本可能不一致",
+    );
+  });
+
   it("uses the audit request ID and appends older process-local results", async () => {
     mockListRuntimeLogs
       .mockResolvedValueOnce({

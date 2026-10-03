@@ -137,3 +137,23 @@ func TestReturnedDiagnosticFieldsDoNotMutateRetainedEntries(t *testing.T) {
 		t.Fatalf("caller modified retained diagnostics %#v", p)
 	}
 }
+
+func TestRollingDurationRecomputesBothBoundsAfterLongPause(t *testing.T) {
+	b := NewBuffer(10)
+	logger := NewLogger(b, "node", "session")
+	record := slog.NewRecord(time.Now().Add(-23*time.Hour), slog.LevelInfo, "inside rolling day", 0)
+	if err := logger.Handler().Handle(context.Background(), record); err != nil {
+		t.Fatal(err)
+	}
+	stale := time.Now().Add(-72 * time.Hour)
+	f := Filter{From: stale.Add(-24 * time.Hour), To: stale, RollingFrom: true, RollingTo: true, RollingWindow: 24 * time.Hour, MaxWindow: 24 * time.Hour, Limit: 10}
+	p := b.Query(context.Background(), f)
+	if p.InvalidWindow || len(p.Items) != 1 {
+		t.Fatalf("stale client bounds affected rolling snapshot: %#v", p)
+	}
+	f.RollingWindow = 24*time.Hour + time.Second
+	p = b.Query(context.Background(), f)
+	if !p.InvalidWindow || len(p.Items) != 0 || p.Position != 0 || p.Latest != 0 || p.Earliest != 0 {
+		t.Fatalf("invalid duration leaked snapshot: %#v", p)
+	}
+}

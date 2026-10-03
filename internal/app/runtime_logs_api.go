@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,6 +43,15 @@ func (h generatedRepositoryAPIAdapter) ListRuntimeLogs(w http.ResponseWriter, r 
 		filter.To = params.To.UTC()
 	}
 	filter.RollingFrom, filter.RollingTo = params.From == nil, params.To == nil
+	if params.WindowSeconds != nil {
+		seconds := *params.WindowSeconds
+		if seconds < 1 || seconds > 86400 || params.From != nil || params.To != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_time_window", "rolling duration must be 1 to 86400 seconds and cannot be combined with explicit bounds")
+			return
+		}
+		filter.RollingWindow = time.Duration(seconds) * time.Second
+		filter.From = now.Add(-filter.RollingWindow)
+	}
 	if filter.From.After(filter.To) || filter.To.Sub(filter.From) > 24*time.Hour || filter.To.After(now.Add(5*time.Minute)) {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_time_window", "time window must be ordered, within 24 hours, and no more than five minutes in the future")
 		return
@@ -90,7 +100,11 @@ func (h generatedRepositoryAPIAdapter) ListRuntimeLogs(w http.ResponseWriter, r 
 	if params.To != nil {
 		to = params.To.UTC().Format(time.RFC3339Nano)
 	}
-	spec, _ := json.Marshal([]string{from, to, strings.ToUpper(filter.Level), filter.Component, filter.RequestID, filter.TraceID, strings.ToLower(filter.Keyword)})
+	window := ""
+	if params.WindowSeconds != nil {
+		window = strconv.Itoa(*params.WindowSeconds)
+	}
+	spec, _ := json.Marshal([]string{from, to, window, strings.ToUpper(filter.Level), filter.Component, filter.RequestID, filter.TraceID, strings.ToLower(filter.Keyword)})
 	if params.AfterCursor != nil {
 		position, err := h.logBuffer.ParseCursor(*params.AfterCursor, instanceID, sessionID, string(spec))
 		if err != nil {

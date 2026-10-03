@@ -5827,15 +5827,18 @@ type ListRepositoryTombstonesParams struct {
 
 // ListRuntimeLogsParams defines parameters for ListRuntimeLogs.
 type ListRuntimeLogsParams struct {
-	From           *time.Time `form:"from,omitempty" json:"from,omitempty"`
-	To             *time.Time `form:"to,omitempty" json:"to,omitempty"`
-	InstanceId     *string    `form:"instanceId,omitempty" json:"instanceId,omitempty"`
-	Level          *string    `form:"level,omitempty" json:"level,omitempty"`
-	Component      *string    `form:"component,omitempty" json:"component,omitempty"`
-	RequestId      *string    `form:"requestId,omitempty" json:"requestId,omitempty"`
-	TraceId        *string    `form:"traceId,omitempty" json:"traceId,omitempty"`
-	Keyword        *string    `form:"keyword,omitempty" json:"keyword,omitempty"`
-	BeforeSequence *int64     `form:"beforeSequence,omitempty" json:"beforeSequence,omitempty"`
+	From *time.Time `form:"from,omitempty" json:"from,omitempty"`
+	To   *time.Time `form:"to,omitempty" json:"to,omitempty"`
+
+	// WindowSeconds Rolling lookback duration in seconds, calculated from one locked query snapshot. Mutually exclusive with from and to. Omitted time bounds default to a rolling hour. Cursors bind this duration; changing it requires a new snapshot.
+	WindowSeconds  *int    `form:"windowSeconds,omitempty" json:"windowSeconds,omitempty"`
+	InstanceId     *string `form:"instanceId,omitempty" json:"instanceId,omitempty"`
+	Level          *string `form:"level,omitempty" json:"level,omitempty"`
+	Component      *string `form:"component,omitempty" json:"component,omitempty"`
+	RequestId      *string `form:"requestId,omitempty" json:"requestId,omitempty"`
+	TraceId        *string `form:"traceId,omitempty" json:"traceId,omitempty"`
+	Keyword        *string `form:"keyword,omitempty" json:"keyword,omitempty"`
+	BeforeSequence *int64  `form:"beforeSequence,omitempty" json:"beforeSequence,omitempty"`
 
 	// AfterCursor Opaque session and filter bound cursor. Mutually exclusive with beforeSequence. Results use ascending sequence order; continue the returned cursor until hasMore is false. An initial reverse page provides a cursor at its snapshot tail for future follow.
 	AfterCursor *string `form:"afterCursor,omitempty" json:"afterCursor,omitempty"`
@@ -11804,6 +11807,19 @@ func (siw *ServerInterfaceWrapper) ListRuntimeLogs(w http.ResponseWriter, r *htt
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "windowSeconds" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "windowSeconds", r.URL.Query(), &params.WindowSeconds, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "windowSeconds"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "windowSeconds", Err: err})
 		}
 		return
 	}

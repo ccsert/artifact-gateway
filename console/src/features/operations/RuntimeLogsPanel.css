@@ -98,3 +98,132 @@
     grid-row: 1;
   }
 }
+
+.ag-runtime-log-intro {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 16px 20px 0;
+  color: var(--ag-content-secondary);
+  font-size: 12px;
+}
+.ag-runtime-log-filters {
+  display: grid;
+  gap: 16px;
+  padding: 16px 20px;
+  min-width: 0;
+}
+.ag-runtime-log-filter-main {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) minmax(160px, 1fr) minmax(
+      140px,
+      1fr
+    );
+  gap: 12px;
+  align-items: end;
+}
+.ag-runtime-log-filter-secondary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+.ag-runtime-log-filter-more {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.ag-runtime-log-custom-range {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  max-width: 560px;
+}
+.ag-runtime-log-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+.ag-runtime-log-hint,
+.ag-runtime-log-help {
+  color: var(--ag-content-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ag-runtime-log-help summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.ag-runtime-log-help p {
+  margin: 8px 0 0;
+}
+@media (pointer: coarse) {
+  .ag-runtime-log-help summary {
+    min-height: 44px;
+    align-content: center;
+  }
+}
+.ag-runtime-log-filters .ant-picker,
+.ag-runtime-log-filters .ant-select {
+  min-width: 0;
+}
+.ag-runtime-log-filters label > span:first-child {
+  color: var(--ag-content-secondary);
+}
+@media (max-width: 760px) {
+  .ag-runtime-log-filter-main {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ag-runtime-log-keyword {
+    grid-column: 1 / -1;
+  }
+  .ag-runtime-log-filter-secondary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ag-runtime-log-more {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+@media (max-width: 480px) {
+  .ag-runtime-log-intro {
+    padding: 16px 12px 0;
+  }
+  .ag-runtime-log-filters {
+    padding: 16px 12px;
+  }
+  .ag-runtime-log-filter-secondary,
+  .ag-runtime-log-filter-more {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ag-runtime-log-filter-actions > .ant-space {
+    width: 100%;
+  }
+  .ag-runtime-log-filter-actions > .ant-space > .ant-space-item:last-child {
+    margin-left: auto;
+  }
+  .ag-runtime-log-toolbar {
+    padding-inline: 12px;
+  }
+  .ag-runtime-log-custom-range .ant-picker-range {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .ag-runtime-log-custom-range .ant-picker-input {
+    flex-basis: calc(100% - 24px);
+  }
+  .ag-runtime-log-custom-range .ant-picker-range-separator {
+    display: none;
+  }
+  .ag-runtime-log-calendar {
+    left: 12px !important;
+  }
+}
+
+.ag-runtime-log-calendar {
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+}

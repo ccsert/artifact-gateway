@@ -3344,6 +3344,10 @@ export type ListRuntimeLogsData = {
   query?: {
     from?: string;
     to?: string;
+    /**
+     * Rolling lookback duration in seconds, calculated from one locked query snapshot. Mutually exclusive with from and to. Omitted time bounds default to a rolling hour. Cursors bind this duration; changing it requires a new snapshot.
+     */
+    windowSeconds?: number;
     instanceId?: string;
     level?: string;
     component?: string;
