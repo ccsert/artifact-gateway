@@ -4,16 +4,23 @@ import {
   InfoCircleOutlined,
   ReloadOutlined,
   SearchOutlined,
+  PauseOutlined,
+  CaretRightOutlined,
+  DownloadOutlined,
 } from "@ant-design/icons";
-import { Button, DatePicker, Input, Select, Space, Tag } from "antd";
+import {
+  Alert,
+  AutoComplete,
+  Button,
+  DatePicker,
+  Input,
+  Select,
+  Space,
+  Switch,
+} from "antd";
 import type { Dayjs } from "dayjs";
 import { useSearchParams } from "react-router-dom";
-import { listRuntimeLogs } from "../../client";
-import type {
-  ListRuntimeLogsData,
-  RuntimeLogEntry,
-  RuntimeLogPage,
-} from "../../client";
+import type { RuntimeLogEntry } from "../../client";
 import { Card, CardHeader, Pagination } from "../../components/ui/Layout";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import {
@@ -23,11 +30,20 @@ import {
 } from "../../components/ui/ConsolePrimitives";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-
-type LogQuery = NonNullable<ListRuntimeLogsData["query"]>;
+import { useRuntimeLogStream } from "./useRuntimeLogStream";
+import type { LogQuery } from "./useRuntimeLogStream";
+import {
+  logNDJSON,
+  logText,
+  MAX_DISPLAY_CHARS,
+  MAX_LOG_BYTES,
+  MAX_LOG_RECORDS,
+  projectLog,
+} from "./runtimeLogView";
+import "./RuntimeLogsPanel.css";
 
 function logCopy(entry: RuntimeLogEntry) {
-  return JSON.stringify(entry, null, 2);
+  return JSON.stringify(projectLog(entry), null, 2);
 }
 
 export function RuntimeLogsPanel() {
@@ -48,10 +64,32 @@ export function RuntimeLogsPanel() {
     traceId: auditTraceId || undefined,
     limit: 50,
   }));
-  const [page, setPage] = useState<RuntimeLogPage | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(false);
-  const requestSequence = useRef(0);
+  const {
+    page,
+    entries,
+    error,
+    loading,
+    following,
+    visible,
+    gap,
+    scopeChanged,
+    trimmed,
+    unread,
+    bytes,
+    viewport: viewportRef,
+    follow,
+    pause,
+    resumeBottom,
+    scrolled,
+    refresh,
+    loadOlder,
+    hasOlder,
+    resetVersion,
+  } = useRuntimeLogStream(query);
+  const [wrap, setWrap] = useState(true);
+  const [selected, setSelected] = useState("");
+  const [selectionTooLarge, setSelectionTooLarge] = useState(false);
+  const [selectionVersion, setSelectionVersion] = useState(-1);
   const { copiedValue, copy } = useClipboardAction();
 
   useEffect(() => {
@@ -67,40 +105,73 @@ export function RuntimeLogsPanel() {
     }));
   }, [auditRequestId, auditTraceId]);
 
-  const load = useCallback(
-    async (beforeSequence?: number, append = false) => {
-      const sequence = ++requestSequence.current;
-      setLoading(true);
-      setError(null);
-      try {
-        const result = await listRuntimeLogs({
-          query: { ...query, beforeSequence },
-        });
-        if (result.error) throw result.error;
-        if (sequence !== requestSequence.current) return;
-        const nextPage = result.data ?? null;
-        setPage((current) =>
-          append && current && nextPage
-            ? { ...nextPage, items: [...current.items, ...nextPage.items] }
-            : nextPage,
-        );
-      } catch (nextError) {
-        if (sequence !== requestSequence.current) return;
-        setError(nextError);
-      } finally {
-        if (sequence === requestSequence.current) setLoading(false);
-      }
-    },
-    [query],
-  );
+  const changedSelection = useCallback(() => {
+    const selection = window.getSelection();
+    const node = viewportRef.current;
+    const withinStream =
+      selection &&
+      node &&
+      selection.anchorNode &&
+      selection.focusNode &&
+      node.contains(selection.anchorNode) &&
+      node.contains(selection.focusNode) &&
+      Array.from({ length: selection.rangeCount }, (_, index) =>
+        selection.getRangeAt(index),
+      ).every(
+        (range) =>
+          node.contains(range.startContainer) &&
+          node.contains(range.endContainer),
+      );
+    const raw = withinStream ? selection.toString() : "";
+    const safe = logText(raw, MAX_LOG_BYTES);
+    const tooLarge =
+      raw.length > MAX_LOG_BYTES ||
+      safe.length > MAX_LOG_BYTES ||
+      new TextEncoder().encode(safe).byteLength > MAX_LOG_BYTES;
+    setSelectionTooLarge(tooLarge);
+    setSelected(tooLarge ? "" : safe);
+    setSelectionVersion(resetVersion);
+    return tooLarge ? "" : safe;
+  }, [viewportRef, resetVersion]);
 
   useEffect(() => {
-    setPage(null);
-    void load();
-    return () => {
-      requestSequence.current += 1;
-    };
-  }, [load]);
+    const selection = window.getSelection();
+    const node = viewportRef.current;
+    if (selection?.anchorNode && node?.contains(selection.anchorNode))
+      selection.removeAllRanges();
+    changedSelection();
+    document.addEventListener("selectionchange", changedSelection);
+    return () =>
+      document.removeEventListener("selectionchange", changedSelection);
+  }, [changedSelection, viewportRef]);
+
+  useEffect(() => {
+    changedSelection();
+  }, [entries, changedSelection]);
+
+  const clearFilters = () => {
+    setRange(null);
+    setInstanceId("");
+    setLevel("");
+    setComponent("");
+    setRequestId("");
+    setTraceId("");
+    setKeyword("");
+    setQuery({ limit: 50 });
+  };
+
+  const download = () => {
+    const url = URL.createObjectURL(
+      new Blob([logNDJSON(entries)], {
+        type: "application/x-ndjson;charset=utf-8",
+      }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "runtime-logs.ndjson";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
 
   const search = () => {
     setQuery({
@@ -131,16 +202,19 @@ export function RuntimeLogsPanel() {
       <FilterBar
         embedded
         actions={
-          <Space>
+          <Space wrap>
             <Button icon={<SearchOutlined />} type="primary" onClick={search}>
               {text("查询", "Search")}
             </Button>
             <Button
               icon={<ReloadOutlined />}
               loading={loading}
-              onClick={() => void load()}
+              onClick={refresh}
             >
-              {text("刷新", "Refresh")}
+              {text("刷新快照", "Refresh snapshot")}
+            </Button>
+            <Button onClick={clearFilters}>
+              {text("清除筛选", "Clear filters")}
             </Button>
           </Space>
         }
@@ -181,10 +255,12 @@ export function RuntimeLogsPanel() {
           label={text("组件", "Component")}
           className="w-full min-w-[160px] sm:w-auto"
         >
-          <Input
+          <AutoComplete
             value={component}
-            onChange={(event) => setComponent(event.target.value)}
-            placeholder="http / worker"
+            onChange={setComponent}
+            options={page?.source?.components.map((value) => ({ value })) ?? []}
+            placeholder={text("精确组件名称", "Exact component name")}
+            className="w-full"
           />
         </FilterField>
         <FilterField
@@ -221,29 +297,181 @@ export function RuntimeLogsPanel() {
           <ErrorBanner
             error={error}
             tone={page ? "warning" : "error"}
-            onRetry={() => void load()}
+            onRetry={refresh}
+            title={
+              scopeChanged
+                ? text(
+                    "进程或会话已变化，请刷新新快照",
+                    "Process or session changed; refresh the snapshot",
+                  )
+                : undefined
+            }
           />
         </div>
       ) : null}
-      {loading && !page ? (
+      {loading && !page && !error ? (
         <div className="p-6">
           <Loading label={text("查询运行日志…", "Querying runtime logs…")} />
         </div>
       ) : null}
       {page ? (
         <div className="border-t border-[var(--ag-border-subtle)]">
-          <div className="flex flex-wrap gap-x-3 gap-y-1 px-5 py-3 text-xs text-[var(--ag-content-tertiary)]">
+          <div className="ag-runtime-log-source flex flex-wrap gap-x-3 gap-y-1 px-5 py-3 text-xs text-[var(--ag-content-tertiary)]">
             <span>
-              {text("当前进程", "Current process")}: {page.instanceId}
+              {text("当前进程", "Current process")}:{" "}
+              {logText(page.instanceId, MAX_DISPLAY_CHARS)}
             </span>
             <span>
-              {text("会话", "Session")}: {page.sessionId}
+              {text("会话", "Session")}:{" "}
+              {logText(page.sessionId, MAX_DISPLAY_CHARS)}
             </span>
             <span>
-              {text(`${page.items.length} 条日志`, `${page.items.length} logs`)}
+              {text(
+                `${entries.length} 条已加载 · ${bytes} 字节`,
+                `${entries.length} loaded · ${bytes} bytes`,
+              )}
+            </span>
+            <span>
+              {text("保留序号", "Retained sequences")}:{" "}
+              {page.retention
+                ? `${page.retention.earliestSequence}–${page.retention.latestSequence}`
+                : text("未报告", "Not reported")}
+            </span>
+            <span>
+              {page.source
+                ? text(
+                    `最低 ${page.source.minimumLevel} · 请求 ${page.source.accessMode} · 慢请求 ${page.source.slowThresholdMs}ms · 缓冲 ${page.source.capacityLines} 行`,
+                    `Minimum ${page.source.minimumLevel} · requests ${page.source.accessMode} · slow ${page.source.slowThresholdMs}ms · buffer ${page.source.capacityLines} lines`,
+                  )
+                : text(
+                    "Gateway 未报告记录策略",
+                    "Gateway did not report its logging policy",
+                  )}
             </span>
           </div>
-          {page.items.length === 0 ? (
+          <div className="ag-runtime-log-toolbar">
+            <Space wrap>
+              <Button
+                icon={following ? <PauseOutlined /> : <CaretRightOutlined />}
+                disabled={!page.afterCursor}
+                onClick={following ? pause : follow}
+              >
+                {following
+                  ? text("暂停跟随", "Pause follow")
+                  : text("跟随新日志", "Follow new logs")}
+              </Button>
+              {following && !visible ? (
+                <span>
+                  {text("隐藏页面已暂停轮询", "Polling paused while hidden")}
+                </span>
+              ) : null}
+              {unread > 0 ? (
+                <Button onClick={resumeBottom}>
+                  {text(
+                    `${unread} 条未读 · 回到底部`,
+                    `${unread} unread · Resume at bottom`,
+                  )}
+                </Button>
+              ) : null}
+              <label className="ag-runtime-log-wrap">
+                <Switch size="small" checked={wrap} onChange={setWrap} />
+                {text("折行", "Wrap lines")}
+              </label>
+              <Button
+                icon={<CopyOutlined />}
+                disabled={!selected || selectionVersion !== resetVersion}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  const current = changedSelection();
+                  if (current) void copy(current, "selection");
+                }}
+              >
+                {text("复制选择", "Copy selection")}
+              </Button>
+              <Button
+                icon={<CopyOutlined />}
+                disabled={!entries.length}
+                onClick={() => void copy(logNDJSON(entries), "loaded")}
+              >
+                {text("复制已加载", "Copy loaded")}
+              </Button>
+              <Button
+                icon={<DownloadOutlined />}
+                disabled={!entries.length}
+                onClick={download}
+              >
+                {text("下载 NDJSON", "Download NDJSON")}
+              </Button>
+            </Space>
+            <span>
+              {text(
+                "暂停会保留增量游标；恢复后继续读取。离底阅读不自动滚动，未读数仅表示已读取的新日志。",
+                "Pause preserves the incremental cursor for resume. Reading above the bottom does not force scrolling; unread counts cover newly fetched logs only.",
+              )}
+            </span>
+            <span>
+              {text(
+                `仅当前筛选已加载结果，最多 ${MAX_LOG_RECORDS} 条 / ${MAX_LOG_BYTES} 字节；显示每字段最多 ${MAX_DISPLAY_CHARS} 字符，选择复制最多 ${MAX_LOG_BYTES} UTF-8 字节，超限拒绝复制。DEBUG 筛选不会启用 DEBUG；空结果不能判定未记录原因。`,
+                `Only loaded results in the current filters, at most ${MAX_LOG_RECORDS} rows / ${MAX_LOG_BYTES} bytes; display fields capped at ${MAX_DISPLAY_CHARS} characters. Selection copy accepts at most ${MAX_LOG_BYTES} UTF-8 bytes and rejects larger selections. A DEBUG filter does not enable DEBUG; empty results do not identify why events were absent.`,
+              )}
+            </span>
+            {selectionTooLarge && selectionVersion === resetVersion ? (
+              <Alert
+                type="warning"
+                showIcon
+                title={text(
+                  "选择内容超过 1 MiB，请缩小选择后复制",
+                  "Selection exceeds 1 MiB; select less text to copy",
+                )}
+              />
+            ) : null}
+            {page.source?.componentsTruncated ? (
+              <span>
+                {text(
+                  "组件列表有界，可输入其他精确名称；worker 不是通配。",
+                  "The component list is bounded; enter another exact name. worker is not a wildcard.",
+                )}
+              </span>
+            ) : null}
+            {query.requestId || query.traceId ? (
+              <span>
+                {text("当前关联筛选", "Current correlation filters")}: Request{" "}
+                {logText(query.requestId ?? "", MAX_DISPLAY_CHARS)} · Trace{" "}
+                {logText(query.traceId ?? "", MAX_DISPLAY_CHARS)}
+              </span>
+            ) : null}
+            {gap ? (
+              <Alert
+                type="warning"
+                showIcon
+                title={text(
+                  "服务器保留已覆盖部分未读日志",
+                  "Server retention overwrote some unread logs",
+                )}
+              />
+            ) : null}
+            {scopeChanged ? (
+              <Alert
+                type="warning"
+                showIcon
+                title={text(
+                  "已切换新进程或会话，旧记录已清除",
+                  "Changed to a new process or session; previous records cleared",
+                )}
+              />
+            ) : null}
+            {trimmed > 0 ? (
+              <Alert
+                type="info"
+                showIcon
+                title={text(
+                  `客户端容量已移除 ${trimmed} 条；不表示服务器日志丢失`,
+                  `Client capacity removed ${trimmed} rows; this does not indicate server log loss`,
+                )}
+              />
+            ) : null}
+          </div>
+          {entries.length === 0 ? (
             <EmptyState
               compact
               title={text("当前范围内没有日志", "No logs in this range")}
@@ -253,62 +481,91 @@ export function RuntimeLogsPanel() {
               )}
             />
           ) : (
-            <div className="space-y-2 px-5 pb-4">
-              {page.items.map((entry) => (
+            <div
+              ref={viewportRef}
+              onScroll={scrolled}
+              role="log"
+              aria-live="off"
+              aria-label={text("运行日志流", "Runtime log stream")}
+              className={`ag-runtime-log-stream${wrap ? "" : " ag-runtime-log-nowrap"}`}
+            >
+              {entries.map((entry) => (
                 <div
-                  key={`${entry.sessionId}-${entry.sequence}`}
-                  className="rounded-lg border border-[var(--ag-border-subtle)] p-3"
+                  key={`${entry.instanceId}-${entry.sessionId}-${entry.sequence}`}
+                  className="ag-runtime-log-row"
+                  data-sequence={entry.sequence}
                 >
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-                    <span>{formatDate(entry.time, locale)}</span>
-                    <Tag
-                      color={
-                        entry.level === "ERROR"
-                          ? "error"
-                          : entry.level === "WARN"
-                            ? "warning"
-                            : "default"
-                      }
-                    >
-                      {entry.level}
-                    </Tag>
-                    <span>
-                      {entry.component} · {entry.operation}
-                    </span>
-                    <Button
-                      size="small"
-                      type="text"
-                      icon={<CopyOutlined />}
-                      onClick={() =>
-                        void copy(
-                          logCopy(entry),
-                          `${entry.sessionId}-${entry.sequence}`,
-                        )
-                      }
-                    >
-                      {copiedValue === `${entry.sessionId}-${entry.sequence}`
-                        ? text("已复制", "Copied")
-                        : text("复制", "Copy")}
-                    </Button>
-                  </div>
-                  <div className="mt-1 break-words text-sm text-zinc-200">
-                    {entry.message}
-                  </div>
-                  <div className="mt-2 break-all font-mono text-xs text-zinc-500">
-                    Request {entry.requestId || "—"} · Trace{" "}
-                    {entry.traceId || "—"}
+                  <span className="ag-runtime-log-time">
+                    {logText(formatDate(entry.time, locale), MAX_DISPLAY_CHARS)}
+                  </span>
+                  <span
+                    className={`ag-runtime-log-level ag-runtime-log-level-${entry.level.toLowerCase()}`}
+                  >
+                    {logText(entry.level, MAX_DISPLAY_CHARS)}
+                  </span>
+                  <span className="ag-runtime-log-scope">
+                    {logText(entry.instanceId, MAX_DISPLAY_CHARS)} /{" "}
+                    {logText(entry.sessionId, MAX_DISPLAY_CHARS)}
+                  </span>
+                  <span className="ag-runtime-log-component">
+                    {logText(entry.component || "—", MAX_DISPLAY_CHARS)} ·{" "}
+                    {logText(entry.operation, MAX_DISPLAY_CHARS)}
+                  </span>
+                  <span className="ag-runtime-log-message">
+                    {logText(entry.message, MAX_DISPLAY_CHARS)}
+                  </span>
+                  <Button
+                    className="ag-runtime-log-copy"
+                    size="small"
+                    type="text"
+                    icon={<CopyOutlined />}
+                    onClick={() =>
+                      void copy(
+                        logCopy(entry),
+                        `${entry.sessionId}-${entry.sequence}`,
+                      )
+                    }
+                  >
+                    {copiedValue === `${entry.sessionId}-${entry.sequence}`
+                      ? text("已复制", "Copied")
+                      : text("复制", "Copy")}
+                  </Button>
+                  <div className="ag-runtime-log-detail">
+                    {logText(
+                      [
+                        entry.method,
+                        entry.requestClass,
+                        entry.status === undefined
+                          ? ""
+                          : `status=${entry.status}`,
+                        entry.durationMs === undefined
+                          ? ""
+                          : `${entry.durationMs}ms`,
+                        entry.jobId ? `job=${entry.jobId}` : "",
+                        entry.attempt === undefined
+                          ? ""
+                          : `attempt=${entry.attempt}`,
+                        `Request ${entry.requestId || "—"}`,
+                        `Trace ${entry.traceId || "—"}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · "),
+                      MAX_DISPLAY_CHARS,
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           )}
           <Pagination
-            hasMore={Boolean(page.nextSequence)}
+            hasMore={
+              hasOlder &&
+              entries.length < MAX_LOG_RECORDS &&
+              bytes < MAX_LOG_BYTES - 16_384
+            }
             loading={loading}
             label={text("加载更早日志", "Load older logs")}
-            onMore={() => {
-              if (page.nextSequence) void load(page.nextSequence, true);
-            }}
+            onMore={loadOlder}
           />
         </div>
       ) : null}

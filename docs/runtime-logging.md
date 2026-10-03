@@ -115,3 +115,51 @@ contended writer. These cursors do not add files, durable history, other nodes,
 stdout readers, worker aggregators or a zero-loss delivery promise.
 
 The bundled Compose deployment uses Docker's `json-file` logging driver with `GATEWAY_LOG_MAX_SIZE` (default `10m`) and `GATEWAY_LOG_MAX_FILES` (default `5`). These bounds apply per container; recreating a container can remove its local history. For a cluster, collect stdout/stderr from every API, scheduler, and worker pod with the deployment's log collector. Configure the collector's durable storage and retention policy outside Gateway, preserving searchable `instanceId`, `sessionId`, `requestId`, and `traceId` fields. Do not use these high-cardinality fields directly as index labels in label-indexed backends such as Loki. Kubernetes node log rotation alone is insufficient for queries after a pod is replaced. Keep collector credentials outside the browser and outside log fields. Verify retention by querying one request ID after a pod restart and by querying a worker event from another node.
+
+### Console reading, follow and bounded export
+
+System Runtime → Runtime logs presents literal, monospace rows with time, textual
+severity, process/session, exact component/operation, message and allowed
+request/job diagnostics. Dark/light palettes preserve severity text. Wrap lines
+can be disabled for horizontal viewing inside the message field. ANSI, control
+and bidirectional characters are escaped as visible text; HTML is not executed.
+Each displayed field is capped at 4096 characters, with an ellipsis when shortened.
+
+Search applies the time, instance, severity, exact component and correlation
+filters together; Clear filters also removes audit-link request/trace filters.
+The component suggestions are the API's observed names, not wildcard groups:
+`worker` does not query every worker. The source line reports the actual INFO
+floor, limited/full policy, slow threshold, ring capacity and retained sequences.
+A DEBUG filter does not enable DEBUG collection; an empty result cannot explain
+why an event was not emitted. Separate processes and file/OTLP history remain
+outside this view.
+
+Follow new logs starts from the snapshot's incremental cursor. Load older logs
+keeps that live anchor separate. Reads are sequential, normally every three
+seconds; unread pages drain no faster than once per second, with at most 100
+records per read and a five-second browser request budget. Pause retains the
+consumed cursor, and hidden tabs suspend polling. Resume continues after that
+cursor; new matching events may already have expired from the server ring, which
+is reported as a server retention warning. Reading above the bottom preserves
+scroll position and counts newly fetched unique records as unread. Resume at
+bottom scrolls to the latest loaded row and continues following. The unread
+count does not estimate events that have not been fetched.
+
+Changing filters replaces the snapshot and cursors. A session/instance change
+clears previous records and requires a new snapshot; an ordinary failed refresh
+retains the loaded rows with an error. Authentication/password-change failures
+clear protected rows. Restart never mixes records from the prior session.
+
+The client retains only the latest contiguous tail of at most 300 unique rows
+and 1,048,576 UTF-8 bytes of projected NDJSON, including line delimiters. Client
+capacity trimming has its own notice and does not claim server loss. Older
+history loading stops at the client capacity boundary. Single-row copy uses the
+safe JSON projection. Copy loaded and Download NDJSON export only the current
+filters' loaded records, capped by those same limits; they do not fetch all
+history. Unknown response attributes are excluded. Copy selection preserves the
+selected visible text up to 1 MiB of UTF-8; larger selections are explicitly
+rejected with a warning rather than silently truncated. Display shortening and
+local trimming do not reconstruct records beyond these limits.
+Replacement snapshots, filter/session changes and authorization clearing also
+invalidate the text selection. Copy checks the current native selection stays
+inside the log stream, so a stale selection cannot export previous records.
