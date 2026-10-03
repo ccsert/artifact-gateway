@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Runtime log queries, Console rows and copy/export now retain only server-registered route templates, without request paths or parameter values. Nexus-compatible repository access logs reuse the resolved Maven/Raw/npm/PyPI/Go request class already used by metrics instead of falling into `other`.
+
 - Runtime log filters now provide bounded rolling recent ranges and validated custom snapshots at visible second precision, with aligned primary filters and recoverable localized errors. Rolling durations bind incremental cursors and are calculated from one locked snapshot, preserving the 24-hour and five-minute future limits across follow/pause/resume.
 
 - Added current-process business HTTP 5xx observation to administrator diagnostics and Console, with request/error counts, actual five-minute sample boundaries and node/session identity. Ratios require at least 20 requests and fresh complete data; warmup, resets, low traffic and stale samples remain explicit. Health/metrics probes are excluded; no health judgment or alert is introduced.

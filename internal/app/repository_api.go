@@ -18,7 +18,10 @@ type Adapter interface {
 // `{sessionId}:commit` to the standard library router, whose wildcard path
 // segment must end with `}`.
 type openAPIServeMux struct {
-	mux       *http.ServeMux
+	mux interface {
+		http.Handler
+		HandleFunc(string, func(http.ResponseWriter, *http.Request))
+	}
 	authorize func(http.ResponseWriter, *http.Request) (Principal, bool)
 }
 
@@ -191,7 +194,7 @@ func NewGatewayHandlerWithFormatCachesAndMetrics(dependencies Dependencies, stor
 }
 
 func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, adapter Adapter, authenticator Authenticator, cache *OCICache, mavenCache *MavenCache, rawCache *RawCache, conanCache *ConanCache, maintenance *CacheMaintenance, metrics *Metrics, ociClients ...OCIClient) http.Handler {
-	mux := http.NewServeMux()
+	mux := newRuntimeLogMux(dependencies.LogBuffer)
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /readyz", dependencies.ready)
 	if metrics == nil {

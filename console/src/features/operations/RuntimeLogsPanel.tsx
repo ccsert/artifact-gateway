@@ -665,6 +665,7 @@ export function RuntimeLogsPanel() {
                     {logText(
                       [
                         entry.method,
+                        entry.route,
                         entry.requestClass,
                         entry.status === undefined
                           ? ""

@@ -17,6 +17,8 @@ const entry = (sequence: number): RuntimeLogEntry => ({
   status: 200,
   durationMs: 12,
   method: "GET",
+  route: "GET /api/v2/repositories/{repositoryId}",
+  requestClass: "management",
 });
 const data = (
   items: RuntimeLogEntry[],
@@ -197,7 +199,10 @@ for (const [width, locale, theme] of [
     ).toHaveLength(4097);
     expect(
       await stream.locator(".ag-runtime-log-detail").first().textContent(),
-    ).toContain("GET · status=200 · 12ms");
+    ).toContain(
+      "GET · GET /api/v2/repositories/{repositoryId} · management · status=200 · 12ms",
+    );
+    await expect(stream.locator("a")).toHaveCount(0);
     await geometry(page);
     await stream.evaluate((node) => {
       node.scrollTop = 0;
@@ -225,6 +230,7 @@ for (const [width, locale, theme] of [
       .map((line) => JSON.parse(line));
     expect(parsed).toHaveLength(4);
     expect(parsed[0].status).toBe(200);
+    expect(parsed[0].route).toBe(items[0].route);
     expect(parsed[0].message).toContain("\\u001b");
     const downloadEvent = page.waitForEvent("download");
     await page

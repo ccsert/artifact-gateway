@@ -67,8 +67,10 @@ func (s *requestClassState) override(class requestClass) {
 	if class == s.class {
 		return
 	}
-	s.metrics.inFlight[s.class].Add(-1)
-	s.metrics.inFlight[class].Add(1)
+	if s.metrics != nil {
+		s.metrics.inFlight[s.class].Add(-1)
+		s.metrics.inFlight[class].Add(1)
+	}
 	s.class = class
 }
 
@@ -76,6 +78,12 @@ func (s *requestClassState) finish() requestClass {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.metrics.inFlight[s.class].Add(-1)
+	return s.class
+}
+
+func (s *requestClassState) current() requestClass {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.class
 }
 

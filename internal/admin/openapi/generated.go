@@ -4834,11 +4834,14 @@ type RuntimeLogEntry struct {
 	Operation    string                       `json:"operation"`
 	RequestClass *RuntimeLogEntryRequestClass `json:"requestClass,omitempty"`
 	RequestId    string                       `json:"requestId"`
-	Sequence     int64                        `json:"sequence"`
-	SessionId    string                       `json:"sessionId"`
-	Status       *int                         `json:"status,omitempty"`
-	Time         time.Time                    `json:"time"`
-	TraceId      string                       `json:"traceId"`
+
+	// Route Server-registered route template or unmatched; never the request URL or resolved parameter values.
+	Route     *string   `json:"route,omitempty"`
+	Sequence  int64     `json:"sequence"`
+	SessionId string    `json:"sessionId"`
+	Status    *int      `json:"status,omitempty"`
+	Time      time.Time `json:"time"`
+	TraceId   string    `json:"traceId"`
 }
 
 // RuntimeLogEntryMethod defines model for RuntimeLogEntry.Method.

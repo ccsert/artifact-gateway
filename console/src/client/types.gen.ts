@@ -1506,6 +1506,10 @@ export type RuntimeLogEntry = {
     | "health"
     | "metrics"
     | "other";
+  /**
+   * Server-registered route template or unmatched; never the request URL or resolved parameter values.
+   */
+  route?: string;
   jobId?: string;
   attempt?: number;
 };

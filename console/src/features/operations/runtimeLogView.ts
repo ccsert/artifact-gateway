@@ -36,6 +36,7 @@ export function projectLog(row: RuntimeLogEntry): RuntimeLogEntry {
     ...(row.status === undefined ? {} : { status: row.status }),
     ...(row.durationMs === undefined ? {} : { durationMs: row.durationMs }),
     ...(row.method === undefined ? {} : { method: row.method }),
+    ...(row.route === undefined ? {} : { route: logText(row.route, 256) }),
     ...(row.requestClass === undefined
       ? {}
       : { requestClass: row.requestClass }),

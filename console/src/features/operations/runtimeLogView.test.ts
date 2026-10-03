@@ -29,6 +29,18 @@ const entry = (
 });
 
 describe("bounded runtime log view", () => {
+  it("preserves the server route template in rows and NDJSON", () => {
+    const source = {
+      ...entry(1),
+      route: "GET /api/v2/repositories/{repositoryId}",
+    };
+    const rows = boundRuntimeLogs(
+      [source],
+      source.instanceId,
+      source.sessionId,
+    ).entries;
+    expect(JSON.parse(logNDJSON(rows))).toMatchObject({ route: source.route });
+  });
   it("merges concurrent pages in sequence order, deduplicating only inside the current scope", () => {
     const result = boundRuntimeLogs(
       [entry(3), entry(1), entry(2), entry(2)],

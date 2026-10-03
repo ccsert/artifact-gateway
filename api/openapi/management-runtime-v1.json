@@ -10277,6 +10277,11 @@
               "other"
             ]
           },
+          "route": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Server-registered route template or unmatched; never the request URL or resolved parameter values."
+          },
           "jobId": {
             "type": "string",
             "maxLength": 128,

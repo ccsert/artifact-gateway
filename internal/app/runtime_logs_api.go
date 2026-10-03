@@ -145,6 +145,10 @@ func (h generatedRepositoryAPIAdapter) ListRuntimeLogs(w http.ResponseWriter, r 
 			value := adminopenapi.RuntimeLogEntryRequestClass(entry.RequestClass)
 			item.RequestClass = &value
 		}
+		if entry.Route != "" {
+			value := entry.Route
+			item.Route = &value
+		}
 		if entry.JobID != "" {
 			value := entry.JobID
 			item.JobId = &value

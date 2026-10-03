@@ -44,7 +44,7 @@ OTLP is an export protocol, not a log-query API. Receiver storage, retention and
 
 The private session directory is exclusively managed by its output instance; administrators and same-UID/root tools must not concurrently replace its paths. Identity checks reject replacements observed before rotation or retention, but are not filesystem transactions against concurrent privileged path mutation.
 
-Gateway runtime events are newline-delimited JSON on stdout. Each record has `time`, `level`, `msg`, `instanceId`, `sessionId`, `component`, `operation`, `requestId`, and `traceId`. A process event without request context has empty correlation IDs. HTTP access events add `method`, the route pattern, request class, status, and duration in milliseconds. Raw URL paths, query strings, request bodies, `Authorization`, and `Cookie` are never access-log fields. Attributes named like secrets, credentials, tokens, bodies, URLs, queries, or errors are redacted before output.
+Gateway runtime events are newline-delimited JSON on stdout. Each record has `time`, `level`, `msg`, `instanceId`, `sessionId`, `component`, `operation`, `requestId`, and `traceId`. A process event without request context has empty correlation IDs. HTTP access events add `method`, the server-registered route template (or `unmatched`), request class, status, and duration in milliseconds. The template is captured at router dispatch, independent of a handler changing `r.Pattern`; compatibility aliases retain the outer `/repository/` template. Their request class reuses the resolved Maven/Raw/npm/PyPI/Go classification already used by metrics, including when metrics are not configured. An unresolved repository does not infer its class from its name. The shared class mapping also supports Cargo; Cargo retains its native `/cargo/` root with no Nexus alias. Raw URL paths, resolved parameter values, query strings, request bodies, `Authorization`, and `Cookie` are never access-log fields. Attributes named like secrets, credentials, tokens, bodies, URLs, queries, or errors are redacted before output.
 
 Runtime logging has an explicit output lifecycle: writes, flushes, and closes are serialized, and close attempts both cleanup callbacks once even if flush fails. The default stdout and memory buffer are borrowed destinations: close is a no-op that does not wait for writes, flush, sync, or close stdout. Configured runtime errors and graceful shutdown finish existing HTTP and resource cleanup before closing log output. Worker cancellation remains context-based; resource-owning destinations will need their own bounded cleanup and delivery behavior.
 
@@ -62,10 +62,14 @@ Custom bounds are fixed snapshots. Console normalizes the picker's visible secon
 
 The local API projects only the redacted core fields and a bounded top-level
 allowlist: HTTP `status` (100–599), `durationMs` (0–86400000), standard HTTP
-`method`, the known `requestClass`, an opaque ASCII `jobId` (at most 128 bytes),
+`method`, the known `requestClass`, `route` (a template registered by this server,
+at most 256 ASCII bytes, or the fixed `unmatched` value), an opaque ASCII `jobId` (at most 128 bytes),
 and `attempt` (0–1000000). Missing, incorrectly typed, out-of-range, redacted or
 nested diagnostic values are omitted without dropping the event. This does not
-open raw attributes, route/URL, headers, bodies or error payloads. The same
+open raw attributes, request paths/URLs, headers, bodies or error payloads.
+Unregistered or malformed top-level route values are excluded from keyword
+matching. Console rows, copy and NDJSON retain the same safe template. Trace IDs
+remain correlation values; no collector-backed trace navigation is introduced. The same
 sensitive-name and ancestor-group redaction runs before stdout, buffer search
 and this projection.
 
