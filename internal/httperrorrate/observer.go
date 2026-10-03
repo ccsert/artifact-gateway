@@ -49,8 +49,10 @@ func New(instanceID, sessionID string) *Observer {
 	return &Observer{instanceID: instanceID, sessionID: sessionID, warmupReason: "warming_up"}
 }
 
-// Record accepts at most one sample per interval. A reset starts a new baseline;
-// no delta ever crosses a session change, backwards clock, gap or counter reset.
+// Record accepts the process-owned sampler's actual boundaries. Equal timestamps
+// are ignored; small scheduling jitter must not discard a tick. The sample count
+// is bounded even for more frequent calls. A reset starts a new baseline; no delta
+// crosses a session change, backwards clock, gap or counter reset.
 func (o *Observer) Record(at time.Time, sessionID string, counters Counters) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -73,7 +75,7 @@ func (o *Observer) Record(at time.Time, sessionID string, counters Counters) {
 			reset("counter_reset")
 		case at.Sub(last.at) > MaxSampleAge:
 			reset("sampling_gap")
-		case at.Sub(last.at) < SampleInterval:
+		case at.Equal(last.at):
 			return
 		}
 	}

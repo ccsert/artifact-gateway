@@ -119,6 +119,25 @@ func TestBoundedRepeatedSamplingAndNonAlignedWindow(t *testing.T) {
 	}
 }
 
+func TestNormalTickerMillisecondJitterCompletesAndKeepsWindow(t *testing.T) {
+	o := httperrorrate.New("node", "session")
+	var counters httperrorrate.Counters
+	for i := 0; i <= 80; i++ {
+		// Literal normal ticker jitter: 0, 15.001, 30.000, 45.002, 60.000...
+		jitter := [...]time.Duration{0, time.Millisecond, 0, 2 * time.Millisecond}[i%4]
+		at := epoch.Add(time.Duration(i)*15*time.Second + jitter)
+		counters[0][1] = uint64(i) * 20
+		o.Record(at, "session", counters)
+		s := o.Snapshot(at)
+		if s.Reason == "sampling_gap" {
+			t.Fatalf("normal jitter created gap at tick %d", i)
+		}
+		if i >= 20 && (s.State != "available" || s.Ratio == nil || *s.Requests != 400 || *s.CoverageSeconds != 300) {
+			t.Fatalf("complete jitter window tick %d: %#v", i, s)
+		}
+	}
+}
+
 func TestSafeIntegerBoundaryAndMissingIdentity(t *testing.T) {
 	for _, n := range []uint64{httperrorrate.MaxSafeCount, httperrorrate.MaxSafeCount + 1} {
 		o, now := window(n, 1)
