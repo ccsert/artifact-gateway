@@ -38,6 +38,7 @@ type Filter struct {
 	SessionID                    string
 	RollingFrom, RollingTo       bool
 	MaxWindow                    time.Duration
+	RollingWindow                time.Duration
 	Before                       uint64
 	After                        uint64
 	Forward                      bool
@@ -169,7 +170,11 @@ func (b *Buffer) Query(ctx context.Context, filter Filter) Page {
 		filter.To = snapshotTime
 	}
 	if filter.RollingFrom {
-		filter.From = snapshotTime.Add(-time.Hour)
+		window := filter.RollingWindow
+		if window == 0 {
+			window = time.Hour
+		}
+		filter.From = snapshotTime.Add(-window)
 	}
 	if filter.MaxWindow > 0 && (filter.From.After(filter.To) || filter.To.Sub(filter.From) > filter.MaxWindow) {
 		page.InvalidWindow = true

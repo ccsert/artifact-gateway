@@ -718,6 +718,16 @@
             }
           },
           {
+            "name": "windowSeconds",
+            "in": "query",
+            "description": "Rolling lookback duration in seconds, calculated from one locked query snapshot. Mutually exclusive with from and to. Omitted time bounds default to a rolling hour. Cursors bind this duration; changing it requires a new snapshot.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 86400
+            }
+          },
+          {
             "name": "instanceId",
             "in": "query",
             "schema": {

@@ -108,6 +108,8 @@ async function geometry(page: Page) {
 for (const [width, locale, theme] of [
   [1440, "zh-CN", "dark"],
   [390, "en-US", "light"],
+  [320, "zh-CN", "dark"],
+  [900, "zh-CN", "dark"],
 ] as const) {
   test(`literal bounded log rows, history and export at ${width}px ${theme}`, async ({
     page,
@@ -317,6 +319,7 @@ test("empty source policy and failed refresh retain honest async states", async 
   await page.goto("/operations?tab=logs&requestId=legacy-link");
   await expect(page).toHaveURL(/\/system\?tab=logs&requestId=legacy-link$/);
   await expect(page.getByText("当前范围内没有日志")).toBeVisible();
+  await page.getByText("查询与复制说明", { exact: true }).click();
   await expect(page.getByText(/DEBUG 筛选不会启用 DEBUG/)).toBeVisible();
   await expect(page.getByText(/最低 INFO · 请求 limited/)).toBeVisible();
   await expect(
@@ -325,7 +328,9 @@ test("empty source policy and failed refresh retain honest async states", async 
   await geometry(page);
   fail = true;
   await page.getByRole("button", { name: "刷新快照" }).click();
-  await expect(page.getByText("synthetic unavailable")).toBeVisible();
+  await expect(
+    page.getByText("当前节点未启用内存日志查询，请检查日志缓冲配置。"),
+  ).toBeVisible();
   await expect(page.getByText("当前范围内没有日志")).toBeVisible();
   await expect(page.getByText("查询运行日志…")).toHaveCount(0);
   await geometry(page);
@@ -368,13 +373,17 @@ for (const width of [1440, 390])
     });
     await page.goto("/system?tab=logs&requestId=request-01&traceId=trace-01");
     await expect(page.getByText("event-1", { exact: true })).toBeVisible();
+    await page
+      .getByRole("combobox", { name: "Time range", exact: true })
+      .click();
+    await page.getByRole("option", { name: "Custom", exact: true }).click();
     await page.getByPlaceholder("Start date").fill("2026-10-03 00:00:00");
     await page.getByPlaceholder("Start date").press("Enter");
     await page.getByPlaceholder("End date").fill("2026-10-03 01:00:00");
     await page.getByPlaceholder("End date").press("Enter");
     await page.getByPlaceholder("End date").press("Escape");
     await page
-      .locator(".ag-filter-bar label")
+      .locator(".ag-runtime-log-filters label")
       .filter({ has: page.getByText("Component", { exact: true }) })
       .getByRole("combobox")
       .fill("custom_worker");
@@ -471,7 +480,9 @@ test("native selection is cleared on snapshot, session and permission recovery",
   await select();
   deny = true;
   await page.getByRole("button", { name: "刷新快照" }).click();
-  await expect(page.getByText("synthetic revoked")).toBeVisible();
+  await expect(
+    page.getByText("需要先更新密码，之后再查询运行日志。"),
+  ).toBeVisible();
   await expect(copy).toHaveCount(0);
   deny = false;
   version = 4;

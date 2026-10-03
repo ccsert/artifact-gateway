@@ -141,7 +141,7 @@ describe("incremental runtime log controls", () => {
     fireEvent(document, new Event("selectionchange"));
     expect(screen.getByRole("button", { name: /复制选择/ })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: /刷新快照/ }));
-    await screen.findByText("synthetic reset");
+    await screen.findByText("需要先更新密码，之后再查询运行日志。");
     expect(screen.queryByRole("button", { name: /复制选择/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /刷新快照/ }));
     await screen.findByText("event-2");
@@ -355,7 +355,7 @@ describe("incremental runtime log controls", () => {
       ).not.toBeDisabled(),
     );
     fireEvent.click(screen.getByRole("button", { name: /刷新快照/ }));
-    await screen.findByText("synthetic unavailable");
+    await screen.findByText("当前节点未启用内存日志查询，请检查日志缓冲配置。");
     expect(screen.getByText("event-1")).toBeInTheDocument();
     await waitFor(() =>
       expect(
@@ -363,7 +363,7 @@ describe("incremental runtime log controls", () => {
       ).not.toBeDisabled(),
     );
     fireEvent.click(screen.getByRole("button", { name: /刷新快照/ }));
-    await screen.findByText("synthetic reset");
+    await screen.findByText("需要先更新密码，之后再查询运行日志。");
     expect(screen.queryByText("event-1")).toBeNull();
     expect(screen.queryByRole("status", { name: /查询运行日志/ })).toBeNull();
   });
@@ -423,7 +423,7 @@ describe("incremental runtime log controls", () => {
     fireEvent.click(screen.getByRole("button", { name: /跟随新日志/ }));
     await act(async () => vi.advanceTimersByTimeAsync(5000));
     expect(
-      screen.getByText("Runtime log request timed out"),
+      screen.getByText("日志查询失败，请检查连接后重试。"),
     ).toBeInTheDocument();
     expect(screen.getByText("event-1")).toBeInTheDocument();
     expect(api.mock.calls.at(-1)?.[0]?.signal?.aborted).toBe(true);

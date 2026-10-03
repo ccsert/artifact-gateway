@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Runtime log filters now provide bounded rolling recent ranges and validated custom snapshots at visible second precision, with aligned primary filters and recoverable localized errors. Rolling durations bind incremental cursors and are calculated from one locked snapshot, preserving the 24-hour and five-minute future limits across follow/pause/resume.
+
 - Added current-process business HTTP 5xx observation to administrator diagnostics and Console, with request/error counts, actual five-minute sample boundaries and node/session identity. Ratios require at least 20 requests and fresh complete data; warmup, resets, low traffic and stale samples remain explicit. Health/metrics probes are excluded; no health judgment or alert is introduced.
 
 - Added opt-in explicit local mount capacity to administrator diagnostics and Console, with process-namespace scope, actual sample times, shared alias identity, safe unknown/stale states and bounded queries. Defaults query no directories; no S3/NAS physical-capacity inference, capacity metric, quota, alert or deployment change is introduced.
