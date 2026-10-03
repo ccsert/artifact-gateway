@@ -28,6 +28,12 @@ func TestLocalRecoveryIntegration(t *testing.T) {
 	if os.Getenv("BACKUPOPS_DOCKER_TEST") != "1" {
 		t.Skip("set BACKUPOPS_DOCKER_TEST=1 and BACKUPOPS_DOCKER_CONTEXT for real PG/S3 recovery")
 	}
+	for _, profile := range []string{"binary", "oci-image"} {
+		t.Run(profile, func(t *testing.T) { runLocalRecoveryIntegration(t, profile) })
+	}
+}
+
+func runLocalRecoveryIntegration(t *testing.T, profile string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 	d := Docker{Context: os.Getenv("BACKUPOPS_DOCKER_CONTEXT")}
@@ -35,6 +41,9 @@ func TestLocalRecoveryIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	release := integrationRelease(t)
+	if profile == "oci-image" {
+		release = integrationOCIRelease(t, ctx, d, release)
+	}
 	spec := func() TargetSpec {
 		return TargetSpec{Project: "ag-restore-" + uuid.NewString()[:18], Docker: d, Release: release,
 			PostgresPassword: uuid.NewString(), AccessKey: "synthetic-test", SecretKey: uuid.NewString(), RPCSecret: uuid.NewString(),
@@ -114,6 +123,9 @@ func TestLocalRecoveryIntegration(t *testing.T) {
 	if err = waitGateway(ctx, url); err != nil {
 		t.Fatal(err)
 	}
+	if profile == "oci-image" {
+		verifyFixtureGatewayImage(t, ctx, source, release)
+	}
 	api := func(method, path, token string, body []byte, status int, match string) ([]byte, http.Header) {
 		t.Helper()
 		return fixtureHTTP(t, ctx, url, method, path, token, body, status, match)
@@ -187,10 +199,16 @@ func TestLocalRecoveryIntegration(t *testing.T) {
 		t.Fatal("synthetic audit evidence missing")
 	}
 	_ = auditConn.Close(ctx)
+	orphan := []byte("unreferenced-backup-bytes")
+	orphanDigest, _, _ := hashReader(bytes.NewReader(orphan))
+	if err = source.objects.Put(ctx, "synthetic/orphan-before-backup", bytes.NewReader(orphan), int64(len(orphan)), orphanDigest); err != nil {
+		t.Fatal(err)
+	}
+	backupObjects := fixtureObjectFingerprint(t, ctx, source.objects)
 	bundle := filepath.Join(t.TempDir(), "bundle")
-	exported, err := Export(ctx, observed, bundle, release, observed.writers(), ss.BackupID)
-	if err != nil || exported.Status != "exported" || exported.VerifiedObjects != 2 {
-		t.Fatalf("export: %+v %v", exported, err)
+	exported, code, _ := fixtureBackupCommand(t, ctx, "export", ss, bundle)
+	if code != 0 || exported.Status != "exported" || exported.VerifiedObjects != 3 || exported.VerifiedBytes != 54 || exported.Gateway == nil || !sameSoftware(*exported.Gateway, release.Identity) {
+		t.Fatalf("export: %+v exit=%d", exported, code)
 	}
 	// Deliberate mutation is outside the stopped backup interval. This also proves
 	// restore never copies live source stores, because the later bytes stay absent.
@@ -223,20 +241,22 @@ func TestLocalRecoveryIntegration(t *testing.T) {
 		{Kind: "grant-deny", Format: "raw", Path: "/raw/recovery-group/releases/candidate.txt", Credential: "denied", Principal: "recovery-denied", Status: 403}}
 	t.Setenv("COMPOSE_PROJECT_NAME", sentinel.spec.Project)
 	t.Setenv("DOCKER_HOST", "tcp://127.0.0.1:1")
-	restored, err := RestoreNew(ctx, bundle, targetSpec)
-	if err != nil {
-		t.Fatalf("restore: %+v %v", restored, err)
+	restored, code, target := fixtureBackupCommand(t, ctx, "restore", targetSpec, bundle)
+	if code != 0 {
+		t.Fatalf("restore: %+v exit=%d", restored, code)
 	}
-	target := captureCreatedTarget(t, ctx, targetSpec)
-	t.Cleanup(func() {
-		cctx, c := context.WithTimeout(context.Background(), 30*time.Second)
-		defer c()
-		if err := target.Cleanup(cctx); err != nil {
-			t.Error(err)
-		}
-	})
-	if restored.GrantMetadata != "verified" || restored.GroupMetadata != "verified" || restored.AuditMetadata != "verified" || restored.Metadata != "verified" || restored.Objects != "verified" || restored.Readiness != "verified" || restored.Protocol != "verified" || restored.Authorization != "verified" || restored.VerifiedObjects != 2 {
+	if target == nil {
+		t.Fatal("successful public restore did not create a captured target")
+	}
+	if restored.Software != "verified" || restored.Database != "restored" || restored.GrantMetadata != "verified" || restored.GroupMetadata != "verified" || restored.AuditMetadata != "verified" || restored.Metadata != "verified" || restored.Objects != "verified" || restored.Readiness != "verified" || restored.Protocol != "verified" || restored.Authorization != "verified" || restored.VerifiedObjects != 3 || restored.VerifiedBytes != 54 || restored.Gateway == nil || !sameSoftware(*restored.Gateway, release.Identity) {
 		t.Fatalf("incomplete real recovery report: %+v", restored)
+	}
+	if fixtureObjectFingerprint(t, ctx, target.objects) != backupObjects {
+		t.Fatal("restored full bucket differs from backup, including unreferenced bytes")
+	}
+	if profile == "oci-image" {
+		verifyFixtureGatewayImage(t, ctx, target, release)
+		verifyOCIIdentityRejections(t, ctx, d, bundle, targetSpec, ss)
 	}
 	port, err := target.port(ctx, "gateway", "8080/tcp")
 	if err != nil {
@@ -521,46 +541,82 @@ func migrateFixture(t *testing.T, ctx context.Context, p Postgres, releaseDir st
 	}
 }
 
-func captureCreatedTarget(t *testing.T, ctx context.Context, s TargetSpec) *OwnedTarget {
+func captureCreatedTarget(t *testing.T, ctx context.Context, s TargetSpec, stageRoot string) *OwnedTarget {
 	t.Helper()
 	x := &OwnedTarget{spec: s, checked: true}
+	// Register cleanup before collecting receipts or deriving endpoints. Any
+	// later fatal assertion still rechecks and removes only recorded owned IDs.
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := x.Cleanup(cleanupCtx); err != nil {
+			t.Error(err)
+		}
+	})
+	inspectionFailed := false
 	for _, entry := range []struct{ kind, suffix string }{{"network", "network"}, {"volume", "pgdata"}, {"volume", "objects"}, {"container", "postgres"}, {"container", "rustfs"}, {"container", "gateway"}} {
 		name := s.Project + "-" + entry.suffix
 		data, err := s.Docker.output(ctx, entry.kind, "inspect", name)
 		if err != nil {
-			t.Fatal(err)
+			inspectionFailed = true
+			continue
 		}
 		var items []struct {
 			ID     string `json:"Id"`
 			Name   string
 			Labels map[string]string
 			Config struct{ Labels map[string]string }
-			Mounts []struct{ Source, Destination string }
+			Mounts []struct {
+				Type, Source, Destination string
+				RW                        bool
+			}
 		}
 		if json.Unmarshal(data, &items) != nil || len(items) != 1 {
-			t.Fatal("created receipt unavailable")
+			inspectionFailed = true
+			continue
 		}
 		item := items[0]
 		owner := item.Labels["artifact-gateway.restore-owner"]
 		if entry.kind == "container" {
 			owner = item.Config.Labels["artifact-gateway.restore-owner"]
 		}
-		if x.owner == "" {
+		if entry.kind == "network" && strings.TrimPrefix(item.Name, "/") == name {
 			x.owner = owner
 		}
-		if owner == "" || owner != x.owner {
-			t.Fatal("created resource owner mismatch")
+		if owner == "" || owner != x.owner || strings.TrimPrefix(item.Name, "/") != name {
+			inspectionFailed = true
+			continue
 		}
 		id := item.ID
 		if entry.kind == "volume" {
 			id = item.Name
 		}
 		x.resources = append(x.resources, ownedResource{entry.kind, id, name})
-		for _, m := range item.Mounts {
-			if m.Destination == "/gateway" {
-				x.directory = filepath.Dir(m.Source)
+		if entry.kind == "container" && entry.suffix == "gateway" {
+			if s.Release.Identity.Artifact.Kind == "binary" {
+				if len(item.Mounts) != 1 {
+					inspectionFailed = true
+					continue
+				}
+				m := item.Mounts[0]
+				dir := filepath.Dir(m.Source)
+				rel, err := filepath.Rel(stageRoot, dir)
+				info, statErr := os.Lstat(dir)
+				// The mount cannot authorize deletion of an arbitrary host path.
+				// Only a real private direct child of our fresh TMPDIR is owned.
+				if m.Type != "bind" || m.RW || m.Destination != "/gateway" || filepath.Base(m.Source) != "gateway" || err != nil || strings.ContainsAny(rel, `/\`) || !strings.HasPrefix(rel, "ag-restore-release-") || statErr != nil || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+					inspectionFailed = true
+					continue
+				}
+				x.directory = dir
+			} else if len(item.Mounts) != 0 {
+				// OCI never derives a host cleanup path from an unexpected mount.
+				inspectionFailed = true
 			}
 		}
+	}
+	if inspectionFailed {
+		t.Fatal("created receipt unavailable or ownership changed; unverified resources retained")
 	}
 	port, err := x.port(ctx, "postgres", "5432/tcp")
 	if err != nil {

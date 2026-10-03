@@ -86,11 +86,30 @@ unknown/退出 3，离线摘要校验不得代替真实恢复验收。
 取消传输后使用独立、有界上下文清理。重试使用新 project，不接管/覆盖旧目标，不自动
 开放流量、不部署、不发布或合并。
 
-`make backup-transfer-test` 执行真实合成 PG/S3/binary 恢复，覆盖当前与 pre-Cargo
-schema 查询、全字节、备份后 mutation 排除、grant 允许/拒绝、Group 顺序、历史审计、
-源/sentinel 的身份/数据/健康不变、无效输入及归属清理。旧物理 profile 仍由
-make backup-restore-readiness 独立验收。两者均不证明生产 fencing、所有格式、
-systemd controller、跨版本升级或云厂商特定 S3 恢复。
+`make backup-transfer-test` 分别通过公开 export/restore 入口执行真实合成
+PG/S3 恢复，覆盖 binary 与 OCI 软件 profile。两者均使用 Raw Hosted/Group 数据：
+3 个对象、54 字节含一个未引用对象；验证完整 bucket、当前与 pre-Cargo 引用查询、
+备份后 mutation 排除、grant 允许/拒绝、Group 顺序、历史审计及受保护 source/sentinel
+的身份、数据和健康。每个 profile 的 11 项拒绝/启动失败场景只清理本次调用拥有的目标。
+
+OCI fixture 将当前 checkout binary 与已有 digest-pinned runtime 构建成镜像，匿名推送到
+随机命名的临时 registry，镜像固定为
+`registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373`。
+registry 只绑定已验证本地 daemon 内的 `127.0.0.1`（含 Docker Desktop VM），使用
+私有 tmpfs，不采用现有 network 或 volume。临时 Docker 配置显式声明匿名 registry，
+拒绝 helper 证明不调用主机凭据 helper。恢复使用实际推送所得 digest 及支持的 Linux 平台。
+测试核对实际 RepoDigest、平台、标签、运行 image ID、无 binary 挂载，以及公开 Gateway
+构建诊断。错误 digest/version/revision/platform、可变 tag、仅 image ID 和本地不可用
+image 在公开 export/restore 中失败，不发布备份集、不创建目标。fixture 镜像和 registry
+只在核对捕获的精确 ID、名称、标签与绑定后移除；资源变动则保留并报告清理失败。
+共享固定 base image 与 build cache 保留。不创建持久凭据或 daemon 设置，
+不假设外部 Gateway 包的可见性或权限。
+
+这里 OCI 指 **Gateway 软件 profile**，不表示 OCI 制品协议恢复；此 transfer fixture
+只执行 Raw 协议。OCI 与 binary profile 均构建当前 checkout。
+`make backup-restore-readiness` 独立验收物理 profile。两者均不证明生产 fencing、所有
+格式或身份提供方、systemd controller、跨版本升级、大对象中断矩阵或云厂商特定 S3
+恢复。#200/#201 仍有更广验收工作，preflight 与这些限定测试均不能关闭完整矩阵。
 
 ## 固定物理演练
 

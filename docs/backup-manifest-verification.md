@@ -108,6 +108,12 @@ image-only and must not carry `artifact`. The offline validator checks syntax
 and bytes only; the transfer adapter separately checks actual executable/build
 identity or local OCI digest/labels and exact migration compatibility.
 
+`make backup-transfer-test` exercises real binary and digest-pinned OCI **software**
+profiles through public export/restore with synthetic PG/S3 and Raw Group/grant
+readback. Its pinned image identity and remaining acceptance boundaries are
+recorded in the [recovery runbook](recovery-runbook.md). This adds no recovery
+claim to the offline validator and is not OCI artifact protocol coverage.
+
 ## Writer declarations and filesystem boundary
 
 Each writer has `id`, `stopConfirmed`, `stoppedAt`, and `confirmedThrough`.
