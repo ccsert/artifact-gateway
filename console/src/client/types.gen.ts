@@ -769,6 +769,16 @@ export type Problem = {
     | "invalid_page_token"
     | "name_exists"
     | "access_denied"
+    | "password_change_required"
+    | "log_buffer_unavailable"
+    | "log_source_identity_unavailable"
+    | "remote_log_query_unavailable"
+    | "log_cursor_scope_changed"
+    | "log_query_timeout"
+    | "invalid_time_window"
+    | "invalid_limit"
+    | "invalid_cursor"
+    | "invalid_filter"
     | "not_found"
     | "version_conflict"
     | "idempotency_conflict"
@@ -1368,6 +1378,58 @@ export type RuntimeLogEntry = {
   operation: string;
   requestId: string;
   traceId: string;
+  status?: number;
+  durationMs?: number;
+  method?:
+    | "GET"
+    | "HEAD"
+    | "POST"
+    | "PUT"
+    | "PATCH"
+    | "DELETE"
+    | "OPTIONS"
+    | "CONNECT"
+    | "TRACE";
+  requestClass?:
+    | "management"
+    | "oci"
+    | "maven"
+    | "raw"
+    | "conan"
+    | "npm"
+    | "pypi"
+    | "go"
+    | "cargo"
+    | "health"
+    | "metrics"
+    | "other";
+  jobId?: string;
+  attempt?: number;
+};
+
+export type RuntimeLogRetention = {
+  /**
+   * Oldest sequence in this memory buffer, or zero if empty, independently of query filters.
+   */
+  earliestSequence: number;
+  latestSequence: number;
+  /**
+   * True only when unread positions were overwritten in this session's ring buffer. Does not imply that overwritten events matched the filters.
+   */
+  gap: boolean;
+};
+
+export type RuntimeLogSource = {
+  minimumLevel: "INFO";
+  accessMode: "limited" | "full";
+  slowThresholdMs: number;
+  capacityLines: number;
+  maxLineBytes: 16384;
+  /**
+   * Exact component names observed in the retained current instance/session, independently of time and other filters. This is not a wildcard or worker aggregation.
+   */
+  components: Array<string>;
+  componentsTruncated: boolean;
 };
 
 export type RuntimeLogPage = {
@@ -1375,7 +1437,18 @@ export type RuntimeLogPage = {
   instanceId: string;
   sessionId: string;
   items: Array<RuntimeLogEntry>;
+  /**
+   * Exclusive backward position for descending history pages.
+   */
   nextSequence?: number;
+  afterCursor?: string;
+  order?: "ascending" | "descending";
+  /**
+   * Additional matching entries remain in the current forward snapshot.
+   */
+  hasMore?: boolean;
+  retention?: RuntimeLogRetention;
+  source?: RuntimeLogSource;
 };
 
 export type UserSession = {
@@ -3175,6 +3248,10 @@ export type ListRuntimeLogsData = {
     traceId?: string;
     keyword?: string;
     beforeSequence?: number;
+    /**
+     * Opaque session and filter bound cursor. Mutually exclusive with beforeSequence. Results use ascending sequence order; continue the returned cursor until hasMore is false. An initial reverse page provides a cursor at its snapshot tail for future follow.
+     */
+    afterCursor?: string;
     limit?: number;
   };
   url: "/runtime/logs";
@@ -3193,6 +3270,10 @@ export type ListRuntimeLogsErrors = {
    * Problem response
    */
   403: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
   /**
    * Problem response
    */

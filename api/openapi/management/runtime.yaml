@@ -63,6 +63,13 @@ runtime_logs:
         type: integer
         format: int64
         minimum: 1
+    - name: afterCursor
+      in: query
+      description: Opaque session and filter bound cursor. Mutually exclusive with beforeSequence. Results use ascending sequence order; continue the returned cursor until hasMore is false. An initial reverse page provides a cursor at its snapshot tail for future follow.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 1024
     - name: limit
       in: query
       schema:
@@ -77,6 +84,8 @@ runtime_logs:
       '401':
         "$ref": "../components/responses.yaml#/Problem"
       '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
         "$ref": "../components/responses.yaml#/Problem"
       '503':
         "$ref": "../components/responses.yaml#/Problem"

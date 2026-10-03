@@ -54,4 +54,46 @@ Gateway 运行事件以每行一个 JSON 对象写入 stdout。每条记录包�
 
 管理界面的“系统运行 → 运行日志”通过 `GET /api/v2/runtime/logs` 查询当前 Gateway 进程的内存缓冲区。默认保留最近 1000 行，可用 `GATEWAY_LOG_BUFFER_LINES` 设为 0 至 5000；0 禁用查询，API 返回 503。仅平台管理员可以访问。查询支持最多 24 小时的时间窗、最多 100 条一页、时间、实例、级别、组件、Request ID、Trace ID 和关键词筛选；请求超时为 2 秒。审计日志详情的关联 ID 可跳转到此页。响应明确标注 `scope=local`、`instanceId` 和 `sessionId`。请求其他实例时返回 503，不把本进程结果冒充集群结果。进程重启后缓冲区消失。文件落盘和协议输出不改变此端点；文件历史与跨节点查询需要独立设计的读取器或检索适配器，见[输出与历史设计](runtime-log-product-design.zh-CN.md)。
 
+### 安全诊断字段投影
+
+本地 API 只返回已经脱敏的核心字段及有界顶层白名单：HTTP `status`（100–599）、
+`durationMs`（0–86400000）、标准 HTTP `method`、已知 `requestClass`、最多 128
+字节的 ASCII 不透明 `jobId`，以及 `attempt`（0–1000000）。缺失、类型错误、越界、
+已遮蔽或嵌套的诊断值不返回，但不丢弃整条事件。不开放原始属性、路由/URL、header、
+请求体或错误 payload。敏感名称及祖先 group 脱敏先于 stdout、buffer 搜索和本次投影。
+
+每个成功页面包含 `source`：INFO 采集下限、实际 limited/full 访问日志策略与慢请求
+阈值、buffer 容量、16 KiB 行接纳上限，以及当前实例/session 保留记录中观察到的最多
+100 个准确组件名；`componentsTruncated` 表示列表被限长。名称是观察结果，不代表
+通配符筛选或跨节点 worker 聚合。筛选结果为空不能推断事件没有输出的原因；选择
+DEBUG 不会开启 DEBUG 采集。关闭 buffer 返回 `log_buffer_unavailable`（503），缺失
+运行身份返回 `log_source_identity_unavailable`（503）。管理员与强制改密门禁先于
+来源可用性或游标校验，响应使用 `Cache-Control: no-store`。
+
+### 绑定会话的增量查询
+
+默认查询及 `beforeSequence` 仍按序号倒序返回历史。初始/历史页面提供绑定加锁快照
+尾部的 `afterCursor`，用于跟随该快照之后的事件。跟随请求发送 `afterCursor`，按
+序号正序收到记录；`hasMore` 为 true 时必须继续使用返回游标。满页只推进已经扫描
+的位置，不会在还有匹配未读页面时跳到最新序号；短页也消费扫描到的不匹配位置。
+快照之后的新记录留待下一次读取。省略的时间边界在每次快照滚动为最近一小时；
+显式边界保持固定，并继续遵守最多 24 小时的查询范围。取得读锁后的快照会再次
+验证顺序及范围；若等待写入使滚动边界无效，返回 `400 invalid_time_window`，
+不返回记录或游标。
+OpenAPI 的 Problem code 枚举包含日志查询的参数验证、缓冲禁用、来源标识、
+远程范围、会话变化、超时及必须改密错误，客户端可区分这些已声明响应。
+
+不透明游标使用 buffer 的临时密钥签名，绑定实例、session 及筛选条件。连续跟随时
+保留相同筛选，可调整页大小；筛选变化、畸形或修改过的游标返回 `invalid_cursor`
+（400）。不能同时发送 `beforeSequence` 与 `afterCursor`。其他实例或重启前 session
+的游标返回 `log_cursor_scope_changed`（409），需要重新查询；显式请求其他实例仍
+返回 503。不要用更早历史页的尾游标替换正在使用的跟随游标。
+
+`retention.earliestSequence` 与 `latestSequence` 描述整个内存 ring 的保留范围，
+不随筛选变化，空缓冲时都为 0。只有前向读取前未读位置已被覆盖时，
+`retention.gap` 才为 true；它不宣称被覆盖事件匹配筛选。返回记录因时间、级别或
+组件筛选产生的序号间隔不是丢失；重启/会话变化另以游标范围错误报告。两秒预算也
+约束等待竞争写锁。这些游标不增加文件历史、持久检索、其他节点、stdout 读取器、
+worker 聚合或零丢失交付承诺。
+
 仓库自带的 Compose 部署使用 Docker `json-file` 日志驱动；`GATEWAY_LOG_MAX_SIZE` 默认为 `10m`，`GATEWAY_LOG_MAX_FILES` 默认为 `5`。这些限制按容器生效，重建容器可能移除本地历史。集群部署应从每个 API、scheduler 和 worker Pod 收集 stdout/stderr，在 Gateway 外配置采集器的持久存储与保留策略，并保留可检索的 `instanceId`、`sessionId`、`requestId`、`traceId` 字段；不应在 Loki 等以标签建索引的后端将这些高基数字段直接作为索引标签。仅靠 Kubernetes 节点日志轮转，无法保证 Pod 更换后仍可查询。采集器凭据不能进入浏览器或日志字段。验收时应在 Pod 重启后用同一请求 ID 查询，并从另一节点查询 worker 事件。

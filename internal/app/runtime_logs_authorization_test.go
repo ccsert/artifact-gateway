@@ -44,7 +44,7 @@ func TestRuntimeLogQueryRejectsAuthenticatedNonAdministrators(t *testing.T) {
 				{"disabled", nil},
 			} {
 				t.Run(state.name, func(t *testing.T) {
-					handler := NewGatewayHandler(Dependencies{LogBuffer: state.buffer}, store, TestAdapter{}, auth)
+					handler := NewGatewayHandler(Dependencies{LogBuffer: state.buffer, Runtime: DiagnosticRuntime{InstanceID: "synthetic-node", SessionID: "synthetic-session"}}, store, TestAdapter{}, auth)
 					response := requestRuntimeLogs(handler, credential.token)
 					assertRuntimeLogPermissionDenied(t, response, "access_denied")
 				})
@@ -53,7 +53,7 @@ func TestRuntimeLogQueryRejectsAuthenticatedNonAdministrators(t *testing.T) {
 	}
 
 	// The protected event exists and the endpoint is available to administrators.
-	handler := NewGatewayHandler(Dependencies{LogBuffer: buffer}, store, TestAdapter{}, auth)
+	handler := NewGatewayHandler(Dependencies{LogBuffer: buffer, Runtime: DiagnosticRuntime{InstanceID: "synthetic-node", SessionID: "synthetic-session"}}, store, TestAdapter{}, auth)
 	response := requestRuntimeLogs(handler, auth.AdminToken)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), protectedRuntimeLogMarker) {
 		t.Fatalf("administrator query=%d body=%s", response.Code, response.Body.String())
@@ -88,7 +88,7 @@ func TestRuntimeLogQueryRequiresPasswordChangeWithoutGrantingAdministration(t *t
 			}
 			for _, state := range states {
 				t.Run("before-reset/"+state.name, func(t *testing.T) {
-					handler := NewGatewayHandler(Dependencies{LogBuffer: state.buffer}, store, TestAdapter{}, auth)
+					handler := NewGatewayHandler(Dependencies{LogBuffer: state.buffer, Runtime: DiagnosticRuntime{InstanceID: "synthetic-node", SessionID: "synthetic-session"}}, store, TestAdapter{}, auth)
 					assertRuntimeLogPermissionDenied(t, requestRuntimeLogs(handler, token), "password_change_required")
 				})
 			}
@@ -104,7 +104,7 @@ func TestRuntimeLogQueryRequiresPasswordChangeWithoutGrantingAdministration(t *t
 			}
 			for _, state := range states {
 				t.Run("after-reset/"+state.name, func(t *testing.T) {
-					handler := NewGatewayHandler(Dependencies{LogBuffer: state.buffer}, store, TestAdapter{}, auth)
+					handler := NewGatewayHandler(Dependencies{LogBuffer: state.buffer, Runtime: DiagnosticRuntime{InstanceID: "synthetic-node", SessionID: "synthetic-session"}}, store, TestAdapter{}, auth)
 					response := requestRuntimeLogs(handler, token)
 					if role == RoleMember {
 						assertRuntimeLogPermissionDenied(t, response, "access_denied")

@@ -29,7 +29,7 @@ func TestRuntimeLogQueryIsAdministratorOnlyLocalAndBounded(t *testing.T) {
 		return w
 	}
 	for _, token := range []string{"", "reader-secret"} {
-		if got := request("/api/v2/runtime/logs", token); got.Code != http.StatusUnauthorized {
+		if got := request("/api/v2/runtime/logs", token); got.Code != http.StatusUnauthorized || got.Header().Get("Cache-Control") != "no-store" {
 			t.Fatalf("token %q status %d: %s", token, got.Code, got.Body.String())
 		}
 	}
@@ -54,9 +54,11 @@ func TestRuntimeLogQueryIsAdministratorOnlyLocalAndBounded(t *testing.T) {
 	}{
 		{"/api/v2/runtime/logs?instanceId=gateway-02", http.StatusServiceUnavailable},
 		{"/api/v2/runtime/logs?limit=101", http.StatusBadRequest},
+		{"/api/v2/runtime/logs?from=not-a-date", http.StatusBadRequest},
+		{"/api/v2/runtime/logs?limit=not-a-number", http.StatusBadRequest},
 		{"/api/v2/runtime/logs?from=2026-09-01T00:00:00Z&to=2026-09-03T00:00:00Z", http.StatusBadRequest},
 	} {
-		if got := request(test.path, "admin-secret"); got.Code != test.want {
+		if got := request(test.path, "admin-secret"); got.Code != test.want || got.Header().Get("Cache-Control") != "no-store" {
 			t.Fatalf("%s status %d, want %d: %s", test.path, got.Code, test.want, got.Body.String())
 		}
 	}

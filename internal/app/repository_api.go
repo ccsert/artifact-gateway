@@ -65,7 +65,17 @@ func (m openAPIServeMux) HandleFunc(pattern string, handler func(http.ResponseWr
 	if m.handlePathParameterAction(pattern, "sessionId", "commit", handler) || m.handlePathParameterAction(pattern, "deliveryId", "replay", handler) {
 		return
 	}
-	m.mux.HandleFunc(pattern, m.guarded(handler))
+	guarded := m.guarded(handler)
+	if pattern == "GET /api/v2/runtime/logs" {
+		// Authentication and generated parameter parsing can reject requests
+		// before the log adapter runs, so apply its policy before both.
+		m.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-store")
+			guarded(w, r)
+		})
+		return
+	}
+	m.mux.HandleFunc(pattern, guarded)
 }
 
 func (m openAPIServeMux) handlePathParameterAction(pattern, parameter, action string, handler func(http.ResponseWriter, *http.Request)) bool {
