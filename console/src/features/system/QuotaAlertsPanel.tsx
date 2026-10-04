@@ -180,8 +180,8 @@ function AuthorizedQuotaAlerts() {
           tone="info"
           title={text("尚无邮件目标", "No email targets")}
           description={text(
-            "先通过管理员 API 配置邮件目标；目标的网页管理将在后续提供。",
-            "Configure an email target through the administrator API first. Web target management will follow.",
+            "在系统运行的“邮件通知”页签新建目标，再返回此页配置规则。",
+            "Create a target in the System runtime Email notifications tab, then return here to configure a rule.",
           )}
         />
       )}

@@ -60,6 +60,52 @@ supply relay addresses, authentication, headers or message bodies.
   nodes. A dedicated worker uses `GATEWAY_NODE_ROLES=worker` and
   `GATEWAY_WORKER_KINDS=email`; empty kind filters include email workers.
 
+## Console workflow
+
+Open **System runtime → Email notifications** (`/system?tab=email`). Platform
+administrators can create disabled targets, edit their name/language and replace
+the write-only recipient, or explicitly confirm enabling/disabling. The existing
+address cannot be read: leave the edit address empty to retain it. Saving never
+sends a test. Target version changes invalidate old queued deliveries and require
+quota-rule route confirmation; in-flight mail cannot be recalled.
+
+Preview warning, critical and recovery in English or Simplified Chinese with HTML
+and equivalent plain text. Previews use fixed synthetic data and send nothing.
+The browser rebuilds an inert layout in an opaque sandbox with no scripts,
+navigation, forms or external resources. Preview links are disabled. Browser
+rendering does not establish real email-client compatibility.
+
+An enabled target and ready deployment channel are required for **Send synthetic
+test…**. Confirm the target name, ID, version, language, scenario and actual queue
+impact. The existing recipient address is not available for review. Uncertain
+request retries keep the same target/version/scenario and UUID key; a conflict
+requires cancelling, refreshing and confirming again. The latest 50 delivery
+results refresh every 30 seconds while visible and show fixed safe errors,
+attempts, next attempt, possible duplicates and explicit SMTP acceptance semantics.
+Manual replay remains available through the administrator API.
+
+Addresses exist only in the open edit form, not URLs, logs or persistent browser
+storage, and are cleared on success, cancel, navigation, conflict or authorization
+block. CAS conflicts retain only the safe name/language draft; explicitly refresh
+the target version before saving again. Permission or forced-password-change
+errors block the entire email workspace until an explicit successful refresh.
+
+The opt-in host test uses a migrated isolated database whose name ends in `_test`:
+
+```sh
+EMAIL_CONSOLE_BROWSER_E2E=1 TEST_DATABASE_URL='<isolated-test-connection>' \
+  go test -count=1 -tags=integration ./internal/app -run '^TestPostgresEmailConsoleBrowserTLS$' -v
+```
+
+It requires installed Console dependencies and Playwright Chromium. It starts an
+owned loopback API, Vite on 4196 (override `EMAIL_CONSOLE_BROWSER_PORT`), and owned
+TLS SMTP sinks that cannot relay mail. It verifies actual UI/API/PG create/edit/CAS,
+explicit tests, accepted multipart MIME and permanent recipient failure, then
+36 preview combinations at 320/390/1440px, both locales and themes. It never
+configures production recipients or SMTP secrets. Screenshots are local evidence
+under `.impeccable/review/`; this test is opt-in on the host, not silently counted
+as a passing default container integration test.
+
 ## Administrator API
 
 All endpoints require a platform administrator and reject forced-password-change
@@ -134,7 +180,7 @@ permissions are covered. `make integration-test` includes these tests.
 The [finite repository quota evaluator](repository-quota-alerts.md) now creates
 immutable logical events atomically with delivery. New synthetic previews use
 version 2, while queued version 1 remains available unchanged. Explicit local
-mount and process 5xx evaluation, Console configuration, client acceptance and
+mount and process 5xx evaluation and their Console configuration, client acceptance and
 real deployment remain follow-up work. S3/NAS pool capacity stays unknown.
 See [operational signals](operational-signals.md) and
 [#211](https://github.com/ccsert/artifact-gateway/issues/211).

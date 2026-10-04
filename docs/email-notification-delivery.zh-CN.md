@@ -53,6 +53,41 @@ JSON 文件，启动时离线读取，拒绝未知键。以下仅为合成文档
 - API 与 Worker 节点须使用一致的中继、加密密钥与信任配置。独立 Worker 使用
   `GATEWAY_NODE_ROLES=worker`、`GATEWAY_WORKER_KINDS=email`；空 kind 过滤包含邮件。
 
+## Console 操作流程
+
+打开**系统运行 → 邮件通知**（`/system?tab=email`）。平台管理员可创建停用目标、
+编辑名称/语言、替换只写收件人，并明确确认启用/停用。旧地址不可读取；编辑时
+地址留空保留。保存不发测试。目标版本变更会使旧队列交付停止，配额规则需重新
+确认路由；在途邮件不能撤回。
+
+预览提供警告、严重、恢复三态，中英文 HTML 及等价纯文本。固定合成数据无发送。
+浏览器先重建惰性布局，再放入不允许脚本、导航、表单或外部资源的隔离沙箱。
+预览链接禁用；浏览器效果不能替代真实邮件客户端兼容验收。
+
+已启用目标及部署通道就绪才能**发送合成测试…**。必须确认名称、ID、版本、语言、
+场景与真实入队影响；无法读取旧收件地址。不确定请求重试保持目标/版本/场景和
+同一 UUID 标识；冲突必须取消、刷新后重新确认。最新 50 条结果在页面可见时每
+30 秒刷新，显示固定安全错误、尝试次数、下次时间、可能重复及明确 SMTP 接受
+语义。手动重放仍使用管理员 API。
+
+地址只保存在当前表单，不入 URL、日志或持久浏览器存储；成功、取消、导航、
+冲突或权限阻断时清除。CAS 冲突仅保留名称/语言安全草稿，必须显式刷新最新
+目标版本再保存。权限或强制改密错误整页阻断；显式成功刷新才恢复。
+
+主机可选验收需迁移后的隔离数据库，名称以 `_test` 结尾：
+
+```sh
+EMAIL_CONSOLE_BROWSER_E2E=1 TEST_DATABASE_URL='<isolated-test-connection>' \
+  go test -count=1 -tags=integration ./internal/app -run '^TestPostgresEmailConsoleBrowserTLS$' -v
+```
+
+依赖已安装 Console dependencies 与 Playwright Chromium；启动本机自有 API、
+4196 Vite（可用 `EMAIL_CONSOLE_BROWSER_PORT` 改端口）及绝不转发邮件的 TLS SMTP
+接收端。实际验证 UI/API/PG 新建、编辑、CAS、明确测试、accepted multipart MIME
+和永久收件拒绝，再覆盖 320/390/1440px、中英明暗共 36 套三态预览。无生产收件人
+或 SMTP secret。截图在 `.impeccable/review/` 留作本地证据；该主机测试显式开启，
+不能把默认容器集成的跳过说成通过。
+
 ## 管理员 API
 
 全部端点要求平台管理员，拒绝强制改密 Session，响应为 `Cache-Control: no-store`。
@@ -110,6 +145,6 @@ UTF-8 纯文本与 HTML。没有外部图片、字体、跟踪像素或附件。
 
 [有限仓库配额评估器](repository-quota-alerts.zh-CN.md)已将逻辑不可变事件与邮件
 交付在同一事务创建。新合成预览使用版本 2，已排队版本 1 仍保持原文案与渲染。
-显式本地挂载/进程 5xx 评估、Console 配置页、真实客户端验收及真实部署继续后续；
+显式本地挂载/进程 5xx 的评估与 Console 配置、真实邮件客户端验收及真实部署继续后续；
 S3/NAS 池容量保持 unknown。见[运维信号](operational-signals.zh-CN.md)和
 [#211](https://github.com/ccsert/artifact-gateway/issues/211)。

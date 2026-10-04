@@ -170,7 +170,7 @@ tests cover concurrent evaluators, configuration fencing, queue overflow, read
 failures and atomic rollback when event persistence fails.
 
 This does not certify real Gmail/Outlook/Apple Mail clients or production rollout.
-Terminal retention/archive, Console email-target management/preview/test/replay, explicit local mount alerts
+Terminal retention/archive, Console manual email replay, explicit local mount alerts
 and process 5xx alerts remain separate slices. Real relay, recipients and production
 thresholds require separate deployment authorization. This slice creates no
 credentials, sends no real email and changes no production state.

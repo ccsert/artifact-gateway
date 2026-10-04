@@ -86,7 +86,7 @@ const labels: Record<string, [string, string]> = {
   outcome_unknown: ["交付结果不确定", "Delivery outcome unknown"],
 };
 export function quotaLabel(code: string, text: Translate) {
-  const label = labels[code];
+  const label = Object.hasOwn(labels, code) ? labels[code] : undefined;
   return label ? text(...label) : text("状态未知", "Status unknown");
 }
 
@@ -160,7 +160,7 @@ export function safeQuotaError(error: unknown, text: Translate): string {
     typeof error.code === "string"
       ? error.code
       : "";
-  const label = errors[code];
+  const label = Object.hasOwn(errors, code) ? errors[code] : undefined;
   return label
     ? text(...label)
     : text(

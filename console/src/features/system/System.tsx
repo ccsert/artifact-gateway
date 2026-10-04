@@ -6,13 +6,16 @@ import { RuntimeLogsPanel } from "../operations/RuntimeLogsPanel";
 import { RuntimeNodesPanel } from "../operations/RuntimeNodesPanel";
 import { SystemDiagnosticsPanel } from "../operations/SystemDiagnosticsPanel";
 import { QuotaAlertsPanel } from "./QuotaAlertsPanel";
+import { EmailNotificationsPanel } from "./EmailNotificationsPanel";
 
 export function SystemPage() {
   const { text } = usePreferences();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const activeTab =
-    requestedTab === "logs" || requestedTab === "alerts"
+    requestedTab === "logs" ||
+    requestedTab === "alerts" ||
+    requestedTab === "email"
       ? requestedTab
       : "diagnostics";
 
@@ -21,8 +24,8 @@ export function SystemPage() {
       <PageHeader
         title={text("系统运行", "System runtime")}
         description={text(
-          "查看 Gateway 节点、诊断、日志与仓库配额告警。",
-          "Inspect Gateway nodes, diagnostics, logs, and repository quota alerts.",
+          "查看 Gateway 节点、诊断、日志、仓库配额告警与邮件通知。",
+          "Inspect Gateway nodes, diagnostics, logs, repository quota alerts, and email notifications.",
         )}
       />
       <Tabs
@@ -54,6 +57,12 @@ export function SystemPage() {
             key: "alerts",
             label: text("配额告警", "Quota alerts"),
             children: activeTab === "alerts" ? <QuotaAlertsPanel /> : null,
+          },
+          {
+            key: "email",
+            label: text("邮件通知", "Email notifications"),
+            children:
+              activeTab === "email" ? <EmailNotificationsPanel /> : null,
           },
         ]}
       />

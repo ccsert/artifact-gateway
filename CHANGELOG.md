@@ -11,7 +11,9 @@ their meaning.
 
 ## Unreleased
 
-- Console System now provides administrator repository quota rule creation/editing, explicit enable/disable/delete confirmation and safe state/event/delivery evidence. New rules stay disabled; permission denials and version conflicts preserve write gates/drafts, stale data retains severity, and SMTP acceptance remains distinct from inbox delivery. Email target web management, preview/test/replay and production configuration remain separate.
+- Console System now manages write-only email targets, sandboxed bilingual three-state template previews, explicitly confirmed synthetic tests, and readable delivery results. Targets default disabled; saving/previewing sends no mail. Whole-workspace permission gates, safe CAS drafts, cancellation and same-key uncertain test retries are covered. Real mailbox clients and production SMTP remain separate.
+
+- Console System now provides administrator repository quota rule creation/editing, explicit enable/disable/delete confirmation and safe state/event/delivery evidence. New rules stay disabled; permission denials and version conflicts preserve write gates/drafts, stale data retains severity, and SMTP acceptance remains distinct from inbox delivery. Manual replay and production configuration remain separate.
 
 - Added default-off repository logical quota rules with explicit sustained thresholds and recovery hysteresis, PostgreSQL state/events and atomic delivery through the existing TLS mail worker. Administrator CAS APIs expose safe evidence and delivery state; restart/multiple evaluators deduplicate, unknown data cannot recover alerts, and bilingual HTML/plain mail retains immutable evidence. Local mounts, 5xx, Console configuration and real-recipient deployment remain separate.
 
