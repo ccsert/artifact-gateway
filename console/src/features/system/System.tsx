@@ -5,19 +5,24 @@ import { usePreferences } from "../../lib/preferences";
 import { RuntimeLogsPanel } from "../operations/RuntimeLogsPanel";
 import { RuntimeNodesPanel } from "../operations/RuntimeNodesPanel";
 import { SystemDiagnosticsPanel } from "../operations/SystemDiagnosticsPanel";
+import { QuotaAlertsPanel } from "./QuotaAlertsPanel";
 
 export function SystemPage() {
   const { text } = usePreferences();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") === "logs" ? "logs" : "diagnostics";
+  const requestedTab = searchParams.get("tab");
+  const activeTab =
+    requestedTab === "logs" || requestedTab === "alerts"
+      ? requestedTab
+      : "diagnostics";
 
   return (
     <div className="ag-page-stack">
       <PageHeader
         title={text("系统运行", "System runtime")}
         description={text(
-          "查看 Gateway 节点状态、依赖诊断和运行日志。",
-          "Inspect Gateway node health, dependency diagnostics, and runtime logs.",
+          "查看 Gateway 节点、诊断、日志与仓库配额告警。",
+          "Inspect Gateway nodes, diagnostics, logs, and repository quota alerts.",
         )}
       />
       <Tabs
@@ -44,6 +49,11 @@ export function SystemPage() {
             key: "logs",
             label: text("运行日志", "Runtime logs"),
             children: <RuntimeLogsPanel />,
+          },
+          {
+            key: "alerts",
+            label: text("配额告警", "Quota alerts"),
+            children: activeTab === "alerts" ? <QuotaAlertsPanel /> : null,
           },
         ]}
       />
