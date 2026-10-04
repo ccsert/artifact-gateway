@@ -21,7 +21,7 @@ func TestPostgresEmailQueueFencesWorkers(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
-	if _, err = store.db.ExecContext(context.Background(), `TRUNCATE email_test_deliveries,email_targets,email_test_requests`); err != nil {
+	if _, err = store.db.ExecContext(context.Background(), `TRUNCATE repository_quota_alert_events,email_test_deliveries,repository_quota_alert_rules,email_targets,email_test_requests`); err != nil {
 		t.Fatal(err)
 	}
 	exerciseEmailQueue(t, store)
@@ -43,7 +43,7 @@ func TestPostgresEmailConcurrentLimitRestartExhaustionAndReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = second.Close() }()
-	if _, err = first.db.Exec(`TRUNCATE email_test_deliveries,email_targets,email_test_requests`); err != nil {
+	if _, err = first.db.Exec(`TRUNCATE repository_quota_alert_events,email_test_deliveries,repository_quota_alert_rules,email_targets,email_test_requests`); err != nil {
 		t.Fatal(err)
 	}
 	target, err := first.CreateEmailTarget(ctx, EmailTarget{ID: uuid.NewString(), Name: "Synthetic", Locale: "en", RecipientCiphertext: "immutable", Enabled: true})

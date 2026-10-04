@@ -204,6 +204,17 @@ func (h generatedRepositoryAPIAdapter) GetEmailNotificationCapability(w http.Res
 }
 func emailDeliveryResponse(v repository.EmailDelivery) map[string]any {
 	out := map[string]any{"id": v.ID, "eventId": v.EventID, "targetId": v.TargetID, "targetVersion": v.TargetVersion, "scenario": v.Scenario, "locale": v.Locale, "templateVersion": v.TemplateVersion, "state": v.State, "attempts": v.Attempts, "possibleDuplicate": v.PossibleDuplicate, "version": v.Version, "createdAt": v.CreatedAt, "updatedAt": v.UpdatedAt}
+	kind := v.Kind
+	if kind == "" {
+		kind = "test"
+	}
+	out["kind"] = kind
+	if kind == "repository_quota" {
+		out["quotaRuleId"], out["episodeId"], out["eventSequence"] = v.QuotaRuleID, v.EpisodeID, v.EventSequence
+	}
+	if v.AutomaticCancellationCode != "" {
+		out["automaticCancellationCode"] = v.AutomaticCancellationCode
+	}
 	if v.ErrorCode != "" {
 		out["errorCode"] = v.ErrorCode
 	}

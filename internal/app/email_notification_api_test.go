@@ -29,7 +29,7 @@ func TestAdministratorCanPreviewWarningEmailWithoutSMTP(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(got.Subject, "警告") || !strings.Contains(got.HTML, "12%") || !strings.Contains(got.Text, "12%") || got.TemplateVersion != "1" {
+	if !strings.Contains(got.Subject, "警告") || !strings.Contains(got.HTML, "12%") || !strings.Contains(got.Text, "12%") || got.TemplateVersion != "2" {
 		t.Fatalf("missing designed HTML/plain warning preview: %#v", got)
 	}
 	if w.Header().Get("Cache-Control") != "no-store" {
@@ -130,6 +130,36 @@ func TestEmailManagementAuthorizationAndDisabledGate(t *testing.T) {
 	d, _ := store.ListEmailDeliveries(context.Background(), 100)
 	if len(d) != 0 {
 		t.Fatal("disabled test created a delivery")
+	}
+}
+
+func TestEmailIdempotencyRetainsV1DescriptorAcrossTemplateUpgrade(t *testing.T) {
+	t.Setenv("GATEWAY_SETTINGS_ENCRYPTION_KEY", "01234567890123456789012345678901")
+	s := repository.NewMemoryStore()
+	ctx := context.Background()
+	target, err := s.CreateEmailTarget(ctx, repository.EmailTarget{ID: uuid.NewString(), Name: "Synthetic", Locale: "en", Enabled: true, RecipientCiphertext: "synthetic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := uuid.NewString()
+	old, err := s.EnqueueEmailTest(ctx, repository.EmailTestRequest{ID: uuid.NewString(), EventID: uuid.NewString(), RequestKey: key, TargetID: target.ID, TargetVersion: target.Version, Scenario: "warning", TemplateVersion: "1", From: "original@example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := emailnotification.Config{Enabled: true, Host: "smtp.example.test", Port: 465, Mode: "implicit_tls", From: "new@example.test", ApprovedIPs: []string{"192.0.2.10"}}
+	h := NewGatewayHandler(Dependencies{Email: cfg}, s, TestAdapter{}, testAuthenticator())
+	r := httptest.NewRequest("POST", "/api/v2/email-notifications:test", strings.NewReader(`{"targetId":"`+target.ID+`","scenario":"warning"}`))
+	authorize(r, "admin-secret")
+	r.Header.Set("If-Match", target.Version)
+	r.Header.Set("Idempotency-Key", key)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 202 || !strings.Contains(w.Body.String(), old.ID) || !strings.Contains(w.Body.String(), `"templateVersion":"1"`) {
+		t.Fatalf("same client request conflicted after template upgrade: %d %s", w.Code, w.Body.String())
+	}
+	retained, err := s.GetEmailDelivery(ctx, old.ID)
+	if err != nil || retained.From != "original@example.test" || retained.TemplateVersion != "1" {
+		t.Fatal("retry rewrote immutable descriptor")
 	}
 }
 

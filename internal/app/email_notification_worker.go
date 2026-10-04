@@ -50,6 +50,15 @@ func (w EmailNotificationWorker) Run(ctx context.Context) (bool, error) {
 			sender.Config.From = v.From
 			sender.Config.ConsoleOrigin = v.ConsoleOrigin
 			message, e := emailnotification.MIME(sender.Config, recipient, v.EventID, v.Scenario, v.Locale, v.TemplateVersion, v.CreatedAt)
+			if v.Kind == "repository_quota" {
+				if v.EventID != v.QuotaEvent.ID || v.QuotaRuleID != v.QuotaEvent.RuleID || v.EventSequence != v.QuotaEvent.Sequence || v.EpisodeID != v.QuotaEvent.EpisodeID || v.Scenario != v.QuotaEvent.Scenario {
+					e = emailnotification.ErrInvalidMessage
+				} else {
+					message, e = emailnotification.MIMEQuota(sender.Config, recipient, v.QuotaEvent, v.Locale, v.TemplateVersion)
+				}
+			} else if v.Kind != "" && v.Kind != "test" {
+				e = emailnotification.ErrInvalidMessage
+			}
 			if e != nil {
 				result = repository.EmailAttemptResult{Code: "invalid_message", Permanent: true}
 			} else {

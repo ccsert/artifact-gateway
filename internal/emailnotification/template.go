@@ -12,19 +12,27 @@ import (
 	"time"
 )
 
-const TemplateVersion = "1"
+const TemplateVersion = "2"
 
 //go:embed template.html
 var templateSource string
-var mailTemplate = template.Must(template.New("notification").Funcs(template.FuncMap{
-	// These no-argument functions emit only compiled layout constants. Dynamic
-	// semantic values never pass through template.HTML. html/template strips
-	// ordinary comments, including the conditional wrappers needed by Outlook.
-	"outlookOpen": func() template.HTML {
-		return `<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0"><tr><td><![endif]-->`
-	},
-	"outlookClose": func() template.HTML { return `<!--[if mso]></td></tr></table><![endif]-->` },
-}).Parse(templateSource))
+
+//go:embed quota-template.html
+var quotaTemplateSource string
+var mailTemplate = compileMailTemplate(templateSource)
+var quotaMailTemplate = compileMailTemplate(quotaTemplateSource)
+
+func compileMailTemplate(source string) *template.Template {
+	return template.Must(template.New("notification").Funcs(template.FuncMap{
+		// These no-argument functions emit only compiled layout constants. Dynamic
+		// semantic values never pass through template.HTML. html/template strips
+		// ordinary comments, including the conditional wrappers needed by Outlook.
+		"outlookOpen": func() template.HTML {
+			return `<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0"><tr><td><![endif]-->`
+		},
+		"outlookClose": func() template.HTML { return `<!--[if mso]></td></tr></table><![endif]-->` },
+	}).Parse(source))
+}
 
 var ErrInvalidMessage = errors.New("invalid email message")
 
@@ -54,9 +62,16 @@ func ConsoleURL(origin string) (string, error) {
 	return u.String(), nil
 }
 
-// Render uses fixed synthetic content until capacity evaluation is implemented.
-// Keeping version 1 is required to replay already queued descriptors faithfully.
+// Render previews the current fixed synthetic descriptor.
 func Render(scenario, locale, eventID string, occurred time.Time, origin string) (Preview, error) {
+	return renderSyntheticVersion(scenario, locale, eventID, occurred, origin, TemplateVersion)
+}
+
+// Version 1 remains intact for already queued descriptors.
+func renderSyntheticVersion(scenario, locale, eventID string, occurred time.Time, origin, version string) (Preview, error) {
+	if version != "1" && version != "2" {
+		return Preview{}, ErrInvalidMessage
+	}
 	if locale != "en" && locale != "zh-CN" {
 		return Preview{}, ErrInvalidMessage
 	}
@@ -116,8 +131,23 @@ func Render(scenario, locale, eventID string, occurred time.Time, origin string)
 		return Preview{}, ErrInvalidMessage
 	}
 	v.Subject = "[Artifact Gateway] " + v.Status + " · " + v.Title
+	if version == "2" {
+		if locale == "zh-CN" {
+			v.Footer = "管理员测试邮件 · 合成样例，非实际告警"
+		} else {
+			v.Footer = "Administrator test email · Synthetic example, not an actual alert"
+		}
+	}
+	return renderView(v, version)
+}
+
+func renderView(v view, version string) (Preview, error) {
 	var html bytes.Buffer
-	if err := mailTemplate.Execute(&html, v); err != nil {
+	current := mailTemplate
+	if version == "quota-1" {
+		current = quotaMailTemplate
+	}
+	if err := current.Execute(&html, v); err != nil {
 		return Preview{}, ErrInvalidMessage
 	}
 	var plain strings.Builder
@@ -130,5 +160,5 @@ func Render(scenario, locale, eventID string, occurred time.Time, origin string)
 		fmt.Fprintf(&plain, "\n%s\n", v.URL)
 	}
 	fmt.Fprintf(&plain, "\n%s\n", v.Footer)
-	return Preview{Subject: v.Subject, HTML: html.String(), Text: plain.String(), TemplateVersion: TemplateVersion}, nil
+	return Preview{Subject: v.Subject, HTML: html.String(), Text: plain.String(), TemplateVersion: version}, nil
 }

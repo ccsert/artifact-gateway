@@ -9,6 +9,12 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/repository-quota-alert-rules/{ruleId}/events":
+    "$ref": "./management/quota-alerts.yaml#/quota_events"
+  "/repository-quota-alert-rules/{ruleId}":
+    "$ref": "./management/quota-alerts.yaml#/quota_rule"
+  "/repository-quota-alert-rules":
+    "$ref": "./management/quota-alerts.yaml#/quota_rules"
   "/email-notifications":
     "$ref": "./management/email.yaml#/email_capabilities"
   "/email-notifications:test":

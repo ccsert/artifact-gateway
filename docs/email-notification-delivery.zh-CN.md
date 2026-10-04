@@ -9,8 +9,9 @@ Prometheus/Alertmanager 可负责外部可用性监测，但增加组件和路�
 [#211](https://github.com/ccsert/artifact-gateway/issues/211) 与
 [#212](https://github.com/ccsert/artifact-gateway/issues/212)。
 
-本批实现**管理员显式发起的合成测试邮件**。容量和 5xx 观测不入邮件队列。
-告警评估、路由与 Console 页面仍待后续。
+本通道支持**管理员显式发起的合成测试邮件**及
+[仓库逻辑配额告警](repository-quota-alerts.zh-CN.md)。本地挂载和 5xx 观测不入
+邮件队列；其评估与 Console 配置页仍待后续。
 [#229](https://github.com/ccsert/artifact-gateway/issues/229)、
 [#230](https://github.com/ccsert/artifact-gateway/issues/230) 的完整范围未交付；
 浏览器截图不能代表 Gmail、Outlook 或 Apple Mail 客户端验收。
@@ -107,8 +108,8 @@ UTF-8 纯文本与 HTML。没有外部图片、字体、跟踪像素或附件。
 安全重放、TLS 信任/降级失败、实际双语 multipart MIME 和管理员权限。
 `make integration-test` 包含这些测试。
 
-下一批另做有限容量评估器，将真实不可变事件与交付在同一事务创建。Repository
-配额使用逻辑字节与明确配额；显式本地挂载使用进程可见的可用字节；S3/NAS 池
-容量保持 unknown。真实告警启用前须验证持续超限、恢复滞回、陈旧/未知数据、冷却
-与共享评估职责。见[运维信号](operational-signals.zh-CN.md)和
+[有限仓库配额评估器](repository-quota-alerts.zh-CN.md)已将逻辑不可变事件与邮件
+交付在同一事务创建。新合成预览使用版本 2，已排队版本 1 仍保持原文案与渲染。
+显式本地挂载/进程 5xx 评估、Console 配置页、真实客户端验收及真实部署继续后续；
+S3/NAS 池容量保持 unknown。见[运维信号](operational-signals.zh-CN.md)和
 [#211](https://github.com/ccsert/artifact-gateway/issues/211)。

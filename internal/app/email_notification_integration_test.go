@@ -33,7 +33,7 @@ func TestPostgresAdministratorEmailReopensAndDeliversActualTLSMIME(t *testing.T)
 		t.Fatal(err)
 	}
 	defer func() { _ = db.Close() }()
-	if _, err = db.Exec(`TRUNCATE email_test_deliveries,email_targets,email_test_requests`); err != nil {
+	if _, err = db.Exec(`TRUNCATE repository_quota_alert_events,email_test_deliveries,repository_quota_alert_rules,email_targets,email_test_requests`); err != nil {
 		t.Fatal(err)
 	}
 	store, err := repository.NewPostgresStore(connection)

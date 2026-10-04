@@ -40,7 +40,7 @@ const repositoryCapacityRecordsQuery = `WITH usage AS (
 	FROM native_go_assets WHERE collected_at IS NULL GROUP BY repository_id
 	UNION ALL
 	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
-	FROM native_cargo_publications GROUP BY repository_id
+	FROM native_cargo_publications WHERE collected_at IS NULL GROUP BY repository_id
 	UNION ALL
 	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
 	FROM native_apt_assets GROUP BY repository_id

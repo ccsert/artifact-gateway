@@ -12,6 +12,13 @@ import (
 	"time"
 )
 
+func TestSyntheticPreviewDoesNotClaimQuotaEvaluationIsDisabled(t *testing.T) {
+	p, err := Render("warning", "zh-CN", "synthetic", time.Now(), "")
+	if err != nil || strings.Contains(p.Text, "尚未启用容量告警评估") || p.TemplateVersion != "2" {
+		t.Fatalf("obsolete synthetic footer: %s %s %v", p.TemplateVersion, p.Text, err)
+	}
+}
+
 func TestVersionedMIMEContainsEquivalentTextAndEscapedHTML(t *testing.T) {
 	for _, locale := range []string{"en", "zh-CN"} {
 		for _, scenario := range []string{"warning", "critical", "resolved"} {
