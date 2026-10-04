@@ -9,6 +9,22 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/email-notifications":
+    "$ref": "./management/email.yaml#/email_capabilities"
+  "/email-notifications:test":
+    "$ref": "./management/email.yaml#/email_test"
+  "/email-targets":
+    "$ref": "./management/email.yaml#/email_targets"
+  "/email-targets/{targetId}":
+    "$ref": "./management/email.yaml#/email_target"
+  "/email-deliveries":
+    "$ref": "./management/email.yaml#/email_deliveries"
+  "/email-deliveries/{deliveryId}":
+    "$ref": "./management/email.yaml#/email_delivery"
+  "/email-deliveries/{deliveryId}:replay":
+    "$ref": "./management/email.yaml#/email_replay"
+  "/email-notifications:preview":
+    "$ref": "./management/email.yaml#/email_preview"
   "/formats":
     "$ref": "./management/formats.yaml#/formats"
   "/artifact-search":

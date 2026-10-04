@@ -13,6 +13,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/database"
+	"github.com/artifact-gateway/artifact-gateway/internal/emailnotification"
 	"github.com/artifact-gateway/artifact-gateway/internal/localcapacity"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
@@ -55,10 +56,11 @@ var supportedScannerFormats = func() map[string]struct{} {
 var supportedWorkerKinds = map[string]struct{}{
 	"promotion": {}, "replication": {}, "retention": {}, "reclaim": {},
 	"intelligence": {}, "scan": {}, "deletion": {}, "recovery": {}, "cache": {}, "audit": {},
-	"webhook": {},
+	"webhook": {}, "email": {},
 }
 
 type Config struct {
+	Email                           emailnotification.Config
 	ListenAddress                   string
 	ConsoleThemeDir                 string
 	NodeRoles                       []NodeRole
@@ -252,6 +254,10 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("GATEWAY_LOCAL_CAPACITY_MOUNTS is invalid")
 	}
 	cfg.LocalCapacityMounts = capacityMounts
+	cfg.Email, err = emailnotification.Load(strings.TrimSpace(os.Getenv("GATEWAY_EMAIL_CONFIG_FILE")))
+	if err != nil {
+		return Config{}, err
+	}
 	if err := configureOTLPLogs(&cfg); err != nil {
 		return Config{}, err
 	}

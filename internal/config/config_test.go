@@ -820,3 +820,18 @@ func TestAPTRestoreTrustIsIndependentAndRequiresCompletePublicKeyPolicy(t *testi
 		t.Fatal("accepted keyring without fingerprints")
 	}
 }
+
+func TestLoadSupportsDefaultOffDedicatedEmailWorker(t *testing.T) {
+	setCompleteConfiguration(t)
+	t.Setenv("GATEWAY_EMAIL_CONFIG_FILE", "")
+	t.Setenv("GATEWAY_NODE_ROLES", "worker")
+	t.Setenv("GATEWAY_WORKER_KINDS", "email")
+	cfg, err := Load()
+	if err != nil || cfg.Email.Enabled || !cfg.WorkerKindEnabled("email") || cfg.WorkerKindEnabled("webhook") {
+		t.Fatal("dedicated email worker configuration")
+	}
+	t.Setenv("GATEWAY_EMAIL_CONFIG_FILE", "/nonexistent/synthetic-relay.json")
+	if _, err = Load(); err == nil || strings.Contains(err.Error(), "nonexistent") {
+		t.Fatal("unsafe email config failure")
+	}
+}

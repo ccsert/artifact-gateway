@@ -1126,6 +1126,189 @@ func (e EgressProxyTestResultEgressMode) Valid() bool {
 	}
 }
 
+// Defines values for EmailCapabilityReason.
+const (
+	EmailCapabilityReasonEmailDisabled            EmailCapabilityReason = "email_disabled"
+	EmailCapabilityReasonEncryptionKeyUnavailable EmailCapabilityReason = "encryption_key_unavailable"
+	EmailCapabilityReasonReady                    EmailCapabilityReason = "ready"
+)
+
+// Valid indicates whether the value is a known member of the EmailCapabilityReason enum.
+func (e EmailCapabilityReason) Valid() bool {
+	switch e {
+	case EmailCapabilityReasonEmailDisabled:
+		return true
+	case EmailCapabilityReasonEncryptionKeyUnavailable:
+		return true
+	case EmailCapabilityReasonReady:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailDeliveryLocale.
+const (
+	EmailDeliveryLocaleEn   EmailDeliveryLocale = "en"
+	EmailDeliveryLocaleZhCN EmailDeliveryLocale = "zh-CN"
+)
+
+// Valid indicates whether the value is a known member of the EmailDeliveryLocale enum.
+func (e EmailDeliveryLocale) Valid() bool {
+	switch e {
+	case EmailDeliveryLocaleEn:
+		return true
+	case EmailDeliveryLocaleZhCN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailDeliveryScenario.
+const (
+	EmailDeliveryScenarioCritical EmailDeliveryScenario = "critical"
+	EmailDeliveryScenarioResolved EmailDeliveryScenario = "resolved"
+	EmailDeliveryScenarioWarning  EmailDeliveryScenario = "warning"
+)
+
+// Valid indicates whether the value is a known member of the EmailDeliveryScenario enum.
+func (e EmailDeliveryScenario) Valid() bool {
+	switch e {
+	case EmailDeliveryScenarioCritical:
+		return true
+	case EmailDeliveryScenarioResolved:
+		return true
+	case EmailDeliveryScenarioWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailDeliveryState.
+const (
+	EmailDeliveryStateAccepted   EmailDeliveryState = "accepted"
+	EmailDeliveryStateDead       EmailDeliveryState = "dead"
+	EmailDeliveryStateDelivering EmailDeliveryState = "delivering"
+	EmailDeliveryStatePending    EmailDeliveryState = "pending"
+	EmailDeliveryStateRetrying   EmailDeliveryState = "retrying"
+)
+
+// Valid indicates whether the value is a known member of the EmailDeliveryState enum.
+func (e EmailDeliveryState) Valid() bool {
+	switch e {
+	case EmailDeliveryStateAccepted:
+		return true
+	case EmailDeliveryStateDead:
+		return true
+	case EmailDeliveryStateDelivering:
+		return true
+	case EmailDeliveryStatePending:
+		return true
+	case EmailDeliveryStateRetrying:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailPreviewInputLocale.
+const (
+	EmailPreviewInputLocaleEn   EmailPreviewInputLocale = "en"
+	EmailPreviewInputLocaleZhCN EmailPreviewInputLocale = "zh-CN"
+)
+
+// Valid indicates whether the value is a known member of the EmailPreviewInputLocale enum.
+func (e EmailPreviewInputLocale) Valid() bool {
+	switch e {
+	case EmailPreviewInputLocaleEn:
+		return true
+	case EmailPreviewInputLocaleZhCN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailPreviewInputScenario.
+const (
+	EmailPreviewInputScenarioCritical EmailPreviewInputScenario = "critical"
+	EmailPreviewInputScenarioResolved EmailPreviewInputScenario = "resolved"
+	EmailPreviewInputScenarioWarning  EmailPreviewInputScenario = "warning"
+)
+
+// Valid indicates whether the value is a known member of the EmailPreviewInputScenario enum.
+func (e EmailPreviewInputScenario) Valid() bool {
+	switch e {
+	case EmailPreviewInputScenarioCritical:
+		return true
+	case EmailPreviewInputScenarioResolved:
+		return true
+	case EmailPreviewInputScenarioWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailTargetLocale.
+const (
+	EmailTargetLocaleEn   EmailTargetLocale = "en"
+	EmailTargetLocaleZhCN EmailTargetLocale = "zh-CN"
+)
+
+// Valid indicates whether the value is a known member of the EmailTargetLocale enum.
+func (e EmailTargetLocale) Valid() bool {
+	switch e {
+	case EmailTargetLocaleEn:
+		return true
+	case EmailTargetLocaleZhCN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailTargetInputLocale.
+const (
+	EmailTargetInputLocaleEn   EmailTargetInputLocale = "en"
+	EmailTargetInputLocaleZhCN EmailTargetInputLocale = "zh-CN"
+)
+
+// Valid indicates whether the value is a known member of the EmailTargetInputLocale enum.
+func (e EmailTargetInputLocale) Valid() bool {
+	switch e {
+	case EmailTargetInputLocaleEn:
+		return true
+	case EmailTargetInputLocaleZhCN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailTestInputScenario.
+const (
+	EmailTestInputScenarioCritical EmailTestInputScenario = "critical"
+	EmailTestInputScenarioResolved EmailTestInputScenario = "resolved"
+	EmailTestInputScenarioWarning  EmailTestInputScenario = "warning"
+)
+
+// Valid indicates whether the value is a known member of the EmailTestInputScenario enum.
+func (e EmailTestInputScenario) Valid() bool {
+	switch e {
+	case EmailTestInputScenarioCritical:
+		return true
+	case EmailTestInputScenarioResolved:
+		return true
+	case EmailTestInputScenarioWarning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Format.
 const (
 	FormatApt   Format = "apt"
@@ -4031,6 +4214,107 @@ type EgressProxyTestResult struct {
 // EgressProxyTestResultEgressMode defines model for EgressProxyTestResult.EgressMode.
 type EgressProxyTestResultEgressMode string
 
+// EmailCapability defines model for EmailCapability.
+type EmailCapability struct {
+	Enabled bool                  `json:"enabled"`
+	Reason  EmailCapabilityReason `json:"reason"`
+}
+
+// EmailCapabilityReason defines model for EmailCapability.Reason.
+type EmailCapabilityReason string
+
+// EmailDelivery defines model for EmailDelivery.
+type EmailDelivery struct {
+	AcceptedAt        *time.Time            `json:"acceptedAt,omitempty"`
+	Attempts          int                   `json:"attempts"`
+	CreatedAt         time.Time             `json:"createdAt"`
+	ErrorCode         *string               `json:"errorCode,omitempty"`
+	EventId           openapi_types.UUID    `json:"eventId"`
+	Id                openapi_types.UUID    `json:"id"`
+	Locale            EmailDeliveryLocale   `json:"locale"`
+	NextAttemptAt     *time.Time            `json:"nextAttemptAt,omitempty"`
+	PossibleDuplicate bool                  `json:"possibleDuplicate"`
+	Scenario          EmailDeliveryScenario `json:"scenario"`
+	State             EmailDeliveryState    `json:"state"`
+	TargetId          openapi_types.UUID    `json:"targetId"`
+	TargetVersion     string                `json:"targetVersion"`
+	TemplateVersion   string                `json:"templateVersion"`
+	UpdatedAt         time.Time             `json:"updatedAt"`
+	Version           string                `json:"version"`
+}
+
+// EmailDeliveryLocale defines model for EmailDelivery.Locale.
+type EmailDeliveryLocale string
+
+// EmailDeliveryScenario defines model for EmailDelivery.Scenario.
+type EmailDeliveryScenario string
+
+// EmailDeliveryState defines model for EmailDelivery.State.
+type EmailDeliveryState string
+
+// EmailDeliveryList defines model for EmailDeliveryList.
+type EmailDeliveryList = []EmailDelivery
+
+// EmailPreview defines model for EmailPreview.
+type EmailPreview struct {
+	Html            string `json:"html"`
+	Subject         string `json:"subject"`
+	TemplateVersion string `json:"templateVersion"`
+	Text            string `json:"text"`
+}
+
+// EmailPreviewInput defines model for EmailPreviewInput.
+type EmailPreviewInput struct {
+	Locale   EmailPreviewInputLocale   `json:"locale"`
+	Scenario EmailPreviewInputScenario `json:"scenario"`
+}
+
+// EmailPreviewInputLocale defines model for EmailPreviewInput.Locale.
+type EmailPreviewInputLocale string
+
+// EmailPreviewInputScenario defines model for EmailPreviewInput.Scenario.
+type EmailPreviewInputScenario string
+
+// EmailTarget defines model for EmailTarget.
+type EmailTarget struct {
+	CreatedAt           time.Time          `json:"createdAt"`
+	Enabled             bool               `json:"enabled"`
+	Id                  openapi_types.UUID `json:"id"`
+	Locale              EmailTargetLocale  `json:"locale"`
+	Name                string             `json:"name"`
+	RecipientConfigured bool               `json:"recipientConfigured"`
+	UpdatedAt           time.Time          `json:"updatedAt"`
+	Version             string             `json:"version"`
+}
+
+// EmailTargetLocale defines model for EmailTarget.Locale.
+type EmailTargetLocale string
+
+// EmailTargetInput defines model for EmailTargetInput.
+type EmailTargetInput struct {
+	Enabled *bool                  `json:"enabled,omitempty"`
+	Locale  EmailTargetInputLocale `json:"locale"`
+	Name    string                 `json:"name"`
+
+	// Recipient Required at creation. Omit on update to retain the encrypted recipient.
+	Recipient *string `json:"recipient,omitempty"`
+}
+
+// EmailTargetInputLocale defines model for EmailTargetInput.Locale.
+type EmailTargetInputLocale string
+
+// EmailTargetList defines model for EmailTargetList.
+type EmailTargetList = []EmailTarget
+
+// EmailTestInput defines model for EmailTestInput.
+type EmailTestInput struct {
+	Scenario EmailTestInputScenario `json:"scenario"`
+	TargetId openapi_types.UUID     `json:"targetId"`
+}
+
+// EmailTestInputScenario defines model for EmailTestInput.Scenario.
+type EmailTestInputScenario string
+
 // Format defines model for Format.
 type Format string
 
@@ -5573,6 +5857,27 @@ type ReplaceConsoleThemePackageParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// ListEmailDeliveriesParams defines parameters for ListEmailDeliveries.
+type ListEmailDeliveriesParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ReplayEmailDeliveryParams defines parameters for ReplayEmailDelivery.
+type ReplayEmailDeliveryParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// TestEmailNotificationParams defines parameters for TestEmailNotification.
+type TestEmailNotificationParams struct {
+	IfMatch        IfMatch            `json:"If-Match"`
+	IdempotencyKey openapi_types.UUID `json:"Idempotency-Key"`
+}
+
+// UpdateEmailTargetParams defines parameters for UpdateEmailTarget.
+type UpdateEmailTargetParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // ListGroupsParams defines parameters for ListGroups.
 type ListGroupsParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
@@ -6035,6 +6340,18 @@ type ReplaceConsoleThemePackageJSONRequestBody = ConsoleThemePackage
 // ValidateConsoleThemePackageJSONRequestBody defines body for ValidateConsoleThemePackage for application/json ContentType.
 type ValidateConsoleThemePackageJSONRequestBody = ConsoleThemePackage
 
+// PreviewEmailNotificationJSONRequestBody defines body for PreviewEmailNotification for application/json ContentType.
+type PreviewEmailNotificationJSONRequestBody = EmailPreviewInput
+
+// TestEmailNotificationJSONRequestBody defines body for TestEmailNotification for application/json ContentType.
+type TestEmailNotificationJSONRequestBody = EmailTestInput
+
+// CreateEmailTargetJSONRequestBody defines body for CreateEmailTarget for application/json ContentType.
+type CreateEmailTargetJSONRequestBody = EmailTargetInput
+
+// UpdateEmailTargetJSONRequestBody defines body for UpdateEmailTarget for application/json ContentType.
+type UpdateEmailTargetJSONRequestBody = EmailTargetInput
+
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = CreateGroup
 
@@ -6286,6 +6603,36 @@ type ServerInterface interface {
 	// GetDiagnostics Get sanitized runtime and dependency diagnostics
 	// (GET /diagnostics)
 	GetDiagnostics(w http.ResponseWriter, r *http.Request)
+
+	// (GET /email-deliveries)
+	ListEmailDeliveries(w http.ResponseWriter, r *http.Request, params ListEmailDeliveriesParams)
+
+	// (GET /email-deliveries/{deliveryId})
+	GetEmailDelivery(w http.ResponseWriter, r *http.Request, deliveryId openapi_types.UUID)
+
+	// (POST /email-deliveries/{deliveryId}:replay)
+	ReplayEmailDelivery(w http.ResponseWriter, r *http.Request, deliveryId openapi_types.UUID, params ReplayEmailDeliveryParams)
+
+	// (GET /email-notifications)
+	GetEmailNotificationCapability(w http.ResponseWriter, r *http.Request)
+
+	// (POST /email-notifications:preview)
+	PreviewEmailNotification(w http.ResponseWriter, r *http.Request)
+
+	// (POST /email-notifications:test)
+	TestEmailNotification(w http.ResponseWriter, r *http.Request, params TestEmailNotificationParams)
+
+	// (GET /email-targets)
+	ListEmailTargets(w http.ResponseWriter, r *http.Request)
+
+	// (POST /email-targets)
+	CreateEmailTarget(w http.ResponseWriter, r *http.Request)
+
+	// (GET /email-targets/{targetId})
+	GetEmailTarget(w http.ResponseWriter, r *http.Request, targetId openapi_types.UUID)
+
+	// (PUT /email-targets/{targetId})
+	UpdateEmailTarget(w http.ResponseWriter, r *http.Request, targetId openapi_types.UUID, params UpdateEmailTargetParams)
 	// ListFormatProfiles List supported artifact formats and management capabilities
 	// (GET /formats)
 	ListFormatProfiles(w http.ResponseWriter, r *http.Request)
@@ -7787,6 +8134,323 @@ func (siw *ServerInterfaceWrapper) GetDiagnostics(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetDiagnostics(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEmailDeliveries operation middleware
+func (siw *ServerInterfaceWrapper) ListEmailDeliveries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListEmailDeliveriesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEmailDeliveries(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEmailDelivery operation middleware
+func (siw *ServerInterfaceWrapper) GetEmailDelivery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "deliveryId" -------------
+	var deliveryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "deliveryId", r.PathValue("deliveryId"), &deliveryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "deliveryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEmailDelivery(w, r, deliveryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplayEmailDelivery operation middleware
+func (siw *ServerInterfaceWrapper) ReplayEmailDelivery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "deliveryId" -------------
+	var deliveryId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "deliveryId", r.PathValue("deliveryId"), &deliveryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "deliveryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplayEmailDeliveryParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplayEmailDelivery(w, r, deliveryId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEmailNotificationCapability operation middleware
+func (siw *ServerInterfaceWrapper) GetEmailNotificationCapability(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEmailNotificationCapability(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewEmailNotification operation middleware
+func (siw *ServerInterfaceWrapper) PreviewEmailNotification(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewEmailNotification(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestEmailNotification operation middleware
+func (siw *ServerInterfaceWrapper) TestEmailNotification(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TestEmailNotificationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey openapi_types.UUID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestEmailNotification(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEmailTargets operation middleware
+func (siw *ServerInterfaceWrapper) ListEmailTargets(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEmailTargets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateEmailTarget operation middleware
+func (siw *ServerInterfaceWrapper) CreateEmailTarget(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateEmailTarget(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEmailTarget operation middleware
+func (siw *ServerInterfaceWrapper) GetEmailTarget(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "targetId" -------------
+	var targetId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "targetId", r.PathValue("targetId"), &targetId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEmailTarget(w, r, targetId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateEmailTarget operation middleware
+func (siw *ServerInterfaceWrapper) UpdateEmailTarget(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "targetId" -------------
+	var targetId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "targetId", r.PathValue("targetId"), &targetId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateEmailTargetParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateEmailTarget(w, r, targetId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13379,6 +14043,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/console-themes/{themeId}", wrapper.ReplaceConsoleThemePackage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/console-themes:validate", wrapper.ValidateConsoleThemePackage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/diagnostics", wrapper.GetDiagnostics)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/email-deliveries", wrapper.ListEmailDeliveries)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/email-deliveries/{deliveryId}", wrapper.GetEmailDelivery)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/email-deliveries/{deliveryId}:replay", wrapper.ReplayEmailDelivery)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/email-notifications", wrapper.GetEmailNotificationCapability)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/email-notifications:preview", wrapper.PreviewEmailNotification)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/email-notifications:test", wrapper.TestEmailNotification)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/email-targets", wrapper.ListEmailTargets)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/email-targets", wrapper.CreateEmailTarget)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/email-targets/{targetId}", wrapper.GetEmailTarget)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/email-targets/{targetId}", wrapper.UpdateEmailTarget)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/formats", wrapper.ListFormatProfiles)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups", wrapper.ListGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/groups", wrapper.CreateGroup)
@@ -15349,6 +16023,1298 @@ func (response GetDiagnostics401ApplicationProblemPlusJSONResponse) VisitGetDiag
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailDeliveriesRequestObject struct {
+	Params ListEmailDeliveriesParams
+}
+
+type ListEmailDeliveriesResponseObject interface {
+	VisitListEmailDeliveriesResponse(w http.ResponseWriter) error
+}
+
+type ListEmailDeliveries200JSONResponse EmailDeliveryList
+
+func (response ListEmailDeliveries200JSONResponse) VisitListEmailDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailDeliveries400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListEmailDeliveries400ApplicationProblemPlusJSONResponse) VisitListEmailDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailDeliveries401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailDeliveries401ApplicationProblemPlusJSONResponse) VisitListEmailDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailDeliveries403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailDeliveries403ApplicationProblemPlusJSONResponse) VisitListEmailDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailDeliveries404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailDeliveries404ApplicationProblemPlusJSONResponse) VisitListEmailDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailDeliveries409ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailDeliveries409ApplicationProblemPlusJSONResponse) VisitListEmailDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailDeliveries412ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailDeliveries412ApplicationProblemPlusJSONResponse) VisitListEmailDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailDeliveries429ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailDeliveries429ApplicationProblemPlusJSONResponse) VisitListEmailDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailDeliveries503ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailDeliveries503ApplicationProblemPlusJSONResponse) VisitListEmailDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailDeliveryRequestObject struct {
+	DeliveryId openapi_types.UUID `json:"deliveryId"`
+}
+
+type GetEmailDeliveryResponseObject interface {
+	VisitGetEmailDeliveryResponse(w http.ResponseWriter) error
+}
+
+type GetEmailDelivery200JSONResponse EmailDelivery
+
+func (response GetEmailDelivery200JSONResponse) VisitGetEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailDelivery400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetEmailDelivery400ApplicationProblemPlusJSONResponse) VisitGetEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailDelivery401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailDelivery401ApplicationProblemPlusJSONResponse) VisitGetEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailDelivery403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailDelivery403ApplicationProblemPlusJSONResponse) VisitGetEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailDelivery404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailDelivery404ApplicationProblemPlusJSONResponse) VisitGetEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailDelivery409ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailDelivery409ApplicationProblemPlusJSONResponse) VisitGetEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailDelivery412ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailDelivery412ApplicationProblemPlusJSONResponse) VisitGetEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailDelivery429ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailDelivery429ApplicationProblemPlusJSONResponse) VisitGetEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailDelivery503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailDelivery503ApplicationProblemPlusJSONResponse) VisitGetEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayEmailDeliveryRequestObject struct {
+	DeliveryId openapi_types.UUID `json:"deliveryId"`
+	Params     ReplayEmailDeliveryParams
+}
+
+type ReplayEmailDeliveryResponseObject interface {
+	VisitReplayEmailDeliveryResponse(w http.ResponseWriter) error
+}
+
+type ReplayEmailDelivery200JSONResponse EmailDelivery
+
+func (response ReplayEmailDelivery200JSONResponse) VisitReplayEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayEmailDelivery400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplayEmailDelivery400ApplicationProblemPlusJSONResponse) VisitReplayEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayEmailDelivery401ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplayEmailDelivery401ApplicationProblemPlusJSONResponse) VisitReplayEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayEmailDelivery403ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplayEmailDelivery403ApplicationProblemPlusJSONResponse) VisitReplayEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayEmailDelivery404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplayEmailDelivery404ApplicationProblemPlusJSONResponse) VisitReplayEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayEmailDelivery409ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplayEmailDelivery409ApplicationProblemPlusJSONResponse) VisitReplayEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayEmailDelivery412ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplayEmailDelivery412ApplicationProblemPlusJSONResponse) VisitReplayEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayEmailDelivery429ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplayEmailDelivery429ApplicationProblemPlusJSONResponse) VisitReplayEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayEmailDelivery503ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplayEmailDelivery503ApplicationProblemPlusJSONResponse) VisitReplayEmailDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailNotificationCapabilityRequestObject struct {
+}
+
+type GetEmailNotificationCapabilityResponseObject interface {
+	VisitGetEmailNotificationCapabilityResponse(w http.ResponseWriter) error
+}
+
+type GetEmailNotificationCapability200JSONResponse EmailCapability
+
+func (response GetEmailNotificationCapability200JSONResponse) VisitGetEmailNotificationCapabilityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailNotificationCapability400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetEmailNotificationCapability400ApplicationProblemPlusJSONResponse) VisitGetEmailNotificationCapabilityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailNotificationCapability401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailNotificationCapability401ApplicationProblemPlusJSONResponse) VisitGetEmailNotificationCapabilityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailNotificationCapability403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailNotificationCapability403ApplicationProblemPlusJSONResponse) VisitGetEmailNotificationCapabilityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailNotificationCapability404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailNotificationCapability404ApplicationProblemPlusJSONResponse) VisitGetEmailNotificationCapabilityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailNotificationCapability409ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailNotificationCapability409ApplicationProblemPlusJSONResponse) VisitGetEmailNotificationCapabilityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailNotificationCapability412ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailNotificationCapability412ApplicationProblemPlusJSONResponse) VisitGetEmailNotificationCapabilityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailNotificationCapability429ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailNotificationCapability429ApplicationProblemPlusJSONResponse) VisitGetEmailNotificationCapabilityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailNotificationCapability503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailNotificationCapability503ApplicationProblemPlusJSONResponse) VisitGetEmailNotificationCapabilityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewEmailNotificationRequestObject struct {
+	Body *PreviewEmailNotificationJSONRequestBody
+}
+
+type PreviewEmailNotificationResponseObject interface {
+	VisitPreviewEmailNotificationResponse(w http.ResponseWriter) error
+}
+
+type PreviewEmailNotification200JSONResponse EmailPreview
+
+func (response PreviewEmailNotification200JSONResponse) VisitPreviewEmailNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewEmailNotification400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewEmailNotification400ApplicationProblemPlusJSONResponse) VisitPreviewEmailNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewEmailNotification401ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewEmailNotification401ApplicationProblemPlusJSONResponse) VisitPreviewEmailNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewEmailNotification403ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewEmailNotification403ApplicationProblemPlusJSONResponse) VisitPreviewEmailNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestEmailNotificationRequestObject struct {
+	Params TestEmailNotificationParams
+	Body   *TestEmailNotificationJSONRequestBody
+}
+
+type TestEmailNotificationResponseObject interface {
+	VisitTestEmailNotificationResponse(w http.ResponseWriter) error
+}
+
+type TestEmailNotification202JSONResponse EmailDelivery
+
+func (response TestEmailNotification202JSONResponse) VisitTestEmailNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestEmailNotification400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response TestEmailNotification400ApplicationProblemPlusJSONResponse) VisitTestEmailNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestEmailNotification401ApplicationProblemPlusJSONResponse Problem
+
+func (response TestEmailNotification401ApplicationProblemPlusJSONResponse) VisitTestEmailNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestEmailNotification403ApplicationProblemPlusJSONResponse Problem
+
+func (response TestEmailNotification403ApplicationProblemPlusJSONResponse) VisitTestEmailNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestEmailNotification404ApplicationProblemPlusJSONResponse Problem
+
+func (response TestEmailNotification404ApplicationProblemPlusJSONResponse) VisitTestEmailNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestEmailNotification409ApplicationProblemPlusJSONResponse Problem
+
+func (response TestEmailNotification409ApplicationProblemPlusJSONResponse) VisitTestEmailNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestEmailNotification412ApplicationProblemPlusJSONResponse Problem
+
+func (response TestEmailNotification412ApplicationProblemPlusJSONResponse) VisitTestEmailNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestEmailNotification429ApplicationProblemPlusJSONResponse Problem
+
+func (response TestEmailNotification429ApplicationProblemPlusJSONResponse) VisitTestEmailNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestEmailNotification503ApplicationProblemPlusJSONResponse Problem
+
+func (response TestEmailNotification503ApplicationProblemPlusJSONResponse) VisitTestEmailNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailTargetsRequestObject struct {
+}
+
+type ListEmailTargetsResponseObject interface {
+	VisitListEmailTargetsResponse(w http.ResponseWriter) error
+}
+
+type ListEmailTargets200JSONResponse EmailTargetList
+
+func (response ListEmailTargets200JSONResponse) VisitListEmailTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailTargets400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListEmailTargets400ApplicationProblemPlusJSONResponse) VisitListEmailTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailTargets401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailTargets401ApplicationProblemPlusJSONResponse) VisitListEmailTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailTargets403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailTargets403ApplicationProblemPlusJSONResponse) VisitListEmailTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailTargets404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailTargets404ApplicationProblemPlusJSONResponse) VisitListEmailTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailTargets409ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailTargets409ApplicationProblemPlusJSONResponse) VisitListEmailTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailTargets412ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailTargets412ApplicationProblemPlusJSONResponse) VisitListEmailTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailTargets429ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailTargets429ApplicationProblemPlusJSONResponse) VisitListEmailTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEmailTargets503ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEmailTargets503ApplicationProblemPlusJSONResponse) VisitListEmailTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEmailTargetRequestObject struct {
+	Body *CreateEmailTargetJSONRequestBody
+}
+
+type CreateEmailTargetResponseObject interface {
+	VisitCreateEmailTargetResponse(w http.ResponseWriter) error
+}
+
+type CreateEmailTarget201JSONResponse EmailTarget
+
+func (response CreateEmailTarget201JSONResponse) VisitCreateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEmailTarget400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateEmailTarget400ApplicationProblemPlusJSONResponse) VisitCreateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEmailTarget401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateEmailTarget401ApplicationProblemPlusJSONResponse) VisitCreateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEmailTarget403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateEmailTarget403ApplicationProblemPlusJSONResponse) VisitCreateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEmailTarget404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateEmailTarget404ApplicationProblemPlusJSONResponse) VisitCreateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEmailTarget409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateEmailTarget409ApplicationProblemPlusJSONResponse) VisitCreateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEmailTarget412ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateEmailTarget412ApplicationProblemPlusJSONResponse) VisitCreateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEmailTarget429ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateEmailTarget429ApplicationProblemPlusJSONResponse) VisitCreateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEmailTarget503ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateEmailTarget503ApplicationProblemPlusJSONResponse) VisitCreateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailTargetRequestObject struct {
+	TargetId openapi_types.UUID `json:"targetId"`
+}
+
+type GetEmailTargetResponseObject interface {
+	VisitGetEmailTargetResponse(w http.ResponseWriter) error
+}
+
+type GetEmailTarget200JSONResponse EmailTarget
+
+func (response GetEmailTarget200JSONResponse) VisitGetEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailTarget400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetEmailTarget400ApplicationProblemPlusJSONResponse) VisitGetEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailTarget401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailTarget401ApplicationProblemPlusJSONResponse) VisitGetEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailTarget403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailTarget403ApplicationProblemPlusJSONResponse) VisitGetEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailTarget404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailTarget404ApplicationProblemPlusJSONResponse) VisitGetEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailTarget409ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailTarget409ApplicationProblemPlusJSONResponse) VisitGetEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailTarget412ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailTarget412ApplicationProblemPlusJSONResponse) VisitGetEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailTarget429ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailTarget429ApplicationProblemPlusJSONResponse) VisitGetEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEmailTarget503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEmailTarget503ApplicationProblemPlusJSONResponse) VisitGetEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateEmailTargetRequestObject struct {
+	TargetId openapi_types.UUID `json:"targetId"`
+	Params   UpdateEmailTargetParams
+	Body     *UpdateEmailTargetJSONRequestBody
+}
+
+type UpdateEmailTargetResponseObject interface {
+	VisitUpdateEmailTargetResponse(w http.ResponseWriter) error
+}
+
+type UpdateEmailTarget200JSONResponse EmailTarget
+
+func (response UpdateEmailTarget200JSONResponse) VisitUpdateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateEmailTarget400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateEmailTarget400ApplicationProblemPlusJSONResponse) VisitUpdateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateEmailTarget401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateEmailTarget401ApplicationProblemPlusJSONResponse) VisitUpdateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateEmailTarget403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateEmailTarget403ApplicationProblemPlusJSONResponse) VisitUpdateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateEmailTarget404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateEmailTarget404ApplicationProblemPlusJSONResponse) VisitUpdateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateEmailTarget409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateEmailTarget409ApplicationProblemPlusJSONResponse) VisitUpdateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateEmailTarget412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateEmailTarget412ApplicationProblemPlusJSONResponse) VisitUpdateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateEmailTarget429ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateEmailTarget429ApplicationProblemPlusJSONResponse) VisitUpdateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateEmailTarget503ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateEmailTarget503ApplicationProblemPlusJSONResponse) VisitUpdateEmailTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -23792,6 +25758,36 @@ type StrictServerInterface interface {
 	// GetDiagnostics Get sanitized runtime and dependency diagnostics
 	// (GET /diagnostics)
 	GetDiagnostics(ctx context.Context, request GetDiagnosticsRequestObject) (GetDiagnosticsResponseObject, error)
+
+	// (GET /email-deliveries)
+	ListEmailDeliveries(ctx context.Context, request ListEmailDeliveriesRequestObject) (ListEmailDeliveriesResponseObject, error)
+
+	// (GET /email-deliveries/{deliveryId})
+	GetEmailDelivery(ctx context.Context, request GetEmailDeliveryRequestObject) (GetEmailDeliveryResponseObject, error)
+
+	// (POST /email-deliveries/{deliveryId}:replay)
+	ReplayEmailDelivery(ctx context.Context, request ReplayEmailDeliveryRequestObject) (ReplayEmailDeliveryResponseObject, error)
+
+	// (GET /email-notifications)
+	GetEmailNotificationCapability(ctx context.Context, request GetEmailNotificationCapabilityRequestObject) (GetEmailNotificationCapabilityResponseObject, error)
+
+	// (POST /email-notifications:preview)
+	PreviewEmailNotification(ctx context.Context, request PreviewEmailNotificationRequestObject) (PreviewEmailNotificationResponseObject, error)
+
+	// (POST /email-notifications:test)
+	TestEmailNotification(ctx context.Context, request TestEmailNotificationRequestObject) (TestEmailNotificationResponseObject, error)
+
+	// (GET /email-targets)
+	ListEmailTargets(ctx context.Context, request ListEmailTargetsRequestObject) (ListEmailTargetsResponseObject, error)
+
+	// (POST /email-targets)
+	CreateEmailTarget(ctx context.Context, request CreateEmailTargetRequestObject) (CreateEmailTargetResponseObject, error)
+
+	// (GET /email-targets/{targetId})
+	GetEmailTarget(ctx context.Context, request GetEmailTargetRequestObject) (GetEmailTargetResponseObject, error)
+
+	// (PUT /email-targets/{targetId})
+	UpdateEmailTarget(ctx context.Context, request UpdateEmailTargetRequestObject) (UpdateEmailTargetResponseObject, error)
 	// ListFormatProfiles List supported artifact formats and management capabilities
 	// (GET /formats)
 	ListFormatProfiles(ctx context.Context, request ListFormatProfilesRequestObject) (ListFormatProfilesResponseObject, error)
@@ -25083,6 +27079,288 @@ func (sh *strictHandler) GetDiagnostics(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetDiagnosticsResponseObject); ok {
 		if err := validResponse.VisitGetDiagnosticsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEmailDeliveries operation middleware
+func (sh *strictHandler) ListEmailDeliveries(w http.ResponseWriter, r *http.Request, params ListEmailDeliveriesParams) {
+	var request ListEmailDeliveriesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEmailDeliveries(ctx, request.(ListEmailDeliveriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEmailDeliveries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEmailDeliveriesResponseObject); ok {
+		if err := validResponse.VisitListEmailDeliveriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEmailDelivery operation middleware
+func (sh *strictHandler) GetEmailDelivery(w http.ResponseWriter, r *http.Request, deliveryId openapi_types.UUID) {
+	var request GetEmailDeliveryRequestObject
+
+	request.DeliveryId = deliveryId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEmailDelivery(ctx, request.(GetEmailDeliveryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEmailDelivery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEmailDeliveryResponseObject); ok {
+		if err := validResponse.VisitGetEmailDeliveryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplayEmailDelivery operation middleware
+func (sh *strictHandler) ReplayEmailDelivery(w http.ResponseWriter, r *http.Request, deliveryId openapi_types.UUID, params ReplayEmailDeliveryParams) {
+	var request ReplayEmailDeliveryRequestObject
+
+	request.DeliveryId = deliveryId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplayEmailDelivery(ctx, request.(ReplayEmailDeliveryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplayEmailDelivery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplayEmailDeliveryResponseObject); ok {
+		if err := validResponse.VisitReplayEmailDeliveryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEmailNotificationCapability operation middleware
+func (sh *strictHandler) GetEmailNotificationCapability(w http.ResponseWriter, r *http.Request) {
+	var request GetEmailNotificationCapabilityRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEmailNotificationCapability(ctx, request.(GetEmailNotificationCapabilityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEmailNotificationCapability")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEmailNotificationCapabilityResponseObject); ok {
+		if err := validResponse.VisitGetEmailNotificationCapabilityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewEmailNotification operation middleware
+func (sh *strictHandler) PreviewEmailNotification(w http.ResponseWriter, r *http.Request) {
+	var request PreviewEmailNotificationRequestObject
+
+	var body PreviewEmailNotificationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewEmailNotification(ctx, request.(PreviewEmailNotificationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewEmailNotification")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewEmailNotificationResponseObject); ok {
+		if err := validResponse.VisitPreviewEmailNotificationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestEmailNotification operation middleware
+func (sh *strictHandler) TestEmailNotification(w http.ResponseWriter, r *http.Request, params TestEmailNotificationParams) {
+	var request TestEmailNotificationRequestObject
+
+	request.Params = params
+
+	var body TestEmailNotificationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestEmailNotification(ctx, request.(TestEmailNotificationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestEmailNotification")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestEmailNotificationResponseObject); ok {
+		if err := validResponse.VisitTestEmailNotificationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEmailTargets operation middleware
+func (sh *strictHandler) ListEmailTargets(w http.ResponseWriter, r *http.Request) {
+	var request ListEmailTargetsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEmailTargets(ctx, request.(ListEmailTargetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEmailTargets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEmailTargetsResponseObject); ok {
+		if err := validResponse.VisitListEmailTargetsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateEmailTarget operation middleware
+func (sh *strictHandler) CreateEmailTarget(w http.ResponseWriter, r *http.Request) {
+	var request CreateEmailTargetRequestObject
+
+	var body CreateEmailTargetJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateEmailTarget(ctx, request.(CreateEmailTargetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateEmailTarget")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateEmailTargetResponseObject); ok {
+		if err := validResponse.VisitCreateEmailTargetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEmailTarget operation middleware
+func (sh *strictHandler) GetEmailTarget(w http.ResponseWriter, r *http.Request, targetId openapi_types.UUID) {
+	var request GetEmailTargetRequestObject
+
+	request.TargetId = targetId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEmailTarget(ctx, request.(GetEmailTargetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEmailTarget")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEmailTargetResponseObject); ok {
+		if err := validResponse.VisitGetEmailTargetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateEmailTarget operation middleware
+func (sh *strictHandler) UpdateEmailTarget(w http.ResponseWriter, r *http.Request, targetId openapi_types.UUID, params UpdateEmailTargetParams) {
+	var request UpdateEmailTargetRequestObject
+
+	request.TargetId = targetId
+	request.Params = params
+
+	var body UpdateEmailTargetJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateEmailTarget(ctx, request.(UpdateEmailTargetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateEmailTarget")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateEmailTargetResponseObject); ok {
+		if err := validResponse.VisitUpdateEmailTargetResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

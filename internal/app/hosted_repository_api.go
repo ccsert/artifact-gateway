@@ -296,6 +296,7 @@ type generatedRepositoryAPIAdapter struct {
 	quarantine             repository.ArtifactQuarantineStore
 	runtimeNodes           repository.RuntimeNodeStore
 	scheduledTasks         repository.ScheduledTaskStore
+	emailTargets           repository.EmailStore
 	webhooks               repository.WebhookStore
 	queueStats             repository.BackgroundOperationQueueStore
 	browse                 repository.ArtifactBrowseStore
