@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Raw Proxy access logs now retain finite failure codes and phases through stdout, local administrator queries and Console copy/export, with final-response precedence and diagnostic keyword redaction.
+
 - Runtime log queries, Console rows and copy/export now retain only server-registered route templates, without request paths or parameter values. Nexus-compatible repository access logs reuse the resolved Maven/Raw/npm/PyPI/Go request class already used by metrics instead of falling into `other`.
 
 - Runtime log filters now provide bounded rolling recent ranges and validated custom snapshots at visible second precision, with aligned primary filters and recoverable localized errors. Rolling durations bind incremental cursors and are calculated from one locked snapshot, preserving the 24-hour and five-minute future limits across follow/pause/resume.

@@ -569,7 +569,12 @@ func (h nativeRawHandler) tryProxyRead(w http.ResponseWriter, r *http.Request, r
 		return false
 	}
 	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
-	if !rawprotocol.MemberProxyAllowed(member) {
+	if validation := rawprotocol.ValidateProxyMember(member); validation != rawprotocol.ProxyMemberAllowed {
+		code := "upstream_policy_rejected"
+		if validation == rawprotocol.ProxyMemberInvalidEndpoint {
+			code = "upstream_configuration_invalid"
+		}
+		recordRawFailure(r.Context(), code)
 		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditProxyDenied, http.StatusForbidden, "bypass", 0)
 		http.Error(w, "upstream repository is not allowed", http.StatusForbidden)
 		return true
@@ -589,6 +594,7 @@ func (h nativeRawHandler) tryProxyRead(w http.ResponseWriter, r *http.Request, r
 	if r.Method == http.MethodHead {
 		response, err := h.proxyClient.FetchRaw(r.Context(), http.MethodHead, member, path, nil)
 		if err != nil {
+			recordRawFailure(r.Context(), rawFetchFailureCode(err))
 			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
 			http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
 			return true
@@ -602,6 +608,7 @@ func (h nativeRawHandler) tryProxyRead(w http.ResponseWriter, r *http.Request, r
 			return false
 		}
 		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+			recordRawFailure(r.Context(), "upstream_status_rejected")
 			h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
 			http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
 			return true
@@ -668,6 +675,7 @@ func (h nativeRawHandler) tryProxyRead(w http.ResponseWriter, r *http.Request, r
 			http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
 			return true
 		}
+		recordRawFailure(r.Context(), rawFetchFailureCode(err))
 		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
 		http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
 		return true
@@ -690,6 +698,7 @@ func (h nativeRawHandler) tryProxyRead(w http.ResponseWriter, r *http.Request, r
 			http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
 			return true
 		}
+		recordRawFailure(r.Context(), "upstream_status_rejected")
 		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
 		http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
 		return true
@@ -706,6 +715,7 @@ func (h nativeRawHandler) tryProxyRead(w http.ResponseWriter, r *http.Request, r
 			http.Error(w, "unable to coordinate Raw cache fetch", http.StatusServiceUnavailable)
 			return true
 		}
+		recordRawFailure(r.Context(), "upstream_body_failed")
 		h.proxyAudit(r, repo, path, member, principal.Actor, repository.AuditUpstreamError, http.StatusBadGateway, "bypass", 0)
 		http.Error(w, "upstream repository unavailable", http.StatusBadGateway)
 		return true

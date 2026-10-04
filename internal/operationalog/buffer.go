@@ -1,6 +1,7 @@
 package operationalog
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -28,6 +29,8 @@ type Entry struct {
 	Method       string    `json:"method,omitempty"`
 	RequestClass string    `json:"requestClass,omitempty"`
 	Route        string    `json:"route,omitempty"`
+	ErrorCode    string    `json:"errorCode,omitempty"`
+	Phase        string    `json:"phase,omitempty"`
 	JobID        string    `json:"jobId,omitempty"`
 	Attempt      *int      `json:"attempt,omitempty"`
 }
@@ -142,16 +145,16 @@ func (b *Buffer) Write(p []byte) (int, error) {
 
 func (b *Buffer) appendLine(line []byte) {
 	var value struct {
-		Time                                                            time.Time `json:"time"`
-		Level                                                           string    `json:"level"`
-		Message                                                         string    `json:"msg"`
-		InstanceID                                                      string    `json:"instanceId"`
-		SessionID                                                       string    `json:"sessionId"`
-		Component                                                       string    `json:"component"`
-		Operation                                                       string    `json:"operation"`
-		RequestID                                                       string    `json:"requestId"`
-		TraceID                                                         string    `json:"traceId"`
-		Status, DurationMS, Method, RequestClass, Route, JobID, Attempt json.RawMessage
+		Time                                                                              time.Time `json:"time"`
+		Level                                                                             string    `json:"level"`
+		Message                                                                           string    `json:"msg"`
+		InstanceID                                                                        string    `json:"instanceId"`
+		SessionID                                                                         string    `json:"sessionId"`
+		Component                                                                         string    `json:"component"`
+		Operation                                                                         string    `json:"operation"`
+		RequestID                                                                         string    `json:"requestId"`
+		TraceID                                                                           string    `json:"traceId"`
+		Status, DurationMS, Method, RequestClass, Route, ErrorCode, Phase, JobID, Attempt json.RawMessage
 	}
 	if json.Unmarshal(line, &value) != nil || value.Time.IsZero() || value.InstanceID == "" {
 		return
@@ -173,31 +176,56 @@ func (b *Buffer) appendLine(line []byte) {
 	if json.Unmarshal(value.Route, &route) == nil && (route == "unmatched" || b.routes[route]) {
 		entry.Route = route
 	}
+	var code, phase string
+	if json.Unmarshal(value.ErrorCode, &code) == nil && json.Unmarshal(value.Phase, &phase) == nil && phase != "" && FailurePhase(code) == phase {
+		entry.ErrorCode, entry.Phase = code, phase
+	}
 	var jobID string
 	if json.Unmarshal(value.JobID, &jobID) == nil && validOpaqueID(jobID) {
 		entry.JobID = jobID
 	}
 	b.entries[index] = entry
-	b.search[index] = string(line)
-	if len(value.Route) > 0 {
-		// Only the accepted template can become a keyword. Remove alternate
-		// JSON key casing too, matching encoding/json's field matching.
-		var fields map[string]json.RawMessage
-		if json.Unmarshal(line, &fields) == nil {
-			for key := range fields {
-				if strings.EqualFold(key, "route") {
-					delete(fields, key)
-				}
+	// Rejected diagnostic values cannot become a keyword oracle. Strip code
+	// and phase at every nesting level and restore only the accepted pair.
+	var fields map[string]any
+	b.search[index] = ""
+	decoder := json.NewDecoder(bytes.NewReader(line))
+	decoder.UseNumber()
+	if decoder.Decode(&fields) == nil {
+		removeFailureSearchFields(fields)
+		for key := range fields {
+			if strings.EqualFold(key, "route") {
+				delete(fields, key)
 			}
-			if entry.Route != "" {
-				fields["route"], _ = json.Marshal(entry.Route)
-			}
-			search, _ := json.Marshal(fields)
-			b.search[index] = string(search)
 		}
+		if entry.Route != "" {
+			fields["route"] = entry.Route
+		}
+		if entry.ErrorCode != "" {
+			fields["errorCode"], fields["phase"] = entry.ErrorCode, entry.Phase
+		}
+		search, _ := json.Marshal(fields)
+		b.search[index] = string(search)
 	}
 	if b.count < len(b.entries) {
 		b.count++
+	}
+}
+
+func removeFailureSearchFields(value any) {
+	switch value := value.(type) {
+	case map[string]any:
+		for key, child := range value {
+			if strings.EqualFold(key, "errorCode") || strings.EqualFold(key, "phase") {
+				delete(value, key)
+			} else {
+				removeFailureSearchFields(child)
+			}
+		}
+	case []any:
+		for _, child := range value {
+			removeFailureSearchFields(child)
+		}
 	}
 }
 

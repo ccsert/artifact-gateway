@@ -29,6 +29,30 @@ const entry = (
 });
 
 describe("bounded runtime log view", () => {
+  it("preserves only recognized failure code/phase pairs in copy and NDJSON", () => {
+    const source: RuntimeLogEntry = {
+      ...entry(1),
+      errorCode: "upstream_transport_failed",
+      phase: "fetch",
+    };
+    expect(JSON.parse(logNDJSON([source]))).toMatchObject({
+      errorCode: "upstream_transport_failed",
+      phase: "fetch",
+    });
+    for (const fields of [
+      { errorCode: "private-error", phase: "fetch" },
+      { errorCode: "upstream_transport_failed", phase: "private-phase" },
+      { errorCode: "upstream_transport_failed", phase: "body" },
+      { errorCode: { nested: "private-error" }, phase: "fetch" },
+      { errorCode: "upstream_transport_failed" },
+    ]) {
+      const output = JSON.parse(
+        logNDJSON([{ ...entry(1), ...fields } as never]),
+      );
+      expect(output.errorCode).toBeUndefined();
+      expect(output.phase).toBeUndefined();
+    }
+  });
   it("preserves the server route template in rows and NDJSON", () => {
     const source = {
       ...entry(1),

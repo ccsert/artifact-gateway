@@ -2074,6 +2074,39 @@ func (e RetentionDryRunCandidatesVersionType) Valid() bool {
 	}
 }
 
+// Defines values for RuntimeLogEntryErrorCode.
+const (
+	RuntimeLogEntryErrorCodeUnknown                      RuntimeLogEntryErrorCode = "unknown"
+	RuntimeLogEntryErrorCodeUpstreamBodyFailed           RuntimeLogEntryErrorCode = "upstream_body_failed"
+	RuntimeLogEntryErrorCodeUpstreamConfigurationInvalid RuntimeLogEntryErrorCode = "upstream_configuration_invalid"
+	RuntimeLogEntryErrorCodeUpstreamEgressFailed         RuntimeLogEntryErrorCode = "upstream_egress_failed"
+	RuntimeLogEntryErrorCodeUpstreamPolicyRejected       RuntimeLogEntryErrorCode = "upstream_policy_rejected"
+	RuntimeLogEntryErrorCodeUpstreamStatusRejected       RuntimeLogEntryErrorCode = "upstream_status_rejected"
+	RuntimeLogEntryErrorCodeUpstreamTransportFailed      RuntimeLogEntryErrorCode = "upstream_transport_failed"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeLogEntryErrorCode enum.
+func (e RuntimeLogEntryErrorCode) Valid() bool {
+	switch e {
+	case RuntimeLogEntryErrorCodeUnknown:
+		return true
+	case RuntimeLogEntryErrorCodeUpstreamBodyFailed:
+		return true
+	case RuntimeLogEntryErrorCodeUpstreamConfigurationInvalid:
+		return true
+	case RuntimeLogEntryErrorCodeUpstreamEgressFailed:
+		return true
+	case RuntimeLogEntryErrorCodeUpstreamPolicyRejected:
+		return true
+	case RuntimeLogEntryErrorCodeUpstreamStatusRejected:
+		return true
+	case RuntimeLogEntryErrorCodeUpstreamTransportFailed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RuntimeLogEntryMethod.
 const (
 	CONNECT RuntimeLogEntryMethod = "CONNECT"
@@ -2107,6 +2140,33 @@ func (e RuntimeLogEntryMethod) Valid() bool {
 	case PUT:
 		return true
 	case TRACE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeLogEntryPhase.
+const (
+	RuntimeLogEntryPhaseBody    RuntimeLogEntryPhase = "body"
+	RuntimeLogEntryPhaseEgress  RuntimeLogEntryPhase = "egress"
+	RuntimeLogEntryPhaseFetch   RuntimeLogEntryPhase = "fetch"
+	RuntimeLogEntryPhasePrepare RuntimeLogEntryPhase = "prepare"
+	RuntimeLogEntryPhaseUnknown RuntimeLogEntryPhase = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeLogEntryPhase enum.
+func (e RuntimeLogEntryPhase) Valid() bool {
+	switch e {
+	case RuntimeLogEntryPhaseBody:
+		return true
+	case RuntimeLogEntryPhaseEgress:
+		return true
+	case RuntimeLogEntryPhaseFetch:
+		return true
+	case RuntimeLogEntryPhasePrepare:
+		return true
+	case RuntimeLogEntryPhaseUnknown:
 		return true
 	default:
 		return false
@@ -4823,15 +4883,21 @@ type RetentionVersionTypeCounts struct {
 
 // RuntimeLogEntry defines model for RuntimeLogEntry.
 type RuntimeLogEntry struct {
-	Attempt      *int                         `json:"attempt,omitempty"`
-	Component    string                       `json:"component"`
-	DurationMs   *int64                       `json:"durationMs,omitempty"`
-	InstanceId   string                       `json:"instanceId"`
-	JobId        *string                      `json:"jobId,omitempty"`
-	Level        string                       `json:"level"`
-	Message      string                       `json:"message"`
-	Method       *RuntimeLogEntryMethod       `json:"method,omitempty"`
-	Operation    string                       `json:"operation"`
+	Attempt    *int   `json:"attempt,omitempty"`
+	Component  string `json:"component"`
+	DurationMs *int64 `json:"durationMs,omitempty"`
+
+	// ErrorCode Optional Raw Proxy failure category, paired with phase; never a raw error. Body failures include local staging and size limits. Unclassified custom client errors use unknown.
+	ErrorCode  *RuntimeLogEntryErrorCode `json:"errorCode,omitempty"`
+	InstanceId string                    `json:"instanceId"`
+	JobId      *string                   `json:"jobId,omitempty"`
+	Level      string                    `json:"level"`
+	Message    string                    `json:"message"`
+	Method     *RuntimeLogEntryMethod    `json:"method,omitempty"`
+	Operation  string                    `json:"operation"`
+
+	// Phase Fixed mapping from errorCode; configuration/policy use prepare, egress uses egress, transport/status use fetch, body uses body, unknown uses unknown. Omitted when a coordination failure supersedes the upstream error.
+	Phase        *RuntimeLogEntryPhase        `json:"phase,omitempty"`
 	RequestClass *RuntimeLogEntryRequestClass `json:"requestClass,omitempty"`
 	RequestId    string                       `json:"requestId"`
 
@@ -4844,8 +4910,14 @@ type RuntimeLogEntry struct {
 	TraceId   string    `json:"traceId"`
 }
 
+// RuntimeLogEntryErrorCode Optional Raw Proxy failure category, paired with phase; never a raw error. Body failures include local staging and size limits. Unclassified custom client errors use unknown.
+type RuntimeLogEntryErrorCode string
+
 // RuntimeLogEntryMethod defines model for RuntimeLogEntry.Method.
 type RuntimeLogEntryMethod string
+
+// RuntimeLogEntryPhase Fixed mapping from errorCode; configuration/policy use prepare, egress uses egress, transport/status use fetch, body uses body, unknown uses unknown. Omitted when a coordination failure supersedes the upstream error.
+type RuntimeLogEntryPhase string
 
 // RuntimeLogEntryRequestClass defines model for RuntimeLogEntry.RequestClass.
 type RuntimeLogEntryRequestClass string

@@ -673,6 +673,8 @@ export function RuntimeLogsPanel() {
                         entry.durationMs === undefined
                           ? ""
                           : `${entry.durationMs}ms`,
+                        entry.errorCode ? `errorCode=${entry.errorCode}` : "",
+                        entry.phase ? `phase=${entry.phase}` : "",
                         entry.jobId ? `job=${entry.jobId}` : "",
                         entry.attempt === undefined
                           ? ""
