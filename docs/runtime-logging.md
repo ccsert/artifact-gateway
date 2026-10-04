@@ -64,7 +64,7 @@ The local API projects only the redacted core fields and a bounded top-level
 allowlist: HTTP `status` (100–599), `durationMs` (0–86400000), standard HTTP
 `method`, the known `requestClass`, `route` (a template registered by this server,
 at most 256 ASCII bytes, or the fixed `unmatched` value), an opaque ASCII `jobId` (at most 128 bytes),
-and `attempt` (0–1000000). Missing, incorrectly typed, out-of-range, redacted or
+`attempt` (0–1000000), and the finite `errorCode` / `phase` pair below. Missing, incorrectly typed, out-of-range, redacted or
 nested diagnostic values are omitted without dropping the event. This does not
 open raw attributes, request paths/URLs, headers, bodies or error payloads.
 Unregistered or malformed top-level route values are excluded from keyword
@@ -72,6 +72,40 @@ matching. Console rows, copy and NDJSON retain the same safe template. Trace IDs
 remain correlation values; no collector-backed trace navigation is introduced. The same
 sensitive-name and ancestor-group redaction runs before stdout, buffer search
 and this projection.
+
+### Raw Proxy failure reasons
+
+Raw Proxy Repository GET/HEAD access events can add the optional pair
+`errorCode` / `phase`. The same native path covers Nexus compatibility URLs
+and native Groups; legacy Group handlers and other protocols do not add these
+fields. They describe the final claimed failure, without exposing a repository
+ID, endpoint, path, headers, body, credentials or raw error text.
+
+| errorCode | phase | Actual branch |
+| --- | --- | --- |
+| `upstream_configuration_invalid` | `prepare` | Invalid endpoint syntax/scheme/embedded credentials (existing 403); client request preparation errors |
+| `upstream_policy_rejected` | `prepare` | Static upstream host allowlist or private IP literal rejected (existing 403) |
+| `upstream_egress_failed` | `egress` | Egress client preparation failed; this can include configuration, DNS, credentials or outbound policy and does not prove policy rejection |
+| `upstream_transport_failed` | `fetch` | HTTP client exchange failed; DNS/TLS/timeout subtypes are not inferred from error strings |
+| `upstream_status_rejected` | `fetch` | Upstream status outside 2xx, excluding 404/410; redirects remain unfollowed |
+| `upstream_body_failed` | `body` | Response staging or close failed, including object size limits and local temporary-file I/O; not necessarily a network read error |
+| `unknown` | `unknown` | Custom Raw client returned an unclassified error |
+
+Only a recognized pair with its fixed mapping is retained by the API and
+Console. Invalid, incorrectly typed, nested, redacted or mismatched values are
+omitted and excluded from diagnostic keyword matching. The logger permits
+only known literal top-level `errorCode` values through its sensitive-name
+rule; raw errors and sensitive ancestor groups remain redacted. Row details,
+row/selection/loaded copy and finite NDJSON preserve the same pair.
+
+404/410 misses, successful Group fallback, cache hits, authentication and
+repository authorization denials do not acquire an upstream reason. When GET
+cache lock release/coordination supersedes an upstream error with 503, the
+upstream reason is omitted. Uninstrumented checksum/cache/coordination failures
+also omit the pair: absence does not imply success. HEAD continues its existing
+behavior of ignoring body-close errors. Limited access collection still records
+5xx and slow requests; a fast 403 reason is visible only in full mode. No new
+metric labels, collector dependency, alert evaluation or email behavior is added.
 
 Every successful page includes `source`: the INFO collection floor, actual
 limited/full access mode and slow threshold, buffer capacity, 16 KiB line

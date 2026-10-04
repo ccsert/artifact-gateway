@@ -117,19 +117,33 @@ func ValidChecksum(path string, body []byte) bool {
 // MemberProxyAllowed validates an explicitly configured proxy member before
 // the runtime creates a network request.
 func MemberProxyAllowed(member repository.Member) bool {
+	return ValidateProxyMember(member) == ProxyMemberAllowed
+}
+
+type ProxyMemberValidation uint8
+
+const (
+	ProxyMemberAllowed ProxyMemberValidation = iota
+	ProxyMemberInvalidEndpoint
+	ProxyMemberPolicyDenied
+)
+
+// ValidateProxyMember preserves the existing preflight policy while exposing
+// whether the endpoint syntax or the static outbound policy rejected it.
+func ValidateProxyMember(member repository.Member) ProxyMemberValidation {
 	u, err := url.Parse(member.Endpoint)
 	if err != nil || u.Scheme != "https" || u.User != nil || u.Hostname() == "" {
-		return false
+		return ProxyMemberInvalidEndpoint
 	}
 	if ip := net.ParseIP(u.Hostname()); ip != nil && privateIP(ip) {
-		return false
+		return ProxyMemberPolicyDenied
 	}
 	for _, host := range member.AllowedHosts {
 		if strings.EqualFold(strings.TrimSpace(host), u.Hostname()) {
-			return true
+			return ProxyMemberAllowed
 		}
 	}
-	return false
+	return ProxyMemberPolicyDenied
 }
 
 // ServeContent writes Raw's single canonical representation, applying HTTP

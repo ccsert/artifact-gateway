@@ -1510,6 +1510,21 @@ export type RuntimeLogEntry = {
    * Server-registered route template or unmatched; never the request URL or resolved parameter values.
    */
   route?: string;
+  /**
+   * Optional Raw Proxy failure category, paired with phase; never a raw error. Body failures include local staging and size limits. Unclassified custom client errors use unknown.
+   */
+  errorCode?:
+    | "upstream_configuration_invalid"
+    | "upstream_policy_rejected"
+    | "upstream_egress_failed"
+    | "upstream_transport_failed"
+    | "upstream_status_rejected"
+    | "upstream_body_failed"
+    | "unknown";
+  /**
+   * Fixed mapping from errorCode; configuration/policy use prepare, egress uses egress, transport/status use fetch, body uses body, unknown uses unknown. Omitted when a coordination failure supersedes the upstream error.
+   */
+  phase?: "prepare" | "egress" | "fetch" | "body" | "unknown";
   jobId?: string;
   attempt?: number;
 };

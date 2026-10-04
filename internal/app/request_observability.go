@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
 	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
 	"github.com/felixge/httpsnoop"
 )
@@ -29,6 +30,8 @@ func (d Dependencies) requestObservability(next http.Handler) http.Handler {
 		ctx, ids := requestcontext.WithRequest(r.Context(), r.Header.Get("X-Request-ID"))
 		route := &runtimeLogRouteState{pattern: "unmatched"}
 		ctx = context.WithValue(ctx, runtimeLogRouteContextKey{}, route)
+		failure := &rawFailureState{}
+		ctx = context.WithValue(ctx, rawFailureContextKey{}, failure)
 		state, ok := ctx.Value(requestClassStateContextKey{}).(*requestClassState)
 		if !ok {
 			// Standalone handlers still share the resolved compatibility class,
@@ -51,12 +54,16 @@ func (d Dependencies) requestObservability(next http.Handler) http.Handler {
 		case options.Mode != "full":
 			return
 		}
-		logger.LogAttrs(ctx, level, "gateway HTTP request",
+		attrs := []slog.Attr{
 			slog.String("component", "http"), slog.String("operation", "http.request"),
 			slog.String("requestId", ids.RequestID), slog.String("traceId", ids.TraceID),
 			slog.String("method", r.Method), slog.String("route", route.current()),
 			slog.String("requestClass", requestClassNames[state.current()]),
 			slog.Int("status", captured.Code), slog.Int64("durationMs", duration.Milliseconds()),
-		)
+		}
+		if code := failure.current(); code != "" && captured.Code >= http.StatusBadRequest {
+			attrs = append(attrs, slog.String("errorCode", code), slog.String("phase", operationalog.FailurePhase(code)))
+		}
+		logger.LogAttrs(ctx, level, "gateway HTTP request", attrs...)
 	})
 }

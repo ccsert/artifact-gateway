@@ -166,6 +166,8 @@ for (const [width, locale, theme] of [
       { locale, theme },
     );
     const items = [entry(2), entry(3), entry(4), entry(5)];
+    items[0].errorCode = "upstream_transport_failed";
+    items[0].phase = "fetch";
     items[0].message =
       '<img src=x onerror="window.__logExecuted=true">\u001b[31m literal\nsecond line';
     items[1].message = "long-" + "x".repeat(6000);
@@ -202,6 +204,9 @@ for (const [width, locale, theme] of [
     ).toContain(
       "GET · GET /api/v2/repositories/{repositoryId} · management · status=200 · 12ms",
     );
+    await expect(
+      stream.locator(".ag-runtime-log-detail").first(),
+    ).toContainText("errorCode=upstream_transport_failed · phase=fetch");
     await expect(stream.locator("a")).toHaveCount(0);
     await geometry(page);
     await stream.evaluate((node) => {
@@ -231,7 +236,16 @@ for (const [width, locale, theme] of [
     expect(parsed).toHaveLength(4);
     expect(parsed[0].status).toBe(200);
     expect(parsed[0].route).toBe(items[0].route);
+    expect(parsed[0]).toMatchObject({
+      errorCode: "upstream_transport_failed",
+      phase: "fetch",
+    });
+    await stream.locator(".ag-runtime-log-copy").first().click();
+    expect(
+      JSON.parse(await page.evaluate(() => navigator.clipboard.readText())),
+    ).toMatchObject({ errorCode: "upstream_transport_failed", phase: "fetch" });
     expect(parsed[0].message).toContain("\\u001b");
+    await page.getByRole("button", { name: /复制已加载|Copy loaded/ }).click();
     const downloadEvent = page.waitForEvent("download");
     await page
       .getByRole("button", { name: /下载 NDJSON|Download NDJSON/ })
@@ -256,6 +270,21 @@ for (const [width, locale, theme] of [
     await page.getByRole("button", { name: /复制选择|Copy selection/ }).click();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(
       "second line",
+    );
+    await stream
+      .locator(".ag-runtime-log-detail")
+      .first()
+      .evaluate((node) => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const selection = getSelection()!;
+        selection.removeAllRanges();
+        selection.addRange(range);
+        document.dispatchEvent(new Event("selectionchange"));
+      });
+    await page.getByRole("button", { name: /复制选择|Copy selection/ }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(
+      "errorCode=upstream_transport_failed · phase=fetch",
     );
     await page
       .getByRole("button", { name: /加载更早日志|Load older logs/ })

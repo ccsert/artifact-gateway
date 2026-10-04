@@ -5,6 +5,16 @@ export const MAX_LOG_BYTES = 1_048_576;
 export const MAX_DISPLAY_CHARS = 4096;
 const encoder = new TextEncoder();
 
+const failurePhases: Record<string, string> = {
+  upstream_configuration_invalid: "prepare",
+  upstream_policy_rejected: "prepare",
+  upstream_egress_failed: "egress",
+  upstream_transport_failed: "fetch",
+  upstream_status_rejected: "fetch",
+  upstream_body_failed: "body",
+  unknown: "unknown",
+};
+
 // Keep log output as literal text, including ANSI and bidirectional controls.
 export function logText(value: string, limit = 16_384): string {
   const visible = value
@@ -22,6 +32,13 @@ export function logText(value: string, limit = 16_384): string {
 // Deliberately copy the safe API projection instead of spreading a response
 // object into a download or clipboard payload.
 export function projectLog(row: RuntimeLogEntry): RuntimeLogEntry {
+  const failure =
+    typeof row.errorCode === "string" &&
+    typeof row.phase === "string" &&
+    Object.hasOwn(failurePhases, row.errorCode) &&
+    failurePhases[row.errorCode] === row.phase
+      ? { errorCode: row.errorCode, phase: row.phase }
+      : {};
   return {
     sequence: row.sequence,
     time: logText(row.time),
@@ -37,6 +54,7 @@ export function projectLog(row: RuntimeLogEntry): RuntimeLogEntry {
     ...(row.durationMs === undefined ? {} : { durationMs: row.durationMs }),
     ...(row.method === undefined ? {} : { method: row.method }),
     ...(row.route === undefined ? {} : { route: logText(row.route, 256) }),
+    ...failure,
     ...(row.requestClass === undefined
       ? {}
       : { requestClass: row.requestClass }),

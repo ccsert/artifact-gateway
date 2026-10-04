@@ -64,9 +64,37 @@ Console 默认展示关键词、时间范围、级别、精确组件和 Request 
 
 本地 API 只返回已经脱敏的核心字段及有界顶层白名单：HTTP `status`（100–599）、
 `durationMs`（0–86400000）、标准 HTTP `method`、已知 `requestClass`、已注册且最多 256 ASCII 字节的 `route` 模板（或固定 `unmatched`）、最多 128
-字节的 ASCII 不透明 `jobId`，以及 `attempt`（0–1000000）。缺失、类型错误、越界、
+字节的 ASCII 不透明 `jobId`，以及 `attempt`（0–1000000）和下述有限 `errorCode` / `phase` 配对。缺失、类型错误、越界、
 已遮蔽或嵌套的诊断值不返回，但不丢弃整条事件。不开放原始属性、请求路径/URL、header、
 请求体或错误 payload。敏感名称及祖先 group 脱敏先于 stdout、buffer 搜索和本次投影。
+
+### Raw Proxy 失败原因
+
+Raw Proxy Repository 的 GET/HEAD 访问事件可增加可选配对字段
+`errorCode` / `phase`。同一原生路径覆盖 Nexus 兼容 URL 和原生 Group；
+legacy Group 实现和其他协议不增加这些字段。字段描述最终已认领响应的失败，
+不暴露仓库 ID、endpoint、路径、header、body、凭据或原始 error 文本。
+
+| errorCode | phase | 实际分支 |
+| --- | --- | --- |
+| `upstream_configuration_invalid` | `prepare` | endpoint 语法/scheme/内嵌凭据无效（沿用 403），或客户端请求准备失败 |
+| `upstream_policy_rejected` | `prepare` | 静态上游 host allowlist 或私有 IP literal 拒绝（沿用 403） |
+| `upstream_egress_failed` | `egress` | 出站客户端准备失败；可能包含配置、DNS、凭据或出站策略，不能据此认定是策略拒绝 |
+| `upstream_transport_failed` | `fetch` | HTTP client 交换失败，不从错误字符串推断 DNS/TLS/timeout 子类 |
+| `upstream_status_rejected` | `fetch` | 上游状态非 2xx，排除 404/410；重定向继续不跟随 |
+| `upstream_body_failed` | `body` | 响应暂存或关闭失败，含对象大小限制和本地临时文件 I/O，不一定是网络读取失败 |
+| `unknown` | `unknown` | 自定义 Raw client 返回未分类错误 |
+
+API 与 Console 只保留已知枚举及固定映射的配对。无效、类型错误、嵌套、
+redacted 或映射不匹配的值省略，也不参与诊断关键词匹配。logger 只允许精确
+顶层 `errorCode` 的已知 literal 通过敏感名称规则；原始 error 和敏感祖先
+group 继续脱敏。行详情、单行/选择/已加载复制和有界 NDJSON 保留相同配对。
+
+404/410 未命中、Group 成功回退、缓存命中、认证和仓库授权拒绝不增加上游原因。
+GET 缓存锁释放/协调错误覆盖上游失败并最终返回 503 时，省略上游原因。
+未接入的 checksum/cache/coordination 失败也省略配对；字段缺失不表示成功。
+HEAD 沿用忽略 body-close 错误的行为。limited 采集继续只记录 5xx 和慢请求；
+快速 403 的原因仅在 full 模式可见。不增加指标标签、collector 依赖、告警评估或邮件行为。
 
 每个成功页面包含 `source`：INFO 采集下限、实际 limited/full 访问日志策略与慢请求
 阈值、buffer 容量、16 KiB 行接纳上限，以及当前实例/session 保留记录中观察到的最多

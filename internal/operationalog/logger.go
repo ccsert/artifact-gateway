@@ -113,6 +113,20 @@ func (h handler) WithGroup(name string) slog.Handler {
 }
 
 func redactAttribute(groups []string, attr slog.Attr) slog.Attr {
+	// Only this exact top-level key may bypass sensitive-name redaction,
+	// and only with a known literal code. Raw errors remain redacted.
+	if len(groups) == 0 && attr.Key == "errorCode" && attr.Value.Kind() == slog.KindString && FailurePhase(attr.Value.String()) != "" {
+		return attr
+	}
+	if strings.EqualFold(attr.Key, "phase") {
+		if len(groups) == 0 && attr.Key == "phase" && attr.Value.Kind() == slog.KindString {
+			switch attr.Value.String() {
+			case "prepare", "egress", "fetch", "body", "unknown":
+				return attr
+			}
+		}
+		return slog.String(attr.Key, "[redacted]")
+	}
 	if sensitiveAttributeName(attr.Key) {
 		return slog.String(attr.Key, "[redacted]")
 	}
@@ -127,6 +141,9 @@ func redactAttribute(groups []string, attr slog.Attr) slog.Attr {
 }
 
 func sensitiveAttributeName(name string) bool {
+	if strings.EqualFold(name, "phase") {
+		return true
+	}
 	key := strings.ToLower(name)
 	for _, sensitive := range []string{"password", "secret", "token", "credential", "authorization", "cookie", "body", "query", "url", "error", "err"} {
 		if strings.Contains(key, sensitive) {
