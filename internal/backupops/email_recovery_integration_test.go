@@ -312,11 +312,9 @@ func verifyRecoveryEmail(t *testing.T, ctx context.Context, target *OwnedTarget,
 		if firstWave {
 			deadline := time.NewTimer(10 * time.Second)
 			ticker := time.NewTicker(5 * time.Millisecond)
-			ready := false
-			for !ready {
+			for {
 				messages, _ := fixture.Snapshot()
 				if len(messages) == 2 && len(results) == 6 {
-					ready = true
 					break
 				}
 				select {
