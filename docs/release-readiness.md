@@ -1,14 +1,13 @@
-# Artifact Gateway 0.1.x Controlled Deployment Readiness
+# Artifact Gateway Controlled Deployment Readiness
 
 [简体中文](release-readiness.zh-CN.md) | [Documentation index](README.md)
 
-This document is the additional evidence gate for approving a controlled target
-deployment of Artifact Gateway 0.1.x. It is intentionally broader than the
-GitHub tag-release gate: `v0.1.0` requires a clean `main` commit with successful
-CI, mainline assets, and immutable image candidates, while this suite also
-exercises environment-specific operations, performance, upgrade, and recovery.
-A GitHub Release does not claim that this checklist has been executed against a
-production target.
+This checklist separates repository release evidence from target deployment
+acceptance. A release requires a clean main commit, successful applicable CI,
+mainline assets and immutable image candidates. It does not imply that the
+checklist ran against production. For v0.6.0 preparation, the bounded new-data
+gates are `make backup-transfer-test` and `make upgrade-readiness`; broader
+protocol, performance and target-deployment checks remain separate.
 
 The suite covers OCI, Maven, Raw, Conan, npm, and PyPI Hosted/Proxy lifecycle
 and distribution paths plus Go Module atomic Hosted publication and
@@ -45,6 +44,7 @@ make console-test
 make console-build
 make console-e2e
 make upgrade-readiness
+make backup-transfer-test
 make backup-restore-readiness
 ```
 
@@ -58,13 +58,24 @@ storage credentials, or unredacted upstream URLs in that record.
 
 ## Pinning the Rehearsal Image
 
-`upgrade-readiness` defaults to the previous formal release, `v0.1.0`.
-Set `GATEWAY_UPGRADE_FROM_REF` to its exact commit for a recorded run.
-Source rehearsals build and label both revisions; they do not verify registry
-distribution. To execute an existing candidate, set `GATEWAY_READINESS_IMAGE`,
-`GATEWAY_READINESS_REF`, and `GATEWAY_READINESS_VERSION`; optionally set
-`GATEWAY_UPGRADE_FROM_IMAGE` for the baseline. These image options also work with
-`backup-restore-readiness` (only the candidate is used there).
+`make upgrade-readiness` is fixed to formal v0.5.0 commit
+`ea60aea333b29bb60d4ac1b8e2b2a8720563726f`. It source-builds that baseline,
+uses fresh owned PostgreSQL/S3 resources and synthetic credentials, and never
+loads `.env`. One migration job adds 000136–139; a second run must preserve the
+complete metadata fingerprint. Existing repository IDs, Group order, grants and
+object bytes are read back, and new encrypted targets/state/events are created
+and read through the candidate API. Rollback restores the consistent
+pre-upgrade DB/object snapshot into a fresh target with matching v0.5.0 software,
+then rolls forward. This gate does not validate an old binary against an
+expanded database, down migrations, every protocol/provider, or published images.
+`make backup-transfer-test` independently proves new outbox recovery semantics
+for both binary and OCI software profiles, with an owned TLS sink.
+
+`scripts/historical-upgrade-readiness.sh` preserves the v0.1.0 protocol regression
+and its explicit `GATEWAY_UPGRADE_FROM_REF` override. Its shared-volume binary
+rollback is historical evidence only, not this release's rollback approval.
+The image options below apply to that historical helper and
+`backup-restore-readiness`, not the fixed v0.5.0 gate.
 
 Image inputs must be registry references ending in `@sha256:<64 lowercase hex>`
 or an already loaded local `sha256:<64 lowercase hex>` image ID. Mutable tags are
@@ -142,18 +153,15 @@ and any registry access failure separately.
       below one second. Override only with an approved release record using
       `GATEWAY_PERFORMANCE_REQUESTS`, `GATEWAY_PERFORMANCE_CONCURRENCY`,
       `GATEWAY_PERFORMANCE_P95_MS`, and `GATEWAY_PERFORMANCE_MAX_ERROR_PERCENT`.
-- [ ] `make upgrade-readiness` deploys `GATEWAY_UPGRADE_FROM_REF` (default
-      `v0.1.0`) into fresh isolated volumes, migrates it to the current
-      checkout while retaining the same PostgreSQL and RustFS state, verifies
-      persisted Maven object bytes and OCI/Maven Groups, and uses the real Go
-      client to resolve a base Go Proxy module after its upstream is made
-      unreachable. It then publishes and resolves a current Go Hosted module,
-      creates current Raw/Conan Group state, starts the prior revision against
-      those volumes, re-verifies the base OCI, Maven, and Go Proxy state, and
-      finally rolls forward to prove both Go Proxy and Go Hosted content remain
-      readable. V2 migrations are additive: a rollback binary must not need V2
-      rows to serve existing OCI Groups. This is an application/schema upgrade
-      gate; the project no longer ships a legacy object-store migration path.
+- [ ] `make backup-transfer-test` preserves nonempty encrypted targets, quota
+      rules/state/events and outbox permissions after real public export/restore;
+      concurrent opted-in TLS workers send only permitted due work. Cancelled
+      expired claims and terminal deliveries never automatically resend; active
+      leases/future retries, stale-token fencing and possibleDuplicate remain.
+- [ ] `make upgrade-readiness` passes the fixed v0.5.0 forward migration,
+      replay no-op, core/new-state readback and isolated pre-upgrade snapshot
+      rollback/rollforward described above. Record source-built software identity
+      separately from published binary/image distribution acceptance.
 - [ ] Before rolling out migration `000095`, stop accepting new replication
       requests, drain every pre-upgrade replication plan to a terminal state,
       and stop all old replication workers. Apply the migration and start only
@@ -225,7 +233,7 @@ and any registry access failure separately.
 | Backup target | PostgreSQL metadata plus RustFS object data; 24-hour RPO, 30-minute RTO drill target |
 | OCI performance gate | 50 cached manifest reads, concurrency 10, zero errors, p95 <= 1000 ms |
 | Cache operations gate | Resolver denied; administrator collection increases successful-run count |
-| Upgrade gate | Previous RustFS revision `v0.1.0`, isolated object-store volumes, current migration, protocol regression, binary rollback |
+| Upgrade gate | Fixed v0.5.0 `ea60aea…`, migrations 000136–139, replay no-op, core/new-state readback, pre-upgrade snapshot rollback and rollforward |
 
 ## Architecture
 
@@ -266,10 +274,14 @@ flowchart LR
 
 ## Rollback
 
-1. Stop traffic to the new Gateway deployment and retain its logs and metrics.
-2. Redeploy the last known-good Gateway image with the previous validated
-   configuration and secrets. Do not roll back PostgreSQL schema independently:
-   migrations are forward-only for this MVP.
+1. Stop traffic and all new evaluators/workers; retain logs, metrics and the
+   current consistent state. Review external mail effects before re-enabling mail.
+2. For the v0.5.0 rollback proven by this gate, restore the consistent pre-upgrade
+   PostgreSQL/object snapshot into a fresh isolated target with matching old
+   software, configuration and independently held key. This loses post-snapshot
+   changes. Binary-only rollback against expanded DB requires separate explicit
+   compatibility evidence; additive migrations alone are insufficient. Migrations
+   are forward-only; never apply a down migration.
 3. Wait for `/readyz` to return `204`, then perform an authenticated OCI and
    Maven read against a known artifact.
 4. If metadata or cache state is implicated, follow the restore drill in

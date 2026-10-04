@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Added nonempty encrypted email/quota recovery acceptance to both isolated binary/OCI transfer profiles, including cancellation, concurrent leases and ambiguous outcomes. The upgrade gate now pins formal v0.5.0 and proves forward migrations plus pre-upgrade snapshot rollback/rollforward; keys remain an independent operational prerequisite. Broader deployment/recovery acceptance remains open.
+
 - Console System now manages write-only email targets, sandboxed bilingual three-state template previews, explicitly confirmed synthetic tests, and readable delivery results. Targets default disabled; saving/previewing sends no mail. Whole-workspace permission gates, safe CAS drafts, cancellation and same-key uncertain test retries are covered. Real mailbox clients and production SMTP remain separate.
 
 - Console System now provides administrator repository quota rule creation/editing, explicit enable/disable/delete confirmation and safe state/event/delivery evidence. New rules stay disabled; permission denials and version conflicts preserve write gates/drafts, stale data retains severity, and SMTP acceptance remains distinct from inbox delivery. Manual replay and production configuration remain separate.

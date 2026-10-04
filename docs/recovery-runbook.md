@@ -149,6 +149,46 @@ systemd controllers, cross-version upgrade, a large-object interruption matrix,
 or recovery from a cloud-specific S3 implementation. #200/#201 remain broader
 acceptance work; neither preflight nor these scoped tests close that matrix.
 
+## Alert mail recovery gate and safe upgrade rollback (v0.6.0 preparation)
+
+The full PostgreSQL dump and dynamic public-table fingerprints already include
+new mail/quota tables; there is no table allowlist to update. The release gate
+adds nonempty encrypted targets, test request records, quota state/episodes/events
+and descriptors, and pending/retrying, active/expired, cancelled and terminal
+deliveries to both existing binary/OCI recovery profiles. Eight concurrent
+opted-in workers use an owned, non-forwarding TLS SMTP sink: only permitted due
+work sends. Cancelled expired leases become dead with possibleDuplicate; accepted
+and dead rows stay terminal. Active leases and future retry deadlines block work,
+expired unrevoked attempts retain possibleDuplicate, and stale tokens cannot
+finish a newer claim. Safe API reads and administrator denials are also checked.
+
+`GATEWAY_SETTINGS_ENCRYPTION_KEY` is an independent operational prerequisite.
+Back up/escrow it separately under the operator's secret-management policy; the
+bundle stores encrypted recipient snapshots, never the encryption key, SMTP
+authentication files, or runtime configuration. Supply the original key through
+the private target runtime settings. Missing/wrong keys cannot decrypt. Restored
+Gateway is API-only and cannot enable SMTP through the runtime allowlist. Before
+explicitly starting any mail worker, review pending/in-flight/possibleDuplicate
+and cancellation state. Restoring an earlier snapshot can repeat an externally
+accepted attempt; SMTP is not exactly-once and accepted mail cannot be recalled.
+
+`make upgrade-readiness` pins formal v0.5.0 `ea60aea333b29bb60d4ac1b8e2b2a8720563726f`.
+Stop all API/Scheduler/Worker and external writers; retain a consistent pre-upgrade
+PG + object snapshot and matching software/config/key. Apply 000136–139 with one
+migration job before starting same-revision roles and Console; default mail stays
+disabled. The gate checks replay no-op, core identity/bytes and new-state readback,
+then restores that pre-upgrade snapshot into a new v0.5.0 target and rolls forward.
+Objects use the same S3 byte format; DB changes are additive forward migrations.
+Additive schema alone does not approve running an old binary against the expanded
+DB. No down migration or intermediate pre-000139 mail worker is approved here.
+Full snapshot rollback loses changes after the snapshot and requires reviewing
+external mail side effects before traffic/worker enablement. Published-registry
+and production deployment acceptance, provider/protocol/scale matrices remain open.
+
+The physical `restore-drill.sh` restarts its original Gateway container. If an
+operator customized it with mail roles/configuration, disable/drain mail first
+and explicitly review/authorize re-enabling it after recovery.
+
 ## Pinned physical drill
 
 Run this drill from a workstation with Docker Desktop, a configured `.env`, and

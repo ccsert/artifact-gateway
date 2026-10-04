@@ -111,6 +111,36 @@ image 在公开 export/restore 中失败，不发布备份集、不创建目标�
 格式或身份提供方、systemd controller、跨版本升级、大对象中断矩阵或云厂商特定 S3
 恢复。#200/#201 仍有更广验收工作，preflight 与这些限定测试均不能关闭完整矩阵。
 
+## 邮件恢复门禁与安全升级回退（v0.6.0 准备）
+
+完整 PostgreSQL dump 和动态 public 表摘要已包含新增邮件／配额表，没有需更新的表
+白名单。本门禁在现有 binary／OCI 恢复 profile 加入非空加密目标、测试请求记录、配额
+状态／episode／事件／描述符，以及 pending/retrying、活动／过期 claim、取消与终态
+交付。八个并发且显式启用的 worker 使用任务拥有、不向外转发的 TLS SMTP 接收端，
+只有可处理项发送。已取消的过期租约转 dead 并保留 possibleDuplicate；accepted/dead
+保持终态。活动租约和未来重试期限阻止处理；过期未取消项保留 possibleDuplicate，
+旧 token 无法完成新 claim。另验收 API 安全读回和非管理员拒绝。
+
+`GATEWAY_SETTINGS_ENCRYPTION_KEY` 是独立运维前提，按操作者 secret 管理策略单独备份／
+托管。备份集保存加密收件快照，不打包加密密钥、SMTP 认证文件或运行配置；通过私有
+目标运行设置提供原密钥。缺失／错误密钥无法解密。恢复 Gateway 强制 API-only，运行
+allowlist 无法启用 SMTP。显式启动邮件 worker 前复核 pending/in-flight/
+possibleDuplicate 与取消状态。较早快照可能重复外部已接受尝试；SMTP 不保证
+exactly-once，已接受邮件不能撤回。
+
+`make upgrade-readiness` 固定正式 v0.5.0 `ea60aea333b29bb60d4ac1b8e2b2a8720563726f`。
+停全部 API／Scheduler／Worker 和外部 writer；保留一致的升级前 PG＋对象快照与匹配
+软件／配置／密钥。一个迁移作业应用 000136–139 后，再启动同 revision 各角色和
+Console；邮件默认关闭。门禁检查二次 no-op、核心身份／字节和新状态读回，再将升级前
+快照恢复到全新 v0.5.0 目标并前滚。对象保持相同 S3 字节格式，DB 是增量前向迁移；
+仅 schema 增量不能批准旧 binary 读扩展 DB。本门禁不批准 down migration 或不认识
+000139 的中间开发版邮件 worker。完整快照回退丢失快照后的变更，重开流量／worker
+前需复核外部邮件副作用。已发布镜像分发、生产部署与所有 provider／协议／规模矩阵
+仍未验收。
+
+物理 `restore-drill.sh` 会重启原 Gateway 容器。如果操作者自定义启用了邮件角色／
+配置，须先停用／排空邮件，并在恢复后明确复核／授权重新启用。
+
 ## 固定物理演练
 
 在安装 Docker Desktop、已经配置 `.env`，并通过 `make up` 启动本地栈的工作站上执行
