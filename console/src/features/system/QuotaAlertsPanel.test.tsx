@@ -355,9 +355,7 @@ describe("quota alerts read boundary", () => {
     mocks.listEmailTargets.mockResolvedValue({ data: [] });
     mount();
     expect(await screen.findByText("尚无配额告警规则")).toBeInTheDocument();
-    expect(
-      screen.getByText(/先通过管理员 API 配置邮件目标/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/“邮件通知”页签新建目标/)).toBeInTheDocument();
   });
 });
 

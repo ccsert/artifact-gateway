@@ -20,6 +20,7 @@ export async function authenticateWithIdentity(
   identity: MockIdentity,
 ) {
   await page.addInitScript(() => {
+    if (window.top !== window) return;
     localStorage.setItem("ag.console.token", "mock-admin-token");
     localStorage.setItem("ag.console.role", "admin");
   });
