@@ -62,6 +62,8 @@ jobs:
         run: make cargo-contract
       - name: Validate Kubernetes manifests
         run: make kubernetes-local-check
+      - name: Verify opt-in Compose email roles with owned TLS SMTP
+        run: make email-compose-check
       - name: Run Native OCI E2E
         run: make native-oci-e2e
       - name: Run Native Raw E2E

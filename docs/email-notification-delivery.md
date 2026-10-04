@@ -56,9 +56,106 @@ supply relay addresses, authentication, headers or message bodies.
 - Optional `consoleOrigin` must be an explicit HTTPS origin, without credentials,
   query or fragment. The server appends `/system?tab=diagnostics`. No request Host
   or arbitrary event URL is used; absent configuration omits the link.
-- Workers need the same relay, encryption key and trust configuration as API
-  nodes. A dedicated worker uses `GATEWAY_NODE_ROLES=worker` and
+- API, scheduler and email workers need the same relay, From, Console origin,
+  encryption key, authentication and trust configuration. A dedicated worker uses `GATEWAY_NODE_ROLES=worker` and
   `GATEWAY_WORKER_KINDS=email`; empty kind filters include email workers.
+
+## Opt-in Compose example
+
+`compose.yml` keeps email disconnected. Setting `GATEWAY_EMAIL_CONFIG_FILE` in
+`.env` alone does not mount or forward it. Explicitly add `compose.email.yml`,
+which fixes the in-container path to `/etc/gateway-email/relay.json`, requires
+`GATEWAY_EMAIL_CONFIG_DIR` and the existing settings encryption key, and mounts
+that directory read-only with `create_host_path: false`. The directory must
+already exist. [The checked-in file](../examples/email/relay.json) is disabled
+and contains no relay or credential. The overlay requires Docker Compose with
+`!reset` support (the acceptance gate also uses `!override`).
+
+Provision the directory through your existing secret management. The image runs
+as UID/GID 65532. On a Linux host, the following installs only the disabled file:
+
+```sh
+sudo install -d -o 65532 -g 65532 -m 0750 /etc/artifact-gateway/email
+sudo install -o 65532 -g 65532 -m 0640 examples/email/relay.json /etc/artifact-gateway/email/relay.json
+```
+
+Keep the private deployment `.env` mode 0600 and set
+`GATEWAY_EMAIL_CONFIG_DIR=/etc/artifact-gateway/email`. Use a separately generated
+32-byte `GATEWAY_SETTINGS_ENCRYPTION_KEY` (for a new installation,
+`openssl rand -hex 32`), independent of admin/resolver, database, S3/RPC and SMTP
+credentials. Retain the existing key when encrypted settings or outbox snapshots
+already exist; regenerating it loses decryption. Do not commit or print the key
+or the expanded Compose environment. On Docker Desktop, verify ownership and
+readability from the image's UID rather than assuming host permission mapping.
+
+For one process, set `GATEWAY_NODE_ROLES=standalone` in that private `.env`:
+
+```sh
+docker compose --env-file .env -f compose.yml -f compose.email.yml config --quiet
+docker compose --env-file .env -f compose.yml -f compose.email.yml up -d --build --wait gateway
+```
+
+For split roles, set `GATEWAY_NODE_ROLES=api`, then select the profile:
+
+```sh
+docker compose --env-file .env -f compose.yml -f compose.email.yml --profile email-roles config --quiet
+docker compose --env-file .env -f compose.yml -f compose.email.yml --profile email-roles up -d --build --wait gateway gateway-scheduler gateway-email-worker
+```
+
+The profile provides one scheduler and an email-only worker, with the same
+base dependencies, revision, config directory and key as API. Background roles
+publish no host ports. This small example covers email tests and quota alerts;
+add separately configured workers for other durable jobs when required, and
+budget PostgreSQL pools across all processes. Stop writers and finish the single
+migration job before an upgrade; this overlay does not orchestrate upgrades.
+
+To enable an authorized relay, replace `relay.json` with a complete validated
+configuration following the contract above. Paths for optional `caFile` and
+`authFile` must use `/etc/gateway-email/...`. Install private auth JSON mode 0600,
+owned and readable by UID 65532; use readable trusted CA PEM and restrict the
+directory to authorized operators. The overlay mounts no SMTP server and
+provisions no credentials. Restart every selected role after config, CA or key
+changes. Directory mounts allow atomic auth-file rotation; workers reread auth
+per attempt. Confirm the intended target/version before explicitly sending a
+synthetic test, then inspect its delivery status and the relay acceptance.
+
+An absent config path disables the channel; explicit `enabled: false` also
+disables it. A configured missing/unreadable/malformed file, unknown field,
+invalid relay/CA or non-private auth file fails process startup. Gateway logs
+`invalid configuration` with the error detail redacted. Missing/invalid settings key
+instead leaves email capability `encryption_key_unavailable`. Compose `--wait`
+and `/readyz` check process dependencies, not email sender health.
+
+`GET /api/v2/email-notifications` reports only the responding API process's
+configuration/key readiness. An API-only process can report `ready` and enqueue
+while no sender runs. An unconfigured worker does not claim/send. A worker with
+a different valid key retries with `encryption_key_unavailable` before SMTP. A
+scheduler with no email config records `notificationCode: email_disabled` with
+no delivery; fixing its config does not backfill that event. Multiple evaluators
+do not negotiate their configs: whichever claims a due evaluation applies its
+own configuration. Deploy identical settings and inspect every role; node
+heartbeats do not prove relay/key agreement. This example adds no cluster-wide
+readiness or configuration synchronization capability.
+
+Run the reproducible gate without reading `.env` or touching existing stacks:
+
+```sh
+make email-compose-render-check
+make email-compose-check
+```
+
+The full gate builds the current real image, starts uniquely named disposable
+PostgreSQL/RustFS/API and background roles, and uses a private internal-network
+TLS SMTP sink that cannot forward mail. Only API receives an ephemeral loopback
+port. Generated credentials/certificates, data and containers are removed on
+exit. It verifies disabled config, startup errors and auth permissions,
+API-only pending, absent worker config, differing worker key, two corrected
+workers, accepted actual HTML/plain MIME, RCPT 550/dead, a disabled scheduler's
+permanent suppression, correct quota delivery and standalone delivery. Three
+synthetic messages are accepted; the rejected attempt has no DATA. This is a
+Compose wiring gate, not real SMTP-provider, inbox/client, production or
+Kubernetes deployment acceptance. Existing sender/PG contract tests cover the
+broader TLS/retry/fencing matrix.
 
 ## Console workflow
 

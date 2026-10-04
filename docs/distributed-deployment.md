@@ -31,13 +31,17 @@ GATEWAY_WORKER_KINDS=reclaim,replication
 `go`, and `apt`. APT currently runs only reclaim for management-preview uploads;
 this does not make Hosted APT public. Job kinds include `promotion`, `replication`,
 `retention`, `reclaim`, `intelligence`, `deletion`, `scan`, `recovery`, `cache`,
-`audit`, and `webhook`.
+`audit`, `webhook`, and `email`.
 
 `intelligence` copies delayed artifact intelligence after promotion. `scan`
 starts only when the node has `GATEWAY_SCANNER_ENDPOINT`; its independent
 `GATEWAY_SCANNER_FORMATS` may include Proxy-only Go and allows scanner isolation.
 `webhook` claims global deliveries from the PostgreSQL durable outbox and ignores
 format filters. Without filters, a worker handles every applicable format and job.
+`email` likewise ignores format filters and sends the durable email outbox.
+API, Scheduler and email Worker must share the same email configuration and
+settings encryption key. See the [opt-in Compose email example](email-notification-delivery.md#opt-in-compose-example);
+API email capability is local configuration readiness, not cluster sender health.
 
 Filters constrain Workers only; the Scheduler discovers work for every format.
 Cache reclaim is claimed separately for OCI, Raw, and Conan. Maven cache expiry
