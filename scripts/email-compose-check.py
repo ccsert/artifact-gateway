@@ -95,7 +95,11 @@ def check(render_only):
             require(node["environment"]["GATEWAY_SETTINGS_ENCRYPTION_KEY"] == key, "key drift")
             require(node["environment"]["GATEWAY_EMAIL_CONFIG_FILE"] == "/etc/gateway-email/relay.json", "config drift")
             mount = next(v for v in node["volumes"] if v["target"] == "/etc/gateway-email")
-            require(mount["read_only"] and not mount["bind"]["create_host_path"], "unsafe mount")
+            # Compose's canonical JSON may omit a false create_host_path value.
+            # The overlay explicitly sets false; still reject a rendered true.
+            require(mount["read_only"] and
+                    mount.get("bind", {}).get("create_host_path", False) is False,
+                    "unsafe mount")
             require(mount["source"] == str(config), "mount drift")
             if name != "gateway":
                 require(not node.get("ports"), "background role publishes host ports")
