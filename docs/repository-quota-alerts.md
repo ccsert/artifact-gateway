@@ -10,7 +10,8 @@ breaches to PostgreSQL state/events and the [existing TLS email channel](email-n
 [#229](https://github.com/ccsert/artifact-gateway/issues/229) and
 [#230](https://github.com/ccsert/artifact-gateway/issues/230).
 It does not evaluate local mounts or 5xx. S3/NAS physical pool capacity stays
-unknown. A Console configuration page is not available yet.
+unknown. Platform administrators can manage rules and read safe delivery evidence
+in Console under **System → Quota alerts** (`/system?tab=alerts`).
 
 For small private deployments, reuse required PostgreSQL, Scheduler and Worker.
 This avoids another alert service, but the product owns rule/mail lifecycle and
@@ -18,6 +19,34 @@ cannot notify when Gateway/PostgreSQL is completely down. Use an existing extern
 availability watcher for independent outage detection. Prometheus/Alertmanager
 offers external observation/routing with additional installation, upgrade and
 configuration work; it is not a prerequisite for this finite quota rule.
+
+## Console workflow
+
+Configure the email channel, encryption key and recipient target through the
+existing deployment configuration and administrator API first. Console shows only
+the target name, locale, enabled state, recipient-configured flag and bound version;
+it never reads back an address, credential or SMTP setting.
+
+Create a rule with explicit warning/critical/recovery percentages, their hold times
+and maximum sample age. Percentages allow two decimal places and are converted to
+exact integer basis points. New rules are always disabled; creation and saving send
+no test email. Enable, disable and delete require a separate explicit confirmation.
+An unavailable channel/key can still permit saving disabled rules. A target version
+change requires editing and saving to rebind before enabling.
+
+Conflicting saves retain the draft and require a fresh configuration read. Permission
+or forced-password denials block writes across cancel/back navigation; only an
+explicit successful refresh with no newer authorization denial restores writes.
+Reads refresh every 30 seconds while visible, pause in the background and stop when
+leaving the tab. Failed reads retain their last snapshot with an outdated notice.
+
+Rule severity and unknown/stale evidence remain separate. The latest 50 immutable
+events preserve their policy and sample evidence; delivery details show attempts,
+retry time, finite failure/cancellation codes and possible duplicates. **Accepted by
+SMTP server** does not confirm inbox delivery. No client-side severity evaluation,
+recipient persistence, automatic enabling or sending is introduced. Email target
+web management, template preview, explicit synthetic tests and replay remain later
+slices; no production relay, recipient or deployment configuration is changed.
 
 ## Explicit configuration and permission
 
@@ -141,7 +170,7 @@ tests cover concurrent evaluators, configuration fencing, queue overflow, read
 failures and atomic rollback when event persistence fails.
 
 This does not certify real Gmail/Outlook/Apple Mail clients or production rollout.
-Terminal retention/archive, Console configuration, explicit local mount alerts
+Terminal retention/archive, Console email-target management/preview/test/replay, explicit local mount alerts
 and process 5xx alerts remain separate slices. Real relay, recipients and production
 thresholds require separate deployment authorization. This slice creates no
 credentials, sends no real email and changes no production state.
