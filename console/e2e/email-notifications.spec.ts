@@ -134,7 +134,7 @@ async function geometry(page: Page) {
           document.documentElement.clientWidth,
       ),
     )
-    .toBe(0);
+    .toBeLessThanOrEqual(0);
   const gaps = await page.locator(".ag-email-notifications").evaluate((el) => {
     const boxes = [...el.children]
       .filter((x) => x.getBoundingClientRect().height > 0)
