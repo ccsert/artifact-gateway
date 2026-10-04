@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io/fs"
 	"net"
+	"net/mail"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -110,7 +111,9 @@ func seedRecoveryEmail(t *testing.T, ctx context.Context, source *OwnedTarget, e
 	for i, repoID := range []string{cancelledRepo, liveRepo} {
 		quota := int64(17)
 		if i == 1 {
-			quota = 16
+			quota = 15
+			policy.CriticalBasisPoints = 9200
+			policy.CriticalForSeconds = 2
 		}
 		if _, err = s.ReplaceRepositoryCapacityQuota(ctx, repoID, quota); err != nil {
 			t.Fatal(err)
@@ -147,6 +150,19 @@ func seedRecoveryEmail(t *testing.T, ctx context.Context, source *OwnedTarget, e
 			recoverySQL(t, ctx, source.database, `UPDATE email_test_deliveries SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id::text=$1`, claim.ID)
 		}
 		f.IDs[label] = events[0].DeliveryID
+		if i == 1 {
+			time.Sleep(1050 * time.Millisecond)
+			recoverySQL(t, ctx, source.database, `UPDATE repository_quota_alert_rules SET next_evaluate_at=clock_timestamp() WHERE id::text=$1`, r.ID)
+			if worked, e := s.EvaluateNextRepositoryQuotaAlert(ctx, cfg, time.Hour); e != nil || !worked {
+				t.Fatal("critical sample failed")
+			}
+			ordered, e := s.ListRepositoryQuotaAlertEvents(ctx, r.ID)
+			if e != nil || len(ordered) != 2 || ordered[0].Snapshot.Sequence != 2 || ordered[0].Snapshot.Scenario != "critical" || ordered[1].Snapshot.Sequence != 1 || ordered[1].Snapshot.Scenario != "warning" || ordered[0].Snapshot.EpisodeID != ordered[1].Snapshot.EpisodeID {
+				t.Fatal("ordered same-episode warning/critical missing")
+			}
+			f.IDs["ordered"] = ordered[0].DeliveryID
+		}
+
 		r, e = s.GetRepositoryQuotaAlertRule(ctx, r.ID)
 		if e != nil {
 			t.Fatal(e)
@@ -261,6 +277,7 @@ func verifyRecoveryEmail(t *testing.T, ctx context.Context, target *OwnedTarget,
 		if bytes.Contains(data, []byte(restored.RecipientCiphertext)) || bytes.Contains(data, []byte(recoveryRecipient)) || bytes.Contains(data, []byte(recoveryEmailKey)) {
 			t.Fatal("safe API leaked encrypted settings")
 		}
+		assertRecoverySafeAPI(t, path, data, f)
 		fixtureHTTP(t, ctx, endpoint, "GET", path, denied, nil, 403, "")
 	}
 	// Restore always starts API-only, with no SMTP configuration or worker role.
@@ -273,6 +290,11 @@ func verifyRecoveryEmail(t *testing.T, ctx context.Context, target *OwnedTarget,
 	if len(messages) != 0 {
 		t.Fatal("restore sent mail before worker opt-in")
 	}
+	// Hold the first two SMTP attempts before completion. The six other workers
+	// must finish idle while critical remains blocked behind in-flight warning.
+	releaseSMTP := make(chan struct{})
+	fixture.AfterAccept = func() { <-releaseSMTP }
+	firstWave := true
 	runTogether := func(want int) {
 		t.Helper()
 		var wg sync.WaitGroup
@@ -286,6 +308,30 @@ func verifyRecoveryEmail(t *testing.T, ctx context.Context, target *OwnedTarget,
 				results <- worked
 				errs <- e
 			}()
+		}
+		if firstWave {
+			deadline := time.NewTimer(10 * time.Second)
+			ticker := time.NewTicker(5 * time.Millisecond)
+			ready := false
+			for !ready {
+				messages, _ := fixture.Snapshot()
+				if len(messages) == 2 && len(results) == 6 {
+					ready = true
+					break
+				}
+				select {
+				case <-deadline.C:
+					close(releaseSMTP)
+					wg.Wait()
+					ticker.Stop()
+					t.Fatal("ordered warning did not block later concurrent claims")
+				case <-ticker.C:
+				}
+			}
+			deadline.Stop()
+			ticker.Stop()
+			close(releaseSMTP)
+			firstWave = false
 		}
 		wg.Wait()
 		close(results)
@@ -306,6 +352,7 @@ func verifyRecoveryEmail(t *testing.T, ctx context.Context, target *OwnedTarget,
 		}
 	}
 	runTogether(2) // due quota warning + expired unrevoked test; active/future blocked.
+	runTogether(1) // critical can proceed only after warning becomes terminal.
 	runTogether(0)
 	cancelled, e := s.GetEmailDelivery(ctx, f.IDs["cancelled"])
 	if e != nil || cancelled.State != "dead" || cancelled.ErrorCode != "rule_disabled" || !cancelled.PossibleDuplicate || cancelled.AutomaticCancellationCode != "rule_disabled" {
@@ -324,6 +371,9 @@ func verifyRecoveryEmail(t *testing.T, ctx context.Context, target *OwnedTarget,
 		t.Fatal("unexpired lease/future retry advanced")
 	}
 	recoverySQL(t, ctx, target.database, `UPDATE email_test_deliveries SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id::text=$1`, active.ID)
+	if e = s.FinishEmailDelivery(ctx, active.ID, active.LeaseToken, repository.EmailAttemptResult{}); !errors.Is(e, repository.ErrVersionConflict) {
+		t.Fatal("expired token finished before lease reclamation")
+	}
 	newer, e := s.ClaimEmailDelivery(ctx, "restored/new-session")
 	if e != nil || newer.ID != active.ID || newer.LeaseToken == active.LeaseToken || !newer.PossibleDuplicate {
 		t.Fatal("expired lease was not fenced/reclaimed")
@@ -338,14 +388,14 @@ func verifyRecoveryEmail(t *testing.T, ctx context.Context, target *OwnedTarget,
 	runTogether(2)
 	runTogether(0)
 	messages, commands := fixture.Snapshot()
-	if len(messages) != 4 {
-		t.Fatalf("SMTP received %d messages want 4", len(messages))
+	if len(messages) != 5 {
+		t.Fatalf("SMTP received %d messages want 5", len(messages))
 	}
-	for _, label := range []string{"pending", "expired", "active", "future"} {
+	for _, label := range []string{"pending", "ordered", "expired", "active", "future"} {
 		id := f.Deliveries[f.IDs[label]].EventID
 		count := 0
 		for _, message := range messages {
-			if strings.Contains(string(message), id) {
+			if recoveryMessageID(t, message) == id {
 				count++
 			}
 		}
@@ -353,13 +403,25 @@ func verifyRecoveryEmail(t *testing.T, ctx context.Context, target *OwnedTarget,
 			t.Fatalf("permitted event %s sent %d times", label, count)
 		}
 	}
+	warningPosition, criticalPosition := -1, -1
+	for i, message := range messages {
+		if recoveryMessageID(t, message) == f.Deliveries[f.IDs["pending"]].EventID {
+			warningPosition = i
+		}
+		if recoveryMessageID(t, message) == f.Deliveries[f.IDs["ordered"]].EventID {
+			criticalPosition = i
+		}
+	}
+	if warningPosition < 0 || criticalPosition <= warningPosition {
+		t.Fatal("SMTP quota event order changed")
+	}
 	for _, label := range []string{"accepted", "dead", "cancelled"} {
 		after, e := s.GetEmailDelivery(ctx, f.IDs[label])
 		if e != nil || (label != "cancelled" && !reflect.DeepEqual(after, f.Deliveries[after.ID])) {
 			t.Fatal("terminal delivery changed")
 		}
 		for _, message := range messages {
-			if strings.Contains(string(message), after.EventID) {
+			if recoveryMessageID(t, message) == after.EventID {
 				t.Fatal("forbidden event resent")
 			}
 		}
@@ -373,8 +435,21 @@ func verifyRecoveryEmail(t *testing.T, ctx context.Context, target *OwnedTarget,
 			}
 		}
 	}
-	if recipients != 4 {
+	if recipients != 5 {
 		t.Fatal("TLS sink recipient evidence missing")
 	}
-	t.Log("nonempty email/rule/event/outbox restored; key separate; permissions/API denial verified; TLS sink accepted only 4 permitted events; cancelled and terminal mail not resent; concurrent claims, future retry, lease fencing and possibleDuplicate preserved")
+	t.Log("nonempty email/rule/event/outbox restored; key separate; permissions/API denial verified; TLS sink accepted only 5 permitted events in quota sequence; cancelled and terminal mail not resent; concurrent claims, future retry, lease fencing and possibleDuplicate preserved")
+}
+
+func recoveryMessageID(t *testing.T, data []byte) string {
+	t.Helper()
+	message, err := mail.ReadMessage(bytes.NewReader(data))
+	if err != nil || message.Header.Get("To") != recoveryRecipient || !strings.HasPrefix(message.Header.Get("Content-Type"), "multipart/alternative;") {
+		t.Fatal("actual TLS MIME identity missing")
+	}
+	id := message.Header.Get("Message-ID")
+	if !strings.HasPrefix(id, "<") || !strings.HasSuffix(id, "@artifact-gateway.invalid>") {
+		t.Fatal("actual TLS Message-ID invalid")
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(id, "<"), "@artifact-gateway.invalid>")
 }

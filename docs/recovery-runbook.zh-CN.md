@@ -117,7 +117,7 @@ image 在公开 export/restore 中失败，不发布备份集、不创建目标�
 白名单。本门禁在现有 binary／OCI 恢复 profile 加入非空加密目标、测试请求记录、配额
 状态／episode／事件／描述符，以及 pending/retrying、活动／过期 claim、取消与终态
 交付。八个并发且显式启用的 worker 使用任务拥有、不向外转发的 TLS SMTP 接收端，
-只有可处理项发送。已取消的过期租约转 dead 并保留 possibleDuplicate；accepted/dead
+只有可处理项发送，同 episode 的 critical 必须等待在途 warning 完成。已取消的过期租约转 dead 并保留 possibleDuplicate；accepted/dead
 保持终态。活动租约和未来重试期限阻止处理；过期未取消项保留 possibleDuplicate，
 旧 token 无法完成新 claim。另验收 API 安全读回和非管理员拒绝。
 

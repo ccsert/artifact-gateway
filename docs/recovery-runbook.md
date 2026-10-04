@@ -157,7 +157,7 @@ adds nonempty encrypted targets, test request records, quota state/episodes/even
 and descriptors, and pending/retrying, active/expired, cancelled and terminal
 deliveries to both existing binary/OCI recovery profiles. Eight concurrent
 opted-in workers use an owned, non-forwarding TLS SMTP sink: only permitted due
-work sends. Cancelled expired leases become dead with possibleDuplicate; accepted
+work sends, with critical blocked behind the same episode’s in-flight warning. Cancelled expired leases become dead with possibleDuplicate; accepted
 and dead rows stay terminal. Active leases and future retry deadlines block work,
 expired unrevoked attempts retain possibleDuplicate, and stale tokens cannot
 finish a newer claim. Safe API reads and administrator denials are also checked.

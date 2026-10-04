@@ -51,7 +51,8 @@ make backup-restore-readiness
 `ea60aea333b29bb60d4ac1b8e2b2a8720563726f`，从该源码构建基线，使用全新 owned
 PostgreSQL/S3 资源与合成凭据，不加载 `.env`。单一迁移作业增加 000136–139，第二次
 运行必须保持完整元数据摘要不变。读回既有仓库 ID、Group 顺序、授权和对象字节，并在
-候选版本创建加密目标／规则状态／事件，通过 API 读回。回退将一致的升级前 DB／对象
+候选版本通过 API 创建加密目标，通过导出的 Store 接口创建／评估规则状态和事件，再
+用 API 读回事件；独立恢复门禁核对安全 API 字段身份／状态。回退将一致的升级前 DB／对象
 快照恢复到全新目标，使用匹配的 v0.5.0 软件，然后再前滚。本门禁不证明旧 binary 能
 读扩展数据库、向下迁移、所有协议/provider 或已发布镜像。`make backup-transfer-test`
 另用任务拥有的 TLS 接收端，证明 binary 与 OCI 软件 profile 的新增 outbox 恢复语义。

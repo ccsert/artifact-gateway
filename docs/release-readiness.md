@@ -63,8 +63,9 @@ storage credentials, or unredacted upstream URLs in that record.
 uses fresh owned PostgreSQL/S3 resources and synthetic credentials, and never
 loads `.env`. One migration job adds 000136–139; a second run must preserve the
 complete metadata fingerprint. Existing repository IDs, Group order, grants and
-object bytes are read back, and new encrypted targets/state/events are created
-and read through the candidate API. Rollback restores the consistent
+object bytes are read back. New encrypted targets are created through the API;
+exported Store interfaces create/evaluate quota state/events, with candidate API
+event readback. The separate restore gate checks safe API field identity/state. Rollback restores the consistent
 pre-upgrade DB/object snapshot into a fresh target with matching v0.5.0 software,
 then rolls forward. This gate does not validate an old binary against an
 expanded database, down migrations, every protocol/provider, or published images.
