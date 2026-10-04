@@ -29,6 +29,9 @@ const managementJSONBodyLimit = 1 << 20
 
 func (m openAPIServeMux) guarded(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v2/email-") {
+			w.Header().Set("Cache-Control", "no-store")
+		}
 		if m.authorize != nil && !isPublicManagementRequest(r) {
 			if _, ok := m.authorize(w, r); !ok {
 				return
@@ -160,6 +163,7 @@ type GatewayStore interface {
 	repository.RuntimeNodeStore
 	repository.ScheduledTaskStore
 	repository.WebhookStore
+	repository.EmailStore
 	repository.BackgroundOperationQueueStore
 	repository.ArtifactBrowseStore
 	repository.ArtifactUsageStore
@@ -314,7 +318,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 	if candidate, ok := any(store).(repository.ArtifactSearchStore); ok {
 		searchProjection = candidate
 	}
-	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptSnapshotImporter: aptSnapshotImporter, aptSnapshotExporter: aptpublication.SnapshotArchiveExporter{Store: store, Objects: nativeAPTObjects}, aptPublications: store, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemePackages: store, consoleThemes: dependencies.ConsoleThemes, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, cargo: store, cargoProxy: store, conan: store, apiKeys: store, serviceAccounts: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, queueStats: store, browse: store, diagnostics: dependencies, logBuffer: dependencies.LogBuffer, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
+	adminopenapi.HandlerWithOptions(generatedRepositoryAPIAdapter{hostedRepositoryAPIHandler: hostedRepositories, sessions: nativeMaven, aptPublication: aptPublication, aptSnapshotPublisher: aptSnapshotPublisher, aptSnapshotImporter: aptSnapshotImporter, aptSnapshotExporter: aptpublication.SnapshotArchiveExporter{Store: store, Objects: nativeAPTObjects}, aptPublications: store, groups: store, grants: store, templates: store, authorizationRoles: store, retentionPolicies: store, securityPolicies: store, quarantineReadPolicies: store, capacities: store, tombstones: store, intelligence: store, quarantine: store, lifecycleJobs: store, auditRetention: store, anonymousAccess: store, siteSettings: store, consoleThemePackages: store, consoleThemes: dependencies.ConsoleThemes, oidcRuntime: dependencies.OIDCRuntime, replication: store, oci: store, cargo: store, cargoProxy: store, conan: store, apiKeys: store, serviceAccounts: store, users: store, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, audit: store, metrics: metrics, maintenance: maintenance, proxyCache: proxyCacheBrowse, mavenProxy: mavenProxyOperations, searchProjection: searchProjection, runtimeNodes: store, scheduledTasks: store, webhooks: store, emailTargets: store, queueStats: store, browse: store, diagnostics: dependencies, logBuffer: dependencies.LogBuffer, artifactScanner: dependencies.ArtifactScanner, artifactScanFormats: dependencies.ArtifactScannerFormats}, adminopenapi.StdHTTPServerOptions{
 		BaseURL:    "/api/v2",
 		BaseRouter: openAPIServeMux{mux: mux, authorize: hostedRepositories.authenticateManagementRequest},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {

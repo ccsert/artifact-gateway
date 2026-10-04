@@ -14,6 +14,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/buildinfo"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
 	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
+	"github.com/artifact-gateway/artifact-gateway/internal/emailnotification"
 	"github.com/artifact-gateway/artifact-gateway/internal/httperrorrate"
 	"github.com/artifact-gateway/artifact-gateway/internal/localcapacity"
 	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
@@ -37,6 +38,7 @@ type Dependencies struct {
 	LogBuffer      *operationalog.Buffer
 	LocalCapacity  *localcapacity.Observer
 	HTTPErrorRate  *httperrorrate.Observer
+	Email          emailnotification.Config
 	// NativeMavenObjectStore is supplied by the runtime after RustFS is initialized.
 	// Tests omit it and receive an isolated in-memory store.
 	NativeMavenObjectStore        OCIObjectStore
@@ -103,6 +105,7 @@ func NewDependencies(cfg config.Config) Dependencies {
 			postgresChecker{databaseURL: cfg.DatabaseURL},
 			httpChecker{url: rustFSEndpointURL(cfg.RustFSEndpoint)},
 		},
+		Email:          cfg.Email,
 		BuildVersion:   build.Version,
 		BuildRevision:  build.Revision,
 		BuildModified:  build.Modified,

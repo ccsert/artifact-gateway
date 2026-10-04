@@ -7,6 +7,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/app"
 	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
 	"github.com/artifact-gateway/artifact-gateway/internal/config"
+	"github.com/artifact-gateway/artifact-gateway/internal/emailnotification"
 	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
 	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
 	npmprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/npm"
@@ -79,6 +80,9 @@ func (r backgroundRuntime) startWorkers(ctx context.Context, cfg config.Config, 
 	if cfg.WorkerKindEnabled("webhook") {
 		owner := cfg.InstanceID + "/" + r.workerSessionID
 		app.WebhookDeliveryWorker{Store: r.store, InstanceID: owner}.Start(ctx, 5*time.Second)
+	}
+	if cfg.WorkerKindEnabled("email") {
+		app.EmailNotificationWorker{Store: r.store, Sender: emailnotification.Sender{Config: cfg.Email}, InstanceID: cfg.InstanceID + "/" + r.workerSessionID}.Start(ctx, 5*time.Second)
 	}
 	r.startMavenWorkers(ctx, cfg)
 	r.startOCIWorkers(ctx, cfg)

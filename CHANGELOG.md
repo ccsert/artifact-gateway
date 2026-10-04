@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Added default-off administrator synthetic email tests with encrypted recipient targets, PostgreSQL idempotency/fenced delivery and retry/replay status, verified TLS SMTP and bilingual responsive HTML/plain-text templates. SMTP acceptance is explicit; capacity evaluation and real-recipient deployment remain separate.
+
 - Raw Proxy access logs now retain finite failure codes and phases through stdout, local administrator queries and Console copy/export, with final-response precedence and diagnostic keyword redaction.
 
 - Runtime log queries, Console rows and copy/export now retain only server-registered route templates, without request paths or parameter values. Nexus-compatible repository access logs reuse the resolved Maven/Raw/npm/PyPI/Go request class already used by metrics instead of falling into `other`.

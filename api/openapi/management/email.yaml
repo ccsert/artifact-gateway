@@ -1,0 +1,389 @@
+email_preview:
+  post:
+    operationId: previewEmailNotification
+    description: Administrator-only offline preview of a fixed synthetic scenario. Never enqueues or sends mail.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/EmailPreviewInput'
+    responses:
+      '200':
+        description: HTML and equivalent plain text
+        content:
+          application/json:
+            schema:
+              $ref: '#/EmailPreview'
+      '400':
+        $ref: '../components/responses.yaml#/Problem'
+      '401':
+        $ref: '../components/responses.yaml#/Problem'
+      '403':
+        $ref: '../components/responses.yaml#/Problem'
+EmailPreviewInput:
+  type: object
+  additionalProperties: false
+  required: [scenario, locale]
+  properties:
+    scenario: {type: string, enum: [warning, critical, resolved]}
+    locale: {type: string, enum: [en, zh-CN]}
+EmailPreview:
+  type: object
+  additionalProperties: false
+  required: [subject, html, text, templateVersion]
+  properties:
+    subject: {type: string}
+    html: {type: string}
+    text: {type: string}
+    templateVersion: {type: string}
+
+email_capabilities:
+  get:
+    operationId: getEmailNotificationCapability
+    responses:
+      '200':
+        description: Email notification result
+        content:
+          application/json:
+            schema:
+              $ref: '#/EmailCapability'
+      '400':
+        $ref: '../components/responses.yaml#/Problem'
+      '401':
+        $ref: '../components/responses.yaml#/Problem'
+      '403':
+        $ref: '../components/responses.yaml#/Problem'
+      '404':
+        $ref: '../components/responses.yaml#/Problem'
+      '409':
+        $ref: '../components/responses.yaml#/Problem'
+      '412':
+        $ref: '../components/responses.yaml#/Problem'
+      '429':
+        $ref: '../components/responses.yaml#/Problem'
+      '503':
+        $ref: '../components/responses.yaml#/Problem'
+
+email_targets:
+  get:
+    operationId: listEmailTargets
+    responses:
+      '200':
+        description: Email notification result
+        content:
+          application/json:
+            schema:
+              $ref: '#/EmailTargetList'
+      '400':
+        $ref: '../components/responses.yaml#/Problem'
+      '401':
+        $ref: '../components/responses.yaml#/Problem'
+      '403':
+        $ref: '../components/responses.yaml#/Problem'
+      '404':
+        $ref: '../components/responses.yaml#/Problem'
+      '409':
+        $ref: '../components/responses.yaml#/Problem'
+      '412':
+        $ref: '../components/responses.yaml#/Problem'
+      '429':
+        $ref: '../components/responses.yaml#/Problem'
+      '503':
+        $ref: '../components/responses.yaml#/Problem'
+  post:
+    operationId: createEmailTarget
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/EmailTargetInput'
+    responses:
+      '201':
+        description: Email notification result
+        content:
+          application/json:
+            schema:
+              $ref: '#/EmailTarget'
+      '400':
+        $ref: '../components/responses.yaml#/Problem'
+      '401':
+        $ref: '../components/responses.yaml#/Problem'
+      '403':
+        $ref: '../components/responses.yaml#/Problem'
+      '404':
+        $ref: '../components/responses.yaml#/Problem'
+      '409':
+        $ref: '../components/responses.yaml#/Problem'
+      '412':
+        $ref: '../components/responses.yaml#/Problem'
+      '429':
+        $ref: '../components/responses.yaml#/Problem'
+      '503':
+        $ref: '../components/responses.yaml#/Problem'
+
+email_target:
+  parameters:
+  - name: targetId
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  get:
+    operationId: getEmailTarget
+    responses:
+      '200':
+        description: Email notification result
+        content:
+          application/json:
+            schema:
+              $ref: '#/EmailTarget'
+      '400':
+        $ref: '../components/responses.yaml#/Problem'
+      '401':
+        $ref: '../components/responses.yaml#/Problem'
+      '403':
+        $ref: '../components/responses.yaml#/Problem'
+      '404':
+        $ref: '../components/responses.yaml#/Problem'
+      '409':
+        $ref: '../components/responses.yaml#/Problem'
+      '412':
+        $ref: '../components/responses.yaml#/Problem'
+      '429':
+        $ref: '../components/responses.yaml#/Problem'
+      '503':
+        $ref: '../components/responses.yaml#/Problem'
+  put:
+    operationId: updateEmailTarget
+    parameters:
+    - $ref: '../components/parameters.yaml#/IfMatch'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/EmailTargetInput'
+    responses:
+      '200':
+        description: Email notification result
+        content:
+          application/json:
+            schema:
+              $ref: '#/EmailTarget'
+      '400':
+        $ref: '../components/responses.yaml#/Problem'
+      '401':
+        $ref: '../components/responses.yaml#/Problem'
+      '403':
+        $ref: '../components/responses.yaml#/Problem'
+      '404':
+        $ref: '../components/responses.yaml#/Problem'
+      '409':
+        $ref: '../components/responses.yaml#/Problem'
+      '412':
+        $ref: '../components/responses.yaml#/Problem'
+      '429':
+        $ref: '../components/responses.yaml#/Problem'
+      '503':
+        $ref: '../components/responses.yaml#/Problem'
+
+email_test:
+  post:
+    operationId: testEmailNotification
+    parameters:
+    - $ref: '../components/parameters.yaml#/IfMatch'
+    - name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, format: uuid}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/EmailTestInput'
+    responses:
+      '202':
+        description: Email notification result
+        content:
+          application/json:
+            schema:
+              $ref: '#/EmailDelivery'
+      '400':
+        $ref: '../components/responses.yaml#/Problem'
+      '401':
+        $ref: '../components/responses.yaml#/Problem'
+      '403':
+        $ref: '../components/responses.yaml#/Problem'
+      '404':
+        $ref: '../components/responses.yaml#/Problem'
+      '409':
+        $ref: '../components/responses.yaml#/Problem'
+      '412':
+        $ref: '../components/responses.yaml#/Problem'
+      '429':
+        $ref: '../components/responses.yaml#/Problem'
+      '503':
+        $ref: '../components/responses.yaml#/Problem'
+
+email_deliveries:
+  get:
+    operationId: listEmailDeliveries
+    parameters:
+    - name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+    responses:
+      '200':
+        description: Email notification result
+        content:
+          application/json:
+            schema:
+              $ref: '#/EmailDeliveryList'
+      '400':
+        $ref: '../components/responses.yaml#/Problem'
+      '401':
+        $ref: '../components/responses.yaml#/Problem'
+      '403':
+        $ref: '../components/responses.yaml#/Problem'
+      '404':
+        $ref: '../components/responses.yaml#/Problem'
+      '409':
+        $ref: '../components/responses.yaml#/Problem'
+      '412':
+        $ref: '../components/responses.yaml#/Problem'
+      '429':
+        $ref: '../components/responses.yaml#/Problem'
+      '503':
+        $ref: '../components/responses.yaml#/Problem'
+
+email_delivery:
+  parameters:
+  - name: deliveryId
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  get:
+    operationId: getEmailDelivery
+    responses:
+      '200':
+        description: Email notification result
+        content:
+          application/json:
+            schema:
+              $ref: '#/EmailDelivery'
+      '400':
+        $ref: '../components/responses.yaml#/Problem'
+      '401':
+        $ref: '../components/responses.yaml#/Problem'
+      '403':
+        $ref: '../components/responses.yaml#/Problem'
+      '404':
+        $ref: '../components/responses.yaml#/Problem'
+      '409':
+        $ref: '../components/responses.yaml#/Problem'
+      '412':
+        $ref: '../components/responses.yaml#/Problem'
+      '429':
+        $ref: '../components/responses.yaml#/Problem'
+      '503':
+        $ref: '../components/responses.yaml#/Problem'
+
+email_replay:
+  parameters:
+  - name: deliveryId
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  post:
+    operationId: replayEmailDelivery
+    parameters:
+    - $ref: '../components/parameters.yaml#/IfMatch'
+    responses:
+      '200':
+        description: Email notification result
+        content:
+          application/json:
+            schema:
+              $ref: '#/EmailDelivery'
+      '400':
+        $ref: '../components/responses.yaml#/Problem'
+      '401':
+        $ref: '../components/responses.yaml#/Problem'
+      '403':
+        $ref: '../components/responses.yaml#/Problem'
+      '404':
+        $ref: '../components/responses.yaml#/Problem'
+      '409':
+        $ref: '../components/responses.yaml#/Problem'
+      '412':
+        $ref: '../components/responses.yaml#/Problem'
+      '429':
+        $ref: '../components/responses.yaml#/Problem'
+      '503':
+        $ref: '../components/responses.yaml#/Problem'
+
+EmailCapability:
+  type: object
+  additionalProperties: false
+  required: [enabled, reason]
+  properties:
+    enabled: {type: boolean}
+    reason: {type: string, enum: [ready, email_disabled, encryption_key_unavailable]}
+EmailTargetInput:
+  type: object
+  additionalProperties: false
+  required: [name, locale]
+  properties:
+    name: {type: string, minLength: 1, maxLength: 128}
+    locale: {type: string, enum: [en, zh-CN]}
+    enabled: {type: boolean, default: false}
+    recipient: {type: string, maxLength: 254, writeOnly: true, description: Required at creation. Omit on update to retain the encrypted recipient.}
+EmailTarget:
+  type: object
+  additionalProperties: false
+  required: [id, name, locale, enabled, recipientConfigured, version, createdAt, updatedAt]
+  properties:
+    id: {type: string, format: uuid}
+    name: {type: string}
+    locale: {type: string, enum: [en, zh-CN]}
+    enabled: {type: boolean}
+    recipientConfigured: {type: boolean}
+    version: {type: string}
+    createdAt: {type: string, format: date-time}
+    updatedAt: {type: string, format: date-time}
+EmailTargetList:
+  type: array
+  items: {$ref: '#/EmailTarget'}
+EmailTestInput:
+  type: object
+  additionalProperties: false
+  required: [targetId, scenario]
+  properties:
+    targetId: {type: string, format: uuid}
+    scenario: {type: string, enum: [warning, critical, resolved]}
+EmailDelivery:
+  type: object
+  additionalProperties: false
+  required: [id, eventId, targetId, targetVersion, scenario, locale, templateVersion, state, attempts, possibleDuplicate, version, createdAt, updatedAt]
+  properties:
+    id: {type: string, format: uuid}
+    eventId: {type: string, format: uuid}
+    targetId: {type: string, format: uuid}
+    targetVersion: {type: string}
+    scenario: {type: string, enum: [warning, critical, resolved]}
+    locale: {type: string, enum: [en, zh-CN]}
+    templateVersion: {type: string}
+    state: {type: string, enum: [pending, delivering, retrying, accepted, dead]}
+    attempts: {type: integer}
+    errorCode: {type: string}
+    possibleDuplicate: {type: boolean}
+    version: {type: string}
+    nextAttemptAt: {type: string, format: date-time}
+    acceptedAt: {type: string, format: date-time}
+    createdAt: {type: string, format: date-time}
+    updatedAt: {type: string, format: date-time}
+EmailDeliveryList:
+  type: array
+  items: {$ref: '#/EmailDelivery'}

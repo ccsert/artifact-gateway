@@ -1130,6 +1130,68 @@ export type AuditCleanupJob = {
   lastError?: string;
 };
 
+export type EmailCapability = {
+  enabled: boolean;
+  reason: "ready" | "email_disabled" | "encryption_key_unavailable";
+};
+
+export type EmailTestInput = {
+  targetId: string;
+  scenario: "warning" | "critical" | "resolved";
+};
+
+export type EmailDelivery = {
+  id: string;
+  eventId: string;
+  targetId: string;
+  targetVersion: string;
+  scenario: "warning" | "critical" | "resolved";
+  locale: "en" | "zh-CN";
+  templateVersion: string;
+  state: "pending" | "delivering" | "retrying" | "accepted" | "dead";
+  attempts: number;
+  errorCode?: string;
+  possibleDuplicate: boolean;
+  version: string;
+  nextAttemptAt?: string;
+  acceptedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EmailTarget = {
+  id: string;
+  name: string;
+  locale: "en" | "zh-CN";
+  enabled: boolean;
+  recipientConfigured: boolean;
+  version: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EmailTargetList = Array<EmailTarget>;
+
+export type EmailTargetInput = {
+  name: string;
+  locale: "en" | "zh-CN";
+  enabled?: boolean;
+};
+
+export type EmailDeliveryList = Array<EmailDelivery>;
+
+export type EmailPreviewInput = {
+  scenario: "warning" | "critical" | "resolved";
+  locale: "en" | "zh-CN";
+};
+
+export type EmailPreview = {
+  subject: string;
+  html: string;
+  text: string;
+  templateVersion: string;
+};
+
 export type AuthenticationKind =
   | "static_admin"
   | "static_resolver"
@@ -2366,6 +2428,16 @@ export type OidcSettingsUpdateWritable = {
   jitDefaultRole: "none" | "member" | "admin";
 };
 
+export type EmailTargetInputWritable = {
+  name: string;
+  locale: "en" | "zh-CN";
+  enabled?: boolean;
+  /**
+   * Required at creation. Omit on update to retain the encrypted recipient.
+   */
+  recipient?: string;
+};
+
 export type CreateWebhookSubscriptionWritable = {
   name: string;
   endpointUrl: string;
@@ -2521,6 +2593,556 @@ export type SnapshotId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type GetEmailNotificationCapabilityData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/email-notifications";
+};
+
+export type GetEmailNotificationCapabilityErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  429: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type GetEmailNotificationCapabilityError =
+  GetEmailNotificationCapabilityErrors[keyof GetEmailNotificationCapabilityErrors];
+
+export type GetEmailNotificationCapabilityResponses = {
+  /**
+   * Email notification result
+   */
+  200: EmailCapability;
+};
+
+export type GetEmailNotificationCapabilityResponse =
+  GetEmailNotificationCapabilityResponses[keyof GetEmailNotificationCapabilityResponses];
+
+export type TestEmailNotificationData = {
+  body: EmailTestInput;
+  headers: {
+    "If-Match": string;
+    "Idempotency-Key": string;
+  };
+  path?: never;
+  query?: never;
+  url: "/email-notifications:test";
+};
+
+export type TestEmailNotificationErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  429: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type TestEmailNotificationError =
+  TestEmailNotificationErrors[keyof TestEmailNotificationErrors];
+
+export type TestEmailNotificationResponses = {
+  /**
+   * Email notification result
+   */
+  202: EmailDelivery;
+};
+
+export type TestEmailNotificationResponse =
+  TestEmailNotificationResponses[keyof TestEmailNotificationResponses];
+
+export type ListEmailTargetsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/email-targets";
+};
+
+export type ListEmailTargetsErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  429: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type ListEmailTargetsError =
+  ListEmailTargetsErrors[keyof ListEmailTargetsErrors];
+
+export type ListEmailTargetsResponses = {
+  /**
+   * Email notification result
+   */
+  200: EmailTargetList;
+};
+
+export type ListEmailTargetsResponse =
+  ListEmailTargetsResponses[keyof ListEmailTargetsResponses];
+
+export type CreateEmailTargetData = {
+  body: EmailTargetInputWritable;
+  path?: never;
+  query?: never;
+  url: "/email-targets";
+};
+
+export type CreateEmailTargetErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  429: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type CreateEmailTargetError =
+  CreateEmailTargetErrors[keyof CreateEmailTargetErrors];
+
+export type CreateEmailTargetResponses = {
+  /**
+   * Email notification result
+   */
+  201: EmailTarget;
+};
+
+export type CreateEmailTargetResponse =
+  CreateEmailTargetResponses[keyof CreateEmailTargetResponses];
+
+export type GetEmailTargetData = {
+  body?: never;
+  path: {
+    targetId: string;
+  };
+  query?: never;
+  url: "/email-targets/{targetId}";
+};
+
+export type GetEmailTargetErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  429: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type GetEmailTargetError =
+  GetEmailTargetErrors[keyof GetEmailTargetErrors];
+
+export type GetEmailTargetResponses = {
+  /**
+   * Email notification result
+   */
+  200: EmailTarget;
+};
+
+export type GetEmailTargetResponse =
+  GetEmailTargetResponses[keyof GetEmailTargetResponses];
+
+export type UpdateEmailTargetData = {
+  body: EmailTargetInputWritable;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    targetId: string;
+  };
+  query?: never;
+  url: "/email-targets/{targetId}";
+};
+
+export type UpdateEmailTargetErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  429: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type UpdateEmailTargetError =
+  UpdateEmailTargetErrors[keyof UpdateEmailTargetErrors];
+
+export type UpdateEmailTargetResponses = {
+  /**
+   * Email notification result
+   */
+  200: EmailTarget;
+};
+
+export type UpdateEmailTargetResponse =
+  UpdateEmailTargetResponses[keyof UpdateEmailTargetResponses];
+
+export type ListEmailDeliveriesData = {
+  body?: never;
+  path?: never;
+  query?: {
+    limit?: number;
+  };
+  url: "/email-deliveries";
+};
+
+export type ListEmailDeliveriesErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  429: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type ListEmailDeliveriesError =
+  ListEmailDeliveriesErrors[keyof ListEmailDeliveriesErrors];
+
+export type ListEmailDeliveriesResponses = {
+  /**
+   * Email notification result
+   */
+  200: EmailDeliveryList;
+};
+
+export type ListEmailDeliveriesResponse =
+  ListEmailDeliveriesResponses[keyof ListEmailDeliveriesResponses];
+
+export type GetEmailDeliveryData = {
+  body?: never;
+  path: {
+    deliveryId: string;
+  };
+  query?: never;
+  url: "/email-deliveries/{deliveryId}";
+};
+
+export type GetEmailDeliveryErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  429: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type GetEmailDeliveryError =
+  GetEmailDeliveryErrors[keyof GetEmailDeliveryErrors];
+
+export type GetEmailDeliveryResponses = {
+  /**
+   * Email notification result
+   */
+  200: EmailDelivery;
+};
+
+export type GetEmailDeliveryResponse =
+  GetEmailDeliveryResponses[keyof GetEmailDeliveryResponses];
+
+export type ReplayEmailDeliveryData = {
+  body?: never;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    deliveryId: string;
+  };
+  query?: never;
+  url: "/email-deliveries/{deliveryId}:replay";
+};
+
+export type ReplayEmailDeliveryErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  429: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type ReplayEmailDeliveryError =
+  ReplayEmailDeliveryErrors[keyof ReplayEmailDeliveryErrors];
+
+export type ReplayEmailDeliveryResponses = {
+  /**
+   * Email notification result
+   */
+  200: EmailDelivery;
+};
+
+export type ReplayEmailDeliveryResponse =
+  ReplayEmailDeliveryResponses[keyof ReplayEmailDeliveryResponses];
+
+export type PreviewEmailNotificationData = {
+  body: EmailPreviewInput;
+  path?: never;
+  query?: never;
+  url: "/email-notifications:preview";
+};
+
+export type PreviewEmailNotificationErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+};
+
+export type PreviewEmailNotificationError =
+  PreviewEmailNotificationErrors[keyof PreviewEmailNotificationErrors];
+
+export type PreviewEmailNotificationResponses = {
+  /**
+   * HTML and equivalent plain text
+   */
+  200: EmailPreview;
+};
+
+export type PreviewEmailNotificationResponse =
+  PreviewEmailNotificationResponses[keyof PreviewEmailNotificationResponses];
 
 export type ListFormatProfilesData = {
   body?: never;
