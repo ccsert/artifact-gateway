@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Removed the optional Ant Design CLI development helpers and their vulnerable `braces` chain. The October 17 audit exception is retired; API generation, theme/style builds, ESLint, type checks, and coverage gates continue through the existing repository tools.
+
 - Console System now manages write-only email targets, sandboxed bilingual three-state template previews, explicitly confirmed synthetic tests, and readable delivery results. Targets default disabled; saving/previewing sends no mail. Whole-workspace permission gates, safe CAS drafts, cancellation and same-key uncertain test retries are covered. Real mailbox clients and production SMTP remain separate.
 
 - Console System now provides administrator repository quota rule creation/editing, explicit enable/disable/delete confirmation and safe state/event/delivery evidence. New rules stay disabled; permission denials and version conflicts preserve write gates/drafts, stale data retains severity, and SMTP acceptance remains distinct from inbox delivery. Manual replay and production configuration remain separate.

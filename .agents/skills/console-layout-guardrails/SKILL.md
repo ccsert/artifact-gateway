@@ -49,7 +49,6 @@ npm --prefix console run typecheck
 npm --prefix console run lint
 npm --prefix console run build
 npm --prefix console run format:check
-(cd console && antd lint src --format json)
 node .agents/skills/impeccable/scripts/detect.mjs --json --scope layout <changed-files>
 ```
 

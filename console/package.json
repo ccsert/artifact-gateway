@@ -13,9 +13,6 @@
     "test:coverage": "vitest run --coverage",
     "generate:api": "openapi-ts -f hey-api.config.ts && prettier --ignore-path /dev/null --write src/client/types.gen.ts",
     "check:api": "npm run generate:api",
-    "antd:doctor": "node ../scripts/console-antd.mjs doctor",
-    "antd:lint": "node ../scripts/console-antd.mjs lint",
-    "antd:usage": "node ../scripts/console-antd.mjs usage",
     "e2e": "playwright test",
     "preview": "vite preview"
   },
@@ -29,7 +26,6 @@
     "react-router-dom": "^7.18.2"
   },
   "devDependencies": {
-    "@ant-design/cli": "^6.5.4",
     "@eslint/js": "^9.39.5",
     "@hey-api/openapi-ts": "^0.99.0",
     "@playwright/test": "^1.57.0",
