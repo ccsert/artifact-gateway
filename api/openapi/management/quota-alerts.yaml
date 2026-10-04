@@ -1,0 +1,206 @@
+quota_rules:
+  post:
+    operationId: createRepositoryQuotaAlertRule
+    description: Administrator creates an explicitly configured logical quota rule. Disabled by default; enabling requires the configured mail channel and enabled target.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/RepositoryQuotaAlertRuleInput'}
+    responses:
+      '201':
+        description: Persisted rule; ETag is the configuration version
+        headers:
+          ETag: {schema: {type: string}}
+        content:
+          application/json:
+            schema: {$ref: '#/RepositoryQuotaAlertRule'}
+      '400': {$ref: '../components/responses.yaml#/Problem'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '404': {$ref: '../components/responses.yaml#/Problem'}
+      '409': {$ref: '../components/responses.yaml#/Problem'}
+      '412': {$ref: '../components/responses.yaml#/Problem'}
+      '503': {$ref: '../components/responses.yaml#/Problem'}
+  get:
+    operationId: listRepositoryQuotaAlertRules
+    description: Administrator-only bounded repository logical quota rules and current safe state. Never sends mail.
+    responses:
+      '200':
+        description: At most 100 finite rules, including retained deleted history
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 100
+              items: {$ref: '#/RepositoryQuotaAlertRule'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '500': {$ref: '../components/responses.yaml#/Problem'}
+
+quota_rule:
+  parameters:
+    - {name: ruleId, in: path, required: true, schema: {type: string, format: uuid}}
+  get:
+    operationId: getRepositoryQuotaAlertRule
+    responses:
+      '200':
+        description: Rule and current safe state, including retained deleted history
+        headers:
+          ETag: {schema: {type: string}}
+        content:
+          application/json:
+            schema: {$ref: '#/RepositoryQuotaAlertRule'}
+      '400': {$ref: '../components/responses.yaml#/Problem'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '404': {$ref: '../components/responses.yaml#/Problem'}
+  put:
+    operationId: updateRepositoryQuotaAlertRule
+    description: CAS configuration update. Repository scope is immutable; candidate evidence is reset and active severity retained. Identical configuration is a no-op.
+    parameters:
+      - {name: If-Match, in: header, required: true, schema: {type: string, minLength: 1}}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/RepositoryQuotaAlertRuleInput'}
+    responses:
+      '200':
+        description: Current persisted rule
+        headers:
+          ETag: {schema: {type: string}}
+        content:
+          application/json:
+            schema: {$ref: '#/RepositoryQuotaAlertRule'}
+      '400': {$ref: '../components/responses.yaml#/Problem'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '404': {$ref: '../components/responses.yaml#/Problem'}
+      '409': {$ref: '../components/responses.yaml#/Problem'}
+      '412': {$ref: '../components/responses.yaml#/Problem'}
+      '503': {$ref: '../components/responses.yaml#/Problem'}
+  delete:
+    operationId: deleteRepositoryQuotaAlertRule
+    description: CAS soft deletion retains historical severity/events and never creates a resource recovery.
+    parameters:
+      - {name: If-Match, in: header, required: true, schema: {type: string, minLength: 1}}
+    responses:
+      '204':
+        description: Deleted or already deleted with the current version
+        headers:
+          ETag: {schema: {type: string}}
+      '400': {$ref: '../components/responses.yaml#/Problem'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '404': {$ref: '../components/responses.yaml#/Problem'}
+      '412': {$ref: '../components/responses.yaml#/Problem'}
+
+quota_events:
+  parameters:
+    - {name: ruleId, in: path, required: true, schema: {type: string, format: uuid}}
+  get:
+    operationId: listRepositoryQuotaAlertEvents
+    description: Administrator reads the newest 50 immutable logical quota events and safe delivery references. Reading never evaluates or sends.
+    responses:
+      '200':
+        description: Newest 50 events, including retained deleted rule history
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 50
+              items: {$ref: '#/RepositoryQuotaAlertEvent'}
+      '400': {$ref: '../components/responses.yaml#/Problem'}
+      '401': {$ref: '../components/responses.yaml#/Problem'}
+      '403': {$ref: '../components/responses.yaml#/Problem'}
+      '404': {$ref: '../components/responses.yaml#/Problem'}
+      '500': {$ref: '../components/responses.yaml#/Problem'}
+
+RepositoryQuotaAlertEvent:
+  type: object
+  additionalProperties: false
+  required: [id, ruleId, ruleVersion, repositoryId, repositoryName, episodeId, sequence, scenario, usedBytes, quotaBytes, policy, occurredAt, sampleAt, evidenceSince, targetId, targetVersion, notificationCode, templateVersion]
+  properties:
+    id: {type: string, format: uuid}
+    ruleId: {type: string, format: uuid}
+    ruleVersion: {type: string}
+    repositoryId: {type: string, format: uuid}
+    repositoryName: {type: string, maxLength: 128}
+    episodeId: {type: string, format: uuid}
+    previousEventId: {type: string, format: uuid}
+    sequence: {type: integer, format: int64, minimum: 1}
+    scenario: {type: string, enum: [warning, critical, resolved]}
+    usedBytes: {type: integer, format: int64, minimum: 0}
+    quotaBytes: {type: integer, format: int64, minimum: 1}
+    policy: {$ref: '#/RepositoryQuotaAlertPolicy'}
+    occurredAt: {type: string, format: date-time}
+    sampleAt: {type: string, format: date-time}
+    evidenceSince: {type: string, format: date-time}
+    targetId: {type: string, format: uuid}
+    targetVersion: {type: string}
+    notificationCode: {type: string, enum: [queued, queue_full, email_disabled, encryption_key_unavailable, target_disabled, target_changed, target_unavailable]}
+    templateVersion: {type: string}
+    deliveryId: {type: string, format: uuid}
+    deliveryState: {type: string, enum: [pending, delivering, retrying, accepted, dead]}
+    deliveryErrorCode: {type: string}
+
+RepositoryQuotaAlertRuleInput:
+  type: object
+  additionalProperties: false
+  required: [repositoryId, targetId, policy]
+  properties:
+    repositoryId: {type: string, format: uuid}
+    targetId: {type: string, format: uuid}
+    enabled: {type: boolean, default: false}
+    policy: {$ref: '#/RepositoryQuotaAlertPolicy'}
+
+RepositoryQuotaAlertPolicy:
+  type: object
+  additionalProperties: false
+  required: [warningBasisPoints, criticalBasisPoints, recoveryBelowBasisPoints, warningForSeconds, criticalForSeconds, recoveryForSeconds, maxSampleAgeSeconds]
+  properties:
+    warningBasisPoints: {type: integer, minimum: 1, maximum: 9999}
+    criticalBasisPoints: {type: integer, minimum: 2, maximum: 10000}
+    recoveryBelowBasisPoints: {type: integer, minimum: 1, maximum: 9998}
+    warningForSeconds: {type: integer, minimum: 1, maximum: 86400}
+    criticalForSeconds: {type: integer, minimum: 1, maximum: 86400}
+    recoveryForSeconds: {type: integer, minimum: 1, maximum: 86400}
+    maxSampleAgeSeconds: {type: integer, minimum: 30, maximum: 3600}
+
+RepositoryQuotaAlertState:
+  type: object
+  additionalProperties: false
+  required: [severity, phase, dataState]
+  properties:
+    severity: {type: string, enum: [normal, warning, critical]}
+    phase: {type: string, enum: [normal, pending, firing]}
+    dataState: {type: string, enum: [available, unknown, stale, not_configured, configuration_changed, disabled, deleted, repository_deleted, repository_inactive]}
+    usedBytes: {type: integer, format: int64, minimum: 0}
+    quotaBytes: {type: integer, format: int64, minimum: 1}
+    lastSampleAt: {type: string, format: date-time}
+    warningSince: {type: string, format: date-time}
+    criticalSince: {type: string, format: date-time}
+    recoverySince: {type: string, format: date-time}
+
+RepositoryQuotaAlertRule:
+  type: object
+  additionalProperties: false
+  required: [id, repositoryId, targetId, targetVersion, enabled, deleted, version, stateVersion, policy, state, sequence, createdAt, updatedAt]
+  properties:
+    id: {type: string, format: uuid}
+    repositoryId: {type: string, format: uuid}
+    targetId: {type: string, format: uuid}
+    targetVersion: {type: string}
+    enabled: {type: boolean}
+    deleted: {type: boolean}
+    version: {type: string}
+    stateVersion: {type: string}
+    policy: {$ref: '#/RepositoryQuotaAlertPolicy'}
+    state: {$ref: '#/RepositoryQuotaAlertState'}
+    sequence: {type: integer, format: int64, minimum: 0}
+    activeEpisodeId: {type: string, format: uuid}
+    lastEventId: {type: string, format: uuid}
+    evaluatedAt: {type: string, format: date-time}
+    createdAt: {type: string, format: date-time}
+    updatedAt: {type: string, format: date-time}

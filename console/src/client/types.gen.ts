@@ -1130,6 +1130,95 @@ export type AuditCleanupJob = {
   lastError?: string;
 };
 
+export type RepositoryQuotaAlertPolicy = {
+  warningBasisPoints: number;
+  criticalBasisPoints: number;
+  recoveryBelowBasisPoints: number;
+  warningForSeconds: number;
+  criticalForSeconds: number;
+  recoveryForSeconds: number;
+  maxSampleAgeSeconds: number;
+};
+
+export type RepositoryQuotaAlertEvent = {
+  id: string;
+  ruleId: string;
+  ruleVersion: string;
+  repositoryId: string;
+  repositoryName: string;
+  episodeId: string;
+  previousEventId?: string;
+  sequence: number;
+  scenario: "warning" | "critical" | "resolved";
+  usedBytes: number;
+  quotaBytes: number;
+  policy: RepositoryQuotaAlertPolicy;
+  occurredAt: string;
+  sampleAt: string;
+  evidenceSince: string;
+  targetId: string;
+  targetVersion: string;
+  notificationCode:
+    | "queued"
+    | "queue_full"
+    | "email_disabled"
+    | "encryption_key_unavailable"
+    | "target_disabled"
+    | "target_changed"
+    | "target_unavailable";
+  templateVersion: string;
+  deliveryId?: string;
+  deliveryState?: "pending" | "delivering" | "retrying" | "accepted" | "dead";
+  deliveryErrorCode?: string;
+};
+
+export type RepositoryQuotaAlertState = {
+  severity: "normal" | "warning" | "critical";
+  phase: "normal" | "pending" | "firing";
+  dataState:
+    | "available"
+    | "unknown"
+    | "stale"
+    | "not_configured"
+    | "configuration_changed"
+    | "disabled"
+    | "deleted"
+    | "repository_deleted"
+    | "repository_inactive";
+  usedBytes?: number;
+  quotaBytes?: number;
+  lastSampleAt?: string;
+  warningSince?: string;
+  criticalSince?: string;
+  recoverySince?: string;
+};
+
+export type RepositoryQuotaAlertRule = {
+  id: string;
+  repositoryId: string;
+  targetId: string;
+  targetVersion: string;
+  enabled: boolean;
+  deleted: boolean;
+  version: string;
+  stateVersion: string;
+  policy: RepositoryQuotaAlertPolicy;
+  state: RepositoryQuotaAlertState;
+  sequence: number;
+  activeEpisodeId?: string;
+  lastEventId?: string;
+  evaluatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RepositoryQuotaAlertRuleInput = {
+  repositoryId: string;
+  targetId: string;
+  enabled?: boolean;
+  policy: RepositoryQuotaAlertPolicy;
+};
+
 export type EmailCapability = {
   enabled: boolean;
   reason: "ready" | "email_disabled" | "encryption_key_unavailable";
@@ -1141,6 +1230,11 @@ export type EmailTestInput = {
 };
 
 export type EmailDelivery = {
+  kind?: "test" | "repository_quota";
+  quotaRuleId?: string;
+  episodeId?: string;
+  eventSequence?: number;
+  automaticCancellationCode?: "rule_changed" | "rule_disabled" | "rule_deleted";
   id: string;
   eventId: string;
   targetId: string;
@@ -2593,6 +2687,282 @@ export type SnapshotId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type ListRepositoryQuotaAlertEventsData = {
+  body?: never;
+  path: {
+    ruleId: string;
+  };
+  query?: never;
+  url: "/repository-quota-alert-rules/{ruleId}/events";
+};
+
+export type ListRepositoryQuotaAlertEventsErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type ListRepositoryQuotaAlertEventsError =
+  ListRepositoryQuotaAlertEventsErrors[keyof ListRepositoryQuotaAlertEventsErrors];
+
+export type ListRepositoryQuotaAlertEventsResponses = {
+  /**
+   * Newest 50 events, including retained deleted rule history
+   */
+  200: Array<RepositoryQuotaAlertEvent>;
+};
+
+export type ListRepositoryQuotaAlertEventsResponse =
+  ListRepositoryQuotaAlertEventsResponses[keyof ListRepositoryQuotaAlertEventsResponses];
+
+export type DeleteRepositoryQuotaAlertRuleData = {
+  body?: never;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    ruleId: string;
+  };
+  query?: never;
+  url: "/repository-quota-alert-rules/{ruleId}";
+};
+
+export type DeleteRepositoryQuotaAlertRuleErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+};
+
+export type DeleteRepositoryQuotaAlertRuleError =
+  DeleteRepositoryQuotaAlertRuleErrors[keyof DeleteRepositoryQuotaAlertRuleErrors];
+
+export type DeleteRepositoryQuotaAlertRuleResponses = {
+  /**
+   * Deleted or already deleted with the current version
+   */
+  204: void;
+};
+
+export type DeleteRepositoryQuotaAlertRuleResponse =
+  DeleteRepositoryQuotaAlertRuleResponses[keyof DeleteRepositoryQuotaAlertRuleResponses];
+
+export type GetRepositoryQuotaAlertRuleData = {
+  body?: never;
+  path: {
+    ruleId: string;
+  };
+  query?: never;
+  url: "/repository-quota-alert-rules/{ruleId}";
+};
+
+export type GetRepositoryQuotaAlertRuleErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetRepositoryQuotaAlertRuleError =
+  GetRepositoryQuotaAlertRuleErrors[keyof GetRepositoryQuotaAlertRuleErrors];
+
+export type GetRepositoryQuotaAlertRuleResponses = {
+  /**
+   * Rule and current safe state, including retained deleted history
+   */
+  200: RepositoryQuotaAlertRule;
+};
+
+export type GetRepositoryQuotaAlertRuleResponse =
+  GetRepositoryQuotaAlertRuleResponses[keyof GetRepositoryQuotaAlertRuleResponses];
+
+export type UpdateRepositoryQuotaAlertRuleData = {
+  body: RepositoryQuotaAlertRuleInput;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    ruleId: string;
+  };
+  query?: never;
+  url: "/repository-quota-alert-rules/{ruleId}";
+};
+
+export type UpdateRepositoryQuotaAlertRuleErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type UpdateRepositoryQuotaAlertRuleError =
+  UpdateRepositoryQuotaAlertRuleErrors[keyof UpdateRepositoryQuotaAlertRuleErrors];
+
+export type UpdateRepositoryQuotaAlertRuleResponses = {
+  /**
+   * Current persisted rule
+   */
+  200: RepositoryQuotaAlertRule;
+};
+
+export type UpdateRepositoryQuotaAlertRuleResponse =
+  UpdateRepositoryQuotaAlertRuleResponses[keyof UpdateRepositoryQuotaAlertRuleResponses];
+
+export type ListRepositoryQuotaAlertRulesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/repository-quota-alert-rules";
+};
+
+export type ListRepositoryQuotaAlertRulesErrors = {
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  500: Problem;
+};
+
+export type ListRepositoryQuotaAlertRulesError =
+  ListRepositoryQuotaAlertRulesErrors[keyof ListRepositoryQuotaAlertRulesErrors];
+
+export type ListRepositoryQuotaAlertRulesResponses = {
+  /**
+   * At most 100 finite rules, including retained deleted history
+   */
+  200: Array<RepositoryQuotaAlertRule>;
+};
+
+export type ListRepositoryQuotaAlertRulesResponse =
+  ListRepositoryQuotaAlertRulesResponses[keyof ListRepositoryQuotaAlertRulesResponses];
+
+export type CreateRepositoryQuotaAlertRuleData = {
+  body: RepositoryQuotaAlertRuleInput;
+  path?: never;
+  query?: never;
+  url: "/repository-quota-alert-rules";
+};
+
+export type CreateRepositoryQuotaAlertRuleErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type CreateRepositoryQuotaAlertRuleError =
+  CreateRepositoryQuotaAlertRuleErrors[keyof CreateRepositoryQuotaAlertRuleErrors];
+
+export type CreateRepositoryQuotaAlertRuleResponses = {
+  /**
+   * Persisted rule; ETag is the configuration version
+   */
+  201: RepositoryQuotaAlertRule;
+};
+
+export type CreateRepositoryQuotaAlertRuleResponse =
+  CreateRepositoryQuotaAlertRuleResponses[keyof CreateRepositoryQuotaAlertRuleResponses];
 
 export type GetEmailNotificationCapabilityData = {
   body?: never;

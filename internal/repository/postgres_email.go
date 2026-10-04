@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"github.com/google/uuid"
 )
@@ -49,12 +50,16 @@ func (s *PostgresStore) UpdateEmailTarget(ctx context.Context, v EmailTarget, ve
 	return out, err
 }
 
-const emailDeliveryColumns = `id::text,event_id::text,request_key::text,target_id::text,target_version::text,scenario,locale,template_version,recipient_ciphertext,from_address,console_origin,state,attempts,possible_duplicate,version::text,error_code,lease_owner,COALESCE(lease_token::text,''),lease_expires_at,next_attempt_at,accepted_at,created_at,updated_at`
+const emailDeliveryColumns = `id::text,event_id::text,request_key::text,target_id::text,target_version::text,scenario,locale,template_version,recipient_ciphertext,from_address,console_origin,state,attempts,possible_duplicate,version::text,error_code,lease_owner,COALESCE(lease_token::text,''),lease_expires_at,next_attempt_at,accepted_at,created_at,updated_at,kind,COALESCE(quota_rule_id::text,''),COALESCE(episode_id::text,''),COALESCE(event_sequence,0),quota_descriptor,automatic_cancellation_code`
 
 func scanEmailDelivery(row interface{ Scan(...any) error }) (EmailDelivery, error) {
 	var v EmailDelivery
 	var expiry, accepted sql.NullTime
-	err := row.Scan(&v.ID, &v.EventID, &v.RequestKey, &v.TargetID, &v.TargetVersion, &v.Scenario, &v.Locale, &v.TemplateVersion, &v.RecipientCiphertext, &v.From, &v.ConsoleOrigin, &v.State, &v.Attempts, &v.PossibleDuplicate, &v.Version, &v.ErrorCode, &v.LeaseOwner, &v.LeaseToken, &expiry, &v.NextAttemptAt, &accepted, &v.CreatedAt, &v.UpdatedAt)
+	var descriptor []byte
+	err := row.Scan(&v.ID, &v.EventID, &v.RequestKey, &v.TargetID, &v.TargetVersion, &v.Scenario, &v.Locale, &v.TemplateVersion, &v.RecipientCiphertext, &v.From, &v.ConsoleOrigin, &v.State, &v.Attempts, &v.PossibleDuplicate, &v.Version, &v.ErrorCode, &v.LeaseOwner, &v.LeaseToken, &expiry, &v.NextAttemptAt, &accepted, &v.CreatedAt, &v.UpdatedAt, &v.Kind, &v.QuotaRuleID, &v.EpisodeID, &v.EventSequence, &descriptor, &v.AutomaticCancellationCode)
+	if err == nil && len(descriptor) > 0 {
+		err = json.Unmarshal(descriptor, &v.QuotaEvent)
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -158,6 +163,11 @@ func (s *PostgresStore) ClaimEmailDelivery(ctx context.Context, owner string) (E
 		return EmailDelivery{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	// A revoked in-flight token may finish once; an expired token cannot be renewed automatically.
+	if _, err = tx.ExecContext(ctx, `WITH clock AS MATERIALIZED (SELECT clock_timestamp() AS now)
+ UPDATE email_test_deliveries SET state='dead',error_code=automatic_cancellation_code,possible_duplicate=possible_duplicate OR state='delivering',lease_owner='',lease_token=NULL,lease_expires_at=NULL,version=version+1,updated_at=clock.now FROM clock WHERE automatic_cancellation_code<>'' AND ((state='delivering' AND lease_expires_at<=clock.now) OR state IN ('pending','retrying'))`); err != nil {
+		return EmailDelivery{}, err
+	}
 	// Expired attempts may already have been accepted before a process crash.
 	if _, err = tx.ExecContext(ctx, `WITH clock AS MATERIALIZED (SELECT clock_timestamp() AS now)
  UPDATE email_test_deliveries SET state='dead',error_code='attempts_exhausted',possible_duplicate=possible_duplicate OR state='delivering',lease_owner='',lease_token=NULL,lease_expires_at=NULL,version=version+1,updated_at=clock.now FROM clock
@@ -166,6 +176,8 @@ func (s *PostgresStore) ClaimEmailDelivery(ctx context.Context, owner string) (E
 	}
 	v, err := scanEmailDelivery(tx.QueryRowContext(ctx, `WITH clock AS MATERIALIZED (SELECT clock_timestamp() AS now), candidate AS (
  SELECT d.id AS candidate_id FROM email_test_deliveries d,clock WHERE d.attempts<8 AND ((d.state IN ('pending','retrying') AND d.next_attempt_at<=clock.now) OR (d.state='delivering' AND d.lease_expires_at<=clock.now))
+ AND d.automatic_cancellation_code=''
+ AND (d.kind='test' OR NOT EXISTS (SELECT 1 FROM email_test_deliveries prior WHERE prior.quota_rule_id=d.quota_rule_id AND prior.event_sequence<d.event_sequence AND prior.state IN ('pending','retrying','delivering')))
  ORDER BY d.next_attempt_at,d.id FOR UPDATE OF d SKIP LOCKED LIMIT 1)
  UPDATE email_test_deliveries SET possible_duplicate=possible_duplicate OR state='delivering',state='delivering',attempts=attempts+1,lease_owner=$1,lease_token=$2,lease_expires_at=clock.now+interval '30 seconds',version=version+1,updated_at=clock.now FROM candidate,clock WHERE email_test_deliveries.id=candidate.candidate_id RETURNING `+emailDeliveryColumns, owner, uuid.NewString()))
 	if errors.Is(err, ErrNotFound) {
@@ -182,7 +194,7 @@ func (s *PostgresStore) ClaimEmailDelivery(ctx context.Context, owner string) (E
 func (s *PostgresStore) FinishEmailDelivery(ctx context.Context, id, token string, result EmailAttemptResult) error {
 	result.Code = emailSafeErrorCode(result.Code)
 	done, err := s.db.ExecContext(ctx, `WITH clock AS MATERIALIZED (SELECT clock_timestamp() AS now)
- UPDATE email_test_deliveries SET state=CASE WHEN $3='' THEN 'accepted' WHEN $4 OR attempts>=8 THEN 'dead' ELSE 'retrying' END,error_code=$3,possible_duplicate=possible_duplicate OR $5,accepted_at=CASE WHEN $3='' THEN clock.now ELSE accepted_at END,
+ UPDATE email_test_deliveries SET state=CASE WHEN $3='' THEN 'accepted' WHEN automatic_cancellation_code<>'' OR $4 OR attempts>=8 THEN 'dead' ELSE 'retrying' END,error_code=CASE WHEN $3<>'' AND automatic_cancellation_code<>'' THEN automatic_cancellation_code ELSE $3 END,possible_duplicate=possible_duplicate OR $5,accepted_at=CASE WHEN $3='' THEN clock.now ELSE accepted_at END,
  next_attempt_at=clock.now+LEAST(3600,5*power(2,GREATEST(0,attempts-1))) * interval '1 second',lease_owner='',lease_token=NULL,lease_expires_at=NULL,updated_at=clock.now,version=version+1 FROM clock WHERE id::text=$1 AND lease_token::text=$2 AND state='delivering' AND lease_expires_at>clock.now`, id, token, result.Code, result.Permanent, result.OutcomeUnknown)
 	if err != nil {
 		return err
@@ -225,7 +237,7 @@ func (s *PostgresStore) ReplayEmailDelivery(ctx context.Context, id, version str
 	if err = emailRatePostgres(ctx, tx); err != nil {
 		return EmailDelivery{}, err
 	}
-	v, err = scanEmailDelivery(tx.QueryRowContext(ctx, `UPDATE email_test_deliveries SET state='pending',attempts=0,error_code='',lease_owner='',lease_token=NULL,lease_expires_at=NULL,next_attempt_at=clock_timestamp(),updated_at=clock_timestamp(),version=version+1 WHERE id::text=$1 RETURNING `+emailDeliveryColumns, id))
+	v, err = scanEmailDelivery(tx.QueryRowContext(ctx, `UPDATE email_test_deliveries SET automatic_cancellation_code='',state='pending',attempts=0,error_code='',lease_owner='',lease_token=NULL,lease_expires_at=NULL,next_attempt_at=clock_timestamp(),updated_at=clock_timestamp(),version=version+1 WHERE id::text=$1 RETURNING `+emailDeliveryColumns, id))
 	if err != nil {
 		return EmailDelivery{}, err
 	}

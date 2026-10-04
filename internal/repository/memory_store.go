@@ -6,6 +6,8 @@ import (
 )
 
 type MemoryStore struct {
+	quotaAlertEvents  map[string]RepositoryQuotaAlertEvent
+	quotaAlertRules   map[string]RepositoryQuotaAlertRule
 	emailTargets      map[string]EmailTarget
 	emailDeliveries   map[string]EmailDelivery
 	emailRequestTimes []time.Time

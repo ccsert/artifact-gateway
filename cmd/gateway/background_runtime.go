@@ -31,7 +31,7 @@ type backgroundRuntime struct {
 
 func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
 	if cfg.HasRole(config.NodeRoleScheduler) {
-		r.startSchedulers(ctx, app.NativeRepositoryRetention{Store: r.store, Metrics: r.metrics})
+		r.startSchedulers(ctx, cfg, app.NativeRepositoryRetention{Store: r.store, Metrics: r.metrics})
 	}
 	if cfg.HasRole(config.NodeRoleWorker) {
 		r.startWorkers(ctx, cfg, app.NativeRepositoryRetention{Store: r.store, Metrics: r.metrics, WorkerFormats: cfg.WorkerFormats})
@@ -39,7 +39,8 @@ func (r backgroundRuntime) Start(ctx context.Context, cfg config.Config) {
 	app.BackgroundOperationQueueObserver{Store: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
 }
 
-func (r backgroundRuntime) startSchedulers(ctx context.Context, retention app.NativeRepositoryRetention) {
+func (r backgroundRuntime) startSchedulers(ctx context.Context, cfg config.Config, retention app.NativeRepositoryRetention) {
+	app.QuotaAlertEvaluator{Store: r.store, Mail: repository.QuotaAlertMailConfig{Enabled: cfg.Email.Enabled, From: cfg.Email.From, ConsoleOrigin: cfg.Email.ConsoleOrigin}}.Start(ctx, 15*time.Second)
 	app.ScheduledTaskScheduler{Store: r.store}.Start(ctx, time.Minute)
 	app.UserSessionJanitor{Store: r.store}.Start(ctx, time.Hour)
 	r.taskQueue.StartCacheScheduler(ctx, 5*time.Minute)

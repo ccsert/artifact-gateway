@@ -297,6 +297,7 @@ type generatedRepositoryAPIAdapter struct {
 	runtimeNodes           repository.RuntimeNodeStore
 	scheduledTasks         repository.ScheduledTaskStore
 	emailTargets           repository.EmailStore
+	quotaAlerts            repository.RepositoryQuotaAlertStore
 	webhooks               repository.WebhookStore
 	queueStats             repository.BackgroundOperationQueueStore
 	browse                 repository.ArtifactBrowseStore

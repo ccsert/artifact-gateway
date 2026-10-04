@@ -134,11 +134,34 @@ func (s *MemoryStore) ClaimEmailDelivery(_ context.Context, owner string) (Email
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
 	for id, v := range s.emailDeliveries {
+		if v.Kind == "repository_quota" {
+			blocked := false
+			for _, prior := range s.emailDeliveries {
+				if prior.Kind == "repository_quota" && prior.QuotaRuleID == v.QuotaRuleID && prior.EventSequence < v.EventSequence && prior.State != "accepted" && prior.State != "dead" {
+					blocked = true
+					break
+				}
+			}
+			if blocked {
+				continue
+			}
+		}
 		if v.State == "accepted" || v.State == "dead" || v.NextAttemptAt.After(now) || (v.State == "delivering" && v.LeaseExpiresAt.After(now)) {
 			continue
 		}
 		if v.State == "delivering" {
 			v.PossibleDuplicate = true
+		}
+		if v.AutomaticCancellationCode != "" {
+			v.State = "dead"
+			v.ErrorCode = v.AutomaticCancellationCode
+			v.Version = nextHostedGroupVersion(v.Version)
+			v.UpdatedAt = now
+			v.LeaseToken = ""
+			v.LeaseOwner = ""
+			v.LeaseExpiresAt = time.Time{}
+			s.emailDeliveries[id] = v
+			continue
 		}
 		if v.Attempts >= EmailMaxAttempts {
 			v.State = "dead"
@@ -178,6 +201,9 @@ func (s *MemoryStore) FinishEmailDelivery(_ context.Context, id, token string, r
 	case result.Code == "":
 		v.State = "accepted"
 		v.AcceptedAt = now
+	case v.AutomaticCancellationCode != "":
+		v.State = "dead"
+		v.ErrorCode = v.AutomaticCancellationCode
 	case result.Permanent || v.Attempts >= EmailMaxAttempts:
 		v.State = "dead"
 	default:
@@ -217,6 +243,7 @@ func (s *MemoryStore) ReplayEmailDelivery(_ context.Context, id, version string)
 		return EmailDelivery{}, err
 	}
 	v.State = "pending"
+	v.AutomaticCancellationCode = ""
 	v.Attempts = 0
 	v.ErrorCode = ""
 	v.LeaseToken = ""

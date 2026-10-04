@@ -62,6 +62,7 @@
       "title": { "en": "Operations and security", "zh-CN": "运维与安全" },
       "items": [
         { "id": "email-notification-delivery", "title": { "en": "Administrator test email delivery", "zh-CN": "管理员测试邮件交付" }, "en": "docs/email-notification-delivery.md", "zh-CN": "docs/email-notification-delivery.zh-CN.md" },
+        { "id": "repository-quota-alerts", "title": { "en": "Repository logical quota alerts", "zh-CN": "仓库逻辑配额告警" }, "en": "docs/repository-quota-alerts.md", "zh-CN": "docs/repository-quota-alerts.zh-CN.md" },
         { "id": "operational-signals", "title": { "en": "Operational signal sources", "zh-CN": "运维信号来源" }, "en": "docs/operational-signals.md", "zh-CN": "docs/operational-signals.zh-CN.md" },
         { "id": "runtime-version", "title": { "en": "Runtime version", "zh-CN": "运行版本" }, "en": "docs/runtime-version.md", "zh-CN": "docs/runtime-version.zh-CN.md" },
         { "id": "runtime-logging", "title": { "en": "Runtime logging", "zh-CN": "运行日志" }, "en": "docs/runtime-logging.md", "zh-CN": "docs/runtime-logging.zh-CN.md" },

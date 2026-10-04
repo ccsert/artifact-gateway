@@ -1147,6 +1147,45 @@ func (e EmailCapabilityReason) Valid() bool {
 	}
 }
 
+// Defines values for EmailDeliveryAutomaticCancellationCode.
+const (
+	RuleChanged  EmailDeliveryAutomaticCancellationCode = "rule_changed"
+	RuleDeleted  EmailDeliveryAutomaticCancellationCode = "rule_deleted"
+	RuleDisabled EmailDeliveryAutomaticCancellationCode = "rule_disabled"
+)
+
+// Valid indicates whether the value is a known member of the EmailDeliveryAutomaticCancellationCode enum.
+func (e EmailDeliveryAutomaticCancellationCode) Valid() bool {
+	switch e {
+	case RuleChanged:
+		return true
+	case RuleDeleted:
+		return true
+	case RuleDisabled:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailDeliveryKind.
+const (
+	RepositoryQuota EmailDeliveryKind = "repository_quota"
+	Test            EmailDeliveryKind = "test"
+)
+
+// Valid indicates whether the value is a known member of the EmailDeliveryKind enum.
+func (e EmailDeliveryKind) Valid() bool {
+	switch e {
+	case RepositoryQuota:
+		return true
+	case Test:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EmailDeliveryLocale.
 const (
 	EmailDeliveryLocaleEn   EmailDeliveryLocale = "en"
@@ -2209,6 +2248,168 @@ func (e RepositoryOperation) Valid() bool {
 	case RepositoryOperationRestore:
 		return true
 	case RepositoryOperationRetain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryQuotaAlertEventDeliveryState.
+const (
+	RepositoryQuotaAlertEventDeliveryStateAccepted   RepositoryQuotaAlertEventDeliveryState = "accepted"
+	RepositoryQuotaAlertEventDeliveryStateDead       RepositoryQuotaAlertEventDeliveryState = "dead"
+	RepositoryQuotaAlertEventDeliveryStateDelivering RepositoryQuotaAlertEventDeliveryState = "delivering"
+	RepositoryQuotaAlertEventDeliveryStatePending    RepositoryQuotaAlertEventDeliveryState = "pending"
+	RepositoryQuotaAlertEventDeliveryStateRetrying   RepositoryQuotaAlertEventDeliveryState = "retrying"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryQuotaAlertEventDeliveryState enum.
+func (e RepositoryQuotaAlertEventDeliveryState) Valid() bool {
+	switch e {
+	case RepositoryQuotaAlertEventDeliveryStateAccepted:
+		return true
+	case RepositoryQuotaAlertEventDeliveryStateDead:
+		return true
+	case RepositoryQuotaAlertEventDeliveryStateDelivering:
+		return true
+	case RepositoryQuotaAlertEventDeliveryStatePending:
+		return true
+	case RepositoryQuotaAlertEventDeliveryStateRetrying:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryQuotaAlertEventNotificationCode.
+const (
+	RepositoryQuotaAlertEventNotificationCodeEmailDisabled            RepositoryQuotaAlertEventNotificationCode = "email_disabled"
+	RepositoryQuotaAlertEventNotificationCodeEncryptionKeyUnavailable RepositoryQuotaAlertEventNotificationCode = "encryption_key_unavailable"
+	RepositoryQuotaAlertEventNotificationCodeQueueFull                RepositoryQuotaAlertEventNotificationCode = "queue_full"
+	RepositoryQuotaAlertEventNotificationCodeQueued                   RepositoryQuotaAlertEventNotificationCode = "queued"
+	RepositoryQuotaAlertEventNotificationCodeTargetChanged            RepositoryQuotaAlertEventNotificationCode = "target_changed"
+	RepositoryQuotaAlertEventNotificationCodeTargetDisabled           RepositoryQuotaAlertEventNotificationCode = "target_disabled"
+	RepositoryQuotaAlertEventNotificationCodeTargetUnavailable        RepositoryQuotaAlertEventNotificationCode = "target_unavailable"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryQuotaAlertEventNotificationCode enum.
+func (e RepositoryQuotaAlertEventNotificationCode) Valid() bool {
+	switch e {
+	case RepositoryQuotaAlertEventNotificationCodeEmailDisabled:
+		return true
+	case RepositoryQuotaAlertEventNotificationCodeEncryptionKeyUnavailable:
+		return true
+	case RepositoryQuotaAlertEventNotificationCodeQueueFull:
+		return true
+	case RepositoryQuotaAlertEventNotificationCodeQueued:
+		return true
+	case RepositoryQuotaAlertEventNotificationCodeTargetChanged:
+		return true
+	case RepositoryQuotaAlertEventNotificationCodeTargetDisabled:
+		return true
+	case RepositoryQuotaAlertEventNotificationCodeTargetUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryQuotaAlertEventScenario.
+const (
+	RepositoryQuotaAlertEventScenarioCritical RepositoryQuotaAlertEventScenario = "critical"
+	RepositoryQuotaAlertEventScenarioResolved RepositoryQuotaAlertEventScenario = "resolved"
+	RepositoryQuotaAlertEventScenarioWarning  RepositoryQuotaAlertEventScenario = "warning"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryQuotaAlertEventScenario enum.
+func (e RepositoryQuotaAlertEventScenario) Valid() bool {
+	switch e {
+	case RepositoryQuotaAlertEventScenarioCritical:
+		return true
+	case RepositoryQuotaAlertEventScenarioResolved:
+		return true
+	case RepositoryQuotaAlertEventScenarioWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryQuotaAlertStateDataState.
+const (
+	RepositoryQuotaAlertStateDataStateAvailable            RepositoryQuotaAlertStateDataState = "available"
+	RepositoryQuotaAlertStateDataStateConfigurationChanged RepositoryQuotaAlertStateDataState = "configuration_changed"
+	RepositoryQuotaAlertStateDataStateDeleted              RepositoryQuotaAlertStateDataState = "deleted"
+	RepositoryQuotaAlertStateDataStateDisabled             RepositoryQuotaAlertStateDataState = "disabled"
+	RepositoryQuotaAlertStateDataStateNotConfigured        RepositoryQuotaAlertStateDataState = "not_configured"
+	RepositoryQuotaAlertStateDataStateRepositoryDeleted    RepositoryQuotaAlertStateDataState = "repository_deleted"
+	RepositoryQuotaAlertStateDataStateRepositoryInactive   RepositoryQuotaAlertStateDataState = "repository_inactive"
+	RepositoryQuotaAlertStateDataStateStale                RepositoryQuotaAlertStateDataState = "stale"
+	RepositoryQuotaAlertStateDataStateUnknown              RepositoryQuotaAlertStateDataState = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryQuotaAlertStateDataState enum.
+func (e RepositoryQuotaAlertStateDataState) Valid() bool {
+	switch e {
+	case RepositoryQuotaAlertStateDataStateAvailable:
+		return true
+	case RepositoryQuotaAlertStateDataStateConfigurationChanged:
+		return true
+	case RepositoryQuotaAlertStateDataStateDeleted:
+		return true
+	case RepositoryQuotaAlertStateDataStateDisabled:
+		return true
+	case RepositoryQuotaAlertStateDataStateNotConfigured:
+		return true
+	case RepositoryQuotaAlertStateDataStateRepositoryDeleted:
+		return true
+	case RepositoryQuotaAlertStateDataStateRepositoryInactive:
+		return true
+	case RepositoryQuotaAlertStateDataStateStale:
+		return true
+	case RepositoryQuotaAlertStateDataStateUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryQuotaAlertStatePhase.
+const (
+	RepositoryQuotaAlertStatePhaseFiring  RepositoryQuotaAlertStatePhase = "firing"
+	RepositoryQuotaAlertStatePhaseNormal  RepositoryQuotaAlertStatePhase = "normal"
+	RepositoryQuotaAlertStatePhasePending RepositoryQuotaAlertStatePhase = "pending"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryQuotaAlertStatePhase enum.
+func (e RepositoryQuotaAlertStatePhase) Valid() bool {
+	switch e {
+	case RepositoryQuotaAlertStatePhaseFiring:
+		return true
+	case RepositoryQuotaAlertStatePhaseNormal:
+		return true
+	case RepositoryQuotaAlertStatePhasePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryQuotaAlertStateSeverity.
+const (
+	RepositoryQuotaAlertStateSeverityCritical RepositoryQuotaAlertStateSeverity = "critical"
+	RepositoryQuotaAlertStateSeverityNormal   RepositoryQuotaAlertStateSeverity = "normal"
+	RepositoryQuotaAlertStateSeverityWarning  RepositoryQuotaAlertStateSeverity = "warning"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryQuotaAlertStateSeverity enum.
+func (e RepositoryQuotaAlertStateSeverity) Valid() bool {
+	switch e {
+	case RepositoryQuotaAlertStateSeverityCritical:
+		return true
+	case RepositoryQuotaAlertStateSeverityNormal:
+		return true
+	case RepositoryQuotaAlertStateSeverityWarning:
 		return true
 	default:
 		return false
@@ -4225,23 +4426,34 @@ type EmailCapabilityReason string
 
 // EmailDelivery defines model for EmailDelivery.
 type EmailDelivery struct {
-	AcceptedAt        *time.Time            `json:"acceptedAt,omitempty"`
-	Attempts          int                   `json:"attempts"`
-	CreatedAt         time.Time             `json:"createdAt"`
-	ErrorCode         *string               `json:"errorCode,omitempty"`
-	EventId           openapi_types.UUID    `json:"eventId"`
-	Id                openapi_types.UUID    `json:"id"`
-	Locale            EmailDeliveryLocale   `json:"locale"`
-	NextAttemptAt     *time.Time            `json:"nextAttemptAt,omitempty"`
-	PossibleDuplicate bool                  `json:"possibleDuplicate"`
-	Scenario          EmailDeliveryScenario `json:"scenario"`
-	State             EmailDeliveryState    `json:"state"`
-	TargetId          openapi_types.UUID    `json:"targetId"`
-	TargetVersion     string                `json:"targetVersion"`
-	TemplateVersion   string                `json:"templateVersion"`
-	UpdatedAt         time.Time             `json:"updatedAt"`
-	Version           string                `json:"version"`
+	AcceptedAt                *time.Time                              `json:"acceptedAt,omitempty"`
+	Attempts                  int                                     `json:"attempts"`
+	AutomaticCancellationCode *EmailDeliveryAutomaticCancellationCode `json:"automaticCancellationCode,omitempty"`
+	CreatedAt                 time.Time                               `json:"createdAt"`
+	EpisodeId                 *openapi_types.UUID                     `json:"episodeId,omitempty"`
+	ErrorCode                 *string                                 `json:"errorCode,omitempty"`
+	EventId                   openapi_types.UUID                      `json:"eventId"`
+	EventSequence             *int64                                  `json:"eventSequence,omitempty"`
+	Id                        openapi_types.UUID                      `json:"id"`
+	Kind                      *EmailDeliveryKind                      `json:"kind,omitempty"`
+	Locale                    EmailDeliveryLocale                     `json:"locale"`
+	NextAttemptAt             *time.Time                              `json:"nextAttemptAt,omitempty"`
+	PossibleDuplicate         bool                                    `json:"possibleDuplicate"`
+	QuotaRuleId               *openapi_types.UUID                     `json:"quotaRuleId,omitempty"`
+	Scenario                  EmailDeliveryScenario                   `json:"scenario"`
+	State                     EmailDeliveryState                      `json:"state"`
+	TargetId                  openapi_types.UUID                      `json:"targetId"`
+	TargetVersion             string                                  `json:"targetVersion"`
+	TemplateVersion           string                                  `json:"templateVersion"`
+	UpdatedAt                 time.Time                               `json:"updatedAt"`
+	Version                   string                                  `json:"version"`
 }
+
+// EmailDeliveryAutomaticCancellationCode defines model for EmailDelivery.AutomaticCancellationCode.
+type EmailDeliveryAutomaticCancellationCode string
+
+// EmailDeliveryKind defines model for EmailDelivery.Kind.
+type EmailDeliveryKind string
 
 // EmailDeliveryLocale defines model for EmailDelivery.Locale.
 type EmailDeliveryLocale string
@@ -5075,6 +5287,102 @@ type RepositoryPage struct {
 	Items         []Repository `json:"items"`
 	NextPageToken *string      `json:"nextPageToken,omitempty"`
 }
+
+// RepositoryQuotaAlertEvent defines model for RepositoryQuotaAlertEvent.
+type RepositoryQuotaAlertEvent struct {
+	DeliveryErrorCode *string                                   `json:"deliveryErrorCode,omitempty"`
+	DeliveryId        *openapi_types.UUID                       `json:"deliveryId,omitempty"`
+	DeliveryState     *RepositoryQuotaAlertEventDeliveryState   `json:"deliveryState,omitempty"`
+	EpisodeId         openapi_types.UUID                        `json:"episodeId"`
+	EvidenceSince     time.Time                                 `json:"evidenceSince"`
+	Id                openapi_types.UUID                        `json:"id"`
+	NotificationCode  RepositoryQuotaAlertEventNotificationCode `json:"notificationCode"`
+	OccurredAt        time.Time                                 `json:"occurredAt"`
+	Policy            RepositoryQuotaAlertPolicy                `json:"policy"`
+	PreviousEventId   *openapi_types.UUID                       `json:"previousEventId,omitempty"`
+	QuotaBytes        int64                                     `json:"quotaBytes"`
+	RepositoryId      openapi_types.UUID                        `json:"repositoryId"`
+	RepositoryName    string                                    `json:"repositoryName"`
+	RuleId            openapi_types.UUID                        `json:"ruleId"`
+	RuleVersion       string                                    `json:"ruleVersion"`
+	SampleAt          time.Time                                 `json:"sampleAt"`
+	Scenario          RepositoryQuotaAlertEventScenario         `json:"scenario"`
+	Sequence          int64                                     `json:"sequence"`
+	TargetId          openapi_types.UUID                        `json:"targetId"`
+	TargetVersion     string                                    `json:"targetVersion"`
+	TemplateVersion   string                                    `json:"templateVersion"`
+	UsedBytes         int64                                     `json:"usedBytes"`
+}
+
+// RepositoryQuotaAlertEventDeliveryState defines model for RepositoryQuotaAlertEvent.DeliveryState.
+type RepositoryQuotaAlertEventDeliveryState string
+
+// RepositoryQuotaAlertEventNotificationCode defines model for RepositoryQuotaAlertEvent.NotificationCode.
+type RepositoryQuotaAlertEventNotificationCode string
+
+// RepositoryQuotaAlertEventScenario defines model for RepositoryQuotaAlertEvent.Scenario.
+type RepositoryQuotaAlertEventScenario string
+
+// RepositoryQuotaAlertPolicy defines model for RepositoryQuotaAlertPolicy.
+type RepositoryQuotaAlertPolicy struct {
+	CriticalBasisPoints      int `json:"criticalBasisPoints"`
+	CriticalForSeconds       int `json:"criticalForSeconds"`
+	MaxSampleAgeSeconds      int `json:"maxSampleAgeSeconds"`
+	RecoveryBelowBasisPoints int `json:"recoveryBelowBasisPoints"`
+	RecoveryForSeconds       int `json:"recoveryForSeconds"`
+	WarningBasisPoints       int `json:"warningBasisPoints"`
+	WarningForSeconds        int `json:"warningForSeconds"`
+}
+
+// RepositoryQuotaAlertRule defines model for RepositoryQuotaAlertRule.
+type RepositoryQuotaAlertRule struct {
+	ActiveEpisodeId *openapi_types.UUID        `json:"activeEpisodeId,omitempty"`
+	CreatedAt       time.Time                  `json:"createdAt"`
+	Deleted         bool                       `json:"deleted"`
+	Enabled         bool                       `json:"enabled"`
+	EvaluatedAt     *time.Time                 `json:"evaluatedAt,omitempty"`
+	Id              openapi_types.UUID         `json:"id"`
+	LastEventId     *openapi_types.UUID        `json:"lastEventId,omitempty"`
+	Policy          RepositoryQuotaAlertPolicy `json:"policy"`
+	RepositoryId    openapi_types.UUID         `json:"repositoryId"`
+	Sequence        int64                      `json:"sequence"`
+	State           RepositoryQuotaAlertState  `json:"state"`
+	StateVersion    string                     `json:"stateVersion"`
+	TargetId        openapi_types.UUID         `json:"targetId"`
+	TargetVersion   string                     `json:"targetVersion"`
+	UpdatedAt       time.Time                  `json:"updatedAt"`
+	Version         string                     `json:"version"`
+}
+
+// RepositoryQuotaAlertRuleInput defines model for RepositoryQuotaAlertRuleInput.
+type RepositoryQuotaAlertRuleInput struct {
+	Enabled      *bool                      `json:"enabled,omitempty"`
+	Policy       RepositoryQuotaAlertPolicy `json:"policy"`
+	RepositoryId openapi_types.UUID         `json:"repositoryId"`
+	TargetId     openapi_types.UUID         `json:"targetId"`
+}
+
+// RepositoryQuotaAlertState defines model for RepositoryQuotaAlertState.
+type RepositoryQuotaAlertState struct {
+	CriticalSince *time.Time                         `json:"criticalSince,omitempty"`
+	DataState     RepositoryQuotaAlertStateDataState `json:"dataState"`
+	LastSampleAt  *time.Time                         `json:"lastSampleAt,omitempty"`
+	Phase         RepositoryQuotaAlertStatePhase     `json:"phase"`
+	QuotaBytes    *int64                             `json:"quotaBytes,omitempty"`
+	RecoverySince *time.Time                         `json:"recoverySince,omitempty"`
+	Severity      RepositoryQuotaAlertStateSeverity  `json:"severity"`
+	UsedBytes     *int64                             `json:"usedBytes,omitempty"`
+	WarningSince  *time.Time                         `json:"warningSince,omitempty"`
+}
+
+// RepositoryQuotaAlertStateDataState defines model for RepositoryQuotaAlertState.DataState.
+type RepositoryQuotaAlertStateDataState string
+
+// RepositoryQuotaAlertStatePhase defines model for RepositoryQuotaAlertState.Phase.
+type RepositoryQuotaAlertStatePhase string
+
+// RepositoryQuotaAlertStateSeverity defines model for RepositoryQuotaAlertState.Severity.
+type RepositoryQuotaAlertStateSeverity string
 
 // ResetUserPassword defines model for ResetUserPassword.
 type ResetUserPassword struct {
@@ -6205,6 +6513,16 @@ type ListRepositoryTombstonesParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// DeleteRepositoryQuotaAlertRuleParams defines parameters for DeleteRepositoryQuotaAlertRule.
+type DeleteRepositoryQuotaAlertRuleParams struct {
+	IfMatch string `json:"If-Match"`
+}
+
+// UpdateRepositoryQuotaAlertRuleParams defines parameters for UpdateRepositoryQuotaAlertRule.
+type UpdateRepositoryQuotaAlertRuleParams struct {
+	IfMatch string `json:"If-Match"`
+}
+
 // ListRuntimeLogsParams defines parameters for ListRuntimeLogs.
 type ListRuntimeLogsParams struct {
 	From *time.Time `form:"from,omitempty" json:"from,omitempty"`
@@ -6435,6 +6753,12 @@ type EvaluateSecurityPolicyJSONRequestBody = SecurityPolicyEvaluationRequest
 
 // TombstoneRepositoryArtifactJSONRequestBody defines body for TombstoneRepositoryArtifact for application/json ContentType.
 type TombstoneRepositoryArtifactJSONRequestBody = RestoreArtifact
+
+// CreateRepositoryQuotaAlertRuleJSONRequestBody defines body for CreateRepositoryQuotaAlertRule for application/json ContentType.
+type CreateRepositoryQuotaAlertRuleJSONRequestBody = RepositoryQuotaAlertRuleInput
+
+// UpdateRepositoryQuotaAlertRuleJSONRequestBody defines body for UpdateRepositoryQuotaAlertRule for application/json ContentType.
+type UpdateRepositoryQuotaAlertRuleJSONRequestBody = RepositoryQuotaAlertRuleInput
 
 // CreateScheduledTaskJSONRequestBody defines body for CreateScheduledTask for application/json ContentType.
 type CreateScheduledTaskJSONRequestBody = CreateScheduledTask
@@ -6915,6 +7239,24 @@ type ServerInterface interface {
 
 	// (GET /repository-grants)
 	ListRepositoryGrants(w http.ResponseWriter, r *http.Request)
+
+	// (GET /repository-quota-alert-rules)
+	ListRepositoryQuotaAlertRules(w http.ResponseWriter, r *http.Request)
+
+	// (POST /repository-quota-alert-rules)
+	CreateRepositoryQuotaAlertRule(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /repository-quota-alert-rules/{ruleId})
+	DeleteRepositoryQuotaAlertRule(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID, params DeleteRepositoryQuotaAlertRuleParams)
+
+	// (GET /repository-quota-alert-rules/{ruleId})
+	GetRepositoryQuotaAlertRule(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID)
+
+	// (PUT /repository-quota-alert-rules/{ruleId})
+	UpdateRepositoryQuotaAlertRule(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID, params UpdateRepositoryQuotaAlertRuleParams)
+
+	// (GET /repository-quota-alert-rules/{ruleId}/events)
+	ListRepositoryQuotaAlertEvents(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID)
 	// ListRuntimeLogs Query this process's bounded, redacted runtime log buffer
 	// (GET /runtime/logs)
 	ListRuntimeLogs(w http.ResponseWriter, r *http.Request, params ListRuntimeLogsParams)
@@ -12515,6 +12857,194 @@ func (siw *ServerInterfaceWrapper) ListRepositoryGrants(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListRepositoryQuotaAlertRules operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryQuotaAlertRules(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryQuotaAlertRules(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRepositoryQuotaAlertRule operation middleware
+func (siw *ServerInterfaceWrapper) CreateRepositoryQuotaAlertRule(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRepositoryQuotaAlertRule(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteRepositoryQuotaAlertRule operation middleware
+func (siw *ServerInterfaceWrapper) DeleteRepositoryQuotaAlertRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ruleId" -------------
+	var ruleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ruleId", r.PathValue("ruleId"), &ruleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ruleId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteRepositoryQuotaAlertRuleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteRepositoryQuotaAlertRule(w, r, ruleId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRepositoryQuotaAlertRule operation middleware
+func (siw *ServerInterfaceWrapper) GetRepositoryQuotaAlertRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ruleId" -------------
+	var ruleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ruleId", r.PathValue("ruleId"), &ruleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ruleId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRepositoryQuotaAlertRule(w, r, ruleId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateRepositoryQuotaAlertRule operation middleware
+func (siw *ServerInterfaceWrapper) UpdateRepositoryQuotaAlertRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ruleId" -------------
+	var ruleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ruleId", r.PathValue("ruleId"), &ruleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ruleId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateRepositoryQuotaAlertRuleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateRepositoryQuotaAlertRule(w, r, ruleId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRepositoryQuotaAlertEvents operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryQuotaAlertEvents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ruleId" -------------
+	var ruleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ruleId", r.PathValue("ruleId"), &ruleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ruleId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryQuotaAlertEvents(w, r, ruleId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRuntimeLogs operation middleware
 func (siw *ServerInterfaceWrapper) ListRuntimeLogs(w http.ResponseWriter, r *http.Request) {
 
@@ -14147,6 +14677,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/tombstones", wrapper.TombstoneRepositoryArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-capacities", wrapper.ListRepositoryCapacities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-grants", wrapper.ListRepositoryGrants)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-quota-alert-rules", wrapper.ListRepositoryQuotaAlertRules)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repository-quota-alert-rules", wrapper.CreateRepositoryQuotaAlertRule)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repository-quota-alert-rules/{ruleId}", wrapper.DeleteRepositoryQuotaAlertRule)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-quota-alert-rules/{ruleId}", wrapper.GetRepositoryQuotaAlertRule)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repository-quota-alert-rules/{ruleId}", wrapper.UpdateRepositoryQuotaAlertRule)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repository-quota-alert-rules/{ruleId}/events", wrapper.ListRepositoryQuotaAlertEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runtime/logs", wrapper.ListRuntimeLogs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runtime/nodes", wrapper.ListRuntimeNodes)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/scheduled-tasks", wrapper.ListScheduledTasks)
@@ -23184,6 +23720,618 @@ func (response ListRepositoryGrants401ApplicationProblemPlusJSONResponse) VisitL
 	return err
 }
 
+type ListRepositoryQuotaAlertRulesRequestObject struct {
+}
+
+type ListRepositoryQuotaAlertRulesResponseObject interface {
+	VisitListRepositoryQuotaAlertRulesResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryQuotaAlertRules200JSONResponse []RepositoryQuotaAlertRule
+
+func (response ListRepositoryQuotaAlertRules200JSONResponse) VisitListRepositoryQuotaAlertRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryQuotaAlertRules401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositoryQuotaAlertRules401ApplicationProblemPlusJSONResponse) VisitListRepositoryQuotaAlertRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryQuotaAlertRules403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryQuotaAlertRules403ApplicationProblemPlusJSONResponse) VisitListRepositoryQuotaAlertRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryQuotaAlertRules500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryQuotaAlertRules500ApplicationProblemPlusJSONResponse) VisitListRepositoryQuotaAlertRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryQuotaAlertRuleRequestObject struct {
+	Body *CreateRepositoryQuotaAlertRuleJSONRequestBody
+}
+
+type CreateRepositoryQuotaAlertRuleResponseObject interface {
+	VisitCreateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error
+}
+
+type CreateRepositoryQuotaAlertRule201ResponseHeaders struct {
+	ETag *string
+}
+
+type CreateRepositoryQuotaAlertRule201JSONResponse struct {
+	Body    RepositoryQuotaAlertRule
+	Headers CreateRepositoryQuotaAlertRule201ResponseHeaders
+}
+
+func (response CreateRepositoryQuotaAlertRule201JSONResponse) VisitCreateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryQuotaAlertRule400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateRepositoryQuotaAlertRule400ApplicationProblemPlusJSONResponse) VisitCreateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryQuotaAlertRule401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryQuotaAlertRule401ApplicationProblemPlusJSONResponse) VisitCreateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryQuotaAlertRule403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryQuotaAlertRule403ApplicationProblemPlusJSONResponse) VisitCreateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryQuotaAlertRule404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryQuotaAlertRule404ApplicationProblemPlusJSONResponse) VisitCreateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryQuotaAlertRule409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryQuotaAlertRule409ApplicationProblemPlusJSONResponse) VisitCreateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryQuotaAlertRule412ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryQuotaAlertRule412ApplicationProblemPlusJSONResponse) VisitCreateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryQuotaAlertRule503ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositoryQuotaAlertRule503ApplicationProblemPlusJSONResponse) VisitCreateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRepositoryQuotaAlertRuleRequestObject struct {
+	RuleId openapi_types.UUID `json:"ruleId"`
+	Params DeleteRepositoryQuotaAlertRuleParams
+}
+
+type DeleteRepositoryQuotaAlertRuleResponseObject interface {
+	VisitDeleteRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error
+}
+
+type DeleteRepositoryQuotaAlertRule204ResponseHeaders struct {
+	ETag *string
+}
+
+type DeleteRepositoryQuotaAlertRule204Response struct {
+	Headers DeleteRepositoryQuotaAlertRule204ResponseHeaders
+}
+
+func (response DeleteRepositoryQuotaAlertRule204Response) VisitDeleteRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteRepositoryQuotaAlertRule400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteRepositoryQuotaAlertRule400ApplicationProblemPlusJSONResponse) VisitDeleteRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRepositoryQuotaAlertRule401ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteRepositoryQuotaAlertRule401ApplicationProblemPlusJSONResponse) VisitDeleteRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRepositoryQuotaAlertRule403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteRepositoryQuotaAlertRule403ApplicationProblemPlusJSONResponse) VisitDeleteRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRepositoryQuotaAlertRule404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteRepositoryQuotaAlertRule404ApplicationProblemPlusJSONResponse) VisitDeleteRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRepositoryQuotaAlertRule412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteRepositoryQuotaAlertRule412ApplicationProblemPlusJSONResponse) VisitDeleteRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryQuotaAlertRuleRequestObject struct {
+	RuleId openapi_types.UUID `json:"ruleId"`
+}
+
+type GetRepositoryQuotaAlertRuleResponseObject interface {
+	VisitGetRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error
+}
+
+type GetRepositoryQuotaAlertRule200ResponseHeaders struct {
+	ETag *string
+}
+
+type GetRepositoryQuotaAlertRule200JSONResponse struct {
+	Body    RepositoryQuotaAlertRule
+	Headers GetRepositoryQuotaAlertRule200ResponseHeaders
+}
+
+func (response GetRepositoryQuotaAlertRule200JSONResponse) VisitGetRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryQuotaAlertRule400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRepositoryQuotaAlertRule400ApplicationProblemPlusJSONResponse) VisitGetRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryQuotaAlertRule401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryQuotaAlertRule401ApplicationProblemPlusJSONResponse) VisitGetRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryQuotaAlertRule403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryQuotaAlertRule403ApplicationProblemPlusJSONResponse) VisitGetRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryQuotaAlertRule404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryQuotaAlertRule404ApplicationProblemPlusJSONResponse) VisitGetRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryQuotaAlertRuleRequestObject struct {
+	RuleId openapi_types.UUID `json:"ruleId"`
+	Params UpdateRepositoryQuotaAlertRuleParams
+	Body   *UpdateRepositoryQuotaAlertRuleJSONRequestBody
+}
+
+type UpdateRepositoryQuotaAlertRuleResponseObject interface {
+	VisitUpdateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error
+}
+
+type UpdateRepositoryQuotaAlertRule200ResponseHeaders struct {
+	ETag *string
+}
+
+type UpdateRepositoryQuotaAlertRule200JSONResponse struct {
+	Body    RepositoryQuotaAlertRule
+	Headers UpdateRepositoryQuotaAlertRule200ResponseHeaders
+}
+
+func (response UpdateRepositoryQuotaAlertRule200JSONResponse) VisitUpdateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryQuotaAlertRule400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateRepositoryQuotaAlertRule400ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryQuotaAlertRule401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepositoryQuotaAlertRule401ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryQuotaAlertRule403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepositoryQuotaAlertRule403ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryQuotaAlertRule404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepositoryQuotaAlertRule404ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryQuotaAlertRule409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepositoryQuotaAlertRule409ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryQuotaAlertRule412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepositoryQuotaAlertRule412ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryQuotaAlertRule503ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepositoryQuotaAlertRule503ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryQuotaAlertRuleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryQuotaAlertEventsRequestObject struct {
+	RuleId openapi_types.UUID `json:"ruleId"`
+}
+
+type ListRepositoryQuotaAlertEventsResponseObject interface {
+	VisitListRepositoryQuotaAlertEventsResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryQuotaAlertEvents200JSONResponse []RepositoryQuotaAlertEvent
+
+func (response ListRepositoryQuotaAlertEvents200JSONResponse) VisitListRepositoryQuotaAlertEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryQuotaAlertEvents400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositoryQuotaAlertEvents400ApplicationProblemPlusJSONResponse) VisitListRepositoryQuotaAlertEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryQuotaAlertEvents401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryQuotaAlertEvents401ApplicationProblemPlusJSONResponse) VisitListRepositoryQuotaAlertEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryQuotaAlertEvents403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryQuotaAlertEvents403ApplicationProblemPlusJSONResponse) VisitListRepositoryQuotaAlertEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryQuotaAlertEvents404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryQuotaAlertEvents404ApplicationProblemPlusJSONResponse) VisitListRepositoryQuotaAlertEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryQuotaAlertEvents500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryQuotaAlertEvents500ApplicationProblemPlusJSONResponse) VisitListRepositoryQuotaAlertEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRuntimeLogsRequestObject struct {
 	Params ListRuntimeLogsParams
 }
@@ -26070,6 +27218,24 @@ type StrictServerInterface interface {
 
 	// (GET /repository-grants)
 	ListRepositoryGrants(ctx context.Context, request ListRepositoryGrantsRequestObject) (ListRepositoryGrantsResponseObject, error)
+
+	// (GET /repository-quota-alert-rules)
+	ListRepositoryQuotaAlertRules(ctx context.Context, request ListRepositoryQuotaAlertRulesRequestObject) (ListRepositoryQuotaAlertRulesResponseObject, error)
+
+	// (POST /repository-quota-alert-rules)
+	CreateRepositoryQuotaAlertRule(ctx context.Context, request CreateRepositoryQuotaAlertRuleRequestObject) (CreateRepositoryQuotaAlertRuleResponseObject, error)
+
+	// (DELETE /repository-quota-alert-rules/{ruleId})
+	DeleteRepositoryQuotaAlertRule(ctx context.Context, request DeleteRepositoryQuotaAlertRuleRequestObject) (DeleteRepositoryQuotaAlertRuleResponseObject, error)
+
+	// (GET /repository-quota-alert-rules/{ruleId})
+	GetRepositoryQuotaAlertRule(ctx context.Context, request GetRepositoryQuotaAlertRuleRequestObject) (GetRepositoryQuotaAlertRuleResponseObject, error)
+
+	// (PUT /repository-quota-alert-rules/{ruleId})
+	UpdateRepositoryQuotaAlertRule(ctx context.Context, request UpdateRepositoryQuotaAlertRuleRequestObject) (UpdateRepositoryQuotaAlertRuleResponseObject, error)
+
+	// (GET /repository-quota-alert-rules/{ruleId}/events)
+	ListRepositoryQuotaAlertEvents(ctx context.Context, request ListRepositoryQuotaAlertEventsRequestObject) (ListRepositoryQuotaAlertEventsResponseObject, error)
 	// ListRuntimeLogs Query this process's bounded, redacted runtime log buffer
 	// (GET /runtime/logs)
 	ListRuntimeLogs(ctx context.Context, request ListRuntimeLogsRequestObject) (ListRuntimeLogsResponseObject, error)
@@ -30055,6 +31221,174 @@ func (sh *strictHandler) ListRepositoryGrants(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListRepositoryGrantsResponseObject); ok {
 		if err := validResponse.VisitListRepositoryGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryQuotaAlertRules operation middleware
+func (sh *strictHandler) ListRepositoryQuotaAlertRules(w http.ResponseWriter, r *http.Request) {
+	var request ListRepositoryQuotaAlertRulesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryQuotaAlertRules(ctx, request.(ListRepositoryQuotaAlertRulesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryQuotaAlertRules")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryQuotaAlertRulesResponseObject); ok {
+		if err := validResponse.VisitListRepositoryQuotaAlertRulesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRepositoryQuotaAlertRule operation middleware
+func (sh *strictHandler) CreateRepositoryQuotaAlertRule(w http.ResponseWriter, r *http.Request) {
+	var request CreateRepositoryQuotaAlertRuleRequestObject
+
+	var body CreateRepositoryQuotaAlertRuleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRepositoryQuotaAlertRule(ctx, request.(CreateRepositoryQuotaAlertRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRepositoryQuotaAlertRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRepositoryQuotaAlertRuleResponseObject); ok {
+		if err := validResponse.VisitCreateRepositoryQuotaAlertRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteRepositoryQuotaAlertRule operation middleware
+func (sh *strictHandler) DeleteRepositoryQuotaAlertRule(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID, params DeleteRepositoryQuotaAlertRuleParams) {
+	var request DeleteRepositoryQuotaAlertRuleRequestObject
+
+	request.RuleId = ruleId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteRepositoryQuotaAlertRule(ctx, request.(DeleteRepositoryQuotaAlertRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteRepositoryQuotaAlertRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteRepositoryQuotaAlertRuleResponseObject); ok {
+		if err := validResponse.VisitDeleteRepositoryQuotaAlertRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRepositoryQuotaAlertRule operation middleware
+func (sh *strictHandler) GetRepositoryQuotaAlertRule(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID) {
+	var request GetRepositoryQuotaAlertRuleRequestObject
+
+	request.RuleId = ruleId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRepositoryQuotaAlertRule(ctx, request.(GetRepositoryQuotaAlertRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRepositoryQuotaAlertRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRepositoryQuotaAlertRuleResponseObject); ok {
+		if err := validResponse.VisitGetRepositoryQuotaAlertRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateRepositoryQuotaAlertRule operation middleware
+func (sh *strictHandler) UpdateRepositoryQuotaAlertRule(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID, params UpdateRepositoryQuotaAlertRuleParams) {
+	var request UpdateRepositoryQuotaAlertRuleRequestObject
+
+	request.RuleId = ruleId
+	request.Params = params
+
+	var body UpdateRepositoryQuotaAlertRuleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateRepositoryQuotaAlertRule(ctx, request.(UpdateRepositoryQuotaAlertRuleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateRepositoryQuotaAlertRule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateRepositoryQuotaAlertRuleResponseObject); ok {
+		if err := validResponse.VisitUpdateRepositoryQuotaAlertRuleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryQuotaAlertEvents operation middleware
+func (sh *strictHandler) ListRepositoryQuotaAlertEvents(w http.ResponseWriter, r *http.Request, ruleId openapi_types.UUID) {
+	var request ListRepositoryQuotaAlertEventsRequestObject
+
+	request.RuleId = ruleId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryQuotaAlertEvents(ctx, request.(ListRepositoryQuotaAlertEventsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryQuotaAlertEvents")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryQuotaAlertEventsResponseObject); ok {
+		if err := validResponse.VisitListRepositoryQuotaAlertEventsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -10,9 +10,10 @@ adds services and routing configuration. A stopped Gateway or database cannot
 report its own outage through this channel. See [#211](https://github.com/ccsert/artifact-gateway/issues/211)
 and [#212](https://github.com/ccsert/artifact-gateway/issues/212).
 
-This slice implements **explicit administrator synthetic test mail**. Capacity
-and 5xx observations do not enqueue mail. Alert evaluation, routing and Console
-pages remain future work. [#229](https://github.com/ccsert/artifact-gateway/issues/229)
+This channel supports **explicit administrator synthetic test mail** and
+[repository logical quota alerts](repository-quota-alerts.md). Local mount and
+5xx observations do not enqueue mail; their evaluation and Console configuration
+remain future work. [#229](https://github.com/ccsert/artifact-gateway/issues/229)
 and [#230](https://github.com/ccsert/artifact-gateway/issues/230) remain broader than
 this slice; browser screenshots are not Gmail, Outlook or Apple Mail acceptance.
 
@@ -130,10 +131,10 @@ concurrent global rate limits, worker fencing, retry exhaustion, safe replay,
 TLS trust/downgrade failures, actual localized multipart MIME and administrator
 permissions are covered. `make integration-test` includes these tests.
 
-Next, add a separate finite capacity evaluator and immutable real events in one
-transaction with delivery creation. Repository quotas use logical bytes and a
-configured quota; explicit local mounts use process-visible available bytes.
-S3/NAS pool capacity stays unknown. Sustained breach, recovery hysteresis,
-fresh/unknown data, cooldown and shared evaluator ownership must be validated
-before enabling real alerts. The existing [operational signals](operational-signals.md)
-and [#211](https://github.com/ccsert/artifact-gateway/issues/211) own that work.
+The [finite repository quota evaluator](repository-quota-alerts.md) now creates
+immutable logical events atomically with delivery. New synthetic previews use
+version 2, while queued version 1 remains available unchanged. Explicit local
+mount and process 5xx evaluation, Console configuration, client acceptance and
+real deployment remain follow-up work. S3/NAS pool capacity stays unknown.
+See [operational signals](operational-signals.md) and
+[#211](https://github.com/ccsert/artifact-gateway/issues/211).

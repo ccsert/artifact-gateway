@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"github.com/artifact-gateway/artifact-gateway/internal/quotaalert"
 	"time"
 )
 
@@ -21,6 +22,10 @@ type EmailTarget struct {
 	CreatedAt, UpdatedAt                           time.Time
 }
 type EmailDelivery struct {
+	AutomaticCancellationCode                                                                                                                                                        string
+	Kind, QuotaRuleID, EpisodeID                                                                                                                                                     string
+	EventSequence                                                                                                                                                                    int64
+	QuotaEvent                                                                                                                                                                       quotaalert.Event
 	ID, EventID, TargetID, TargetVersion, RequestKey, Scenario, Locale, TemplateVersion, RecipientCiphertext, From, ConsoleOrigin, State, Version, ErrorCode, LeaseOwner, LeaseToken string
 	Attempts                                                                                                                                                                         int
 	PossibleDuplicate                                                                                                                                                                bool
@@ -48,7 +53,8 @@ type EmailStore interface {
 }
 
 func emailSameRequest(v EmailDelivery, r EmailTestRequest) bool {
-	return v.TargetID == r.TargetID && v.TargetVersion == r.TargetVersion && v.Scenario == r.Scenario && v.TemplateVersion == r.TemplateVersion
+	// Template/transport versions are chosen by the server, not client request semantics.
+	return (v.Kind == "" || v.Kind == "test") && v.TargetID == r.TargetID && v.TargetVersion == r.TargetVersion && v.Scenario == r.Scenario
 }
 func emailRetryDelay(attempts int) time.Duration {
 	if attempts < 1 {
@@ -65,6 +71,8 @@ func emailRetryDelay(attempts int) time.Duration {
 }
 func emailSafeErrorCode(code string) string {
 	switch code {
+	case "queue_full", "rule_changed", "rule_disabled", "rule_deleted":
+		return code
 	case "", "email_disabled", "invalid_message", "relay_resolution_failed", "relay_address_denied", "relay_connect_failed", "tls_configuration_failed", "tls_verification_failed", "tls_required", "authentication_configuration_failed", "authentication_failed", "smtp_permanent_rejection", "smtp_temporary_rejection", "outcome_unknown", "smtp_transport_failed", "target_changed", "target_disabled", "encryption_key_unavailable", "attempts_exhausted":
 		return code
 	default:

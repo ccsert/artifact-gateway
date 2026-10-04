@@ -368,6 +368,11 @@ EmailDelivery:
   additionalProperties: false
   required: [id, eventId, targetId, targetVersion, scenario, locale, templateVersion, state, attempts, possibleDuplicate, version, createdAt, updatedAt]
   properties:
+    kind: {type: string, enum: [test, repository_quota]}
+    quotaRuleId: {type: string, format: uuid}
+    episodeId: {type: string, format: uuid}
+    eventSequence: {type: integer, format: int64, minimum: 1}
+    automaticCancellationCode: {type: string, enum: [rule_changed, rule_disabled, rule_deleted]}
     id: {type: string, format: uuid}
     eventId: {type: string, format: uuid}
     targetId: {type: string, format: uuid}

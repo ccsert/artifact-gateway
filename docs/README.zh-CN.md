@@ -54,6 +54,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 ## 运维与安全
 
 - [管理员测试邮件交付](email-notification-delivery.zh-CN.md) — 可选 TLS SMTP、加密目标、持久合成测试与投递边界。
+- [仓库逻辑配额告警](repository-quota-alerts.zh-CN.md) — 显式持续阈值、持久证据与已有邮件 worker 交付。
 - [运维信号来源](operational-signals.zh-CN.md) — 已有信号清单与可选管理员本地容量诊断的 namespace、新鲜度及失败边界。
 - [运行日志产品设计](runtime-log-product-design.zh-CN.md) — API/Worker 日志切分、查看、持久存储与部署验收提案。
 - [Kubernetes 部署](kubernetes-deployment.zh-CN.md) — 可执行本地基线与生产要求。
