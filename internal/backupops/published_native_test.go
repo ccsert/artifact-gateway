@@ -39,7 +39,8 @@ func TestPublishedNativeRelease(t *testing.T) {
 			for _, s := range bi.Settings {
 				settings[s.Key] = s.Value
 			}
-			if bi.GoVersion != "go1.26.6" || settings["-trimpath"] != "true" || settings["-ldflags"] != "" {
+			_, hasLDFlags := settings["-ldflags"]
+			if bi.GoVersion != "go1.26.6" || settings["-trimpath"] != "true" || hasLDFlags {
 				t.Fatal("published build shape changed")
 			}
 			if digestFile(t, filepath.Join(dir, "gateway")) != "sha256:"+r.binarySHA {

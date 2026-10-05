@@ -22,10 +22,15 @@ func binaryRelease(t *testing.T) (backupmanifest.Manifest, backupops.Release, []
 
 func binaryReleaseWithInjection(t *testing.T, version, injectedRevision string) (backupmanifest.Manifest, backupops.Release, []byte) {
 	t.Helper()
+	flags := "-X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedVersion=" + version + " -X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedRevision=" + injectedRevision
+	return binaryReleaseWithFlags(t, flags)
+}
+
+func binaryReleaseWithFlags(t *testing.T, flags string) (backupmanifest.Manifest, backupops.Release, []byte) {
+	t.Helper()
 	dir := t.TempDir()
 	_ = os.Chmod(dir, 0700)
 	revision := strings.Repeat("a", 40)
-	flags := "-X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedVersion=" + version + " -X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedRevision=" + injectedRevision
 	cmd := exec.CommandContext(context.Background(), "go", "build", "-buildvcs=false", "-ldflags", flags, "-o", filepath.Join(dir, "gateway"), "./cmd/gateway")
 	cmd.Dir = "../.."
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=arm64")

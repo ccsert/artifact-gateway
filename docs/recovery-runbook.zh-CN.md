@@ -43,7 +43,9 @@ artifact.sha256 中的 manifest digest 和固定摘要 imageReference；镜像�
 RepoDigest、平台、OCI version/revision 标签全部一致。备份不能自行选择下载软件。
 v1 保留仅镜像 imageDigest，新导出使用 v2 的明确 artifact 身份。
 
-正式原生trimpath构建的Go BuildInfo可能不含注入身份。对此source和restore spec
+正式原生trimpath构建的Go BuildInfo可能不含注入身份。
+归档回退要求整个 `-ldflags` setting 缺失；该字段存在时仍须严格比较已解析的
+version/revision，包括拒绝旧解析器无法识别的带引号赋值。对此类binary，source和restore spec
 均可新增 `release.nativeArchive: {"path":"/private/original-release.tar.gz",
 "sha256":"sha256:<64位小写hex>"}`。该可选字段不属于backup manifest，OCI使用无效。
 旧工具按未知spec字段拒绝；使用包含修复的工具，源/恢复运行的已批准原始executable

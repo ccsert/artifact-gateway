@@ -227,6 +227,40 @@ func TestArchiveRejectsExplicitEmptyStaticIdentity(t *testing.T) {
 	}
 }
 
+func TestArchiveRejectsUnparsedRetainedLinkerIdentity(t *testing.T) {
+	prefix := "github.com/artifact-gateway/artifact-gateway/internal/buildinfo."
+	for _, field := range []string{"version", "revision", "missing identity"} {
+		t.Run(field, func(t *testing.T) {
+			version, revision := prefix+"injectedVersion=synthetic-v1", prefix+"injectedRevision="+strings.Repeat("a", 40)
+			flags := "-s -w"
+			switch field {
+			case "version":
+				flags = "-X '" + prefix + "injectedVersion=forged-v2' -X " + revision
+			case "revision":
+				flags = "-X " + version + " -X '" + prefix + "injectedRevision=" + strings.Repeat("b", 40) + "'"
+			}
+			m, release, ledger := binaryReleaseWithFlags(t, flags)
+			bi, err := buildinfo.ReadFile(filepath.Join(release.Directory, "gateway"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			retained := false
+			for _, setting := range bi.Settings {
+				if setting.Key == "-ldflags" && setting.Value == flags {
+					retained = true
+				}
+			}
+			if !retained {
+				t.Fatal("fixture did not retain the linker flags under test")
+			}
+			release.NativeArchive = writeNativeArchive(t, nativeEntries(t, release))
+			if backupops.VerifyRelease(m, release, bytes.NewReader(ledger)) == nil {
+				t.Fatal("archive concealed unparsed retained linker identity")
+			}
+		})
+	}
+}
+
 func TestArchiveMismatchFailsBeforeTransferWrites(t *testing.T) {
 	_, release, ledger := binaryRelease(t)
 	release.NativeArchive = writeNativeArchive(t, nativeEntries(t, release))

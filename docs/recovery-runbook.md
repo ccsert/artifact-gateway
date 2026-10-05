@@ -53,6 +53,9 @@ choose a downloadable executable or image. Version 1 retains its image-only
 `imageDigest`; new exports produce version 2 with unambiguous artifact identity.
 
 Published native trimpath builds can omit injected identity from Go BuildInfo.
+Archive fallback requires the entire `-ldflags` setting to be absent. When it is
+present, strict parsed version/revision comparison remains mandatory, including
+rejecting quoted assignments the legacy parser cannot interpret.
 For these binaries, source and restore specs may add
 `release.nativeArchive: {"path":"/private/original-release.tar.gz","sha256":"sha256:<64 lowercase hex digits>"}`.
 This optional field is outside the backup manifest and is invalid for OCI.

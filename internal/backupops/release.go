@@ -94,12 +94,13 @@ func VerifyRelease(m backupmanifest.Manifest, release Release, ledger io.Reader)
 		if bi.Path != "github.com/artifact-gateway/artifact-gateway/cmd/gateway" || bi.Main.Path != "github.com/artifact-gateway/artifact-gateway" || values["GOOS"]+"/"+values["GOARCH"] != m.Gateway.Artifact.Platform {
 			return errRelease
 		}
+		_, hasLDFlags := values["-ldflags"]
 		for name, expected := range map[string]string{prefix + "injectedVersion": m.Gateway.Version, prefix + "injectedRevision": m.Gateway.Revision} {
 			observed, exists := values[name]
-			// A digest-pinned original archive supplies absent static injection
-			// metadata, but never overrides a conflicting value. Without that
-			// independent approval, preserve the original strict comparison.
-			if observed != expected && (release.NativeArchive == nil || exists) {
+			// Only a missing linker-flags setting may use the approved archive.
+			// Retained flags keep strict comparison, including quoted assignments
+			// this limited legacy parser cannot interpret. Never hide a conflict.
+			if observed != expected && (release.NativeArchive == nil || exists || hasLDFlags) {
 				return errRelease
 			}
 		}
