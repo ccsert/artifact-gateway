@@ -104,6 +104,7 @@ down:
 	@docker compose --env-file .env -f compose.yml down
 
 test:
+	@python3 ./scripts/email-compose-check.py --render-only
 	@bash ./scripts/readiness-image-test.sh
 	@./scripts/integration-isolation-test.sh
 	@./scripts/local-dev-test.sh
@@ -132,6 +133,13 @@ api-change-check:
 
 integration-test:
 	@./scripts/integration-test.sh
+
+.PHONY: email-compose-check email-compose-render-check
+email-compose-check:
+	@python3 ./scripts/email-compose-check.py
+
+email-compose-render-check:
+	@python3 ./scripts/email-compose-check.py --render-only
 
 integration-down:
 	@docker volume create artifact-gateway-go-mod >/dev/null

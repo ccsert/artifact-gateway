@@ -124,6 +124,7 @@ run_contract() {
   run "unit and integration scripts" make test
   run "cargo C0 contract" make cargo-contract
   run "kubernetes manifests" make kubernetes-local-check
+  run "opt-in Compose email TLS chain" make email-compose-check
   run "native OCI E2E" make native-oci-e2e
   run "native Raw E2E" make native-raw-e2e
   run "native Maven E2E" make native-maven-e2e

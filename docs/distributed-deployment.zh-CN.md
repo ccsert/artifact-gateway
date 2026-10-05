@@ -31,11 +31,14 @@ GATEWAY_WORKER_KINDS=reclaim,replication
 `GATEWAY_WORKER_FORMATS` 支持 `maven`、`oci`、`raw`、`conan`、`npm`、`pypi`、`go`、`apt`；
 其中 `apt` 当前只执行管理预览上传的 `reclaim`，不代表 Hosted 协议已可用。任务类型支持
 `promotion`、`replication`、`retention`、`reclaim`、`intelligence`、`deletion`、
-`scan`、`recovery`、`cache`、`audit`、`webhook`。`intelligence` 负责处理晋升成功后被延迟的
+`scan`、`recovery`、`cache`、`audit`、`webhook`、`email`。`intelligence` 负责处理晋升成功后被延迟的
 制品情报复制；`scan` 只在该节点配置了 `GATEWAY_SCANNER_ENDPOINT` 时启动，其格式
 由独立的 `GATEWAY_SCANNER_FORMATS` 控制（包含仅代理的 `go`），可以与普通生命周期
 Worker 隔离部署。`webhook` 从 PostgreSQL durable outbox 领取全局投递，不受
 `GATEWAY_WORKER_FORMATS` 限制。未设置过滤器时，worker 处理全部适用格式和任务类型。
+`email` 同样不受格式过滤，发送持久邮件 outbox。API、Scheduler 与 email Worker
+须使用一致邮件配置和 settings 加密 key，见[可选 Compose 邮件样例](email-notification-delivery.zh-CN.md#可选-compose-样例)；
+API 邮件 capability 仅表示本进程配置就绪，不代表集群 sender 健康。
 
 格式和任务过滤器只限制 Worker，Scheduler 始终为全部格式发现工作。缓存回收任务
 按 OCI、Raw、Conan 分开领取；Maven 缓存条目在读取时执行过期判断，因此没有

@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Added an opt-in Compose email overlay with a read-only operator configuration directory shared by API, scheduler and email worker. The checked-in relay example remains disabled. An isolated real Compose/TLS gate checks role wiring, local-only API readiness, startup failures, mismatched keys, actual HTML/plain MIME, permanent SMTP rejection and quota suppression without backfill.
+
 - Added nonempty encrypted email/quota recovery acceptance to both isolated binary/OCI transfer profiles, including cancellation, concurrent leases and ambiguous outcomes. The upgrade gate now pins formal v0.5.0 and proves forward migrations plus pre-upgrade snapshot rollback/rollforward; keys remain an independent operational prerequisite. Broader deployment/recovery acceptance remains open.
 
 - Console System now manages write-only email targets, sandboxed bilingual three-state template previews, explicitly confirmed synthetic tests, and readable delivery results. Targets default disabled; saving/previewing sends no mail. Whole-workspace permission gates, safe CAS drafts, cancellation and same-key uncertain test retries are covered. Real mailbox clients and production SMTP remain separate.

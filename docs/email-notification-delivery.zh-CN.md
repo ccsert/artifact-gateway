@@ -50,8 +50,89 @@ JSON 文件，启动时离线读取，拒绝未知键。以下仅为合成文档
 - 可选 `consoleOrigin` 必须是明确的 HTTPS origin，不能含凭据、查询或 fragment。
   服务端固定追加 `/system?tab=diagnostics`，不用请求 Host 或事件自带 URL。
   未配置则省略按钮。
-- API 与 Worker 节点须使用一致的中继、加密密钥与信任配置。独立 Worker 使用
+- API、scheduler 与 email worker 须使用一致的中继、From、Console origin、
+  加密密钥、认证与信任配置。独立 Worker 使用
   `GATEWAY_NODE_ROLES=worker`、`GATEWAY_WORKER_KINDS=email`；空 kind 过滤包含邮件。
+
+## 可选 Compose 样例
+
+`compose.yml` 保持邮件未接线。仅在 `.env` 设置 `GATEWAY_EMAIL_CONFIG_FILE`
+不会挂载或传递它；需明确加入 `compose.email.yml`。该 overlay 固定容器内路径
+`/etc/gateway-email/relay.json`，要求设置 `GATEWAY_EMAIL_CONFIG_DIR` 与已有
+settings 加密 key，只读挂载目录，使用 `create_host_path: false`，目录须预先存在。
+[仓库内配置文件](../examples/email/relay.json) 保持关闭，无中继或凭据。overlay
+要求 Docker Compose 支持 `!reset`，验收夹具还使用 `!override`。
+
+用现有秘密管理流程准备目录。镜像使用 UID/GID 65532；Linux 宿主机以下命令
+只安装关闭状态的文件：
+
+```sh
+sudo install -d -o 65532 -g 65532 -m 0750 /etc/artifact-gateway/email
+sudo install -o 65532 -g 65532 -m 0640 examples/email/relay.json /etc/artifact-gateway/email/relay.json
+```
+
+私有部署 `.env` 保持 0600，设置
+`GATEWAY_EMAIL_CONFIG_DIR=/etc/artifact-gateway/email`。使用单独生成的 32-byte
+`GATEWAY_SETTINGS_ENCRYPTION_KEY`（新安装可用 `openssl rand -hex 32`），与
+admin/resolver、数据库、S3/RPC 和 SMTP 凭据独立。已有加密设置或 outbox 快照
+时保留原 key，重新生成会失去解密能力。不要提交、打印 key 或展开后的 Compose
+环境。Docker Desktop 上须从镜像 UID 验证所有权与可读性，不能假设宿主权限映射。
+
+单进程时在私有 `.env` 设置 `GATEWAY_NODE_ROLES=standalone`：
+
+```sh
+docker compose --env-file .env -f compose.yml -f compose.email.yml config --quiet
+docker compose --env-file .env -f compose.yml -f compose.email.yml up -d --build --wait gateway
+```
+
+分角色时设置 `GATEWAY_NODE_ROLES=api`，再选择 profile：
+
+```sh
+docker compose --env-file .env -f compose.yml -f compose.email.yml --profile email-roles config --quiet
+docker compose --env-file .env -f compose.yml -f compose.email.yml --profile email-roles up -d --build --wait gateway gateway-scheduler gateway-email-worker
+```
+
+profile 提供一个 scheduler 和仅处理 email 的 worker，与 API 共用基础依赖、
+revision、配置目录和 key；后台角色不发布宿主机端口。这个小样例支持邮件测试与
+配额告警；其他持久任务需要时另配 worker，并按全部进程核算 PostgreSQL 连接池。
+升级先停 writer 并完成单一 migration job；此 overlay 不编排升级。
+
+启用已授权中继时，按上文契约替换 `relay.json` 为完整有效配置。可选 `caFile`、
+`authFile` 必须使用容器内 `/etc/gateway-email/...` 路径。私有 auth JSON 保持
+0600，UID 65532 所有且可读；可信 CA PEM 须可读，目录仅允许授权运维访问。
+overlay 不挂载 SMTP 服务，也不生成凭据。配置、CA 或 key 变化后重启全部所选
+角色。目录挂载支持原子轮换 auth 文件，worker 每次尝试重新读取。管理员确认目标
+及版本后明确发起合成测试，再核对 delivery 与中继接受状态。
+
+未指定配置路径或明确 `enabled: false` 时关闭。已指定的文件缺失、不可读、格式
+错误、未知字段、非法中继/CA 或 auth 非私有权限时，进程启动失败；Gateway 日志
+报告 `invalid configuration`，错误详情脱敏。settings key 缺失/非法则表现为 capability
+`encryption_key_unavailable`。Compose `--wait` 与 `/readyz` 验证进程依赖，
+不证明邮件 sender 健康。
+
+`GET /api/v2/email-notifications` 只报告响应 API 进程的配置/key 就绪。API-only
+可报告 `ready` 并入队，sender 仍可能无人运行。未配置 worker 不领用、不发送；
+持有不同有效 key 的 worker 在 SMTP 前以 `encryption_key_unavailable` 重试。
+未配置 scheduler 会记录 `notificationCode: email_disabled`、无 delivery；之后
+修好配置也不补发该事件。多个 evaluator 不协商配置，领用到期评估者使用自己的
+配置。各角色必须一致并分别核对，节点心跳不能证明中继/key 一致。此样例不新增
+集群 sender readiness 或配置同步能力。
+
+可重复门禁不读取 `.env`，不操作已有 stack：
+
+```sh
+make email-compose-render-check
+make email-compose-check
+```
+
+完整门禁构建当前真实镜像，使用独立唯一项目启动一次性 PostgreSQL、RustFS、
+API 与后台角色；TLS SMTP sink 只在私有 internal network，不能外发。仅 API
+使用临时 loopback 宿主端口。生成的凭据/证书、数据与容器退出时清理。验收覆盖
+关闭配置、启动失败/auth 权限、API-only pending、worker 缺配置/key 不同、两个
+正确 worker、实际 HTML/纯文本 MIME 接受、RCPT 550/dead、scheduler 缺配置
+永久抑制、正确配额交付与 standalone 交付。合成邮件共接受三封，拒绝项无 DATA。
+这是 Compose 接线门禁，不代表真实 SMTP provider、收件箱/邮件客户端、生产或
+Kubernetes 部署验收；已有 sender/PG 契约测试覆盖更广 TLS/重试/fencing 矩阵。
 
 ## Console 操作流程
 
