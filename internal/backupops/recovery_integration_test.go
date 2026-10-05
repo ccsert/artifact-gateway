@@ -40,7 +40,12 @@ func runLocalRecoveryIntegration(t *testing.T, profile string) {
 	if err := d.Validate(ctx); err != nil {
 		t.Fatal(err)
 	}
-	release := integrationRelease(t)
+	var release Release
+	if strings.HasPrefix(profile, "published-") {
+		release = publishedNativeFixture(t, strings.TrimPrefix(profile, "published-"))
+	} else {
+		release = integrationRelease(t)
+	}
 	if profile == "oci-image" {
 		release = integrationOCIRelease(t, ctx, d, release)
 	}
@@ -162,7 +167,10 @@ func runLocalRecoveryIntegration(t *testing.T, profile string) {
 		t.Fatal("group did not select first source")
 	}
 	api("GET", "/raw/recovery-group/releases/candidate.txt", denied, nil, 403, "")
-	emailFixture := seedRecoveryEmail(t, ctx, source, url, repos[0].ID, repos[1].ID)
+	var emailFixture recoveryEmail
+	if profile != "published-0.5.0" {
+		emailFixture = seedRecoveryEmail(t, ctx, source, url, repos[0].ID, repos[1].ID)
+	}
 	// Flush audit/runtime writes before recording the offline boundary.
 	writerID := source.resourceID("container", source.spec.Project+"-gateway")
 	if _, err = d.output(ctx, "stop", writerID); err != nil {
@@ -295,8 +303,14 @@ func runLocalRecoveryIntegration(t *testing.T, profile string) {
 		_ = body.Close()
 		t.Fatal("post-backup object recovered")
 	}
-	verifyRecoveryEmail(t, ctx, target, url, denied, emailFixture, bundle)
-	for _, scenario := range []string{"existing source", "existing sentinel", "wrong release", "corrupt object", "corrupt dump", "corrupt archive with matching digest", "unsupported manifest", "semantic failure", "postgres start failure", "gateway start failure", "lost create response"} {
+	if profile != "published-0.5.0" {
+		verifyRecoveryEmail(t, ctx, target, url, denied, emailFixture, bundle)
+	}
+	scenarios := []string{"existing source", "existing sentinel", "wrong release", "corrupt object", "corrupt dump", "corrupt archive with matching digest", "unsupported manifest", "semantic failure", "postgres start failure", "gateway start failure", "lost create response"}
+	if release.NativeArchive != nil {
+		scenarios = append(scenarios, "wrong native archive", "missing native archive")
+	}
+	for _, scenario := range scenarios {
 		t.Run(scenario, func(t *testing.T) {
 			candidate := spec()
 			candidate.ResolverToken = targetSpec.ResolverToken
@@ -310,6 +324,12 @@ func runLocalRecoveryIntegration(t *testing.T, profile string) {
 				candidate.Project = sentinel.spec.Project
 			case "wrong release":
 				candidate.Release.Identity.Version = "different"
+			case "wrong native archive":
+				archive := *candidate.Release.NativeArchive
+				archive.SHA256 = "sha256:" + strings.Repeat("0", 64)
+				candidate.Release.NativeArchive = &archive
+			case "missing native archive":
+				candidate.Release.NativeArchive = nil
 			case "semantic failure":
 				candidate.ReadChecks = append([]ReadCheck(nil), targetSpec.ReadChecks...)
 				candidate.ReadChecks[0].SHA256 = "sha256:" + strings.Repeat("0", 64)

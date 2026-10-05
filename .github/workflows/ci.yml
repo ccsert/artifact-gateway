@@ -84,6 +84,9 @@ jobs:
         run: make conan-e2e
       - name: Verify isolated S3 backup transfers
         run: make backup-transfer-test
+      - name: Verify original published native backup identity and PG/RustFS recovery
+        run: make published-native-backup-test
+        timeout-minutes: 15
       - name: Verify fixed v0.5.0 alert upgrade and snapshot rollback
         run: make upgrade-readiness
         timeout-minutes: 10

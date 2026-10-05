@@ -36,11 +36,44 @@ spec 必须是私有普通 JSON 文件（0600，最多 1 MiB），拒绝重复�
 
 release directory 必须含与已应用 ledger 完全一致的 `migrations/*.sql`。binary 还需
 `gateway`，身份为 `{version, revision, artifact:{kind:"binary", sha256:"sha256:...",
-platform:"linux/arm64"}}`（或 linux/amd64）。完整文件摘要、Go 构建信息、注入的版本/
-revision、平台与每项 migration checksum 均须一致。OCI 使用 `kind:"oci-image"`、
+platform:"linux/arm64"}}`（或 linux/amd64）。完整文件摘要、Go module/平台与每项
+migration checksum 均须一致。未提供 nativeArchive 时仍要求静态注入的版本和完整
+revision 一致，保留原严格行为。OCI 使用 `kind:"oci-image"`、
 artifact.sha256 中的 manifest digest 和固定摘要 imageReference；镜像须已在本地，
 RepoDigest、平台、OCI version/revision 标签全部一致。备份不能自行选择下载软件。
 v1 保留仅镜像 imageDigest，新导出使用 v2 的明确 artifact 身份。
+
+正式原生trimpath构建的Go BuildInfo可能不含注入身份。
+归档回退要求整个 `-ldflags` setting 缺失；该字段存在时仍须严格比较已解析的
+version/revision，包括拒绝旧解析器无法识别的带引号赋值。对此类binary，source和restore spec
+均可新增 `release.nativeArchive: {"path":"/private/original-release.tar.gz",
+"sha256":"sha256:<64位小写hex>"}`。该可选字段不属于backup manifest，OCI使用无效。
+旧工具按未知spec字段拒绝；使用包含修复的工具，源/恢复运行的已批准原始executable
+保持不变。此修复不改写v0.5.0/v0.6.0资产，也不决定后续工具或发行版本。
+
+信任根是 **bundle之外** 由操作者控制的私有批准spec。批准前独立把官方GitHub tag
+解析为完整commit，核对version，经HTTPS获取release API的归档和SHA256SUMS完整
+digest，校验两个下载文件及归档checksum行，然后固定批准值。bundle、任意包自己
+提供的checksum或孤立VERSION.txt均不能建立批准身份。验证过程本身离线；摘要绑定
+已批准字节，不是签名attestation。发行者/GitHub或批准spec被攻破不在此边界。
+上游替换会被批准pins拒绝；主动批准的旧包只能配套匹配version/revision/platform/
+ledger，不能重放为另一个版本。归档与release directory在验证及恢复期间必须保持
+不可变、由操作者控制；恶意并发修改仍超出现有本地文件系统保证。
+
+验证器先计算绝对路径普通归档完整摘要，再流式读取同一原始包内VERSION.txt、gateway
+与全部migrations，不解压落盘、不执行软件。VERSION的精确version/完整revision/
+platform须匹配受信spec；gateway和全部SQL摘要须匹配实际directory与数据库完整ledger。
+已有静态注入不得冲突；重新计算篡改binary/SQL的摘要不能覆盖独立固定的归档。
+路径穿越/绝对/别名路径、包裹根目录、软硬链接、重复文件名、未知条目、多gzip member、
+损坏/截断压缩均拒绝。上限：压缩512 MiB、解码1 GiB（含padding）、普通条目256 MiB、
+单SQL 4 MiB、VERSION 4 KiB、4096条目。
+
+`bash scripts/published-native-backup-test.sh` 下载固定官方v0.5.0/v0.6.0 linux/amd64
+原始字节，执行静态及篡改/重放回归。`make published-native-backup-test` 进一步复用
+明确所有权的随机PG/RustFS fixture：导出/校验/恢复、Raw Group/grant读回、source/
+sentinel不变及负向恢复。原始binary仅在静态信任校验后运行，自报version不是信任源。
+CI在PR精确SHA运行此门禁；未来实际Linux发行包也以真实trimpath参数通过同一静态
+验证器。静态通过不能替代完成PG/RustFS或生产验收。
 
 导出流式读取整个有序 bucket（包括无引用字节），随后再次 LIST/GET 并核对所有已发布
 DB 引用存在；intent/GC 行不等于已发布对象。兼容 v0.4.2 的完全无 Cargo 表引用查询，

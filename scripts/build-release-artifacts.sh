@@ -91,15 +91,22 @@ create_tar_gz() {
   fi
   (
     cd "$source"
-    find . -print | LC_ALL=C sort | COPYFILE_DISABLE=1 tar \
-      --no-recursion \
-      --format ustar \
-      --uid 0 \
-      --gid 0 \
-      --uname root \
-      --gname root \
-      -cf - \
-      -T - | gzip -n > "$destination"
+    # BSD tar's --format ustar leaves size/mtime terminated with spaces;
+    # Go reports those headers as unknown. Write canonical USTAR here so the
+    # same strict distribution acceptance applies on non-GNU build hosts.
+    python3 - <<'PY' | gzip -n > "$destination"
+import sys, tarfile
+from pathlib import Path
+
+def canonical(info):
+    info.uid = info.gid = 0
+    info.uname = info.gname = 'root'
+    return info
+
+with tarfile.open(fileobj=sys.stdout.buffer, mode='w|', format=tarfile.USTAR_FORMAT) as archive:
+    for name in ['.'] + sorted('./' + str(p) for p in Path('.').rglob('*')):
+        archive.add(name, arcname=name, recursive=False, filter=canonical)
+PY
   )
 }
 
@@ -159,6 +166,18 @@ for target in "${targets[@]}"; do
   else
     archive="$output/artifact-gateway_${version}_${goos}_${goarch}.tar.gz"
     create_tar_gz "$stage" "$archive"
+  fi
+
+  # Backup's native profile supports Linux. Verify the actual packaged bytes
+  # statically on the build host; a self-built non-trimpath fixture or runtime
+  # `version` output must not substitute for this distribution acceptance gate.
+  if [[ "$goos" == "linux" ]]; then
+    BACKUPOPS_BUILT_RELEASE_DIR="$stage" \
+      BACKUPOPS_BUILT_ARCHIVE="$archive" \
+      BACKUPOPS_BUILT_VERSION="$version" \
+      BACKUPOPS_BUILT_REVISION="$revision" \
+      BACKUPOPS_BUILT_PLATFORM="$target" \
+      go test -count=1 ./internal/backupops -run '^TestBuiltNativeArchiveIdentity$'
   fi
 done
 

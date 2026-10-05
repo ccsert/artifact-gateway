@@ -9,6 +9,10 @@ version=0.1.0
 revision=0123456789abcdef0123456789abcdef01234567
 goos=$(go env GOOS)
 goarch=$(go env GOARCH)
+targets=(--target "$goos/$goarch")
+if [[ "$goos" != linux ]]; then
+  targets+=(--target "linux/$goarch")
+fi
 
 if bash "$root/scripts/build-release-artifacts.sh" \
   --version "v$version" \
@@ -26,7 +30,7 @@ fi
     --version "$version" \
     --revision "$revision" \
     --output dist \
-    --target "$goos/$goarch" \
+    "${targets[@]}" \
     --skip-console
 )
 
@@ -93,7 +97,7 @@ test "$("$healthcheck" --version)" = "$healthcheck_version_output"
     --version "$version" \
     --revision "$revision" \
     --output dist-repeat \
-    --target "$goos/$goarch" \
+    "${targets[@]}" \
     --skip-console
 )
 repeat_archive="$workdir/dist-repeat/${archive##*/}"
