@@ -149,7 +149,7 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@62c96d0c4e8a889135c1f3a25910db8dbe0e85f7 # v2.3.4
         with:
-          name: Artifact Gateway ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           body_path: .github/release-notes/${{ github.ref_name }}.md
           generate_release_notes: true
           fail_on_unmatched_files: true
