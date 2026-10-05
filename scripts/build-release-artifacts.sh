@@ -91,15 +91,22 @@ create_tar_gz() {
   fi
   (
     cd "$source"
-    find . -print | LC_ALL=C sort | COPYFILE_DISABLE=1 tar \
-      --no-recursion \
-      --format ustar \
-      --uid 0 \
-      --gid 0 \
-      --uname root \
-      --gname root \
-      -cf - \
-      -T - | gzip -n > "$destination"
+    # BSD tar's --format ustar leaves size/mtime terminated with spaces;
+    # Go reports those headers as unknown. Write canonical USTAR here so the
+    # same strict distribution acceptance applies on non-GNU build hosts.
+    python3 - <<'PY' | gzip -n > "$destination"
+import sys, tarfile
+from pathlib import Path
+
+def canonical(info):
+    info.uid = info.gid = 0
+    info.uname = info.gname = 'root'
+    return info
+
+with tarfile.open(fileobj=sys.stdout.buffer, mode='w|', format=tarfile.USTAR_FORMAT) as archive:
+    for name in ['.'] + sorted('./' + str(p) for p in Path('.').rglob('*')):
+        archive.add(name, arcname=name, recursive=False, filter=canonical)
+PY
   )
 }
 
