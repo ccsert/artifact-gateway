@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+## 0.6.0 - 2026-10-05
+
 - Console email target and quota rule editors now show field-specific validation with linked hints and keyboard focus on the first invalid field. Email read, save and preview failures describe the actual operation without exposing recipient data or suggesting a synthetic test retry. Default Gateway primary buttons retain readable text through normal, hover and active states.
 
 - Removed the optional Ant Design CLI development helpers and their vulnerable `braces` chain. The October 17 audit exception is retired; API generation, theme/style builds, ESLint, type checks, and coverage gates continue through the existing repository tools.
