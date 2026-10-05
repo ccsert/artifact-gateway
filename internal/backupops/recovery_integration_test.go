@@ -47,7 +47,7 @@ func runLocalRecoveryIntegration(t *testing.T, profile string) {
 	spec := func() TargetSpec {
 		return TargetSpec{Project: "ag-restore-" + uuid.NewString()[:18], Docker: d, Release: release,
 			PostgresPassword: uuid.NewString(), AccessKey: "synthetic-test", SecretKey: uuid.NewString(), RPCSecret: uuid.NewString(),
-			AdminToken: uuid.NewString(), ResolverToken: uuid.NewString()}
+			AdminToken: uuid.NewString(), ResolverToken: uuid.NewString(), RuntimeEnvironment: map[string]string{"GATEWAY_SETTINGS_ENCRYPTION_KEY": recoveryEmailKey}}
 	}
 	create := func(s TargetSpec) *OwnedTarget {
 		t.Helper()
@@ -162,6 +162,7 @@ func runLocalRecoveryIntegration(t *testing.T, profile string) {
 		t.Fatal("group did not select first source")
 	}
 	api("GET", "/raw/recovery-group/releases/candidate.txt", denied, nil, 403, "")
+	emailFixture := seedRecoveryEmail(t, ctx, source, url, repos[0].ID, repos[1].ID)
 	// Flush audit/runtime writes before recording the offline boundary.
 	writerID := source.resourceID("container", source.spec.Project+"-gateway")
 	if _, err = d.output(ctx, "stop", writerID); err != nil {
@@ -294,6 +295,7 @@ func runLocalRecoveryIntegration(t *testing.T, profile string) {
 		_ = body.Close()
 		t.Fatal("post-backup object recovered")
 	}
+	verifyRecoveryEmail(t, ctx, target, url, denied, emailFixture, bundle)
 	for _, scenario := range []string{"existing source", "existing sentinel", "wrong release", "corrupt object", "corrupt dump", "corrupt archive with matching digest", "unsupported manifest", "semantic failure", "postgres start failure", "gateway start failure", "lost create response"} {
 		t.Run(scenario, func(t *testing.T) {
 			candidate := spec()

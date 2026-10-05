@@ -84,6 +84,9 @@ jobs:
         run: make conan-e2e
       - name: Verify isolated S3 backup transfers
         run: make backup-transfer-test
+      - name: Verify fixed v0.5.0 alert upgrade and snapshot rollback
+        run: make upgrade-readiness
+        timeout-minutes: 10
       - name: Run integration tests
         run: make integration-test
       - name: Check release readiness entrypoints
