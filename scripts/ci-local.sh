@@ -124,6 +124,7 @@ run_contract() {
   run "unit and integration scripts" make test
   run "cargo C0 contract" make cargo-contract
   run "kubernetes manifests" make kubernetes-local-check
+  run "opt-in Compose email TLS chain" make email-compose-check
   run "native OCI E2E" make native-oci-e2e
   run "native Raw E2E" make native-raw-e2e
   run "native Maven E2E" make native-maven-e2e
@@ -134,6 +135,7 @@ run_contract() {
   run "APT signer rotation E2E" make apt-signer-rotation-e2e
   run "Conan E2E" make conan-e2e
   run "isolated backup transfers" make backup-transfer-test
+  run "v0.5.0 upgrade and snapshot rollback" make upgrade-readiness
   run "integration tests" make integration-test
   run "release readiness entrypoints" make release-readiness-check
 }

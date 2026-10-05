@@ -1,0 +1,43 @@
+# Opt-in overlay; compose.yml alone keeps mail disabled. See
+# docs/email-notification-delivery.md for provisioning and role selection.
+x-email-environment: &email-environment
+  GATEWAY_EMAIL_CONFIG_FILE: /etc/gateway-email/relay.json
+  GATEWAY_SETTINGS_ENCRYPTION_KEY: ${GATEWAY_SETTINGS_ENCRYPTION_KEY:?set an independent settings encryption key}
+
+x-email-volumes: &email-volumes
+  - type: bind
+    source: ${GATEWAY_EMAIL_CONFIG_DIR:?set an operator-owned absolute email config directory}
+    target: /etc/gateway-email
+    read_only: true
+    bind:
+      create_host_path: false
+
+services:
+  gateway:
+    environment: *email-environment
+    volumes: *email-volumes
+
+  gateway-scheduler:
+    extends:
+      file: compose.yml
+      service: gateway
+    profiles: [email-roles]
+    environment:
+      <<: *email-environment
+      GATEWAY_NODE_ROLES: scheduler
+      GATEWAY_INSTANCE_ID: gateway-email-scheduler
+    ports: !reset []
+    volumes: *email-volumes
+
+  gateway-email-worker:
+    extends:
+      file: compose.yml
+      service: gateway
+    profiles: [email-roles]
+    environment:
+      <<: *email-environment
+      GATEWAY_NODE_ROLES: worker
+      GATEWAY_WORKER_KINDS: email
+      GATEWAY_INSTANCE_ID: gateway-email-worker
+    ports: !reset []
+    volumes: *email-volumes
