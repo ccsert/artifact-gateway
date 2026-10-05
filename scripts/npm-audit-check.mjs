@@ -1,14 +1,12 @@
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { acceptsAdvisory, auditFailures, consoleGuard, parseAuditResult } from './npm-audit-policy.mjs';
+import { acceptsAdvisory, auditFailures, parseAuditResult } from './npm-audit-policy.mjs';
 
-const root = fileURLToPath(new URL('../', import.meta.url));
 function audit(project) {
   const result = spawnSync('npm', ['--prefix', project, 'audit', '--json'], { encoding: 'utf8', timeout: 120000 });
   const report = parseAuditResult(result);
   const printed = new Set();
   const failures = auditFailures(report, (advisory, name) => {
-    const reason = acceptsAdvisory(project, advisory, name, new Date(), () => consoleGuard(project, root));
+    const reason = acceptsAdvisory(advisory, name, new Date());
     if (reason && !printed.has(advisory.url)) { printed.add(advisory.url); process.stdout.write(`Accepted ${advisory.url}: ${reason}\n`); }
     return Boolean(reason);
   });

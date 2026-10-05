@@ -60,12 +60,16 @@ the managed Console with `make dev-down`, install dependencies, then restart it
 with `make dev`; replacing `node_modules` under a live Vite process invalidates
 its optimized dependency URLs.
 
-The Ant Design helpers use a fixed-scope local CLI wrapper. The unpatched
-`braces` advisory GHSA-vfj7-8cjw-p6xm has a Console-only exception until
-2026-10-17 UTC: the pinned CLI uses fixed glob patterns, and guards verify its
-bytes, exact dev dependency chain, consumers, and absence from product/build
-imports. This is a limited reachability exception, not an upstream fix. Any
-scope drift, new advisory, registry failure, or expiry fails dependency audit.
+The optional Ant Design CLI lint/usage/doctor helpers have been removed with
+their `fast-glob` → `micromatch` → `braces` development dependency chain.
+GHSA-vfj7-8cjw-p6xm has no audit exception; reintroducing the advisory fails the
+gate. Use `make console-check` for ESLint and formatting, `make console-typecheck`
+for types, and `make console-test` for the full coverage gate. API generation
+still uses the pinned OpenAPI tooling above. Themes use the Console theme
+definitions and Ant Design `ConfigProvider`; Vite and Tailwind build the styles
+through `make console-build`. None of these flows requires the Ant Design CLI.
+Other audit decisions remain in `scripts/npm-audit-policy.mjs`; new advisories,
+invalid reports, registry failures, and expired exceptions fail dependency audit.
 
 ## Issue-to-merge traceability
 

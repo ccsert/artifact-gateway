@@ -84,9 +84,6 @@ console-check:
 	@cd console && npm run lint
 	@cd console && npm run format:check
 
-console-antd-lint:
-	@npm --prefix console run antd:lint
-
 console-test:
 	@cd console && npm run test:coverage
 

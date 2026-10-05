@@ -54,11 +54,15 @@ npm --prefix console ci --ignore-scripts --no-audit --no-fund
 Console，安装依赖后再执行 `make dev`；在运行中的 Vite 进程下替换 `node_modules` 会使
 优化后的依赖 URL 失效。
 
-Ant Design 辅助命令使用固定范围的本地 CLI 包装器。尚未修补的 `braces` 风险
-GHSA-vfj7-8cjw-p6xm 仅对 Console 限期接受至 2026-10-17 UTC：锁定 CLI 使用
-固定 glob 模式，并检查分发文件摘要、准确开发依赖链、消费者及产品/构建中无引用。
-这属于有界可达性例外，不能称为上游修复。范围变化、新 advisory、注册表故障或
-到期均使依赖审计失败。
+可选的 Ant Design CLI lint/usage/doctor 辅助命令及其
+`fast-glob` → `micromatch` → `braces` 开发依赖链已移除。
+GHSA-vfj7-8cjw-p6xm 不再有审计例外；重新引入该 advisory 会使门禁失败。
+使用 `make console-check` 执行 ESLint 和格式检查，`make console-typecheck` 检查类型，
+`make console-test` 执行全量覆盖率门禁。API 生成仍使用上述固定 OpenAPI 工具；
+主题通过 Console 主题定义与 Ant Design `ConfigProvider` 实现，样式通过
+`make console-build` 使用 Vite 与 Tailwind 构建。这些流程均无需 Ant Design CLI。
+其他审计决策保留在 `scripts/npm-audit-policy.mjs`；新 advisory、无效报告、注册表故障
+和例外到期均使依赖审计失败。
 
 ## 从 Issue 到合并的追溯
 

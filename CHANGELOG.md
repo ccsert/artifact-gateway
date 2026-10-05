@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Removed the optional Ant Design CLI development helpers and their vulnerable `braces` chain. The October 17 audit exception is retired; API generation, theme/style builds, ESLint, type checks, and coverage gates continue through the existing repository tools.
+
 - Added an opt-in Compose email overlay with a read-only operator configuration directory shared by API, scheduler and email worker. The checked-in relay example remains disabled. An isolated real Compose/TLS gate checks role wiring, local-only API readiness, startup failures, mismatched keys, actual HTML/plain MIME, permanent SMTP rejection and quota suppression without backfill.
 
 - Added nonempty encrypted email/quota recovery acceptance to both isolated binary/OCI transfer profiles, including cancellation, concurrent leases and ambiguous outcomes. The upgrade gate now pins formal v0.5.0 and proves forward migrations plus pre-upgrade snapshot rollback/rollforward; keys remain an independent operational prerequisite. Broader deployment/recovery acceptance remains open.
