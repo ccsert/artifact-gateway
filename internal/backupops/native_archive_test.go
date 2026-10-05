@@ -45,7 +45,13 @@ func nativeEntries(t *testing.T, release backupops.Release) []nativeEntry {
 func writeNativeArchive(t *testing.T, entries []nativeEntry) *backupops.NativeArchive {
 	t.Helper()
 	var b bytes.Buffer
-	z := gzip.NewWriter(&b)
+	// These cases exercise archive identity/structure, not compression ratio.
+	// Storing the full synthetic executable avoids re-running deflate under
+	// the race detector for every malformed archive. Real assets cover deflate.
+	z, err := gzip.NewWriterLevel(&b, gzip.NoCompression)
+	if err != nil {
+		t.Fatal(err)
+	}
 	w := tar.NewWriter(z)
 	for _, entry := range entries {
 		kind := entry.kind
@@ -295,7 +301,10 @@ func TestNativeArchiveCompressedAndDecodedLimits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	encoded := gzip.NewWriter(out)
+	encoded, err := gzip.NewWriterLevel(out, gzip.BestSpeed)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err = io.Copy(encoded, z); err != nil {
 		t.Fatal(err)
 	}
