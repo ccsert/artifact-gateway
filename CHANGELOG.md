@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+## 0.6.1 - 2026-10-05
+
 - Native backup export/restore can verify original trimpath binaries through an explicitly approved, full-digest-pinned release archive. Module/platform, complete binary bytes, archive-bound version/revision and the full migration ledger remain mandatory; specs without an archive retain strict injected-identity checks. Published v0.5.0/v0.6.0 regression and isolated PG/RustFS gates are wired to CI, and future Linux packages pass the actual backup identity check. Existing release assets are unchanged.
 
 ## 0.6.0 - 2026-10-05
