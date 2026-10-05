@@ -45,8 +45,14 @@ make console-build
 make console-e2e
 make upgrade-readiness
 make backup-transfer-test
+make published-native-backup-test
 make backup-restore-readiness
 ```
+
+The published-native gate downloads fixed official public assets over HTTPS;
+it uses synthetic owned PG/RustFS resources and no production credentials. It
+is additional Unreleased compatibility acceptance, not a retroactive claim
+that the original v0.6.0 verifier accepted its trimpath bytes.
 
 `make test` includes the isolated `dev/dev-status/dev-down` public CLI boundary
 tests. The commands exercise native protocol fixtures, persistent metadata,

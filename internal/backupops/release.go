@@ -27,6 +27,7 @@ var migrationFilename = regexp.MustCompile(`^[0-9]{6}_[A-Za-z0-9_]+\.sql$`)
 type Release struct {
 	Directory      string                         `json:"directory"`
 	Identity       backupmanifest.GatewayIdentity `json:"identity"`
+	NativeArchive  *NativeArchive                 `json:"nativeArchive,omitempty"`
 	observedImage  bool
 	imageID        string
 	ImageReference string `json:"imageReference,omitempty"`
@@ -39,6 +40,9 @@ func VerifyRelease(m backupmanifest.Manifest, release Release, ledger io.Reader)
 		return errRelease
 	}
 	if (m.SchemaVersion == 1 || (m.Gateway.Artifact != nil && m.Gateway.Artifact.Kind == "oci-image")) && !release.observedImage {
+		return errRelease
+	}
+	if release.NativeArchive != nil && (m.SchemaVersion != 2 || m.Gateway.Artifact.Kind != "binary") {
 		return errRelease
 	}
 	if m.SchemaVersion == 2 && m.Gateway.Artifact.Kind == "binary" {
@@ -62,6 +66,9 @@ func VerifyRelease(m backupmanifest.Manifest, release Release, ledger io.Reader)
 		}
 		values := map[string]string{}
 		for _, setting := range bi.Settings {
+			if _, exists := values[setting.Key]; exists {
+				return errRelease
+			}
 			values[setting.Key] = setting.Value
 			if setting.Key == "-ldflags" {
 				flags := strings.Fields(setting.Value)
@@ -84,8 +91,17 @@ func VerifyRelease(m backupmanifest.Manifest, release Release, ledger io.Reader)
 			}
 		}
 		prefix := "github.com/artifact-gateway/artifact-gateway/internal/buildinfo."
-		if bi.Path != "github.com/artifact-gateway/artifact-gateway/cmd/gateway" || values[prefix+"injectedVersion"] != m.Gateway.Version || values[prefix+"injectedRevision"] != m.Gateway.Revision || values["GOOS"]+"/"+values["GOARCH"] != m.Gateway.Artifact.Platform {
+		if bi.Path != "github.com/artifact-gateway/artifact-gateway/cmd/gateway" || bi.Main.Path != "github.com/artifact-gateway/artifact-gateway" || values["GOOS"]+"/"+values["GOARCH"] != m.Gateway.Artifact.Platform {
 			return errRelease
+		}
+		for name, expected := range map[string]string{prefix + "injectedVersion": m.Gateway.Version, prefix + "injectedRevision": m.Gateway.Revision} {
+			observed := values[name]
+			// A digest-pinned original archive supplies absent static injection
+			// metadata, but never overrides a conflicting value. Without that
+			// independent approval, preserve the original strict comparison.
+			if observed != expected && (release.NativeArchive == nil || observed != "") {
+				return errRelease
+			}
 		}
 	}
 	root, err := os.OpenRoot(filepath.Join(release.Directory, "migrations"))
@@ -117,6 +133,9 @@ func VerifyRelease(m backupmanifest.Manifest, release Release, ledger io.Reader)
 		expected[entry.Name()] = strings.TrimPrefix(sum, "sha256:")
 	}
 	if len(expected) == 0 {
+		return errRelease
+	}
+	if release.NativeArchive != nil && verifyNativeArchive(release, expected) != nil {
 		return errRelease
 	}
 	scanner := bufio.NewScanner(io.LimitReader(ledger, 64<<20+1))

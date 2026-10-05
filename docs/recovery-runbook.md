@@ -43,13 +43,57 @@ The source spec contains these explicit fields:
 Release `directory` contains the exact `migrations/*.sql` files for the recorded
 applied ledger. Binary releases also contain `gateway`; identity uses
 `{version, revision, artifact:{kind:"binary", sha256:"sha256:...", platform:"linux/arm64"}}`
-(or `linux/amd64`). Full executable bytes, Go build metadata, injected version
-and revision, platform and every migration checksum must agree. OCI uses
+(or `linux/amd64`). Full executable bytes, Go module/platform and every migration
+checksum must agree. Without `nativeArchive`, static injected version/revision
+must also agree, retaining strict legacy behavior. OCI uses
 `kind:"oci-image"`, the approved manifest digest in `artifact.sha256`, and a
 digest-pinned `imageReference`; the image must already be local, its RepoDigest,
 platform and OCI version/revision labels must agree. Bundle contents never
 choose a downloadable executable or image. Version 1 retains its image-only
 `imageDigest`; new exports produce version 2 with unambiguous artifact identity.
+
+Published native trimpath builds can omit injected identity from Go BuildInfo.
+For these binaries, source and restore specs may add
+`release.nativeArchive: {"path":"/private/original-release.tar.gz","sha256":"sha256:<64 lowercase hex digits>"}`.
+This optional field is outside the backup manifest and is invalid for OCI.
+Older tools reject it as unknown; use a tool containing the fix, keeping the
+approved original source/restored executables unchanged. It does not rewrite
+v0.5.0/v0.6.0 assets or decide the next tool/release version.
+
+The trust root is the operator-controlled private spec **outside the bundle**.
+Before approving it, independently resolve the official GitHub tag to its full
+commit, check the version, obtain the release API's full archive and SHA256SUMS
+digests over HTTPS, and verify both downloaded files and the archive checksum
+line. Pin these values; a bundle, arbitrary archive's own checksum, or detached
+VERSION.txt cannot establish approval. Verification itself is offline. Digests
+bind approved bytes; they are not signed attestations. Publisher/GitHub or
+approved-spec compromise is outside this boundary. Upstream replacement fails
+the approved pins; a deliberately approved old archive works only with its
+matching version/revision/platform/ledger, never as another release. Keep the
+archive and release directory immutable and operator controlled throughout
+verification/restore; hostile concurrent mutation exceeds the existing local
+filesystem guarantee.
+
+The verifier hashes the full absolute-path regular archive, then streams its
+original VERSION.txt, gateway and all migrations without extraction/execution.
+VERSION's exact version/full revision/platform must match the trusted spec;
+gateway and every SQL digest must match the actual directory and complete DB
+ledger. Present static injection cannot conflict. Rehashing tampered binary/SQL
+does not override the separately pinned archive. Traversal/absolute/alias paths,
+wrapper roots, soft/hard links, duplicate names, unknown entries, multiple gzip
+members and corrupt/truncated compression fail. Caps: 512 MiB compressed,
+1 GiB decoded including padding, 256 MiB per regular entry, 4 MiB per SQL,
+4 KiB VERSION, 4096 entries.
+
+`bash scripts/published-native-backup-test.sh` downloads fixed official v0.5.0/
+v0.6.0 linux/amd64 original bytes for static and tamper/replay regressions.
+`make published-native-backup-test` additionally runs the existing owned random
+PG/RustFS fixture: export/verify/restore, Raw Group/grant reads, source/sentinel
+preservation and negative restores. Original binaries run only after static
+trust verification; runtime self-report is not a trust source. CI runs this
+at the PR SHA. Every future packaged Linux distribution also passes the same
+static verifier with actual trimpath parameters. A static pass cannot replace
+completed PG/RustFS or production acceptance.
 
 The exporter streams the entire sorted bucket, including unreferenced bytes,
 and then repeats LIST/GET and verifies published DB references are present.

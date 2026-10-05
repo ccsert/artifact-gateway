@@ -160,6 +160,18 @@ for target in "${targets[@]}"; do
     archive="$output/artifact-gateway_${version}_${goos}_${goarch}.tar.gz"
     create_tar_gz "$stage" "$archive"
   fi
+
+  # Backup's native profile supports Linux. Verify the actual packaged bytes
+  # statically on the build host; a self-built non-trimpath fixture or runtime
+  # `version` output must not substitute for this distribution acceptance gate.
+  if [[ "$goos" == "linux" ]]; then
+    BACKUPOPS_BUILT_RELEASE_DIR="$stage" \
+      BACKUPOPS_BUILT_ARCHIVE="$archive" \
+      BACKUPOPS_BUILT_VERSION="$version" \
+      BACKUPOPS_BUILT_REVISION="$revision" \
+      BACKUPOPS_BUILT_PLATFORM="$target" \
+      go test -count=1 ./internal/backupops -run '^TestBuiltNativeArchiveIdentity$'
+  fi
 done
 
 if [[ "$skip_console" -eq 0 ]]; then

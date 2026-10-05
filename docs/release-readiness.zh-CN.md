@@ -40,8 +40,13 @@ make console-build
 make console-e2e
 make upgrade-readiness
 make backup-transfer-test
+make published-native-backup-test
 make backup-restore-readiness
 ```
+
+published-native门禁经HTTPS下载固定官方公开资产，仅使用合成且明确所有权的
+PG/RustFS资源，不使用生产凭据。它是Unreleased新增兼容验收，不追溯声称原v0.6.0
+验证器能接受自己的trimpath字节。
 
 `make test` 包含隔离的 `dev/dev-status/dev-down` CLI 边界。把输出、Git revision、operator、UTC 起止和偏差写入[发布记录](release-record-template.zh-CN.md)，不得记录 Bearer、存储凭证或未脱敏上游 URL。
 

@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Native backup export/restore can verify original trimpath binaries through an explicitly approved, full-digest-pinned release archive. Module/platform, complete binary bytes, archive-bound version/revision and the full migration ledger remain mandatory; specs without an archive retain strict injected-identity checks. Published v0.5.0/v0.6.0 regression and isolated PG/RustFS gates are wired to CI, and future Linux packages pass the actual backup identity check. Existing release assets are unchanged.
+
 ## 0.6.0 - 2026-10-05
 
 - Console email target and quota rule editors now show field-specific validation with linked hints and keyboard focus on the first invalid field. Email read, save and preview failures describe the actual operation without exposing recipient data or suggesting a synthetic test retry. Default Gateway primary buttons retain readable text through normal, hover and active states.
