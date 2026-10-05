@@ -203,6 +203,24 @@ func TestArchiveNeverOverridesConflictingStaticOrModuleIdentity(t *testing.T) {
 	}
 }
 
+func TestArchiveRejectsExplicitEmptyStaticIdentity(t *testing.T) {
+	for _, field := range []string{"version", "revision"} {
+		t.Run(field, func(t *testing.T) {
+			version, revision := "synthetic-v1", strings.Repeat("a", 40)
+			if field == "version" {
+				version = ""
+			} else {
+				revision = ""
+			}
+			m, release, ledger := binaryReleaseWithInjection(t, version, revision)
+			release.NativeArchive = writeNativeArchive(t, nativeEntries(t, release))
+			if backupops.VerifyRelease(m, release, bytes.NewReader(ledger)) == nil {
+				t.Fatal("archive concealed an explicitly empty injected identity")
+			}
+		})
+	}
+}
+
 func TestArchiveMismatchFailsBeforeTransferWrites(t *testing.T) {
 	_, release, ledger := binaryRelease(t)
 	release.NativeArchive = writeNativeArchive(t, nativeEntries(t, release))

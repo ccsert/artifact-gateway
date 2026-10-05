@@ -95,11 +95,11 @@ func VerifyRelease(m backupmanifest.Manifest, release Release, ledger io.Reader)
 			return errRelease
 		}
 		for name, expected := range map[string]string{prefix + "injectedVersion": m.Gateway.Version, prefix + "injectedRevision": m.Gateway.Revision} {
-			observed := values[name]
+			observed, exists := values[name]
 			// A digest-pinned original archive supplies absent static injection
 			// metadata, but never overrides a conflicting value. Without that
 			// independent approval, preserve the original strict comparison.
-			if observed != expected && (release.NativeArchive == nil || observed != "") {
+			if observed != expected && (release.NativeArchive == nil || exists) {
 				return errRelease
 			}
 		}
