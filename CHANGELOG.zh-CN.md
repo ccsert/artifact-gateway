@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+## 0.6.1 - 2026-10-05
+
 - 原生备份导出/恢复可通过明确批准、完整摘要固定的原始发行包验证trimpath二进制。module/platform、binary完整字节、归档绑定的version/revision与完整migration ledger仍必须一致；没有归档的spec保留严格注入身份校验。正式v0.5.0/v0.6.0原始资产回归与隔离PG/RustFS门禁接入CI，未来Linux发行包执行真实备份身份校验。既有发行资产不变。
 
 ## 0.6.0 - 2026-10-05
