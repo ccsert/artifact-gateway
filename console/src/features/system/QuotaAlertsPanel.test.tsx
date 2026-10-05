@@ -415,7 +415,9 @@ describe("quota alerts explicit writes", () => {
       "1",
     );
     await userEvent.click(screen.getByRole("button", { name: "创建停用规则" }));
-    expect(await screen.findByText(/恢复阈值必须低于警告/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "警告阈值（%）" }),
+    ).toHaveAccessibleDescription(/最多两位小数/);
     expect(mocks.createRepositoryQuotaAlertRule).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "取消" }));
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
@@ -564,3 +566,62 @@ describe("quota alert evidence and control", () => {
     ).toEqual({ "If-Match": "rule-v1" });
   });
 });
+
+it.each(["zh-CN", "en-US"])(
+  "associates quota errors with controls and focuses the first selection in %s",
+  async (locale) => {
+    localStorage.setItem("ag.console.locale", locale);
+    const zh = locale === "zh-CN";
+    mount();
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: zh ? "创建规则" : "Create rule",
+      }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: zh ? "创建停用规则" : "Create disabled rule",
+      }),
+    );
+    const repository = screen.getByRole("combobox", {
+      name: zh ? "仓库" : "Repository",
+    });
+    expect(repository).toHaveFocus();
+    expect(repository).toHaveAttribute("aria-invalid", "true");
+    expect(repository).toHaveAccessibleDescription(
+      zh ? /请选择仓库/ : /Choose a repository/,
+    );
+    const duration = screen.getByRole("textbox", {
+      name: zh ? "警告持续时间（秒）" : "Warning hold duration (seconds)",
+    });
+    expect(duration).toHaveAttribute("aria-invalid", "true");
+    expect(duration).toHaveAccessibleDescription(zh ? /1–86400/ : /1–86400/);
+    await userEvent.type(duration, "120");
+    expect(duration).not.toHaveAttribute("aria-invalid", "true");
+    expect(mocks.createRepositoryQuotaAlertRule).not.toHaveBeenCalled();
+  },
+);
+
+it.each([
+  ["警告阈值（%）", "80.001", /最多两位小数/],
+  ["严重阈值（%）", "79", /警告阈值必须低于严重阈值/],
+  ["恢复阈值（%）", "80", /恢复阈值必须低于警告阈值/],
+  ["警告持续时间（秒）", "0", /1–86400/],
+  ["最大样本年龄（秒）", "29", /30–3600/],
+])(
+  "reports the %s constraint at the related field without saving",
+  async (label, value, description) => {
+    mount();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "查看 Synthetic Raw" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "编辑规则" }));
+    const field = screen.getByRole("textbox", { name: label });
+    await userEvent.clear(field);
+    await userEvent.type(field, value);
+    await userEvent.click(screen.getByRole("button", { name: "保存规则" }));
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field).toHaveAccessibleDescription(description);
+    expect(mocks.updateRepositoryQuotaAlertRule).not.toHaveBeenCalled();
+  },
+);

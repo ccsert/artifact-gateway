@@ -48,9 +48,55 @@ it.each(["constructor", "__proto__", "toString", "unknown-private-raw"])(
   "uses a fixed fallback for unknown server codes: %s",
   (code) => {
     const text = (_zh: string, en: string) => en;
-    expect(safeEmailError({ code, message: "private-raw" }, text)).toContain(
-      "request failed",
-    );
+    expect(
+      safeEmailError({ code, message: "private-raw" }, text, "test"),
+    ).toContain("request failed");
     expect(quotaLabel(code, text)).toBe("Status unknown");
+  },
+);
+
+it("asks test conflicts to refresh and reconfirm without claiming an address was cleared", () => {
+  for (const language of ["zh", "en"]) {
+    const text = (zh: string, en: string) => (language === "zh" ? zh : en);
+    const message = safeEmailError({ code: "version_conflict" }, text, "test");
+    expect(message).not.toMatch(
+      /敏感地址已清除|address was cleared|重新编辑|edit again/,
+    );
+    expect(
+      safeEmailError({ code: "version_conflict" }, text, "save"),
+    ).not.toMatch(/敏感地址已清除|address was cleared/);
+    expect(message).toMatch(
+      language === "zh"
+        ? /取消.*刷新.*重新确认/
+        : /Cancel.*refresh.*confirm again/,
+    );
+  }
+});
+
+it.each(["read", "save", "preview"] as const)(
+  "keeps %s failures free of test-only instructions and raw response text",
+  (operation) => {
+    for (const code of [
+      "constructor",
+      "__proto__",
+      "unknown",
+      "rate_limited",
+      "queue_full",
+      "invalid_request",
+    ]) {
+      for (const language of ["zh", "en"]) {
+        const text = (zh: string, en: string) => (language === "zh" ? zh : en);
+        const message = safeEmailError(
+          { code, message: "private-response-marker" },
+          text,
+          operation,
+        );
+        expect(message).not.toMatch(
+          /private-response-marker|同一标识|same key|Retry the same test/,
+        );
+        expect(message.length).toBeGreaterThan(10);
+        if (language === "zh") expect(message).toMatch(/[\u4e00-\u9fff]/);
+      }
+    }
   },
 );

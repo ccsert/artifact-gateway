@@ -295,3 +295,143 @@ it("cancels a pending save and ignores its later success after a new editor open
   expect(screen.getByLabelText("收件人地址")).toHaveValue("");
   expect(screen.queryByText(/邮件目标已保存/)).not.toBeInTheDocument();
 });
+
+it.each(["zh-CN", "en-US"])(
+  "associates field errors and focuses the first invalid field in %s",
+  async (locale) => {
+    localStorage.setItem("ag.console.locale", locale);
+    const zh = locale === "zh-CN";
+    mount();
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: zh ? "新建邮件目标" : "New email target",
+      }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: zh ? "保存停用目标" : "Save disabled target",
+      }),
+    );
+    const name = screen.getByLabelText(zh ? "目标名称" : "Target name");
+    const recipient = screen.getByLabelText(
+      zh ? "收件人地址" : "Recipient address",
+    );
+    expect(name).toHaveFocus();
+    expect(name).toHaveAttribute("aria-invalid", "true");
+    expect(name).toHaveAccessibleDescription(
+      zh ? /请输入目标名称/ : /Enter a target name/,
+    );
+    expect(recipient).toHaveAttribute("aria-invalid", "true");
+    expect(recipient).toHaveAccessibleDescription(
+      zh ? /请输入单个收件人邮箱地址/ : /Enter one recipient email address/,
+    );
+    await userEvent.type(name, "Synthetic");
+    expect(name).not.toHaveAttribute("aria-invalid", "true");
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: zh ? "保存停用目标" : "Save disabled target",
+      }),
+    );
+    expect(recipient).toHaveFocus();
+    await userEvent.type(recipient, "private-sensitive-marker");
+    expect(recipient).toHaveAccessibleDescription(
+      zh ? /请输入单个有效邮箱/ : /Enter one valid mailbox/,
+    );
+    expect(
+      screen.queryByText("private-sensitive-marker"),
+    ).not.toBeInTheDocument();
+    expect(mocks.createEmailTarget).not.toHaveBeenCalled();
+    expect(mocks.testEmailNotification).not.toHaveBeenCalled();
+    await userEvent.click(
+      screen.getByRole("button", { name: zh ? "取消" : "Cancel" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: zh ? "新建邮件目标" : "New email target",
+      }),
+    );
+    expect(
+      screen.getByLabelText(zh ? "收件人地址" : "Recipient address"),
+    ).toHaveValue("");
+    expect(
+      screen.getByLabelText(zh ? "收件人地址" : "Recipient address"),
+    ).not.toHaveAttribute("aria-invalid", "true");
+  },
+);
+
+it.each(["zh-CN", "en-US"])(
+  "gives a safe read fallback rather than test retry instructions in %s",
+  async (locale) => {
+    localStorage.setItem("ag.console.locale", locale);
+    mocks.listEmailTargets.mockResolvedValue({
+      error: { code: "private-unknown", message: "private-server-marker" },
+    });
+    mount();
+    expect(
+      await screen.findByText(
+        locale === "zh-CN"
+          ? "无法读取邮件通知数据。请重试读取。"
+          : "Could not read email notification data. Retry the read.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/private-server-marker|同一标识|same key/),
+    ).not.toBeInTheDocument();
+    expect(mocks.testEmailNotification).not.toHaveBeenCalled();
+  },
+);
+
+it("keeps an unknown save outcome separate from test retries without revealing its response", async () => {
+  mocks.updateEmailTarget.mockResolvedValue({
+    error: { code: "private-unknown", message: "private-server-marker" },
+  });
+  mount();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "编辑 Synthetic operations" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "保存目标" }));
+  expect(
+    await screen.findByText(
+      "保存结果不确定。请刷新核对目标配置后再决定是否重试。",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByText(/private-server-marker|同一标识/),
+  ).not.toBeInTheDocument();
+  expect(mocks.testEmailNotification).not.toHaveBeenCalled();
+});
+
+it("locks duplicate saves and discards a cancelled form's late result and errors", async () => {
+  let finish!: (value: unknown) => void;
+  mocks.createEmailTarget.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  mount();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "新建邮件目标" }),
+  );
+  await userEvent.type(screen.getByLabelText("目标名称"), "Synthetic pending");
+  await userEvent.type(
+    screen.getByLabelText("收件人地址"),
+    "private@example.test",
+  );
+  const save = screen.getByRole("button", { name: "保存停用目标" });
+  fireEvent.click(save);
+  fireEvent.click(save);
+  expect(mocks.createEmailTarget).toHaveBeenCalledTimes(1);
+  const signal = mocks.createEmailTarget.mock.calls[0][0].signal as AbortSignal;
+  await userEvent.click(screen.getByRole("button", { name: "取消" }));
+  expect(signal.aborted).toBe(true);
+  await userEvent.click(screen.getByRole("button", { name: "新建邮件目标" }));
+  finish({ data: { ...target, enabled: false } });
+  await waitFor(() =>
+    expect(screen.getByLabelText("收件人地址")).toHaveValue(""),
+  );
+  expect(screen.getByLabelText("目标名称")).toHaveValue("");
+  expect(screen.queryByText(/目标已保存/)).not.toBeInTheDocument();
+  expect(JSON.stringify(localStorage)).not.toContain("private@example.test");
+  expect(mocks.testEmailNotification).not.toHaveBeenCalled();
+});

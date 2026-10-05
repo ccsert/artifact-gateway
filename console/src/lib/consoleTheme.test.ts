@@ -235,3 +235,29 @@ describe("console themes", () => {
     );
   });
 });
+
+it.each([
+  ["gateway-dark", "#041b23", "#06b6d4"],
+  ["gateway-light", "#ffffff", "#087f9c"],
+])(
+  "projects readable %s action tokens without replacing global solid text",
+  (id, foreground, background) => {
+    const theme = defaultConsoleThemes.find((entry) => entry.id === id)!;
+    const resolved = resolveConsoleTheme(theme);
+    expect(resolved.roles.content.onAction).toBe(foreground);
+    expect(resolved.roles.action.primary).toBe(background);
+    expect(resolved.antDesign.components?.Button?.primaryColor).toBe(
+      foreground,
+    );
+    expect(resolved.antDesign.components?.Button?.colorPrimary).toBe(
+      background,
+    );
+    expect(resolved.antDesign.components?.Button?.colorPrimaryHover).toBe(
+      resolved.roles.action.hover,
+    );
+    expect(resolved.antDesign.components?.Button?.colorPrimaryActive).toBe(
+      resolved.roles.action.active,
+    );
+    expect(resolved.token.colorTextLightSolid).toBe("#fff");
+  },
+);

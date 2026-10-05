@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Button, Input, Select } from "antd";
 import {
   createEmailTarget,
@@ -8,13 +8,17 @@ import {
 } from "../../client";
 import { Card, CardHeader, Field } from "../../components/ui/Layout";
 import { ErrorBanner } from "../../components/ui/Feedback";
+import {
+  fieldFeedback,
+  useFormValidationFocus,
+} from "../../components/ui/formFeedback";
 import { usePreferences } from "../../lib/preferences";
 import { useQuotaAction } from "./useQuotaAction";
 import { quotaResult } from "./useQuotaSnapshot";
 import {
   emailConflict,
   safeEmailError,
-  validEmailTarget,
+  emailTargetErrors,
 } from "./emailPresentation";
 
 export function EmailTargetEditor({
@@ -37,7 +41,27 @@ export function EmailTargetEditor({
     target?.locale ?? (uiLocale === "zh-CN" ? "zh-CN" : "en"),
   );
   const [recipient, setRecipient] = useState("");
-  const [invalid, setInvalid] = useState(false);
+  const baseId = useId();
+  const { formRef, attempted, reportInvalid } = useFormValidationFocus();
+  const errors = attempted ? emailTargetErrors(name, recipient, !current) : {};
+  const nameError =
+    errors.name === "required"
+      ? text("请输入目标名称。", "Enter a target name.")
+      : errors.name
+        ? text(
+            "名称须为 1–128 字，不能包含换行或空字符。",
+            "Use a 1–128 character name without line breaks or null characters.",
+          )
+        : undefined;
+  const recipientError =
+    errors.recipient === "required"
+      ? text("请输入单个收件人邮箱地址。", "Enter one recipient email address.")
+      : errors.recipient
+        ? text(
+            "请输入单个有效邮箱，不含显示名、分隔符或换行。",
+            "Enter one valid mailbox without a display name, separators, or line breaks.",
+          )
+        : undefined;
   const action = useQuotaAction(onAuthBlocked);
   const reload = useQuotaAction(onAuthBlocked);
   const [conflict, setConflict] = useState(false);
@@ -45,18 +69,10 @@ export function EmailTargetEditor({
   return (
     <div className="ag-page-stack">
       {Boolean(action.error) && !acknowledged && (
-        <ErrorBanner error={safeEmailError(action.error, text)} />
+        <ErrorBanner error={safeEmailError(action.error, text, "save")} />
       )}
       {Boolean(reload.error) && (
-        <ErrorBanner error={safeEmailError(reload.error, text)} />
-      )}
-      {invalid && (
-        <ErrorBanner
-          error={text(
-            "请填写 1–128 字目标名称及单个有效邮箱地址，不能包含换行。编辑时地址留空保留原值。",
-            "Enter a 1–128 character name and one valid mailbox without line breaks. Leave the address empty when editing to retain it.",
-          )}
-        />
+        <ErrorBanner error={safeEmailError(reload.error, text, "read")} />
       )}
       <Card>
         <CardHeader
@@ -67,15 +83,17 @@ export function EmailTargetEditor({
           }
         />
         <form
+          ref={formRef}
           className="grid min-w-0 gap-5 p-5"
           onSubmit={(event) => {
             event.preventDefault();
             if (!writable || action.busy || conflict || reload.busy) return;
-            if (!validEmailTarget(name, recipient, !current)) {
-              setInvalid(true);
+            if (
+              Object.keys(emailTargetErrors(name, recipient, !current)).length
+            ) {
+              reportInvalid();
               return;
             }
-            setInvalid(false);
             setAcknowledged(false);
             const body = {
               name: name.trim(),
@@ -112,6 +130,8 @@ export function EmailTargetEditor({
           }}
         >
           <Field
+            id={`${baseId}-name`}
+            error={nameError}
             label={text("目标名称", "Target name")}
             hint={text(
               "使用团队或用途名称，不要把邮箱地址写入名称。",
@@ -119,6 +139,7 @@ export function EmailTargetEditor({
             )}
           >
             <Input
+              {...fieldFeedback(`${baseId}-name`, nameError, true)}
               aria-label={text("目标名称", "Target name")}
               value={name}
               disabled={action.busy || reload.busy}
@@ -139,6 +160,8 @@ export function EmailTargetEditor({
             />
           </Field>
           <Field
+            id={`${baseId}-recipient`}
+            error={recipientError}
             label={text("收件人地址", "Recipient address")}
             hint={
               current
@@ -153,6 +176,7 @@ export function EmailTargetEditor({
             }
           >
             <Input
+              {...fieldFeedback(`${baseId}-recipient`, recipientError, true)}
               aria-label={text("收件人地址", "Recipient address")}
               value={recipient}
               disabled={action.busy || reload.busy || conflict}

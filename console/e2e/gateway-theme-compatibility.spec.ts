@@ -205,7 +205,7 @@ test("switching back from an extension theme restores Gateway Dark exactly", asy
 
 const semanticThemeCases = [
   ["gateway-dark", "#06b6d4"],
-  ["gateway-light", "#0891b2"],
+  ["gateway-light", "#087f9c"],
   ["aerok-dark", "#3258d0"],
   ["aerok-light", "#26499d"],
 ] as const;

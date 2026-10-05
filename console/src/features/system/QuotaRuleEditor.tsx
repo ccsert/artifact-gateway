@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Button, Input, Select } from "antd";
 import {
   createRepositoryQuotaAlertRule,
@@ -11,10 +11,15 @@ import {
 } from "../../client";
 import { ErrorBanner } from "../../components/ui/Feedback";
 import { Card, CardHeader, Field } from "../../components/ui/Layout";
+import {
+  fieldFeedback,
+  useFormValidationFocus,
+} from "../../components/ui/formFeedback";
 import { usePreferences } from "../../lib/preferences";
 import {
   parsePolicy,
   policyDraft,
+  policyErrors,
   safeQuotaError,
   isQuotaAuthError,
 } from "./quotaAlertPresentation";
@@ -44,7 +49,46 @@ export function QuotaRuleEditor({
   const [repositoryId, setRepositoryId] = useState(rule?.repositoryId ?? "");
   const [targetId, setTargetId] = useState(rule?.targetId ?? "");
   const [draft, setDraft] = useState(() => policyDraft(rule?.policy));
-  const [invalid, setInvalid] = useState(false);
+  const baseId = useId();
+  const { formRef, attempted, reportInvalid } = useFormValidationFocus();
+  const errors = attempted ? policyErrors(draft) : {};
+  const errorFor = (key: keyof RepositoryQuotaAlertPolicy) => {
+    switch (errors[key]) {
+      case "percent":
+        return text(
+          "请输入大于 0 且不超过 100 的百分比，最多两位小数。",
+          "Enter a percentage above 0 and at most 100, with up to two decimals.",
+        );
+      case "seconds":
+        return text(
+          "请输入 1–86400 的整数秒。",
+          "Enter integer seconds from 1–86400.",
+        );
+      case "sampleAge":
+        return text(
+          "请输入 30–3600 的整数秒。",
+          "Enter integer seconds from 30–3600.",
+        );
+      case "recoveryOrder":
+        return text(
+          "恢复阈值必须低于警告阈值。",
+          "Recovery must be below the warning threshold.",
+        );
+      case "warningOrder":
+        return text(
+          "警告阈值必须低于严重阈值。",
+          "Warning must be below the critical threshold.",
+        );
+    }
+  };
+  const repositoryError =
+    attempted && !repositoryId
+      ? text("请选择仓库。", "Choose a repository.")
+      : undefined;
+  const targetError =
+    attempted && !targetId
+      ? text("请选择邮件目标。", "Choose an email target.")
+      : undefined;
   const [catalogue, setCatalogue] = useState(() => ({
     items: repositories,
     nextPageToken,
@@ -72,8 +116,14 @@ export function QuotaRuleEditor({
           mode: "numeric" as const,
         },
       ].map((field) => (
-        <Field key={field.key} label={field.label}>
+        <Field
+          key={field.key}
+          id={`${baseId}-${field.key}`}
+          error={errorFor(field.key)}
+          label={field.label}
+        >
           <Input
+            {...fieldFeedback(`${baseId}-${field.key}`, errorFor(field.key))}
             aria-label={field.label}
             inputMode={field.mode}
             value={draft[field.key]}
@@ -92,14 +142,6 @@ export function QuotaRuleEditor({
       {Boolean(action.error) && !isQuotaAuthError(action.error) && (
         <ErrorBanner error={safeQuotaError(action.error, text)} />
       )}
-      {invalid && (
-        <ErrorBanner
-          error={text(
-            "请填写仓库和邮件目标。恢复阈值必须低于警告，警告低于严重，范围 0–100%，至多两位小数。持续时间为 1–86400 整数秒，最大样本年龄为 30–3600 整数秒。",
-            "Select a repository and email target. Recovery must be below warning, and warning below critical, within 0–100% with at most two decimals. Hold durations must be integer seconds from 1–86400; sample age from 30–3600.",
-          )}
-        />
-      )}
       <Card>
         <CardHeader
           title={
@@ -109,16 +151,16 @@ export function QuotaRuleEditor({
           }
         />
         <form
+          ref={formRef}
           className="ag-quota-form grid min-w-0 gap-6 p-5"
           onSubmit={(event) => {
             event.preventDefault();
+            if (!canSave || action.blocked || action.busy) return;
             const policy = parsePolicy(draft);
             if (!policy || !repositoryId || !targetId) {
-              setInvalid(true);
+              reportInvalid();
               return;
             }
-            if (!canSave || action.blocked) return;
-            setInvalid(false);
             const body = {
               repositoryId,
               targetId,
@@ -182,6 +224,8 @@ export function QuotaRuleEditor({
           )}
           <div className="grid min-w-0 grid-cols-1 items-start gap-4 sm:grid-cols-2">
             <Field
+              id={`${baseId}-repository`}
+              error={repositoryError}
               label={text("仓库", "Repository")}
               hint={text(
                 "创建后不能修改所属仓库。",
@@ -189,6 +233,11 @@ export function QuotaRuleEditor({
               )}
             >
               <Select
+                {...fieldFeedback(
+                  `${baseId}-repository`,
+                  repositoryError,
+                  true,
+                )}
                 virtual={false}
                 aria-label={text("仓库", "Repository")}
                 style={{ width: "100%" }}
@@ -212,6 +261,8 @@ export function QuotaRuleEditor({
               />
             </Field>
             <Field
+              id={`${baseId}-target`}
+              error={targetError}
               label={text("邮件目标", "Email target")}
               hint={text(
                 "仅显示名称和配置状态，不读取收件地址。",
@@ -219,6 +270,7 @@ export function QuotaRuleEditor({
               )}
             >
               <Select
+                {...fieldFeedback(`${baseId}-target`, targetError, true)}
                 virtual={false}
                 aria-label={text("邮件目标", "Email target")}
                 style={{ width: "100%" }}
@@ -277,6 +329,8 @@ export function QuotaRuleEditor({
             </p>
           </fieldset>
           <Field
+            id={`${baseId}-maxSampleAgeSeconds`}
+            error={errorFor("maxSampleAgeSeconds")}
             label={text("最大样本年龄（秒）", "Maximum sample age (seconds)")}
             hint={text(
               "陈旧或未知数据会中断持续计时，保留已有严重度。",
@@ -284,6 +338,11 @@ export function QuotaRuleEditor({
             )}
           >
             <Input
+              {...fieldFeedback(
+                `${baseId}-maxSampleAgeSeconds`,
+                errorFor("maxSampleAgeSeconds"),
+                true,
+              )}
               aria-label={text(
                 "最大样本年龄（秒）",
                 "Maximum sample age (seconds)",

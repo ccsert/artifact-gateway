@@ -32,6 +32,7 @@ Console 应像一个所有声明都可被证明的系统控制台。视觉语言
 ### 主色
 
 - **Signal Cyan**（`primary-dark`、`primary-light`）：主操作、链接、焦点、选中导航、可信生命周期操作和当前状态。
+- 默认 Gateway 填充主按钮在常态、悬浮及按下状态共用 `content.onAction` 前景色。浅色动作背景使用 `primary-light-action`，保持白色文字可读；链接、导航与状态角色继续使用各自 token。
 - **Signal Wash**（`primary-soft-dark`、`primary-soft-light`）：选中操作或当前位置背景，必须从属于正文；信息表面使用 `info` 状态家族。
 
 ### 中性色

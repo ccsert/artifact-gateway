@@ -101,7 +101,7 @@ export function EmailTemplatePreview({
           />
         </div>
         {Boolean(action.error) && (
-          <ErrorBanner error={safeEmailError(action.error, text)} />
+          <ErrorBanner error={safeEmailError(action.error, text, "preview")} />
         )}
         {preview ? (
           <>

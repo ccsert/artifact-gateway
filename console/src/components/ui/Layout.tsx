@@ -124,11 +124,15 @@ export function Field({
   children,
   hint,
   group,
+  id,
+  error,
 }: {
   label: string;
   children: ReactNode;
   hint?: string;
   group?: boolean;
+  id?: string;
+  error?: string;
 }) {
   if (group) {
     return (
@@ -145,13 +149,28 @@ export function Field({
   }
   return (
     <div className="block">
-      <label className="block">
+      <label className="block" htmlFor={id}>
         <span className="mb-1.5 block text-xs font-medium text-zinc-400">
           {label}
         </span>
         {children}
       </label>
-      {hint && <span className="mt-1 block text-xs text-zinc-600">{hint}</span>}
+      {hint && (
+        <span
+          id={id && `${id}-hint`}
+          className="mt-1 block text-xs text-zinc-600"
+        >
+          {hint}
+        </span>
+      )}
+      {error && (
+        <span
+          id={id && `${id}-error`}
+          className="mt-1 block text-xs text-[var(--ag-status-danger)]"
+        >
+          {error}
+        </span>
+      )}
     </div>
   );
 }

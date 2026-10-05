@@ -436,3 +436,69 @@ test("polling pauses when hidden, refreshes on return, and stops outside the ale
   await page.clock.fastForward(90000);
   expect(reads).toBe(2);
 });
+
+for (const locale of ["zh-CN", "en-US"]) {
+  test(`desktop quota field errors focus selections and expose precise constraints ${locale}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.route("**/api/**", (route) =>
+      route.fulfill({ status: 503, json: { code: "synthetic-unavailable" } }),
+    );
+    const writes = await fixture(page, locale, "dark");
+    await page.goto("/system?tab=alerts");
+    const zh = locale === "zh-CN";
+    await page
+      .getByRole("button", {
+        name: zh ? "创建规则" : "Create rule",
+        exact: true,
+      })
+      .click();
+    const save = page.getByRole("button", {
+      name: zh ? "创建停用规则" : "Create disabled rule",
+      exact: true,
+    });
+    await save.focus();
+    await page.keyboard.press("Enter");
+    const repository = page.getByRole("combobox", {
+      name: zh ? "仓库" : "Repository",
+      exact: true,
+    });
+    await expect(repository).toBeFocused();
+    await expect(repository).toHaveAttribute("aria-invalid", "true");
+    await expect(repository).toHaveAccessibleDescription(
+      zh ? /请选择仓库/ : /Choose a repository/,
+    );
+    const warning = page.getByRole("textbox", {
+      name: zh ? "警告阈值（%）" : "Warning threshold (%)",
+      exact: true,
+    });
+    await warning.fill("80.001");
+    await expect(warning).toHaveAccessibleDescription(
+      zh ? /最多两位小数/ : /up to two decimals/,
+    );
+    const duration = page.getByRole("textbox", {
+      name: zh ? "警告持续时间（秒）" : "Warning hold duration (seconds)",
+      exact: true,
+    });
+    await duration.fill("120");
+    await expect(duration).not.toHaveAttribute("aria-invalid", "true");
+    // Read settled geometry after the editor's entrance animation.
+    await expect
+      .poll(() =>
+        page.locator(".ag-quota-alerts").evaluate(async (stack) => {
+          await Promise.all(
+            stack
+              .getAnimations({ subtree: true })
+              .map((animation) => animation.finished),
+          );
+          return stack
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.playState === "running").length;
+        }),
+      )
+      .toBe(0);
+    await geometry(page);
+    expect(writes).toHaveLength(0);
+  });
+}
