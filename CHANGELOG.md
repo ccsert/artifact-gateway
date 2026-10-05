@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Console email target and quota rule editors now show field-specific validation with linked hints and keyboard focus on the first invalid field. Email read, save and preview failures describe the actual operation without exposing recipient data or suggesting a synthetic test retry. Default Gateway primary buttons retain readable text through normal, hover and active states.
+
 - Removed the optional Ant Design CLI development helpers and their vulnerable `braces` chain. The October 17 audit exception is retired; API generation, theme/style builds, ESLint, type checks, and coverage gates continue through the existing repository tools.
 
 - Added an opt-in Compose email overlay with a read-only operator configuration directory shared by API, scheduler and email worker. The checked-in relay example remains disabled. An isolated real Compose/TLS gate checks role wiring, local-only API readiness, startup failures, mismatched keys, actual HTML/plain MIME, permanent SMTP rejection and quota suppression without backfill.

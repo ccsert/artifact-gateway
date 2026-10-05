@@ -199,7 +199,7 @@ const builtInRoleOverrides: Readonly<Record<string, RoleOverrides>> = {
       secondary: "#b4b4bd",
       tertiary: "#8f8f9a",
       disabled: "#85858f",
-      onAction: "#083344",
+      onAction: "#041b23",
       onIdentity: "#083344",
     },
     border: {
@@ -278,7 +278,7 @@ const builtInRoleOverrides: Readonly<Record<string, RoleOverrides>> = {
       strong: "#a1a1aa",
     },
     action: {
-      primary: "#0891b2",
+      primary: "#087f9c",
       hover: "#0e7490",
       active: "#155e75",
       soft: "rgba(8, 145, 178, 0.1)",
@@ -498,6 +498,12 @@ function buildConsoleComponents(
       defaultBg: roles.surface.container,
       defaultBorderColor: roles.border.default,
       defaultColor: roles.content.primary,
+      // The Gateway compatibility roles correct only action colors. Keep
+      // global solid text (including danger) and extension palettes intact.
+      primaryColor: roles.content.onAction,
+      colorPrimary: roles.action.primary,
+      colorPrimaryHover: roles.action.hover,
+      colorPrimaryActive: roles.action.active,
       primaryShadow: roles.action.shadow,
     },
     Empty: {

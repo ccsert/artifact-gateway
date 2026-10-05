@@ -196,38 +196,68 @@ export function policyDraft(policy?: RepositoryQuotaAlertPolicy): PolicyDraft {
     maxSampleAgeSeconds: policy ? String(policy.maxSampleAgeSeconds) : "",
   };
 }
+type PolicyError =
+  "percent" | "seconds" | "sampleAge" | "recoveryOrder" | "warningOrder";
+function policyValues(draft: PolicyDraft): RepositoryQuotaAlertPolicy {
+  const percent = (value: string) => {
+    if (!/^\d{1,3}(?:\.\d{1,2})?$/.test(value.trim())) return NaN;
+    const [whole, fraction = ""] = value.trim().split(".");
+    return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  };
+  const seconds = (value: string) =>
+    /^\d{1,5}$/.test(value.trim()) ? Number(value.trim()) : NaN;
+  return {
+    warningBasisPoints: percent(draft.warningBasisPoints),
+    criticalBasisPoints: percent(draft.criticalBasisPoints),
+    recoveryBelowBasisPoints: percent(draft.recoveryBelowBasisPoints),
+    warningForSeconds: seconds(draft.warningForSeconds),
+    criticalForSeconds: seconds(draft.criticalForSeconds),
+    recoveryForSeconds: seconds(draft.recoveryForSeconds),
+    maxSampleAgeSeconds: seconds(draft.maxSampleAgeSeconds),
+  };
+}
+export function policyErrors(draft: PolicyDraft) {
+  const values = policyValues(draft);
+  const errors: Partial<Record<keyof RepositoryQuotaAlertPolicy, PolicyError>> =
+    {};
+  for (const key of [
+    "warningBasisPoints",
+    "criticalBasisPoints",
+    "recoveryBelowBasisPoints",
+  ] as const) {
+    if (!(values[key] > 0 && values[key] <= 10000)) errors[key] = "percent";
+  }
+  for (const key of [
+    "warningForSeconds",
+    "criticalForSeconds",
+    "recoveryForSeconds",
+  ] as const) {
+    if (!(values[key] >= 1 && values[key] <= 86400)) errors[key] = "seconds";
+  }
+  if (!(values.maxSampleAgeSeconds >= 30 && values.maxSampleAgeSeconds <= 3600))
+    errors.maxSampleAgeSeconds = "sampleAge";
+  if (
+    !errors.recoveryBelowBasisPoints &&
+    !errors.warningBasisPoints &&
+    values.recoveryBelowBasisPoints >= values.warningBasisPoints
+  ) {
+    errors.recoveryBelowBasisPoints = "recoveryOrder";
+    errors.warningBasisPoints = "recoveryOrder";
+  }
+  if (
+    !errors.criticalBasisPoints &&
+    Number.isFinite(values.warningBasisPoints) &&
+    values.warningBasisPoints >= values.criticalBasisPoints
+  ) {
+    errors.warningBasisPoints = "warningOrder";
+    errors.criticalBasisPoints = "warningOrder";
+  }
+  return errors;
+}
 export function parsePolicy(
   draft: PolicyDraft,
 ): RepositoryQuotaAlertPolicy | undefined {
-  const parsePercent = (v: string) => {
-    if (!/^\d{1,3}(?:\.\d{1,2})?$/.test(v.trim())) return NaN;
-    const [whole, fraction = ""] = v.trim().split(".");
-    return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  };
-  const parseSeconds = (v: string) =>
-    /^\d{1,5}$/.test(v.trim()) ? Number(v.trim()) : NaN;
-  const p = {
-    warningBasisPoints: parsePercent(draft.warningBasisPoints),
-    criticalBasisPoints: parsePercent(draft.criticalBasisPoints),
-    recoveryBelowBasisPoints: parsePercent(draft.recoveryBelowBasisPoints),
-    warningForSeconds: parseSeconds(draft.warningForSeconds),
-    criticalForSeconds: parseSeconds(draft.criticalForSeconds),
-    recoveryForSeconds: parseSeconds(draft.recoveryForSeconds),
-    maxSampleAgeSeconds: parseSeconds(draft.maxSampleAgeSeconds),
-  };
-  if (!(
-    p.recoveryBelowBasisPoints > 0 &&
-    p.recoveryBelowBasisPoints < p.warningBasisPoints &&
-    p.warningBasisPoints < p.criticalBasisPoints &&
-    p.criticalBasisPoints <= 10000
-  ))
-    return;
-  if (
-    ![p.warningForSeconds, p.criticalForSeconds, p.recoveryForSeconds].every(
-      (v) => v >= 1 && v <= 86400,
-    )
-  )
-    return;
-  if (!(p.maxSampleAgeSeconds >= 30 && p.maxSampleAgeSeconds <= 3600)) return;
-  return p;
+  return Object.keys(policyErrors(draft)).length
+    ? undefined
+    : policyValues(draft);
 }

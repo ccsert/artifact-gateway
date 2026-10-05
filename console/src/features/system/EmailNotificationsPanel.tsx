@@ -87,14 +87,14 @@ function AuthorizedEmailNotifications() {
   if (authBlocked)
     return (
       <ErrorBanner
-        error={safeEmailError(authBlocked, text)}
+        error={safeEmailError(authBlocked, text, "read")}
         onRetry={() => void refresh()}
       />
     );
   if (!snapshot.data)
     return snapshot.error ? (
       <ErrorBanner
-        error={safeEmailError(snapshot.error, text)}
+        error={safeEmailError(snapshot.error, text, "read")}
         onRetry={() => void refresh()}
       />
     ) : (
@@ -134,7 +134,7 @@ function AuthorizedEmailNotifications() {
         <ErrorBanner
           tone="warning"
           title={text("当前显示上次读取的数据", "Showing previously read data")}
-          error={safeEmailError(snapshot.error, text)}
+          error={safeEmailError(snapshot.error, text, "read")}
           onRetry={() => void refresh()}
         />
       )}

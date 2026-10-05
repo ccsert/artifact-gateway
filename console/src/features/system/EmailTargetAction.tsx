@@ -44,7 +44,13 @@ export function EmailTargetAction({
   return (
     <div className="ag-page-stack">
       {Boolean(action.error) && (
-        <ErrorBanner error={safeEmailError(action.error, text)} />
+        <ErrorBanner
+          error={safeEmailError(
+            action.error,
+            text,
+            kind === "test" ? "test" : "save",
+          )}
+        />
       )}
       <Card>
         <CardHeader title={title} />

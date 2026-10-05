@@ -6,6 +6,8 @@ colors:
   primary-dark-hover: "#22d3ee"
   primary-dark-active: "#0891b2"
   primary-light: "#0891b2"
+  primary-light-action: "#087f9c"
+  dark-text-on-action: "#041b23"
   primary-soft-dark: "rgba(6, 182, 212, 0.12)"
   primary-soft-light: "rgba(8, 145, 178, 0.10)"
   dark-bg: "#08090b"
@@ -69,7 +71,7 @@ spacing:
 components:
   button-primary:
     backgroundColor: "{colors.primary-dark}"
-    textColor: "{colors.dark-text-strong}"
+    textColor: "{colors.dark-text-on-action}"
     typography: "{typography.body}"
     rounded: "{rounded.control}"
     height: "34px"
@@ -139,6 +141,7 @@ Runtime themes follow [ADR 0005](docs/adr/0005-console-semantic-theme-system.md)
 ### Primary
 
 - **Signal Cyan** (`primary-dark`, `primary-light`): primary actions, links, focus, selected navigation, trusted lifecycle affordances, and current-state emphasis.
+- Default Gateway filled primary actions use the `content.onAction` foreground across normal, hover and active states. The light action background uses `primary-light-action` for readable white text; link, navigation and status roles retain their own tokens.
 - **Signal Wash** (`primary-soft-dark`, `primary-soft-light`): selected action or current-location backgrounds that must remain subordinate to content. Informational surfaces use the `info` status family instead.
 
 ### Neutral

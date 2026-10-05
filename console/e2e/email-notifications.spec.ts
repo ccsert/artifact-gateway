@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { authenticateAsAdmin } from "./support/auth";
 import type { EmailDelivery, EmailTarget } from "../src/client";
+import { defaultConsoleThemes } from "../src/lib/consoleTheme";
 
 const target: EmailTarget = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -321,7 +322,9 @@ test("initial failure and empty states are mutually exclusive; refresh denial re
   await page.goto("/system?tab=email");
   await expect(page.getByText("加载中…", { exact: true })).toBeVisible();
   release();
-  await expect(page.getByText(/请求失败，结果可能尚未返回/)).toBeVisible();
+  await expect(
+    page.getByText("无法读取邮件通知数据。请重试读取。", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("加载中…", { exact: true })).toHaveCount(0);
   await expect(page.getByText("private-raw")).toHaveCount(0);
   await page.unroute("**/api/v2/email-targets");
@@ -338,3 +341,196 @@ test("initial failure and empty states are mutually exclusive; refresh denial re
   await expect(page.getByText(/必须先修改密码/)).toBeVisible();
   await expect(page.getByLabel("收件人地址", { exact: true })).toHaveCount(0);
 });
+
+for (const mode of ["dark", "light"]) {
+  test(`Gateway ${mode} desktop primary action preserves readable text in normal hover active`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.route("**/api/**", (route) =>
+      route.fulfill({ status: 503, json: { code: "synthetic-unavailable" } }),
+    );
+    await fixture(page, "zh-CN", mode);
+    await page.addInitScript(
+      (id) => localStorage.setItem("ag.console.theme.id", id),
+      `gateway-${mode}`,
+    );
+    await page.route("**/api/v2/site-settings", (route) =>
+      route.fulfill({
+        json: {
+          version: "synthetic-1",
+          siteName: "Artifact Gateway",
+          logoUrl: "",
+          brandMark: "AG",
+          availableThemes: defaultConsoleThemes,
+          enabledThemeIds: defaultConsoleThemes.map((theme) => theme.id),
+          defaultThemeId: "gateway-dark",
+          updatedAt: "2026-01-01T12:00:00Z",
+        },
+      }),
+    );
+    await page.goto("/system?tab=email");
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-theme-id",
+      `gateway-${mode}`,
+    );
+    const button = page.getByRole("button", {
+      name: "新建邮件目标",
+      exact: true,
+    });
+    const colors = () =>
+      button.evaluate((element) => {
+        const style = getComputedStyle(element);
+        const rgb = (color: string) =>
+          color
+            .match(/[\d.]+/g)!
+            .slice(0, 3)
+            .map(Number);
+        const luminance = (values: number[]) =>
+          values
+            .map((v) => v / 255)
+            .map((v) =>
+              v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4,
+            )
+            .reduce(
+              (value, channel, index) =>
+                value + channel * [0.2126, 0.7152, 0.0722][index],
+              0,
+            );
+        const contrast = (a: number[], b: number[]) => {
+          const [lo, hi] = [luminance(a), luminance(b)].sort((x, y) => x - y);
+          return (hi + 0.05) / (lo + 0.05);
+        };
+        const layers: number[][] = [];
+        for (
+          let parent = element.parentElement;
+          parent;
+          parent = parent.parentElement
+        ) {
+          const values = getComputedStyle(parent)
+            .backgroundColor.match(/[\d.]+/g)!
+            .map(Number);
+          layers.push([...values.slice(0, 3), values[3] ?? 1]);
+        }
+        const backdrop = layers
+          .reverse()
+          .reduce(
+            (bg, layer) =>
+              bg.map(
+                (channel, index) =>
+                  channel * (1 - layer[3]) + layer[index] * layer[3],
+              ),
+            [255, 255, 255],
+          );
+        return {
+          foreground: style.color,
+          background: style.backgroundColor,
+          fontSize: style.fontSize,
+          textContrast: contrast(rgb(style.color), rgb(style.backgroundColor)),
+          boundaryContrast: contrast(rgb(style.backgroundColor), backdrop),
+        };
+      });
+    const results = [];
+    const expectedBackground =
+      mode === "dark"
+        ? ["rgb(6, 182, 212)", "rgb(34, 211, 238)", "rgb(8, 145, 178)"]
+        : ["rgb(8, 127, 156)", "rgb(14, 116, 144)", "rgb(21, 94, 117)"];
+    for (const state of ["normal", "hover", "active"]) {
+      if (state === "hover") await button.hover();
+      if (state === "active") await page.mouse.down();
+      await expect
+        .poll(async () => (await colors()).background)
+        .toBe(expectedBackground[results.length]);
+      if (state === "active") {
+        expect(
+          await button.evaluate((element) => element.matches(":active")),
+        ).toBe(true);
+      }
+      await expect
+        .poll(async () => (await colors()).textContrast)
+        .toBeGreaterThanOrEqual(4.5);
+      const measured = await colors();
+      expect(measured.boundaryContrast).toBeGreaterThanOrEqual(3);
+      results.push({ state, ...measured });
+    }
+    await page.mouse.move(10, 10);
+    await page.mouse.up();
+    await testInfo.attach("actual-button-contrast", {
+      body: JSON.stringify(results, null, 2),
+      contentType: "application/json",
+    });
+  });
+}
+
+for (const locale of ["zh-CN", "en-US"]) {
+  for (const theme of ["dark", "light"]) {
+    test(`desktop field validation uses keyboard focus and associated errors ${locale} ${theme}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.route("**/api/**", (route) =>
+        route.fulfill({ status: 503, json: { code: "synthetic-unavailable" } }),
+      );
+      const writes = await fixture(page, locale, theme);
+      await page.addInitScript(
+        (id) => localStorage.setItem("ag.console.theme.id", id),
+        `gateway-${theme}`,
+      );
+      await page.goto("/system?tab=email");
+      const zh = locale === "zh-CN";
+      await page
+        .getByRole("button", {
+          name: zh ? "新建邮件目标" : "New email target",
+          exact: true,
+        })
+        .click();
+      const save = page.getByRole("button", {
+        name: zh ? "保存停用目标" : "Save disabled target",
+        exact: true,
+      });
+      await save.focus();
+      await page.keyboard.press("Enter");
+      const name = page.getByRole("textbox", {
+        name: zh ? "目标名称" : "Target name",
+        exact: true,
+      });
+      const recipient = page.getByRole("textbox", {
+        name: zh ? "收件人地址" : "Recipient address",
+        exact: true,
+      });
+      await expect(name).toBeFocused();
+      await expect(name).toHaveAttribute("aria-invalid", "true");
+      await expect(name).toHaveAccessibleDescription(
+        zh ? /请输入目标名称/ : /Enter a target name/,
+      );
+      await name.fill("Synthetic");
+      await expect(name).not.toHaveAttribute("aria-invalid", "true");
+      await save.focus();
+      await page.keyboard.press("Enter");
+      await expect(recipient).toBeFocused();
+      await expect(recipient).toHaveAccessibleDescription(
+        zh ? /请输入单个收件人邮箱地址/ : /Enter one recipient email address/,
+      );
+      await recipient.fill("sensitive-marker-invalid");
+      await expect(recipient).toHaveAccessibleDescription(
+        zh ? /请输入单个有效邮箱/ : /Enter one valid mailbox/,
+      );
+      await geometry(page);
+      expect(writes).toHaveLength(0);
+      await page
+        .getByRole("button", { name: zh ? "取消" : "Cancel", exact: true })
+        .click();
+      await page
+        .getByRole("button", {
+          name: zh ? "新建邮件目标" : "New email target",
+          exact: true,
+        })
+        .click();
+      await expect(recipient).toHaveValue("");
+      await expect(recipient).not.toHaveAttribute("aria-invalid", "true");
+      await expect(
+        page.getByText("sensitive-marker-invalid", { exact: true }),
+      ).toHaveCount(0);
+    });
+  }
+}

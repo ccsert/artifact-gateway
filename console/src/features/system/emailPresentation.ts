@@ -1,15 +1,21 @@
 import { type Translate } from "./quotaAlertPresentation";
 
-export function validEmailTarget(
+export function emailTargetErrors(
   name: string,
   recipient: string,
   create: boolean,
 ) {
+  const errors: Partial<Record<"name" | "recipient", "required" | "invalid">> =
+    {};
+  if (!name.trim()) errors.name = "required";
   if (!name.trim() || [...name.trim()].length > 128 || /[\r\n\0]/.test(name))
-    return false;
-  if (!recipient) return !create;
+    errors.name ??= "invalid";
+  if (!recipient) {
+    if (create) errors.recipient = "required";
+    return errors;
+  }
   // Deliberately a single bare mailbox; the server remains authoritative.
-  return (
+  if (!(
     recipient.length <= 254 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient) &&
     ![...recipient].some(
@@ -18,7 +24,17 @@ export function validEmailTarget(
         c.codePointAt(0) === 127 ||
         '<>(),;:\\"[]'.includes(c),
     )
-  );
+  ))
+    errors.recipient = "invalid";
+  return errors;
+}
+
+export function validEmailTarget(
+  name: string,
+  recipient: string,
+  create: boolean,
+) {
+  return Object.keys(emailTargetErrors(name, recipient, create)).length === 0;
 }
 
 export function emailCode(error: unknown) {
@@ -37,11 +53,16 @@ export function emailConflict(error: unknown) {
     "target_changed",
   ].includes(emailCode(error));
 }
-export function safeEmailError(error: unknown, text: Translate) {
+export type EmailOperation = "read" | "save" | "test" | "preview";
+export function safeEmailError(
+  error: unknown,
+  text: Translate,
+  operation: EmailOperation,
+) {
   const labels: Record<string, [string, string]> = {
     version_conflict: [
-      "配置已变更。敏感地址已清除，请刷新最新目标并重新编辑。",
-      "Configuration changed. The sensitive address was cleared; refresh the latest target and edit again.",
+      "目标配置已变更。请刷新最新目标后重新确认。",
+      "Target settings changed. Refresh the latest target and confirm again.",
     ],
     idempotency_conflict: [
       "此测试标识已有不同请求。取消后刷新目标并重新确认。",
@@ -101,13 +122,109 @@ export function safeEmailError(error: unknown, text: Translate) {
     ],
   };
   const code = emailCode(error);
-  const label = Object.hasOwn(labels, code) ? labels[code] : undefined;
-  return label
-    ? text(...label)
-    : text(
-        "请求失败，结果可能尚未返回。测试重试会使用同一标识；请刷新核对交付结果。",
-        "The request failed and its result may be unknown. Test retries use the same key; refresh to check delivery results.",
-      );
+  const fallback: Record<EmailOperation, [string, string]> = {
+    read: [
+      "无法读取邮件通知数据。请重试读取。",
+      "Could not read email notification data. Retry the read.",
+    ],
+    save: [
+      "保存结果不确定。请刷新核对目标配置后再决定是否重试。",
+      "Could not confirm the save. Refresh and check target settings before retrying.",
+    ],
+    preview: [
+      "无法生成模板预览。请重试预览；此操作不会发送邮件。",
+      "Could not generate the template preview. Retry the preview; this operation sends no mail.",
+    ],
+    test: [
+      "请求失败，结果可能尚未返回。测试重试会使用同一标识；请刷新核对交付结果。",
+      "The request failed and its result may be unknown. Test retries use the same key; refresh to check delivery results.",
+    ],
+  };
+  const invalid: Record<EmailOperation, [string, string]> = {
+    read: [
+      "读取请求未通过校验。请刷新并核对 Gateway 版本。",
+      "The read request was invalid. Refresh and check the Gateway version.",
+    ],
+    save: [
+      "目标配置未通过校验。请检查名称、单个收件人地址和语言。",
+      "Target validation failed. Check the name, single recipient address, and language.",
+    ],
+    preview: [
+      "预览请求未通过校验。请检查场景和语言。",
+      "Preview validation failed. Check the scenario and language.",
+    ],
+    test: [
+      "测试请求未通过校验。请检查目标、场景和语言。",
+      "Test validation failed. Check the target, scenario, and language.",
+    ],
+  };
+  const testOnly = [
+    "idempotency_conflict",
+    "target_disabled",
+    "target_changed",
+    "rate_limited",
+    "queue_full",
+  ];
+  const scoped: Partial<
+    Record<EmailOperation, Record<string, [string, string]>>
+  > = {
+    test: {
+      version_conflict: [
+        "目标配置已变更。请取消当前测试，刷新目标后重新确认。",
+        "Target settings changed. Cancel this test, refresh the target, and confirm again.",
+      ],
+    },
+    read: {
+      rate_limited: [
+        "读取过于频繁，请稍后重试读取。",
+        "Reads are rate limited. Retry the read later.",
+      ],
+      version_conflict: [
+        "邮件配置已变更，请重试读取。",
+        "Email settings changed. Retry the read.",
+      ],
+      not_found: [
+        "邮件资源或接口不可用，请重试读取并核对 Gateway 版本。",
+        "Email resources or endpoints are unavailable. Retry the read and check the Gateway version.",
+      ],
+    },
+    save: {
+      rate_limited: [
+        "保存请求过于频繁，请稍后重试。",
+        "Save requests are rate limited. Retry later.",
+      ],
+      target_disabled: [
+        "邮件目标已停用，请刷新核对目标配置。",
+        "The email target was disabled. Refresh and check target settings.",
+      ],
+      target_changed: [
+        "邮件目标已变更，请刷新后重新确认配置。",
+        "The email target changed. Refresh and confirm its settings again.",
+      ],
+    },
+    preview: {
+      rate_limited: [
+        "预览请求过于频繁，请稍后重试预览。",
+        "Preview requests are rate limited. Retry the preview later.",
+      ],
+      not_found: [
+        "模板预览接口不可用，请刷新并核对 Gateway 版本。",
+        "The template preview endpoint is unavailable. Refresh and check the Gateway version.",
+      ],
+    },
+  };
+  const contextLabels = scoped[operation];
+  const label =
+    code === "invalid_request"
+      ? invalid[operation]
+      : contextLabels && Object.hasOwn(contextLabels, code)
+        ? contextLabels[code]
+        : operation !== "test" && testOnly.includes(code)
+          ? undefined
+          : Object.hasOwn(labels, code)
+            ? labels[code]
+            : undefined;
+  return label ? text(...label) : text(...fallback[operation]);
 }
 
 /** Defense in depth for API HTML: rebuild a finite inert mail layout before sandboxing. */
