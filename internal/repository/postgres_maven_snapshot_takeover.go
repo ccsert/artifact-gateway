@@ -282,6 +282,11 @@ func (s *PostgresStore) CompleteMavenSnapshotDeployment(ctx context.Context, id,
 		}
 	}
 	if session.State != "committed" {
+		// Quota, artifact and shared CAS locks can outlive the receipt lease.
+		// Recheck after all waits, immediately before advancing current.
+		if !session.ExpiresAt.After(time.Now()) {
+			return v, ErrMavenSnapshotTakeoverNotReady
+		}
 		if a.BuildNumber > v.CurrentBuildNumber {
 			v.CurrentBuildNumber, v.CurrentAliases = a.BuildNumber, aliases
 			raw, _ := json.Marshal(aliases)

@@ -148,6 +148,9 @@ func (s *MemoryStore) CompleteMavenSnapshotDeployment(_ context.Context, id, fin
 	if session.State == "committed" {
 		return cloneMavenImport(v), nil
 	}
+	if !session.ExpiresAt.After(time.Now()) {
+		return v, ErrMavenSnapshotTakeoverNotReady
+	}
 	if a.BuildNumber > v.CurrentBuildNumber {
 		v.CurrentBuildNumber, v.CurrentAliases = a.BuildNumber, aliases
 		s.mavenImports[v.RepositoryID+"\x00"+v.Coordinate] = cloneMavenImport(v)

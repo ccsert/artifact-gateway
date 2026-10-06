@@ -6,6 +6,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"strings"
@@ -17,6 +19,143 @@ import (
 	testsupport "github.com/artifact-gateway/artifact-gateway/internal/testsupport/snapshotfixture"
 	"github.com/google/uuid"
 )
+
+func TestPostgresSnapshotCompletionExpiresWhileWaitingForQuota(t *testing.T) {
+	if os.Getenv("TEST_DATABASE_URL") == "" {
+		t.Skip("isolated PostgreSQL required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	u, err := url.Parse(os.Getenv("TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	label := "expiry-" + uuid.NewString()
+	query := u.Query()
+	query.Set("application_name", label)
+	u.RawQuery = query.Encode()
+	store, err := repository.NewPostgresStore(u.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: label, Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryCapacityQuota(ctx, repo.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	dir, digest, _, files := testsupport.SnapshotBundle(t)
+	p, _, err := snapshotimport.Prepare(ctx, dir, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = p.Close() }()
+	objects := NewMemoryOCIObjectStore()
+	if _, err = snapshotimport.Run(ctx, p, store, objects, repo.ID, "target", "operator", testsupport.SnapshotTargetBinding, true, testsupport.SnapshotCapacity(t, p, repo.ID, "target", "operator")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = snapshotimport.RunTakeover(ctx, p, store, objects, repo.ID, "target", "operator", testsupport.SnapshotTargetBinding, "reviewed-key", false); err != nil {
+		t.Fatal(err)
+	}
+	h := newNativeMavenHandler(store, objects, Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"maven": {repo.Name}}, RepositoryWriters: map[string][]string{"maven": {repo.Name}}})
+	request := func(method, name, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, "/repository/maven/"+repo.Name+"/org/example/widget/1.0-SNAPSHOT/"+name, strings.NewReader(body))
+		r.SetBasicAuth("maven", "resolver-secret")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	for suffix, body := range map[string]string{".jar": "new synthetic jar", ".pom": `<project><modelVersion>4.0.0</modelVersion><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.0-SNAPSHOT</version></project>`} {
+		if w := request(http.MethodPut, "widget-1.0-20261006.100000-9"+suffix, body); w.Code != 201 {
+			t.Fatalf("primary=%d %s", w.Code, w.Body.String())
+		}
+	}
+	session, err := store.FindMavenSnapshotDeployment(ctx, repo.ID, "org.example:widget:1.0-SNAPSHOT", "maven", "20261006.100000", 9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("pgx", os.Getenv("TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET expires_at=clock_timestamp()+interval '3 seconds' WHERE id=$1`, session.ID); err != nil {
+		t.Fatal(err)
+	}
+	barrier, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = barrier.Rollback() }()
+	var pid int
+	if err = barrier.QueryRowContext(ctx, `SELECT pg_backend_pid()`).Scan(&pid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = barrier.ExecContext(ctx, `SELECT repository_id FROM repository_capacity_quotas WHERE repository_id=$1 FOR UPDATE`, repo.ID); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		done <- request(http.MethodPut, "maven-metadata.xml", clientSnapshotMetadata("20261006.100000", 9))
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		var blocked bool
+		if err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE application_name=$1 AND $2=ANY(pg_blocking_pids(pid)) AND query LIKE '%repository_capacity_quotas%')`, label, pid).Scan(&blocked); err != nil {
+			t.Fatal(err)
+		}
+		if blocked {
+			break
+		}
+		select {
+		case w := <-done:
+			t.Fatalf("completion did not wait on quota: %d %s", w.Code, w.Body.String())
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("completion never reached quota lock barrier")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	for {
+		var expired bool
+		if err = db.QueryRowContext(ctx, `SELECT clock_timestamp()>expires_at FROM native_maven_publish_sessions WHERE id=$1`, session.ID).Scan(&expired); err != nil {
+			t.Fatal(err)
+		}
+		if expired {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err = barrier.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case w := <-done:
+		if w.Code != 409 {
+			t.Errorf("expired completion=%d %s", w.Code, w.Body.String())
+		}
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	checkpoint, err := store.GetMavenSnapshotImport(ctx, repo.ID, session.Coordinate)
+	if err != nil || checkpoint.CurrentBuildNumber != 0 {
+		t.Errorf("expired completion advanced current: %+v %v", checkpoint, err)
+	}
+	if w := request(http.MethodGet, "maven-metadata.xml", ""); w.Code != 200 || w.Body.String() != string(files["org/example/widget/1.0-SNAPSHOT/maven-metadata.xml"]) {
+		t.Error("expired completion changed selected metadata")
+	}
+	audits, err := store.ListAudits(ctx, repository.AuditQuery{Repository: repo.Name, Operation: "maven.snapshot.deploy.complete", Limit: 100})
+	if err != nil || len(audits) != 0 {
+		t.Errorf("expired completion audit=%+v %v", audits, err)
+	}
+	stored, err := store.GetMavenPublishSession(ctx, session.ID)
+	if err != nil || stored.State != "open" {
+		t.Errorf("expired session state=%+v %v", stored, err)
+	}
+}
 
 func TestPostgresSnapshotImportAndPublicationShareQuotaLockOrder(t *testing.T) {
 	if os.Getenv("TEST_DATABASE_URL") == "" {
