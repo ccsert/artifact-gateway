@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Console 锁定的间接依赖 source-map-js 更新至 1.2.2，修复 GHSA-68fv-2mgg-jv7q；依赖审计保持严格，没有新增例外。
+
 - 新增受控离线 Maven SNAPSHOT 历史导入：严格冻结字节/POM/metadata 准入，保留源 timestamp/build/classifier 与当前解析选择，绑定容量预检，持久化 GAV 原子 checkpoint、安全重试/GC 恢复及可检索审计。导入 GAV 拒绝普通发布；异常须显式整 GAV 排除，retention 必须停用。见[操作手册](docs/maven-snapshot-import.zh-CN.md)。
 
 ## 0.6.1 - 2026-10-05

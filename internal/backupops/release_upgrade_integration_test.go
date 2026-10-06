@@ -92,15 +92,15 @@ func TestLocalAlertReleaseUpgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 	newMigrations := fixtureLedger(t, forward)
-	if len(newMigrations) != 140 {
-		t.Fatal("candidate ledger did not reach 140 entries")
+	if len(newMigrations) != 141 {
+		t.Fatal("candidate ledger did not reach 141 entries")
 	}
 	for name, sum := range oldMigrations {
 		if newMigrations[name] != sum {
 			t.Fatal("applied baseline checksum changed")
 		}
 	}
-	for _, name := range []string{"000136_email_test_delivery.sql", "000137_repository_quota_alert_rules.sql", "000138_repository_quota_alert_events.sql", "000139_quota_delivery_permission.sql"} {
+	for _, name := range []string{"000136_email_test_delivery.sql", "000137_repository_quota_alert_rules.sql", "000138_repository_quota_alert_events.sql", "000139_quota_delivery_permission.sql", "000141_maven_snapshot_import.sql"} {
 		if newMigrations[name] == "" {
 			t.Fatal("new alert migration missing")
 		}
