@@ -22,8 +22,10 @@ extension/classifier、完整主资产字节及版本 metadata 原文。每一�
 - GAV 必须以 `-SNAPSHOT` 结尾。构建身份是 **timestamp 加 build number**，不能只看
   编号。同编号不同时间、同时间不同编号均保留。路径、POM GAV（含父 POM 中字面继承
   group/version）、packaging 与必需主资产必须一致。支持 packaging：`jar`、
-  `maven-plugin`、`ejb`、`bundle`、`war`、`ear`、`rar`、`zip`、`pom`。自定义 packaging
-  或未解析的 POM 表达式被拒绝，不自动修复。
+  `maven-plugin`、`maven-archetype`、`ejb`、`bundle`、`war`、`ear`、`rar`、`zip`、`pom`。
+  [官方 archetype packaging](https://maven.apache.org/archetype/archetype-packaging/)
+  映射为必需的主 JAR；classifier JAR 不能代替主 JAR。自定义 packaging 或未解析的
+  POM 表达式被拒绝，不自动修复。
 - 版本 metadata 必须通过唯一 extension/classifier 的 `snapshotVersions` 明确指向
   已准入 timestamp/build。Maven 也支持只有全局 timestamp/build 的旧式 metadata；
   **v1 暂不支持这种表示**，报告不支持。漏写 `metadata` 字段被拒绝。显式

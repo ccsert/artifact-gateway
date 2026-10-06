@@ -123,8 +123,17 @@ func TestMavenSnapshotImportReservationRejectsOrdinarySameActorWrites(t *testing
 }
 
 func TestMavenSnapshotImportPreservesSourceHistory(t *testing.T) {
+	testMavenSnapshotImportPreservesSourceHistory(t, testsupport.SnapshotBundle)
+}
+
+func TestMavenArchetypeSnapshotImportPreservesSourceHistory(t *testing.T) {
+	testMavenSnapshotImportPreservesSourceHistory(t, testsupport.SnapshotArchetypeBundle)
+}
+
+func testMavenSnapshotImportPreservesSourceHistory(t *testing.T, bundle func(testing.TB) (string, string, snapshotimport.Manifest, map[string][]byte)) {
+	t.Helper()
 	ctx := context.Background()
-	dir, digest, _, files := testsupport.SnapshotBundle(t)
+	dir, digest, _, files := bundle(t)
 	prepared, rejected, err := snapshotimport.Prepare(ctx, dir, digest)
 	if err != nil {
 		t.Fatalf("prepare=%v rejected=%v", err, rejected)

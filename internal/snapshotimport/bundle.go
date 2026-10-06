@@ -387,7 +387,7 @@ func validatePOM(data []byte, coordinate string) (string, error) {
 	switch ext {
 	case "pom", "jar", "war", "ear", "rar", "zip":
 		return ext, nil
-	case "maven-plugin", "ejb", "bundle":
+	case "maven-plugin", "maven-archetype", "ejb", "bundle":
 		return "jar", nil
 	default:
 		return "", errors.New("unsupported POM packaging")

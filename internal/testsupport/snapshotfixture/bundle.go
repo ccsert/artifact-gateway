@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +38,26 @@ type BuildIdentity struct {
 func SnapshotBundle(t testing.TB) (string, string, snapshotimport.Manifest, map[string][]byte) {
 	return SnapshotBundleWithBuilds(t, []BuildIdentity{{"20260101.000000", 7}, {"20260102.000000", 7}, {"20260103.000000", 8}})
 }
+
+// SnapshotArchetypeBundle keeps the same synthetic history and old current
+// selectors, with the official archetype packaging and extension declaration.
+func SnapshotArchetypeBundle(t testing.TB) (string, string, snapshotimport.Manifest, map[string][]byte) {
+	t.Helper()
+	dir, _, m, files := SnapshotBundle(t)
+	for i := range m.Coordinates[0].Builds {
+		f := &m.Coordinates[0].Builds[i].Files[0]
+		body := []byte(strings.ReplaceAll(string(files[f.Path]), "</project>", "<packaging>maven-archetype</packaging><build><extensions><extension><groupId>org.apache.maven.archetype</groupId><artifactId>archetype-packaging</artifactId><version>3.4.1</version></extension></extensions></build></project>"))
+		if err := os.WriteFile(filepath.Join(dir, f.Path), body, 0600); err != nil {
+			t.Fatal(err)
+		}
+		files[f.Path] = body
+		f.Size = int64(len(body))
+		sum := sha256.Sum256(body)
+		f.Digest = "sha256:" + hex.EncodeToString(sum[:])
+	}
+	return dir, WriteSnapshotManifest(t, dir, m), m, files
+}
+
 func SnapshotBundleWithBuilds(t testing.TB, identities []BuildIdentity) (string, string, snapshotimport.Manifest, map[string][]byte) {
 	t.Helper()
 	dir := t.TempDir()

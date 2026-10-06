@@ -111,6 +111,36 @@ func writeFixtureFile(t *testing.T, dir string, f *snapshotimport.File, b []byte
 	f.Size = int64(len(b))
 	f.Digest = fixtureDigest(b)
 }
+
+func TestArchetypeSnapshotImportRequiresMainJAR(t *testing.T) {
+	for _, missing := range []bool{false, true} {
+		t.Run(map[bool]string{false: "classifier-is-not-main", true: "missing-file"}[missing], func(t *testing.T) {
+			dir, _, m, _ := testsupport.SnapshotArchetypeBundle(t)
+			b := &m.Coordinates[0].Builds[0]
+			want := "incomplete_build"
+			if missing {
+				if err := os.Remove(filepath.Join(dir, b.Files[1].Path)); err != nil {
+					t.Fatal(err)
+				}
+				want = "source_bytes_mismatch"
+			} else {
+				// Keep the POM and both classifier assets, but no main JAR.
+				b.Files = append(b.Files[:1], b.Files[2:]...)
+			}
+			digest := testsupport.WriteSnapshotManifest(t, dir, m)
+			var out, stderr bytes.Buffer
+			code := snapshotimport.RunCLI(context.Background(), []string{"verify", "--bundle", dir, "--manifest-sha256", digest}, &out, &stderr)
+			var report snapshotimport.Report
+			if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+				t.Fatal(err)
+			}
+			if code != 1 || report.Status != "rejected" || len(report.Rejected) != 1 || report.Rejected[0].Coordinate != m.Coordinates[0].Coordinate || report.Rejected[0].Reason != want {
+				t.Fatalf("verify exit=%d report=%+v; want explicit %s rejection", code, report, want)
+			}
+		})
+	}
+}
+
 func TestExplicitExclusionAndAbsentMetadata(t *testing.T) {
 	p, dir, m, _ := prepared(t)
 	m.Coordinates[0].Metadata = nil

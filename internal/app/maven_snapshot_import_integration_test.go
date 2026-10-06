@@ -26,7 +26,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestPostgresRustFSSnapshotImportCLIExplicitTarget(t *testing.T) {
+func TestPostgresRustFSArchetypeSnapshotImportCLIExplicitTarget(t *testing.T) {
 	if os.Getenv("TEST_DATABASE_URL") == "" || os.Getenv("TEST_RUSTFS_ENDPOINT") == "" {
 		t.Skip("isolated PostgreSQL/RustFS required")
 	}
@@ -48,7 +48,7 @@ func TestPostgresRustFSSnapshotImportCLIExplicitTarget(t *testing.T) {
 	if err = objects.EnsureBucket(ctx); err != nil {
 		t.Fatal(err)
 	}
-	dir, digest, _, _ := testsupport.SnapshotBundle(t)
+	dir, digest, _, _ := testsupport.SnapshotArchetypeBundle(t)
 	p, rejected, err := snapshotimport.Prepare(ctx, dir, digest)
 	if err != nil {
 		t.Fatalf("%v %v", rejected, err)

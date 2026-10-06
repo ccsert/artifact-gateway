@@ -29,8 +29,10 @@ services or change production configuration.
   and different numbers at the same timestamp are retained. Paths, POM GAV
   (including literal inherited parent group/version), packaging and required
   main artifacts must agree. Supported packaging is `jar`, `maven-plugin`,
-  `ejb`, `bundle`, `war`, `ear`, `rar`, `zip`, and `pom`. Custom packaging or
-  unresolved POM expressions are rejected, without repair.
+  `maven-archetype`, `ejb`, `bundle`, `war`, `ear`, `rar`, `zip`, and `pom`.
+  [Official archetype packaging](https://maven.apache.org/archetype/archetype-packaging/)
+  maps to a required main JAR; a classifier JAR does not replace it. Custom
+  packaging or unresolved POM expressions are rejected, without repair.
 - Version metadata must explicitly select existing admitted timestamp/build
   values through unique extension/classifier `snapshotVersions`. Maven also
   supports older metadata containing only a global timestamp/build; **v1 does
