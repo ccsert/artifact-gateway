@@ -722,13 +722,13 @@ func (s *PostgresStore) ReplaceRepositoryRetentionPolicy(ctx context.Context, re
 		return RepositoryRetentionPolicy{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	var exists bool
-	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM hosted_repositories WHERE id::text=$1)`, repositoryID).Scan(&exists); err != nil {
+	var repoID string
+	if err = tx.QueryRowContext(ctx, `SELECT id::text FROM hosted_repositories WHERE id::text=$1 FOR UPDATE`, repositoryID).Scan(&repoID); errors.Is(err, sql.ErrNoRows) {
+		return RepositoryRetentionPolicy{}, ErrNotFound
+	} else if err != nil {
 		return RepositoryRetentionPolicy{}, err
 	}
-	if !exists {
-		return RepositoryRetentionPolicy{}, ErrNotFound
-	}
+
 	if _, err = tx.ExecContext(ctx, `INSERT INTO repository_retention_policies (repository_id,version,enabled,keep_days,snapshot_keep_days,minimum_versions,maximum_versions,coordinate_patterns,protected_patterns) VALUES ($1,1,false,30,30,1,0,'{}','{}') ON CONFLICT DO NOTHING`, repositoryID); err != nil {
 		return RepositoryRetentionPolicy{}, err
 	}

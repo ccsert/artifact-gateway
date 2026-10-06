@@ -350,7 +350,7 @@ func (h generatedRepositoryAPIAdapter) ListMavenCoordinates(w http.ResponseWrite
 		}
 		items := make([]adminopenapi.MavenCoordinate, 0, len(artifacts))
 		for _, artifact := range artifacts {
-			items = append(items, adminopenapi.MavenCoordinate{Coordinate: artifact.Coordinate, Digest: artifact.Digest, CreatedAt: artifact.CreatedAt, Publisher: optionalPublisher(artifact.Publisher), BuildNumber: optionalBuildNumber(artifact.BuildNumber)})
+			items = append(items, adminopenapi.MavenCoordinate{Coordinate: artifact.Coordinate, Digest: artifact.Digest, CreatedAt: artifact.CreatedAt, Publisher: optionalPublisher(artifact.Publisher), BuildNumber: optionalBuildNumber(artifact.BuildNumber), SourceTimestamp: optionalString(artifact.SourceTimestamp), SourceBuildNumber: optionalBuildNumber(artifact.SourceBuildNumber)})
 		}
 		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.MavenCoordinatePage{Items: items, NextPageToken: next})
 	})

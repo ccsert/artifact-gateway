@@ -233,6 +233,8 @@ func (h generatedRepositoryAPIAdapter) groupBrowseContributions(r *http.Request,
 			if node.BuildNumber > 0 {
 				build := node.BuildNumber
 				source.BuildNumber = &build
+				source.SourceTimestamp = optionalString(node.SourceTimestamp)
+				source.SourceBuildNumber = optionalBuildNumber(node.SourceBuildNumber)
 			}
 			if member.repo.Type == repository.RepositoryTypeProxy {
 				source.CacheRepositoryName = optionalString(node.CacheRepositoryName)

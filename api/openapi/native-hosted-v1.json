@@ -6745,7 +6745,7 @@
             "type": "integer",
             "format": "int32",
             "minimum": 0,
-            "description": "Snapshot build number; zero for release coordinates."
+            "description": "Local publication sequence for Maven SNAPSHOT cursors; zero for releases. Imported source identity is exposed separately."
           },
           "publisher": {
             "type": "string",
@@ -6753,6 +6753,16 @@
           },
           "intelligence": {
             "$ref": "#/components/schemas/ArtifactIntelligenceSummary"
+          },
+          "sourceTimestamp": {
+            "type": "string",
+            "pattern": "^[0-9]{8}\\.[0-9]{6}$",
+            "description": "Original timestamp of an imported Maven SNAPSHOT; absent for ordinary publications."
+          },
+          "sourceBuildNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Original imported Maven SNAPSHOT build number, which can repeat at different timestamps."
           }
         }
       },
@@ -8049,6 +8059,16 @@
           },
           "cacheRepositoryName": {
             "type": "string"
+          },
+          "sourceTimestamp": {
+            "type": "string",
+            "pattern": "^[0-9]{8}\\.[0-9]{6}$",
+            "description": "Original timestamp of an imported Maven SNAPSHOT; absent for ordinary publications."
+          },
+          "sourceBuildNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Original imported Maven SNAPSHOT build number, which can repeat at different timestamps."
           }
         }
       },
@@ -8125,7 +8145,7 @@
           "buildNumber": {
             "type": "integer",
             "minimum": 1,
-            "description": "Exact Maven SNAPSHOT build; Proxy nodes additionally pin the timestamp in their opaque ID."
+            "description": "Exact local Maven SNAPSHOT publication sequence; Proxy nodes additionally pin the timestamp in their opaque ID. Imported source identity is exposed separately."
           },
           "sourceRepositoryId": {
             "type": "string",
@@ -8153,6 +8173,16 @@
           "cacheRepositoryName": {
             "type": "string",
             "description": "Scope owning the cache index, which may be a Group rather than the source Repository."
+          },
+          "sourceTimestamp": {
+            "type": "string",
+            "pattern": "^[0-9]{8}\\.[0-9]{6}$",
+            "description": "Original timestamp of an imported Maven SNAPSHOT; absent for ordinary publications."
+          },
+          "sourceBuildNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Original imported Maven SNAPSHOT build number, which can repeat at different timestamps."
           }
         }
       },
@@ -8385,7 +8415,17 @@
           },
           "buildNumber": {
             "type": "integer",
-            "description": "Snapshot build number. Zero for release coordinates; one or greater for each published build of a SNAPSHOT coordinate."
+            "description": "Local publication sequence. Zero for releases; imported source timestamp and build number are exposed separately."
+          },
+          "sourceTimestamp": {
+            "type": "string",
+            "pattern": "^[0-9]{8}\\.[0-9]{6}$",
+            "description": "Original timestamp of an imported Maven SNAPSHOT; absent for ordinary publications."
+          },
+          "sourceBuildNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Original imported Maven SNAPSHOT build number, which can repeat at different timestamps."
           }
         }
       },

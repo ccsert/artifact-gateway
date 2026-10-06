@@ -41,6 +41,8 @@ type ArtifactBrowseNode struct {
 	Namespace           string
 	Component           string
 	Version             string
+	SourceTimestamp     string
+	SourceBuildNumber   int
 	BuildNumber         int
 	Path                string
 	Coordinate          string

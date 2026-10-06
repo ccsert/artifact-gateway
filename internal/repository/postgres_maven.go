@@ -17,6 +17,13 @@ func (s *PostgresStore) CreateMavenPublishSession(ctx context.Context, v MavenPu
 		return MavenPublishSession{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = lockMavenCoordinate(ctx, tx, v.RepositoryID, v.Coordinate); err != nil {
+		return MavenPublishSession{}, err
+	}
+	if err = rejectMavenImportPublication(ctx, tx, v.RepositoryID, v.Coordinate); err != nil {
+		return MavenPublishSession{}, err
+	}
+
 	if _, err = tx.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET state='expired' WHERE repository_id::text=$1 AND coordinate=$2 AND publisher=$3 AND state='open' AND expires_at<=now()`, v.RepositoryID, v.Coordinate, v.Publisher); err != nil {
 		return MavenPublishSession{}, err
 	}
@@ -38,6 +45,13 @@ func (s *PostgresStore) CreateMavenPublishSessionIdempotently(ctx context.Contex
 		return MavenPublishSession{}, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = lockMavenCoordinate(ctx, tx, v.RepositoryID, v.Coordinate); err != nil {
+		return MavenPublishSession{}, false, err
+	}
+	if err = rejectMavenImportPublication(ctx, tx, v.RepositoryID, v.Coordinate); err != nil {
+		return MavenPublishSession{}, false, err
+	}
+
 	// FOR UPDATE cannot serialize concurrent first use because the idempotency
 	// row does not exist yet. Lock the complete idempotency scope before either
 	// transaction creates the open publisher/coordinate session.
@@ -214,7 +228,8 @@ func (s *PostgresStore) MarkMavenPublishObject(ctx context.Context, id, name, ke
 		return ErrNotFound
 	}
 	var claimed, deleted bool
-	err = tx.QueryRowContext(ctx, `SELECT claimed_at IS NOT NULL, deleted_at IS NOT NULL FROM native_maven_object_intents WHERE object_key=$1 FOR UPDATE`, key).Scan(&claimed, &deleted)
+	var stale sql.NullBool
+	err = tx.QueryRowContext(ctx, `SELECT claimed_at IS NOT NULL, deleted_at IS NOT NULL, claimed_at <= now() - interval '5 minutes' FROM native_maven_object_intents WHERE object_key=$1 FOR UPDATE`, key).Scan(&claimed, &deleted, &stale)
 	if errors.Is(err, sql.ErrNoRows) {
 		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_intents (object_key,session_id,digest,size) VALUES ($1,$2,$3,$4)`, key, id, declared.Digest, declared.Size); err != nil {
 			return err
@@ -222,7 +237,18 @@ func (s *PostgresStore) MarkMavenPublishObject(ctx context.Context, id, name, ke
 	} else if err != nil {
 		return err
 	} else if claimed && !deleted {
-		return ErrDisabled
+		// Import callers hold LockMavenObject through this reset and object I/O.
+		// An active GC claim continues to reject recovery.
+		var imported bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM native_maven_snapshot_imports WHERE session_id=$1 AND state='staged')`, id).Scan(&imported); err != nil {
+			return err
+		}
+		if !imported || !stale.Valid || !stale.Bool {
+			return ErrDisabled
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE native_maven_object_intents SET session_id=$2,claimed_at=NULL,claimed_token=NULL WHERE object_key=$1`, key, id); err != nil {
+			return err
+		}
 	} else if deleted {
 		if _, err = tx.ExecContext(ctx, `UPDATE native_maven_object_intents SET session_id=$2,digest=$3,size=$4,created_at=now(),claimed_at=NULL,claimed_token=NULL,deleted_at=NULL WHERE object_key=$1`, key, id, declared.Digest, declared.Size); err != nil {
 			return err
@@ -270,10 +296,14 @@ func (s *PostgresStore) PublishMavenProtocolAssets(ctx context.Context, id strin
 		return MavenArtifact{}, err
 	}
 
+	if err = rejectMavenImportPublication(ctx, tx, session.RepositoryID, session.Coordinate); err != nil {
+		return MavenArtifact{}, err
+	}
+
 	var artifact MavenArtifact
-	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number FROM native_maven_artifacts WHERE id=$1`, id).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber)
+	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number,source_timestamp,source_build_number FROM native_maven_artifacts WHERE id=$1`, id).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber, &artifact.SourceTimestamp, &artifact.SourceBuildNumber)
 	if errors.Is(err, sql.ErrNoRows) && !IsMavenSnapshotCoordinate(session.Coordinate) {
-		err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number FROM native_maven_artifacts WHERE repository_id=$1 AND coordinate=$2 ORDER BY build_number DESC LIMIT 1 FOR UPDATE`, session.RepositoryID, session.Coordinate).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber)
+		err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number,source_timestamp,source_build_number FROM native_maven_artifacts WHERE repository_id=$1 AND coordinate=$2 ORDER BY build_number DESC LIMIT 1 FOR UPDATE`, session.RepositoryID, session.Coordinate).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber, &artifact.SourceTimestamp, &artifact.SourceBuildNumber)
 	}
 	if err == nil && artifact.State != "visible" {
 		return MavenArtifact{}, ErrNameExists
@@ -346,10 +376,10 @@ func (s *PostgresStore) PublishMavenProtocolAssets(ctx context.Context, id strin
 
 func (s *PostgresStore) CompleteMavenProtocolPublications(ctx context.Context, repositoryID, publisher, selector string, exact bool) error {
 	if exact {
-		_, err := s.db.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET state='committed' WHERE repository_id=$1 AND publisher=$2 AND state='open' AND coordinate=$3`, repositoryID, publisher, selector)
+		_, err := s.db.ExecContext(ctx, `UPDATE native_maven_publish_sessions s SET state='committed' WHERE repository_id=$1 AND publisher=$2 AND state='open' AND NOT EXISTS(SELECT 1 FROM native_maven_snapshot_imports i WHERE i.session_id=s.id) AND coordinate=$3`, repositoryID, publisher, selector)
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET state='committed' WHERE repository_id=$1 AND publisher=$2 AND state='open' AND coordinate LIKE $3 || '%' ESCAPE '\'`, repositoryID, publisher, escapeLikePrefix(selector))
+	_, err := s.db.ExecContext(ctx, `UPDATE native_maven_publish_sessions s SET state='committed' WHERE repository_id=$1 AND publisher=$2 AND state='open' AND NOT EXISTS(SELECT 1 FROM native_maven_snapshot_imports i WHERE i.session_id=s.id) AND coordinate LIKE $3 || '%' ESCAPE '\'`, repositoryID, publisher, escapeLikePrefix(selector))
 	return err
 }
 
@@ -392,7 +422,7 @@ func (s *PostgresStore) commitMavenPublishSession(ctx context.Context, id, key, 
 				return MavenArtifact{}, false, ErrDisabled
 			}
 			var artifact MavenArtifact
-			if err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number FROM native_maven_artifacts WHERE id=$1`, id).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber); err != nil {
+			if err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number,source_timestamp,source_build_number FROM native_maven_artifacts WHERE id=$1`, id).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber, &artifact.SourceTimestamp, &artifact.SourceBuildNumber); err != nil {
 				return MavenArtifact{}, false, err
 			}
 			if err = tx.Commit(); err != nil {
@@ -426,6 +456,12 @@ func (s *PostgresStore) commitMavenPublishSession(ctx context.Context, id, key, 
 	}
 	if claimed {
 		return MavenArtifact{}, false, ErrDisabled
+	}
+	if err = lockMavenCoordinate(ctx, tx, v.RepositoryID, v.Coordinate); err != nil {
+		return MavenArtifact{}, false, err
+	}
+	if err = rejectMavenImportPublication(ctx, tx, v.RepositoryID, v.Coordinate); err != nil {
+		return MavenArtifact{}, false, err
 	}
 	a := MavenArtifact{ID: id, RepositoryID: v.RepositoryID, Coordinate: v.Coordinate, Digest: v.Objects[0].Digest, State: "visible", CreatedAt: time.Now().UTC()}
 	if IsMavenSnapshotCoordinate(v.Coordinate) {
@@ -547,7 +583,7 @@ func (s *PostgresStore) GetMavenAsset(ctx context.Context, repoID, path string) 
 	// The join matches an asset to a visible artifact only when the path sits
 	// under the artifact's own files: the version directory for releases, the
 	// build's timestamped filename prefix for SNAPSHOT builds.
-	err := s.db.QueryRowContext(ctx, `SELECT a.repository_id::text,a.path,a.object_key,a.digest,a.size FROM native_maven_assets a JOIN native_maven_artifacts m ON m.repository_id=a.repository_id AND m.state='visible' AND left(a.path, length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS') || '-' || m.build_number ELSE '' END)) = replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS') || '-' || m.build_number ELSE '' END WHERE a.repository_id::text=$1 AND a.path=$2`, repoID, path).Scan(&a.RepositoryID, &a.Path, &a.ObjectKey, &a.Digest, &a.Size)
+	err := s.db.QueryRowContext(ctx, `SELECT a.repository_id::text,a.path,a.object_key,a.digest,a.size FROM native_maven_assets a JOIN native_maven_artifacts m ON m.repository_id=a.repository_id AND m.state='visible' AND left(a.path, length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || COALESCE(NULLIF(m.source_timestamp,''),to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS')) || '-' || CASE WHEN m.source_build_number>0 THEN m.source_build_number ELSE m.build_number END ELSE '' END)) = replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || COALESCE(NULLIF(m.source_timestamp,''),to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS')) || '-' || CASE WHEN m.source_build_number>0 THEN m.source_build_number ELSE m.build_number END ELSE '' END AND (m.build_number=0 OR substring(a.path,length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || COALESCE(NULLIF(m.source_timestamp,''),to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS')) || '-' || CASE WHEN m.source_build_number>0 THEN m.source_build_number ELSE m.build_number END ELSE '' END)+1,1) IN ('.','-')) WHERE a.repository_id::text=$1 AND a.path=$2`, repoID, path).Scan(&a.RepositoryID, &a.Path, &a.ObjectKey, &a.Digest, &a.Size)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -555,7 +591,7 @@ func (s *PostgresStore) GetMavenAsset(ctx context.Context, repoID, path string) 
 }
 func (s *PostgresStore) ListMavenAssets(ctx context.Context, repoID, coordinate string) ([]MavenAsset, error) {
 	prefix := mavenArtifactPathPrefix(coordinate)
-	rows, err := s.db.QueryContext(ctx, `SELECT a.repository_id::text,a.path,a.object_key,a.digest,a.size FROM native_maven_assets a JOIN native_maven_artifacts m ON m.repository_id=a.repository_id AND m.coordinate=$2 AND m.state='visible' AND left(a.path, length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS') || '-' || m.build_number ELSE '' END)) = replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS') || '-' || m.build_number ELSE '' END WHERE a.repository_id::text=$1 AND left(a.path,length($3))=$3 ORDER BY a.path`, repoID, coordinate, prefix)
+	rows, err := s.db.QueryContext(ctx, `SELECT a.repository_id::text,a.path,a.object_key,a.digest,a.size FROM native_maven_assets a JOIN native_maven_artifacts m ON m.repository_id=a.repository_id AND m.coordinate=$2 AND m.state='visible' AND left(a.path, length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || COALESCE(NULLIF(m.source_timestamp,''),to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS')) || '-' || CASE WHEN m.source_build_number>0 THEN m.source_build_number ELSE m.build_number END ELSE '' END)) = replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || COALESCE(NULLIF(m.source_timestamp,''),to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS')) || '-' || CASE WHEN m.source_build_number>0 THEN m.source_build_number ELSE m.build_number END ELSE '' END AND (m.build_number=0 OR substring(a.path,length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || COALESCE(NULLIF(m.source_timestamp,''),to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS')) || '-' || CASE WHEN m.source_build_number>0 THEN m.source_build_number ELSE m.build_number END ELSE '' END)+1,1) IN ('.','-')) WHERE a.repository_id::text=$1 AND left(a.path,length($3))=$3 ORDER BY a.path`, repoID, coordinate, prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -577,7 +613,7 @@ func (s *PostgresStore) ListMavenAssets(ctx context.Context, repoID, coordinate 
 	return assets, nil
 }
 func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) ([]MavenArtifact, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND state='visible' ORDER BY created_at DESC`, repoID)
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number,source_timestamp,source_build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND state='visible' ORDER BY created_at DESC`, repoID)
 	if err != nil {
 		return nil, err
 	}
@@ -585,7 +621,7 @@ func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) (
 	out := []MavenArtifact{}
 	for rows.Next() {
 		var a MavenArtifact
-		if err := rows.Scan(&a.ID, &a.RepositoryID, &a.Coordinate, &a.Digest, &a.State, &a.CreatedAt, &a.BuildNumber); err != nil {
+		if err := rows.Scan(&a.ID, &a.RepositoryID, &a.Coordinate, &a.Digest, &a.State, &a.CreatedAt, &a.BuildNumber, &a.SourceTimestamp, &a.SourceBuildNumber); err != nil {
 			return nil, err
 		}
 		out = append(out, a)
@@ -606,7 +642,7 @@ func (s *PostgresStore) SearchMavenArtifacts(ctx context.Context, repoID, prefix
 	if after.BuildNumber > 2_147_483_647 {
 		after.BuildNumber = 2_147_483_647
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT a.id::text,a.repository_id::text,a.coordinate,a.digest,a.state,a.created_at,a.build_number,COALESCE(p.publisher,'')
+	rows, err := s.db.QueryContext(ctx, `SELECT a.id::text,a.repository_id::text,a.coordinate,a.digest,a.state,a.created_at,a.build_number,a.source_timestamp,a.source_build_number,COALESCE(p.publisher,'')
 		FROM native_maven_artifacts a
 		LEFT JOIN LATERAL (
 			SELECT s.publisher FROM native_maven_publish_sessions s
@@ -623,7 +659,7 @@ func (s *PostgresStore) SearchMavenArtifacts(ctx context.Context, repoID, prefix
 	out := []MavenArtifact{}
 	for rows.Next() {
 		var artifact MavenArtifact
-		if err := rows.Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber, &artifact.Publisher); err != nil {
+		if err := rows.Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber, &artifact.SourceTimestamp, &artifact.SourceBuildNumber, &artifact.Publisher); err != nil {
 			return nil, err
 		}
 		out = append(out, artifact)
@@ -632,7 +668,7 @@ func (s *PostgresStore) SearchMavenArtifacts(ctx context.Context, repoID, prefix
 }
 func (s *PostgresStore) GetMavenArtifact(ctx context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
 	var artifact MavenArtifact
-	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND id::text=$2`, repositoryID, artifactID).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber)
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number,source_timestamp,source_build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND id::text=$2`, repositoryID, artifactID).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber, &artifact.SourceTimestamp, &artifact.SourceBuildNumber)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MavenArtifact{}, ErrNotFound
 	}
@@ -645,7 +681,7 @@ func (s *PostgresStore) GetMavenArtifact(ctx context.Context, repositoryID, arti
 // them by coordinate.
 func (s *PostgresStore) GetMavenArtifactByCoordinate(ctx context.Context, repositoryID, coordinate string) (MavenArtifact, error) {
 	var artifact MavenArtifact
-	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND coordinate=$2 ORDER BY build_number DESC LIMIT 1`, repositoryID, coordinate).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber)
+	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number,source_timestamp,source_build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND coordinate=$2 ORDER BY build_number DESC LIMIT 1`, repositoryID, coordinate).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber, &artifact.SourceTimestamp, &artifact.SourceBuildNumber)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MavenArtifact{}, ErrNotFound
 	}
@@ -658,7 +694,7 @@ func (s *PostgresStore) TombstoneMavenArtifact(ctx context.Context, repositoryID
 	}
 	defer func() { _ = tx.Rollback() }()
 	var artifact MavenArtifact
-	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND id::text=$2 FOR UPDATE`, repositoryID, artifactID).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber)
+	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number,source_timestamp,source_build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND id::text=$2 FOR UPDATE`, repositoryID, artifactID).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber, &artifact.SourceTimestamp, &artifact.SourceBuildNumber)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MavenArtifact{}, ErrNotFound
 	}
@@ -679,12 +715,12 @@ func (s *PostgresStore) TombstoneMavenArtifact(ctx context.Context, repositoryID
 	// version-directory prefix because they own it exclusively.
 	prefix := mavenArtifactPathPrefix(artifact.Coordinate)
 	if artifact.BuildNumber > 0 {
-		prefix += mavenSnapshotBuildFilePrefix(artifact.Coordinate, artifact.CreatedAt, artifact.BuildNumber)
+		prefix += mavenArtifactFilePrefix(artifact)
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE native_maven_object_intents i SET created_at=now() WHERE i.object_key IN (SELECT a.object_key FROM native_maven_assets a WHERE a.repository_id::text=$1 AND left(a.path, length($2))=$2) AND NOT EXISTS (SELECT 1 FROM native_maven_assets a JOIN native_maven_artifacts m ON m.repository_id=a.repository_id AND m.state='visible' WHERE a.object_key=i.object_key AND left(a.path, length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS') || '-' || m.build_number ELSE '' END)) = replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS') || '-' || m.build_number ELSE '' END)`, repositoryID, prefix); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE native_maven_object_intents i SET created_at=now() WHERE i.object_key IN (SELECT a.object_key FROM native_maven_assets a WHERE a.repository_id::text=$1 AND left(a.path, length($2))=$2 AND (right($2,1)='/' OR substring(a.path,length($2)+1,1) IN ('.','-'))) AND NOT EXISTS (SELECT 1 FROM native_maven_assets a JOIN native_maven_artifacts m ON m.repository_id=a.repository_id AND m.state='visible' WHERE a.object_key=i.object_key AND left(a.path, length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || COALESCE(NULLIF(m.source_timestamp,''),to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS')) || '-' || CASE WHEN m.source_build_number>0 THEN m.source_build_number ELSE m.build_number END ELSE '' END)) = replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || COALESCE(NULLIF(m.source_timestamp,''),to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS')) || '-' || CASE WHEN m.source_build_number>0 THEN m.source_build_number ELSE m.build_number END ELSE '' END AND (m.build_number=0 OR substring(a.path,length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || COALESCE(NULLIF(m.source_timestamp,''),to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS')) || '-' || CASE WHEN m.source_build_number>0 THEN m.source_build_number ELSE m.build_number END ELSE '' END)+1,1) IN ('.','-')))`, repositoryID, prefix); err != nil {
 		return MavenArtifact{}, err
 	}
-	if _, err = tx.ExecContext(ctx, `DELETE FROM native_maven_object_references r WHERE r.object_key IN (SELECT a.object_key FROM native_maven_assets a WHERE a.repository_id::text=$1 AND left(a.path, length($2))=$2) AND NOT EXISTS (SELECT 1 FROM native_maven_assets a JOIN native_maven_artifacts m ON m.repository_id=a.repository_id AND m.state='visible' WHERE a.object_key=r.object_key AND left(a.path, length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS') || '-' || m.build_number ELSE '' END)) = replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS') || '-' || m.build_number ELSE '' END)`, repositoryID, prefix); err != nil {
+	if _, err = tx.ExecContext(ctx, `DELETE FROM native_maven_object_references r WHERE r.object_key IN (SELECT a.object_key FROM native_maven_assets a WHERE a.repository_id::text=$1 AND left(a.path, length($2))=$2 AND (right($2,1)='/' OR substring(a.path,length($2)+1,1) IN ('.','-'))) AND NOT EXISTS (SELECT 1 FROM native_maven_assets a JOIN native_maven_artifacts m ON m.repository_id=a.repository_id AND m.state='visible' WHERE a.object_key=r.object_key AND left(a.path, length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || COALESCE(NULLIF(m.source_timestamp,''),to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS')) || '-' || CASE WHEN m.source_build_number>0 THEN m.source_build_number ELSE m.build_number END ELSE '' END)) = replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || COALESCE(NULLIF(m.source_timestamp,''),to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS')) || '-' || CASE WHEN m.source_build_number>0 THEN m.source_build_number ELSE m.build_number END ELSE '' END AND (m.build_number=0 OR substring(a.path,length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/' || CASE WHEN m.build_number > 0 THEN split_part(m.coordinate, ':', 2) || '-' || regexp_replace(split_part(m.coordinate, ':', 3), '-SNAPSHOT$', '') || '-' || COALESCE(NULLIF(m.source_timestamp,''),to_char(m.created_at AT TIME ZONE 'UTC', 'YYYYMMDD.HH24MISS')) || '-' || CASE WHEN m.source_build_number>0 THEN m.source_build_number ELSE m.build_number END ELSE '' END)+1,1) IN ('.','-')))`, repositoryID, prefix); err != nil {
 		return MavenArtifact{}, err
 	}
 	artifact.State = "deleted"
@@ -701,7 +737,7 @@ func (s *PostgresStore) RestoreMavenArtifact(ctx context.Context, repositoryID, 
 	}
 	defer func() { _ = tx.Rollback() }()
 	var artifact MavenArtifact
-	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND id::text=$2 FOR UPDATE`, repositoryID, artifactID).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber)
+	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number,source_timestamp,source_build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND id::text=$2 FOR UPDATE`, repositoryID, artifactID).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber, &artifact.SourceTimestamp, &artifact.SourceBuildNumber)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MavenArtifact{}, ErrNotFound
 	}
@@ -715,10 +751,10 @@ func (s *PostgresStore) RestoreMavenArtifact(ctx context.Context, repositoryID, 
 	// timestamped files, a release restores the whole version directory.
 	prefix := mavenArtifactPathPrefix(artifact.Coordinate)
 	if artifact.BuildNumber > 0 {
-		prefix += mavenSnapshotBuildFilePrefix(artifact.Coordinate, artifact.CreatedAt, artifact.BuildNumber)
+		prefix += mavenArtifactFilePrefix(artifact)
 	}
 	var recoverable bool
-	err = tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_maven_assets a WHERE a.repository_id::text=$1 AND left(a.path, length($2))=$2) AND NOT EXISTS (SELECT 1 FROM native_maven_assets a JOIN native_maven_object_intents i ON i.object_key=a.object_key WHERE a.repository_id::text=$1 AND left(a.path, length($2))=$2 AND i.deleted_at IS NOT NULL)`, repositoryID, prefix).Scan(&recoverable)
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM native_maven_assets a WHERE a.repository_id::text=$1 AND left(a.path, length($2))=$2 AND (right($2,1)='/' OR substring(a.path,length($2)+1,1) IN ('.','-'))) AND NOT EXISTS (SELECT 1 FROM native_maven_assets a JOIN native_maven_object_intents i ON i.object_key=a.object_key WHERE a.repository_id::text=$1 AND left(a.path, length($2))=$2 AND (right($2,1)='/' OR substring(a.path,length($2)+1,1) IN ('.','-')) AND i.deleted_at IS NOT NULL)`, repositoryID, prefix).Scan(&recoverable)
 	if err != nil {
 		return MavenArtifact{}, err
 	}
@@ -731,7 +767,7 @@ func (s *PostgresStore) RestoreMavenArtifact(ctx context.Context, repositoryID, 
 	if _, err = tx.ExecContext(ctx, `DELETE FROM artifact_tombstones WHERE repository_id::text=$1 AND format='maven' AND coordinate=$2`, repositoryID, artifact.Coordinate); err != nil {
 		return MavenArtifact{}, err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_references (object_key,repository_id) SELECT object_key,repository_id FROM native_maven_assets WHERE repository_id::text=$1 AND left(path, length($2))=$2 ON CONFLICT (object_key) DO NOTHING`, repositoryID, prefix); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_references (object_key,repository_id) SELECT object_key,repository_id FROM native_maven_assets WHERE repository_id::text=$1 AND left(path, length($2))=$2 AND (right($2,1)='/' OR substring(path,length($2)+1,1) IN ('.','-')) ON CONFLICT (object_key) DO NOTHING`, repositoryID, prefix); err != nil {
 		return MavenArtifact{}, err
 	}
 	artifact.State = "visible"
@@ -754,7 +790,7 @@ func (s *PostgresStore) PromoteMavenArtifact(ctx context.Context, promotion Mave
 	}
 	defer func() { _ = tx.Rollback() }()
 	var source MavenArtifact
-	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND coordinate=$2 AND digest=$3 AND state='visible' FOR UPDATE`, promotion.SourceRepositoryID, promotion.Coordinate, promotion.Digest).Scan(&source.ID, &source.RepositoryID, &source.Coordinate, &source.Digest, &source.State, &source.CreatedAt, &source.BuildNumber)
+	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number,source_timestamp,source_build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND coordinate=$2 AND digest=$3 AND state='visible' FOR UPDATE`, promotion.SourceRepositoryID, promotion.Coordinate, promotion.Digest).Scan(&source.ID, &source.RepositoryID, &source.Coordinate, &source.Digest, &source.State, &source.CreatedAt, &source.BuildNumber, &source.SourceTimestamp, &source.SourceBuildNumber)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MavenArtifact{}, ErrNotFound
 	}
@@ -803,7 +839,7 @@ func (s *PostgresStore) PublishReplicatedMavenArtifact(ctx context.Context, repl
 	}
 	defer func() { _ = tx.Rollback() }()
 	var source MavenArtifact
-	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND coordinate=$2 AND digest=$3 AND state='visible' FOR UPDATE`, replication.SourceRepositoryID, replication.Coordinate, replication.Digest).Scan(&source.ID, &source.RepositoryID, &source.Coordinate, &source.Digest, &source.State, &source.CreatedAt, &source.BuildNumber)
+	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number,source_timestamp,source_build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND coordinate=$2 AND digest=$3 AND state='visible' FOR UPDATE`, replication.SourceRepositoryID, replication.Coordinate, replication.Digest).Scan(&source.ID, &source.RepositoryID, &source.Coordinate, &source.Digest, &source.State, &source.CreatedAt, &source.BuildNumber, &source.SourceTimestamp, &source.SourceBuildNumber)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MavenArtifact{}, ErrNotFound
 	}
@@ -811,7 +847,7 @@ func (s *PostgresStore) PublishReplicatedMavenArtifact(ctx context.Context, repl
 		return MavenArtifact{}, err
 	}
 	var existing MavenArtifact
-	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND coordinate=$2 AND build_number=0 FOR UPDATE`, replication.TargetRepositoryID, replication.Coordinate).Scan(&existing.ID, &existing.RepositoryID, &existing.Coordinate, &existing.Digest, &existing.State, &existing.CreatedAt, &existing.BuildNumber)
+	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number,source_timestamp,source_build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND coordinate=$2 AND build_number=0 FOR UPDATE`, replication.TargetRepositoryID, replication.Coordinate).Scan(&existing.ID, &existing.RepositoryID, &existing.Coordinate, &existing.Digest, &existing.State, &existing.CreatedAt, &existing.BuildNumber, &existing.SourceTimestamp, &existing.SourceBuildNumber)
 	if err == nil {
 		if existing.ID == replication.ID && existing.Digest == replication.Digest {
 			return existing, tx.Commit()
@@ -866,7 +902,7 @@ func (s *PostgresStore) PublishReplicatedMavenArtifact(ctx context.Context, repl
 	return artifact, nil
 }
 func (s *PostgresStore) ClaimExpiredMavenObjectIntents(ctx context.Context, before time.Time, limit int) ([]MavenObjectIntent, error) {
-	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (SELECT i.object_key FROM native_maven_object_intents i JOIN native_maven_publish_sessions s ON s.id=i.session_id WHERE i.created_at <= $1 AND (i.claimed_at IS NULL OR i.claimed_at <= now() - interval '5 minutes') AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key) AND NOT (s.state='open' AND s.expires_at > now()) ORDER BY i.created_at FOR UPDATE OF s, i SKIP LOCKED LIMIT $2) UPDATE native_maven_object_intents i SET claimed_at=now(), claimed_token=md5(random()::text || clock_timestamp()::text || i.object_key) FROM candidates, native_maven_publish_sessions s WHERE i.object_key=candidates.object_key AND s.id=i.session_id RETURNING s.repository_id::text, i.object_key, i.claimed_token`, before, limit)
+	rows, err := s.db.QueryContext(ctx, `WITH candidates AS (SELECT i.object_key FROM native_maven_object_intents i JOIN native_maven_publish_sessions s ON s.id=i.session_id WHERE i.created_at <= $1 AND (i.claimed_at IS NULL OR i.claimed_at <= now() - interval '5 minutes') AND i.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM native_maven_object_references r WHERE r.object_key=i.object_key) AND NOT (s.state='open' AND s.expires_at > now()) AND NOT EXISTS (SELECT 1 FROM native_maven_publish_uploads u JOIN native_maven_publish_sessions live ON live.id=u.session_id WHERE u.object_key=i.object_key AND live.state='open' AND live.expires_at>now()) ORDER BY i.created_at FOR UPDATE OF s, i SKIP LOCKED LIMIT $2) UPDATE native_maven_object_intents i SET claimed_at=now(), claimed_token=md5(random()::text || clock_timestamp()::text || i.object_key) FROM candidates, native_maven_publish_sessions s WHERE i.object_key=candidates.object_key AND s.id=i.session_id RETURNING s.repository_id::text, i.object_key, i.claimed_token`, before, limit)
 	if err != nil {
 		return nil, err
 	}

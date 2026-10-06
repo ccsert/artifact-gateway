@@ -32,7 +32,7 @@ export type BrowseNode = {
    */
   cachedAt?: string;
   /**
-   * Exact Maven SNAPSHOT build; Proxy nodes additionally pin the timestamp in their opaque ID.
+   * Exact local Maven SNAPSHOT publication sequence; Proxy nodes additionally pin the timestamp in their opaque ID. Imported source identity is exposed separately.
    */
   buildNumber?: number;
   /**
@@ -52,6 +52,14 @@ export type BrowseNode = {
    * Scope owning the cache index, which may be a Group rather than the source Repository.
    */
   cacheRepositoryName?: string;
+  /**
+   * Original timestamp of an imported Maven SNAPSHOT; absent for ordinary publications.
+   */
+  sourceTimestamp?: string;
+  /**
+   * Original imported Maven SNAPSHOT build number, which can repeat at different timestamps.
+   */
+  sourceBuildNumber?: number;
 };
 
 export type BrowseNodePage = {
@@ -738,7 +746,7 @@ export type ArtifactSummary = {
    */
   sourceUrl?: string;
   /**
-   * Snapshot build number; zero for release coordinates.
+   * Local publication sequence for Maven SNAPSHOT cursors; zero for releases. Imported source identity is exposed separately.
    */
   buildNumber?: number;
   /**
@@ -746,6 +754,14 @@ export type ArtifactSummary = {
    */
   publisher?: string;
   intelligence?: ArtifactIntelligenceSummary;
+  /**
+   * Original timestamp of an imported Maven SNAPSHOT; absent for ordinary publications.
+   */
+  sourceTimestamp?: string;
+  /**
+   * Original imported Maven SNAPSHOT build number, which can repeat at different timestamps.
+   */
+  sourceBuildNumber?: number;
 };
 
 export type ArtifactSummaryPage = {
@@ -832,9 +848,17 @@ export type MavenCoordinate = {
    */
   publisher?: string;
   /**
-   * Snapshot build number. Zero for release coordinates; one or greater for each published build of a SNAPSHOT coordinate.
+   * Local publication sequence. Zero for releases; imported source timestamp and build number are exposed separately.
    */
   buildNumber?: number;
+  /**
+   * Original timestamp of an imported Maven SNAPSHOT; absent for ordinary publications.
+   */
+  sourceTimestamp?: string;
+  /**
+   * Original imported Maven SNAPSHOT build number, which can repeat at different timestamps.
+   */
+  sourceBuildNumber?: number;
 };
 
 export type MavenCoordinatePage = {
@@ -2124,6 +2148,14 @@ export type BrowseSource = {
   buildNumber?: number;
   cachedAt?: string;
   cacheRepositoryName?: string;
+  /**
+   * Original timestamp of an imported Maven SNAPSHOT; absent for ordinary publications.
+   */
+  sourceTimestamp?: string;
+  /**
+   * Original imported Maven SNAPSHOT build number, which can repeat at different timestamps.
+   */
+  sourceBuildNumber?: number;
 };
 
 export type BrowseNodeKind =

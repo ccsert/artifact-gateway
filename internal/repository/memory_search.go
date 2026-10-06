@@ -84,7 +84,7 @@ func (s *MemoryStore) artifactSearchItemsLocked(repositoryID string, format Form
 			createdAt := artifact.CreatedAt
 			items = append(items, ArtifactSearchItem{
 				Coordinate: artifact.Coordinate, Digest: artifact.Digest, CreatedAt: &createdAt,
-				Publisher: s.latestCommittedMavenPublisherLocked(repositoryID, artifact.Coordinate), BuildNumber: artifact.BuildNumber,
+				Publisher: s.latestCommittedMavenPublisherLocked(repositoryID, artifact.Coordinate), BuildNumber: artifact.BuildNumber, SourceTimestamp: artifact.SourceTimestamp, SourceBuildNumber: artifact.SourceBuildNumber,
 			})
 		}
 	case FormatOCI:

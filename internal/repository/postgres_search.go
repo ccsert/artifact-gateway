@@ -34,15 +34,17 @@ type ArtifactSearchQuery struct {
 }
 
 type ArtifactSearchItem struct {
-	Coordinate   string
-	Version      string
-	Digest       string
-	CreatedAt    *time.Time
-	Size         *int64
-	Publisher    string
-	BuildNumber  int
-	ContentType  string
-	Intelligence *ArtifactIntelligenceSummary
+	Coordinate        string
+	Version           string
+	Digest            string
+	CreatedAt         *time.Time
+	Size              *int64
+	Publisher         string
+	SourceTimestamp   string
+	SourceBuildNumber int
+	BuildNumber       int
+	ContentType       string
+	Intelligence      *ArtifactIntelligenceSummary
 }
 
 // ArtifactSearchStore exposes the format-neutral management projection. Both
@@ -88,8 +90,9 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 		         'medium', COALESCE((ai.vulnerability->>'medium')::int, 0),
 		         'low', COALESCE((ai.vulnerability->>'low')::int, 0),
 		         'unknown', COALESCE((ai.vulnerability->>'unknown')::int, 0)
-		       ) END AS intelligence
+		       ) END AS intelligence,COALESCE(ma.source_timestamp,''),COALESCE(ma.source_build_number,0)
 		FROM ranked
+ LEFT JOIN native_maven_artifacts ma ON $2='maven' AND ma.repository_id::text=$1 AND ma.coordinate=ranked.coordinate AND ma.build_number=ranked.build_number
 		LEFT JOIN artifact_intelligence ai
 		  ON ai.repository_id::text=$1 AND ai.format=$2 AND ai.coordinate=ranked.coordinate AND ai.digest=ranked.digest
 		WHERE (($3='coordinate' AND ($2='maven' OR ranked.coordinate_rank=1))
@@ -109,7 +112,7 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 		var createdAt sql.NullTime
 		var size sql.NullInt64
 		var intelligence []byte
-		if err := rows.Scan(&item.Coordinate, &item.Digest, &createdAt, &size, &item.Publisher, &item.BuildNumber, &item.ContentType, &item.Version, &intelligence); err != nil {
+		if err := rows.Scan(&item.Coordinate, &item.Digest, &createdAt, &size, &item.Publisher, &item.BuildNumber, &item.ContentType, &item.Version, &intelligence, &item.SourceTimestamp, &item.SourceBuildNumber); err != nil {
 			return nil, err
 		}
 		if createdAt.Valid {

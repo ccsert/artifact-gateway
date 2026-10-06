@@ -61,11 +61,11 @@ func (s *MemoryStore) listMemoryMavenBrowseNodes(repositoryID string, parent Art
 				continue
 			}
 			current, exists := nodes[artifact.Coordinate]
-			if !exists || artifact.CreatedAt.After(current.CreatedAt) {
+			if !exists || artifact.BuildNumber > current.BuildNumber || artifact.BuildNumber == current.BuildNumber && artifact.CreatedAt.After(current.CreatedAt) {
 				nodes[artifact.Coordinate] = ArtifactBrowseNode{
 					Key: artifact.Coordinate, Kind: BrowseNodeVersion, Name: parts[2], HasChildren: true,
 					Namespace: parts[0], Component: parts[1], Version: parts[2], Coordinate: artifact.Coordinate,
-					BuildNumber: artifact.BuildNumber, Digest: artifact.Digest, CreatedAt: artifact.CreatedAt,
+					BuildNumber: artifact.BuildNumber, SourceTimestamp: artifact.SourceTimestamp, SourceBuildNumber: artifact.SourceBuildNumber, Digest: artifact.Digest, CreatedAt: artifact.CreatedAt,
 				}
 			}
 		}

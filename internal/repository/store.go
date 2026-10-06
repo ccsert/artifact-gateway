@@ -308,6 +308,8 @@ type ReplicationStore interface {
 }
 
 type NativeMavenStore interface {
+	LockMavenObject(context.Context, string) (context.Context, func(), error)
+	MavenSnapshotImportStore
 	CreateMavenPublishSession(context.Context, MavenPublishSession) (MavenPublishSession, error)
 	FindOpenMavenPublishSession(context.Context, string, string, string) (MavenPublishSession, error)
 	FindMavenPublishSession(context.Context, string, string, string) (MavenPublishSession, error)

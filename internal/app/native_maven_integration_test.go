@@ -503,6 +503,11 @@ func TestPostgresMavenCollectorClaimTokenFencesOverlappingCollectors(t *testing.
 	if err = store.MarkMavenPublishObject(ctx, active.ID, declared.Name, key); err != nil {
 		t.Fatal(err)
 	}
+	// A live deduplicated upload is now protected from collection. Model a
+	// crashed/expired uploader before exercising overlapping claim tokens.
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET expires_at=now()-interval '1 hour' WHERE id=$1`, active.ID); err != nil {
+		t.Fatal(err)
+	}
 	first, err := store.ClaimExpiredMavenObjectIntents(ctx, time.Now().Add(-24*time.Hour), 1)
 	if err != nil || len(first) != 1 {
 		t.Fatalf("first claim=%#v err=%v", first, err)
@@ -520,6 +525,9 @@ func TestPostgresMavenCollectorClaimTokenFencesOverlappingCollectors(t *testing.
 	var currentToken string
 	if err = db.QueryRowContext(ctx, `SELECT claimed_token FROM native_maven_object_intents WHERE object_key=$1`, key).Scan(&currentToken); err != nil || currentToken != second[0].ClaimToken {
 		t.Fatalf("current token=%q want=%q err=%v", currentToken, second[0].ClaimToken, err)
+	}
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET expires_at=now()+interval '1 hour' WHERE id=$1`, active.ID); err != nil {
+		t.Fatal(err)
 	}
 	_, err = store.CommitMavenPublishSession(ctx, active.ID, []repository.MavenAsset{{RepositoryID: repo.ID, Path: "org/example/claim-token/1.0.0/claim-token-1.0.0.pom", ObjectKey: key, Digest: declared.Digest, Size: 1}})
 	if err != repository.ErrDisabled {
@@ -590,11 +598,19 @@ func TestPostgresMavenCommitCannotReferenceObjectDuringBlockedDeletion(t *testin
 		commitResult <- w
 	}()
 	<-commitStore.entered
+	// The stalled upload expires before collection, then recovery attempts
+	// publication while the collector already holds the deletion fence.
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET expires_at=now()-interval '1 hour' WHERE id=$1`, active.ID); err != nil {
+		t.Fatal(err)
+	}
 	maintenanceResult := make(chan error, 1)
 	go func() {
 		maintenanceResult <- NativeMavenMaintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now() }}.Collect(ctx)
 	}()
 	<-objects.entered
+	if _, err = db.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET expires_at=now()+interval '1 hour' WHERE id=$1`, active.ID); err != nil {
+		t.Fatal(err)
+	}
 	close(commitStore.release)
 	commit := <-commitResult
 	if commit.Code != http.StatusUnprocessableEntity {

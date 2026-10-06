@@ -112,6 +112,11 @@ func (m NativeMaintenance) runReclaimJob(ctx context.Context, job repository.Lif
 	if err := json.Unmarshal(job.Payload, &payload); err != nil || payload.ObjectKey == "" || payload.ClaimToken == "" {
 		return m.failReclaimJob(ctx, job, "invalid Maven reclaim payload")
 	}
+	ctx, release, err := m.Store.LockMavenObject(ctx, payload.ObjectKey)
+	if err != nil {
+		return m.failReclaimJob(ctx, job, "Maven object lock failed")
+	}
+	defer release()
 	active, err := m.Store.MavenObjectIntentClaimIsActive(ctx, payload.ObjectKey, payload.ClaimToken)
 	if err != nil {
 		return m.failReclaimJob(ctx, job, "Maven object claim lookup failed")
