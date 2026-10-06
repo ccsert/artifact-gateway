@@ -40,6 +40,7 @@ import {
   CardHeader,
   Field,
   PageHeader,
+  Pagination,
 } from "../../components/ui/Layout";
 import { ConfirmDialog, Modal, useDisclosure } from "../../components/ui/Modal";
 import { formatDate } from "../../lib/format";
@@ -532,18 +533,12 @@ export function ServiceAccountsPage() {
                 </button>
               ))}
             </div>
-            {nextAccountsPageToken && (
-              <div className="border-t border-zinc-800/70 px-2 pt-2">
-                <Button
-                  block
-                  type="text"
-                  loading={loadingMoreAccounts}
-                  onClick={() => void loadAccounts(nextAccountsPageToken)}
-                >
-                  {text("加载更多账号", "Load more accounts")}
-                </Button>
-              </div>
-            )}
+            <Pagination
+              hasMore={!!nextAccountsPageToken}
+              loading={loadingMoreAccounts}
+              onMore={() => void loadAccounts(nextAccountsPageToken)}
+              label={text("加载更多账号", "Load more accounts")}
+            />
           </Card>
 
           {selectedAccount && (
@@ -657,19 +652,14 @@ export function ServiceAccountsPage() {
                     size="small"
                     scroll={{ x: 760 }}
                   />
-                  {nextCredentialsPageToken && (
-                    <div className="border-t border-zinc-800/70 p-3 text-center">
-                      <Button
-                        type="text"
-                        loading={loadingMoreCredentials}
-                        onClick={() =>
-                          void loadCredentials(nextCredentialsPageToken)
-                        }
-                      >
-                        {text("加载更多凭据", "Load more credentials")}
-                      </Button>
-                    </div>
-                  )}
+                  <Pagination
+                    hasMore={!!nextCredentialsPageToken}
+                    loading={loadingMoreCredentials}
+                    onMore={() =>
+                      void loadCredentials(nextCredentialsPageToken)
+                    }
+                    label={text("加载更多凭据", "Load more credentials")}
+                  />
                 </>
               )}
             </Card>

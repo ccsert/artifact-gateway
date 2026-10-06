@@ -619,7 +619,7 @@ export function AuditsPage() {
               },
             }}
           />
-          <div className="flex items-center justify-between gap-3 border-t border-zinc-800/60 px-4 py-3 text-xs text-zinc-500">
+          <div className="ag-pagination-footer flex items-center justify-end gap-3 border-t border-zinc-800/60 px-4 py-3 text-xs text-zinc-500">
             <span>
               {text(
                 `第 ${currentPage} 页 · 当前页 ${pageRecords.length} 条`,

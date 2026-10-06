@@ -10,7 +10,12 @@ import {
   type RepositoryQuotaAlertRule,
 } from "../../client";
 import { ErrorBanner } from "../../components/ui/Feedback";
-import { Card, CardHeader, Field } from "../../components/ui/Layout";
+import {
+  Card,
+  CardHeader,
+  Field,
+  Pagination,
+} from "../../components/ui/Layout";
 import {
   fieldFeedback,
   useFormValidationFocus,
@@ -185,10 +190,11 @@ export function QuotaRuleEditor({
         >
           {catalogue.nextPageToken && (
             <div className="grid gap-3">
-              <Button
+              <Pagination
+                hasMore
                 disabled={!canSave || more.blocked || action.busy}
                 loading={more.busy}
-                onClick={() =>
+                onMore={() =>
                   void more.run(
                     async (signal) =>
                       quotaResult(
@@ -214,9 +220,8 @@ export function QuotaRuleEditor({
                       })),
                   )
                 }
-              >
-                {text("加载更多仓库", "Load more repositories")}
-              </Button>
+                label={text("加载更多仓库", "Load more repositories")}
+              />
               {Boolean(more.error) && !isQuotaAuthError(more.error) && (
                 <ErrorBanner error={safeQuotaError(more.error, text)} />
               )}

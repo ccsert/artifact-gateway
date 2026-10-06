@@ -28,7 +28,12 @@ import {
   Notice,
   isNotFound,
 } from "../../components/ui/Feedback";
-import { Card, CardHeader, Field } from "../../components/ui/Layout";
+import {
+  Card,
+  CardHeader,
+  Field,
+  Pagination,
+} from "../../components/ui/Layout";
 import { useAuth } from "../../lib/auth";
 import { downloadCsv } from "../../lib/csv";
 import { formatDate, shortDigest } from "../../lib/format";
@@ -1012,13 +1017,12 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
               scroll={{ x: 1080 }}
             />
           )}
-          {dryRun.nextPageToken && (
-            <div className="flex justify-center border-t border-zinc-800 px-4 py-3">
-              <Button onClick={loadMoreDryRun} loading={dryRunLoadingMore}>
-                {text("加载更多候选", "Load more candidates")}
-              </Button>
-            </div>
-          )}
+          <Pagination
+            hasMore={!!dryRun.nextPageToken}
+            onMore={() => void loadMoreDryRun()}
+            loading={dryRunLoadingMore}
+            label={text("加载更多候选", "Load more candidates")}
+          />
         </Card>
       )}
     </div>

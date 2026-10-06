@@ -601,6 +601,17 @@ export function RepositoryScanningTab({
             </Button>
           }
         />
+        {canViewJobs &&
+          jobs !== null &&
+          jobs.length > 0 &&
+          loadError === null && (
+            <p className="px-5 py-3 text-xs text-zinc-500">
+              {text(
+                "仅显示最近 100 条生命周期任务中的扫描任务；不是全部扫描历史。",
+                "Shows scans among the latest 100 lifecycle jobs; this is not the complete scan history.",
+              )}
+            </p>
+          )}
         {!canViewJobs ? (
           <EmptyState
             compact
@@ -622,10 +633,10 @@ export function RepositoryScanningTab({
         ) : jobs.length === 0 ? (
           <EmptyState
             compact
-            title={text("暂无扫描任务", "No scan jobs")}
+            title={text("最近任务中暂无扫描", "No scans in recent jobs")}
             hint={text(
-              "手动提交或对账历史制品后，任务会显示在这里。",
-              "Jobs appear here after a manual submission or historical reconciliation.",
+              "仅检查最近 100 条生命周期任务。手动提交或对账历史制品后，任务会显示在这里。",
+              "Checks the latest 100 lifecycle jobs only. Jobs appear here after a manual submission or historical reconciliation.",
             )}
           />
         ) : (
@@ -633,7 +644,7 @@ export function RepositoryScanningTab({
             rowKey="id"
             dataSource={jobs}
             columns={columns}
-            pagination={{}}
+            pagination={false}
             scroll={{ x: 900 }}
           />
         )}

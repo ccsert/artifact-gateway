@@ -104,18 +104,27 @@ export function Pagination({
   loading,
   onMore,
   label,
+  disabled,
 }: {
   hasMore: boolean;
   loading?: boolean;
   onMore: () => void;
   label?: string;
+  disabled?: boolean;
 }) {
   const { text } = usePreferences();
   if (!hasMore) return null;
+  const actionLabel = label ?? text("加载更多", "Load more");
   return (
     <div className="ag-pagination-footer flex justify-end border-t border-zinc-800/60 px-4 py-3">
-      <Button icon={<DownOutlined />} onClick={onMore} loading={loading}>
-        {label ?? text("加载更多", "Load more")}
+      <Button
+        icon={<DownOutlined />}
+        onClick={onMore}
+        loading={loading}
+        disabled={disabled}
+        aria-label={actionLabel}
+      >
+        {actionLabel}
       </Button>
     </div>
   );

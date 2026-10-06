@@ -19,7 +19,7 @@ repeatable-read transaction. The memory implementation uses one read lock.
 Pages sort by address then format in bytewise ascending order, replacing the
 former top-download ranking. Download increments do not reorder existing rows.
 Each request is a live view; newly added addresses between page requests can
-shift offset boundaries. Refresh to restart a traversal. This is not a durable
+shift offset boundaries. Return to page one to restart a traversal. This is not a durable
 cross-request snapshot or a cursor contract. Deep offsets still have database
 cost, and whole-repository totals aggregate all its usage rows.
 
@@ -42,11 +42,14 @@ tables also reset their server query. Local filter owners reset their page.
 | Surface | Data protocol | Shared presentation |
 | --- | --- | --- |
 | Users, repository usage | Server limit/offset and known total | Numbered pages, size choices and total |
-| Vulnerability findings; scanning jobs; APT packages, deletions, snapshots and export choices | Complete local result already returned by their APIs | Numbered local pages; local filters reset page |
-| Repositories, groups, artifacts, lifecycle jobs | Server cursor, unknown total | Bottom end load-more footer; no fabricated total or fetch loop |
+| Vulnerability findings; APT packages, deletions, snapshots and export choices | Complete local result already returned by their APIs | Numbered local pages; local filters reset page |
+| Repositories, groups, artifacts, global search, retention dry-run candidates, service accounts and credentials, lifecycle tombstones | Server cursor, unknown total | Bottom end load-more footer; no fabricated total or fetch loop |
+| Audit records | Bounded server cursor pages, unknown total | Bottom end previous/next controls; page and current record count only, no total or fetch loop |
+| Quota-rule repository picker | Server cursor, unknown total; appends only on request | Shared end-aligned load-more action beside the form; no fabricated total |
+| Scanning jobs and repository lifecycle jobs | Latest 100 lifecycle jobs, filtered locally by job kind | Explicit bounded summary and `pagination=false`; never claim a complete history count |
 | Runtime logs | Bounded older-log cursor | Same footer, explicit “Load older logs”, existing record/byte caps |
 | Browse trees and protocol-native/public expandable tables | Branch/protocol cursors or nested projections | Preserve native branch/load-more controls and `pagination=false` |
-| Dashboard top-ten/recent rows, grants, roles/templates, operations, runtime nodes, diagnostics, webhook/delivery and embedded detail tables | Bounded summaries or complete small lists | Explicit `pagination=false`; no artificial numbered pages |
+| Dashboard top-ten/recent rows, grants, roles/templates, API keys, global lifecycle jobs (up to 500), scheduled tasks, operations, runtime nodes, diagnostics, webhook/delivery, audit retention and embedded detail tables | Bounded summaries or complete small lists | Explicit `pagination=false`; no artificial numbered pages |
 
 Adding a table must choose its actual data protocol before enabling pagination.
 Never set a loaded batch's length as a server total, or fetch all cursor pages to
