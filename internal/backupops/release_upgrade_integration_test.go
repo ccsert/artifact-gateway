@@ -92,17 +92,17 @@ func TestLocalAlertReleaseUpgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 	newMigrations := fixtureLedger(t, forward)
-	if len(newMigrations) != 142 {
-		t.Fatal("candidate ledger did not reach 142 entries")
+	if len(newMigrations) != 143 {
+		t.Fatal("candidate ledger did not reach 143 entries")
 	}
 	for name, sum := range oldMigrations {
 		if newMigrations[name] != sum {
 			t.Fatal("applied baseline checksum changed")
 		}
 	}
-	for _, name := range []string{"000136_email_test_delivery.sql", "000137_repository_quota_alert_rules.sql", "000138_repository_quota_alert_events.sql", "000139_quota_delivery_permission.sql", "000141_maven_snapshot_import.sql", "000142_maven_snapshot_takeover.sql"} {
+	for _, name := range []string{"000136_email_test_delivery.sql", "000137_repository_quota_alert_rules.sql", "000138_repository_quota_alert_events.sql", "000139_quota_delivery_permission.sql", "000141_maven_snapshot_import.sql", "000142_maven_snapshot_takeover.sql", "000143_artifact_usage_paging.sql"} {
 		if newMigrations[name] == "" {
-			t.Fatal("new alert migration missing")
+			t.Fatalf("candidate migration %s missing", name)
 		}
 	}
 	before, err := source.Metadata(ctx)
@@ -154,7 +154,7 @@ func TestLocalAlertReleaseUpgrade(t *testing.T) {
 	if err != nil || !bytes.Equal(protected, stillProtected) || fixtureObjectFingerprint(t, ctx, source.objects) != sourceObjects || fixtureObjectFingerprint(t, ctx, rollback.objects) != sourceObjects {
 		t.Fatal("rollback/rollforward changed source or object format")
 	}
-	t.Logf("formal v0.5.0 %s -> candidate: 136 old checksums preserved, only 000136-139 added, replay complete no-op; object bytes/Group order/repository IDs/grants preserved; new alert API readback passed; isolated pre-upgrade snapshot rollback and rollforward passed; expanded-DB old-binary rollback NOT tested/supported by this gate", alertUpgradeBaseline)
+	t.Logf("formal v0.5.0 %s -> candidate: 136 old checksums preserved, 143 candidate entries including artifact usage paging verified, replay complete no-op; object bytes/Group order/repository IDs/grants preserved; new alert API readback passed; isolated pre-upgrade snapshot rollback and rollforward passed; expanded-DB old-binary rollback NOT tested/supported by this gate", alertUpgradeBaseline)
 }
 
 func formalUpgradeRelease(t *testing.T) Release {
