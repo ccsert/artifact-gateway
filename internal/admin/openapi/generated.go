@@ -3553,7 +3553,7 @@ type ArtifactSignature struct {
 
 // ArtifactSummary defines model for ArtifactSummary.
 type ArtifactSummary struct {
-	// BuildNumber Snapshot build number; zero for release coordinates.
+	// BuildNumber Local publication sequence for Maven SNAPSHOT cursors; zero for releases. Imported source identity is exposed separately.
 	BuildNumber *int32 `json:"buildNumber,omitempty"`
 
 	// CachedAt Most recent successful cache fill or metadata revalidation time.
@@ -3567,6 +3567,12 @@ type ArtifactSummary struct {
 	// Publisher Publisher actor when the format records it.
 	Publisher *string `json:"publisher,omitempty"`
 	Size      *int64  `json:"size,omitempty"`
+
+	// SourceBuildNumber Original imported Maven SNAPSHOT build number, which can repeat at different timestamps.
+	SourceBuildNumber *int `json:"sourceBuildNumber,omitempty"`
+
+	// SourceTimestamp Original timestamp of an imported Maven SNAPSHOT; absent for ordinary publications.
+	SourceTimestamp *string `json:"sourceTimestamp,omitempty"`
 
 	// SourceUrl Exact upstream URL persisted when this proxy asset was cached.
 	SourceUrl *string `json:"sourceUrl,omitempty"`
@@ -3782,7 +3788,7 @@ type AuthorizationTemplateWritable struct {
 
 // BrowseNode defines model for BrowseNode.
 type BrowseNode struct {
-	// BuildNumber Exact Maven SNAPSHOT build; Proxy nodes additionally pin the timestamp in their opaque ID.
+	// BuildNumber Exact local Maven SNAPSHOT publication sequence; Proxy nodes additionally pin the timestamp in their opaque ID. Imported source identity is exposed separately.
 	BuildNumber *int `json:"buildNumber,omitempty"`
 
 	// CacheRepositoryName Scope owning the cache index, which may be a Group rather than the source Repository.
@@ -3812,9 +3818,15 @@ type BrowseNode struct {
 	Path *string `json:"path,omitempty"`
 	Size *int64  `json:"size,omitempty"`
 
+	// SourceBuildNumber Original imported Maven SNAPSHOT build number, which can repeat at different timestamps.
+	SourceBuildNumber *int `json:"sourceBuildNumber,omitempty"`
+
 	// SourceRepositoryId Repository providing this publication or cached upstream response; absent on aggregate Group nodes.
 	SourceRepositoryId   *openapi_types.UUID `json:"sourceRepositoryId,omitempty"`
 	SourceRepositoryName *string             `json:"sourceRepositoryName,omitempty"`
+
+	// SourceTimestamp Original timestamp of an imported Maven SNAPSHOT; absent for ordinary publications.
+	SourceTimestamp *string `json:"sourceTimestamp,omitempty"`
 
 	// Sources Ordered local contributions for a Group node. Does not identify an actual protocol hit.
 	Sources *[]BrowseSource `json:"sources,omitempty"`
@@ -3844,8 +3856,14 @@ type BrowseSource struct {
 	RepositoryName      string             `json:"repositoryName"`
 
 	// ResolutionOrder Order among members visible to this reader, Hosted first.
-	ResolutionOrder int              `json:"resolutionOrder"`
-	Size            *int64           `json:"size,omitempty"`
+	ResolutionOrder int    `json:"resolutionOrder"`
+	Size            *int64 `json:"size,omitempty"`
+
+	// SourceBuildNumber Original imported Maven SNAPSHOT build number, which can repeat at different timestamps.
+	SourceBuildNumber *int `json:"sourceBuildNumber,omitempty"`
+
+	// SourceTimestamp Original timestamp of an imported Maven SNAPSHOT; absent for ordinary publications.
+	SourceTimestamp *string          `json:"sourceTimestamp,omitempty"`
 	Type            BrowseSourceType `json:"type"`
 }
 
@@ -4550,7 +4568,7 @@ type FormatProfileList struct {
 
 // GlobalArtifactSearchHit defines model for GlobalArtifactSearchHit.
 type GlobalArtifactSearchHit struct {
-	// BuildNumber Snapshot build number; zero for release coordinates.
+	// BuildNumber Local publication sequence for Maven SNAPSHOT cursors; zero for releases. Imported source identity is exposed separately.
 	BuildNumber *int32 `json:"buildNumber,omitempty"`
 
 	// CachedAt Most recent successful cache fill or metadata revalidation time.
@@ -4570,6 +4588,12 @@ type GlobalArtifactSearchHit struct {
 	RepositoryId   openapi_types.UUID `json:"repositoryId"`
 	RepositoryName string             `json:"repositoryName"`
 	Size           *int64             `json:"size,omitempty"`
+
+	// SourceBuildNumber Original imported Maven SNAPSHOT build number, which can repeat at different timestamps.
+	SourceBuildNumber *int `json:"sourceBuildNumber,omitempty"`
+
+	// SourceTimestamp Original timestamp of an imported Maven SNAPSHOT; absent for ordinary publications.
+	SourceTimestamp *string `json:"sourceTimestamp,omitempty"`
 
 	// SourceUrl Exact upstream URL persisted when this proxy asset was cached.
 	SourceUrl *string `json:"sourceUrl,omitempty"`
@@ -4763,7 +4787,7 @@ type MavenCacheRefreshResult struct {
 
 // MavenCoordinate defines model for MavenCoordinate.
 type MavenCoordinate struct {
-	// BuildNumber Snapshot build number. Zero for release coordinates; one or greater for each published build of a SNAPSHOT coordinate.
+	// BuildNumber Local publication sequence. Zero for releases; imported source timestamp and build number are exposed separately.
 	BuildNumber *int      `json:"buildNumber,omitempty"`
 	Coordinate  string    `json:"coordinate"`
 	CreatedAt   time.Time `json:"createdAt"`
@@ -4771,6 +4795,12 @@ type MavenCoordinate struct {
 
 	// Publisher Publisher actor of the most recent committed publish session for this coordinate. Empty when no publish session was recorded (for example replicated or pre-session artifacts).
 	Publisher *string `json:"publisher,omitempty"`
+
+	// SourceBuildNumber Original imported Maven SNAPSHOT build number, which can repeat at different timestamps.
+	SourceBuildNumber *int `json:"sourceBuildNumber,omitempty"`
+
+	// SourceTimestamp Original timestamp of an imported Maven SNAPSHOT; absent for ordinary publications.
+	SourceTimestamp *string `json:"sourceTimestamp,omitempty"`
 }
 
 // MavenCoordinatePage defines model for MavenCoordinatePage.

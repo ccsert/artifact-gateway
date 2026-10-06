@@ -42,6 +42,15 @@ func (s *PostgresStore) ReplaceArtifactQuarantine(ctx context.Context, value Art
 			return ArtifactQuarantine{}, err
 		}
 	}
+	if value.Format == FormatMaven {
+		if err = lockMavenCoordinate(ctx, tx, value.RepositoryID, value.Coordinate); err != nil {
+			return ArtifactQuarantine{}, err
+		}
+		if _, err = tx.ExecContext(ctx, `SELECT id FROM hosted_repositories WHERE id=$1 FOR SHARE`, value.RepositoryID); err != nil {
+			return ArtifactQuarantine{}, err
+		}
+	}
+
 	if expectedVersion == "0" {
 		if value.State != ArtifactQuarantineStateQuarantined {
 			return ArtifactQuarantine{}, ErrInvalidArtifactQuarantine

@@ -164,6 +164,8 @@ func (h hostedRepositoryAPIHandler) repositoryBrowseNodeResponse(repo repository
 		}
 	}
 	response := adminopenapi.BrowseNode{Id: encodeSignedCursor(h.authenticator.AdminToken, cursor), Kind: adminopenapi.BrowseNodeKind(node.Kind), Name: name, HasChildren: node.HasChildren}
+	response.SourceTimestamp = optionalString(node.SourceTimestamp)
+	response.SourceBuildNumber = optionalBuildNumber(node.SourceBuildNumber)
 	response.Path = optionalString(node.Path)
 	response.CacheRepositoryName = optionalString(node.CacheRepositoryName)
 	if id, err := uuid.Parse(repo.ID); err == nil {

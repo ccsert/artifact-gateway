@@ -8,6 +8,14 @@
 
 ## Unreleased
 
+- 新增历史验收后的显式、可审计 SNAPSHOT 发布接管：接管不改历史字节和当前解析；普通 Maven 部署按客户端收据隔离，完整校验后才推进 current，保留旧 classifier 选择和固定历史，拒绝再次导入与旧 retention 任务，并新增真实 Maven 重试/解析门禁。
+
+- Maven SNAPSHOT 历史导入补齐官方 `maven-archetype` packaging 到 JAR 的支持，缺主 JAR 和未知 packaging 仍拒绝。
+
+- Console 锁定的间接依赖 source-map-js 更新至 1.2.2，修复 GHSA-68fv-2mgg-jv7q；依赖审计保持严格，没有新增例外。
+
+- 新增受控离线 Maven SNAPSHOT 历史导入：严格冻结字节/POM/metadata 准入，保留源 timestamp/build/classifier 与当前解析选择，绑定容量预检，持久化 GAV 原子 checkpoint、安全重试/GC 恢复及可检索审计。导入 GAV 默认拒绝普通发布；异常须显式整 GAV 排除，retention 必须停用。见[操作手册](docs/maven-snapshot-import.zh-CN.md)。
+
 ## 0.6.1 - 2026-10-05
 
 - 原生备份导出/恢复可通过明确批准、完整摘要固定的原始发行包验证trimpath二进制。module/platform、binary完整字节、归档绑定的version/revision与完整migration ledger仍必须一致；没有归档的spec保留严格注入身份校验。正式v0.5.0/v0.6.0原始资产回归与隔离PG/RustFS门禁接入CI，未来Linux发行包执行真实备份身份校验。既有发行资产不变。

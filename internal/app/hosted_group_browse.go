@@ -161,7 +161,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 				value := item.Version
 				version = &value
 			}
-			items = append(items, adminopenapi.ArtifactSummary{Coordinate: item.Coordinate, Version: version, Digest: digest, CreatedAt: createdAt, Size: size, ContentType: contentType, BuildNumber: buildNumber, Publisher: optionalPublisher(item.Publisher), Intelligence: artifactIntelligenceSummaryResponse(item.Intelligence)})
+			items = append(items, adminopenapi.ArtifactSummary{Coordinate: item.Coordinate, Version: version, Digest: digest, CreatedAt: createdAt, Size: size, ContentType: contentType, BuildNumber: buildNumber, Publisher: optionalPublisher(item.Publisher), Intelligence: artifactIntelligenceSummaryResponse(item.Intelligence), SourceTimestamp: optionalString(item.SourceTimestamp), SourceBuildNumber: optionalBuildNumber(item.SourceBuildNumber)})
 		}
 		return items, nil
 	}
@@ -185,7 +185,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 		for _, artifact := range artifacts {
 			digest, createdAt := artifact.Digest, artifact.CreatedAt
 			buildNumber := int32(artifact.BuildNumber)
-			items = append(items, adminopenapi.ArtifactSummary{Coordinate: artifact.Coordinate, Digest: &digest, CreatedAt: &createdAt, BuildNumber: &buildNumber, Publisher: optionalPublisher(artifact.Publisher)})
+			items = append(items, adminopenapi.ArtifactSummary{Coordinate: artifact.Coordinate, Digest: &digest, CreatedAt: &createdAt, BuildNumber: &buildNumber, Publisher: optionalPublisher(artifact.Publisher), SourceTimestamp: optionalString(artifact.SourceTimestamp), SourceBuildNumber: optionalBuildNumber(artifact.SourceBuildNumber)})
 		}
 	case repository.FormatConan:
 		references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query.Value, limit, after.Coordinate)

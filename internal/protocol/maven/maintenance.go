@@ -112,6 +112,11 @@ func (m NativeMaintenance) runReclaimJob(ctx context.Context, job repository.Lif
 	if err := json.Unmarshal(job.Payload, &payload); err != nil || payload.ObjectKey == "" || payload.ClaimToken == "" {
 		return m.failReclaimJob(ctx, job, "invalid Maven reclaim payload")
 	}
+	ctx, release, err := m.Store.LockMavenObject(ctx, payload.ObjectKey)
+	if err != nil {
+		return m.failReclaimJob(ctx, job, "Maven object lock failed")
+	}
+	defer release()
 	active, err := m.Store.MavenObjectIntentClaimIsActive(ctx, payload.ObjectKey, payload.ClaimToken)
 	if err != nil {
 		return m.failReclaimJob(ctx, job, "Maven object claim lookup failed")
@@ -445,7 +450,7 @@ func (m NativeRetention) runJob(ctx context.Context, job repository.LifecycleJob
 		return m.failRetentionJob(ctx, job, "plan Maven retention failed")
 	}
 	for _, artifact := range candidates {
-		if _, err = m.Store.TombstoneMavenArtifact(ctx, job.RepositoryID, artifact.ID); err != nil {
+		if _, err = m.Store.TombstoneMavenArtifactForRetention(ctx, job.RepositoryID, artifact.ID, payload.PolicyVersion); err != nil {
 			return m.failRetentionJob(ctx, job, "tombstone Maven retention candidate failed")
 		}
 	}

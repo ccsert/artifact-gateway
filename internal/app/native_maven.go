@@ -228,6 +228,9 @@ func (h nativeMavenHandler) createWithIdempotencyKey(w http.ResponseWriter, r *h
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "pomObject must be declared")
 		return
 	}
+	if h.rejectSnapshotImportWrite(w, r, repo.ID, body.Coordinate) {
+		return
+	}
 	key = strings.TrimSpace(key)
 	if key == "" || len(key) > 128 {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "Idempotency-Key is required and must be at most 128 characters")
@@ -286,6 +289,9 @@ func (h nativeMavenHandler) upload(w http.ResponseWriter, r *http.Request, id, n
 		writeHostedProblem(w, 409, "session_closed", "publish session is closed")
 		return
 	}
+	if h.rejectSnapshotImportWrite(w, r, s.RepositoryID, s.Coordinate) {
+		return
+	}
 	var declared *repository.MavenDeclaredObject
 	for i := range s.Objects {
 		if s.Objects[i].Name == name {
@@ -331,6 +337,9 @@ func (h nativeMavenHandler) commit(w http.ResponseWriter, r *http.Request, id st
 	}
 	if s.State != "open" || time.Now().After(s.ExpiresAt) {
 		writeHostedProblem(w, 409, "session_closed", "publish session is closed")
+		return
+	}
+	if h.rejectSnapshotImportWrite(w, r, s.RepositoryID, s.Coordinate) {
 		return
 	}
 	a, err := h.promote(r.Context(), s)
@@ -558,6 +567,31 @@ func (h nativeMavenHandler) snapshotAsset(ctx context.Context, repositoryID, pat
 	}
 	group := strings.Join(parts[:len(parts)-3], ".")
 	coordinate := group + ":" + artifact + ":" + version
+	if imported, err := h.store.GetMavenSnapshotImport(ctx, repositoryID, coordinate); err == nil {
+		if imported.State != "committed" {
+			return repository.MavenAsset{}, false
+		}
+		aliases := imported.Aliases
+		if imported.CurrentBuildNumber > 0 {
+			aliases = imported.CurrentAliases
+		}
+		target := aliases[path]
+		if target == "" {
+			for _, suffix := range []string{".sha512", ".sha256", ".sha1", ".md5"} {
+				if strings.HasSuffix(path, suffix) && aliases[strings.TrimSuffix(path, suffix)] != "" {
+					target = aliases[strings.TrimSuffix(path, suffix)] + suffix
+					break
+				}
+			}
+		}
+		if target == "" {
+			return repository.MavenAsset{}, false
+		}
+		asset, err := h.store.GetMavenAsset(ctx, repositoryID, target)
+		return asset, err == nil
+	} else if !errors.Is(err, repository.ErrNotFound) {
+		return repository.MavenAsset{}, false
+	}
 	items, err := h.store.ListMavenArtifacts(ctx, repositoryID)
 	if err != nil {
 		return repository.MavenAsset{}, false
@@ -617,6 +651,9 @@ func (h nativeMavenHandler) coordinateCommit(w http.ResponseWriter, r *http.Requ
 		h.recordAuthorizationDenial(decision)
 		_ = h.store.RecordAudit(r.Context(), repository.AuditRecord{Repository: repo.Name, GroupName: repo.Name, Actor: principal.Actor, Outcome: repository.AuditAccessDenied, OccurredAt: time.Now().UTC(), Format: "maven", Resource: coordinate, Operation: "commit", Status: http.StatusForbidden, AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason})
 		http.Error(w, "repository write permission required", http.StatusForbidden)
+		return
+	}
+	if h.rejectSnapshotImportWrite(w, r, repo.ID, coordinate) {
 		return
 	}
 	var body nativeMavenCoordinateCommitRequest
@@ -740,6 +777,36 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "repository write permission required", http.StatusForbidden)
 		return
 	}
+	imported, importErr := h.store.GetMavenSnapshotImport(r.Context(), repo.ID, resource)
+	writable := importErr == nil && imported.Writable()
+	if !writable && h.rejectSnapshotImportWrite(w, r, repo.ID, resource) {
+		return
+	}
+	if writable {
+		reserved, err := h.store.MavenSnapshotImportPathReserved(r.Context(), repo.ID, resource, assetPath)
+		if err != nil {
+			http.Error(w, "check archived Maven path", 500)
+			return
+		}
+		if reserved {
+			writeHostedProblem(w, 409, "snapshot_history_reserved", "historical build namespaces are immutable")
+			return
+		}
+		if name == "maven-metadata.xml" {
+			data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<20))
+			if err != nil {
+				writeHostedProblem(w, 400, "invalid_metadata", "bounded deployment metadata is required")
+				return
+			}
+			if err = h.completeSnapshotDeployment(r.Context(), imported, principal.Actor, data); err != nil {
+				writeHostedProblem(w, 409, "snapshot_deployment_not_ready", "metadata does not match a complete verified deployment")
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+	}
+
 	// Maven and Gradle upload repository metadata and checksum sidecars as part
 	// of their normal deploy protocol. They never decide coordinate visibility,
 	// so accept them for client compatibility without making them authoritative.
@@ -773,21 +840,44 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = spool.Close() }()
 	digest := spool.Digest()
+	clientStamp, clientBuild, receiptOK := mavenClientReceipt(artifact, version, name)
+	if writable && !receiptOK {
+		writeHostedProblem(w, 409, "snapshot_client_receipt_required", "timestamped Maven deployment paths are required after takeover")
+		return
+	}
 	name = canonicalMavenAssetName(artifact, version, name)
+	if writable {
+		if _, _, ok := repository.MavenSnapshotAssetPair(strings.TrimPrefix(name, artifact+"-"+version)); !ok {
+			writeHostedProblem(w, 400, "invalid_snapshot_asset", "valid extension and classifier are required")
+			return
+		}
+	}
 	declared := repository.MavenDeclaredObject{Name: name, Digest: digest, Size: spool.Size()}
-	s, err := h.store.FindOpenMavenPublishSession(r.Context(), repo.ID, coordinate, principal.Actor)
+	findSession := func() (repository.MavenPublishSession, error) {
+		if writable {
+			return h.store.FindMavenSnapshotDeployment(r.Context(), repo.ID, coordinate, principal.Actor, clientStamp, clientBuild)
+		}
+		return h.store.FindOpenMavenPublishSession(r.Context(), repo.ID, coordinate, principal.Actor)
+	}
+	s, err := findSession()
+	if err == nil && writable && (s.State != "open" || !s.ExpiresAt.After(time.Now())) {
+		writeHostedProblem(w, 409, "session_closed", "deployment receipt is closed")
+		return
+	}
 	if errors.Is(err, repository.ErrNotFound) {
 		pomObject := ""
 		if strings.HasSuffix(name, ".pom") {
 			pomObject = name
 		}
 		s = repository.MavenPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Coordinate: coordinate, Publisher: principal.Actor, PomObject: pomObject, State: "open", Objects: []repository.MavenDeclaredObject{declared}, ExpiresAt: time.Now().Add(time.Hour)}
-		_, err = h.store.CreateMavenPublishSession(r.Context(), s)
+		if writable {
+			s.ClientTimestamp, s.ClientBuildNumber = clientStamp, clientBuild
+			_, err = h.store.CreateMavenSnapshotDeployment(r.Context(), s)
+		} else {
+			_, err = h.store.CreateMavenPublishSession(r.Context(), s)
+		}
 		if errors.Is(err, repository.ErrNameExists) {
-			// A concurrent first asset may have created the replacement session
-			// after our lookup. Rejoin that live session instead of surfacing a
-			// transient 500 or overwriting its staged facts.
-			s, err = h.store.FindOpenMavenPublishSession(r.Context(), repo.ID, coordinate, principal.Actor)
+			s, err = findSession()
 			if err == nil {
 				err = h.store.AppendMavenPublishObject(r.Context(), s.ID, declared)
 			}
@@ -795,6 +885,7 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 	} else if err == nil {
 		err = h.store.AppendMavenPublishObject(r.Context(), s.ID, declared)
 	}
+
 	if err != nil {
 		if errors.Is(err, repository.ErrNameExists) {
 			writeHostedProblem(w, http.StatusConflict, "asset_conflict", "Maven asset was already staged with different bytes")
@@ -824,7 +915,7 @@ func (h nativeMavenHandler) deploy(w http.ResponseWriter, r *http.Request) {
 	}
 	var directChecksums []mavenChecksum
 	if !repo.MavenStrictPublication {
-		directChecksums, err = generatedMavenChecksumsFromReader(spool.Reader())
+		directChecksums, err = generatedMavenChecksumsFromReader(spool.Reader(), writable)
 		if err != nil || spool.Rewind() != nil {
 			http.Error(w, "stage Maven asset", http.StatusInternalServerError)
 			return
@@ -1000,6 +1091,39 @@ func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, rep
 		group := strings.Join(parts[:len(parts)-2], ".")
 		artifact, version := parts[len(parts)-2], parts[len(parts)-1]
 		coordinate := group + ":" + artifact + ":" + version
+		if imported, err := h.store.GetMavenSnapshotImport(r.Context(), repo.ID, coordinate); err == nil {
+			if imported.State != "committed" || blockedCoordinates[coordinate] {
+				http.NotFound(w, r)
+				return
+			}
+			if imported.Writable() && imported.CurrentBuildNumber > 0 {
+				h.writeTakenOverSnapshotMetadata(w, r, repo, imported, requestedPath, actor, checksum, items)
+				return
+			}
+			if imported.Metadata == nil {
+				http.NotFound(w, r)
+				return
+			}
+
+			// Never silently select a sibling build when the pinned current
+			// reference is tombstoned, quarantined or unavailable.
+			for _, target := range imported.Aliases {
+				if _, err := h.store.GetMavenAsset(r.Context(), repo.ID, target); err != nil {
+					http.NotFound(w, r)
+					return
+				}
+			}
+			body, err := h.objects.Get(r.Context(), imported.Metadata.ObjectKey)
+			if err != nil {
+				http.Error(w, "metadata unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			h.writeGeneratedMavenMetadata(w, r, repo, requestedPath, actor, body, checksum)
+			return
+		} else if !errors.Is(err, repository.ErrNotFound) {
+			http.Error(w, "metadata unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		builds := []repository.MavenArtifact{}
 		for _, item := range items {
 			if item.Coordinate == coordinate && item.BuildNumber > 0 {
@@ -1243,12 +1367,15 @@ func mavenResourceFromPath(path string) string {
 
 type mavenChecksum struct{ extension, digest, body string }
 
-func generatedMavenChecksumsFromReader(reader io.Reader) ([]mavenChecksum, error) {
-	sha256Hash, sha1Hash, md5Hash := sha256.New(), sha1.New(), md5.New()
-	if _, err := io.Copy(io.MultiWriter(sha256Hash, sha1Hash, md5Hash), reader); err != nil {
+func generatedMavenChecksumsFromReader(reader io.Reader, includeSHA512 ...bool) ([]mavenChecksum, error) {
+	sha256Hash, sha1Hash, md5Hash, sha512Hash := sha256.New(), sha1.New(), md5.New(), sha512.New()
+	if _, err := io.Copy(io.MultiWriter(sha256Hash, sha1Hash, md5Hash, sha512Hash), reader); err != nil {
 		return nil, err
 	}
 	checksums := []struct{ extension, value string }{{".sha256", hex.EncodeToString(sha256Hash.Sum(nil))}, {".sha1", hex.EncodeToString(sha1Hash.Sum(nil))}, {".md5", hex.EncodeToString(md5Hash.Sum(nil))}}
+	if len(includeSHA512) > 0 && includeSHA512[0] {
+		checksums = append(checksums, struct{ extension, value string }{".sha512", hex.EncodeToString(sha512Hash.Sum(nil))})
+	}
 	out := make([]mavenChecksum, 0, len(checksums))
 	for _, v := range checksums {
 		body := v.value + "\n"
@@ -1261,4 +1388,15 @@ func writeNativeMavenJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func (h nativeMavenHandler) rejectSnapshotImportWrite(w http.ResponseWriter, r *http.Request, repo, coordinate string) bool {
+	if _, err := h.store.GetMavenSnapshotImport(r.Context(), repo, coordinate); err == nil {
+		writeHostedProblem(w, http.StatusConflict, "snapshot_import_reserved", "coordinate belongs to a fixed SNAPSHOT import")
+		return true
+	} else if !errors.Is(err, repository.ErrNotFound) {
+		writeHostedProblem(w, http.StatusServiceUnavailable, "metadata_unavailable", "SNAPSHOT import checkpoint unavailable")
+		return true
+	}
+	return false
 }

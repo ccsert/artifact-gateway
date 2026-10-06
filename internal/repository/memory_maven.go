@@ -15,6 +15,10 @@ const mavenObjectClaimLease = 5 * time.Minute
 func (s *MemoryStore) CreateMavenPublishSession(_ context.Context, session MavenPublishSession) (MavenPublishSession, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, reserved := s.mavenImports[session.RepositoryID+"\x00"+session.Coordinate]; reserved {
+		return MavenPublishSession{}, ErrNameExists
+	}
+
 	now := time.Now().UTC()
 	for id, existing := range s.mavenSessions {
 		if existing.RepositoryID != session.RepositoryID || existing.Coordinate != session.Coordinate || existing.Publisher != session.Publisher || existing.State != "open" {
@@ -33,6 +37,10 @@ func (s *MemoryStore) CreateMavenPublishSession(_ context.Context, session Maven
 func (s *MemoryStore) CreateMavenPublishSessionIdempotently(ctx context.Context, session MavenPublishSession, actor, target, key, payload string) (MavenPublishSession, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, reserved := s.mavenImports[session.RepositoryID+"\x00"+session.Coordinate]; reserved {
+		return MavenPublishSession{}, false, ErrNameExists
+	}
+
 	recordKey := actor + "\x00" + target + "\x00" + key
 	if record, ok := s.mavenSessionKeys[recordKey]; ok && time.Now().UTC().Before(record.expiresAt) {
 		if record.payload != payload {
@@ -138,7 +146,16 @@ func (s *MemoryStore) MarkMavenPublishObject(_ context.Context, id, name, key st
 	}
 	if intent, exists := s.mavenObjectIntents[key]; exists {
 		if !intent.claimedAt.IsZero() && intent.deletedAt.IsZero() {
-			return ErrDisabled
+			imported := false
+			for _, checkpoint := range s.mavenImports {
+				imported = imported || checkpoint.SessionID == id && checkpoint.State == "staged"
+			}
+			if !imported || time.Since(intent.claimedAt) < mavenObjectClaimLease {
+				return ErrDisabled
+			}
+			// Import callers hold LockMavenObject through reset and object I/O.
+			intent.claimedAt, intent.claimToken = time.Time{}, ""
+			s.mavenObjectIntents[key] = intent
 		}
 		if !intent.deletedAt.IsZero() {
 			intent.claimedAt, intent.deletedAt, intent.createdAt, intent.claimToken = time.Time{}, time.Time{}, time.Now().UTC(), ""
@@ -162,6 +179,16 @@ func (s *MemoryStore) PublishMavenProtocolAssets(_ context.Context, id string, a
 	if !ok || session.State != "open" || time.Now().After(session.ExpiresAt) {
 		return MavenArtifact{}, ErrDisabled
 	}
+	if imported, reserved := s.mavenImports[session.RepositoryID+"\x00"+session.Coordinate]; reserved && (!imported.Writable() || session.ID == imported.SessionID || !validMavenSnapshotReceipt(session)) {
+		return MavenArtifact{}, ErrNameExists
+	}
+	if imported, exists := s.mavenImports[session.RepositoryID+"\x00"+session.Coordinate]; exists && imported.Writable() {
+		repo := s.hostedRepositories[session.RepositoryID]
+		if repo.State != RepositoryActive || repo.MavenStrictPublication || s.retentionPolicies[repo.ID].Enabled {
+			return MavenArtifact{}, ErrMavenSnapshotTakeoverNotReady
+		}
+	}
+
 	artifact, found := s.mavenArtifacts[id]
 	if !found && !IsMavenSnapshotCoordinate(session.Coordinate) {
 		for _, existing := range s.mavenArtifacts {
@@ -178,8 +205,12 @@ func (s *MemoryStore) PublishMavenProtocolAssets(_ context.Context, id string, a
 		buildNumber := 0
 		if IsMavenSnapshotCoordinate(session.Coordinate) {
 			for _, existing := range s.mavenArtifacts {
-				if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate && existing.BuildNumber >= buildNumber {
-					buildNumber = existing.BuildNumber + 1
+				if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate {
+					maximum := max(existing.BuildNumber, existing.SourceBuildNumber)
+					if maximum >= MaxMavenSnapshotBuildNumber {
+						return MavenArtifact{}, ErrMavenSnapshotBuildExhausted
+					}
+					buildNumber = max(buildNumber, maximum+1)
 				}
 			}
 			if buildNumber == 0 {
@@ -232,6 +263,10 @@ func (s *MemoryStore) CompleteMavenProtocolPublications(_ context.Context, repos
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for id, session := range s.mavenSessions {
+		if _, reserved := s.mavenImports[session.RepositoryID+"\x00"+session.Coordinate]; reserved {
+			continue
+		}
+
 		matches := session.Coordinate == selector
 		if !exact {
 			matches = strings.HasPrefix(session.Coordinate, selector)
@@ -327,6 +362,9 @@ func (s *MemoryStore) commitMavenPublishSessionLocked(id string, assets []MavenA
 				return MavenArtifact{}, ErrNameExists
 			}
 		}
+	}
+	if _, reserved := s.mavenImports[session.RepositoryID+"\x00"+session.Coordinate]; reserved {
+		return MavenArtifact{}, ErrNameExists
 	}
 	artifact := MavenArtifact{ID: id, RepositoryID: session.RepositoryID, Coordinate: session.Coordinate, Digest: session.Objects[0].Digest, State: "visible", BuildNumber: buildNumber, CreatedAt: time.Now().UTC()}
 	for _, a := range assets {
@@ -463,6 +501,25 @@ func (s *MemoryStore) GetMavenArtifactByCoordinate(_ context.Context, repository
 func (s *MemoryStore) TombstoneMavenArtifact(_ context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.tombstoneMavenArtifactLocked(repositoryID, artifactID)
+}
+
+func (s *MemoryStore) TombstoneMavenArtifactForRetention(_ context.Context, repositoryID, artifactID, policyVersion string) (MavenArtifact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.retentionPolicies[repositoryID]
+	if !p.Enabled || p.Version != policyVersion {
+		return MavenArtifact{}, ErrVersionConflict
+	}
+	for _, v := range s.mavenImports {
+		if v.RepositoryID == repositoryID && v.Writable() {
+			return MavenArtifact{}, ErrMavenSnapshotImportRetention
+		}
+	}
+	return s.tombstoneMavenArtifactLocked(repositoryID, artifactID)
+}
+
+func (s *MemoryStore) tombstoneMavenArtifactLocked(repositoryID, artifactID string) (MavenArtifact, error) {
 	artifact, ok := s.mavenArtifacts[artifactID]
 	if !ok || artifact.RepositoryID != repositoryID {
 		return MavenArtifact{}, ErrNotFound
@@ -624,8 +681,13 @@ func mavenAssetBelongsToArtifactBuild(asset MavenAsset, artifact MavenArtifact) 
 	if artifact.BuildNumber > 0 {
 		parts := strings.Split(artifact.Coordinate, ":")
 		base := strings.TrimSuffix(parts[2], "-SNAPSHOT")
-		prefix := mavenArtifactPathPrefix(artifact.Coordinate) + parts[1] + "-" + base + "-" + artifact.CreatedAt.UTC().Format("20060102.150405") + "-" + strconv.Itoa(artifact.BuildNumber)
-		return strings.HasPrefix(asset.Path, prefix)
+		timestamp, build := artifact.CreatedAt.UTC().Format("20060102.150405"), artifact.BuildNumber
+		if artifact.SourceTimestamp != "" {
+			timestamp, build = artifact.SourceTimestamp, artifact.SourceBuildNumber
+		}
+		prefix := mavenArtifactPathPrefix(artifact.Coordinate) + parts[1] + "-" + base + "-" + timestamp + "-" + strconv.Itoa(build)
+		suffix := strings.TrimPrefix(asset.Path, prefix)
+		return strings.HasPrefix(asset.Path, prefix) && (strings.HasPrefix(suffix, ".") || strings.HasPrefix(suffix, "-"))
 	}
 	return mavenAssetBelongsToArtifact(asset, artifact.Coordinate)
 }

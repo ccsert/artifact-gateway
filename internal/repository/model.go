@@ -1070,6 +1070,8 @@ type MavenPublishSession struct {
 	ID, RepositoryID, Coordinate, Publisher, PomObject, State string
 	Objects                                                   []MavenDeclaredObject
 	ExpiresAt                                                 time.Time
+	ClientTimestamp                                           string `json:"-"`
+	ClientBuildNumber                                         int    `json:"-"`
 }
 type MavenAsset struct {
 	RepositoryID, Path, ObjectKey, Digest string
@@ -1084,8 +1086,10 @@ type MavenArtifact struct {
 	Publisher    string `json:"publisher,omitempty"`
 	// BuildNumber is 0 for immutable releases and the 1-based publish sequence
 	// for SNAPSHOT coordinates, which keep one row per timestamped build.
-	BuildNumber int       `json:"buildNumber,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
+	BuildNumber       int       `json:"buildNumber,omitempty"`
+	SourceTimestamp   string    `json:"sourceTimestamp,omitempty"`
+	SourceBuildNumber int       `json:"sourceBuildNumber,omitempty"`
+	CreatedAt         time.Time `json:"createdAt"`
 }
 
 // IsMavenSnapshotCoordinate reports whether the coordinate's version segment

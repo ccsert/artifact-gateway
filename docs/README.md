@@ -62,6 +62,7 @@ agree with executable tests and the
 - [Runtime log product design](runtime-log-product-design.md) — proposal for API/Worker log classification, search, durable storage, and deployment acceptance.
 - [Kubernetes deployment](kubernetes-deployment.md) — local executable baseline and production requirements.
 - [Recovery runbook](recovery-runbook.md) — backup, restore, RPO/RTO evidence, and rollback.
+- [Historical Maven SNAPSHOT import](maven-snapshot-import.md) — controlled frozen-bundle admission, exact historical identities and source current selectors, capacity and checkpoint recovery.
 - [Migration capacity preflight](migration-capacity-preflight.md) — offline logical and physical budget calculation for fixed inventory evidence.
 - [Offline backup manifest verification](backup-manifest-verification.md) — private local byte verification and explicitly unproven snapshot consistency.
 - [Anonymous access operations](anonymous-access-operations.md) — default-deny global, Group, and Repository gates.

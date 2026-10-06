@@ -83,7 +83,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				d := a.Digest
 				created := a.CreatedAt
 				buildNumber := int32(a.BuildNumber)
-				items = append(items, adminopenapi.ArtifactSummary{Coordinate: a.Coordinate, Digest: &d, CreatedAt: &created, BuildNumber: &buildNumber, Publisher: optionalPublisher(a.Publisher)})
+				items = append(items, adminopenapi.ArtifactSummary{Coordinate: a.Coordinate, Digest: &d, CreatedAt: &created, BuildNumber: &buildNumber, Publisher: optionalPublisher(a.Publisher), SourceTimestamp: optionalString(a.SourceTimestamp), SourceBuildNumber: optionalBuildNumber(a.SourceBuildNumber)})
 				lastCoordinate = a.Coordinate
 			}
 		case repository.FormatConan:

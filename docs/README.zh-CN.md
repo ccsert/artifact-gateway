@@ -59,6 +59,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [运行日志产品设计](runtime-log-product-design.zh-CN.md) — API/Worker 日志切分、查看、持久存储与部署验收提案。
 - [Kubernetes 部署](kubernetes-deployment.zh-CN.md) — 可执行本地基线与生产要求。
 - [恢复手册](recovery-runbook.zh-CN.md) — 备份、恢复、RPO/RTO 证据与回滚。
+- [Maven SNAPSHOT 历史导入](maven-snapshot-import.zh-CN.md) — 受控冻结 bundle 准入、原历史身份和源当前选择、容量及 checkpoint 恢复。
 - [迁移容量预检](migration-capacity-preflight.zh-CN.md) — 固定库存证据的离线逻辑与物理预算。
 - [离线备份清单验证](backup-manifest-verification.zh-CN.md) — 私有本地字节验证与明确未证实的快照一致性。
 - [匿名访问运维](anonymous-access-operations.zh-CN.md) — 默认拒绝的全局、Group、Repository 门禁。

@@ -308,6 +308,9 @@ type ReplicationStore interface {
 }
 
 type NativeMavenStore interface {
+	LockMavenObject(context.Context, string) (context.Context, func(), error)
+	MavenSnapshotImportStore
+	MavenSnapshotTakeoverStore
 	CreateMavenPublishSession(context.Context, MavenPublishSession) (MavenPublishSession, error)
 	FindOpenMavenPublishSession(context.Context, string, string, string) (MavenPublishSession, error)
 	FindMavenPublishSession(context.Context, string, string, string) (MavenPublishSession, error)
@@ -329,6 +332,7 @@ type NativeMavenStore interface {
 	GetMavenArtifact(context.Context, string, string) (MavenArtifact, error)
 	GetMavenArtifactByCoordinate(context.Context, string, string) (MavenArtifact, error)
 	TombstoneMavenArtifact(context.Context, string, string) (MavenArtifact, error)
+	TombstoneMavenArtifactForRetention(context.Context, string, string, string) (MavenArtifact, error)
 	RestoreMavenArtifact(context.Context, string, string) (MavenArtifact, error)
 	PromoteMavenArtifact(context.Context, MavenPromotion) (MavenArtifact, error)
 	PublishReplicatedMavenArtifact(context.Context, MavenReplication) (MavenArtifact, error)

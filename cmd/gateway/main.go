@@ -25,6 +25,7 @@ import (
 	"github.com/artifact-gateway/artifact-gateway/internal/preflight"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
+	"github.com/artifact-gateway/artifact-gateway/internal/snapshotimport"
 	"github.com/google/uuid"
 )
 
@@ -33,6 +34,12 @@ func main() {
 		build := buildinfo.Read()
 		fmt.Printf("artifact-gateway %s (revision %s, %s)\n", build.Version, build.Revision, build.GoVersion)
 		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "snapshot-import" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		code := snapshotimport.RunCLI(ctx, os.Args[2:], os.Stdout, os.Stderr)
+		stop()
+		os.Exit(code)
 	}
 	if len(os.Args) > 1 && os.Args[1] == "backup" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
