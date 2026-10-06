@@ -2,8 +2,8 @@
 
 [简体中文](maven-snapshot-import.zh-CN.md) | [Documentation index](README.md)
 
-`gateway snapshot-import` is an **Unreleased** operator command for a frozen,
-offline Maven SNAPSHOT bundle. Published v0.6.1 does not contain it. It preserves
+`gateway snapshot-import` is available from **v0.7.0** for a frozen,
+offline Maven SNAPSHOT bundle. v0.6.1 does not contain it. It preserves
 admitted source timestamp/build filenames, extension/classifier pairs, complete
 primary bytes and version metadata bytes. Each metadata pair keeps its source
 selection, including an older build or different builds for different pairs.
@@ -104,10 +104,14 @@ issues, PRs and the Git repository.
    apply, complete the [recovery runbook](recovery-runbook.md) with a validated,
    paired PostgreSQL/S3 backup and the complete writer scope. All Gateway API,
    reader, scheduler and worker processes connected to the target must run the
-   same revision containing this importer and migrations `000141`/`000142`; apply the
-   migration through the existing migration workflow. **Do not import into a
+   same v0.7.0 revision. Upgrading from v0.6.1/schema `000140` applies
+   `000141` (import checkpoints) and `000142` (publication takeover) through the
+   existing migration workflow. **Do not import into a
    mixed old/new revision deployment.** An old binary does not honor import
    reservations or the preserved selectors. Schema addition alone is insufficient.
+   Do not run old binaries against the expanded database or attempt down migrations.
+   Rollback requires the validated, paired **pre-upgrade** PostgreSQL/S3 snapshot
+   and matching old software; preserve configuration and encryption keys separately.
 2. Keep target retention disabled through acceptance. Use an existing privileged
    operator's database/S3 credential references; this command does not grant
    permissions. Database identity uses `pg_control_system()` plus database name;

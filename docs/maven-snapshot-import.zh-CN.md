@@ -2,8 +2,8 @@
 
 [English](maven-snapshot-import.md) | [文档索引](README.zh-CN.md)
 
-`gateway snapshot-import` 是 **Unreleased** 的运维命令，用于冻结的离线 Maven SNAPSHOT
-bundle。已发布的 v0.6.1 没有此能力。它保留准入构建的源 timestamp/build 文件名、
+`gateway snapshot-import` 从 **v0.7.0** 提供，用于冻结的离线 Maven SNAPSHOT
+bundle。v0.6.1 没有此能力。它保留准入构建的源 timestamp/build 文件名、
 extension/classifier、完整主资产字节及版本 metadata 原文。每一对 metadata 都保持源
 选择，包括选旧构建或不同 classifier 各选不同构建。普通 Maven PUT/session 发布仍
 分配新的本地身份，不能用来原样保留历史。
@@ -81,9 +81,11 @@ headroom 的本地临时空间。以下为 **模板**，须替换为实际测量
 1. 通过既有管理能力建立并审阅明确的源到目标 Repository 映射，先用隔离目标演练。
    真正 apply 前，按[恢复手册](recovery-runbook.zh-CN.md)完成已验证的 PostgreSQL/S3
    配对备份与完整写入者范围。连接目标的全部 Gateway API、reader、scheduler、worker
-   须运行包含导入器和 migration `000141`/`000142` 的同一 revision，并通过既有流程应用
-   migration。**不能在旧新版本混跑期间导入**。旧 binary 不识别预留 checkpoint 和
-   原解析选择，单纯添加 schema 不足以支持导入。
+   须运行同一 v0.7.0 revision。从 v0.6.1/schema `000140` 升级，通过既有流程依次应用
+   `000141`（导入 checkpoint）与 `000142`（发布接管）。**不能在旧新版本混跑期间导入**。旧 binary 不识别预留 checkpoint 和
+   原解析选择，单纯添加 schema 不足以支持导入。不能让旧 binary 连接已扩展的数据库，
+   也不能尝试 down migration。回退依赖已验证的 **升级前** PostgreSQL/S3 配对快照和
+   匹配的旧软件；配置与加密 key 须独立保管。
 2. 验收期间保持目标 retention 停用。使用已有特权操作者的数据库/S3 凭据引用；命令
    不授权。数据库身份读取 `pg_control_system()` 与 database name；权限不足会拒绝，
    不请求或授予新权限。
