@@ -225,7 +225,7 @@ func TestPostgresRustFSArchetypeSnapshotImportCLIExplicitTarget(t *testing.T) {
 			t.Fatalf("%s changed current", failure.mode)
 		}
 		if failure.mode == "claimed" {
-			if _, err = database.ExecContext(ctx, `UPDATE native_maven_object_intents SET claimed_at=NULL,claim_token=NULL WHERE claimed_token='synthetic-claim'`); err != nil {
+			if _, err = database.ExecContext(ctx, `UPDATE native_maven_object_intents SET claimed_at=NULL,claimed_token=NULL WHERE object_key IN (SELECT object_key FROM native_maven_publish_uploads WHERE session_id=$1)`, session.ID); err != nil {
 				t.Fatal(err)
 			}
 		}
