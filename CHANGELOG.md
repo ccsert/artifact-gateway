@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+## 0.7.0 - 2026-10-06
+
 - Added explicit, audited SNAPSHOT publication takeover after historical acceptance. Frozen target bytes/current selectors stay fixed through takeover; receipt-bound ordinary Maven deployments advance current only when complete, retain immutable history and source classifier choices, reject sealed re-import and stale retention jobs, and use a mandatory real Maven retry/resolution gate.
 
 - Maven SNAPSHOT history import now supports official `maven-archetype` packaging as JARs while still rejecting missing main JARs and unknown packaging.

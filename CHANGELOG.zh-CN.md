@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+## 0.7.0 - 2026-10-06
+
 - 新增历史验收后的显式、可审计 SNAPSHOT 发布接管：接管不改历史字节和当前解析；普通 Maven 部署按客户端收据隔离，完整校验后才推进 current，保留旧 classifier 选择和固定历史，拒绝再次导入与旧 retention 任务，并新增真实 Maven 重试/解析门禁。
 
 - Maven SNAPSHOT 历史导入补齐官方 `maven-archetype` packaging 到 JAR 的支持，缺主 JAR 和未知 packaging 仍拒绝。
