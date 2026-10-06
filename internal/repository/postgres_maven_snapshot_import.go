@@ -12,11 +12,12 @@ import (
 	"github.com/google/uuid"
 )
 
-const mavenImportColumns = `repository_id::text,coordinate,target_id,target_binding,source_id,manifest_digest,plan_digest,session_id::text,actor,state,metadata,aliases,created_at`
+const mavenImportColumns = `repository_id::text,coordinate,target_id,target_binding,source_id,manifest_digest,plan_digest,session_id::text,actor,state,metadata,aliases,created_at,takeover_key,takeover_actor,taken_over_at,current_build_number,current_aliases`
 
 func scanMavenImport(row interface{ Scan(...any) error }) (v MavenSnapshotImport, err error) {
-	var metadata, aliases []byte
-	err = row.Scan(&v.RepositoryID, &v.Coordinate, &v.TargetID, &v.TargetBinding, &v.SourceID, &v.ManifestDigest, &v.PlanDigest, &v.SessionID, &v.Actor, &v.State, &metadata, &aliases, &v.CreatedAt)
+	var metadata, aliases, current []byte
+	var takenOver sql.NullTime
+	err = row.Scan(&v.RepositoryID, &v.Coordinate, &v.TargetID, &v.TargetBinding, &v.SourceID, &v.ManifestDigest, &v.PlanDigest, &v.SessionID, &v.Actor, &v.State, &metadata, &aliases, &v.CreatedAt, &v.TakeoverKey, &v.TakeoverActor, &takenOver, &v.CurrentBuildNumber, &current)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, ErrNotFound
 	}
@@ -28,6 +29,12 @@ func scanMavenImport(row interface{ Scan(...any) error }) (v MavenSnapshotImport
 	}
 	if err == nil {
 		err = json.Unmarshal(aliases, &v.Aliases)
+	}
+	if err == nil {
+		err = json.Unmarshal(current, &v.CurrentAliases)
+	}
+	if takenOver.Valid {
+		v.TakenOverAt = takenOver.Time
 	}
 	return v, err
 }
@@ -77,6 +84,9 @@ func checkPostgresMavenImport(ctx context.Context, tx *sql.Tx, p MavenSnapshotIm
 
 	v, err := scanMavenImport(tx.QueryRowContext(ctx, `SELECT `+mavenImportColumns+` FROM native_maven_snapshot_imports WHERE repository_id=$1 AND coordinate=$2 FOR UPDATE`, p.RepositoryID, p.Coordinate))
 	if err == nil {
+		if v.Writable() {
+			return v, ErrMavenSnapshotTakenOver
+		}
 		if v.PlanDigest != mavenImportDigest(p) {
 			return v, ErrIdempotencyConflict
 		}
@@ -174,6 +184,9 @@ func (s *PostgresStore) CommitMavenSnapshotImport(ctx context.Context, p MavenSn
 		if key != a.ObjectKey {
 			return v, ErrDisabled
 		}
+	}
+	if err = lockMavenSnapshotAssetIntentsTx(ctx, tx, p.Assets); err != nil {
+		return v, err
 	}
 	for i, a := range p.Artifacts {
 		id := uuid.NewSHA1(uuid.MustParse(v.SessionID), []byte(a.SourceTimestamp+":"+strconv.Itoa(a.SourceBuildNumber)+":"+a.Digest)).String()

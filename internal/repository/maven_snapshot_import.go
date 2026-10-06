@@ -29,6 +29,14 @@ type MavenSnapshotImport struct {
 	Metadata                                                                                                         *MavenAsset
 	Aliases                                                                                                          map[string]string
 	CreatedAt                                                                                                        time.Time
+	TakeoverKey, TakeoverActor                                                                                       string
+	TakenOverAt                                                                                                      time.Time
+	CurrentBuildNumber                                                                                               int
+	CurrentAliases                                                                                                   map[string]string
+}
+
+func (v MavenSnapshotImport) Writable() bool {
+	return v.State == "committed" && !v.TakenOverAt.IsZero()
 }
 
 type MavenSnapshotImportStore interface {

@@ -48,13 +48,13 @@ func privateJSON(file string, max int64) ([]byte, error) {
 	return readBounded(root, filepath.Base(file), max)
 }
 func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	usage := "usage: gateway snapshot-import <verify|dry-run|apply> --bundle directory --manifest-sha256 sha256:... [--spec private-target.json] [--capacity-plan private-capacity.json]"
+	usage := "usage: gateway snapshot-import <verify|dry-run|apply|takeover> --bundle directory --manifest-sha256 sha256:... [--spec private-target.json] [--capacity-plan private-capacity.json] [--idempotency-key key] [--dry-run]"
 	if len(args) == 0 {
 		_, _ = fmt.Fprintln(stderr, usage)
 		return 2
 	}
 	action := args[0]
-	if action != "verify" && action != "dry-run" && action != "apply" {
+	if action != "verify" && action != "dry-run" && action != "apply" && action != "takeover" {
 		_, _ = fmt.Fprintln(stderr, usage)
 		return 2
 	}
@@ -64,6 +64,8 @@ func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	digest := flags.String("manifest-sha256", "", "exact manifest digest")
 	specPath := flags.String("spec", "", "explicit existing target")
 	capPath := flags.String("capacity-plan", "", "bound capacity evidence")
+	takeoverKey := flags.String("idempotency-key", "", "explicit takeover receipt")
+	takeoverDryRun := flags.Bool("dry-run", false, "preflight takeover without writing")
 	if err := flags.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			_, _ = fmt.Fprintln(stdout, usage)
@@ -72,7 +74,7 @@ func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "invalid snapshot import arguments")
 		return 2
 	}
-	if flags.NArg() != 0 || *bundle == "" || *digest == "" || (action != "verify" && *specPath == "") || (action == "apply" && *capPath == "") || (action == "verify" && (*specPath != "" || *capPath != "")) {
+	if (action == "takeover" && (*takeoverKey == "" || *capPath != "")) || (action != "takeover" && (*takeoverKey != "" || *takeoverDryRun)) || flags.NArg() != 0 || *bundle == "" || *digest == "" || (action != "verify" && *specPath == "") || (action == "apply" && *capPath == "") || (action == "verify" && (*specPath != "" || *capPath != "")) {
 		_, _ = fmt.Fprintln(stderr, usage)
 		return 2
 	}
@@ -164,7 +166,11 @@ func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		}
 		capacity = append(capacity, plan)
 	}
-	report, err = Run(ctx, prepared, store, objects, spec.RepositoryID, spec.TargetID, spec.Actor, binding, action == "apply", capacity...)
+	if action == "takeover" {
+		report, err = RunTakeover(ctx, prepared, store, objects, spec.RepositoryID, spec.TargetID, spec.Actor, binding, *takeoverKey, *takeoverDryRun)
+	} else {
+		report, err = Run(ctx, prepared, store, objects, spec.RepositoryID, spec.TargetID, spec.Actor, binding, action == "apply", capacity...)
+	}
 	if action == "dry-run" && err == nil {
 		report.CapacityReferences = CapacityReferences(plans)
 	}

@@ -450,7 +450,7 @@ func (m NativeRetention) runJob(ctx context.Context, job repository.LifecycleJob
 		return m.failRetentionJob(ctx, job, "plan Maven retention failed")
 	}
 	for _, artifact := range candidates {
-		if _, err = m.Store.TombstoneMavenArtifact(ctx, job.RepositoryID, artifact.ID); err != nil {
+		if _, err = m.Store.TombstoneMavenArtifactForRetention(ctx, job.RepositoryID, artifact.ID, payload.PolicyVersion); err != nil {
 			return m.failRetentionJob(ctx, job, "tombstone Maven retention candidate failed")
 		}
 	}

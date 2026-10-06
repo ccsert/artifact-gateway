@@ -179,8 +179,14 @@ func (s *MemoryStore) PublishMavenProtocolAssets(_ context.Context, id string, a
 	if !ok || session.State != "open" || time.Now().After(session.ExpiresAt) {
 		return MavenArtifact{}, ErrDisabled
 	}
-	if _, reserved := s.mavenImports[session.RepositoryID+"\x00"+session.Coordinate]; reserved {
+	if imported, reserved := s.mavenImports[session.RepositoryID+"\x00"+session.Coordinate]; reserved && (!imported.Writable() || session.ID == imported.SessionID || !validMavenSnapshotReceipt(session)) {
 		return MavenArtifact{}, ErrNameExists
+	}
+	if imported, exists := s.mavenImports[session.RepositoryID+"\x00"+session.Coordinate]; exists && imported.Writable() {
+		repo := s.hostedRepositories[session.RepositoryID]
+		if repo.State != RepositoryActive || repo.MavenStrictPublication || s.retentionPolicies[repo.ID].Enabled {
+			return MavenArtifact{}, ErrMavenSnapshotTakeoverNotReady
+		}
 	}
 
 	artifact, found := s.mavenArtifacts[id]
@@ -199,8 +205,12 @@ func (s *MemoryStore) PublishMavenProtocolAssets(_ context.Context, id string, a
 		buildNumber := 0
 		if IsMavenSnapshotCoordinate(session.Coordinate) {
 			for _, existing := range s.mavenArtifacts {
-				if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate && existing.BuildNumber >= buildNumber {
-					buildNumber = existing.BuildNumber + 1
+				if existing.RepositoryID == session.RepositoryID && existing.Coordinate == session.Coordinate {
+					maximum := max(existing.BuildNumber, existing.SourceBuildNumber)
+					if maximum >= MaxMavenSnapshotBuildNumber {
+						return MavenArtifact{}, ErrMavenSnapshotBuildExhausted
+					}
+					buildNumber = max(buildNumber, maximum+1)
 				}
 			}
 			if buildNumber == 0 {
@@ -491,6 +501,25 @@ func (s *MemoryStore) GetMavenArtifactByCoordinate(_ context.Context, repository
 func (s *MemoryStore) TombstoneMavenArtifact(_ context.Context, repositoryID, artifactID string) (MavenArtifact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.tombstoneMavenArtifactLocked(repositoryID, artifactID)
+}
+
+func (s *MemoryStore) TombstoneMavenArtifactForRetention(_ context.Context, repositoryID, artifactID, policyVersion string) (MavenArtifact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.retentionPolicies[repositoryID]
+	if !p.Enabled || p.Version != policyVersion {
+		return MavenArtifact{}, ErrVersionConflict
+	}
+	for _, v := range s.mavenImports {
+		if v.RepositoryID == repositoryID && v.Writable() {
+			return MavenArtifact{}, ErrMavenSnapshotImportRetention
+		}
+	}
+	return s.tombstoneMavenArtifactLocked(repositoryID, artifactID)
+}
+
+func (s *MemoryStore) tombstoneMavenArtifactLocked(repositoryID, artifactID string) (MavenArtifact, error) {
 	artifact, ok := s.mavenArtifacts[artifactID]
 	if !ok || artifact.RepositoryID != repositoryID {
 		return MavenArtifact{}, ErrNotFound

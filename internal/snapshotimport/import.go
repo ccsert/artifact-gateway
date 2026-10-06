@@ -29,6 +29,7 @@ type EntryResult struct {
 	Files      int    `json:"files"`
 }
 type Report struct {
+	Action             string                   `json:"action,omitempty"`
 	TargetBinding      string                   `json:"targetBinding,omitempty"`
 	CheckedAt          time.Time                `json:"checkedAt"`
 	Counts             Counts                   `json:"counts"`
@@ -137,6 +138,9 @@ func Run(ctx context.Context, p *Prepared, store Store, objects objectstore.Stor
 			report.Entries[i].Reason = "target_or_input_conflict"
 			if errors.Is(err, repository.ErrMavenSnapshotImportRetention) {
 				report.Entries[i].Reason = "snapshot_import_retention_enabled"
+			}
+			if errors.Is(err, repository.ErrMavenSnapshotTakenOver) {
+				report.Entries[i].Reason = "snapshot_import_taken_over"
 			}
 			report.Status = "rejected"
 			return report.withCounts(), errors.New("target_or_input_conflict")
@@ -277,21 +281,27 @@ func Run(ctx context.Context, p *Prepared, store Store, objects objectstore.Stor
 }
 
 type Counts struct {
-	Planned   int `json:"planned"`
-	Pending   int `json:"pending"`
-	Staged    int `json:"staged"`
-	Committed int `json:"committed"`
-	Verified  int `json:"verified"`
-	Failed    int `json:"failed"`
-	Conflict  int `json:"conflict"`
-	Rejected  int `json:"rejected"`
-	Excluded  int `json:"excluded"`
+	TakeoverReady int `json:"takeoverReady,omitempty"`
+	Writable      int `json:"writable,omitempty"`
+	Planned       int `json:"planned"`
+	Pending       int `json:"pending"`
+	Staged        int `json:"staged"`
+	Committed     int `json:"committed"`
+	Verified      int `json:"verified"`
+	Failed        int `json:"failed"`
+	Conflict      int `json:"conflict"`
+	Rejected      int `json:"rejected"`
+	Excluded      int `json:"excluded"`
 }
 
 func (r Report) withCounts() Report {
 	r.Counts = Counts{Planned: r.Counts.Planned, Rejected: len(r.Rejected), Excluded: len(r.Excluded)}
 	for _, e := range r.Entries {
 		switch e.State {
+		case "takeover-ready":
+			r.Counts.TakeoverReady++
+		case "writable":
+			r.Counts.Writable++
 		case "pending":
 			r.Counts.Pending++
 		case "staged":

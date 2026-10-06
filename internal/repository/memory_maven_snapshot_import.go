@@ -28,6 +28,9 @@ func (s *MemoryStore) checkMavenImportLocked(p MavenSnapshotImportPlan) error {
 		return ErrMavenSnapshotImportRetention
 	}
 	if v, ok := s.mavenImports[p.RepositoryID+"\x00"+p.Coordinate]; ok {
+		if v.Writable() {
+			return ErrMavenSnapshotTakenOver
+		}
 		if v.PlanDigest != mavenImportDigest(p) {
 			return ErrIdempotencyConflict
 		}

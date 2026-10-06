@@ -500,6 +500,13 @@ func (s *MemoryStore) ReplaceRepositoryRetentionPolicy(_ context.Context, reposi
 	if _, ok := s.hostedRepositories[repositoryID]; !ok {
 		return RepositoryRetentionPolicy{}, ErrNotFound
 	}
+	if policy.Enabled {
+		for _, v := range s.mavenImports {
+			if v.RepositoryID == repositoryID && v.Writable() {
+				return RepositoryRetentionPolicy{}, ErrMavenSnapshotImportRetention
+			}
+		}
+	}
 	current, ok := s.retentionPolicies[repositoryID]
 	if !ok {
 		current = defaultRepositoryRetentionPolicy()

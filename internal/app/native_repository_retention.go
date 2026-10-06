@@ -202,7 +202,7 @@ func (m NativeRepositoryRetention) runJob(ctx context.Context, job repository.Li
 		return m.fail(ctx, job, "update repository retention progress failed")
 	}
 	for index, candidate := range candidates {
-		err = m.tombstone(ctx, job.RepositoryID, candidate)
+		err = m.tombstone(ctx, job.RepositoryID, candidate, payload.PolicyVersion)
 		if err != nil && !errors.Is(err, repository.ErrNotFound) {
 			return m.fail(ctx, job, "tombstone repository retention candidate failed")
 		}
@@ -217,10 +217,10 @@ func (m NativeRepositoryRetention) runJob(ctx context.Context, job repository.Li
 	return m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken)
 }
 
-func (m NativeRepositoryRetention) tombstone(ctx context.Context, repositoryID string, candidate RepositoryRetentionCandidate) error {
+func (m NativeRepositoryRetention) tombstone(ctx context.Context, repositoryID string, candidate RepositoryRetentionCandidate, policyVersion string) error {
 	switch candidate.Format {
 	case repository.FormatMaven:
-		_, err := m.Store.TombstoneMavenArtifact(ctx, repositoryID, candidate.mavenID)
+		_, err := m.Store.TombstoneMavenArtifactForRetention(ctx, repositoryID, candidate.mavenID, policyVersion)
 		return err
 	case repository.FormatOCI:
 		return m.Store.DeleteOCIManifest(ctx, repositoryID, candidate.ociName, candidate.Digest)

@@ -1070,6 +1070,8 @@ type MavenPublishSession struct {
 	ID, RepositoryID, Coordinate, Publisher, PomObject, State string
 	Objects                                                   []MavenDeclaredObject
 	ExpiresAt                                                 time.Time
+	ClientTimestamp                                           string `json:"-"`
+	ClientBuildNumber                                         int    `json:"-"`
 }
 type MavenAsset struct {
 	RepositoryID, Path, ObjectKey, Digest string

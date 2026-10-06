@@ -35,6 +35,9 @@ func (s *PostgresStore) ReplaceRepositoryQuarantineReadPolicy(ctx context.Contex
 	if !exists {
 		return RepositoryQuarantineReadPolicy{}, ErrNotFound
 	}
+	if _, err = tx.ExecContext(ctx, `SELECT id FROM hosted_repositories WHERE id=$1 AND format='maven' FOR UPDATE`, repositoryID); err != nil {
+		return RepositoryQuarantineReadPolicy{}, err
+	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO repository_quarantine_read_policies (repository_id,version,enabled) VALUES ($1,1,false) ON CONFLICT DO NOTHING`, repositoryID); err != nil {
 		return RepositoryQuarantineReadPolicy{}, err
 	}

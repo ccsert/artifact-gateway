@@ -57,7 +57,9 @@ services or change production configuration.
   Repository lock as retention updates. The command does not alter retention.
   Source timestamps become artifact `createdAt`; checkpoint time records the
   actual import. Re-enabling age/count retention after acceptance can delete
-  histories and their selected current build, and is a separate operator choice.
+  histories and their selected current build while they remain protected. After
+  explicit publication takeover, enabling retention is rejected for the entire
+  Repository; already-planned jobs recheck policy/receipt before deletion.
 
 The manifest is strict version-1 JSON, at most 8 MiB. POMs are at most 16 MiB,
 metadata at most 4 MiB, individual primary files at most 1 TiB. Declared integer
@@ -102,7 +104,7 @@ issues, PRs and the Git repository.
    apply, complete the [recovery runbook](recovery-runbook.md) with a validated,
    paired PostgreSQL/S3 backup and the complete writer scope. All Gateway API,
    reader, scheduler and worker processes connected to the target must run the
-   same revision containing this importer and migration `000141`; apply the
+   same revision containing this importer and migrations `000141`/`000142`; apply the
    migration through the existing migration workflow. **Do not import into a
    mixed old/new revision deployment.** An old binary does not honor import
    reservations or the preserved selectors. Schema addition alone is insufficient.
@@ -197,8 +199,10 @@ A GAV remains invisible until all of its primary/derived bytes are uploaded or
 fully verified, then all artifacts/assets, exact metadata selector, session and
 one `maven.snapshot.import` audit event commit atomically. Existing GAVs, even
 tombstoned history, sessions, paths or different checkpoints reject; there is no
-force/overwrite option. Imported GAVs remain reserved against ordinary Maven
-PUT/session publication (`409 snapshot_import_reserved`). Artifact lists/search
+force/overwrite option. Imported GAVs remain reserved by default against ordinary
+Maven PUT/session publication (`409 snapshot_import_reserved`). The explicit
+takeover below enables only ordinary timestamped Maven deployment; the native
+session API and original importer session remain reserved. Artifact lists/search
 expose `sourceTimestamp`/`sourceBuildNumber`; existing `buildNumber` remains a
 unique **local publication sequence** for cursors/browse, not the source number.
 
@@ -227,6 +231,74 @@ security quarantine can hide imported builds. A hidden selected build does not
 switch metadata to a sibling: unavailable current metadata returns 404, and
 quarantined artifact GET/HEAD follows existing denial policy, including Groups.
 
+## Explicit takeover and continued Maven publication
+
+After historical acceptance, keep the identical frozen bundle, manifest receipt
+and private target spec. Takeover applies to exactly the GAVs in that bundle.
+Use the existing privileged operator; ordinary Repository writers cannot grant
+this transition. This operation verifies all imported target bytes and references,
+visible source builds and the configured quarantine read policy. It requires an
+active Maven Hosted Repository with direct publication and retention disabled.
+No capacity plan is required because takeover writes no objects, publishes no
+build, and does not change source metadata or aliases. A read-only database
+session or missing permissions cannot grant takeover.
+
+```sh
+/path/to/import-capable/gateway snapshot-import takeover \
+  --bundle /private/bundle --manifest-sha256 "$manifest_digest" \
+  --spec /private/target.json --idempotency-key reviewed-takeover-1 \
+  --dry-run > /private/takeover-dry-run.json
+
+/path/to/import-capable/gateway snapshot-import takeover \
+  --bundle /private/bundle --manifest-sha256 "$manifest_digest" \
+  --spec /private/target.json --idempotency-key reviewed-takeover-1 \
+  > /private/takeover.json
+```
+
+Dry-run reports `takeover-ready`; success reports `writable`. Each GAV commits
+its first key, actor, time and one `maven.snapshot.takeover` audit atomically.
+Retry the same identity/key after a lost response or partial failure. A different
+key or physical target conflicts. Preserve every report. Target-side import
+`dry-run`/`apply` is permanently sealed with `snapshot_import_taken_over` after
+this transition; source-only `verify` still works. Do not delete checkpoints or
+use a changed manifest to append historical data.
+
+Then point the reviewed synthetic/rehearsal POM's `distributionManagement`
+server id/URL and matching Maven settings to the target, using existing writer
+credentials. The standard command remains:
+
+```sh
+mvn deploy -DskipTests -f /path/to/pom.xml -s /private/settings.xml -B -ntp
+```
+
+The Gateway stores the client's timestamp/build as a deployment receipt before
+canonicalizing filenames. A fresh timestamp forms a separate session after an
+interrupted run; different receipts and concurrent deployments cannot mix files.
+A version-level metadata PUT completes only that actor's matching, unexpired,
+fully verified POM/main/all-declared-primary deployment. GA metadata is auxiliary.
+New pairs update a separate live alias overlay; unrepublished classifier/extension
+pairs retain their exact source/current choice, including multipart extensions.
+Current resolution stays at the source choice or last completed deployment until
+completion succeeds. Delayed lower builds may complete as history but cannot
+regress current. Checksums are derived and checked for the new selected paths.
+
+The server allocates above every source build number and local sequence, including
+tombstones; a source-selected old build never sets this counter. Duplicate source
+numbers remain distinct by timestamp. The first client's metadata-derived number
+can differ from the allocated server number: resolve the resulting Gateway
+metadata rather than assuming the PUT filename was preserved. Exhausted int32
+sequences reject takeover. Imported namespaces and completed new build namespaces,
+including sidecars/new classifiers and tombstones, reject PUT without overwriting
+history. Reusing a closed client receipt also conflicts.
+
+Validate two ordinary deployments with a freshly evicted artifact cache, each
+new metadata/alias/checksum, and all fixed historical GET/HEAD/checksum URLs.
+Keep retention off: once any GAV is writable, Repository retention enable is
+refused. Both old retention workers recheck version/enabled/receipt inside the
+delete transaction. Explicit administrator deletion, quarantine and permissions
+retain their existing behavior; a hidden selected path does not fall back to a
+sibling. A paired backup restore is the rollback mechanism, not deleting receipts.
+
 ## Reproducible checks
 
 The public synthetic fixture covers three histories, repeated source build
@@ -235,7 +307,9 @@ also cover same timestamp builds 1/10/70 with identical POMs, missing files,
 metadata/POM mismatch, explicit absence, whole-GAV exclusion, source/target byte
 drift, multiple-GAV failures, concurrent replay, lost commit response, retention
 admission, ordinary same-actor PUT, quarantine and real PostgreSQL/RustFS CLI
-replay/expired-claim recovery.
+replay/expired-claim recovery. The mandatory native Maven gate also executes the
+real client command through protected refusal, takeover, HTTP interruption, fresh
+rerun, two deployments, delayed metadata and fresh artifact resolution.
 
 ```sh
 go test ./internal/snapshotimport ./internal/repository ./internal/protocol/maven ./internal/app ./cmd/gateway

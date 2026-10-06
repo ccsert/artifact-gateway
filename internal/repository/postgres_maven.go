@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -111,16 +112,7 @@ func (s *PostgresStore) CreateMavenPublishSessionIdempotently(ctx context.Contex
 	return v, false, nil
 }
 func (s *PostgresStore) GetMavenPublishSession(ctx context.Context, id string) (MavenPublishSession, error) {
-	var v MavenPublishSession
-	var objects []byte
-	err := s.db.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,publisher,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE id::text=$1`, id).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.Publisher, &v.PomObject, &v.State, &v.ExpiresAt, &objects)
-	if errors.Is(err, sql.ErrNoRows) {
-		return v, ErrNotFound
-	}
-	if err == nil {
-		err = json.Unmarshal(objects, &v.Objects)
-	}
-	return v, err
+	return scanMavenDeployment(s.db.QueryRowContext(ctx, `SELECT `+mavenDeploymentColumns+` FROM native_maven_publish_sessions WHERE id=$1`, id))
 }
 func (s *PostgresStore) FindOpenMavenPublishSession(ctx context.Context, repoID, coordinate, publisher string) (MavenPublishSession, error) {
 	var v MavenPublishSession
@@ -278,26 +270,27 @@ func (s *PostgresStore) PublishMavenProtocolAssets(ctx context.Context, id strin
 		return MavenArtifact{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	var session MavenPublishSession
-	var objects []byte
-	if err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,publisher,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE id::text=$1 FOR UPDATE`, id).Scan(&session.ID, &session.RepositoryID, &session.Coordinate, &session.Publisher, &session.PomObject, &session.State, &session.ExpiresAt, &objects); errors.Is(err, sql.ErrNoRows) {
-		return MavenArtifact{}, ErrNotFound
-	} else if err != nil {
+	initial, err := scanMavenDeployment(tx.QueryRowContext(ctx, `SELECT `+mavenDeploymentColumns+` FROM native_maven_publish_sessions WHERE id=$1`, id))
+	if err != nil {
 		return MavenArtifact{}, err
 	}
-	if session.State != "open" || time.Now().After(session.ExpiresAt) {
+	if err = lockMavenCoordinate(ctx, tx, initial.RepositoryID, initial.Coordinate); err != nil {
+		return MavenArtifact{}, err
+	}
+	// Lock the checkpoint before the session when this is a taken-over GAV.
+	imported, err := lockMavenTakeover(ctx, tx, initial.RepositoryID, initial.Coordinate)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return MavenArtifact{}, err
+	}
+	session, err := scanMavenDeployment(tx.QueryRowContext(ctx, `SELECT `+mavenDeploymentColumns+` FROM native_maven_publish_sessions WHERE id=$1 FOR UPDATE`, id))
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	if session.State != "open" || !session.ExpiresAt.After(time.Now()) || len(session.Objects) == 0 {
 		return MavenArtifact{}, ErrDisabled
 	}
-	if err = json.Unmarshal(objects, &session.Objects); err != nil || len(session.Objects) == 0 {
-		return MavenArtifact{}, ErrDisabled
-	}
-	lockKey := session.RepositoryID + ":" + session.Coordinate
-	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
-		return MavenArtifact{}, err
-	}
-
-	if err = rejectMavenImportPublication(ctx, tx, session.RepositoryID, session.Coordinate); err != nil {
-		return MavenArtifact{}, err
+	if imported.SessionID != "" && (!imported.Writable() || session.ID == imported.SessionID || !validMavenSnapshotReceipt(session)) {
+		return MavenArtifact{}, ErrNameExists
 	}
 
 	var artifact MavenArtifact
@@ -314,9 +307,12 @@ func (s *PostgresStore) PublishMavenProtocolAssets(ctx context.Context, id strin
 	if errors.Is(err, sql.ErrNoRows) {
 		artifact = MavenArtifact{ID: id, RepositoryID: session.RepositoryID, Coordinate: session.Coordinate, Digest: session.Objects[0].Digest, State: "visible"}
 		if IsMavenSnapshotCoordinate(session.Coordinate) {
-			if err = tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(build_number),0)+1 FROM native_maven_artifacts WHERE repository_id=$1 AND coordinate=$2`, artifact.RepositoryID, artifact.Coordinate).Scan(&artifact.BuildNumber); err != nil {
+			if err = tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(GREATEST(build_number::bigint,source_build_number::bigint)),0)+1 FROM native_maven_artifacts WHERE repository_id=$1 AND coordinate=$2`, artifact.RepositoryID, artifact.Coordinate).Scan(&artifact.BuildNumber); err != nil {
 				return MavenArtifact{}, err
 			}
+		}
+		if artifact.BuildNumber > MaxMavenSnapshotBuildNumber {
+			return MavenArtifact{}, ErrMavenSnapshotBuildExhausted
 		}
 		err = tx.QueryRowContext(ctx, `INSERT INTO native_maven_artifacts (id,repository_id,coordinate,digest,state,build_number) VALUES ($1,$2,$3,$4,'visible',$5) RETURNING created_at`, artifact.ID, artifact.RepositoryID, artifact.Coordinate, artifact.Digest, artifact.BuildNumber).Scan(&artifact.CreatedAt)
 		if isUnique(err) {
@@ -325,6 +321,18 @@ func (s *PostgresStore) PublishMavenProtocolAssets(ctx context.Context, id strin
 		if err != nil {
 			return MavenArtifact{}, err
 		}
+	}
+
+	// Pre-create and lock all intents in one deterministic key order.
+	orderedAssets := append([]MavenAsset(nil), assets...)
+	sort.Slice(orderedAssets, func(i, j int) bool { return orderedAssets[i].ObjectKey < orderedAssets[j].ObjectKey })
+	for _, asset := range orderedAssets {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_maven_object_intents(object_key,session_id,digest,size) VALUES($1,$2,$3,$4) ON CONFLICT(object_key) DO NOTHING`, asset.ObjectKey, session.ID, asset.Digest, asset.Size); err != nil {
+			return MavenArtifact{}, err
+		}
+	}
+	if err = lockMavenSnapshotAssetIntentsTx(ctx, tx, orderedAssets); err != nil {
+		return MavenArtifact{}, err
 	}
 
 	for _, asset := range assets {
@@ -376,10 +384,10 @@ func (s *PostgresStore) PublishMavenProtocolAssets(ctx context.Context, id strin
 
 func (s *PostgresStore) CompleteMavenProtocolPublications(ctx context.Context, repositoryID, publisher, selector string, exact bool) error {
 	if exact {
-		_, err := s.db.ExecContext(ctx, `UPDATE native_maven_publish_sessions s SET state='committed' WHERE repository_id=$1 AND publisher=$2 AND state='open' AND NOT EXISTS(SELECT 1 FROM native_maven_snapshot_imports i WHERE i.session_id=s.id) AND coordinate=$3`, repositoryID, publisher, selector)
+		_, err := s.db.ExecContext(ctx, `UPDATE native_maven_publish_sessions s SET state='committed' WHERE repository_id=$1 AND publisher=$2 AND state='open' AND NOT EXISTS(SELECT 1 FROM native_maven_snapshot_imports i WHERE i.repository_id=s.repository_id AND i.coordinate=s.coordinate) AND coordinate=$3`, repositoryID, publisher, selector)
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `UPDATE native_maven_publish_sessions s SET state='committed' WHERE repository_id=$1 AND publisher=$2 AND state='open' AND NOT EXISTS(SELECT 1 FROM native_maven_snapshot_imports i WHERE i.session_id=s.id) AND coordinate LIKE $3 || '%' ESCAPE '\'`, repositoryID, publisher, escapeLikePrefix(selector))
+	_, err := s.db.ExecContext(ctx, `UPDATE native_maven_publish_sessions s SET state='committed' WHERE repository_id=$1 AND publisher=$2 AND state='open' AND NOT EXISTS(SELECT 1 FROM native_maven_snapshot_imports i WHERE i.repository_id=s.repository_id AND i.coordinate=s.coordinate) AND coordinate LIKE $3 || '%' ESCAPE '\'`, repositoryID, publisher, escapeLikePrefix(selector))
 	return err
 }
 
@@ -399,6 +407,17 @@ func (s *PostgresStore) commitMavenPublishSession(ctx context.Context, id, key, 
 		return MavenArtifact{}, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	initial, err := scanMavenDeployment(tx.QueryRowContext(ctx, `SELECT `+mavenDeploymentColumns+` FROM native_maven_publish_sessions WHERE id=$1`, id))
+	if err != nil {
+		return MavenArtifact{}, false, err
+	}
+	if err = lockMavenCoordinate(ctx, tx, initial.RepositoryID, initial.Coordinate); err != nil {
+		return MavenArtifact{}, false, err
+	}
+	if err = rejectMavenImportPublication(ctx, tx, initial.RepositoryID, initial.Coordinate); err != nil {
+		return MavenArtifact{}, false, err
+	}
+
 	var v MavenPublishSession
 	var objects []byte
 	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,publisher,pom_object,state,expires_at,objects FROM native_maven_publish_sessions WHERE id::text=$1 FOR UPDATE`, id).Scan(&v.ID, &v.RepositoryID, &v.Coordinate, &v.Publisher, &v.PomObject, &v.State, &v.ExpiresAt, &objects)
@@ -693,6 +712,32 @@ func (s *PostgresStore) TombstoneMavenArtifact(ctx context.Context, repositoryID
 		return MavenArtifact{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	return tombstoneMavenArtifactTx(ctx, tx, repositoryID, artifactID)
+}
+
+func (s *PostgresStore) TombstoneMavenArtifactForRetention(ctx context.Context, repositoryID, artifactID, policyVersion string) (MavenArtifact, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return MavenArtifact{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var repo string
+	if err = tx.QueryRowContext(ctx, `SELECT id::text FROM hosted_repositories WHERE id=$1 FOR UPDATE`, repositoryID).Scan(&repo); err != nil {
+		return MavenArtifact{}, err
+	}
+	var allowed bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM repository_retention_policies WHERE repository_id=$1 AND enabled AND version::text=$2) AND NOT EXISTS(SELECT 1 FROM native_maven_snapshot_imports WHERE repository_id=$1 AND taken_over_at IS NOT NULL)`, repositoryID, policyVersion).Scan(&allowed); err != nil {
+		return MavenArtifact{}, err
+	}
+	if !allowed {
+		return MavenArtifact{}, ErrVersionConflict
+	}
+	return tombstoneMavenArtifactTx(ctx, tx, repositoryID, artifactID)
+}
+
+func tombstoneMavenArtifactTx(ctx context.Context, tx *sql.Tx, repositoryID, artifactID string) (MavenArtifact, error) {
+	var err error
+
 	var artifact MavenArtifact
 	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number,source_timestamp,source_build_number FROM native_maven_artifacts WHERE repository_id::text=$1 AND id::text=$2 FOR UPDATE`, repositoryID, artifactID).Scan(&artifact.ID, &artifact.RepositoryID, &artifact.Coordinate, &artifact.Digest, &artifact.State, &artifact.CreatedAt, &artifact.BuildNumber, &artifact.SourceTimestamp, &artifact.SourceBuildNumber)
 	if errors.Is(err, sql.ErrNoRows) {

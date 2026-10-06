@@ -71,7 +71,6 @@ func (p *Prepared) Close() error { return p.Root.Close() }
 var atom = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 var opaque = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
 var digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-var suffixPattern = regexp.MustCompile(`^(?:-([A-Za-z0-9][A-Za-z0-9_-]*))?\.([A-Za-z0-9][A-Za-z0-9.-]*)$`)
 
 func base(coordinate string) string {
 	p := strings.Split(coordinate, ":")
@@ -222,8 +221,8 @@ func (p *Prepared) prepareCoordinate(ctx context.Context, c Coordinate) (reposit
 				return bad("path_identity_mismatch")
 			}
 			suffix := strings.TrimPrefix(path.Base(f.Path), prefix)
-			pair := suffixPattern.FindStringSubmatch(suffix)
-			if pair == nil {
+			extension, classifier, pairOK := repository.MavenSnapshotAssetPair(suffix)
+			if !pairOK {
 				return bad("path_identity_mismatch")
 			}
 			for _, ext := range []string{"md5", "sha1", "sha256", "sha512"} {
@@ -232,8 +231,8 @@ func (p *Prepared) prepareCoordinate(ctx context.Context, c Coordinate) (reposit
 				}
 			}
 			paths[f.Path] = true
-			if pair[1] == "" {
-				mainFiles[pair[2]] = true
+			if classifier == "" {
+				mainFiles[extension] = true
 			}
 			checksums, err := p.verifyFile(ctx, f)
 			if err != nil {
@@ -427,7 +426,7 @@ func validateMetadata(data []byte, c string, paths, builds map[string]bool) (map
 			suffix = "-" + v.Classifier
 		}
 		suffix += "." + v.Extension
-		if suffixPattern.FindStringSubmatch(suffix) == nil {
+		if _, _, ok := repository.MavenSnapshotAssetPair(suffix); !ok {
 			return nil, errors.New("invalid metadata pair")
 		}
 		canonical := base(c) + m.Artifact + "-" + m.Version + suffix

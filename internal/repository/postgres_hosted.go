@@ -729,6 +729,16 @@ func (s *PostgresStore) ReplaceRepositoryRetentionPolicy(ctx context.Context, re
 		return RepositoryRetentionPolicy{}, err
 	}
 
+	if policy.Enabled {
+		var writable bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM native_maven_snapshot_imports WHERE repository_id=$1 AND taken_over_at IS NOT NULL)`, repositoryID).Scan(&writable); err != nil {
+			return RepositoryRetentionPolicy{}, err
+		}
+		if writable {
+			return RepositoryRetentionPolicy{}, ErrMavenSnapshotImportRetention
+		}
+	}
+
 	if _, err = tx.ExecContext(ctx, `INSERT INTO repository_retention_policies (repository_id,version,enabled,keep_days,snapshot_keep_days,minimum_versions,maximum_versions,coordinate_patterns,protected_patterns) VALUES ($1,1,false,30,30,1,0,'{}','{}') ON CONFLICT DO NOTHING`, repositoryID); err != nil {
 		return RepositoryRetentionPolicy{}, err
 	}

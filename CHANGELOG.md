@@ -11,11 +11,13 @@ their meaning.
 
 ## Unreleased
 
+- Added explicit, audited SNAPSHOT publication takeover after historical acceptance. Frozen target bytes/current selectors stay fixed through takeover; receipt-bound ordinary Maven deployments advance current only when complete, retain immutable history and source classifier choices, reject sealed re-import and stale retention jobs, and use a mandatory real Maven retry/resolution gate.
+
 - Maven SNAPSHOT history import now supports official `maven-archetype` packaging as JARs while still rejecting missing main JARs and unknown packaging.
 
 - Updated the Console's locked source-map-js dependency to 1.2.2 for GHSA-68fv-2mgg-jv7q; dependency audit remains strict with no new exception.
 
-- Added a controlled offline Maven SNAPSHOT historical importer with strict frozen-byte/POM/metadata admission, original timestamp/build/classifier identities and source-selected current resolution, bound capacity preflight, durable per-GAV atomic checkpoints, safe replay/GC recovery and searchable audit. Imported GAVs reject ordinary publication; anomalies require explicit whole-GAV exclusion, and retention must be disabled. See [the operator runbook](docs/maven-snapshot-import.md).
+- Added a controlled offline Maven SNAPSHOT historical importer with strict frozen-byte/POM/metadata admission, original timestamp/build/classifier identities and source-selected current resolution, bound capacity preflight, durable per-GAV atomic checkpoints, safe replay/GC recovery and searchable audit. Imported GAVs reject ordinary publication by default; anomalies require explicit whole-GAV exclusion, and retention must be disabled. See [the operator runbook](docs/maven-snapshot-import.md).
 
 ## 0.6.1 - 2026-10-05
 

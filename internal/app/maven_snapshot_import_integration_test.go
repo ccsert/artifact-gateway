@@ -12,6 +12,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -107,6 +108,129 @@ func TestPostgresRustFSArchetypeSnapshotImportCLIExplicitTarget(t *testing.T) {
 	if err != nil || len(audits) != 1 {
 		t.Fatalf("audit=%v %v", audits, err)
 	}
+	keysBefore, err := objects.List(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report, code := run("takeover", "--idempotency-key", "synthetic-reviewed-key", "--dry-run"); code != 0 || report.Counts.TakeoverReady != 1 {
+		t.Fatalf("takeover dry=%+v exit=%d", report, code)
+	}
+	// Reuse existing credentials with a read-only session; no new role or key.
+	readonly, err := url.Parse(os.Getenv("TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := readonly.Query()
+	query.Set("default_transaction_read_only", "on")
+	readonly.RawQuery = query.Encode()
+	t.Setenv("TEST_SNAPSHOT_READONLY_DATABASE_URL", readonly.String())
+	spec.DatabaseURLEnv = "TEST_SNAPSHOT_READONLY_DATABASE_URL"
+	b, _ = json.Marshal(spec)
+	if err = os.WriteFile(specPath, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, code := run("takeover", "--idempotency-key", "synthetic-reviewed-key"); code != 1 {
+		t.Fatalf("read-only takeover exit=%d", code)
+	}
+	checkpoint, err := store.GetMavenSnapshotImport(ctx, repo.ID, p.Plans[0].Coordinate)
+	if err != nil || checkpoint.Writable() {
+		t.Fatal("read-only operator granted publication")
+	}
+	spec.DatabaseURLEnv = "TEST_DATABASE_URL"
+	b, _ = json.Marshal(spec)
+	if err = os.WriteFile(specPath, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if report, code := run("takeover", "--idempotency-key", "synthetic-reviewed-key"); code != 0 || report.Counts.Writable != 1 {
+			t.Fatalf("takeover=%+v exit=%d", report, code)
+		}
+	}
+	keysAfter, err := objects.List(ctx, "")
+	if err != nil || strings.Join(keysBefore, "\n") != strings.Join(keysAfter, "\n") {
+		t.Fatal("takeover wrote object bytes")
+	}
+	audits, err = store.ListAudits(ctx, repository.AuditQuery{Repository: repo.Name, Operation: "maven.snapshot.takeover", Limit: 100})
+	if err != nil || len(audits) != 1 {
+		t.Fatalf("takeover audit=%v %v", audits, err)
+	}
+	if report, code := run("dry-run"); code != 1 || report.Entries[0].Reason != "snapshot_import_taken_over" {
+		t.Fatalf("sealed import=%+v %d", report, code)
+	}
+	h := newNativeMavenHandler(store, objects, Authenticator{AdminToken: "synthetic-admin", ResolverToken: "synthetic-secret", RepositoryReaders: map[string][]string{"maven": {repo.Name}}, RepositoryWriters: map[string][]string{"maven": {repo.Name}}})
+	request := func(method, name, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, "/repository/maven/"+repo.Name+"/org/example/widget/1.0-SNAPSHOT/"+name, strings.NewReader(body))
+		r.SetBasicAuth("maven", "synthetic-secret")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	original := request(http.MethodGet, "maven-metadata.xml", "").Body.Bytes()
+	stamp := "20261006.074000"
+	for _, asset := range []struct{ name, body string }{{"widget-1.0-" + stamp + "-8.jar", "synthetic new JAR"}, {"widget-1.0-" + stamp + "-8.pom", `<project><modelVersion>4.0.0</modelVersion><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.0-SNAPSHOT</version></project>`}} {
+		if w := request(http.MethodPut, asset.name, asset.body); w.Code != 201 {
+			t.Fatalf("PG ordinary publish=%d %s", w.Code, w.Body.String())
+		}
+		if w := request(http.MethodGet, "maven-metadata.xml", ""); !bytes.Equal(w.Body.Bytes(), original) {
+			t.Fatal("PG incomplete deployment changed source current")
+		}
+	}
+	if w := request(http.MethodPut, "maven-metadata.xml", clientSnapshotMetadata(stamp, 8)); w.Code != 201 {
+		t.Fatalf("PG completion=%d %s", w.Code, w.Body.String())
+	}
+	reopened, err := repository.NewPostgresStore(os.Getenv("TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = reopened.Close() }()
+	checkpoint, err = reopened.GetMavenSnapshotImport(ctx, repo.ID, p.Plans[0].Coordinate)
+	if err != nil || checkpoint.CurrentBuildNumber != 9 || !checkpoint.Writable() {
+		t.Fatalf("durable takeover/current=%+v %v", checkpoint, err)
+	}
+	session, err := reopened.FindMavenSnapshotDeployment(ctx, repo.ID, p.Plans[0].Coordinate, "maven", stamp, 8)
+	if err != nil || session.State != "committed" {
+		t.Fatalf("durable receipt=%+v %v", session, err)
+	}
+	if w := request(http.MethodPut, "maven-metadata.xml", clientSnapshotMetadata(stamp, 8)); w.Code != 201 {
+		t.Fatalf("PG completion replay=%d", w.Code)
+	}
+	database, err := sql.Open("pgx", os.Getenv("TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = database.Close() }()
+	currentMetadata := request(http.MethodGet, "maven-metadata.xml", "").Body.Bytes()
+	for _, failure := range []struct{ stamp, mode string }{{"20261006.074100", "expired"}, {"20261006.074200", "claimed"}} {
+		for _, asset := range []struct{ suffix, body string }{{".jar", "new ready " + failure.mode}, {".pom", `<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.0-SNAPSHOT</version></project>`}} {
+			if w := request(http.MethodPut, "widget-1.0-"+failure.stamp+"-10"+asset.suffix, asset.body); w.Code != 201 {
+				t.Fatalf("ready setup=%d %s", w.Code, w.Body.String())
+			}
+		}
+		session, err := store.FindMavenSnapshotDeployment(ctx, repo.ID, p.Plans[0].Coordinate, "maven", failure.stamp, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if failure.mode == "expired" {
+			_, err = database.ExecContext(ctx, `UPDATE native_maven_publish_sessions SET expires_at=now()-interval '1 minute' WHERE id=$1`, session.ID)
+		} else {
+			_, err = database.ExecContext(ctx, `UPDATE native_maven_object_intents SET claimed_at=now(),claimed_token='synthetic-claim' WHERE object_key IN (SELECT object_key FROM native_maven_publish_uploads WHERE session_id=$1 AND object_name LIKE '%.jar')`, session.ID)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if w := request(http.MethodPut, "maven-metadata.xml", clientSnapshotMetadata(failure.stamp, 10)); w.Code != 409 {
+			t.Fatalf("%s completion=%d", failure.mode, w.Code)
+		}
+		if w := request(http.MethodGet, "maven-metadata.xml", ""); !bytes.Equal(w.Body.Bytes(), currentMetadata) {
+			t.Fatalf("%s changed current", failure.mode)
+		}
+		if failure.mode == "claimed" {
+			if _, err = database.ExecContext(ctx, `UPDATE native_maven_object_intents SET claimed_at=NULL,claim_token=NULL WHERE claimed_token='synthetic-claim'`); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
 	// A changed physical bucket is rejected even with the same human targetId.
 	spec.S3Bucket = "snapshot-other-" + uuid.NewString()
 	other, err := NewRustFSOCIObjectStore(spec.S3Endpoint, os.Getenv(spec.S3AccessKeyEnv), os.Getenv(spec.S3SecretKeyEnv), spec.S3Bucket)
