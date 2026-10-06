@@ -11,6 +11,23 @@ import (
 	"github.com/google/uuid"
 )
 
+func TestPostgresArtifactUsagePages(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required")
+	}
+	store, err := NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := "usage-pages-" + uuid.NewString()
+	t.Cleanup(func() {
+		_, _ = store.db.ExecContext(context.Background(), `DELETE FROM artifact_usage_stats WHERE repository IN ($1, $2)`, repo, repo+"-other")
+		_ = store.Close()
+	})
+	exerciseArtifactUsagePages(t, store, repo)
+}
+
 func TestPostgresArtifactUsageAggregatesDownloadAudits(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {

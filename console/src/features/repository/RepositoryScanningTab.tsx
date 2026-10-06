@@ -633,7 +633,7 @@ export function RepositoryScanningTab({
             rowKey="id"
             dataSource={jobs}
             columns={columns}
-            pagination={{ pageSize: 10, hideOnSinglePage: true }}
+            pagination={{}}
             scroll={{ x: 900 }}
           />
         )}

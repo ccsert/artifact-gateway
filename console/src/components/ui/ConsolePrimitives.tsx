@@ -9,6 +9,10 @@ import {
   type ReactNode,
 } from "react";
 import { usePreferences } from "../../lib/preferences";
+import {
+  CONSOLE_PAGE_SIZE,
+  useConsolePagination,
+} from "./useConsolePagination";
 
 export interface MetricItem {
   label: string;
@@ -207,13 +211,40 @@ export function ConsoleTable<RecordType extends object = object>({
   compact = false,
   className = "",
   size,
+  pagination,
   ...rest
 }: TableProps<RecordType> & { compact?: boolean }) {
+  const baseline = useConsolePagination();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(CONSOLE_PAGE_SIZE);
+  const config = pagination || {};
+  const effectiveSize = config.pageSize ?? pageSize;
+  const total = config.total ?? rest.dataSource?.length ?? 0;
+  const current = Math.min(
+    config.current ?? page,
+    Math.max(1, Math.ceil(total / effectiveSize)),
+  );
   return (
     <Table<RecordType>
       {...rest}
       size={size ?? (compact ? "small" : "middle")}
       className={`ag-console-table ${className}`.trim()}
+      pagination={
+        pagination === false
+          ? false
+          : {
+              ...baseline,
+              ...config,
+              current,
+              pageSize: effectiveSize,
+              onChange: (nextPage, nextSize) => {
+                const target = nextSize === effectiveSize ? nextPage : 1;
+                setPage(target);
+                setPageSize(nextSize);
+                config.onChange?.(target, nextSize);
+              },
+            }
+      }
     />
   );
 }

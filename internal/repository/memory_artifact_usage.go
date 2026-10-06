@@ -1,9 +1,58 @@
 package repository
 
 import (
+	"container/heap"
 	"context"
 	"sort"
+	"strings"
 )
+
+// Keep only the offset plus one page while counting under the same read lock.
+// The maximum-address heap discards rows beyond that bounded window.
+type artifactUsageHeap []ArtifactUsageStat
+
+func (h artifactUsageHeap) Len() int           { return len(h) }
+func (h artifactUsageHeap) Less(i, j int) bool { return artifactUsageAddressLess(h[j], h[i]) }
+func (h artifactUsageHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *artifactUsageHeap) Push(v any)        { *h = append(*h, v.(ArtifactUsageStat)) }
+func (h *artifactUsageHeap) Pop() any          { a := *h; v := a[len(a)-1]; *h = a[:len(a)-1]; return v }
+
+func (s *MemoryStore) QueryArtifactUsage(ctx context.Context, repository string, query ArtifactUsageQuery) (ArtifactUsagePage, error) {
+	var page ArtifactUsagePage
+	if err := query.Validate(repository); err != nil {
+		return page, err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	window := artifactUsageHeap{}
+	capacity := query.Offset + query.Limit
+	for _, stat := range s.artifactUsage {
+		if err := ctx.Err(); err != nil {
+			return page, err
+		}
+		if stat.Repository != repository {
+			continue
+		}
+		page.Totals.Resources++
+		page.Totals.DownloadCount += stat.DownloadCount
+		page.Totals.TotalBytes += stat.TotalBytes
+		if !strings.Contains(stat.Resource, query.Query) {
+			continue
+		}
+		page.TotalCount++
+		if len(window) < capacity {
+			heap.Push(&window, stat)
+		} else if artifactUsageAddressLess(stat, window[0]) {
+			window[0] = stat
+			heap.Fix(&window, 0)
+		}
+	}
+	sort.Slice(window, func(i, j int) bool { return artifactUsageAddressLess(window[i], window[j]) })
+	start := min(query.Offset, len(window))
+	page.Items = make([]ArtifactUsageStat, len(window)-start)
+	copy(page.Items, window[start:])
+	return page, nil
+}
 
 // RecordArtifactUsage folds one download increment into the in-memory
 // aggregate. RecordAudit calls it under the store lock for download audits;

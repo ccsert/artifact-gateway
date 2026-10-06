@@ -243,7 +243,7 @@ function APTArchiveOperations({
           rowKey={(item) => item.snapshot.id}
           dataSource={exportable}
           scroll={{ x: 720 }}
-          pagination={{ pageSize: 10, hideOnSinglePage: true }}
+          pagination={{}}
           columns={[
             {
               title: text("快照", "Snapshot"),
@@ -665,7 +665,7 @@ function APTSuiteOperations({
                       dataSource={state.packages}
                       columns={packageColumns}
                       scroll={{ x: 640 }}
-                      pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                      pagination={{}}
                       rowSelection={{
                         selectedRowKeys: selected,
                         onChange: setSelected,
@@ -739,7 +739,7 @@ function APTSuiteOperations({
                     rowKey="id"
                     dataSource={state.deletions}
                     scroll={{ x: 640 }}
-                    pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                    pagination={{}}
                     columns={[
                       {
                         title: text("软件包", "Package"),
@@ -789,7 +789,7 @@ function APTSuiteOperations({
                     rowKey={(item) => item.snapshot.id}
                     dataSource={state.snapshots}
                     scroll={{ x: 720 }}
-                    pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                    pagination={{}}
                     columns={[
                       {
                         title: text("快照", "Snapshot"),

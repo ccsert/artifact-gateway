@@ -26,6 +26,7 @@
         { "id": "context", "title": { "en": "Project context", "zh-CN": "项目上下文" }, "en": "CONTEXT.md", "zh-CN": "CONTEXT.zh-CN.md" },
         { "id": "postgresql", "title": { "en": "PostgreSQL capabilities", "zh-CN": "PostgreSQL 能力" }, "en": "docs/postgresql-capabilities.md", "zh-CN": "docs/postgresql-capabilities.zh-CN.md" },
         { "id": "native-hosted-contract", "title": { "en": "Native Hosted contract", "zh-CN": "Native Hosted 契约" }, "en": "docs/native-hosted-contract.md", "zh-CN": "docs/native-hosted-contract.zh-CN.md" },
+        { "id": "repository-usage", "title": { "en": "Repository usage and pagination", "zh-CN": "仓库使用统计与分页" }, "en": "docs/repository-usage.md", "zh-CN": "docs/repository-usage.zh-CN.md" },
         { "id": "v2-contract", "title": { "en": "V2 contract", "zh-CN": "V2 契约" }, "en": "docs/v2-contract.md", "zh-CN": "docs/v2-contract.zh-CN.md" },
         { "id": "artifact-lifecycle", "title": { "en": "Artifact lifecycle contract", "zh-CN": "制品生命周期契约" }, "en": "docs/artifact-lifecycle-contract.md", "zh-CN": "docs/artifact-lifecycle-contract.zh-CN.md" },
         { "id": "repository-deletion", "title": { "en": "Repository deletion contract", "zh-CN": "仓库删除契约" }, "en": "docs/repository-deletion-contract.md", "zh-CN": "docs/repository-deletion-contract.zh-CN.md" },

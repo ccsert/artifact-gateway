@@ -1818,7 +1818,9 @@ export const listArtifacts = <ThrowOnError extends boolean = false>(options: Opt
 });
 
 /**
- * Get lifecycle download usage aggregated per artifact address
+ * Get paginated lifecycle download usage aggregated per artifact address
+ *
+ * Returns one live page ordered by resource then format (bytewise ascending). Download increments do not reorder addresses. New addresses between requests can move offset boundaries; refresh to restart browsing. Items, totalCount and whole-repository totals come from one consistent read snapshot.
  */
 export const listRepositoryArtifactUsage = <ThrowOnError extends boolean = false>(options: Options<ListRepositoryArtifactUsageData, ThrowOnError>): RequestResult<ListRepositoryArtifactUsageResponses, ListRepositoryArtifactUsageErrors, ThrowOnError> => (options.client ?? client).get<ListRepositoryArtifactUsageResponses, ListRepositoryArtifactUsageErrors, ThrowOnError>({
     security: [{

@@ -5205,7 +5205,12 @@ type RepositoryArtifactUsage struct {
 	GeneratedAt  time.Time           `json:"generatedAt"`
 	Items        []ArtifactUsageStat `json:"items"`
 	RepositoryId openapi_types.UUID  `json:"repositoryId"`
-	Totals       ArtifactUsageTotals `json:"totals"`
+
+	// TotalCount Number of artifact addresses matching q, independent of offset and limit.
+	TotalCount int64 `json:"totalCount"`
+
+	// Totals Lifetime totals for the whole repository, independent of q and offset.
+	Totals ArtifactUsageTotals `json:"totals"`
 }
 
 // RepositoryCapabilities defines model for RepositoryCapabilities.
@@ -6373,7 +6378,11 @@ type SearchRepositoryArtifactsParams struct {
 
 // ListRepositoryArtifactUsageParams defines parameters for ListRepositoryArtifactUsage.
 type ListRepositoryArtifactUsageParams struct {
-	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Q Case-sensitive literal substring of the artifact address. Surrounding whitespace is trimmed; SQL wildcard characters have no special meaning.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
 }
 
 // ListArtifactsParams defines parameters for ListArtifacts.
@@ -7113,7 +7122,7 @@ type ServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/artifact-search)
 	SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params SearchRepositoryArtifactsParams)
-	// ListRepositoryArtifactUsage Get lifecycle download usage aggregated per artifact address
+	// ListRepositoryArtifactUsage Get paginated lifecycle download usage aggregated per artifact address
 	// (GET /repositories/{repositoryId}/artifact-usage)
 	ListRepositoryArtifactUsage(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListRepositoryArtifactUsageParams)
 
@@ -10609,6 +10618,32 @@ func (siw *ServerInterfaceWrapper) ListRepositoryArtifactUsage(w http.ResponseWr
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
 		}
 		return
 	}
@@ -21099,9 +21134,23 @@ func (response ListRepositoryArtifactUsage200JSONResponse) VisitListRepositoryAr
 	return err
 }
 
-type ListRepositoryArtifactUsage401ApplicationProblemPlusJSONResponse struct {
+type ListRepositoryArtifactUsage400ApplicationProblemPlusJSONResponse struct {
 	ProblemApplicationProblemPlusJSONResponse
 }
+
+func (response ListRepositoryArtifactUsage400ApplicationProblemPlusJSONResponse) VisitListRepositoryArtifactUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryArtifactUsage401ApplicationProblemPlusJSONResponse Problem
 
 func (response ListRepositoryArtifactUsage401ApplicationProblemPlusJSONResponse) VisitListRepositoryArtifactUsageResponse(w http.ResponseWriter) error {
 
@@ -27092,7 +27141,7 @@ type StrictServerInterface interface {
 
 	// (GET /repositories/{repositoryId}/artifact-search)
 	SearchRepositoryArtifacts(ctx context.Context, request SearchRepositoryArtifactsRequestObject) (SearchRepositoryArtifactsResponseObject, error)
-	// ListRepositoryArtifactUsage Get lifecycle download usage aggregated per artifact address
+	// ListRepositoryArtifactUsage Get paginated lifecycle download usage aggregated per artifact address
 	// (GET /repositories/{repositoryId}/artifact-usage)
 	ListRepositoryArtifactUsage(ctx context.Context, request ListRepositoryArtifactUsageRequestObject) (ListRepositoryArtifactUsageResponseObject, error)
 

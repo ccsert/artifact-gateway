@@ -15,7 +15,12 @@ repositories_repositoryId_artifact_usage:
   - "$ref": "../components/parameters.yaml#/RepositoryId"
   get:
     operationId: listRepositoryArtifactUsage
-    summary: Get lifecycle download usage aggregated per artifact address
+    summary: Get paginated lifecycle download usage aggregated per artifact address
+    description: >-
+      Returns one live page ordered by resource then format (bytewise ascending).
+      Download increments do not reorder addresses. New addresses between requests
+      can move offset boundaries; refresh to restart browsing. Items, totalCount
+      and whole-repository totals come from one consistent read snapshot.
     parameters:
     - name: limit
       in: query
@@ -24,9 +29,18 @@ repositories_repositoryId_artifact_usage:
         minimum: 1
         maximum: 500
         default: 100
+    - name: offset
+      in: query
+      schema: {type: integer, minimum: 0, maximum: 1000000, default: 0}
+    - name: q
+      in: query
+      description: Case-sensitive literal substring of the artifact address. Surrounding whitespace is trimmed; SQL wildcard characters have no special meaning.
+      schema: {type: string, maxLength: 512}
     responses:
       '200':
         "$ref": "../components/responses.yaml#/RepositoryArtifactUsage"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
       '401':
         "$ref": "../components/responses.yaml#/Problem"
       '403':

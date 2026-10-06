@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
@@ -23,22 +24,24 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryArtifactUsage(w http.Respon
 		if params.Limit != nil {
 			limit = *params.Limit
 		}
-		if limit < 1 || limit > 500 {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "limit must be between 1 and 500")
+		query := repository.ArtifactUsageQuery{Limit: limit}
+		if params.Offset != nil {
+			query.Offset = *params.Offset
+		}
+		if params.Q != nil {
+			query.Query = strings.TrimSpace(*params.Q)
+		}
+		if err := query.Validate(repo.Name); err != nil {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
 			return
 		}
-		stats, err := usage.ListArtifactUsage(r.Context(), repo.Name, limit)
+		page, err := usage.QueryArtifactUsage(r.Context(), repo.Name, query)
 		if err != nil {
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list artifact usage failed")
 			return
 		}
-		totals, err := usage.ArtifactUsageTotals(r.Context(), repo.Name)
-		if err != nil {
-			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "sum artifact usage failed")
-			return
-		}
-		items := make([]adminopenapi.ArtifactUsageStat, 0, len(stats))
-		for _, stat := range stats {
+		items := make([]adminopenapi.ArtifactUsageStat, 0, len(page.Items))
+		for _, stat := range page.Items {
 			item := adminopenapi.ArtifactUsageStat{
 				Format:            stat.Format,
 				Resource:          stat.Resource,
@@ -56,10 +59,11 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryArtifactUsage(w http.Respon
 		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.RepositoryArtifactUsage{
 			RepositoryId: repositoryID,
 			Totals: adminopenapi.ArtifactUsageTotals{
-				DownloadCount: totals.DownloadCount,
-				TotalBytes:    totals.TotalBytes,
-				Resources:     totals.Resources,
+				DownloadCount: page.Totals.DownloadCount,
+				TotalBytes:    page.Totals.TotalBytes,
+				Resources:     page.Totals.Resources,
 			},
+			TotalCount:  page.TotalCount,
 			Items:       items,
 			GeneratedAt: time.Now().UTC(),
 		})

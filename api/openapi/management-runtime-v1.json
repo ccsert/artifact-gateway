@@ -4581,7 +4581,8 @@
       ],
       "get": {
         "operationId": "listRepositoryArtifactUsage",
-        "summary": "Get lifecycle download usage aggregated per artifact address",
+        "summary": "Get paginated lifecycle download usage aggregated per artifact address",
+        "description": "Returns one live page ordered by resource then format (bytewise ascending). Download increments do not reorder addresses. New addresses between requests can move offset boundaries; refresh to restart browsing. Items, totalCount and whole-repository totals come from one consistent read snapshot.",
         "parameters": [
           {
             "name": "limit",
@@ -4592,11 +4593,33 @@
               "maximum": 500,
               "default": 100
             }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000,
+              "default": 0
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Case-sensitive literal substring of the artifact address. Surrounding whitespace is trimmed; SQL wildcard characters have no special meaning.",
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
           }
         ],
         "responses": {
           "200": {
             "$ref": "#/components/responses/RepositoryArtifactUsage"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
           },
           "401": {
             "$ref": "#/components/responses/Problem"
@@ -13397,6 +13420,7 @@
         "required": [
           "repositoryId",
           "totals",
+          "totalCount",
           "items",
           "generatedAt"
         ],
@@ -13406,7 +13430,14 @@
             "format": "uuid"
           },
           "totals": {
-            "$ref": "#/components/schemas/ArtifactUsageTotals"
+            "$ref": "#/components/schemas/ArtifactUsageTotals",
+            "description": "Lifetime totals for the whole repository, independent of q and offset."
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Number of artifact addresses matching q, independent of offset and limit."
           },
           "items": {
             "type": "array",

@@ -2,7 +2,10 @@ package repository
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // ArtifactUsageStat is the lifecycle download usage of one artifact address:
@@ -32,11 +35,45 @@ type ArtifactUsageTotals struct {
 // happen implicitly on RecordAudit so every download path is counted without
 // each protocol handler having to opt in.
 type ArtifactUsageStore interface {
+	QueryArtifactUsage(ctx context.Context, repository string, query ArtifactUsageQuery) (ArtifactUsagePage, error)
 	ListArtifactUsage(ctx context.Context, repository string, limit int) ([]ArtifactUsageStat, error)
 	// WalkArtifactUsage visits every aggregate for one repository. Retention
 	// cannot use the bounded management API list without missing candidates.
 	WalkArtifactUsage(ctx context.Context, repository string, visit func(ArtifactUsageStat) error) error
 	ArtifactUsageTotals(ctx context.Context, repository string) (ArtifactUsageTotals, error)
+}
+
+// ArtifactUsageQuery selects one live page. Ordering uses the immutable address
+// and format, so download increments cannot move existing rows between pages.
+type ArtifactUsageQuery struct {
+	Limit  int
+	Offset int
+	Query  string
+}
+
+func (q ArtifactUsageQuery) Validate(repository string) error {
+	if repository == "" || q.Limit < 1 || q.Limit > 500 || q.Offset < 0 || q.Offset > 1000000 {
+		return fmt.Errorf("repository, limit (1-500) and offset (0-1000000) are required")
+	}
+	if !utf8.ValidString(q.Query) || utf8.RuneCountInString(q.Query) > 512 || strings.ContainsRune(q.Query, 0) {
+		return fmt.Errorf("q must be valid text of at most 512 characters without NUL")
+	}
+	return nil
+}
+
+// ArtifactUsagePage keeps filtered count and whole-repository totals distinct.
+// Each store captures all three parts under one consistent read snapshot.
+type ArtifactUsagePage struct {
+	Items      []ArtifactUsageStat
+	TotalCount int64
+	Totals     ArtifactUsageTotals
+}
+
+func artifactUsageAddressLess(a, b ArtifactUsageStat) bool {
+	if a.Resource != b.Resource {
+		return a.Resource < b.Resource
+	}
+	return a.Format < b.Format
 }
 
 // artifactFormatsCountedForUsage are the formats whose resolved GET audits

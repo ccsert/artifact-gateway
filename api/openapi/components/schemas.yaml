@@ -3883,11 +3883,17 @@ ArtifactUsageTotals:
 RepositoryArtifactUsage:
   type: object
   additionalProperties: false
-  required: [repositoryId, totals, items, generatedAt]
+  required: [repositoryId, totals, totalCount, items, generatedAt]
   properties:
     repositoryId: {type: string, format: uuid}
     totals:
       "$ref": "#/ArtifactUsageTotals"
+      description: Lifetime totals for the whole repository, independent of q and offset.
+    totalCount:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Number of artifact addresses matching q, independent of offset and limit.
     items:
       type: array
       items:
