@@ -5,6 +5,10 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
 	"fmt"
 	"io"
 	"net/http"
@@ -79,15 +83,57 @@ func TestMavenClientSnapshotHistoryTakeoverAndDeploy(t *testing.T) {
 	deploy := func() error {
 		return run("deploy", "-DskipTests", "-f", pom, "-s", settings, "-B", "-ntp", "-Dmaven.repo.local="+local)
 	}
+	request := func(method, name, body, actor, password string) (int, http.Header, []byte) {
+		t.Helper()
+		r, err := http.NewRequestWithContext(ctx, method, server.URL+"/repository/maven/"+f.repo.Name+"/org/example/widget/1.0-SNAPSHOT/"+name, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.SetBasicAuth(actor, password)
+		response, err := server.Client().Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = response.Body.Close() }()
+		data, err := io.ReadAll(response.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response.StatusCode, response.Header, data
+	}
 	get := func(name string) []byte {
 		t.Helper()
-		w := f.request(http.MethodGet, name, "")
-		if w.Code != 200 {
-			t.Fatalf("GET %s=%d %s", name, w.Code, w.Body.String())
+		status, _, body := request(http.MethodGet, name, "", "maven", "resolver-secret")
+		if status != 200 {
+			t.Fatalf("GET %s=%d %s", name, status, body)
 		}
-		return w.Body.Bytes()
+		return body
+	}
+	checkAsset := func(name string, body []byte) {
+		t.Helper()
+		if !bytes.Equal(get(name), body) {
+			t.Fatalf("bytes changed %s", name)
+		}
+		status, header, head := request(http.MethodHead, name, "", "maven", "resolver-secret")
+		if status != 200 || header.Get("Content-Length") != fmt.Sprint(len(body)) || len(head) != 0 {
+			t.Fatalf("HEAD %s=%d length=%s body=%d", name, status, header.Get("Content-Length"), len(head))
+		}
+		checksums := map[string]string{".md5": fmt.Sprintf("%x", md5.Sum(body)), ".sha1": fmt.Sprintf("%x", sha1.Sum(body)), ".sha256": fmt.Sprintf("%x", sha256.Sum256(body)), ".sha512": fmt.Sprintf("%x", sha512.Sum512(body))}
+		for suffix, expected := range checksums {
+			if actual := strings.TrimSpace(string(get(name + suffix))); actual != expected {
+				t.Fatalf("checksum %s%s=%q want %q", name, suffix, actual, expected)
+			}
+		}
 	}
 	original := get("maven-metadata.xml")
+	selected := f.files["org/example/widget/1.0-SNAPSHOT/widget-1.0-20260101.000000-7.jar"]
+	checkAsset("widget-1.0-SNAPSHOT.jar", selected)
+	if status, _, _ := request(http.MethodPut, "widget-1.0-20261006.100000-9.jar", "unauthorized", "maven", "wrong-secret"); status != 401 {
+		t.Fatalf("bad credential=%d", status)
+	}
+	if status, _, _ := request(http.MethodPut, "widget-1.0-20261006.100000-9.jar", "unauthorized", "reader", "resolver-secret"); status != 403 {
+		t.Fatalf("reader publication=%d", status)
+	}
 	if err := deploy(); err == nil {
 		t.Fatal("ordinary Maven deployment bypassed protected import")
 	}
@@ -95,6 +141,7 @@ func TestMavenClientSnapshotHistoryTakeoverAndDeploy(t *testing.T) {
 		t.Fatal("protected deploy changed source current")
 	}
 	f.takeOver(t)
+	checkAsset("widget-1.0-SNAPSHOT.jar", selected)
 	if !bytes.Equal(get("maven-metadata.xml"), original) {
 		t.Fatal("takeover changed source current")
 	}
@@ -141,10 +188,15 @@ func TestMavenClientSnapshotHistoryTakeoverAndDeploy(t *testing.T) {
 		if !bytes.Equal(resolved, get("widget-1.0-SNAPSHOT.jar")) {
 			t.Fatal("fresh Maven resolver did not select current")
 		}
+		built, err := os.ReadFile(filepath.Join(root, "target/widget-1.0-SNAPSHOT.jar"))
+		if err != nil || !bytes.Equal(resolved, built) {
+			t.Fatalf("resolver did not retrieve this completed build: %v", err)
+		}
+		checkAsset("widget-1.0-SNAPSHOT.jar", built)
 	}
 	current := get("maven-metadata.xml")
-	if w := f.request(http.MethodPut, "maven-metadata.xml", string(oldMetadata)); w.Code != 201 {
-		t.Fatalf("delayed real metadata=%d %s", w.Code, w.Body.String())
+	if status, _, body := request(http.MethodPut, "maven-metadata.xml", string(oldMetadata), "maven", "resolver-secret"); status != 201 {
+		t.Fatalf("delayed real metadata=%d %s", status, body)
 	}
 	if !bytes.Equal(get("maven-metadata.xml"), current) {
 		t.Fatal("delayed real client metadata regressed current")
@@ -154,13 +206,6 @@ func TestMavenClientSnapshotHistoryTakeoverAndDeploy(t *testing.T) {
 			continue
 		}
 		name := path[strings.LastIndexByte(path, '/')+1:]
-		if !bytes.Equal(get(name), body) {
-			t.Fatalf("history changed %s", name)
-		}
-	}
-	for _, suffix := range []string{".md5", ".sha1", ".sha256", ".sha512"} {
-		if len(get("widget-1.0-SNAPSHOT.jar"+suffix)) == 0 {
-			t.Fatal("missing current checksum")
-		}
+		checkAsset(name, body)
 	}
 }

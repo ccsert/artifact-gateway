@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -44,6 +45,48 @@ func (s *PostgresStore) GetMavenSnapshotImport(ctx context.Context, repo, coordi
 func lockMavenCoordinate(ctx context.Context, tx *sql.Tx, repo, coordinate string) error {
 	_, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, repo+":"+coordinate)
 	return err
+}
+
+// Capacity triggers lock the repository quota even when its value is zero.
+// Acquire it before artifact or CAS intent locks in every Maven transaction
+// that participates in publication visibility. The repository lock also
+// fences insertion of a previously absent quota by the quota setter.
+func lockMavenCapacityTx(ctx context.Context, tx *sql.Tx, repositories ...string) error {
+	repos := append([]string(nil), repositories...)
+	sort.Strings(repos)
+	for i, repo := range repos {
+		if i > 0 && repo == repos[i-1] {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `SELECT id FROM hosted_repositories WHERE id=$1 FOR SHARE`, repo); err != nil {
+			return err
+		}
+	}
+	for i, repo := range repos {
+		if i > 0 && repo == repos[i-1] {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `SELECT repository_id FROM repository_capacity_quotas WHERE repository_id=$1 FOR UPDATE`, repo); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func lockMavenArtifactIntentsTx(ctx context.Context, tx *sql.Tx, repo, prefix string) error {
+	_, err := tx.ExecContext(ctx, `SELECT i.object_key FROM native_maven_object_intents i WHERE i.object_key IN (SELECT a.object_key FROM native_maven_assets a WHERE a.repository_id=$1 AND left(a.path,length($2))=$2 AND (right($2,1)='/' OR substring(a.path,length($2)+1,1) IN ('.','-'))) ORDER BY i.object_key FOR UPDATE`, repo, prefix)
+	return err
+}
+
+func lockMavenAssetIntentRowsTx(ctx context.Context, tx *sql.Tx, assets []MavenAsset) error {
+	ordered := append([]MavenAsset(nil), assets...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].ObjectKey < ordered[j].ObjectKey })
+	for _, asset := range ordered {
+		if _, err := tx.ExecContext(ctx, `SELECT object_key FROM native_maven_object_intents WHERE object_key=$1 FOR UPDATE`, asset.ObjectKey); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func rejectMavenImportPublication(ctx context.Context, tx *sql.Tx, repo, coordinate string) error {
 	var reserved bool
@@ -184,6 +227,9 @@ func (s *PostgresStore) CommitMavenSnapshotImport(ctx context.Context, p MavenSn
 		if key != a.ObjectKey {
 			return v, ErrDisabled
 		}
+	}
+	if err = lockMavenCapacityTx(ctx, tx, p.RepositoryID); err != nil {
+		return v, err
 	}
 	if err = lockMavenSnapshotAssetIntentsTx(ctx, tx, p.Assets); err != nil {
 		return v, err

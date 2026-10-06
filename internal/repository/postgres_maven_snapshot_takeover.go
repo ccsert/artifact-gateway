@@ -23,7 +23,7 @@ func scanMavenDeployment(row interface{ Scan(...any) error }) (v MavenPublishSes
 	return v, err
 }
 
-// Coordinate, repository, checkpoint, session, then sorted intents is the
+// Coordinate, repository, checkpoint, session, quota, artifacts, then sorted intents is the
 // transaction lock order shared with import and protocol publication.
 func lockMavenTakeover(ctx context.Context, tx *sql.Tx, repo, coordinate string) (MavenSnapshotImport, error) {
 	if err := lockMavenCoordinate(ctx, tx, repo, coordinate); err != nil {
@@ -61,6 +61,9 @@ func checkPostgresMavenTakeover(ctx context.Context, tx *sql.Tx, p MavenSnapshot
 	}
 	if maximum >= MaxMavenSnapshotBuildNumber {
 		return v, ErrMavenSnapshotBuildExhausted
+	}
+	if err = lockMavenCapacityTx(ctx, tx, p.RepositoryID); err != nil {
+		return v, err
 	}
 	artifacts, err := lockMavenSnapshotArtifactsTx(ctx, tx, p.RepositoryID, p.Coordinate)
 	if err != nil {
@@ -211,6 +214,9 @@ func (s *PostgresStore) CompleteMavenSnapshotDeployment(ctx context.Context, id,
 	}
 	if MavenSnapshotDeploymentFingerprint(session, uploads) != fingerprint {
 		return v, ErrMavenSnapshotTakeoverNotReady
+	}
+	if err = lockMavenCapacityTx(ctx, tx, session.RepositoryID); err != nil {
+		return v, err
 	}
 	var a MavenArtifact
 	err = tx.QueryRowContext(ctx, `SELECT id::text,repository_id::text,coordinate,digest,state,created_at,build_number,source_timestamp,source_build_number FROM native_maven_artifacts WHERE id=$1 FOR SHARE`, id).Scan(&a.ID, &a.RepositoryID, &a.Coordinate, &a.Digest, &a.State, &a.CreatedAt, &a.BuildNumber, &a.SourceTimestamp, &a.SourceBuildNumber)
