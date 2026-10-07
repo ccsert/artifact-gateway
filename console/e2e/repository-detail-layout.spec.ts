@@ -1438,6 +1438,12 @@ for (const delayedMotion of [false, true]) {
   test(`the grant dialog keeps every field reachable at both widths${delayedMotion ? " with a delayed opening frame" : ""}`, async ({
     page,
   }, testInfo) => {
+    const pageErrors: string[] = [];
+    const consoleErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
     await mockRepositoryDetail(page);
     await page.route(
       `**/api/v2/repositories/${repositoryId}/grants**`,
@@ -1560,5 +1566,7 @@ for (const delayedMotion of [false, true]) {
         await expect(dialog).toBeHidden();
       }
     }
+    expect(pageErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
   });
 }
