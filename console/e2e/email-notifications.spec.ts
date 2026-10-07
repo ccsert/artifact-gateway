@@ -2,8 +2,21 @@ import { expect, test, type Page } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { authenticateAsAdmin } from "./support/auth";
+import { mockDefaultSiteSettings } from "./support/siteSettings";
 import type { EmailDelivery, EmailTarget } from "../src/client";
 import { defaultConsoleThemes } from "../src/lib/consoleTheme";
+
+// Playwright's DOM snapshot streamer emits a sandbox script error even for a
+// script-free srcdoc. Keep trace events, network, sources and screenshots;
+// avoid injecting the DOM snapshotter into this deliberately inert preview.
+test.use({
+  trace: {
+    mode: "retain-on-failure",
+    snapshots: false,
+    screenshots: true,
+    sources: true,
+  },
+});
 
 const target: EmailTarget = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -47,6 +60,7 @@ async function fixture(
     { locale, theme },
   );
   await authenticateAsAdmin(page);
+  await mockDefaultSiteSettings(page);
   let targets = empty ? [] : [target];
   const writes: Array<{
     path: string;

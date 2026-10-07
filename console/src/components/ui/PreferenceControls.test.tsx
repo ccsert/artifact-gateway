@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreferencesProvider } from "../../lib/preferences";
@@ -109,6 +109,59 @@ describe("PreferenceControls", () => {
     }
   });
 
+  it("persists the accepted choice while keeping its palette inside the capture update", async () => {
+    const user = userEvent.setup();
+    let update!: () => void | Promise<void>;
+    let resolveFinished!: () => void;
+    const original = (document as Document & { startViewTransition?: unknown })
+      .startViewTransition;
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: (callback: () => void | Promise<void>) => {
+        update = callback;
+        return {
+          finished: new Promise<void>((resolve) => {
+            resolveFinished = resolve;
+          }),
+          skipTransition() {},
+        };
+      },
+    });
+    try {
+      render(
+        <PreferencesProvider>
+          <PreferenceControls />
+        </PreferencesProvider>,
+      );
+      await user.click(screen.getByRole("button", { name: /选择主题/ }));
+      await user.click(
+        await screen.findByRole("menuitem", { name: /Gateway Light/ }),
+      );
+      expect(localStorage.getItem("ag.console.theme.id")).toBe("gateway-light");
+      expect(localStorage.getItem("ag.console.theme")).toBe("light");
+      expect(document.documentElement).toHaveAttribute(
+        "data-theme-id",
+        "gateway-dark",
+      );
+      await act(async () => {
+        await update();
+        resolveFinished();
+      });
+      expect(document.documentElement).toHaveAttribute(
+        "data-theme-id",
+        "gateway-light",
+      );
+      expect(document.documentElement).not.toHaveAttribute(
+        "data-theme-transition",
+      );
+    } finally {
+      Object.defineProperty(document, "startViewTransition", {
+        configurable: true,
+        value: original,
+      });
+    }
+  });
+
   it("commits atomically when view transitions are unavailable", async () => {
     const user = userEvent.setup();
     const original = (document as Document & { startViewTransition?: unknown })
@@ -159,6 +212,87 @@ describe("PreferenceControls", () => {
       ).toBeInTheDocument();
     } finally {
       animationFrameSpy?.mockRestore();
+      Object.defineProperty(document, "startViewTransition", {
+        configurable: true,
+        value: original,
+      });
+    }
+  });
+
+  it("keeps the theme selection when the browser cannot start its reveal", async () => {
+    const user = userEvent.setup();
+    const original = (document as Document & { startViewTransition?: unknown })
+      .startViewTransition;
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: () => {
+        throw new DOMException("Capture unavailable", "InvalidStateError");
+      },
+    });
+    try {
+      render(
+        <PreferencesProvider>
+          <PreferenceControls />
+        </PreferencesProvider>,
+      );
+      await user.click(screen.getByRole("button", { name: /选择主题/ }));
+      await user.click(
+        await screen.findByRole("menuitem", { name: /Gateway Light/ }),
+      );
+      expect(document.documentElement).toHaveAttribute(
+        "data-theme-id",
+        "gateway-light",
+      );
+      expect(localStorage.getItem("ag.console.theme.id")).toBe("gateway-light");
+      expect(document.documentElement).not.toHaveAttribute(
+        "data-theme-transition",
+      );
+    } finally {
+      Object.defineProperty(document, "startViewTransition", {
+        configurable: true,
+        value: original,
+      });
+    }
+  });
+
+  it("settles a rejected reveal without losing the selected theme", async () => {
+    const user = userEvent.setup();
+    let rejectFinished!: (reason: Error) => void;
+    const original = (document as Document & { startViewTransition?: unknown })
+      .startViewTransition;
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: (update: () => void | Promise<void>) => {
+        void update();
+        return {
+          finished: new Promise<void>((_, reject) => {
+            rejectFinished = reject;
+          }),
+          skipTransition() {},
+        };
+      },
+    });
+    try {
+      render(
+        <PreferencesProvider>
+          <PreferenceControls />
+        </PreferencesProvider>,
+      );
+      await user.click(screen.getByRole("button", { name: /选择主题/ }));
+      await user.click(
+        await screen.findByRole("menuitem", { name: /Gateway Light/ }),
+      );
+      rejectFinished(new Error("Snapshot skipped"));
+      await waitFor(() =>
+        expect(document.documentElement).not.toHaveAttribute(
+          "data-theme-transition",
+        ),
+      );
+      expect(document.documentElement).toHaveAttribute(
+        "data-theme-id",
+        "gateway-light",
+      );
+    } finally {
       Object.defineProperty(document, "startViewTransition", {
         configurable: true,
         value: original,

@@ -301,6 +301,15 @@ function storedLocale(): AppLocale {
   }
 }
 
+function persistThemePreference(theme: Pick<ConsoleTheme, "id" | "mode">) {
+  try {
+    localStorage.setItem(THEME_ID_KEY, theme.id);
+    localStorage.setItem(THEME_MODE_KEY, theme.mode);
+  } catch {
+    // Preferences still work for this session when storage is unavailable.
+  }
+}
+
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const { settings } = useSiteSettings();
   const availableThemes = useMemo(() => {
@@ -318,6 +327,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<AppLocale>(storedLocale);
   const activeThemeTransition = useRef<ThemeViewTransition | null>(null);
   const themeCommitSequence = useRef(0);
+  const requestedThemeId = useRef(themeId);
   // Keep a just-disabled theme mounted for one render so the effect below can
   // animate to the configured default instead of swapping the whole UI first.
   const activeTheme =
@@ -338,11 +348,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     root.classList.toggle("dark", colorMode === "dark");
     root.style.colorScheme = colorMode;
     applyResolvedConsoleTheme(resolvedTheme, root);
-    try {
-      localStorage.setItem(THEME_ID_KEY, activeTheme.id);
-      localStorage.setItem(THEME_MODE_KEY, colorMode);
-    } catch {
-      // Preferences still work for this session when storage is unavailable.
+    if (requestedThemeId.current === activeTheme.id) {
+      persistThemePreference({ id: activeTheme.id, mode: colorMode });
     }
   }, [activeTheme.id, colorMode, resolvedTheme]);
 
@@ -357,18 +364,27 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 
   const setThemeId = useCallback(
     (nextThemeID: string, origin?: ThemeTransitionOrigin) => {
-      if (
-        nextThemeID === themeId ||
-        !availableThemes.some((theme) => theme.id === nextThemeID)
-      )
-        return;
+      const nextTheme = availableThemes.find(
+        (theme) => theme.id === nextThemeID,
+      );
+      if (nextThemeID === requestedThemeId.current || !nextTheme) return;
       const root = document.documentElement;
       const reduceMotion = window.matchMedia(
         "(prefers-reduced-motion: reduce)",
       ).matches;
       const transitionDocument = document as ThemeTransitionDocument;
-      const commit = () => flushSync(() => setThemeIdState(nextThemeID));
       const commitSequence = ++themeCommitSequence.current;
+      requestedThemeId.current = nextThemeID;
+      // Persist the accepted choice before an optional browser capture starts.
+      // Document navigation can destroy its callback before the palette commit.
+      persistThemePreference(nextTheme);
+      const commit = () => {
+        // Skipping a View Transition does not cancel its asynchronous update
+        // callback. An older snapshot must never replace a later user choice.
+        if (themeCommitSequence.current === commitSequence) {
+          flushSync(() => setThemeIdState(nextThemeID));
+        }
+      };
 
       activeThemeTransition.current?.skipTransition();
       if (reduceMotion || !transitionDocument.startViewTransition) {
@@ -393,23 +409,38 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 
       setThemeRevealGeometry(root, origin);
       root.dataset.themeTransition = "view";
-      const transition = transitionDocument.startViewTransition(async () => {
+      let transition: ThemeViewTransition;
+      try {
+        transition = transitionDocument.startViewTransition(async () => {
+          commit();
+          // Let Ant Design v6 publish its CSS-variable theme before the browser
+          // captures the new snapshot. A task boundary works while rendering is
+          // paused; requestAnimationFrame would deadlock the View Transition.
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+        });
+      } catch {
+        // The reveal is optional; a browser capture failure cannot reject the
+        // user's theme selection.
+        activeThemeTransition.current = null;
+        delete root.dataset.themeTransition;
+        clearThemeRevealGeometry(root);
         commit();
-        // Let Ant Design v6 publish its CSS-variable theme before the browser
-        // captures the new snapshot. A task boundary works while rendering is
-        // paused; requestAnimationFrame would deadlock the View Transition.
-        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-      });
+        return;
+      }
       activeThemeTransition.current = transition;
-      void transition.finished.finally(() => {
+      const finish = () => {
         if (activeThemeTransition.current === transition) {
           activeThemeTransition.current = null;
           delete root.dataset.themeTransition;
           clearThemeRevealGeometry(root);
         }
+      };
+      void transition.finished.then(finish, () => {
+        commit();
+        finish();
       });
     },
-    [availableThemes, themeId],
+    [availableThemes],
   );
   useEffect(() => {
     if (!availableThemes.some((theme) => theme.id === themeId)) {

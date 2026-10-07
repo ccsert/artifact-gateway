@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { DatabaseOutlined } from "@ant-design/icons";
 import { Button, Segmented } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -26,8 +26,32 @@ import {
 } from "../../components/ui/ConsolePrimitives";
 import { StorageByFormatChart } from "../../components/ui/DashboardCharts";
 import { usePreferences } from "../../lib/preferences";
+import { useDashboardResource } from "./useDashboardResource";
+import { preloadDashboardPiePlot } from "../../components/ui/dashboard-charts/loadDashboardPiePlot";
 
 type StatisticsWindow = keyof OverviewWindowCounts;
+
+async function readGroups(signal: AbortSignal): Promise<Group[]> {
+  const result = await listGroups({ query: { pageSize: 200 }, signal });
+  if (result.error && !isNotFound(result.error)) throw result.error;
+  return result.data?.items ?? [];
+}
+
+async function readAudits(signal: AbortSignal): Promise<AuditRecord[]> {
+  const result = await listAudits({ query: { limit: 8 }, signal });
+  if (result.error && !isNotFound(result.error)) throw result.error;
+  return result.data ?? [];
+}
+
+async function readStatistics(
+  signal: AbortSignal,
+): Promise<OverviewStatistics> {
+  const result = await getOverviewStatistics({ signal });
+  if (result.error || !result.data) {
+    throw result.error ?? new Error("Overview statistics unavailable");
+  }
+  return result.data;
+}
 
 export function sortRepositoryStatistics(
   repositories: OverviewRepositoryStatistics[],
@@ -43,49 +67,19 @@ export function sortRepositoryStatistics(
 export function DashboardPage() {
   const { locale, text } = usePreferences();
   const navigate = useNavigate();
-  const [groups, setGroups] = useState<Group[] | null>(null);
-  const [audits, setAudits] = useState<AuditRecord[] | null>(null);
-  const [statistics, setStatistics] = useState<OverviewStatistics | null>(null);
+  const groupsResource = useDashboardResource(readGroups);
+  const auditsResource = useDashboardResource(readAudits);
+  const statisticsResource = useDashboardResource(readStatistics);
+  const groups = groupsResource.data;
+  const audits = auditsResource.data;
+  const statistics = statisticsResource.data;
   const [window, setWindow] = useState<StatisticsWindow>("sevenDays");
-  const [error, setError] = useState<unknown>(null);
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const [g, a, s] = await Promise.all([
-        listGroups({ query: { pageSize: 200 } }),
-        listAudits({ query: { limit: 8 } }),
-        getOverviewStatistics(),
-      ]);
-      // groups / audits 在当前后端构建中可能未启用（404），降级为空数据
-      if (g.error && !isNotFound(g.error)) throw g.error;
-      if (a.error && !isNotFound(a.error)) throw a.error;
-      if (s.error) throw s.error;
-      setGroups(g.data?.items ?? []);
-      setAudits(a.data ?? []);
-      setStatistics(s.data ?? null);
-    } catch (e) {
-      setError(e);
-    }
-  }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    preloadDashboardPiePlot();
+  }, []);
 
-  // A refresh failure keeps the loaded overview on screen and says what
-  // happened above it; only a first load has nothing to fall back to.
-  const firstLoad = !groups || !audits || !statistics;
-  if (firstLoad) {
-    return (
-      <div className="ag-page-stack">
-        <PageHeader title={text("总览", "Overview")} />
-        {error ? <ErrorBanner error={error} onRetry={load} /> : <Loading />}
-      </div>
-    );
-  }
-
-  const bytesByFormat = statistics.repositories.reduce<Record<string, number>>(
+  const bytesByFormat = statistics?.repositories.reduce<Record<string, number>>(
     (byFormat, item) => {
       byFormat[item.format] = (byFormat[item.format] ?? 0) + item.usedBytes;
       return byFormat;
@@ -93,7 +87,7 @@ export function DashboardPage() {
     {},
   );
   const rankedRepositories = sortRepositoryStatistics(
-    statistics.repositories,
+    statistics?.repositories ?? [],
     window,
   );
   const repositoryColumns: ColumnsType<OverviewRepositoryStatistics> = [
@@ -225,37 +219,72 @@ export function DashboardPage() {
           </div>
         }
       />
-      {error ? <ErrorBanner error={error} onRetry={load} /> : null}
+      {statisticsResource.error ? (
+        <ErrorBanner
+          title={text("仓库统计加载失败", "Repository statistics unavailable")}
+          error={statisticsResource.error}
+          onRetry={statisticsResource.reload}
+          tone={statistics ? "warning" : "error"}
+        />
+      ) : null}
+      {groupsResource.error ? (
+        <ErrorBanner
+          title={text("分组统计加载失败", "Group statistics unavailable")}
+          error={groupsResource.error}
+          onRetry={groupsResource.reload}
+          tone={groups ? "warning" : "error"}
+        />
+      ) : null}
       <MetricStrip
         items={[
           {
             label: text("总请求量", "Total requests"),
-            value: formatNumber(statistics.totals.requests[window], locale),
-            hint: text(
-              `其中拒绝 ${formatNumber(statistics.totals.denied[window], locale)}`,
-              `${formatNumber(statistics.totals.denied[window], locale)} denied`,
-            ),
+            value: statistics
+              ? formatNumber(statistics.totals.requests[window], locale)
+              : "—",
+            hint: statistics
+              ? text(
+                  `其中拒绝 ${formatNumber(statistics.totals.denied[window], locale)}`,
+                  `${formatNumber(statistics.totals.denied[window], locale)} denied`,
+                )
+              : text(
+                  statisticsResource.loading
+                    ? "正在加载仓库统计…"
+                    : "仓库统计不可用",
+                  statisticsResource.loading
+                    ? "Loading repository statistics…"
+                    : "Repository statistics unavailable",
+                ),
           },
           {
             label: text("总对象数", "Total objects"),
-            value: formatNumber(statistics.totals.objectCount, locale),
+            value: statistics
+              ? formatNumber(statistics.totals.objectCount, locale)
+              : "—",
             hint: text("当前仓库容量口径", "Current repository capacity basis"),
           },
           {
             label: text("存储占用", "Storage used"),
-            value: formatBytes(statistics.totals.usedBytes),
+            value: statistics ? formatBytes(statistics.totals.usedBytes) : "—",
           },
           {
             label: text("仓库总数", "Repositories"),
-            value: statistics.repositories.length,
+            value: statistics?.repositories.length ?? "—",
           },
           {
             label: text("分组", "Groups"),
-            value: groups.length,
-            hint: text(
-              `共 ${groups.reduce((n, g) => n + (g.members?.length ?? 0), 0)} 个成员引用`,
-              `${groups.reduce((n, g) => n + (g.members?.length ?? 0), 0)} member references`,
-            ),
+            value: groups?.length ?? "—",
+            hint: groups
+              ? text(
+                  `共 ${groups.reduce((n, g) => n + (g.members?.length ?? 0), 0)} 个成员引用`,
+                  `${groups.reduce((n, g) => n + (g.members?.length ?? 0), 0)} member references`,
+                )
+              : text(
+                  groupsResource.loading ? "正在加载分组…" : "分组统计不可用",
+                  groupsResource.loading
+                    ? "Loading groups…"
+                    : "Group statistics unavailable",
+                ),
           },
         ]}
       />
@@ -272,24 +301,35 @@ export function DashboardPage() {
             </Link>
           }
         />
-        <ConsoleTable<OverviewRepositoryStatistics>
-          rowKey="repositoryId"
-          dataSource={rankedRepositories.slice(0, 10)}
-          columns={repositoryColumns}
-          pagination={false}
-          locale={{
-            emptyText: (
-              <EmptyState
-                title={text("暂无仓库", "No repositories")}
-                hint={text(
-                  "创建仓库后，这里会展示请求量、对象数与存储占用。",
-                  "Create a repository to see requests, objects, and storage here.",
-                )}
-              />
-            ),
-          }}
-          scroll={{ x: 700 }}
-        />
+        {statistics ? (
+          <ConsoleTable<OverviewRepositoryStatistics>
+            rowKey="repositoryId"
+            dataSource={rankedRepositories.slice(0, 10)}
+            columns={repositoryColumns}
+            pagination={false}
+            locale={{
+              emptyText: (
+                <EmptyState
+                  title={text("暂无仓库", "No repositories")}
+                  hint={text(
+                    "创建仓库后，这里会展示请求量、对象数与存储占用。",
+                    "Create a repository to see requests, objects, and storage here.",
+                  )}
+                />
+              ),
+            }}
+            scroll={{ x: 700 }}
+          />
+        ) : statisticsResource.loading ? (
+          <Loading
+            label={text("正在加载仓库统计…", "Loading repository statistics…")}
+          />
+        ) : (
+          <EmptyState
+            compact
+            title={text("仓库统计不可用", "Repository statistics unavailable")}
+          />
+        )}
       </Card>
 
       <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-2">
@@ -306,10 +346,27 @@ export function DashboardPage() {
             }
           />
           <div className="px-5 py-6">
-            <StorageByFormatChart
-              bytesByFormat={bytesByFormat}
-              totalBytes={statistics.totals.usedBytes}
-            />
+            {statistics ? (
+              <StorageByFormatChart
+                bytesByFormat={bytesByFormat ?? {}}
+                totalBytes={statistics.totals.usedBytes}
+              />
+            ) : statisticsResource.loading ? (
+              <Loading
+                label={text(
+                  "正在加载容量统计…",
+                  "Loading capacity statistics…",
+                )}
+              />
+            ) : (
+              <EmptyState
+                compact
+                title={text(
+                  "容量统计不可用",
+                  "Capacity statistics unavailable",
+                )}
+              />
+            )}
           </div>
         </Card>
 
@@ -320,8 +377,8 @@ export function DashboardPage() {
               <div className="flex items-center gap-3 text-xs">
                 <span className="text-zinc-500">
                   {text(
-                    `${audits.length} 条最新记录`,
-                    `${audits.length} latest`,
+                    audits ? `${audits.length} 条最新记录` : "",
+                    audits ? `${audits.length} latest` : "",
                   )}
                 </span>
                 <Link
@@ -333,28 +390,42 @@ export function DashboardPage() {
               </div>
             }
           />
-          <ConsoleTable<AuditRecord>
-            rowKey={(record) =>
-              record.requestId ??
-              record.traceId ??
-              `${record.occurredAt}-${record.actor ?? ""}-${record.operation ?? ""}-${record.resource ?? ""}`
-            }
-            dataSource={audits}
-            columns={auditColumns}
-            pagination={false}
-            locale={{
-              emptyText: (
-                <EmptyState
-                  title={text("暂无审计记录", "No audit records")}
-                  hint={text(
-                    "产生访问或发布行为后，这里会列出最近的判定记录。",
-                    "Recent decisions appear here once access or publishing is recorded.",
-                  )}
-                />
-              ),
-            }}
-            scroll={{ x: 520 }}
-          />
+          {auditsResource.error ? (
+            <ErrorBanner
+              title={text("审计事件加载失败", "Audit events unavailable")}
+              error={auditsResource.error}
+              onRetry={auditsResource.reload}
+              tone={audits ? "warning" : "error"}
+            />
+          ) : null}
+          {audits ? (
+            <ConsoleTable<AuditRecord>
+              rowKey={(record) =>
+                record.requestId ??
+                record.traceId ??
+                `${record.occurredAt}-${record.actor ?? ""}-${record.operation ?? ""}-${record.resource ?? ""}`
+              }
+              dataSource={audits}
+              columns={auditColumns}
+              pagination={false}
+              locale={{
+                emptyText: (
+                  <EmptyState
+                    title={text("暂无审计记录", "No audit records")}
+                    hint={text(
+                      "产生访问或发布行为后，这里会列出最近的判定记录。",
+                      "Recent decisions appear here once access or publishing is recorded.",
+                    )}
+                  />
+                ),
+              }}
+              scroll={{ x: 520 }}
+            />
+          ) : auditsResource.loading ? (
+            <Loading
+              label={text("正在加载审计事件…", "Loading audit events…")}
+            />
+          ) : null}
         </Card>
       </div>
     </div>
