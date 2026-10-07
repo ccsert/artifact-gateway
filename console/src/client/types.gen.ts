@@ -2224,7 +2224,14 @@ export type ArtifactUsageStat = {
 
 export type RepositoryArtifactUsage = {
   repositoryId: string;
+  /**
+   * Lifetime totals for the whole repository, independent of q and offset.
+   */
   totals: ArtifactUsageTotals;
+  /**
+   * Number of artifact addresses matching q, independent of offset and limit.
+   */
+  totalCount: number;
   items: Array<ArtifactUsageStat>;
   generatedAt: string;
 };
@@ -7839,11 +7846,20 @@ export type ListRepositoryArtifactUsageData = {
   };
   query?: {
     limit?: number;
+    offset?: number;
+    /**
+     * Case-sensitive literal substring of the artifact address. Surrounding whitespace is trimmed; SQL wildcard characters have no special meaning.
+     */
+    q?: string;
   };
   url: "/repositories/{repositoryId}/artifact-usage";
 };
 
 export type ListRepositoryArtifactUsageErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
   /**
    * Problem response
    */

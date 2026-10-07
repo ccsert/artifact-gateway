@@ -1,6 +1,7 @@
 import { DownOutlined } from "@ant-design/icons";
 import { Button, Card as AntdCard } from "antd";
 import type { ReactNode } from "react";
+import { usePreferences } from "../../lib/preferences";
 
 export function PageHeader({
   title,
@@ -102,18 +103,28 @@ export function Pagination({
   hasMore,
   loading,
   onMore,
-  label = "加载更多",
+  label,
+  disabled,
 }: {
   hasMore: boolean;
   loading?: boolean;
   onMore: () => void;
   label?: string;
+  disabled?: boolean;
 }) {
+  const { text } = usePreferences();
   if (!hasMore) return null;
+  const actionLabel = label ?? text("加载更多", "Load more");
   return (
-    <div className="flex justify-center border-t border-zinc-800/60 px-4 py-3">
-      <Button icon={<DownOutlined />} onClick={onMore} loading={loading}>
-        {label}
+    <div className="ag-pagination-footer flex justify-end border-t border-zinc-800/60 px-4 py-3">
+      <Button
+        icon={<DownOutlined />}
+        onClick={onMore}
+        loading={loading}
+        disabled={disabled}
+        aria-label={actionLabel}
+      >
+        {actionLabel}
       </Button>
     </div>
   );

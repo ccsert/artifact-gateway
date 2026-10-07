@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Repository usage supports server pagination, literal address search and distinct matching/whole-repository totals; Console tables share Ant Design pagination while cursor lists retain load-more semantics.
+
 ## 0.7.0 - 2026-10-06
 
 - Added explicit, audited SNAPSHOT publication takeover after historical acceptance. Frozen target bytes/current selectors stay fixed through takeover; receipt-bound ordinary Maven deployments advance current only when complete, retain immutable history and source classifier choices, reject sealed re-import and stale retention jobs, and use a mandatory real Maven retry/resolution gate.

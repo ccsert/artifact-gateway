@@ -22,11 +22,10 @@ import { usePreferences } from "../../lib/preferences";
 import { UserCreateDialog } from "./users/UserCreateDialog";
 import { UserDetailsDrawer } from "./users/UserDetailsDrawer";
 import { isUserLocked, roleTone } from "./users/userPresentation";
+import { CONSOLE_PAGE_SIZE } from "../../components/ui/useConsolePagination";
 
 type Role = User["role"];
 type UserState = User["state"];
-
-const DEFAULT_PAGE_SIZE = 20;
 
 export function UsersPage() {
   const { locale, text } = usePreferences();
@@ -40,7 +39,7 @@ export function UsersPage() {
   const [role, setRole] = useState<Role | undefined>();
   const [state, setState] = useState<UserState | undefined>();
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [pageSize, setPageSize] = useState(CONSOLE_PAGE_SIZE);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
@@ -233,13 +232,6 @@ export function UsersPage() {
     current: page,
     pageSize,
     total,
-    showSizeChanger: true,
-    pageSizeOptions: [20, 50, 100],
-    showTotal: (count, range) =>
-      text(
-        `第 ${range[0]}-${range[1]} 项，共 ${count} 个用户`,
-        `${range[0]}-${range[1]} of ${count} users`,
-      ),
     onChange: (nextPage, nextPageSize) => {
       setPageSize(nextPageSize);
       setPage(nextPageSize === pageSize ? nextPage : 1);

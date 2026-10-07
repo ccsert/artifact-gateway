@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { listRepositoryArtifactUsage } from "../../client";
@@ -34,12 +34,166 @@ afterEach(() => {
 });
 
 describe("RepositoryUsageTab", () => {
+  it("recovers a removed last page with one bounded request", async () => {
+    const user = userEvent.setup();
+    const data = (totalCount: number) => ({
+      data: {
+        repositoryId: repository.id,
+        generatedAt: "2026-09-17T08:00:00Z",
+        totals: {
+          downloadCount: totalCount,
+          totalBytes: totalCount,
+          resources: totalCount,
+        },
+        totalCount,
+        items: [],
+      },
+    });
+    mockListRepositoryArtifactUsage
+      .mockResolvedValueOnce(data(21) as never)
+      .mockResolvedValueOnce(data(0) as never)
+      .mockResolvedValueOnce(data(0) as never);
+    render(
+      <PreferencesProvider>
+        <RepositoryUsageTab repo={repository} />
+      </PreferencesProvider>,
+    );
+    await screen.findByText("第 1-20 项，共 21 项");
+    await user.click(screen.getByTitle("2"));
+    await vi.waitFor(() =>
+      expect(mockListRepositoryArtifactUsage).toHaveBeenCalledTimes(3),
+    );
+    expect(mockListRepositoryArtifactUsage.mock.calls[1][0]?.query).toEqual({
+      limit: 20,
+      offset: 20,
+      q: undefined,
+    });
+    expect(mockListRepositoryArtifactUsage.mock.calls[2][0]?.query).toEqual({
+      limit: 20,
+      offset: 0,
+      q: undefined,
+    });
+  });
+
+  it("shows only the initial error and recovers on retry", async () => {
+    const user = userEvent.setup();
+    mockListRepositoryArtifactUsage
+      .mockRejectedValueOnce(new Error("initial read failed"))
+      .mockResolvedValueOnce({
+        data: {
+          repositoryId: repository.id,
+          generatedAt: "2026-09-17T08:00:00Z",
+          totals: { downloadCount: 0, totalBytes: 0, resources: 0 },
+          totalCount: 0,
+          items: [],
+        },
+      } as never);
+    render(
+      <PreferencesProvider>
+        <RepositoryUsageTab repo={repository} />
+      </PreferencesProvider>,
+    );
+    await screen.findByText("initial read failed");
+    expect(screen.queryByText("正在加载…")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /重\s*试/ }));
+    await screen.findByText("暂无下载记录");
+  });
+  it("ignores a slow old refresh after a new search succeeds", async () => {
+    const user = userEvent.setup();
+    const response = (path: string) => ({
+      data: {
+        repositoryId: repository.id,
+        generatedAt: "2026-09-17T08:00:00Z",
+        totals: { downloadCount: 2, totalBytes: 2, resources: 2 },
+        totalCount: 1,
+        items: [
+          {
+            format: "raw",
+            resource: path,
+            downloadCount: 1,
+            totalBytes: 1,
+            firstDownloadedAt: "2026-09-17T08:00:00Z",
+            lastDownloadedAt: "2026-09-17T08:00:00Z",
+          },
+        ],
+      },
+    });
+    let resolveOld!: (value: never) => void;
+    mockListRepositoryArtifactUsage
+      .mockResolvedValueOnce(response("initial") as never)
+      .mockImplementationOnce(
+        () =>
+          new Promise<never>((resolve) => {
+            resolveOld = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(response("new-search") as never);
+    render(
+      <PreferencesProvider>
+        <RepositoryUsageTab repo={repository} />
+      </PreferencesProvider>,
+    );
+    await screen.findByText("initial");
+    await user.click(screen.getByRole("button", { name: /刷\s*新/ }));
+    await user.type(
+      screen.getByRole("searchbox", { name: "搜索制品地址" }),
+      "new-search{Enter}",
+    );
+    await screen.findByText("new-search");
+    await act(async () => resolveOld(response("old-refresh") as never));
+    expect(screen.getByText("new-search")).toBeVisible();
+    expect(screen.queryByText("old-refresh")).not.toBeInTheDocument();
+    expect(mockListRepositoryArtifactUsage).toHaveBeenCalledTimes(3);
+  });
+  it("requests one bounded page and searches on the server with a matching total", async () => {
+    const user = userEvent.setup();
+    mockListRepositoryArtifactUsage.mockResolvedValue({
+      data: {
+        repositoryId: repository.id,
+        generatedAt: "2026-09-17T08:00:00Z",
+        totals: { downloadCount: 400, totalBytes: 4096, resources: 201 },
+        totalCount: 201,
+        items: [],
+      },
+    } as never);
+    render(
+      <PreferencesProvider>
+        <RepositoryUsageTab repo={repository} />
+      </PreferencesProvider>,
+    );
+    await screen.findByText("暂无下载记录");
+    expect(mockListRepositoryArtifactUsage).toHaveBeenCalledTimes(1);
+    expect(mockListRepositoryArtifactUsage.mock.calls[0][0]?.query).toEqual({
+      limit: 20,
+      offset: 0,
+      q: undefined,
+    });
+    await user.click(screen.getByTitle("2"));
+    await vi.waitFor(() =>
+      expect(
+        mockListRepositoryArtifactUsage.mock.calls.at(-1)?.[0]?.query,
+      ).toEqual({ limit: 20, offset: 20, q: undefined }),
+    );
+    await user.type(
+      screen.getByRole("searchbox", { name: "搜索制品地址" }),
+      "widget",
+    );
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() =>
+      expect(
+        mockListRepositoryArtifactUsage.mock.calls.at(-1)?.[0]?.query,
+      ).toEqual({ limit: 20, offset: 0, q: "widget" }),
+    );
+    expect(screen.getByText("第 1-20 项，共 201 项")).toBeVisible();
+    expect(screen.getByText(/全仓库：201 个地址/)).toBeVisible();
+  });
   it("shows per-artifact downloads without redundant summary cards", async () => {
     mockListRepositoryArtifactUsage.mockResolvedValue({
       data: {
         repositoryId: repository.id,
         generatedAt: "2026-09-17T08:00:00Z",
         totals: { downloadCount: 12, totalBytes: 1536, resources: 2 },
+        totalCount: 2,
         items: [
           {
             format: "npm",
@@ -81,6 +235,7 @@ describe("RepositoryUsageTab", () => {
         repositoryId: repository.id,
         generatedAt: "2026-09-17T08:00:00Z",
         totals: { downloadCount: 0, totalBytes: 0, resources: 0 },
+        totalCount: 0,
         items: [],
       },
     } as never);
@@ -102,6 +257,7 @@ describe("RepositoryUsageTab", () => {
         repositoryId: repository.id,
         generatedAt: "2026-09-17T08:00:00Z",
         totals: { downloadCount: 0, totalBytes: 0, resources: 0 },
+        totalCount: 0,
         items: [],
       },
     } as never);
@@ -126,6 +282,7 @@ describe("RepositoryUsageTab", () => {
           repositoryId: repository.id,
           generatedAt: "2026-09-17T08:00:00Z",
           totals: { downloadCount: 1, totalBytes: 512, resources: 1 },
+          totalCount: 1,
           items: [
             {
               format: "npm",

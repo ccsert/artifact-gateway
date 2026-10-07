@@ -60,6 +60,45 @@ afterEach(() => {
 });
 
 describe("RepositoryScanningTab", () => {
+  it("labels scan jobs as a bounded recent window without claiming a complete total", async () => {
+    mockListJobs.mockResolvedValue({
+      data: Array.from({ length: 100 }, (_, index) => ({
+        id: `recent-job-${index}`,
+        kind: index < 26 ? "scan" : "intelligence",
+        state: "pending",
+        createdAt: "2026-08-12T06:00:00Z",
+        attempts: 0,
+        maxAttempts: 3,
+        progressCurrent: 0,
+        progressTotal: 0,
+      })),
+    } as never);
+    const { container } = render(
+      <PreferencesProvider>
+        <RepositoryScanningTab
+          repo={repository}
+          capabilities={capabilities}
+          capabilitiesLoading={false}
+          capabilitiesError={null}
+          canManage
+          canViewJobs
+        />
+      </PreferencesProvider>,
+    );
+    expect(
+      await screen.findByText(
+        "仅显示最近 100 条生命周期任务中的扫描任务；不是全部扫描历史。",
+      ),
+    ).toBeVisible();
+    await waitFor(() =>
+      expect(container.querySelectorAll("tbody tr.ant-table-row")).toHaveLength(
+        26,
+      ),
+    );
+    expect(container.querySelector(".ant-pagination")).toBeNull();
+    expect(screen.queryByText(/共 26 项/)).not.toBeInTheDocument();
+  });
+
   it("searches, selects, and queues a repository artifact without manual identity input", async () => {
     const user = userEvent.setup();
     mockListJobs.mockResolvedValue({ data: [] } as never);

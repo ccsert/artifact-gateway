@@ -5,7 +5,7 @@ import type { ColumnsType } from "antd/es/table";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { searchArtifacts } from "../../client";
 import type { GlobalArtifactSearchHit } from "../../client";
-import { PageHeader } from "../../components/ui/Layout";
+import { PageHeader, Pagination } from "../../components/ui/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../../components/ui/Feedback";
 import { Badge, FormatBadge } from "../../components/ui/Badge";
 import { ArtifactSecurityBadge } from "../artifact-detail/ArtifactSecurityBadge";
@@ -824,13 +824,11 @@ export function SearchPage() {
               })}
             />
           </div>
-          {nextPageToken && (
-            <div className="flex justify-center">
-              <Button loading={loadingMore} onClick={() => void loadMore()}>
-                {text("加载更多", "Load more")}
-              </Button>
-            </div>
-          )}
+          <Pagination
+            hasMore={!!nextPageToken}
+            loading={loadingMore}
+            onMore={() => void loadMore()}
+          />
         </>
       )}
     </div>
