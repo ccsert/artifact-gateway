@@ -57,11 +57,11 @@ func TestOCIBearerPublicFailures(t *testing.T) {
 			fixture := newProxyRedirectFixture(t, func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/token" {
 					exchanges.Add(1)
-					io.WriteString(w, tc.body)
+					_, _ = io.WriteString(w, tc.body)
 					return
 				}
 				if r.Header.Get("Authorization") != "" && !tc.retry401 {
-					io.WriteString(w, "ok")
+					_, _ = io.WriteString(w, "ok")
 					return
 				}
 				w.Header().Set("WWW-Authenticate", tc.challenge)
@@ -88,11 +88,11 @@ func TestOCIBearerPublicCacheSingleflightCancellationIsolation(t *testing.T) {
 			exchanges.Add(1)
 			once.Do(func() { close(started) })
 			<-release
-			io.WriteString(w, `{"token":"token","expires_in":3600,"issued_at":"`+time.Now().Add(-10*time.Minute).UTC().Format(time.RFC3339)+`"}`)
+			_, _ = io.WriteString(w, `{"token":"token","expires_in":3600,"issued_at":"`+time.Now().Add(-10*time.Minute).UTC().Format(time.RFC3339)+`"}`)
 			return
 		}
 		if r.Header.Get("Authorization") == "Bearer token" {
-			io.WriteString(w, "ok")
+			_, _ = io.WriteString(w, "ok")
 			return
 		}
 		w.Header().Set("WWW-Authenticate", `Bearer realm="https://`+redirectOrigin+`/token",service="registry"`)
@@ -144,7 +144,7 @@ func TestOCIBearerPublicIssuerRedirectPolicy(t *testing.T) {
 					if r.Header.Get("Authorization") != "" {
 						t.Error("issuer redirect leaked authorization")
 					}
-					io.WriteString(w, `{"token":"token"}`)
+					_, _ = io.WriteString(w, `{"token":"token"}`)
 					return
 				}
 				if r.URL.Path == "/token" {
@@ -152,7 +152,7 @@ func TestOCIBearerPublicIssuerRedirectPolicy(t *testing.T) {
 					return
 				}
 				if r.Header.Get("Authorization") == "Bearer token" {
-					io.WriteString(w, "ok")
+					_, _ = io.WriteString(w, "ok")
 					return
 				}
 				w.Header().Set("WWW-Authenticate", `Bearer realm="https://`+redirectOrigin+`/token",service="registry"`)
@@ -185,12 +185,12 @@ func TestOCIBearerPublicRevocationAndShortExpiry(t *testing.T) {
 					if short {
 						ttl = 1
 					}
-					fmt.Fprintf(w, `{"token":"token-%d","expires_in":%d}`, number, ttl)
+					_, _ = fmt.Fprintf(w, `{"token":"token-%d","expires_in":%d}`, number, ttl)
 					return
 				}
 				authorization := r.Header.Get("Authorization")
 				if authorization != "" && (!revoked.Load() || authorization != "Bearer token-1") {
-					io.WriteString(w, "ok")
+					_, _ = io.WriteString(w, "ok")
 					return
 				}
 				w.Header().Set("WWW-Authenticate", `Bearer realm="https://`+redirectOrigin+`/token",service="registry"`)
@@ -229,11 +229,11 @@ func TestOCIBearerPublicIndependentIssuerRequiresAllowedHost(t *testing.T) {
 			fixture := newProxyRedirectFixture(t, func(w http.ResponseWriter, r *http.Request) {
 				if r.Host == redirectCDN {
 					issued.Add(1)
-					io.WriteString(w, `{"token":"token"}`)
+					_, _ = io.WriteString(w, `{"token":"token"}`)
 					return
 				}
 				if r.Header.Get("Authorization") == "Bearer token" {
-					io.WriteString(w, "ok")
+					_, _ = io.WriteString(w, "ok")
 					return
 				}
 				w.Header().Set("WWW-Authenticate", `Bearer realm="https://`+redirectCDN+`/token",service="registry"`)

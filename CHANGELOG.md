@@ -13,7 +13,7 @@ their meaning.
 
 - Native OCI Proxy repositories can opt into anonymous upstream Bearer exchange with the V2 `ociBearer` issuer/audience configuration. PATCH omission preserves it and explicit null clears it; Hosted repositories, other formats and legacy Group member settings reject the field. Migration 000144 persists configuration only; tokens remain ephemeral. Issuer trust does not grant egress permission.
 
-- Maven/OCI Proxy downloads now reapply the selected egress policy at each approved HTTPS redirect, with exact origin/port checks, five-hop bounds, DNS pinning on locally resolved paths, credential isolation, one cancellation/timeout budget and safe outbound telemetry. Existing HTTP-only or unapproved redirect chains fail closed; OCI upstream Bearer exchange remains pending.
+- Maven/OCI Proxy downloads now reapply the selected egress policy at each approved HTTPS redirect, with exact origin/port checks, five-hop bounds, DNS pinning on locally resolved paths, credential isolation, one cancellation/timeout budget and safe outbound telemetry. Existing HTTP-only or unapproved redirect chains fail closed.
 
 - Console theme choices preserve the latest accepted selection across skipped or failed visual transitions and document navigation. Browser layout checks measure dialogs after their opening motion completes, with unchanged geometry thresholds and failure traces.
 

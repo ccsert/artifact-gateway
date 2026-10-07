@@ -121,7 +121,7 @@ func (c *OCIBearerTokenCache) get(ctx context.Context, key [32]byte, refresh fun
 				}
 				if len(c.entries) >= 256 {
 					var oldest [32]byte
-					var used uint64 = ^uint64(0)
+					used := ^uint64(0)
 					for k, e := range c.entries {
 						if e.used < used {
 							oldest = k
