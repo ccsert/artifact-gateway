@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Console theme choices preserve the latest accepted selection across skipped or failed visual transitions and document navigation. Browser layout checks measure dialogs after their opening motion completes, with unchanged geometry thresholds and failure traces.
+
 - Repository usage supports server pagination, literal address search and distinct matching/whole-repository totals; Console tables share Ant Design pagination while cursor lists retain load-more semantics.
 
 ## 0.7.0 - 2026-10-06

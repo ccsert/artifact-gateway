@@ -1,6 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
 import { defaultSiteSettings } from "../src/lib/siteSettings";
 import { authenticateAsAdmin } from "./support/auth";
+import { waitForModalOpen } from "./support/motion";
+import {
+  attachThemeEvidence,
+  recordThemeEvidence,
+} from "./support/themeEvidence";
+
+test.beforeEach(async ({ page }) => recordThemeEvidence(page));
+test.afterEach(async ({ page }, testInfo) =>
+  attachThemeEvidence(page, testInfo),
+);
 
 const repositoryId = "repo-layout";
 
@@ -1328,6 +1338,14 @@ test("a quarantined artifact reads as an ongoing state in both themes", async ({
       await page.getByRole("button", { name: /选择主题/ }).click();
       await page.getByRole("menuitem", { name: /Gateway Light/ }).click();
       await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+      await testInfo.attach("quarantine-single-light-events.json", {
+        body: JSON.stringify(
+          await page.evaluate(() => window.__themeEvidence ?? []),
+          null,
+          2,
+        ),
+        contentType: "application/json",
+      });
     }
     await page.goto(
       `/repositories/${repositoryId}?artifact=${packageName}&version=0.1.3`,
@@ -1348,6 +1366,22 @@ test("a blocked admission reads as a policy judgment in both themes", async ({
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockRepositoryDetail(page, { distributionEnabled: true });
+  // This tone assertion needs one eligible artifact. Keep its fixture focused
+  // instead of combining a twenty-row virtual-picker scroll with theme motion.
+  await page.route("**/artifact-identities?**", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            coordinate: "releases/example-1.zip",
+            digest: `sha256:${"0".repeat(64)}`,
+            size: 1024,
+            publishedAt: "2026-08-08T08:00:00Z",
+          },
+        ],
+      },
+    }),
+  );
   await page.route("**/security-policy:evaluate**", (route) =>
     route.fulfill({
       json: {
@@ -1400,89 +1434,131 @@ test("a blocked admission reads as a policy judgment in both themes", async ({
   }
 });
 
-test("the grant dialog keeps every field reachable at both widths", async ({
-  page,
-}, testInfo) => {
-  await mockRepositoryDetail(page);
-  await page.route(`**/api/v2/repositories/${repositoryId}/grants**`, (route) =>
-    route.fulfill({ json: [] }),
-  );
-  await page.route("**/api/v2/users**", (route) =>
-    route.fulfill({
-      json: {
-        items: [{ name: "alice", role: "member", state: "active" }],
-      },
-    }),
-  );
-  await page.route("**/api/v2/api-keys**", (route) =>
-    route.fulfill({ json: { items: [] } }),
-  );
-  await page.route("**/api/v2/service-accounts**", (route) =>
-    route.fulfill({ json: { items: [] } }),
-  );
-  await page.route("**/api/v2/authorization-roles**", (route) =>
-    route.fulfill({ json: [] }),
-  );
+for (const delayedMotion of [false, true]) {
+  test(`the grant dialog keeps every field reachable at both widths${delayedMotion ? " with a delayed opening frame" : ""}`, async ({
+    page,
+  }, testInfo) => {
+    await mockRepositoryDetail(page);
+    await page.route(
+      `**/api/v2/repositories/${repositoryId}/grants**`,
+      (route) => route.fulfill({ json: [] }),
+    );
+    await page.route("**/api/v2/users**", (route) =>
+      route.fulfill({
+        json: {
+          items: [{ name: "alice", role: "member", state: "active" }],
+        },
+      }),
+    );
+    await page.route("**/api/v2/api-keys**", (route) =>
+      route.fulfill({ json: { items: [] } }),
+    );
+    await page.route("**/api/v2/service-accounts**", (route) =>
+      route.fulfill({ json: { items: [] } }),
+    );
+    await page.route("**/api/v2/authorization-roles**", (route) =>
+      route.fulfill({ json: [] }),
+    );
 
-  for (const [width, height] of [
-    [1440, 900],
-    [390, 844],
-  ] as const) {
-    for (const mode of ["dark", "light"] as const) {
-      if (mode === "light") {
-        await page.getByRole("button", { name: /选择主题/ }).click();
-        await page.getByRole("menuitem", { name: /Gateway Light/ }).click();
-        await expect(page.locator("html")).toHaveAttribute(
-          "data-theme",
-          "light",
-        );
-      }
-      await page.setViewportSize({ width, height });
-      await page.goto(`/repositories/${repositoryId}?tab=grants`);
-      await page
-        .getByRole("button", { name: /添加授权/ })
-        .last()
-        .click();
-      const dialog = page.locator(".ant-modal").first();
-      await expect(dialog).toBeVisible();
-      await page.waitForTimeout(400);
+    for (const [width, height] of [
+      [1440, 900],
+      [390, 844],
+    ] as const) {
+      for (const mode of ["dark", "light"] as const) {
+        await page.setViewportSize({ width, height });
+        await page.goto(`/repositories/${repositoryId}?tab=grants`);
+        if (
+          (await page.locator("html").getAttribute("data-theme-id")) !==
+          `gateway-${mode}`
+        ) {
+          await page.getByRole("button", { name: /选择主题/ }).click();
+          await page
+            .getByRole("menuitem", {
+              name: mode === "dark" ? /Gateway Dark/ : /Gateway Light/,
+            })
+            .click();
+        }
+        await expect(page.locator("html")).toHaveAttribute("data-theme", mode);
+        if (delayedMotion) {
+          // Exercise the same AntD keyframes under a slower frame schedule. A
+          // fixed wall-clock sleep must not decide when geometry is final.
+          await page.addStyleTag({
+            content:
+              ".ant-modal.ant-zoom-enter-active, .ant-modal.ant-zoom-appear-active { animation-duration: 800ms !important; }",
+          });
+        }
+        await page
+          .getByRole("button", { name: /添加授权/ })
+          .last()
+          .click();
+        const dialog = page.locator(".ant-modal").first();
+        // AntD starts its keyframes after frame preparation, which can be
+        // delayed under load. Visibility does not mean its scale has settled.
+        await waitForModalOpen(dialog);
 
-      const body = dialog.locator(".ant-modal-body");
-      // Nothing may sit past the dialog's own edge: the body scrolls vertically
-      // only, so horizontally clipped controls are unreachable.
-      const overflow = await body.evaluate((element) => ({
-        hidden: element.scrollWidth - element.clientWidth,
-        width: Math.round(element.getBoundingClientRect().width),
-      }));
-      expect(overflow.hidden, `${width}px dialog body overflows`).toBe(0);
-
-      for (const label of ["授权主体", "权限级别", "资源范围", "本规则授予"]) {
-        await expect(body.getByText(label, { exact: true })).toBeVisible();
-      }
-      // The scope control and its prefix input are reachable, not cut off.
-      const prefix = body.getByText("整个仓库", { exact: true });
-      await expect(prefix).toBeVisible();
-      const box = await prefix.boundingBox();
-      const dialogBox = await dialog.boundingBox();
-      expect(box).not.toBeNull();
-      expect(dialogBox).not.toBeNull();
-      expect(box!.x).toBeGreaterThanOrEqual(dialogBox!.x);
-      expect(box!.x + box!.width).toBeLessThanOrEqual(
-        dialogBox!.x + dialogBox!.width + 1,
-      );
-
-      if (width === 1440) {
-        // Browser font metrics can round the same modal by one CSS pixel.
-        expect(overflow.width).toBeGreaterThanOrEqual(630);
-        expect(overflow.width).toBeLessThanOrEqual(634);
-      }
-      if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
-        await page.screenshot({
-          path: testInfo.outputPath(`grant-dialog-${width}-${mode}.png`),
+        const body = dialog.locator(".ant-modal-body");
+        // Nothing may sit past the dialog's own edge: the body scrolls vertically
+        // only, so horizontally clipped controls are unreachable.
+        const overflow = await body.evaluate((element) => ({
+          hidden: element.scrollWidth - element.clientWidth,
+          width: Math.round(element.getBoundingClientRect().width),
+          renderedWidth: element.getBoundingClientRect().width,
+          layoutWidth: element.clientWidth,
+          fontFamily: getComputedStyle(element).fontFamily,
+          fonts: document.fonts.status,
+          modal: (() => {
+            const modal = element.closest(".ant-modal")!;
+            return {
+              className: modal.className,
+              width: getComputedStyle(modal).width,
+              transform: getComputedStyle(modal).transform,
+              animations: modal.getAnimations().map((animation) => ({
+                currentTime: animation.currentTime,
+                playState: animation.playState,
+                timing: animation.effect?.getComputedTiming(),
+              })),
+            };
+          })(),
+        }));
+        await testInfo.attach(`grant-geometry-${width}-${mode}.json`, {
+          body: JSON.stringify(overflow, null, 2),
+          contentType: "application/json",
         });
+        expect(overflow.hidden, `${width}px dialog body overflows`).toBe(0);
+
+        for (const label of [
+          "授权主体",
+          "权限级别",
+          "资源范围",
+          "本规则授予",
+        ]) {
+          await expect(body.getByText(label, { exact: true })).toBeVisible();
+        }
+        // The scope control and its prefix input are reachable, not cut off.
+        const prefix = body.getByText("整个仓库", { exact: true });
+        await expect(prefix).toBeVisible();
+        const box = await prefix.boundingBox();
+        const dialogBox = await dialog.boundingBox();
+        expect(box).not.toBeNull();
+        expect(dialogBox).not.toBeNull();
+        expect(box!.x).toBeGreaterThanOrEqual(dialogBox!.x);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(
+          dialogBox!.x + dialogBox!.width + 1,
+        );
+
+        if (width === 1440) {
+          // The 680px modal leaves 632px after its horizontal padding.
+          expect(overflow.width).toBeGreaterThanOrEqual(630);
+          expect(overflow.width).toBeLessThanOrEqual(634);
+        }
+        if (process.env.CAPTURE_LAYOUT_EVIDENCE === "1") {
+          await page.screenshot({
+            path: testInfo.outputPath(`grant-dialog-${width}-${mode}.png`),
+          });
+        }
+        await page.keyboard.press("Escape");
+        await expect(dialog).toBeHidden();
       }
-      await page.keyboard.press("Escape");
-      await expect(dialog).toBeHidden();
     }
-  }
-});
+  });
+}
