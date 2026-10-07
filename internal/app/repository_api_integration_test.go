@@ -297,6 +297,9 @@ func TestPostgresHTTPIntegration(t *testing.T) {
 
 	mavenUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("artifact")) }))
 	defer mavenUpstream.Close()
+	// Only this task-owned HTTP fixture opts into plaintext upstream reads.
+	// Production clients keep the default HTTPS-only proxy policy.
+	handler = NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: mavenUpstream.Client(), AllowHTTPForTesting: true})
 	mavenGroup := fmt.Sprintf(`{"name":"maven-engineering","members":[{"name":"hosted","type":"hosted","endpoint":"%s","position":0},{"name":"proxy","type":"proxy","endpoint":"%s","position":1}]}`, mavenUpstream.URL, mavenUpstream.URL)
 	createdMaven := integrationRequest(handler, http.MethodPost, "/api/v1/maven/groups", mavenGroup, "admin-secret")
 	if createdMaven.Code != http.StatusCreated {
