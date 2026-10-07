@@ -1,8 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { authenticateAsAdmin } from "./support/auth";
+import { mockDefaultSiteSettings } from "./support/siteSettings";
 
 async function mockAudits(page: Page) {
   await authenticateAsAdmin(page);
+  await mockDefaultSiteSettings(page);
   await page.route("**/api/v2/repositories**", (route) =>
     route.fulfill({ json: { items: [] } }),
   );

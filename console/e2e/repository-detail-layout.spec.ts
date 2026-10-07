@@ -650,6 +650,16 @@ test("repository detail keeps operational content above the fold", async ({
   });
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockRepositoryDetail(page);
+  // This layout scenario enters the grants tab, so its picker reads must also
+  // be synthetic rather than falling through to a live Gateway.
+  for (const endpoint of ["users", "api-keys", "service-accounts"]) {
+    await page.route(`**/api/v2/${endpoint}**`, (route) =>
+      route.fulfill({ json: { items: [] } }),
+    );
+  }
+  await page.route("**/api/v2/authorization-roles**", (route) =>
+    route.fulfill({ json: [] }),
+  );
 
   await page.goto(`/repositories/${repositoryId}`);
 

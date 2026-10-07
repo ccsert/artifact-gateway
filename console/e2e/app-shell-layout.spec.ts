@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { authenticateAsAdmin } from "./support/auth";
+import { mockDefaultSiteSettings } from "./support/siteSettings";
 
 async function shellGeometry(page: Page) {
   return page.evaluate(() => {
@@ -60,6 +61,7 @@ test("desktop navigation collapses within one aligned and stable rail", async ({
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await authenticateAsAdmin(page);
+  await mockDefaultSiteSettings(page);
   await page.addInitScript(() => {
     localStorage.setItem("ag.console.theme", "dark");
     localStorage.setItem("ag.console.locale", "zh-CN");

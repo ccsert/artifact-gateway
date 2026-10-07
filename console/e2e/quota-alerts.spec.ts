@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { RepositoryQuotaAlertRule } from "../src/client";
+import { mockDefaultSiteSettings } from "./support/siteSettings";
 
 const policy = {
   warningBasisPoints: 8000,
@@ -39,6 +40,7 @@ async function fixture(
   theme = "dark",
   empty = false,
 ) {
+  await mockDefaultSiteSettings(page);
   await page.clock.setFixedTime(new Date("2026-10-04T12:00:00Z"));
   await page.addInitScript(
     ({ locale, theme }) => {

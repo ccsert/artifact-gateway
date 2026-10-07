@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { authenticateAsAdmin } from "./support/auth";
+import { mockDefaultSiteSettings } from "./support/siteSettings";
 
 const serviceAccountId = "11111111-1111-4111-8111-111111111111";
 
@@ -14,6 +15,7 @@ function captureRuntimeErrors(page: Page) {
 
 async function openServiceAccounts(page: Page) {
   await authenticateAsAdmin(page);
+  await mockDefaultSiteSettings(page);
   await page.route("**/api/v2/service-accounts**", (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname.endsWith("/credentials")) {
