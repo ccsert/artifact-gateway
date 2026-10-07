@@ -79,7 +79,7 @@ func (c UpstreamClient) doProxyUpstream(ctx context.Context, member repository.M
 		history = append(history, current)
 		client := *base
 		client.Timeout = 0 // The shared context owns the complete chain's budget.
-		client.Jar = nil // Upstream credentials come only from the bound request.
+		client.Jar = nil   // Upstream credentials come only from the bound request.
 		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 		var release func()
 		if current.URL.Scheme == "https" {
@@ -140,6 +140,7 @@ func (c UpstreamClient) doProxyUpstream(ctx context.Context, member repository.M
 		}
 		next := current.Clone(ctx)
 		next.URL = nextURL
+		next.Response = response
 		next.Host = ""
 		if proxyOrigin(nextURL) != proxyOrigin(current.URL) {
 			next.Header.Del("Authorization")

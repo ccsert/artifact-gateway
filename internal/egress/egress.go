@@ -250,6 +250,10 @@ func (d hookDialer) Dial(network, address string) (net.Conn, error) {
 	return d.hooks.DialContext(context.Background(), network, address)
 }
 
+func (d hookDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return d.hooks.DialContext(ctx, network, address)
+}
+
 // socksLocalResolveDialer resolves the upstream hostname locally (with the
 // private-address check) and hands the SOCKS5 proxy an IP literal, preserving
 // the SSRF posture of direct mode.

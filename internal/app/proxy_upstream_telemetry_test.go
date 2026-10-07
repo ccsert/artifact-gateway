@@ -133,3 +133,27 @@ func TestProxyRedirectClientCanReturnLastResponse(t *testing.T) {
 		t.Fatalf("hops=%d, want one", hops)
 	}
 }
+
+func TestProxyRedirectCallbackReceivesPreviousResponse(t *testing.T) {
+	fixture := newProxyRedirectFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Host == redirectOrigin {
+			w.Header().Set("X-Synthetic-Redirect-Decision", "approved")
+			http.Redirect(w, r, "https://"+redirectCDN+"/content", http.StatusFound)
+			return
+		}
+		_, _ = io.WriteString(w, "artifact")
+	})
+	fixture.client.HTTPClient.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+		if next.Response == nil || next.Response.StatusCode != http.StatusFound ||
+			next.Response.Header.Get("X-Synthetic-Redirect-Decision") != "approved" ||
+			next.Response.Request.URL.Hostname() != redirectOrigin || len(via) != 1 {
+			return errors.New("synthetic policy requires previous redirect response")
+		}
+		return nil
+	}
+	response, err := proxyRedirectFetch(context.Background(), fixture.client, "maven", http.MethodGet, proxyRedirectMember(nil), nil)
+	defer closeProxyRedirectResponse(response)
+	if err != nil || response.StatusCode != http.StatusOK || len(fixture.snapshot()) != 2 {
+		t.Fatalf("response-based client policy did not receive the redirect: %v", err)
+	}
+}
