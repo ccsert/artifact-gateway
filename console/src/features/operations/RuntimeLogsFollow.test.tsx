@@ -318,6 +318,9 @@ describe("incremental runtime log controls", () => {
       .mockResolvedValueOnce(reply(page(2, 3)));
     mount();
     await screen.findByText("event-1");
+    // Complete the initial snapshot's scroll effect before simulating a reader
+    // who has scrolled away from the bottom.
+    await act(async () => {});
     const viewport = screen.getByLabelText("运行日志流");
     Object.defineProperties(viewport, {
       scrollHeight: { configurable: true, value: 1000 },
