@@ -4954,6 +4954,9 @@
           "upstreamAuth": {
             "$ref": "#/components/schemas/UpstreamAuth"
           },
+          "ociBearer": {
+            "$ref": "#/components/schemas/OCIBearer"
+          },
           "state": {
             "type": "string",
             "description": "Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.",
@@ -5017,6 +5020,9 @@
           },
           "upstreamAuth": {
             "$ref": "#/components/schemas/UpstreamAuth"
+          },
+          "ociBearer": {
+            "$ref": "#/components/schemas/OCIBearer"
           }
         }
       },
@@ -7386,6 +7392,30 @@
           }
         }
       },
+      "OCIBearer": {
+        "type": "object",
+        "nullable": true,
+        "description": "Optional anonymous upstream Bearer challenge exchange for OCI Proxy repositories only. Omitted configuration preserves legacy reads and disables token exchange. The realm and service bind the approved issuer and audience; this object never contains credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null.",
+        "required": [
+          "realm",
+          "service"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "realm": {
+            "type": "string",
+            "format": "uri",
+            "description": "Exact complete HTTPS token-service URL. The first exchange contract rejects userinfo, all query parameters, and fragments."
+          },
+          "service": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[^\\s\\x00-\\x1f\\x7f]+$",
+            "description": "Exact challenge audience. At most 256 UTF-8 bytes; no whitespace or control characters."
+          }
+        }
+      },
       "RepositoryGrantRecord": {
         "type": "object",
         "required": [
@@ -7518,6 +7548,9 @@
           },
           "upstreamAuth": {
             "$ref": "#/components/schemas/UpstreamAuth"
+          },
+          "ociBearer": {
+            "$ref": "#/components/schemas/OCIBearer"
           }
         }
       },

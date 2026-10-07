@@ -21,8 +21,9 @@ func (s *MemoryStore) CreateHostedRepository(_ context.Context, repo HostedRepos
 	repo.CreatedAt = time.Now().UTC()
 	repo.EgressProxy = cloneEgressProxy(repo.EgressProxy)
 	repo.UpstreamAuth = cloneUpstreamAuth(repo.UpstreamAuth)
+	repo.OCIBearer = cloneOCIBearer(repo.OCIBearer)
 	s.hostedRepositories[repo.ID] = repo
-	return repo, nil
+	return cloneHostedRepositoryOCIBearer(repo), nil
 }
 
 func (s *MemoryStore) CreateHostedRepositoryIdempotently(_ context.Context, repo HostedRepository, actor, key, payload string) (HostedRepository, bool, error) {
@@ -34,7 +35,7 @@ func (s *MemoryStore) CreateHostedRepositoryIdempotently(_ context.Context, repo
 		if record.payload != payload {
 			return HostedRepository{}, false, ErrIdempotencyConflict
 		}
-		return s.hostedRepositories[record.repositoryID], true, nil
+		return cloneHostedRepositoryOCIBearer(s.hostedRepositories[record.repositoryID]), true, nil
 	}
 	for _, existing := range s.hostedRepositories {
 		if existing.Name == repo.Name {
@@ -42,9 +43,10 @@ func (s *MemoryStore) CreateHostedRepositoryIdempotently(_ context.Context, repo
 		}
 	}
 	repo.State, repo.Version, repo.CreatedAt = RepositoryActive, "1", time.Now().UTC()
+	repo.OCIBearer = cloneOCIBearer(repo.OCIBearer)
 	s.hostedRepositories[repo.ID] = repo
 	s.idempotencyRecords[recordKey] = idempotencyRecord{payload: payload, repositoryID: repo.ID, expiresAt: time.Now().UTC().Add(24 * time.Hour)}
-	return repo, false, nil
+	return cloneHostedRepositoryOCIBearer(repo), false, nil
 }
 
 func (s *MemoryStore) ListHostedRepositories(_ context.Context, limit int, after string) ([]HostedRepository, string, error) {
@@ -55,7 +57,7 @@ func (s *MemoryStore) ListHostedRepositories(_ context.Context, limit int, after
 	}
 	items := make([]HostedRepository, 0, len(s.hostedRepositories))
 	for _, repo := range s.hostedRepositories {
-		items = append(items, repo)
+		items = append(items, cloneHostedRepositoryOCIBearer(repo))
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
 	start := 0
@@ -92,7 +94,7 @@ func (s *MemoryStore) GetHostedRepository(_ context.Context, id string) (HostedR
 	if !ok {
 		return HostedRepository{}, ErrNotFound
 	}
-	return repo, nil
+	return cloneHostedRepositoryOCIBearer(repo), nil
 }
 
 func (s *MemoryStore) GetHostedRepositoryByName(_ context.Context, name string) (HostedRepository, error) {
@@ -100,7 +102,7 @@ func (s *MemoryStore) GetHostedRepositoryByName(_ context.Context, name string) 
 	defer s.mu.RUnlock()
 	for _, repo := range s.hostedRepositories {
 		if repo.Name == name {
-			return repo, nil
+			return cloneHostedRepositoryOCIBearer(repo), nil
 		}
 	}
 	return HostedRepository{}, ErrNotFound
@@ -114,7 +116,7 @@ func (s *MemoryStore) DisableHostedRepository(_ context.Context, id string) (Hos
 		return HostedRepository{}, ErrNotFound
 	}
 	if repo.State == RepositoryDeleting {
-		return repo, nil
+		return cloneHostedRepositoryOCIBearer(repo), nil
 	}
 	if repo.State != RepositoryActive {
 		return HostedRepository{}, ErrNotFound
@@ -122,7 +124,7 @@ func (s *MemoryStore) DisableHostedRepository(_ context.Context, id string) (Hos
 	repo.State = RepositoryDeleting
 	repo.Version = "2"
 	s.hostedRepositories[id] = repo
-	return repo, nil
+	return cloneHostedRepositoryOCIBearer(repo), nil
 }
 
 func (s *MemoryStore) FinalizeHostedRepositoryDeletion(_ context.Context, id string) (HostedRepository, error) {
@@ -133,7 +135,7 @@ func (s *MemoryStore) FinalizeHostedRepositoryDeletion(_ context.Context, id str
 		return HostedRepository{}, ErrNotFound
 	}
 	if repo.State == RepositoryDeleted {
-		return repo, nil
+		return cloneHostedRepositoryOCIBearer(repo), nil
 	}
 	if repo.State != RepositoryDeleting {
 		return HostedRepository{}, ErrVersionConflict
@@ -141,7 +143,7 @@ func (s *MemoryStore) FinalizeHostedRepositoryDeletion(_ context.Context, id str
 	repo.State = RepositoryDeleted
 	repo.Version = nextHostedGroupVersion(repo.Version)
 	s.hostedRepositories[id] = repo
-	return repo, nil
+	return cloneHostedRepositoryOCIBearer(repo), nil
 }
 
 func (s *MemoryStore) UpdateHostedRepository(_ context.Context, repo HostedRepository, expectedVersion string) (HostedRepository, error) {
@@ -160,9 +162,10 @@ func (s *MemoryStore) UpdateHostedRepository(_ context.Context, repo HostedRepos
 	current.MavenStrictPublication = repo.MavenStrictPublication
 	current.EgressProxy = cloneEgressProxy(repo.EgressProxy)
 	current.UpstreamAuth = cloneUpstreamAuth(repo.UpstreamAuth)
+	current.OCIBearer = cloneOCIBearer(repo.OCIBearer)
 	current.Version = nextHostedGroupVersion(current.Version)
 	s.hostedRepositories[repo.ID] = current
-	return current, nil
+	return cloneHostedRepositoryOCIBearer(current), nil
 }
 
 // cloneEgressProxy deep-copies the pointer so stored repositories never share

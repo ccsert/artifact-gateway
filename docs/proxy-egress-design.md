@@ -205,8 +205,8 @@ The configured endpoint's exact origin, including its port, is allowed. Extra
 `allowedHosts` entries authorize the HTTPS host on port 443; the management API
 continues to accept bare hostnames. An in-process member with an explicit port
 entry is matched exactly, never by hostname alone. A content host permission
-does not establish trust in an OCI token issuer. Upstream Bearer exchange
-remains separate work; this change does not implement it.
+does not establish trust in an OCI token issuer. Anonymous Bearer exchange
+requires the separate explicit issuer/audience configuration described below.
 
 For direct paths, environment `NO_PROXY`, custom `noProxy`, and SOCKS5 with local
 DNS, each hop checks all DNS answers before a connection and pins the selected
@@ -243,3 +243,60 @@ it keeps older HTTP fixtures usable without admitting production HTTP paths.
 Raw keeps its independent refusal to follow redirects. Hosted bytes, digest
 verification and cache ownership/authorization are unchanged. Production CDN
 permissions, native client acceptance and rollout require separate approval.
+
+## Native OCI Proxy Bearer Configuration
+
+Administrators can opt a native OCI Proxy repository into anonymous upstream
+Bearer challenge exchange through `POST /api/v2/repositories` or
+`PATCH /api/v2/repositories/{repositoryId}`:
+
+```json
+{
+  "ociBearer": {
+    "realm": "https://auth.example.test/token",
+    "service": "registry.example.test"
+  }
+}
+```
+
+`realm` is the exact complete HTTPS token-service URL. HTTP, userinfo, query
+parameters (including an empty query), and fragments (including an empty
+fragment) are rejected. `service` is the exact challenge audience: 1–256 UTF-8
+bytes with no whitespace or control characters. Both fields are required, and
+unknown properties are rejected; this object never accepts credentials or tokens.
+
+Omission on creation leaves exchange disabled. On PATCH, omission preserves the
+existing object, `null` clears it, and an object replaces both fields together;
+updates retain the existing `If-Match` concurrency requirement. Responses expose
+configured realm/service and omit the field when disabled. Hosted repositories
+and other formats reject this field, including `null`. Legacy V1 Group members
+also reject it: V2 Groups inherit their native Proxy member's configuration at
+runtime without introducing a legacy member configuration field.
+
+Migration `000144_oci_bearer_configuration.sql` adds nullable JSONB `oci_bearer`
+to `hosted_repositories`; existing rows remain disabled. Only configuration is
+persisted, never exchanged tokens. The API does not alter `allowedHosts`: a
+cross-origin token realm still needs independent authorization under the
+repository's existing egress policy. Private authenticated registries and
+production identity, network-policy or deployment changes require separate work.
+The generated Console client includes the field; this change adds no Console
+configuration form.
+
+The exchange accepts one unambiguous Bearer challenge bound to the configured
+realm/service and the requested repository's `pull` scope. It performs at most
+one anonymous token GET and one content retry. Inbound credentials never enter
+either request; cross-origin redirects remove the exchanged token. Token GETs
+use the same five-hop egress checks as content, including independently approved
+issuer/CDN hosts. Invalid challenges, tokens and repeated 401s return stable
+errors without authentication payloads; cancellation/deadline identity remains
+available to callers.
+
+Runtime caches are process-local, with at most 256 entries and 32 refresh keys
+in flight. Keys bind repository identity, registry, issuer, service, scope and
+egress/host policy. Concurrent callers share a refresh bounded to 30 seconds;
+cancelling one waiter does not cancel other callers. A rejected cached token is
+invalidated by version. Missing `expires_in` defaults to 60 seconds; positive
+remaining lifetime is cached for at most 300 seconds with a five-second refresh
+margin. Optional RFC3339 `issued_at` must not place issuance more than 30 seconds
+in the future or make the token expired. Challenge/token/JSON response limits
+are 8 KiB/8 KiB/64 KiB. No refresh tokens or durable identities are requested.

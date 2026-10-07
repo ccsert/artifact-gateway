@@ -18,7 +18,11 @@ func (s *PostgresStore) CreateHostedRepository(ctx context.Context, repo HostedR
 	if err != nil {
 		return HostedRepository{}, err
 	}
-	err = s.db.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, maven_strict_publication, state, version, egress_proxy, upstream_auth) VALUES ($1,$2,$3,$4,$5,COALESCE($6::text[], '{}'::text[]),$7,$8,'active',1,$9,$10) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead, repo.MavenStrictPublication, egressProxy, upstreamAuth).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
+	ociBearer, err := marshalOCIBearer(repo.OCIBearer)
+	if err != nil {
+		return HostedRepository{}, err
+	}
+	err = s.db.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, maven_strict_publication, state, version, egress_proxy, upstream_auth, oci_bearer) VALUES ($1,$2,$3,$4,$5,COALESCE($6::text[], '{}'::text[]),$7,$8,'active',1,$9,$10,$11) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead, repo.MavenStrictPublication, egressProxy, upstreamAuth, ociBearer).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
 	if isUnique(err) {
 		return HostedRepository{}, ErrNameExists
 	}
@@ -35,6 +39,10 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 		return HostedRepository{}, false, err
 	}
 	upstreamAuth, err := marshalUpstreamAuth(repo.UpstreamAuth)
+	if err != nil {
+		return HostedRepository{}, false, err
+	}
+	ociBearer, err := marshalOCIBearer(repo.OCIBearer)
 	if err != nil {
 		return HostedRepository{}, false, err
 	}
@@ -73,7 +81,7 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 	if !errors.Is(err, sql.ErrNoRows) {
 		return HostedRepository{}, false, err
 	}
-	err = tx.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, maven_strict_publication, state, version, egress_proxy, upstream_auth) VALUES ($1,$2,$3,$4,$5,COALESCE($6::text[], '{}'::text[]),$7,$8,'active',1,$9,$10) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead, repo.MavenStrictPublication, egressProxy, upstreamAuth).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
+	err = tx.QueryRowContext(ctx, `INSERT INTO hosted_repositories (id, name, format, repo_type, endpoint, allowed_hosts, anonymous_read, maven_strict_publication, state, version, egress_proxy, upstream_auth, oci_bearer) VALUES ($1,$2,$3,$4,$5,COALESCE($6::text[], '{}'::text[]),$7,$8,'active',1,$9,$10,$11) RETURNING state, version, created_at`, repo.ID, repo.Name, repo.Format, repo.Type, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead, repo.MavenStrictPublication, egressProxy, upstreamAuth, ociBearer).Scan(&repo.State, &repo.Version, &repo.CreatedAt)
 	if isUnique(err) {
 		return HostedRepository{}, false, ErrNameExists
 	}
@@ -93,7 +101,7 @@ func (s *PostgresStore) CreateHostedRepositoryIdempotently(ctx context.Context, 
 // hostedRepositoryColumns is the canonical projection for hosted_repositories
 // reads. allowed_hosts is projected through array_to_json so it scans into
 // []byte and decodes into []string without a pq dependency.
-const hostedRepositoryColumns = `id::text, name, format, repo_type, endpoint, array_to_json(allowed_hosts), anonymous_read, maven_strict_publication, state, version::text, created_at, egress_proxy, upstream_auth`
+const hostedRepositoryColumns = `id::text, name, format, repo_type, endpoint, array_to_json(allowed_hosts), anonymous_read, maven_strict_publication, state, version::text, created_at, egress_proxy, upstream_auth, oci_bearer`
 
 // marshalEgressProxy encodes the egress proxy configuration for the JSONB
 // column. The response-only CredentialsConfigured marker is never persisted.
@@ -125,9 +133,22 @@ func marshalUpstreamAuth(auth *UpstreamAuth) (any, error) {
 	return string(encoded), nil
 }
 
+// marshalOCIBearer stores only the issuer/audience configuration. Anonymous
+// exchange tokens are ephemeral runtime state and never enter persistence.
+func marshalOCIBearer(config *OCIBearer) (any, error) {
+	if config == nil {
+		return nil, nil
+	}
+	encoded, err := json.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+	return string(encoded), nil
+}
+
 func scanHostedRepository(row interface{ Scan(...any) error }, repo *HostedRepository) error {
-	var allowedHosts, egressProxy, upstreamAuth []byte
-	if err := row.Scan(&repo.ID, &repo.Name, &repo.Format, &repo.Type, &repo.Endpoint, &allowedHosts, &repo.AnonymousRead, &repo.MavenStrictPublication, &repo.State, &repo.Version, &repo.CreatedAt, &egressProxy, &upstreamAuth); err != nil {
+	var allowedHosts, egressProxy, upstreamAuth, ociBearer []byte
+	if err := row.Scan(&repo.ID, &repo.Name, &repo.Format, &repo.Type, &repo.Endpoint, &allowedHosts, &repo.AnonymousRead, &repo.MavenStrictPublication, &repo.State, &repo.Version, &repo.CreatedAt, &egressProxy, &upstreamAuth, &ociBearer); err != nil {
 		return err
 	}
 	if err := json.Unmarshal(allowedHosts, &repo.AllowedHosts); err != nil {
@@ -146,6 +167,13 @@ func scanHostedRepository(row interface{ Scan(...any) error }, repo *HostedRepos
 			return err
 		}
 		repo.UpstreamAuth = &auth
+	}
+	if len(ociBearer) > 0 {
+		var config OCIBearer
+		if err := json.Unmarshal(ociBearer, &config); err != nil {
+			return err
+		}
+		repo.OCIBearer = &config
 	}
 	return nil
 }
@@ -264,8 +292,12 @@ func (s *PostgresStore) UpdateHostedRepository(ctx context.Context, repo HostedR
 	if err != nil {
 		return HostedRepository{}, err
 	}
+	ociBearer, err := marshalOCIBearer(repo.OCIBearer)
+	if err != nil {
+		return HostedRepository{}, err
+	}
 	var updated HostedRepository
-	err = scanHostedRepository(s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET endpoint=$2, allowed_hosts=COALESCE($3::text[], '{}'::text[]), anonymous_read=$4, maven_strict_publication=$5, version=version+1, egress_proxy=$7, upstream_auth=$8 WHERE id::text=$1 AND state='active' AND version::text=$6 RETURNING `+hostedRepositoryColumns, repo.ID, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead, repo.MavenStrictPublication, expectedVersion, egressProxy, upstreamAuth), &updated)
+	err = scanHostedRepository(s.db.QueryRowContext(ctx, `UPDATE hosted_repositories SET endpoint=$2, allowed_hosts=COALESCE($3::text[], '{}'::text[]), anonymous_read=$4, maven_strict_publication=$5, version=version+1, egress_proxy=$7, upstream_auth=$8, oci_bearer=$9 WHERE id::text=$1 AND state='active' AND version::text=$6 RETURNING `+hostedRepositoryColumns, repo.ID, repo.Endpoint, repo.AllowedHosts, repo.AnonymousRead, repo.MavenStrictPublication, expectedVersion, egressProxy, upstreamAuth, ociBearer), &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		if _, getErr := s.GetHostedRepository(ctx, repo.ID); errors.Is(getErr, ErrNotFound) {
 			return HostedRepository{}, ErrNotFound

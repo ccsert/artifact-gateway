@@ -4079,6 +4079,9 @@ type CreateRepository struct {
 	MavenStrictPublication *bool  `json:"mavenStrictPublication,omitempty"`
 	Name                   string `json:"name"`
 
+	// OciBearer Optional anonymous upstream Bearer challenge exchange for OCI Proxy repositories only. Omitted configuration preserves legacy reads and disables token exchange. The realm and service bind the approved issuer and audience; this object never contains credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null.
+	OciBearer *OCIBearer `json:"ociBearer,omitempty"`
+
 	// Type APT hosted is accepted as a management-only preview repository; it is not advertised as protocol-capable until signed snapshots are implemented.
 	Type *CreateRepositoryType `json:"type,omitempty"`
 
@@ -4832,6 +4835,15 @@ type Member struct {
 // MemberList defines model for MemberList.
 type MemberList = []Member
 
+// OCIBearer Optional anonymous upstream Bearer challenge exchange for OCI Proxy repositories only. Omitted configuration preserves legacy reads and disables token exchange. The realm and service bind the approved issuer and audience; this object never contains credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null.
+type OCIBearer struct {
+	// Realm Exact complete HTTPS token-service URL. The first exchange contract rejects userinfo, all query parameters, and fragments.
+	Realm string `json:"realm"`
+
+	// Service Exact challenge audience. At most 256 UTF-8 bytes; no whitespace or control characters.
+	Service string `json:"service"`
+}
+
 // OCIImage defines model for OCIImage.
 type OCIImage struct {
 	Name string `json:"name"`
@@ -5182,6 +5194,9 @@ type Repository struct {
 	// MavenStrictPublication Maven Hosted only. When false (the default), successful standard Maven/Gradle PUTs are published directly. When true, uploaded coordinates remain unreadable until the Gateway coordinate commit succeeds.
 	MavenStrictPublication bool   `json:"mavenStrictPublication"`
 	Name                   string `json:"name"`
+
+	// OciBearer Optional anonymous upstream Bearer challenge exchange for OCI Proxy repositories only. Omitted configuration preserves legacy reads and disables token exchange. The realm and service bind the approved issuer and audience; this object never contains credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null.
+	OciBearer *OCIBearer `json:"ociBearer,omitempty"`
 
 	// State Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
 	State RepositoryState `json:"state"`
@@ -5831,6 +5846,9 @@ type UpdateRepository struct {
 
 	// MavenStrictPublication Maven Hosted only. False publishes successful standard PUTs directly; true requires a Gateway coordinate commit before reads can resolve the uploaded coordinate.
 	MavenStrictPublication *bool `json:"mavenStrictPublication,omitempty"`
+
+	// OciBearer Optional anonymous upstream Bearer challenge exchange for OCI Proxy repositories only. Omitted configuration preserves legacy reads and disables token exchange. The realm and service bind the approved issuer and audience; this object never contains credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null.
+	OciBearer *OCIBearer `json:"ociBearer,omitempty"`
 
 	// UpstreamAuth Per-Proxy-Repository credential presented to the upstream registry. Supported for Go Proxy repositories only; any other format rejects the field so authentication can never be configured where the fetch path would not use it. `secret` is accepted on write (plaintext over TLS) and stored AES-256-GCM encrypted; responses never return it and carry `credentialsConfigured` instead.
 	UpstreamAuth *UpstreamAuth `json:"upstreamAuth,omitempty"`

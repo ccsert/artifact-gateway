@@ -304,7 +304,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 			LegacyReadPermissive: cfg.LegacyReadPermissive,
 			OIDCSource:           oidcRuntime,
 			APIKeys:              store,
-		}, ociCache, app.NewDefaultMavenCache(cacheStore, cfg.MavenProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota).WithTTLs(cfg.MavenCacheTTL, cfg.MavenMetadataCacheTTL, cfg.MavenNegativeCacheTTL), rawCache, conanCache, maintenance, metrics, app.UpstreamClient{})
+		}, ociCache, app.NewDefaultMavenCache(cacheStore, cfg.MavenProxyAllowedHosts).WithCoordinator(coordinator).WithQuota(quota).WithTTLs(cfg.MavenCacheTTL, cfg.MavenMetadataCacheTTL, cfg.MavenNegativeCacheTTL), rawCache, conanCache, maintenance, metrics, app.UpstreamClient{OCIBearerCache: app.NewOCIBearerTokenCache()})
 	}
 	server := &http.Server{
 		Addr:              cfg.ListenAddress,

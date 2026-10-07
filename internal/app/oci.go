@@ -32,7 +32,8 @@ type OCIClient interface {
 // UpstreamClient is used only by legacy Group reads. Native Hosted repositories
 // are served from PostgreSQL metadata and the object store.
 type UpstreamClient struct {
-	HTTPClient *http.Client
+	HTTPClient     *http.Client
+	OCIBearerCache *OCIBearerTokenCache
 	// EgressHooks is a trusted network injection, never repository configuration.
 	EgressHooks *egress.Hooks
 	// AllowHTTPForTesting permits existing task-owned HTTP fixtures. Production
@@ -62,7 +63,7 @@ func (c UpstreamClient) Fetch(ctx context.Context, method string, member reposit
 		request.Header.Set("Range", rangeHeader)
 	}
 	if member.Type == repository.MemberProxy {
-		return c.doProxyUpstream(ctx, member, request)
+		return c.fetchOCIWithBearer(ctx, member, repositoryName, request)
 	}
 	client := c.HTTPClient
 	response, err := tracedHTTPClient(client).Do(request)
@@ -311,7 +312,7 @@ func (h OCIHandler) authorizedOCIMembers(ctx context.Context, groupName, reposit
 // reuses the Group proxy fetch path: upstream client, read-through cache,
 // digest verification and circuit breaking all come from fetchOCIContent.
 func (h OCIHandler) serveNativeProxy(w http.ResponseWriter, request *http.Request, repo repository.HostedRepository, imageName, resource, reference, actor string) {
-	member := repository.Member{Type: repository.MemberProxy, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy}
+	member := repository.Member{Type: repository.MemberProxy, RepositoryID: repo.ID, Name: repo.Name, Endpoint: repo.Endpoint, AllowedHosts: repo.AllowedHosts, EgressProxy: repo.EgressProxy, OCIBearer: repo.OCIBearer}
 	h.serveV2GroupProxy(w, request, repo.Name, member, imageName, resource, reference, actor)
 }
 
