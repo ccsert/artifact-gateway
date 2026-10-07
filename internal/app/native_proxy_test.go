@@ -82,7 +82,7 @@ func TestNativeOCIProxyRepositoryPullsThroughUpstreamAndCaches(t *testing.T) {
 		t.Fatal(err)
 	}
 	cache := NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, []string{allowedHost})
-	handler := NewGatewayHandlerWithOCICache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), cache, UpstreamClient{HTTPClient: upstreamServer.Client()})
+	handler := NewGatewayHandlerWithOCICache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), cache, UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
 
 	get := func() *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/v2/docker-proxy/app/manifests/latest", nil)
@@ -141,7 +141,7 @@ func TestNativeMavenProxyRepositoryPullsThroughUpstreamAndCaches(t *testing.T) {
 		t.Fatal(err)
 	}
 	mavenCache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{allowedHost})
-	handler := NewGatewayHandlerWithCaches(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), mavenCache, UpstreamClient{HTTPClient: upstreamServer.Client()})
+	handler := NewGatewayHandlerWithCaches(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), mavenCache, UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
 
 	get := func() *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/maven/maven-proxy/"+assetPath, nil)

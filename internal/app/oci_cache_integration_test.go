@@ -516,7 +516,7 @@ func TestOCIProxyCacheWithPostgresAndS3AcrossGatewayInstances(t *testing.T) {
 	cacheA := NewOCICache(controlA, cacheTTL, cacheTTL, breakerTTL, []string{allowedHost}).WithCoordinator(coordinatorA)
 	cacheB := NewOCICache(controlB, cacheTTL, cacheTTL, breakerTTL, []string{allowedHost}).WithCoordinator(coordinatorB)
 	metricsA, metricsB := &Metrics{}, &Metrics{}
-	client := UpstreamClient{HTTPClient: upstreamServer.Client()}
+	client := UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true}
 	handlerA := OCIHandler{Resolver: Resolver{Store: repositoryStore, Adapter: TestAdapter{}, Metrics: metricsA}, Client: client, Authenticator: testAuthenticator(), Cache: cacheA}
 	handlerB := OCIHandler{Resolver: Resolver{Store: repositoryStore, Adapter: TestAdapter{}, Metrics: metricsB}, Client: client, Authenticator: testAuthenticator(), Cache: cacheB}
 

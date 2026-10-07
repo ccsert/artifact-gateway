@@ -25,6 +25,9 @@ type Hooks struct {
 	LookupIP             func(ctx context.Context, network, host string) ([]net.IP, error)
 	DialContext          func(ctx context.Context, network, address string) (net.Conn, error)
 	ProxyFromEnvironment func(*http.Request) (*url.URL, error)
+	// ProxyDialContext is an explicit trusted injection for the selected HTTP
+	// proxy hop. It is never inferred from an upstream transport's dial hook.
+	ProxyDialContext func(ctx context.Context, network, address string) (net.Conn, error)
 	// AllowPrivateProxy permits proxy addresses on private/loopback networks.
 	// Reserved for tests and local development overrides.
 	AllowPrivateProxy bool
@@ -45,6 +48,12 @@ func DefaultHooks() Hooks {
 // configuration for requests to endpoint. A nil proxy (or empty mode) keeps
 // the legacy environment behavior.
 func Apply(client *http.Client, proxy *repository.EgressProxy, endpoint string, hooks Hooks) (*http.Client, error) {
+	return ApplyContext(context.Background(), client, proxy, endpoint, hooks)
+}
+
+// ApplyContext applies the same factory policy while binding DNS and proxy
+// selection work to the upstream request's cancellation and deadline.
+func ApplyContext(ctx context.Context, client *http.Client, proxy *repository.EgressProxy, endpoint string, hooks Hooks) (*http.Client, error) {
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
@@ -61,7 +70,7 @@ func Apply(client *http.Client, proxy *repository.EgressProxy, endpoint string, 
 	}
 	switch mode {
 	case repository.EgressProxyModeDirect:
-		return PinnedClient(client, u, hooks)
+		return pinnedClientContext(ctx, client, u, hooks)
 	case repository.EgressProxyModeEnvironment:
 		useEgressProxy, err := Applies(u, hooks)
 		if err != nil {
@@ -72,12 +81,12 @@ func Apply(client *http.Client, proxy *repository.EgressProxy, endpoint string, 
 			// IP-pinning 既不必要也会绕过代理，因此改用标准代理 Transport。
 			return EnvironmentClient(client, hooks), nil
 		}
-		return PinnedClient(client, u, hooks)
+		return pinnedClientContext(ctx, client, u, hooks)
 	case repository.EgressProxyModeCustom:
 		if bypassedByNoProxy(u.Hostname(), proxy.NoProxy) {
-			return PinnedClient(client, u, hooks)
+			return pinnedClientContext(ctx, client, u, hooks)
 		}
-		return customClient(client, proxy, u, hooks)
+		return customClient(ctx, client, proxy, u, hooks)
 	default:
 		return nil, fmt.Errorf("unsupported egress proxy mode %q", mode)
 	}
@@ -108,6 +117,9 @@ func EnvironmentClient(client *http.Client, hooks Hooks) *http.Client {
 	// trust configuration but let the standard transport establish the proxy hop.
 	transport.DialContext = nil
 	transport.Dial = nil //nolint:staticcheck // Clear the legacy hook too; otherwise it bypasses the egress proxy when DialContext is nil.
+	if hooks.ProxyDialContext != nil {
+		transport.DialContext = hooks.ProxyDialContext
+	}
 	copy := *client
 	copy.Transport = transport
 	return &copy
@@ -117,7 +129,11 @@ func EnvironmentClient(client *http.Client, hooks Hooks) *http.Client {
 // the private-network check, preventing a second DNS resolution from
 // rebinding the connection.
 func PinnedClient(client *http.Client, u *url.URL, hooks Hooks) (*http.Client, error) {
-	ips, err := hooks.LookupIP(context.Background(), "ip", u.Hostname())
+	return pinnedClientContext(context.Background(), client, u, hooks)
+}
+
+func pinnedClientContext(ctx context.Context, client *http.Client, u *url.URL, hooks Hooks) (*http.Client, error) {
+	ips, err := hooks.LookupIP(ctx, "ip", u.Hostname())
 	if err != nil || len(ips) == 0 {
 		return nil, fmt.Errorf("resolve egress endpoint: %w", err)
 	}
@@ -163,8 +179,8 @@ func PinnedClient(client *http.Client, u *url.URL, hooks Hooks) (*http.Client, e
 // customClient routes upstream requests through the configured HTTP CONNECT or
 // SOCKS5 proxy. The proxy address itself must not resolve to a private
 // address unless hooks.AllowPrivateProxy is set.
-func customClient(client *http.Client, proxy *repository.EgressProxy, upstream *url.URL, hooks Hooks) (*http.Client, error) {
-	if err := checkProxyAddress(proxy, hooks); err != nil {
+func customClient(ctx context.Context, client *http.Client, proxy *repository.EgressProxy, upstream *url.URL, hooks Hooks) (*http.Client, error) {
+	if err := checkProxyAddress(ctx, proxy, hooks); err != nil {
 		return nil, err
 	}
 	password, err := DecryptPassword(proxy.Password)
@@ -192,6 +208,9 @@ func customClient(client *http.Client, proxy *repository.EgressProxy, upstream *
 		// dial hook would bypass it.
 		custom.DialContext = nil
 		custom.Dial = nil //nolint:staticcheck
+		if hooks.ProxyDialContext != nil {
+			custom.DialContext = hooks.ProxyDialContext
+		}
 		copy.Transport = custom
 		return &copy, nil
 	case repository.EgressProxyProtocolSOCKS5:
@@ -262,8 +281,8 @@ func socksLocalResolveDialer(upstream *url.URL, hooks Hooks, dialer xproxy.Conte
 
 // checkProxyAddress resolves the configured proxy host and rejects private or
 // loopback results unless the hooks explicitly allow them.
-func checkProxyAddress(proxy *repository.EgressProxy, hooks Hooks) error {
-	ips, err := hooks.LookupIP(context.Background(), "ip", proxy.Host)
+func checkProxyAddress(ctx context.Context, proxy *repository.EgressProxy, hooks Hooks) error {
+	ips, err := hooks.LookupIP(ctx, "ip", proxy.Host)
 	if err != nil || len(ips) == 0 {
 		return fmt.Errorf("resolve egress proxy address: %w", err)
 	}

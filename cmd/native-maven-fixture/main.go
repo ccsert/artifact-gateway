@@ -70,7 +70,7 @@ func main() {
 	if _, _, err := store.CreateHostedGroupIdempotently(context.Background(), repository.HostedGroup{ID: uuid.NewString(), Name: "maven-chain", Format: repository.FormatMaven, Members: members}, "fixture", "maven-chain", "maven-chain"); err != nil {
 		log.Fatal(err)
 	}
-	handler := app.NewGatewayHandlerWithCaches(deps, store, app.TestAdapter{}, auth, app.NewDefaultOCICache(app.NewMemoryOCIObjectStore(), nil), app.NewDefaultMavenCache(app.NewMemoryOCIObjectStore(), allowedHosts), app.UpstreamClient{})
+	handler := app.NewGatewayHandlerWithCaches(deps, store, app.TestAdapter{}, auth, app.NewDefaultOCICache(app.NewMemoryOCIObjectStore(), nil), app.NewDefaultMavenCache(app.NewMemoryOCIObjectStore(), allowedHosts), app.UpstreamClient{AllowHTTPForTesting: true})
 	log.Printf("Native Maven fixture listening on %s", address)
 	log.Fatal(http.ListenAndServe(address, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s", r.Method, r.URL.Path)

@@ -10,7 +10,7 @@ Status: implemented (2026-08-06). Migration `000070_egress_proxy.sql`, the
 
 ## Problem
 
-Today only the Raw proxy path has explicit egress handling
+At the time of this proposal, only the Raw proxy path had explicit egress handling
 (`internal/app/raw.go`): it honors `http.ProxyFromEnvironment`, and when no
 environment proxy applies it pins the dial to DNS answers that passed the
 private-address check. OCI, Maven, and Conan upstream fetches fall back to
@@ -191,3 +191,55 @@ must not resolve to a private/loopback address — same rule as
    connection test.
 4. Audit/metrics fields and documentation updates (README env-var table,
    `docs/protocol-compatibility.md` notes).
+
+## Maven/OCI Per-Hop Downloads
+
+Maven and OCI Proxy content reads apply the effective egress policy separately
+to the initial request and every redirect. The limit is five redirects; loops,
+missing or invalid locations, user information in URLs, unapproved origins and
+HTTPS downgrades fail before the next request. Production Proxy endpoints must
+use HTTPS. This tightening may reject an old HTTP-only or previously unchecked
+redirect chain; do not broaden policy to hide the failure.
+
+The configured endpoint's exact origin, including its port, is allowed. Extra
+`allowedHosts` entries authorize the HTTPS host on port 443; the management API
+continues to accept bare hostnames. An in-process member with an explicit port
+entry is matched exactly, never by hostname alone. A content host permission
+does not establish trust in an OCI token issuer. Upstream Bearer exchange
+remains separate work; this change does not implement it.
+
+For direct paths, environment `NO_PROXY`, custom `noProxy`, and SOCKS5 with local
+DNS, each hop checks all DNS answers before a connection and pins the selected
+connection to those answers. Checks and connections obey the request context.
+Private, loopback, link-local, unspecified and multicast addresses are refused,
+as are special-use IPv4 ranges `0/8`, `100.64/10`, `192.0.0/24`, `192.0.2/24`,
+`192.88.99/24`, `198.18/15`, `198.51.100/24`, `203.0.113/24` and `240/4`.
+IPv6 must be in `2000::/3`, excluding `2001::/23` and `2001:db8::/32`.
+Literal URLs receive the same check even on proxy-owned DNS paths.
+
+HTTP CONNECT and SOCKS5 remote DNS leave target DNS and connection address
+enforcement to the selected proxy. Local URL/origin permission still applies
+before every hop. The mode and `NO_PROXY` decision are reevaluated for each
+target; a successful proxy hop does not grant a later direct connection.
+
+Gateway client authentication is not copied upstream. Cross-origin redirects
+remove Authorization, Cookie and Proxy-Authorization and do not restore them
+when a chain returns to the original origin. The supplied client's cookie jar
+is disabled for upstream requests, so it cannot add authentication back.
+Maven conditional headers and
+User-Agent, and Maven/OCI Accept and Range headers retain their existing
+semantics. Existing client redirect restrictions remain effective, including
+`http.ErrUseLastResponse` returning the readable final redirect response. A single
+budget covers DNS, the chain and response-body consumption; cancellation and
+timeout remain recognizable through `errors.Is`. Public errors are safe fixed
+messages. Proxy client spans propagate trace context without recording target
+URLs, signed query strings or original transport/callback error messages.
+
+Trusted in-process test hooks can map synthetic public addresses and the
+selected proxy hop to task-owned loopback fixtures. `ProxyDialContext` is never
+inferred from a supplied upstream dialer. `AllowHTTPForTesting` exists only on
+the Go client, defaults false and is unavailable through repository settings;
+it keeps older HTTP fixtures usable without admitting production HTTP paths.
+Raw keeps its independent refusal to follow redirects. Hosted bytes, digest
+verification and cache ownership/authorization are unchanged. Production CDN
+permissions, native client acceptance and rollout require separate approval.

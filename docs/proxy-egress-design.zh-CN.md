@@ -89,3 +89,41 @@ Password 只以 AES-256-GCM ciphertext 存储，构造 transport 时延迟解密
 2. 共享 Factory，先迁 Raw，再接 OCI/Maven/Conan；
 3. OpenAPI、生成客户端和 Console 连接测试；
 4. 审计、指标及 README/兼容文档。
+
+## Maven/OCI 逐跳下载
+
+Maven 与 OCI Proxy 内容读取对首个请求和每次重定向分别应用有效出站策略。最多跟随
+5 次跳转；循环、缺失/非法 Location、URL 用户信息、未获准来源和 HTTPS 降级均在
+下一请求发出前失败。生产 Proxy endpoint 必须使用 HTTPS。这个收紧可能拒绝旧的
+纯 HTTP 或此前未检查的跳转链；不得放宽策略来掩盖失败。
+
+配置 endpoint 的精确 origin（含端口）获准；额外 `allowedHosts` 批准 HTTPS 主机的
+443 端口，管理 API 仍只接受裸主机名。进程内 Member 的显式端口条目精确匹配，不能
+仅按 hostname 匹配。内容主机许可不能建立 OCI token 签发者信任。上游 Bearer 交换
+仍是独立待完成工作，本变更没有实现它。
+
+direct、环境 `NO_PROXY`、custom `noProxy` 及 SOCKS5 本地 DNS 路径每跳先检查全部
+DNS 答案，再把连接固定到已检查地址。检查与连接服从请求 context。拒绝私网、回环、
+链路本地、未指定和多播地址，同时拒绝特殊用途 IPv4 段：`0/8`、`100.64/10`、
+`192.0.0/24`、`192.0.2/24`、`192.88.99/24`、`198.18/15`、`198.51.100/24`、
+`203.0.113/24`、`240/4`。IPv6 须属于 `2000::/3`，并排除 `2001::/23` 和
+`2001:db8::/32`。即使由代理解析 DNS，字面量 IP URL 仍执行同样检查。
+
+HTTP CONNECT 与 SOCKS5 remote DNS 的目标 DNS/连接地址检查由所选代理负责；本地
+仍在每跳前检查 URL/origin 许可。每个目标重新判断模式和 `NO_PROXY`，一次代理跳
+成功不意味着后续直连自动获准。
+
+Gateway 客户端认证不复制上游。跨 origin 清除 Authorization、Cookie 和
+Proxy-Authorization；链返回原 origin 也不恢复。上游请求禁用传入客户端的 cookie jar，
+防止它重新补入认证。Maven 条件请求与 User-Agent，及 Maven/OCI Accept、Range 保持
+原语义。既有客户端重定向限制仍生效，包括 `http.ErrUseLastResponse` 返回仍可读取的
+最后重定向响应。一个总预算覆盖
+DNS、全部跳转与响应体读取，取消/超时仍可由 `errors.Is` 识别。公共错误为固定安全
+消息；Proxy 客户端 span 传播 trace context，但不记录目标 URL、签名 query 或原始
+transport/callback 错误消息。
+
+可信进程内测试 hook 可把合成公开地址与选定代理首跳映射到任务自有 loopback fixture。
+`ProxyDialContext` 不会从既有 upstream dialer 隐式推导。`AllowHTTPForTesting` 仅在
+Go 客户端存在，默认 false，不能经仓库设置启用；它保留旧 HTTP fixture，不开放生产
+HTTP 路径。Raw 保持独立的禁止重定向策略。Hosted 字节、digest 校验及缓存归属/授权
+不变；生产 CDN 许可、原生客户端验收与 rollout 仍需另行批准。

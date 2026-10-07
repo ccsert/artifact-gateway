@@ -31,15 +31,28 @@ type OCIClient interface {
 
 // UpstreamClient is used only by legacy Group reads. Native Hosted repositories
 // are served from PostgreSQL metadata and the object store.
-type UpstreamClient struct{ HTTPClient *http.Client }
+type UpstreamClient struct {
+	HTTPClient *http.Client
+	// EgressHooks is a trusted network injection, never repository configuration.
+	EgressHooks *egress.Hooks
+	// AllowHTTPForTesting permits existing task-owned HTTP fixtures. Production
+	// clients leave it false; OCI token exchanges always require HTTPS.
+	AllowHTTPForTesting bool
+}
 
 func (c UpstreamClient) Fetch(ctx context.Context, method string, member repository.Member, repositoryName, resource, reference string, headers http.Header) (*http.Response, error) {
 	endpoint, err := url.Parse(strings.TrimRight(member.Endpoint, "/") + "/v2/" + repositoryName + "/" + resource + "/" + reference)
 	if err != nil {
+		if member.Type == repository.MemberProxy {
+			return nil, &proxyFetchError{message: "OCI upstream configuration invalid", cause: err}
+		}
 		return nil, fmt.Errorf("parse OCI upstream endpoint: %w", err)
 	}
 	request, err := http.NewRequestWithContext(ctx, method, endpoint.String(), nil)
 	if err != nil {
+		if member.Type == repository.MemberProxy {
+			return nil, &proxyFetchError{message: "OCI upstream request invalid", cause: err}
+		}
 		return nil, fmt.Errorf("create OCI upstream request: %w", err)
 	}
 	if accept := headers.Get("Accept"); accept != "" {
@@ -48,13 +61,10 @@ func (c UpstreamClient) Fetch(ctx context.Context, method string, member reposit
 	if rangeHeader := headers.Get("Range"); rangeHeader != "" {
 		request.Header.Set("Range", rangeHeader)
 	}
-	client := c.HTTPClient
-	if member.Type == repository.MemberProxy && customEgressConfigured(member.EgressProxy) {
-		client, err = egress.Apply(client, member.EgressProxy, member.Endpoint, rawEgressHooks())
-		if err != nil {
-			return nil, err
-		}
+	if member.Type == repository.MemberProxy {
+		return c.doProxyUpstream(ctx, member, request)
 	}
+	client := c.HTTPClient
 	response, err := tracedHTTPClient(client).Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("fetch OCI upstream content: %w", err)

@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Maven/OCI Proxy downloads now reapply the selected egress policy at each approved HTTPS redirect, with exact origin/port checks, five-hop bounds, DNS pinning on locally resolved paths, credential isolation, one cancellation/timeout budget and safe outbound telemetry. Existing HTTP-only or unapproved redirect chains fail closed; OCI upstream Bearer exchange remains pending.
+
 - Console theme choices preserve the latest accepted selection across skipped or failed visual transitions and document navigation. Browser layout checks measure dialogs after their opening motion completes, with unchanged geometry thresholds and failure traces.
 
 - Overview storage and repository statistics render independently of Groups and recent audits, with source-specific retries, cancellation of obsolete requests and an early chart-module download.
