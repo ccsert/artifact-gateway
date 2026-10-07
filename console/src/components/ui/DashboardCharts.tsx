@@ -1,5 +1,6 @@
 import type { PieConfig } from "@ant-design/plots";
 import {
+  Component,
   lazy,
   Suspense,
   useEffect,
@@ -10,10 +11,35 @@ import {
 import { formatBytes } from "../../lib/format";
 import { artifactFormatVisualizationSlot } from "../../lib/artifactFormatVisuals";
 import { usePreferences } from "../../lib/preferences";
+import {
+  getLoadedDashboardPiePlot,
+  loadDashboardPiePlot,
+} from "./dashboard-charts/loadDashboardPiePlot";
+import { ErrorBanner } from "./Feedback";
 
-const DashboardPiePlot = lazy(
-  () => import("./dashboard-charts/DashboardPiePlot"),
-);
+const LazyDashboardPiePlot = lazy(loadDashboardPiePlot);
+
+function DashboardPiePlot({ config }: { config: PieConfig }) {
+  // A completed preload can render immediately without suspending first.
+  // Choose once per mount so later data updates do not replace the plot type.
+  const [Plot] = useState(
+    () => getLoadedDashboardPiePlot() ?? LazyDashboardPiePlot,
+  );
+  return <Plot config={config} />;
+}
+
+class StoragePlotBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
 
 const FORMAT_ORDER = [
   "oci",
@@ -203,30 +229,45 @@ export function StorageByFormatChart({
 
   return (
     <div className="grid min-w-0 items-center gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
-      <div
-        className="relative min-w-0"
-        role="img"
-        aria-label={text(
-          `各制品格式的存储占比，合计 ${formatBytes(totalBytes)}`,
-          `Storage share by artifact format, ${formatBytes(totalBytes)} total`,
-        )}
-        data-testid="storage-by-format-chart"
+      <StoragePlotBoundary
+        fallback={
+          <div className="flex min-h-56 items-center">
+            <ErrorBanner
+              title={text("存储图表加载失败", "Storage chart unavailable")}
+              error={text(
+                "容量数据仍可查看，请刷新页面重试图表。",
+                "Capacity data remains available. Reload the page to retry the chart.",
+              )}
+              onRetry={() => window.location.reload()}
+            />
+          </div>
+        }
       >
-        <DeferredChart
-          height={224}
-          label={text("正在加载图表…", "Loading chart…")}
+        <div
+          className="relative min-w-0"
+          role="img"
+          aria-label={text(
+            `各制品格式的存储占比，合计 ${formatBytes(totalBytes)}`,
+            `Storage share by artifact format, ${formatBytes(totalBytes)} total`,
+          )}
+          data-testid="storage-by-format-chart"
         >
-          <DashboardPiePlot key={colorMode} config={config} />
-        </DeferredChart>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-lg font-semibold tabular-nums text-zinc-100">
-            {formatBytes(totalBytes)}
-          </span>
-          <span className="text-xs uppercase tracking-wider text-zinc-500">
-            {text("合计", "Total")}
-          </span>
+          <DeferredChart
+            height={224}
+            label={text("正在加载图表…", "Loading chart…")}
+          >
+            <DashboardPiePlot key={colorMode} config={config} />
+          </DeferredChart>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-lg font-semibold tabular-nums text-zinc-100">
+              {formatBytes(totalBytes)}
+            </span>
+            <span className="text-xs uppercase tracking-wider text-zinc-500">
+              {text("合计", "Total")}
+            </span>
+          </div>
         </div>
-      </div>
+      </StoragePlotBoundary>
       <ul
         className="grid min-w-36 grid-cols-2 gap-x-5 gap-y-2 sm:grid-cols-1"
         aria-label={text("格式图例", "Format legend")}

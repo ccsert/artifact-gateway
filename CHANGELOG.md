@@ -13,6 +13,10 @@ their meaning.
 
 - Console theme choices preserve the latest accepted selection across skipped or failed visual transitions and document navigation. Browser layout checks measure dialogs after their opening motion completes, with unchanged geometry thresholds and failure traces.
 
+- Overview storage and repository statistics render independently of Groups and recent audits, with source-specific retries, cancellation of obsolete requests and an early chart-module download.
+
+- Repository capacity aggregation joins Maven path prefixes with visible coordinates and counts each matched asset once, preserving logical bytes and object counts across overlapping paths and SNAPSHOT builds.
+
 - Repository usage supports server pagination, literal address search and distinct matching/whole-repository totals; Console tables share Ant Design pagination while cursor lists retain load-more semantics.
 
 ## 0.7.0 - 2026-10-06

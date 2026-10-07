@@ -10,13 +10,20 @@ const repositoryCapacityRecordsQuery = `WITH usage AS (
 	SELECT a.repository_id,COALESCE(SUM(o.size),0)::bigint AS used_bytes,COUNT(*)::bigint AS object_count
 	FROM native_raw_assets a JOIN native_raw_objects o ON o.digest=a.digest GROUP BY a.repository_id
 	UNION ALL
-	SELECT a.repository_id,COALESCE(SUM(a.size),0)::bigint,COUNT(*)::bigint
-	FROM native_maven_assets a
-	WHERE EXISTS (
-		SELECT 1 FROM native_maven_artifacts m
-		WHERE m.repository_id=a.repository_id AND m.state='visible'
-		AND left(a.path, length(replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/')) = replace(split_part(m.coordinate, ':', 1), '.', '/') || '/' || split_part(m.coordinate, ':', 2) || '/' || split_part(m.coordinate, ':', 3) || '/'
-	) GROUP BY a.repository_id
+	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint
+	FROM (
+		-- A path may match multiple visible coordinates/builds; count each asset once.
+		SELECT DISTINCT a.repository_id,a.path,a.size
+		FROM native_maven_assets a
+		CROSS JOIN LATERAL unnest(string_to_array(a.path,'/')) WITH ORDINALITY AS segments(part,depth)
+		JOIN (
+			SELECT DISTINCT repository_id,
+				replace(split_part(coordinate,':',1),'.','/') || '/' || split_part(coordinate,':',2) || '/' || split_part(coordinate,':',3) || '/' AS prefix
+			FROM native_maven_artifacts WHERE state='visible'
+		) m ON m.repository_id=a.repository_id
+			AND m.prefix=array_to_string((string_to_array(a.path,'/'))[1:depth::int],'/') || '/'
+		WHERE depth<cardinality(string_to_array(a.path,'/'))
+	) maven_objects GROUP BY repository_id
 	UNION ALL
 	SELECT repository_id,COALESCE(SUM(size),0)::bigint,COUNT(*)::bigint FROM (
 		SELECT repository_id,size FROM native_oci_manifests
