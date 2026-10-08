@@ -49,6 +49,7 @@ type HostedRepository struct {
 	AllowedHosts           []string        `json:"allowedHosts,omitempty"`
 	EgressProxy            *EgressProxy    `json:"egressProxy,omitempty"`
 	UpstreamAuth           *UpstreamAuth   `json:"upstreamAuth,omitempty"`
+	OCIBearer              *OCIBearer      `json:"ociBearer,omitempty"`
 	AnonymousRead          bool            `json:"anonymousRead"`
 	MavenStrictPublication bool            `json:"mavenStrictPublication"`
 	State                  RepositoryState `json:"state"`
@@ -1200,6 +1201,15 @@ const (
 	MemberProxy  MemberType = "proxy"
 )
 
+// OCIBearer opts an OCI Proxy into anonymous upstream Bearer challenge exchange.
+// Realm and Service bind challenges to this repository's configured issuer and
+// audience. This configuration carries no credentials and grants no egress
+// permission; every request still requires the repository's egress policy.
+type OCIBearer struct {
+	Realm   string `json:"realm"`
+	Service string `json:"service"`
+}
+
 type Member struct {
 	Name         string       `json:"name"`
 	Type         MemberType   `json:"type"`
@@ -1208,7 +1218,10 @@ type Member struct {
 	Anonymous    bool         `json:"anonymous"`
 	AllowedHosts []string     `json:"allowedHosts,omitempty"`
 	EgressProxy  *EgressProxy `json:"egressProxy,omitempty"`
-	RepositoryID string       `json:"repositoryId,omitempty"`
+	// OCIBearer is projected from V2 repository configuration at runtime. It is
+	// not a configuration field on the legacy Group management surface.
+	OCIBearer    *OCIBearer `json:"-"`
+	RepositoryID string     `json:"repositoryId,omitempty"`
 }
 
 type Group struct {

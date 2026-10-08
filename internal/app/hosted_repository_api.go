@@ -42,6 +42,7 @@ type createHostedRepositoryRequest struct {
 	AllowedHosts           []string             `json:"allowedHosts,omitempty"`
 	EgressProxy            *egressProxyRequest  `json:"egressProxy,omitempty"`
 	UpstreamAuth           *upstreamAuthRequest `json:"upstreamAuth,omitempty"`
+	OCIBearer              json.RawMessage      `json:"ociBearer,omitempty"`
 	AnonymousRead          bool                 `json:"anonymousRead,omitempty"`
 	MavenStrictPublication bool                 `json:"mavenStrictPublication,omitempty"`
 }
@@ -51,6 +52,7 @@ type updateHostedRepositoryRequest struct {
 	AllowedHosts           []string             `json:"allowedHosts,omitempty"`
 	EgressProxy            *egressProxyRequest  `json:"egressProxy,omitempty"`
 	UpstreamAuth           *upstreamAuthRequest `json:"upstreamAuth,omitempty"`
+	OCIBearer              json.RawMessage      `json:"ociBearer,omitempty"`
 	AnonymousRead          *bool                `json:"anonymousRead,omitempty"`
 	MavenStrictPublication *bool                `json:"mavenStrictPublication,omitempty"`
 }
@@ -609,9 +611,19 @@ func (h hostedRepositoryAPIHandler) createWithIdempotencyKey(w http.ResponseWrit
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
+	ociBearer, err := resolveOCIBearer(request.OCIBearer, nil, request.Format, repoType)
+	if err != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	if ociBearer != nil {
+		// Presence is retained for PATCH semantics, while create idempotency
+		// hashes the validated value as it does for other typed settings.
+		request.OCIBearer, _ = json.Marshal(ociBearer)
+	}
 	payload, _ := json.Marshal(request)
 	digest := sha256.Sum256(payload)
-	repo, _, err := h.store.CreateHostedRepositoryIdempotently(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: request.Name, Format: request.Format, Type: repoType, Endpoint: request.Endpoint, AllowedHosts: request.AllowedHosts, EgressProxy: egressProxy, UpstreamAuth: upstreamAuth, AnonymousRead: request.AnonymousRead, MavenStrictPublication: request.MavenStrictPublication}, principal.Actor, key, base64.RawURLEncoding.EncodeToString(digest[:]))
+	repo, _, err := h.store.CreateHostedRepositoryIdempotently(r.Context(), repository.HostedRepository{ID: uuid.NewString(), Name: request.Name, Format: request.Format, Type: repoType, Endpoint: request.Endpoint, AllowedHosts: request.AllowedHosts, EgressProxy: egressProxy, UpstreamAuth: upstreamAuth, OCIBearer: ociBearer, AnonymousRead: request.AnonymousRead, MavenStrictPublication: request.MavenStrictPublication}, principal.Actor, key, base64.RawURLEncoding.EncodeToString(digest[:]))
 	if errors.Is(err, repository.ErrIdempotencyConflict) {
 		writeHostedProblem(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used with a different request")
 		return
@@ -740,7 +752,13 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "repository update body must be valid")
 		return
 	}
-	updatedRepo := repository.HostedRepository{ID: repo.ID, Endpoint: repo.Endpoint, AllowedHosts: append([]string(nil), repo.AllowedHosts...), EgressProxy: repo.EgressProxy, UpstreamAuth: repo.UpstreamAuth, AnonymousRead: repo.AnonymousRead, MavenStrictPublication: repo.MavenStrictPublication}
+	updatedRepo := repository.HostedRepository{ID: repo.ID, Endpoint: repo.Endpoint, AllowedHosts: append([]string(nil), repo.AllowedHosts...), EgressProxy: repo.EgressProxy, UpstreamAuth: repo.UpstreamAuth, OCIBearer: repo.OCIBearer, AnonymousRead: repo.AnonymousRead, MavenStrictPublication: repo.MavenStrictPublication}
+	ociBearer, err := resolveOCIBearer(request.OCIBearer, repo.OCIBearer, repo.Format, repo.Type)
+	if err != nil {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	updatedRepo.OCIBearer = ociBearer
 	if request.AnonymousRead != nil {
 		updatedRepo.AnonymousRead = *request.AnonymousRead
 	}
@@ -805,7 +823,7 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 		}
 		updatedRepo.UpstreamAuth = upstreamAuth
 	} else {
-		if request.Endpoint != nil || request.AllowedHosts != nil || request.EgressProxy != nil || request.UpstreamAuth != nil {
+		if request.Endpoint != nil || request.AllowedHosts != nil || request.EgressProxy != nil || request.UpstreamAuth != nil || request.OCIBearer != nil {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "hosted repositories only support anonymousRead and Maven publication policy updates")
 			return
 		}

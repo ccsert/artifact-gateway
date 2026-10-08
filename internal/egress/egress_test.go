@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
@@ -30,6 +31,74 @@ func testHooks(t *testing.T, ips map[string][]net.IP) Hooks {
 		},
 		ProxyFromEnvironment: func(*http.Request) (*url.URL, error) { return nil, nil },
 		AllowPrivateProxy:    true,
+	}
+}
+
+func TestApplyContextSOCKSDialHonorsCancellation(t *testing.T) {
+	for _, remoteDNS := range []bool{false, true} {
+		name := "local-dns"
+		if remoteDNS {
+			name = "remote-dns"
+		}
+		t.Run(name, func(t *testing.T) {
+			arrived, stopped, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			hooks := testHooks(t, map[string][]net.IP{
+				"proxy.example": {net.ParseIP("93.184.216.13")}, "upstream.example": {net.ParseIP("93.184.216.10")},
+			})
+			hooks.DialContext = func(ctx context.Context, _, address string) (net.Conn, error) {
+				defer close(stopped)
+				close(arrived)
+				if address != "proxy.example:1080" {
+					return nil, errors.New("unexpected synthetic proxy hop")
+				}
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-release:
+					return nil, errors.New("synthetic cleanup released uncanceled dial")
+				}
+			}
+			t.Cleanup(func() {
+				close(release)
+				select {
+				case <-stopped:
+				case <-time.After(time.Second):
+				}
+			})
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			client, err := ApplyContext(ctx, nil, &repository.EgressProxy{
+				Mode: repository.EgressProxyModeCustom, Protocol: repository.EgressProxyProtocolSOCKS5,
+				Host: "proxy.example", Port: 1080, RemoteDNS: remoteDNS,
+			}, "https://upstream.example/repo", hooks)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result := make(chan error, 1)
+			go func() {
+				_, err := client.Transport.(*http.Transport).DialContext(ctx, "tcp", "upstream.example:443")
+				result <- err
+			}()
+			select {
+			case <-arrived:
+				cancel()
+			case <-time.After(time.Second):
+				t.Fatal("synthetic proxy dial was not reached")
+			}
+			select {
+			case err := <-result:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("dial error=%v, want cancellation", err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("SOCKS dial did not return on cancellation")
+			}
+			select {
+			case <-stopped:
+			case <-time.After(200 * time.Millisecond):
+				t.Fatal("proxy connection continued after cancellation")
+			}
+		})
 	}
 }
 

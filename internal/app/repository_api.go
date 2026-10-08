@@ -218,7 +218,7 @@ func newGatewayHandlerWithCaches(dependencies Dependencies, store GatewayStore, 
 		authenticator.OIDCSource = dependencies.OIDCRuntime
 	}
 	api := apiHandler{store: store, repositories: store, resolver: resolver, authenticator: authenticator}
-	upstreamClient := OCIClient(UpstreamClient{})
+	upstreamClient := OCIClient(UpstreamClient{OCIBearerCache: NewOCIBearerTokenCache()})
 	if len(ociClients) > 0 {
 		upstreamClient = ociClients[0]
 	}

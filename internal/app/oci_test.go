@@ -435,7 +435,7 @@ func TestOCITriesProxyAfterHostedMiss(t *testing.T) {
 		{Name: "legacy-hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0},
 		{Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1},
 	}})
-	handler := NewGatewayHandlerWithOCICache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{strings.TrimPrefix(proxy.URL, "http://")}), UpstreamClient{})
+	handler := NewGatewayHandlerWithOCICache(Dependencies{}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), []string{strings.TrimPrefix(proxy.URL, "http://")}), UpstreamClient{AllowHTTPForTesting: true})
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()
@@ -473,7 +473,7 @@ func TestOCITriesProxyAfterHostedFailure(t *testing.T) {
 		{Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1},
 	}})
 	metrics := &Metrics{}
-	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Client: UpstreamClient{}, Authenticator: testAuthenticator()}
+	handler := OCIHandler{Resolver: Resolver{Store: store, Adapter: TestAdapter{}, Metrics: metrics}, Client: UpstreamClient{AllowHTTPForTesting: true}, Authenticator: testAuthenticator()}
 	request := httptest.NewRequest(http.MethodGet, "/v2/team/app/manifests/latest", nil)
 	authorize(request, "resolver-secret")
 	response := httptest.NewRecorder()

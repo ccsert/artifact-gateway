@@ -32,14 +32,6 @@ func rawEgressHooks() egress.Hooks {
 	return egress.Hooks{LookupIP: rawProxyLookupIP, DialContext: rawProxyDialContext, ProxyFromEnvironment: rawProxyFromEnvironment}
 }
 
-// customEgressConfigured reports whether the member carries a per-repository
-// egress override (direct or custom). Nil and environment keep the
-// transport's default HTTP(S)_PROXY behavior, which the standard library
-// already honors for OCI and Maven upstream fetches.
-func customEgressConfigured(proxy *repository.EgressProxy) bool {
-	return proxy != nil && (proxy.Mode == repository.EgressProxyModeDirect || proxy.Mode == repository.EgressProxyModeCustom)
-}
-
 func (c UpstreamClient) FetchRaw(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
 	client := c.HTTPClient
 	if member.Type == repository.MemberProxy {

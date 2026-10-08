@@ -820,7 +820,7 @@ func TestV2GroupOCIManifestHostedPreferredOverProxy(t *testing.T) {
 	upstream.bodies["/v2/app/manifests/latest"] = []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","from":"upstream"}`)
 
 	cache := NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, []string{allowedHost})
-	handler := NewGatewayHandlerWithOCICache(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), cache, UpstreamClient{HTTPClient: upstreamServer.Client()})
+	handler := NewGatewayHandlerWithOCICache(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), cache, UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
 
 	req := httptest.NewRequest(http.MethodGet, "/v2/oci-group/app/manifests/latest", nil)
 	authorize(req, "resolver-secret")
@@ -861,7 +861,7 @@ func TestV2GroupOCIManifestFallsBackToProxy(t *testing.T) {
 	upstream.bodies["/v2/app/manifests/latest"] = manifest
 
 	cache := NewOCICache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, []string{allowedHost})
-	handler := NewGatewayHandlerWithOCICache(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), cache, UpstreamClient{HTTPClient: upstreamServer.Client()})
+	handler := NewGatewayHandlerWithOCICache(Dependencies{NativeOCIObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), cache, UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
 
 	get := func() *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/v2/oci-group/app/manifests/latest", nil)
@@ -978,7 +978,7 @@ func TestV2GroupMavenHostedPreferredOverProxy(t *testing.T) {
 	)
 
 	mavenCache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{allowedHost})
-	handler := NewGatewayHandlerWithCaches(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), mavenCache, UpstreamClient{HTTPClient: upstreamServer.Client()})
+	handler := NewGatewayHandlerWithCaches(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), mavenCache, UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
 
 	req := httptest.NewRequest(http.MethodGet, "/maven/maven-group/"+assetPath, nil)
 	authorize(req, "resolver-secret")
@@ -1033,7 +1033,7 @@ func TestV2GroupMavenFallsBackToProxy(t *testing.T) {
 	)
 
 	mavenCache := NewMavenCache(NewMemoryOCIObjectStore(), time.Hour, time.Hour, time.Hour, time.Hour, []string{allowedHost})
-	handler := NewGatewayHandlerWithCaches(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), mavenCache, UpstreamClient{HTTPClient: upstreamServer.Client()})
+	handler := NewGatewayHandlerWithCaches(Dependencies{NativeMavenObjectStore: objects}, store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), mavenCache, UpstreamClient{HTTPClient: upstreamServer.Client(), AllowHTTPForTesting: true})
 
 	get := func() *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/maven/maven-group/"+assetPath, nil)

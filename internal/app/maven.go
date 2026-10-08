@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/egress"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 )
 
@@ -24,12 +23,18 @@ const mavenProxyUserAgent = "Apache-Maven/3.9 Artifact-Gateway/1.0"
 func (c UpstreamClient) FetchMaven(ctx context.Context, method string, member repository.Member, artifactPath string, headers http.Header) (*http.Response, error) {
 	endpoint, err := url.Parse(member.Endpoint)
 	if err != nil {
+		if member.Type == repository.MemberProxy {
+			return nil, &proxyFetchError{message: "Maven upstream configuration invalid", cause: err}
+		}
 		return nil, fmt.Errorf("parse Maven endpoint: %w", err)
 	}
 	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/" + artifactPath
 	endpoint.RawPath = ""
 	request, err := http.NewRequestWithContext(ctx, method, endpoint.String(), nil)
 	if err != nil {
+		if member.Type == repository.MemberProxy {
+			return nil, &proxyFetchError{message: "Maven upstream request invalid", cause: err}
+		}
 		return nil, fmt.Errorf("create Maven request: %w", err)
 	}
 	request.Header.Set("User-Agent", mavenProxyUserAgent)
@@ -38,14 +43,10 @@ func (c UpstreamClient) FetchMaven(ctx context.Context, method string, member re
 			request.Header.Set(name, value)
 		}
 	}
-	client := c.HTTPClient
-	if member.Type == repository.MemberProxy && customEgressConfigured(member.EgressProxy) {
-		client, err = egress.Apply(client, member.EgressProxy, member.Endpoint, rawEgressHooks())
-		if err != nil {
-			return nil, err
-		}
+	if member.Type == repository.MemberProxy {
+		return c.doProxyUpstream(ctx, member, request)
 	}
-	response, err := tracedHTTPClient(client).Do(request)
+	response, err := tracedHTTPClient(c.HTTPClient).Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("fetch Maven content: %w", err)
 	}

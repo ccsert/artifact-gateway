@@ -11,6 +11,12 @@ their meaning.
 
 ## Unreleased
 
+- Update `golang.org/x/text` to v0.41.0 to address GO-2026-6629 in the existing PostgreSQL connection dependency path.
+
+- Native OCI Proxy repositories can opt into anonymous upstream Bearer exchange with the V2 `ociBearer` issuer/audience configuration. PATCH omission preserves it and explicit null clears it; Hosted repositories, other formats and legacy Group member settings reject the field. Migration 000144 persists configuration only; tokens remain ephemeral. Issuer trust does not grant egress permission.
+
+- Maven/OCI Proxy downloads now reapply the selected egress policy at each approved HTTPS redirect, with exact origin/port checks, five-hop bounds, DNS pinning on locally resolved paths, credential isolation, one cancellation/timeout budget and safe outbound telemetry. Existing HTTP-only or unapproved redirect chains fail closed.
+
 - Console theme choices preserve the latest accepted selection across skipped or failed visual transitions and document navigation. Browser layout checks measure dialogs after their opening motion completes, with unchanged geometry thresholds and failure traces.
 
 - Overview storage and repository statistics render independently of Groups and recent audits, with source-specific retries, cancellation of obsolete requests and an early chart-module download.

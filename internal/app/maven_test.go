@@ -286,7 +286,7 @@ func TestMavenHostedMemberWinsAndProxyIsFallback(t *testing.T) {
 		{Name: "proxy-first", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 0},
 		{Name: "hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 1},
 	}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{AllowHTTPForTesting: true})
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
@@ -322,7 +322,7 @@ func TestMavenSignalsAndAuditsAnInternalCoordinateConflict(t *testing.T) {
 		{Name: "hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0},
 		{Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1},
 	}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{AllowHTTPForTesting: true})
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
@@ -449,7 +449,7 @@ func TestMavenGroupRepositoryKeyAuthorizesAuditsAndEnforcesQuota(t *testing.T) {
 	objects := NewMemoryOCIObjectStore()
 	cache := NewDefaultMavenCache(objects, []string{strings.TrimPrefix(upstream.URL, "http://")}).WithQuota(NewCacheQuota(objects, map[string]int64{"engineering": 1}))
 	metrics := &Metrics{}
-	handler := MavenHandler{Store: store, Authenticator: authenticator, Client: UpstreamClient{}, Metrics: metrics, Cache: cache}
+	handler := MavenHandler{Store: store, Authenticator: authenticator, Client: UpstreamClient{AllowHTTPForTesting: true}, Metrics: metrics, Cache: cache}
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/1.0/library-1.0.pom", nil)
 	request.SetBasicAuth("maven", "resolver-secret")
 	response := httptest.NewRecorder()
@@ -499,7 +499,7 @@ func TestMavenForwardsConditionalRequestsAndDisabledGroupsAreAudited(t *testing.
 	defer proxy.Close()
 	store := repository.NewMemoryStore()
 	_, _ = store.CreateMavenGroup(context.Background(), repository.Group{Name: "engineering", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: hosted.URL, Position: 0}, {Name: "proxy", Type: repository.MemberProxy, Endpoint: proxy.URL, Position: 1}}})
-	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{})
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator(), UpstreamClient{AllowHTTPForTesting: true})
 	request := httptest.NewRequest(http.MethodGet, "/maven/engineering/com/example/library/maven-metadata.xml", nil)
 	request.Header.Set("If-None-Match", `"cached"`)
 	request.SetBasicAuth("maven", "resolver-secret")

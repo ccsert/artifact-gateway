@@ -10,7 +10,7 @@ Status: implemented (2026-08-06). Migration `000070_egress_proxy.sql`, the
 
 ## Problem
 
-Today only the Raw proxy path has explicit egress handling
+At the time of this proposal, only the Raw proxy path had explicit egress handling
 (`internal/app/raw.go`): it honors `http.ProxyFromEnvironment`, and when no
 environment proxy applies it pins the dial to DNS answers that passed the
 private-address check. OCI, Maven, and Conan upstream fetches fall back to
@@ -191,3 +191,112 @@ must not resolve to a private/loopback address — same rule as
    connection test.
 4. Audit/metrics fields and documentation updates (README env-var table,
    `docs/protocol-compatibility.md` notes).
+
+## Maven/OCI Per-Hop Downloads
+
+Maven and OCI Proxy content reads apply the effective egress policy separately
+to the initial request and every redirect. The limit is five redirects; loops,
+missing or invalid locations, user information in URLs, unapproved origins and
+HTTPS downgrades fail before the next request. Production Proxy endpoints must
+use HTTPS. This tightening may reject an old HTTP-only or previously unchecked
+redirect chain; do not broaden policy to hide the failure.
+
+The configured endpoint's exact origin, including its port, is allowed. Extra
+`allowedHosts` entries authorize the HTTPS host on port 443; the management API
+continues to accept bare hostnames. An in-process member with an explicit port
+entry is matched exactly, never by hostname alone. A content host permission
+does not establish trust in an OCI token issuer. Anonymous Bearer exchange
+requires the separate explicit issuer/audience configuration described below.
+
+For direct paths, environment `NO_PROXY`, custom `noProxy`, and SOCKS5 with local
+DNS, each hop checks all DNS answers before a connection and pins the selected
+connection to those answers. Checks and connections obey the request context.
+Private, loopback, link-local, unspecified and multicast addresses are refused,
+as are special-use IPv4 ranges `0/8`, `100.64/10`, `192.0.0/24`, `192.0.2/24`,
+`192.88.99/24`, `198.18/15`, `198.51.100/24`, `203.0.113/24` and `240/4`.
+IPv6 must be in `2000::/3`, excluding `2001::/23` and `2001:db8::/32`.
+Literal URLs receive the same check even on proxy-owned DNS paths.
+
+HTTP CONNECT and SOCKS5 remote DNS leave target DNS and connection address
+enforcement to the selected proxy. Local URL/origin permission still applies
+before every hop. The mode and `NO_PROXY` decision are reevaluated for each
+target; a successful proxy hop does not grant a later direct connection.
+
+Gateway client authentication is not copied upstream. Cross-origin redirects
+remove Authorization, Cookie and Proxy-Authorization and do not restore them
+when a chain returns to the original origin. The supplied client's cookie jar
+is disabled for upstream requests, so it cannot add authentication back.
+Maven conditional headers and
+User-Agent, and Maven/OCI Accept and Range headers retain their existing
+semantics. Existing client redirect restrictions remain effective, including
+`http.ErrUseLastResponse` returning the readable final redirect response. A single
+budget covers DNS, the chain and response-body consumption; cancellation and
+timeout remain recognizable through `errors.Is`. Public errors are safe fixed
+messages. Proxy client spans propagate trace context without recording target
+URLs, signed query strings or original transport/callback error messages.
+
+Trusted in-process test hooks can map synthetic public addresses and the
+selected proxy hop to task-owned loopback fixtures. `ProxyDialContext` is never
+inferred from a supplied upstream dialer. `AllowHTTPForTesting` exists only on
+the Go client, defaults false and is unavailable through repository settings;
+it keeps older HTTP fixtures usable without admitting production HTTP paths.
+Raw keeps its independent refusal to follow redirects. Hosted bytes, digest
+verification and cache ownership/authorization are unchanged. Production CDN
+permissions, native client acceptance and rollout require separate approval.
+
+## Native OCI Proxy Bearer Configuration
+
+Administrators can opt a native OCI Proxy repository into anonymous upstream
+Bearer challenge exchange through `POST /api/v2/repositories` or
+`PATCH /api/v2/repositories/{repositoryId}`:
+
+```json
+{
+  "ociBearer": {
+    "realm": "https://auth.example.test/token",
+    "service": "registry.example.test"
+  }
+}
+```
+
+`realm` is the exact complete HTTPS token-service URL. HTTP, userinfo, query
+parameters (including an empty query), and fragments (including an empty
+fragment) are rejected. `service` is the exact challenge audience: 1–256 UTF-8
+bytes with no whitespace or control characters. Both fields are required, and
+unknown properties are rejected; this object never accepts credentials or tokens.
+
+Omission on creation leaves exchange disabled. On PATCH, omission preserves the
+existing object, `null` clears it, and an object replaces both fields together;
+updates retain the existing `If-Match` concurrency requirement. Responses expose
+configured realm/service and omit the field when disabled. Hosted repositories
+and other formats reject this field, including `null`. Legacy V1 Group members
+also reject it: V2 Groups inherit their native Proxy member's configuration at
+runtime without introducing a legacy member configuration field.
+
+Migration `000144_oci_bearer_configuration.sql` adds nullable JSONB `oci_bearer`
+to `hosted_repositories`; existing rows remain disabled. Only configuration is
+persisted, never exchanged tokens. The API does not alter `allowedHosts`: a
+cross-origin token realm still needs independent authorization under the
+repository's existing egress policy. Private authenticated registries and
+production identity, network-policy or deployment changes require separate work.
+The generated Console client includes the field; this change adds no Console
+configuration form.
+
+The exchange accepts one unambiguous Bearer challenge bound to the configured
+realm/service and the requested repository's `pull` scope. It performs at most
+one anonymous token GET and one content retry. Inbound credentials never enter
+either request; cross-origin redirects remove the exchanged token. Token GETs
+use the same five-hop egress checks as content, including independently approved
+issuer/CDN hosts. Invalid challenges, tokens and repeated 401s return stable
+errors without authentication payloads; cancellation/deadline identity remains
+available to callers.
+
+Runtime caches are process-local, with at most 256 entries and 32 refresh keys
+in flight. Keys bind repository identity, registry, issuer, service, scope and
+egress/host policy. Concurrent callers share a refresh bounded to 30 seconds;
+cancelling one waiter does not cancel other callers. A rejected cached token is
+invalidated by version. Missing `expires_in` defaults to 60 seconds; positive
+remaining lifetime is cached for at most 300 seconds with a five-second refresh
+margin. Optional RFC3339 `issued_at` must not place issuance more than 30 seconds
+in the future or make the token expired. Challenge/token/JSON response limits
+are 8 KiB/8 KiB/64 KiB. No refresh tokens or durable identities are requested.

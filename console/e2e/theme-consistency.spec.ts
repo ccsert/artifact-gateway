@@ -428,21 +428,45 @@ test("sign-in artwork and source-derived backdrop stay theme-aware and size-appr
   await reducedMotionPage.route("**/auth/session", (route) =>
     route.fulfill({ json: { authenticated: false } }),
   );
-  await reducedMotionPage.route("**/auth/oidc/config", (route) =>
-    route.fulfill({ json: { enabled: false } }),
-  );
-  await reducedMotionPage.goto("/login");
-  await reducedMotionPage.waitForLoadState("networkidle");
-  await expect(
-    reducedMotionPage.locator(".ag-login-brand-panel"),
-  ).toBeVisible();
-  await expect(
-    reducedMotionPage.locator('[data-kokonutui-component="beams-background"]'),
-  ).toHaveAttribute("data-active", "false");
-  await expect(reducedMotionPage.locator(".ag-login-beams canvas")).toHaveCount(
-    0,
-  );
-  await reducedMotionContext.close();
+  // Artwork readiness must not depend on unrelated OIDC discovery finishing.
+  // Keep that request pending until the reduced-motion assertions complete.
+  let releaseOIDCConfig: () => void = () => {};
+  let markOIDCConfigPending: () => void = () => {};
+  const oidcConfigRelease = new Promise<void>((resolve) => {
+    releaseOIDCConfig = resolve;
+  });
+  const oidcConfigPending = new Promise<void>((resolve) => {
+    markOIDCConfigPending = resolve;
+  });
+  await reducedMotionPage.route("**/auth/oidc/config", async (route) => {
+    markOIDCConfigPending();
+    await oidcConfigRelease;
+    await route.fulfill({ json: { enabled: false } });
+  });
+  try {
+    await reducedMotionPage.goto("/login");
+    await oidcConfigPending;
+    await expect(
+      reducedMotionPage.locator(".ag-login-brand-panel"),
+    ).toBeVisible();
+    await expect(
+      reducedMotionPage.locator(
+        '[data-kokonutui-component="beams-background"]',
+      ),
+    ).toHaveAttribute("data-active", "false");
+    await expect(
+      reducedMotionPage.locator(".ag-login-beams canvas"),
+    ).toHaveCount(0);
+    const oidcConfigResponse = reducedMotionPage.waitForResponse(
+      (response) =>
+        response.url().endsWith("/auth/oidc/config") && response.ok(),
+    );
+    releaseOIDCConfig();
+    await oidcConfigResponse;
+  } finally {
+    releaseOIDCConfig();
+    await reducedMotionContext.close();
+  }
   expect(runtimeErrors).toEqual([]);
 });
 

@@ -126,6 +126,7 @@ export type Repository = {
   mavenStrictPublication: boolean;
   egressProxy?: EgressProxy;
   upstreamAuth?: UpstreamAuth;
+  ociBearer?: OciBearer;
   /**
    * Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
    */
@@ -158,6 +159,7 @@ export type CreateRepository = {
   mavenStrictPublication?: boolean;
   egressProxy?: EgressProxy;
   upstreamAuth?: UpstreamAuth;
+  ociBearer?: OciBearer;
 };
 
 export type Group = {
@@ -1886,6 +1888,20 @@ export type UpstreamAuth = {
   readonly credentialsConfigured?: boolean;
 };
 
+/**
+ * Optional anonymous upstream Bearer challenge exchange for OCI Proxy repositories only. Omitted configuration preserves legacy reads and disables token exchange. The realm and service bind the approved issuer and audience; this object never contains credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null.
+ */
+export type OciBearer = {
+  /**
+   * Exact complete HTTPS token-service URL. The first exchange contract rejects userinfo, all query parameters, and fragments.
+   */
+  realm: string;
+  /**
+   * Exact challenge audience. At most 256 UTF-8 bytes; no whitespace or control characters.
+   */
+  service: string;
+};
+
 export type RepositoryGrantRecord = {
   repositoryId: string;
   repositoryName: string;
@@ -2009,6 +2025,7 @@ export type UpdateRepository = {
   mavenStrictPublication?: boolean;
   egressProxy?: EgressProxy;
   upstreamAuth?: UpstreamAuth;
+  ociBearer?: OciBearer;
 };
 
 /**
@@ -2504,6 +2521,7 @@ export type RepositoryWritable = {
   mavenStrictPublication: boolean;
   egressProxy?: EgressProxyWritable;
   upstreamAuth?: UpstreamAuthWritable;
+  ociBearer?: OciBearer;
   /**
    * Deletion is asynchronous. Protocol access stops in deleting; the worker advances it to deleted. The metadata row remains as an audit anchor.
    */
@@ -2536,6 +2554,7 @@ export type CreateRepositoryWritable = {
   mavenStrictPublication?: boolean;
   egressProxy?: EgressProxyWritable;
   upstreamAuth?: UpstreamAuthWritable;
+  ociBearer?: OciBearer;
 };
 
 export type RepositoryPageWritable = {
@@ -2666,6 +2685,7 @@ export type UpdateRepositoryWritable = {
   mavenStrictPublication?: boolean;
   egressProxy?: EgressProxyWritable;
   upstreamAuth?: UpstreamAuthWritable;
+  ociBearer?: OciBearer;
 };
 
 export type RepositoryId = string;

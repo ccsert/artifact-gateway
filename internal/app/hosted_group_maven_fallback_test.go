@@ -75,7 +75,7 @@ func newGroupMavenFixture(t *testing.T, objects OCIObjectStore, statuses ...int)
 		t.Fatal(err)
 	}
 	f.cache = NewMavenCache(objects, time.Hour, time.Hour, time.Minute, time.Minute, hosts)
-	f.gateway = httptest.NewServer(NewGatewayHandlerWithCaches(Dependencies{NativeMavenObjectStore: NewMemoryOCIObjectStore()}, f.store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), f.cache, UpstreamClient{}))
+	f.gateway = httptest.NewServer(NewGatewayHandlerWithCaches(Dependencies{NativeMavenObjectStore: NewMemoryOCIObjectStore()}, f.store, TestAdapter{}, testAuthenticator(), NewDefaultOCICache(NewMemoryOCIObjectStore(), nil), f.cache, UpstreamClient{AllowHTTPForTesting: true}))
 	t.Cleanup(f.gateway.Close)
 	return f
 }
