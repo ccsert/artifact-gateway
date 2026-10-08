@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+## 0.8.0 - 2026-10-08
+
 - 将 `golang.org/x/text` 更新至 v0.41.0，修复既有 PostgreSQL 连接依赖路径中的 GO-2026-6629。
 
 - 原生 OCI Proxy 仓库可通过 V2 `ociBearer` 签发者／受众配置显式启用匿名上游 Bearer 交换。PATCH 省略字段时保留，显式 null 清除；Hosted、其他格式和旧 Group member 设置拒绝该字段。迁移 000144 仅持久化配置，token 保持临时状态；签发者信任不授予出站许可。
