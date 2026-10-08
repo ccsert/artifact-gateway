@@ -2,7 +2,9 @@ import { App } from "antd";
 import {
   act,
   cleanup,
+  configure,
   fireEvent,
+  getConfig,
   render,
   screen,
   waitFor,
@@ -79,7 +81,10 @@ const clipboardDescriptor = Object.getOwnPropertyDescriptor(
   "clipboard",
 );
 
+const defaultAsyncWrapper = getConfig().asyncWrapper;
+
 afterEach(() => {
+  configure({ asyncWrapper: defaultAsyncWrapper });
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -149,6 +154,9 @@ describe("incremental runtime log controls", () => {
   });
 
   it("rechecks an empty native selection at click time even without a selection event", async () => {
+    // Observe the committed row without Testing Library draining passive effects.
+    // The selection must be created after the snapshot reset effect settles.
+    configure({ asyncWrapper: async (callback) => callback() });
     api.mockResolvedValue(reply(page(1, 1)));
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
@@ -157,6 +165,7 @@ describe("incremental runtime log controls", () => {
     });
     mount();
     await screen.findByText("event-1");
+    await act(async () => {});
     const range = document.createRange();
     range.selectNodeContents(screen.getByText("event-1"));
     const selection = window.getSelection()!;
