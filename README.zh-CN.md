@@ -19,7 +19,7 @@
   <a href="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ccsert/artifact-gateway/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/ccsert/artifact-gateway/releases/tag/v0.4.0"><img alt="Release 0.4.0" src="https://img.shields.io/badge/release-0.4.0-2563EB"></a>
   <a href="LICENSE"><img alt="开源许可：MIT" src="https://img.shields.io/badge/license-MIT-22C55E"></a>
-  <img alt="Go 1.26.6" src="https://img.shields.io/badge/Go-1.26.6-00ADD8?logo=go&logoColor=white">
+  <img alt="Go 1.26.9" src="https://img.shields.io/badge/Go-1.26.9-00ADD8?logo=go&logoColor=white">
   <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white">
   <img alt="S3 兼容对象存储" src="https://img.shields.io/badge/Object_storage-S3_compatible-06B6D4">
   <img alt="状态：早期版本" src="https://img.shields.io/badge/status-early_release-6B7280">

@@ -172,7 +172,7 @@ single-flight。另有确定性测试会让锁跨越缩短后的租约，并验�
 
 ## 复现基线
 
-前置条件为支持 Compose v2 的 Docker、Go 1.26.6、ApacheBench（`ab`）、curl、jq、
+前置条件为支持 Compose v2 的 Docker、Go 1.26.9、ApacheBench（`ab`）、curl、jq、
 OpenSSL、Python 3、gzip 和标准 POSIX 工具。
 
 ```sh
