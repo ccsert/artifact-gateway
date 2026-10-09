@@ -13,7 +13,9 @@ their meaning.
 
 ## 0.8.0 - 2026-10-08
 
-- Update `golang.org/x/text` to v0.41.0 to address GO-2026-6629 in the existing PostgreSQL connection dependency path.
+- Build Gateway and Go sidecars with Go 1.26.9 to address the standard-library vulnerabilities detected by release dependency audit, and update `golang.org/x/net` to v0.60.0 with its required module closure; retain strict audit with no new exception.
+
+- Update `golang.org/x/text` to v0.42.0 to address GO-2026-6629 in the existing PostgreSQL connection dependency path.
 
 - Native OCI Proxy repositories can opt into anonymous upstream Bearer exchange with the V2 `ociBearer` issuer/audience configuration. PATCH omission preserves it and explicit null clears it; Hosted repositories, other formats and legacy Group member settings reject the field. Migration 000144 persists configuration only; tokens remain ephemeral. Issuer trust does not grant egress permission.
 

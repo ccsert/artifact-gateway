@@ -196,7 +196,7 @@ and [`reports/raw-proxy-cold-upstream-2026-08-21.csv`](reports/raw-proxy-cold-up
 
 ## Reproduce the baseline
 
-Prerequisites are Docker with Compose v2, Go 1.26.6, ApacheBench (`ab`), curl,
+Prerequisites are Docker with Compose v2, Go 1.26.9, ApacheBench (`ab`), curl,
 jq, OpenSSL, Python 3, gzip, and standard POSIX utilities.
 
 ```sh
