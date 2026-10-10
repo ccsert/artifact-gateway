@@ -347,6 +347,9 @@ describe("incremental runtime log controls", () => {
   });
 
   it("keeps refresh data after failure, but discards protected data on permission revocation", async () => {
+    // Observe the committed snapshot before passive effects drain. Ant Design
+    // may still ignore clicks while loading without setting HTML disabled.
+    configure({ asyncWrapper: async (callback) => callback() });
     api
       .mockResolvedValueOnce(reply(page(1, 1)))
       .mockRejectedValueOnce({
@@ -361,20 +364,22 @@ describe("incremental runtime log controls", () => {
       });
     mount();
     await screen.findByText("event-1");
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: /刷新快照/ }),
-      ).not.toBeDisabled(),
-    );
+    await waitFor(() => {
+      const refresh = screen.getByRole("button", { name: /刷新快照/ });
+      expect(refresh).not.toBeDisabled();
+      expect(refresh).not.toHaveClass("ant-btn-loading");
+    });
     fireEvent.click(screen.getByRole("button", { name: /刷新快照/ }));
+    expect(api).toHaveBeenCalledTimes(2);
     await screen.findByText("当前节点未启用内存日志查询，请检查日志缓冲配置。");
     expect(screen.getByText("event-1")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: /刷新快照/ }),
-      ).not.toBeDisabled(),
-    );
+    await waitFor(() => {
+      const refresh = screen.getByRole("button", { name: /刷新快照/ });
+      expect(refresh).not.toBeDisabled();
+      expect(refresh).not.toHaveClass("ant-btn-loading");
+    });
     fireEvent.click(screen.getByRole("button", { name: /刷新快照/ }));
+    expect(api).toHaveBeenCalledTimes(3);
     await screen.findByText("需要先更新密码，之后再查询运行日志。");
     expect(screen.queryByText("event-1")).toBeNull();
     expect(screen.queryByRole("status", { name: /查询运行日志/ })).toBeNull();

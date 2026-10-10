@@ -37,27 +37,27 @@ export function APTAssetDetail({
       }
       extra={
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-zinc-500">
+          <div className="rounded-lg border border-line px-3 py-2">
+            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
               {text("APT 资产类型", "APT asset type")}
             </div>
-            <div className="mt-0.5 text-xs font-semibold text-zinc-100">
+            <div className="mt-0.5 text-xs font-semibold text-fg-strong">
               {assetKind}
             </div>
           </div>
           {meta.cachedAt && (
-            <div className="rounded-lg border border-zinc-800 px-3 py-2">
-              <div className="text-xs uppercase tracking-wider text-zinc-500">
+            <div className="rounded-lg border border-line px-3 py-2">
+              <div className="text-xs uppercase tracking-wider text-fg-tertiary">
                 {text("最近缓存", "Last cached")}
               </div>
-              <div className="mt-0.5 text-xs font-semibold text-zinc-100">
+              <div className="mt-0.5 text-xs font-semibold text-fg-strong">
                 {formatDate(meta.cachedAt, locale)}
               </div>
             </div>
           )}
           {meta.sourceUrl && (
-            <div className="min-w-0 rounded-lg border border-zinc-800 px-3 py-2">
-              <div className="text-xs uppercase tracking-wider text-zinc-500">
+            <div className="min-w-0 rounded-lg border border-line px-3 py-2">
+              <div className="text-xs uppercase tracking-wider text-fg-tertiary">
                 {text("上游地址", "Upstream URL")}
               </div>
               <a

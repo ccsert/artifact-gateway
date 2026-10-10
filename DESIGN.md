@@ -159,7 +159,9 @@ The interface is an **Operate** surface. Density, scanability, predictable Ant D
 
 The palette is neutral-first with a single cool signal family and explicit semantic status colors.
 
-Runtime themes follow [ADR 0005](docs/adr/0005-console-semantic-theme-system.md): a constrained Theme Package is resolved once into typed surface, content, border, action, link, focus, selection, navigation, status, visualization, identity, and effect roles. Ant Design component tokens and custom CSS variables consume that same projection. Page CSS must name a semantic role rather than a palette color.
+Runtime themes follow [ADR 0005](docs/adr/0005-console-semantic-theme-system.md): a constrained Theme Package is resolved once into typed surface, content, border, action, link, focus, selection, navigation, status, visualization, identity, and effect roles. Ant Design component tokens and custom CSS variables consume that same projection. Page CSS must name a semantic role rather than a palette color. Markup does the same through the semantic utilities defined in `console/src/styles.css` (`text-fg-strong`, `text-fg`, `text-fg-secondary`, `text-fg-tertiary`, `text-fg-disabled`, `border-line`, `divide-line`, `bg-surface`, `bg-surface-translucent`, `bg-surface-hover`, `bg-canvas`, `text-on-identity`); a unit test rejects raw palette utilities such as `text-zinc-500` or `bg-white/10`.
+
+An explicit foreground role applied directly to an Ant Design button or icon uses the Tailwind important modifier (for example, `text-fg-tertiary!`) to preserve that role over Ant Design’s unlayered component styles. Verify the actual foreground in both themes and relevant interaction states.
 
 ### Action and Signal
 

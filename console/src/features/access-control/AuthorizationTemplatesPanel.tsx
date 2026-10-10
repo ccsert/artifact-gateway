@@ -214,7 +214,7 @@ export function AuthorizationTemplatesPanel({
         <div className="text-xs font-medium">
           {text(preset.name, preset.nameEn)}
         </div>
-        <div className="text-xs text-zinc-500">
+        <div className="text-xs text-fg-tertiary">
           {text(preset.description, preset.descriptionEn)}
         </div>
       </div>
@@ -349,7 +349,7 @@ export function AuthorizationTemplatesPanel({
       render: (_, template) => (
         <div>
           <Typography.Text strong>{template.name}</Typography.Text>
-          <div className="text-xs text-zinc-500">
+          <div className="text-xs text-fg-tertiary">
             {template.description || text("无描述", "No description")}
           </div>
         </div>
@@ -442,7 +442,7 @@ export function AuthorizationTemplatesPanel({
           </Space>
         }
       />
-      <div className="px-5 py-3 text-xs text-zinc-500">
+      <div className="px-5 py-3 text-xs text-fg-tertiary">
         <SafetyCertificateOutlined className="mr-2 text-[var(--ag-content-tertiary)]" />
         {text(
           "模板只保存可复用规则，不会自动修改仓库；应用时会检查仓库当前版本。",
@@ -511,7 +511,7 @@ export function AuthorizationTemplatesPanel({
             onChange={(event) => setDraftDescription(event.target.value)}
           />
         </div>
-        <div className="mt-3 text-xs leading-5 text-zinc-500">
+        <div className="mt-3 text-xs leading-5 text-fg-tertiary">
           {text(
             "主体支持选择已知用户或 API Key，也可以直接填写 OIDC / CI actor。资源前缀留空表示整个仓库；下拉建议按仓库格式提供常见写法。",
             "Choose a known user or API key, or enter an OIDC / CI actor directly. Leave the resource prefix blank for the entire repository; suggestions follow the repository format.",
@@ -725,7 +725,7 @@ export function AuthorizationTemplatesPanel({
             <ErrorBanner error={applyError} />
           </div>
         )}
-        <p className="mb-3 text-sm text-zinc-500">
+        <p className="mb-3 text-sm text-fg-tertiary">
           {text(
             "选择目标仓库。应用会替换该仓库现有授权规则，并保留并发版本保护。",
             "Choose a target repository. Applying replaces its current grants with optimistic concurrency protection.",

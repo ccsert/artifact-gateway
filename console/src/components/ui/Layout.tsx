@@ -15,11 +15,11 @@ export function PageHeader({
   return (
     <div className="ag-page-header flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="text-[22px] font-semibold tracking-tight text-zinc-50">
+        <h1 className="text-[22px] font-semibold tracking-tight text-fg-strong">
           {title}
         </h1>
         {description && (
-          <p className="mt-1 text-sm text-zinc-500">{description}</p>
+          <p className="mt-1 text-sm text-fg-tertiary">{description}</p>
         )}
       </div>
       {actions && (
@@ -63,8 +63,8 @@ export function CardHeader({
   extra?: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between border-b border-zinc-800/60 px-5 py-3">
-      <h2 className="text-sm font-semibold tracking-tight text-zinc-100">
+    <div className="flex items-center justify-between border-b border-line px-5 py-3">
+      <h2 className="text-sm font-semibold tracking-tight text-fg-strong">
         {title}
       </h2>
       {extra}
@@ -86,15 +86,15 @@ export function StatCard({
   return (
     <Card bodyClassName="px-5 py-4">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+        <span className="text-xs font-medium uppercase tracking-wider text-fg-tertiary">
           {label}
         </span>
-        {icon && <span className="text-zinc-600">{icon}</span>}
+        {icon && <span className="text-fg-disabled">{icon}</span>}
       </div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight text-zinc-50">
+      <div className="mt-2 text-2xl font-semibold tracking-tight text-fg-strong">
         {value}
       </div>
-      {sub && <div className="mt-1 text-xs text-zinc-500">{sub}</div>}
+      {sub && <div className="mt-1 text-xs text-fg-tertiary">{sub}</div>}
     </Card>
   );
 }
@@ -116,7 +116,7 @@ export function Pagination({
   if (!hasMore) return null;
   const actionLabel = label ?? text("加载更多", "Load more");
   return (
-    <div className="ag-pagination-footer flex justify-end border-t border-zinc-800/60 px-4 py-3">
+    <div className="ag-pagination-footer flex justify-end border-t border-line px-4 py-3">
       <Button
         icon={<DownOutlined />}
         onClick={onMore}
@@ -148,12 +148,12 @@ export function Field({
   if (group) {
     return (
       <fieldset className="min-w-0 border-0 p-0">
-        <legend className="mb-1.5 block text-xs font-medium text-zinc-400">
+        <legend className="mb-1.5 block text-xs font-medium text-fg-secondary">
           {label}
         </legend>
         {children}
         {hint && (
-          <span className="mt-1 block text-xs text-zinc-600">{hint}</span>
+          <span className="mt-1 block text-xs text-fg-disabled">{hint}</span>
         )}
       </fieldset>
     );
@@ -161,7 +161,7 @@ export function Field({
   return (
     <div className="block">
       <label className="block" htmlFor={id}>
-        <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+        <span className="mb-1.5 block text-xs font-medium text-fg-secondary">
           {label}
         </span>
         {children}
@@ -169,7 +169,7 @@ export function Field({
       {hint && (
         <span
           id={id && `${id}-hint`}
-          className="mt-1 block text-xs text-zinc-600"
+          className="mt-1 block text-xs text-fg-disabled"
         >
           {hint}
         </span>

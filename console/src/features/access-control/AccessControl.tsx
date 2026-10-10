@@ -225,10 +225,10 @@ function Principal({ value }: { value: string }) {
   if (value.startsWith("user:")) {
     return (
       <div>
-        <div className="text-xs font-medium text-zinc-200">
+        <div className="text-xs font-medium text-fg">
           {text("用户", "User")} · {value.slice("user:".length)}
         </div>
-        <div className="mt-0.5 font-mono text-xs text-zinc-600">{value}</div>
+        <div className="mt-0.5 font-mono text-xs text-fg-disabled">{value}</div>
       </div>
     );
   }
@@ -238,17 +238,17 @@ function Principal({ value }: { value: string }) {
       <CopyableValue
         value={value}
         label={`${text("服务账号", "Service account")} · ${id.slice(0, 8)}${id.length > 8 ? "…" : ""}`}
-        className="text-xs text-zinc-200"
+        className="text-xs text-fg"
       />
     );
   }
   if (!value.startsWith("api-key:")) {
     return (
       <div>
-        <div className="text-xs font-medium text-zinc-200">
+        <div className="text-xs font-medium text-fg">
           {text("OIDC / 自定义", "OIDC / custom")}
         </div>
-        <div className="mt-0.5 font-mono text-xs text-zinc-500">{value}</div>
+        <div className="mt-0.5 font-mono text-xs text-fg-tertiary">{value}</div>
       </div>
     );
   }
@@ -257,7 +257,7 @@ function Principal({ value }: { value: string }) {
     <CopyableValue
       value={value}
       label={`API Key · ${id.slice(0, 8)}${id.length > 8 ? "…" : ""}`}
-      className="text-xs text-zinc-200"
+      className="text-xs text-fg"
     />
   );
 }
@@ -734,7 +734,7 @@ export function AccessControlPage() {
       key: "resourcePrefix",
       width: 240,
       render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-500">
+        <span className="font-mono text-xs text-fg-tertiary">
           {value || text("整个仓库", "Entire repository")}
         </span>
       ),
@@ -949,13 +949,13 @@ export function AccessControlPage() {
             children: (
               <div className="ag-page-stack">
                 <Card bodyClassName="p-0">
-                  <div className="flex items-start justify-between gap-6 border-b border-zinc-800/70 px-5 py-4">
+                  <div className="flex items-start justify-between gap-6 border-b border-line px-5 py-4">
                     <div>
-                      <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-fg-strong">
                         <ExperimentOutlined className="text-[var(--ag-content-tertiary)]" />
                         {text("权限检查", "Access evaluation")}
                       </div>
-                      <p className="mt-1 text-xs text-zinc-500">
+                      <p className="mt-1 text-xs text-fg-tertiary">
                         {text(
                           "使用网关真实判定链检查全局角色、仓库授权和资源前缀叠加后的结果。",
                           "Run the Gateway decision chain across global roles, repository grants, and resource prefixes.",
@@ -1111,7 +1111,7 @@ export function AccessControlPage() {
                             onPressEnter={() => void runEvaluation()}
                           />
                         </FilterField>
-                        <div className="col-span-3 flex items-end pb-2 text-xs text-zinc-600">
+                        <div className="col-span-3 flex items-end pb-2 text-xs text-fg-disabled">
                           {text(
                             "该值必须与认证完成后产生的 actor 完全一致；OIDC 角色需按实际映射结果选择。",
                             "This must exactly match the authenticated actor; choose the global role produced by the OIDC mapping.",
@@ -1125,8 +1125,8 @@ export function AccessControlPage() {
                       </div>
                     )}
                     {evaluation && (
-                      <div className="mt-4 border-t border-zinc-800/70 pt-4">
-                        <div className="mb-3 flex min-w-0 items-center gap-2 text-xs text-zinc-500">
+                      <div className="mt-4 border-t border-line pt-4">
+                        <div className="mb-3 flex min-w-0 items-center gap-2 text-xs text-fg-tertiary">
                           <Badge
                             tone={evaluation.simulated ? "info" : "success"}
                           >
@@ -1134,7 +1134,7 @@ export function AccessControlPage() {
                               ? text("模拟结果", "Simulated")
                               : text("当前身份", "Current identity")}
                           </Badge>
-                          <span className="font-mono text-zinc-300">
+                          <span className="font-mono text-fg-secondary">
                             {evaluation.actor}
                           </span>
                           <span>·</span>
@@ -1156,19 +1156,19 @@ export function AccessControlPage() {
                     {
                       key: "authorization",
                       label: (
-                        <span className="text-xs text-zinc-400">
+                        <span className="text-xs text-fg-secondary">
                           {text(
                             "权限判定顺序与角色能力",
                             "Authorization order and roles",
                           )}{" "}
-                          <span className="ml-2 text-zinc-600">
+                          <span className="ml-2 text-fg-disabled">
                             {text("了解规则如何叠加", "How rules combine")}
                           </span>
                         </span>
                       ),
                       children: (
                         <div>
-                          <p className="mb-4 text-xs leading-5 text-zinc-500">
+                          <p className="mb-4 text-xs leading-5 text-fg-tertiary">
                             {text(
                               "仓库规则只追加权限，不能撤销全局角色。",
                               "Repository rules add permissions; they cannot revoke a global role.",
@@ -1178,23 +1178,23 @@ export function AccessControlPage() {
                             {AUTHORIZATION_STEPS.map((step, index) => (
                               <div
                                 key={step.title}
-                                className="border-l border-zinc-700 pl-3"
+                                className="border-l border-line pl-3"
                               >
-                                <div className="text-xs font-medium text-zinc-300">
+                                <div className="text-xs font-medium text-fg-secondary">
                                   {index + 1}.{" "}
                                   {english ? step.titleEn : step.title}
                                 </div>
-                                <p className="mt-1 text-xs leading-5 text-zinc-500">
+                                <p className="mt-1 text-xs leading-5 text-fg-tertiary">
                                   {english ? step.textEn : step.text}
                                 </p>
                               </div>
                             ))}
                           </div>
-                          <div className="mt-5 grid grid-cols-3 gap-3 border-t border-zinc-800/80 pt-4">
+                          <div className="mt-5 grid grid-cols-3 gap-3 border-t border-line pt-4">
                             {ROLE_REFERENCE.map((item) => (
                               <div
                                 key={item.role}
-                                className="flex items-start gap-2 text-xs text-zinc-400"
+                                className="flex items-start gap-2 text-xs text-fg-secondary"
                               >
                                 <Badge tone={item.tone}>{item.role}</Badge>
                                 <span>{english ? item.descEn : item.desc}</span>
@@ -1218,10 +1218,10 @@ export function AccessControlPage() {
                   <div className="grid gap-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                        <h2 className="text-sm font-semibold text-zinc-100">
+                        <h2 className="text-sm font-semibold text-fg-strong">
                           {text("公开访问边界", "Public access boundary")}
                         </h2>
-                        <span className="text-xs text-zinc-500">
+                        <span className="text-xs text-fg-tertiary">
                           {text(
                             `${publicRepositoryCount} / ${repositories.length} 个仓库公开`,
                             `${publicRepositoryCount} / ${repositories.length} repositories public`,
@@ -1274,7 +1274,7 @@ export function AccessControlPage() {
                         </Popconfirm>
                       ) : canManageAnonymousPolicy ? (
                         anonymousPolicyError === null ? (
-                          <span className="text-xs text-zinc-500">
+                          <span className="text-xs text-fg-tertiary">
                             {text("加载中…", "Loading…")}
                           </span>
                         ) : null

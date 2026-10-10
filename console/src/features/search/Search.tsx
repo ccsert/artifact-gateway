@@ -248,7 +248,7 @@ export function SearchPage() {
           <div>
             <div className="flex min-w-0 items-center gap-2">
               <span
-                className="truncate font-mono text-xs text-zinc-200"
+                className="truncate font-mono text-xs text-fg"
                 title={displayCoordinate}
                 dir="auto"
               >
@@ -308,7 +308,7 @@ export function SearchPage() {
       key: "versionOrSize",
       width: 150,
       render: (_, tableRow) => (
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-fg-secondary">
           {isMavenGroup(tableRow.row)
             ? text(
                 `${tableRow.row.hits.length} 个版本`,
@@ -338,7 +338,7 @@ export function SearchPage() {
       key: "createdAt",
       width: 180,
       render: (_, tableRow) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(tableRow.representative.createdAt, locale)}
         </span>
       ),
@@ -406,10 +406,10 @@ export function SearchPage() {
         <div className="px-2 py-1">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-medium text-zinc-200">
+              <div className="text-sm font-medium text-fg">
                 {text("版本与构建", "Versions and builds")}
               </div>
-              <div className="mt-1 text-xs text-zinc-500">
+              <div className="mt-1 text-xs text-fg-tertiary">
                 {text(
                   "选择版本查看 POM、digest 和发布信息",
                   "Select a version to view its POM, digest, and publication details",
@@ -424,24 +424,24 @@ export function SearchPage() {
               {text("打开最新版本", "Open latest version")}
             </Button>
           </div>
-          <div className="max-h-64 overflow-y-auto rounded-md border border-zinc-800/80">
+          <div className="max-h-64 overflow-y-auto rounded-md border border-line">
             {row.hits.map((versionHit) => {
               const versionKey = `${row.key}:${versionHit.coordinate}:${versionHit.buildNumber ?? 0}`;
               const selected = selectedVersion === versionKey;
               return (
                 <div
                   key={versionKey}
-                  className={`flex items-center justify-between gap-4 border-b border-zinc-800/60 px-3 py-2 last:border-b-0 ${selected ? "bg-[var(--ag-navigation-selected-start)]" : ""}`}
+                  className={`flex items-center justify-between gap-4 border-b border-line px-3 py-2 last:border-b-0 ${selected ? "bg-[var(--ag-navigation-selected-start)]" : ""}`}
                 >
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-left"
                     onClick={() => setSelectedVersion(versionKey)}
                   >
-                    <div className="truncate font-mono text-xs text-zinc-200">
+                    <div className="truncate font-mono text-xs text-fg">
                       {mavenVersionLabel(versionHit)}
                     </div>
-                    <div className="mt-0.5 text-xs text-zinc-500">
+                    <div className="mt-0.5 text-xs text-fg-tertiary">
                       {formatDate(versionHit.createdAt, locale)} ·{" "}
                       {formatBytes(versionHit.size)} ·{" "}
                       {versionHit.publisher ??
@@ -461,7 +461,7 @@ export function SearchPage() {
                             label={versionHit.digest.slice(0, 14)}
                           />
                         ) : (
-                          <span className="text-xs text-zinc-600">
+                          <span className="text-xs text-fg-disabled">
                             {text("无 digest", "No digest")}
                           </span>
                         )}
@@ -513,14 +513,14 @@ export function SearchPage() {
             ]}
           />
           {hit.digest && (
-            <div className="mb-4 rounded-md border border-zinc-800/80 bg-zinc-950/40 px-3 py-2.5">
-              <div className="mb-1 text-xs font-medium text-zinc-500">
+            <div className="mb-4 rounded-md border border-line bg-surface-translucent px-3 py-2.5">
+              <div className="mb-1 text-xs font-medium text-fg-tertiary">
                 SHA-256 Digest
               </div>
               <CopyableValue
                 value={hit.digest}
                 label={hit.digest}
-                className="w-full text-xs text-zinc-300"
+                className="w-full text-xs text-fg-secondary"
               />
             </div>
           )}
@@ -578,8 +578,8 @@ export function SearchPage() {
           ]}
         />
         {row.digest && (
-          <div className="mb-4 rounded-md border border-zinc-800/80 bg-zinc-950/40 px-3 py-2.5">
-            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-zinc-500">
+          <div className="mb-4 rounded-md border border-line bg-surface-translucent px-3 py-2.5">
+            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-fg-tertiary">
               <span>SHA-256 Digest</span>
               <Badge
                 tone={
@@ -594,7 +594,7 @@ export function SearchPage() {
             <CopyableValue
               value={row.digest}
               label={row.digest}
-              className="w-full text-xs text-zinc-300"
+              className="w-full text-xs text-fg-secondary"
             />
           </div>
         )}
@@ -799,7 +799,7 @@ export function SearchPage() {
             ]}
           />
           {error && <ErrorBanner error={error} />}
-          <div className="overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-900/20">
+          <div className="overflow-hidden rounded-lg border border-line bg-surface-translucent">
             <ConsoleTable<SearchTableRow>
               rowKey="key"
               dataSource={tableRows}

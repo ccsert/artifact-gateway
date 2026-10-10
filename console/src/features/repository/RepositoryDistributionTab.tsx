@@ -339,7 +339,7 @@ export function RepositoryDistributionTab({
       key: "id",
       width: 150,
       render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-500" title={value}>
+        <span className="font-mono text-xs text-fg-tertiary" title={value}>
           {value.slice(0, 8)}…
         </span>
       ),
@@ -350,7 +350,7 @@ export function RepositoryDistributionTab({
       key: "targetRepositoryId",
       width: 220,
       render: (value: string) => (
-        <span className="text-xs text-zinc-300">{repoName(value)}</span>
+        <span className="text-xs text-fg-secondary">{repoName(value)}</span>
       ),
     },
     {
@@ -366,7 +366,7 @@ export function RepositoryDistributionTab({
       key: "createdAt",
       width: 180,
       render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(value)}
         </span>
       ),
@@ -377,7 +377,7 @@ export function RepositoryDistributionTab({
       key: "completedAt",
       width: 180,
       render: (value?: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(value)}
         </span>
       ),
@@ -423,7 +423,7 @@ export function RepositoryDistributionTab({
       width: 280,
       render: (value: string) => (
         <span
-          className="block max-w-64 truncate font-mono text-xs text-zinc-300"
+          className="block max-w-64 truncate font-mono text-xs text-fg-secondary"
           title={value}
         >
           {value}
@@ -436,7 +436,7 @@ export function RepositoryDistributionTab({
       key: "digest",
       width: 180,
       render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-500">
+        <span className="font-mono text-xs text-fg-tertiary">
           {shortDigest(value)}
         </span>
       ),
@@ -447,7 +447,7 @@ export function RepositoryDistributionTab({
       key: "size",
       width: 120,
       render: (value: number) => (
-        <span className="text-xs text-zinc-400">{formatBytes(value)}</span>
+        <span className="text-xs text-fg-secondary">{formatBytes(value)}</span>
       ),
     },
     {
@@ -455,7 +455,7 @@ export function RepositoryDistributionTab({
       key: "progress",
       width: 110,
       render: (_, checkpoint) => (
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-fg-secondary">
           {checkpoint.size > 0
             ? `${Math.round((checkpoint.byteOffset / checkpoint.size) * 100)}%`
             : "—"}
@@ -475,7 +475,7 @@ export function RepositoryDistributionTab({
       key: "attempts",
       width: 90,
       render: (value: number) => (
-        <span className="text-xs text-zinc-500">{value}</span>
+        <span className="text-xs text-fg-tertiary">{value}</span>
       ),
     },
   ];
@@ -489,12 +489,12 @@ export function RepositoryDistributionTab({
       )}
 
       {/* 发起表单 */}
-      <div className="rounded-lg border border-zinc-800 p-4">
+      <div className="rounded-lg border border-line p-4">
         <div className="mb-4">
-          <div className="text-sm font-medium text-zinc-200">
+          <div className="text-sm font-medium text-fg">
             {text("发起晋升 / 复制", "Start promotion / replication")}
           </div>
-          <p className="mt-1 max-w-3xl text-xs leading-5 text-zinc-500">
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-fg-tertiary">
             {text(
               "选择不可变制品和同格式目标仓库。晋升经目标仓安全准入后发布副本；复制创建可续传计划，不代表通过安全准入。",
               "Select an immutable artifact and a target repository of the same format. Promotion publishes a copy after target admission; replication creates a resumable plan without security approval.",
@@ -624,10 +624,10 @@ export function RepositoryDistributionTab({
 
         {selectedArtifact && !manualIdentity && (
           <div className="mt-3 rounded-md border border-[var(--ag-status-info-border)] bg-[var(--ag-status-info-soft)] px-3 py-2.5">
-            <p className="break-all font-mono text-xs text-zinc-200">
+            <p className="break-all font-mono text-xs text-fg">
               {selectedArtifact.coordinate}
             </p>
-            <p className="mt-0.5 break-all font-mono text-xs text-zinc-500">
+            <p className="mt-0.5 break-all font-mono text-xs text-fg-tertiary">
               {selectedArtifact.digest}
             </p>
           </div>
@@ -672,7 +672,7 @@ export function RepositoryDistributionTab({
           </div>
         )}
 
-        <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-zinc-800/70 pt-3">
+        <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-line pt-3">
           <div className="flex flex-wrap justify-end gap-2">
             <Button
               loading={evaluating}
@@ -749,7 +749,7 @@ export function RepositoryDistributionTab({
                     )}
                   </p>
                 )}
-                <div className="flex flex-wrap gap-x-5 gap-y-1 text-zinc-500">
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-fg-tertiary">
                   <span>
                     {text("策略版本", "Policy version")}:{" "}
                     {evaluation.policyVersion}
@@ -787,7 +787,7 @@ export function RepositoryDistributionTab({
 
       {/* 复制计划列表 */}
       <div>
-        <div className="mb-2 text-sm font-medium text-zinc-200">
+        <div className="mb-2 text-sm font-medium text-fg">
           {text(
             `复制计划（${plans?.length ?? 0}）`,
             `Replication plans (${plans?.length ?? 0})`,
@@ -817,7 +817,7 @@ export function RepositoryDistributionTab({
       >
         {detail && (
           <div className="space-y-4">
-            <div className="flex flex-wrap gap-4 text-xs text-zinc-400">
+            <div className="flex flex-wrap gap-4 text-xs text-fg-secondary">
               <span>
                 {text("状态：", "Status: ")}
                 <StateBadge state={detail.state} />
@@ -837,7 +837,7 @@ export function RepositoryDistributionTab({
               )}
             </div>
             {detail.checkpoints.length === 0 ? (
-              <p className="py-4 text-center text-sm text-zinc-500">
+              <p className="py-4 text-center text-sm text-fg-tertiary">
                 {text("暂无检查点", "No checkpoints")}
               </p>
             ) : (

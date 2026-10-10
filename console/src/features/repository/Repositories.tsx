@@ -196,7 +196,7 @@ function CreateRepositoryDialog({
                     : text("代理 (proxy)", "Proxy"),
               }))}
             />
-            <span className="mt-1 block text-xs text-zinc-600">
+            <span className="mt-1 block text-xs text-fg-disabled">
               {type === "hosted"
                 ? text("自己托管制品，可推送", "Host and publish artifacts")
                 : text("从上游仓库拉取并缓存", "Fetch and cache from upstream")}
@@ -229,12 +229,12 @@ function CreateRepositoryDialog({
             />
           </Field>
           {type === "hosted" && selectedFormat === "maven" && (
-            <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-line bg-surface-translucent px-4 py-3">
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-zinc-200">
+                <div className="text-sm font-medium text-fg">
                   {text("严格发布", "Strict publication")}
                 </div>
-                <div className="mt-1 max-w-[62ch] text-xs leading-5 text-zinc-500">
+                <div className="mt-1 max-w-[62ch] text-xs leading-5 text-fg-tertiary">
                   {text(
                     "默认关闭：Maven/Gradle 标准上传成功后立即可读，便于从 Nexus 直接迁移。开启后，同一坐标会在 Gateway commit 成功前保持不可见。",
                     "Off by default: successful standard Maven/Gradle uploads are immediately readable for Nexus-compatible migration. When enabled, a coordinate stays hidden until its Gateway commit succeeds.",
@@ -484,17 +484,17 @@ export function RepositoriesPage() {
         const capacity = capacities[repository.id];
         return capacity ? (
           <div>
-            <div className="font-mono text-xs text-zinc-300">
+            <div className="font-mono text-xs text-fg-secondary">
               {formatBytes(capacity.usedBytes)}
             </div>
             {capacity.quotaBytes > 0 && (
-              <div className="mt-1 text-xs text-zinc-600">
+              <div className="mt-1 text-xs text-fg-disabled">
                 / {formatBytes(capacity.quotaBytes)}
               </div>
             )}
           </div>
         ) : (
-          <span className="text-xs text-zinc-600">—</span>
+          <span className="text-xs text-fg-disabled">—</span>
         );
       },
     },
@@ -505,7 +505,7 @@ export function RepositoriesPage() {
       ellipsis: true,
       render: (_value, repository) => (
         <span
-          className="font-mono text-xs text-zinc-500"
+          className="font-mono text-xs text-fg-tertiary"
           title={
             repository.type === "proxy"
               ? repository.endpoint
@@ -527,7 +527,7 @@ export function RepositoriesPage() {
         <CopyableValue
           value={id}
           label={`${id.slice(0, 8)}…`}
-          className="text-xs text-zinc-500"
+          className="text-xs text-fg-tertiary"
         />
       ),
     },
@@ -554,7 +554,7 @@ export function RepositoriesPage() {
         ) : repository.state === "deleting" ? (
           <Badge tone="warning">{text("删除中", "Deleting")}</Badge>
         ) : (
-          <span className="text-xs text-zinc-600">—</span>
+          <span className="text-xs text-fg-disabled">—</span>
         ),
     },
   ];
@@ -771,7 +771,7 @@ export function RepositoriesPage() {
         message={
           <>
             {text("确定要删除仓库", "Delete repository")}{" "}
-            <span className="font-mono text-zinc-100">{toDelete?.name}</span>{" "}
+            <span className="font-mono text-fg-strong">{toDelete?.name}</span>{" "}
             {text(
               "吗？仓库会立即停止读写并进入 deleting 状态，后台通常在一分钟内完成处理并标记为已删除。此操作不可撤销，审计元数据会保留。",
               "? Reads and writes stop immediately while the repository enters the deleting state. Background cleanup normally completes within one minute. This cannot be undone; audit metadata is retained.",

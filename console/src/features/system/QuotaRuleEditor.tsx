@@ -295,14 +295,14 @@ export function QuotaRuleEditor({
             </Field>
           </div>
           <fieldset className="grid min-w-0 gap-3 border-0 p-0">
-            <legend className="mb-3 text-sm font-semibold text-zinc-100">
+            <legend className="mb-3 text-sm font-semibold text-fg-strong">
               {text("触发警告", "Trigger warning")}
             </legend>
             {fields("warningBasisPoints", "warningForSeconds", [
               "警告",
               "Warning",
             ])}
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-fg-tertiary">
               {text(
                 "用量达到阈值并持续指定时间后触发。",
                 "Triggers after usage reaches the threshold for the specified duration.",
@@ -310,7 +310,7 @@ export function QuotaRuleEditor({
             </p>
           </fieldset>
           <fieldset className="grid min-w-0 gap-3 border-0 p-0">
-            <legend className="mb-3 text-sm font-semibold text-zinc-100">
+            <legend className="mb-3 text-sm font-semibold text-fg-strong">
               {text("升级为严重", "Escalate to critical")}
             </legend>
             {fields("criticalBasisPoints", "criticalForSeconds", [
@@ -319,14 +319,14 @@ export function QuotaRuleEditor({
             ])}
           </fieldset>
           <fieldset className="grid min-w-0 gap-3 border-0 p-0">
-            <legend className="mb-3 text-sm font-semibold text-zinc-100">
+            <legend className="mb-3 text-sm font-semibold text-fg-strong">
               {text("恢复", "Recovery")}
             </legend>
             {fields("recoveryBelowBasisPoints", "recoveryForSeconds", [
               "恢复",
               "Recovery",
             ])}
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-fg-tertiary">
               {text(
                 "用量严格低于恢复阈值并持续指定时间后通知恢复。",
                 "Recovery is notified after usage stays strictly below this threshold for the specified duration.",
@@ -364,7 +364,7 @@ export function QuotaRuleEditor({
               }
             />
           </Field>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-fg-tertiary">
             {rule
               ? text(
                   "保存会重新绑定目标的当前版本，重置持续计时并保留严重度；未领取的旧自动交付会取消，已领取的交付可能完成一次。",

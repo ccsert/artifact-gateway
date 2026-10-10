@@ -141,12 +141,12 @@ function BrandLockup({ collapsed = false }: { collapsed?: boolean }) {
       className="ag-brand-lockup flex items-center"
       data-collapsed={collapsed ? "true" : "false"}
     >
-      <SiteBrandMark className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white" />
+      <SiteBrandMark className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-on-identity" />
       <div className="ag-brand-copy min-w-0">
-        <div className="truncate text-sm font-semibold text-zinc-100">
+        <div className="truncate text-sm font-semibold text-fg-strong">
           <SiteName />
         </div>
-        <div className="text-xs uppercase tracking-widest text-zinc-600">
+        <div className="text-xs uppercase tracking-widest text-fg-disabled">
           Console
         </div>
       </div>
@@ -365,7 +365,7 @@ function ConnectedVersion() {
   return (
     <Link
       to="/system?tab=diagnostics"
-      className="ag-sider-meta text-xs leading-4 text-zinc-500 hover:text-zinc-200"
+      className="ag-sider-meta text-xs leading-4 text-fg-tertiary hover:text-fg"
       title={text(
         "查看当前连接节点的系统诊断",
         "View diagnostics for the connected node",
@@ -430,12 +430,12 @@ export function AppLayout() {
   if (capabilities.pending) {
     return (
       <div className="ag-app-fallback flex min-h-screen items-center justify-center px-6">
-        <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center">
-          <SiteBrandMark className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl text-lg font-bold text-white" />
-          <h1 className="mt-5 text-xl font-semibold text-zinc-100">
+        <div className="w-full max-w-lg rounded-2xl border border-line bg-surface p-8 text-center">
+          <SiteBrandMark className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl text-lg font-bold text-on-identity" />
+          <h1 className="mt-5 text-xl font-semibold text-fg-strong">
             {t("auth.awaitingAuthorization")}
           </h1>
-          <p className="mt-3 text-sm leading-6 text-zinc-400">
+          <p className="mt-3 text-sm leading-6 text-fg-secondary">
             {t("auth.awaitingAuthorizationDescription")}
           </p>
           <Space className="mt-6">
@@ -563,7 +563,7 @@ export function AppLayout() {
           items={menuItems}
         />
         <div
-          className="ag-sider-footer border-t border-zinc-800/60 py-2"
+          className="ag-sider-footer border-t border-line py-2"
           data-collapsed={collapsed ? "true" : "false"}
         >
           {capabilities.platformAdmin && <ConnectedVersion />}
@@ -616,7 +616,7 @@ export function AppLayout() {
           items={menuItems}
           onClick={() => setMobileNavOpen(false)}
         />
-        <div className="ag-mobile-nav-footer text-xs text-zinc-600">
+        <div className="ag-mobile-nav-footer text-xs text-fg-disabled">
           {capabilities.platformAdmin && <ConnectedVersion />}
         </div>
       </Drawer>

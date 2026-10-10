@@ -213,10 +213,10 @@ export function WebhookDeliveriesPanel() {
       width: 210,
       render: (_, subscription) => (
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-zinc-100">
+          <div className="truncate text-sm font-medium text-fg-strong">
             {subscription.name}
           </div>
-          <div className="mt-1 text-xs text-zinc-600">
+          <div className="mt-1 text-xs text-fg-disabled">
             v{subscription.version}
           </div>
         </div>
@@ -229,7 +229,7 @@ export function WebhookDeliveriesPanel() {
       width: 340,
       ellipsis: true,
       render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-400" title={value}>
+        <span className="font-mono text-xs text-fg-secondary" title={value}>
           {value}
         </span>
       ),
@@ -300,7 +300,7 @@ export function WebhookDeliveriesPanel() {
       key: "subscription",
       width: 190,
       render: (subscriptionId: string) => (
-        <span className="text-xs text-zinc-300">
+        <span className="text-xs text-fg-secondary">
           {subscriptionById.get(subscriptionId)?.name ?? subscriptionId}
         </span>
       ),
@@ -311,7 +311,7 @@ export function WebhookDeliveriesPanel() {
       key: "eventType",
       width: 190,
       render: (eventType: WebhookEventType) => (
-        <span className="font-mono text-xs text-zinc-400">{eventType}</span>
+        <span className="font-mono text-xs text-fg-secondary">{eventType}</span>
       ),
     },
     {
@@ -327,7 +327,9 @@ export function WebhookDeliveriesPanel() {
       key: "attempts",
       width: 90,
       render: (attempts: number) => (
-        <span className="font-mono text-xs text-zinc-400">{attempts}/8</span>
+        <span className="font-mono text-xs text-fg-secondary">
+          {attempts}/8
+        </span>
       ),
     },
     {
@@ -335,7 +337,7 @@ export function WebhookDeliveriesPanel() {
       key: "result",
       width: 280,
       render: (_, delivery) => (
-        <div className="min-w-0 text-xs text-zinc-400">
+        <div className="min-w-0 text-xs text-fg-secondary">
           <div>{delivery.lastStatus ? `HTTP ${delivery.lastStatus}` : "—"}</div>
           {delivery.lastError ? (
             <div
@@ -354,7 +356,7 @@ export function WebhookDeliveriesPanel() {
       key: "updatedAt",
       width: 180,
       render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(value, locale)}
         </span>
       ),
@@ -376,7 +378,7 @@ export function WebhookDeliveriesPanel() {
             />
           </Tooltip>
         ) : (
-          <span className="text-xs text-zinc-600">—</span>
+          <span className="text-xs text-fg-disabled">—</span>
         ),
     },
   ];
@@ -619,7 +621,7 @@ export function WebhookDeliveriesPanel() {
                   setForm((current) => ({ ...current, enabled }))
                 }
               />
-              <span className="text-xs text-zinc-400">
+              <span className="text-xs text-fg-secondary">
                 {form.enabled
                   ? text("接收新事件", "Receive new events")
                   : text("暂停生成新投递", "Pause new deliveries")}

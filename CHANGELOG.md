@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Console markup names semantic colour roles (`text-fg-tertiary`, `border-line`, `bg-surface-translucent`, ...) instead of Zinc palette steps; the `!important` compatibility layer that remapped 35 palette classes is removed and a unit test rejects new raw palette utilities. Dividers, the pending-approval card and the public-browse summary grid now follow the light theme instead of staying dark.
+
 - Recent activity on the overview reads as events (operation, object, actor, time, outcome) through the same labels as the audit log, which now also shows outcomes as status text and localizes the actor column. Previously the overview printed raw operation and outcome codes.
 
 - Repository detail groups its thirteen tasks into Artifacts, Governance, Distribution and Settings, with the group's tasks as a secondary bar. Existing `?tab=` deep links keep working; the Artifacts and Settings tasks are labelled Browse and General to stay distinct from their groups.

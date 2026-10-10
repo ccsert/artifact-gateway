@@ -208,7 +208,7 @@ export function RepositoryDetailPage() {
   return (
     <div className="ag-page-stack">
       <div>
-        <div className="mb-1 text-xs text-zinc-500">
+        <div className="mb-1 text-xs text-fg-tertiary">
           <Link
             to="/repositories"
             className="hover:text-[var(--ag-link-hover)]"
@@ -216,7 +216,7 @@ export function RepositoryDetailPage() {
             {text("仓库", "Repositories")}
           </Link>
           <span className="mx-1.5">/</span>
-          <span className="text-zinc-400">{repo.name}</span>
+          <span className="text-fg-secondary">{repo.name}</span>
         </div>
         <RepositorySummary
           repo={repo}

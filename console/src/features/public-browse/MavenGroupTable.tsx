@@ -112,7 +112,7 @@ export function MavenGroupTable({
       dataIndex: "key",
       key: "key",
       render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-100">{value}</span>
+        <span className="font-mono text-xs text-fg-strong">{value}</span>
       ),
     },
     {
@@ -120,7 +120,7 @@ export function MavenGroupTable({
       key: "latest",
       width: 180,
       render: (_, row) => (
-        <span className="font-mono text-xs text-zinc-400">
+        <span className="font-mono text-xs text-fg-secondary">
           {row.latest.coordinate.split(":").slice(2).join(":")}
         </span>
       ),
@@ -130,7 +130,7 @@ export function MavenGroupTable({
       key: "versionCount",
       width: 100,
       render: (_, row) => (
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-fg-tertiary">
           {row.group.versions.length}
         </span>
       ),
@@ -169,9 +169,9 @@ export function MavenGroupTable({
     return (
       <div className="grid gap-5 px-2 py-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-zinc-500">
+          <label className="mb-1.5 block text-xs font-medium text-fg-tertiary">
             {text("选择版本", "Select version")}{" "}
-            <span className="font-normal text-zinc-600">
+            <span className="font-normal text-fg-disabled">
               ({row.group.versions.length})
             </span>
           </label>
@@ -186,7 +186,7 @@ export function MavenGroupTable({
             onChange={(value) => onSelectVersion(row.group, value)}
             placeholder={text("搜索并选择 Maven 版本", "Search Maven versions")}
           />
-          <p className="mt-2 text-xs leading-5 text-zinc-600">
+          <p className="mt-2 text-xs leading-5 text-fg-disabled">
             {text(
               "在选择器中输入版本号或 SNAPSHOT 构建号即可定位，不会铺开全部版本。",
               "Search by version or SNAPSHOT build number without expanding the full list.",
@@ -195,7 +195,7 @@ export function MavenGroupTable({
         </div>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-zinc-100">
+            <span className="font-mono text-xs text-fg-strong">
               {row.selectedVersion.coordinate}
             </span>
             {row.selectedVersion.buildNumber ? (
@@ -221,17 +221,17 @@ export function MavenGroupTable({
                 : text("复制链接", "Copy link")}
             </Button>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-zinc-600">
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-fg-disabled">
             <span>{formatDate(row.selectedVersion.createdAt, locale)}</span>
             <span
-              className="max-w-[min(70vw,560px)] truncate font-mono text-zinc-500"
+              className="max-w-[min(70vw,560px)] truncate font-mono text-fg-tertiary"
               title={row.selectedVersion.digest}
             >
               {row.selectedVersion.digest ?? "—"}
             </span>
             <span>{formatBytes(row.selectedVersion.size)}</span>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
+          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-line py-3 text-xs sm:grid-cols-4">
             <MetadataItem
               label={text("发布时间", "Published")}
               value={formatDate(row.selectedVersion.createdAt, locale)}

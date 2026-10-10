@@ -113,7 +113,7 @@ export function AuditRetentionPage() {
       key: "id",
       width: 150,
       render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-500" title={value}>
+        <span className="font-mono text-xs text-fg-tertiary" title={value}>
           {value.slice(0, 8)}…
         </span>
       ),
@@ -131,7 +131,7 @@ export function AuditRetentionPage() {
       key: "cutoffAt",
       width: 180,
       render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-400">
+        <span className="whitespace-nowrap text-xs text-fg-secondary">
           {formatDate(value, locale)}
         </span>
       ),
@@ -142,7 +142,7 @@ export function AuditRetentionPage() {
       key: "deleted",
       width: 110,
       render: (value: number) => (
-        <span className="text-xs text-zinc-300">
+        <span className="text-xs text-fg-secondary">
           {formatNumber(value, locale)}
         </span>
       ),
@@ -153,7 +153,7 @@ export function AuditRetentionPage() {
       key: "batchSize",
       width: 110,
       render: (value: number) => (
-        <span className="text-xs text-zinc-400">{value}</span>
+        <span className="text-xs text-fg-secondary">{value}</span>
       ),
     },
     {
@@ -162,7 +162,7 @@ export function AuditRetentionPage() {
       key: "createdAt",
       width: 180,
       render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(value, locale)}
         </span>
       ),
@@ -199,10 +199,10 @@ export function AuditRetentionPage() {
       <Card>
         <div className="max-w-3xl p-5">
           <div className="mb-4">
-            <h2 className="text-sm font-semibold text-zinc-200">
+            <h2 className="text-sm font-semibold text-fg">
               {text("策略设置", "Policy settings")}
             </h2>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-fg-tertiary">
               {text(
                 "控制审计日志的自动保留周期，保存后由后台任务异步处理。",
                 "Control the automatic audit retention window. Changes are processed asynchronously.",
@@ -288,7 +288,7 @@ export function AuditRetentionPage() {
           }
         />
         {jobs.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-zinc-500">
+          <p className="px-4 py-8 text-center text-sm text-fg-tertiary">
             {text("暂无清理任务", "No cleanup jobs")}
           </p>
         ) : (

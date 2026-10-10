@@ -76,7 +76,7 @@ export function GrantForm({
             label={text("授权主体", "Principal")}
             hint={selectedChoice?.detail}
           >
-            <div className="min-h-8 font-mono text-sm text-zinc-200">
+            <div className="min-h-8 font-mono text-sm text-fg">
               {grant.principal}
             </div>
           </Field>
@@ -248,7 +248,7 @@ export function GrantForm({
         />
       </Field>
       <div className="min-w-0">
-        <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+        <span className="mb-1.5 block text-xs font-medium text-fg-secondary">
           {text("本规则授予", "Granted by this rule")}
         </span>
         <div className="flex min-h-8 items-center">

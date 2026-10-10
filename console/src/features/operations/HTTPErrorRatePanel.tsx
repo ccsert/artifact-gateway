@@ -113,7 +113,7 @@ export function HTTPErrorRatePanel({
         title={text("业务 HTTP 5xx 观察", "Business HTTP 5xx observation")}
       />
       <div className="ag-http-error-rate-content">
-        <p className="text-xs leading-5 text-zinc-500">
+        <p className="text-xs leading-5 text-fg-tertiary">
           {text(
             "当前进程业务 HTTP：1xx–5xx 为总请求，5xx 为错误；包括管理 API，排除健康检查与 metrics 探针。此比例不表示服务健康，不触发告警。",
             "This process's business HTTP: 1xx–5xx requests, with 5xx counted as errors. Includes management API; excludes health and metrics probes. The ratio is not a health judgment or an alert.",
@@ -128,7 +128,7 @@ export function HTTPErrorRatePanel({
                 : text("数据不足或未知", "Insufficient data or unknown")}
           </Badge>
           {!valid && (
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-fg-secondary">
               {reason && reasons[reason]
                 ? text(...reasons[reason])
                 : text(
@@ -196,7 +196,7 @@ export function HTTPErrorRatePanel({
             </div>
           </dl>
         )}
-        <p className="text-xs leading-5 text-zinc-500">
+        <p className="text-xs leading-5 text-fg-tertiary">
           {text(
             "目标窗口 300 秒 · 最少 20 个请求 · 每 15 秒采样 · 最大样本年龄 30 秒。预热计数只覆盖实际窗口；20 个请求不保证统计置信度。",
             "Target window 300s · minimum 20 requests · sample every 15s · maximum sample age 30s. Warmup counts cover only the actual window; 20 requests do not guarantee statistical confidence.",

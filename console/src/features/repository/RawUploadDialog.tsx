@@ -184,7 +184,7 @@ export function RawUploadDialog({
                 </Button>
               </Upload>
               <span
-                className="max-w-72 truncate text-xs text-zinc-400"
+                className="max-w-72 truncate text-xs text-fg-secondary"
                 title={file?.name}
               >
                 {file?.name ?? text("尚未选择文件", "No file selected")}
@@ -205,7 +205,7 @@ export function RawUploadDialog({
               onChange={(e) => setPath(e.target.value)}
             />
           </Field>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-fg-tertiary">
             {text(
               "服务端会校验 sha256；同名路径会被覆盖。",
               "The server validates SHA-256. An existing path with the same name will be overwritten.",

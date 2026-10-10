@@ -146,7 +146,7 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
       render: (_, role) => (
         <div>
           <Typography.Text strong>{role.name}</Typography.Text>
-          <div className="text-xs text-zinc-500">
+          <div className="text-xs text-fg-tertiary">
             {role.description || text("无描述", "No description")}
           </div>
         </div>
@@ -227,7 +227,7 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
           </Button>
         }
       />
-      <div className="px-5 py-3 text-xs text-zinc-500">
+      <div className="px-5 py-3 text-xs text-fg-tertiary">
         <SafetyCertificateOutlined className="mr-2 text-[var(--ag-content-tertiary)]" />
         {text(
           "角色复用一组权限。选入模板或授权规则时会复制权限快照，之后修改或删除角色不会改变已有授权。",
@@ -287,7 +287,7 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
         <div className="grid grid-cols-[120px_minmax(0,1fr)] items-start gap-x-4 gap-y-4">
           <label
             htmlFor="authorization-role-name"
-            className="pt-2 text-right text-sm text-zinc-500"
+            className="pt-2 text-right text-sm text-fg-tertiary"
           >
             {text("角色名称", "Role name")}
           </label>
@@ -303,7 +303,7 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
           />
           <label
             htmlFor="authorization-role-description"
-            className="pt-2 text-right text-sm text-zinc-500"
+            className="pt-2 text-right text-sm text-fg-tertiary"
           >
             {text("用途描述", "Description")}
           </label>
@@ -320,7 +320,7 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
           />
           <label
             htmlFor="authorization-role-scopes"
-            className="pt-2 text-right text-sm text-zinc-500"
+            className="pt-2 text-right text-sm text-fg-tertiary"
           >
             {text("仓库权限", "Permissions")}
           </label>

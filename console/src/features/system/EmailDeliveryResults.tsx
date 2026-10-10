@@ -25,7 +25,7 @@ export function EmailDeliveryResults({
           "Recent delivery results (up to 50)",
         )}
       />
-      <p className="px-5 pt-4 text-sm text-zinc-500">
+      <p className="px-5 pt-4 text-sm text-fg-tertiary">
         {text(
           "SMTP 已接受不代表最终送达或已读。停用目标不能撤回在途邮件；结果不确定的重试可能重复。",
           "SMTP acceptance does not mean inbox delivery or reading. Disabling cannot recall in-flight mail; uncertain retries may duplicate mail.",
@@ -36,7 +36,7 @@ export function EmailDeliveryResults({
           title={text("暂无邮件交付记录", "No email deliveries yet")}
         />
       ) : (
-        <ul className="divide-y divide-zinc-800/60">
+        <ul className="divide-y divide-line">
           {deliveries.map((delivery) => (
             <li className="grid min-w-0 gap-3 px-5 py-4" key={delivery.id}>
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -56,17 +56,17 @@ export function EmailDeliveryResults({
                   {quotaLabel(delivery.state, text)}
                 </QuotaBadge>
               </div>
-              <p className="text-sm text-zinc-500">
+              <p className="text-sm text-fg-tertiary">
                 {delivery.kind === "repository_quota"
                   ? text("仓库配额告警", "Repository quota alert")
                   : text("管理员合成测试", "Administrator synthetic test")}{" "}
                 · {quotaLabel(delivery.scenario, text)} · {delivery.locale} ·{" "}
                 {text("尝试次数", "Attempts")}: {delivery.attempts}
               </p>
-              <p className="break-all font-mono text-xs text-zinc-500">
+              <p className="break-all font-mono text-xs text-fg-tertiary">
                 {text("交付 ID", "Delivery ID")}: {delivery.id}
               </p>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-fg-tertiary">
                 {text("更新时间", "Updated")}: {time(delivery.updatedAt)}
                 {delivery.nextAttemptAt && (
                   <>
@@ -84,12 +84,12 @@ export function EmailDeliveryResults({
                 )}
               </p>
               {delivery.errorCode && (
-                <p className="text-sm text-zinc-400">
+                <p className="text-sm text-fg-secondary">
                   {quotaLabel(delivery.errorCode, text)}
                 </p>
               )}
               {delivery.automaticCancellationCode && (
-                <p className="text-sm text-zinc-400">
+                <p className="text-sm text-fg-secondary">
                   {quotaLabel(delivery.automaticCancellationCode, text)}
                 </p>
               )}

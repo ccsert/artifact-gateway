@@ -221,16 +221,16 @@ export function RepositoryScanningTab({
         render: (_, job) => (
           <div className="space-y-0.5">
             <div
-              className="truncate font-mono text-xs text-zinc-200"
+              className="truncate font-mono text-xs text-fg"
               title={job.details?.coordinate}
             >
               {job.details?.coordinate ?? text("未知制品", "Unknown artifact")}
             </div>
-            <div className="font-mono text-xs text-zinc-600">
+            <div className="font-mono text-xs text-fg-disabled">
               {job.details ? shortDigest(job.details.digest) : job.id}
             </div>
             {job.details && (
-              <div className="font-mono text-xs text-zinc-600">{job.id}</div>
+              <div className="font-mono text-xs text-fg-disabled">{job.id}</div>
             )}
           </div>
         ),
@@ -247,7 +247,7 @@ export function RepositoryScanningTab({
         key: "progress",
         width: 170,
         render: (_, job) => (
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs text-fg-tertiary">
             {job.progressTotal > 0
               ? `${job.progressCurrent} / ${job.progressTotal}`
               : job.progressMessage || "—"}
@@ -260,7 +260,7 @@ export function RepositoryScanningTab({
         key: "createdAt",
         width: 190,
         render: (value: string) => (
-          <span className="whitespace-nowrap text-xs text-zinc-500">
+          <span className="whitespace-nowrap text-xs text-fg-tertiary">
             {formatDate(value)}
           </span>
         ),
@@ -307,12 +307,12 @@ export function RepositoryScanningTab({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-800/80 pb-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4">
         <div>
-          <h2 className="text-base font-semibold text-zinc-100">
+          <h2 className="text-base font-semibold text-fg-strong">
             {text("制品扫描", "Artifact scanning")}
           </h2>
-          <p className="mt-1 max-w-3xl text-xs leading-5 text-zinc-500">
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-fg-tertiary">
             {text(
               "扫描将 SBOM、许可证和漏洞结果写入制品情报；扫描失败不回滚上传，结果也不会自动隔离或阻断读取。",
               "Scanning writes SBOM, license, and vulnerability results to artifact intelligence. Failures do not roll back uploads, and results do not automatically quarantine artifacts or block reads.",
@@ -434,7 +434,7 @@ export function RepositoryScanningTab({
                 }}
               />
               <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                <span className="text-xs leading-5 text-zinc-500">
+                <span className="text-xs leading-5 text-fg-tertiary">
                   {text(
                     "选择后会自动锁定规范坐标与完整摘要；最多显示 50 条，可输入关键词检索历史版本和 Conan 修订。仅在无法检索时使用高级手动输入。",
                     "Selection locks the canonical coordinate and full digest. Up to 50 matches are shown; search historical versions and Conan revisions by keyword. Use advanced manual input only as a recovery path.",
@@ -456,10 +456,10 @@ export function RepositoryScanningTab({
             {selectedArtifact && !manualIdentity && (
               <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--ag-status-info-border)] bg-[var(--ag-status-info-soft)] px-3 py-2.5 md:col-span-2">
                 <div className="min-w-0">
-                  <p className="truncate font-mono text-xs text-zinc-200">
+                  <p className="truncate font-mono text-xs text-fg">
                     {selectedArtifact.coordinate}
                   </p>
-                  <p className="mt-0.5 break-all font-mono text-xs text-zinc-500">
+                  <p className="mt-0.5 break-all font-mono text-xs text-fg-tertiary">
                     {selectedArtifact.digest}
                   </p>
                 </div>
@@ -532,8 +532,8 @@ export function RepositoryScanningTab({
                 spellCheck={false}
               />
             </Form.Item>
-            <div className="grid gap-3 border-t border-zinc-800/70 pt-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center md:col-span-2">
-              <p className="max-w-2xl text-xs leading-5 text-zinc-500">
+            <div className="grid gap-3 border-t border-line pt-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center md:col-span-2">
+              <p className="max-w-2xl text-xs leading-5 text-fg-tertiary">
                 {manualIdentity
                   ? text(
                       "高级模式要求坐标和摘要与仓库中的不可变制品完全一致。",
@@ -605,7 +605,7 @@ export function RepositoryScanningTab({
           jobs !== null &&
           jobs.length > 0 &&
           loadError === null && (
-            <p className="px-5 py-3 text-xs text-zinc-500">
+            <p className="px-5 py-3 text-xs text-fg-tertiary">
               {text(
                 "仅显示最近 100 条生命周期任务中的扫描任务；不是全部扫描历史。",
                 "Shows scans among the latest 100 lifecycle jobs; this is not the complete scan history.",

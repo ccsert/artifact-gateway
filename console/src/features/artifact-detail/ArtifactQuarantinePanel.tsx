@@ -125,7 +125,7 @@ export function ArtifactQuarantinePanel({
     : (record?.releasedAt ?? record?.updatedAt);
 
   return (
-    <div className="col-span-full border-b border-zinc-800/80 pb-3">
+    <div className="col-span-full border-b border-line pb-3">
       {loadError !== null ? (
         <ErrorBanner error={loadError} onRetry={() => void load()} />
       ) : activeRecord ? (
@@ -136,18 +136,18 @@ export function ArtifactQuarantinePanel({
           description={
             <div className="space-y-1 text-xs">
               {label && (
-                <div className="font-mono text-zinc-300" title={label}>
+                <div className="font-mono text-fg-secondary" title={label}>
                   {label}
                 </div>
               )}
               <div>{activeRecord.reason}</div>
-              <div className="text-zinc-500">
+              <div className="text-fg-tertiary">
                 {text(
                   "已阻止晋升和复制；普通读取不受影响。",
                   "Promotion and replication are blocked; ordinary reads are unaffected.",
                 )}
               </div>
-              <div className="text-zinc-500">
+              <div className="text-fg-tertiary">
                 {activeRecord.updatedBy} · {formatDate(updatedAt, locale)}
               </div>
             </div>
@@ -167,13 +167,13 @@ export function ArtifactQuarantinePanel({
       ) : loading || !canManage ? null : (
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
           <div>
-            <div className="text-zinc-400">
+            <div className="text-fg-secondary">
               {label
                 ? `${label} · ${text("未隔离", "Not quarantined")}`
                 : text("制品未隔离", "Artifact not quarantined")}
             </div>
             {record && (
-              <div className="mt-1 text-zinc-600">
+              <div className="mt-1 text-fg-disabled">
                 {text("最近解除", "Last released")} · {record.updatedBy} ·{" "}
                 {formatDate(updatedAt, locale)}
               </div>
@@ -219,7 +219,7 @@ export function ArtifactQuarantinePanel({
         }
       >
         <div className="space-y-3">
-          <p className="text-sm leading-6 text-zinc-400">
+          <p className="text-sm leading-6 text-fg-secondary">
             {modalQuarantining
               ? text(
                   "隔离后将阻止该制品晋升和复制，但不会阻止普通读取。",
@@ -230,15 +230,15 @@ export function ArtifactQuarantinePanel({
                   "Release permits promotion and replication again; other security admission rules still apply.",
                 )}
           </p>
-          <div className="rounded border border-zinc-800 px-3 py-2">
+          <div className="rounded border border-line px-3 py-2">
             <div
-              className="truncate font-mono text-xs text-zinc-300"
+              className="truncate font-mono text-xs text-fg-secondary"
               title={coordinate}
             >
               {coordinate}
             </div>
             <div
-              className="mt-1 truncate font-mono text-xs text-zinc-600"
+              className="mt-1 truncate font-mono text-xs text-fg-disabled"
               title={digest}
             >
               {digest}
@@ -246,7 +246,7 @@ export function ArtifactQuarantinePanel({
           </div>
           <div>
             <label
-              className="mb-1.5 block text-xs text-zinc-400"
+              className="mb-1.5 block text-xs text-fg-secondary"
               htmlFor="artifact-quarantine-reason"
             >
               {modalQuarantining

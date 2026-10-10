@@ -147,7 +147,7 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       key: "id",
       width: 150,
       render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-500" title={value}>
+        <span className="font-mono text-xs text-fg-tertiary" title={value}>
           {value.slice(0, 8)}…
         </span>
       ),
@@ -172,7 +172,7 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       key: "createdAt",
       width: 180,
       render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(value)}
         </span>
       ),
@@ -183,7 +183,7 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       key: "completedAt",
       width: 180,
       render: (value?: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(value)}
         </span>
       ),
@@ -224,8 +224,8 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       {scanReconcileError !== null && (
         <ErrorBanner error={scanReconcileError} />
       )}
-      <div className="flex items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
-        <div className="text-xs text-zinc-500">
+      <div className="flex items-center justify-between gap-4 border-b border-line pb-3">
+        <div className="text-xs text-fg-tertiary">
           {text(
             "对账可补入发布时漏掉的扫描任务，并重试失败任务。",
             "Reconciliation fills publication scan gaps and retries failed jobs.",
@@ -364,7 +364,7 @@ export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
       width: 360,
       render: (value: string) => (
         <span
-          className="block max-w-md truncate font-mono text-xs text-zinc-200"
+          className="block max-w-md truncate font-mono text-xs text-fg"
           title={value}
         >
           {value}
@@ -377,7 +377,7 @@ export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
       key: "digest",
       width: 180,
       render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-500">
+        <span className="font-mono text-xs text-fg-tertiary">
           {shortDigest(value)}
         </span>
       ),
@@ -388,7 +388,7 @@ export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
       key: "tombstonedAt",
       width: 190,
       render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(value)}
         </span>
       ),

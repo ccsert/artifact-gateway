@@ -69,14 +69,14 @@ export function QuotaRuleDetail({
       )}
       {confirmation && (
         <Card bodyClassName="grid gap-4 p-5">
-          <h3 className="text-sm font-semibold text-zinc-100">
+          <h3 className="text-sm font-semibold text-fg-strong">
             {confirmation.kind === "enable"
               ? text("确认启用规则", "Confirm enabling this rule")
               : confirmation.kind === "disable"
                 ? text("确认停用规则", "Confirm disabling this rule")
                 : text("确认删除规则", "Confirm deleting this rule")}
           </h3>
-          <p className="break-words text-sm text-zinc-400">
+          <p className="break-words text-sm text-fg-secondary">
             {repositoryName} · {target?.name ?? rule.targetId} ·{" "}
             {target?.locale === "en"
               ? "English"
@@ -84,7 +84,7 @@ export function QuotaRuleDetail({
                 ? "中文"
                 : text("语言未知", "Locale unknown")}
           </p>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-fg-secondary">
             {confirmation.kind === "enable"
               ? text(
                   "启用后，后续真实超限事件可能产生发往该目标的邮件。不会补发先前未入队的事件，也不会发送测试邮件。",
@@ -165,7 +165,7 @@ export function QuotaRuleDetail({
       <Card>
         <CardHeader title={text("规则状态", "Rule state")} />
         <div className="grid min-w-0 gap-4 p-5">
-          <h3 className="break-words text-base font-semibold text-zinc-100">
+          <h3 className="break-words text-base font-semibold text-fg-strong">
             {repositoryName}
           </h3>
           <div className="flex flex-wrap gap-2">
@@ -190,7 +190,7 @@ export function QuotaRuleDetail({
             <Badge>{quotaLabel(rule.state.dataState, text)}</Badge>
           </div>
           {rule.state.dataState !== "available" && (
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-fg-tertiary">
               {text(
                 "严重度为保留状态；当前证据不可用于判断是否恢复。",
                 "Severity is retained; current evidence cannot determine whether the repository has recovered.",
@@ -198,7 +198,7 @@ export function QuotaRuleDetail({
             </p>
           )}
           {rule.state.lastSampleAt ? (
-            <p className="break-words text-sm text-zinc-400">
+            <p className="break-words text-sm text-fg-secondary">
               {rule.state.dataState === "available"
                 ? text("最近样本", "Latest sample")
                 : text("历史样本", "Historical sample")}{" "}
@@ -212,7 +212,7 @@ export function QuotaRuleDetail({
                 ` · ${text("字节值为近似显示，严重度以服务端为准。", "Byte values are approximate; severity comes from the server.")}`}
             </p>
           ) : (
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-fg-tertiary">
               {text("尚无有效容量样本", "No valid capacity sample yet")}
             </p>
           )}
@@ -242,8 +242,8 @@ export function QuotaRuleDetail({
               ],
             ].map(([label, value]) => (
               <div key={label} className="min-w-0">
-                <dt className="text-xs text-zinc-500">{label}</dt>
-                <dd className="mt-1 break-words text-zinc-300">{value}</dd>
+                <dt className="text-xs text-fg-tertiary">{label}</dt>
+                <dd className="mt-1 break-words text-fg-secondary">{value}</dd>
               </div>
             ))}
           </dl>
@@ -262,13 +262,13 @@ export function QuotaRuleDetail({
           ).map(
             ([key, label]) =>
               rule.state[key] && (
-                <p key={key} className="text-xs text-zinc-500">
+                <p key={key} className="text-xs text-fg-tertiary">
                   {label}: {new Date(rule.state[key]).toLocaleString()}
                 </p>
               ),
           )}
-          <div className="grid gap-2 border-t border-zinc-800/60 pt-4">
-            <p className="break-words text-sm text-zinc-400">
+          <div className="grid gap-2 border-t border-line pt-4">
+            <p className="break-words text-sm text-fg-secondary">
               {text("通知目标", "Notification target")}:{" "}
               {target?.name ?? rule.targetId} ·{" "}
               {target?.locale === "en"
@@ -284,7 +284,7 @@ export function QuotaRuleDetail({
                     "Recipient missing or target unavailable",
                   )}
             </p>
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-fg-secondary">
               {text("目标状态", "Target state")}:{" "}
               {target
                 ? target.enabled
@@ -292,17 +292,17 @@ export function QuotaRuleDetail({
                   : text("已停用", "Disabled")
                 : text("不可用", "Unavailable")}
             </p>
-            <p className="break-all text-xs text-zinc-500">
+            <p className="break-all text-xs text-fg-tertiary">
               {text("绑定目标版本", "Bound target version")}:{" "}
               {rule.targetVersion}
             </p>
             {target && target.version !== rule.targetVersion && (
               <div className="grid gap-2">
-                <p className="break-all text-xs text-zinc-500">
+                <p className="break-all text-xs text-fg-tertiary">
                   {text("当前目标版本", "Current target version")}:{" "}
                   {target.version}
                 </p>
-                <p className="text-sm text-zinc-500">
+                <p className="text-sm text-fg-tertiary">
                   {text(
                     "目标版本已变更。编辑并保存以重新绑定；此前未入队的事件不会补发。",
                     "The target version changed. Edit and save to bind it again; previously unqueued events are not caught up.",
@@ -311,7 +311,7 @@ export function QuotaRuleDetail({
               </div>
             )}
             {target && !target.enabled && (
-              <p className="text-sm text-zinc-500">
+              <p className="text-sm text-fg-tertiary">
                 {quotaLabel("target_disabled", text)}
               </p>
             )}
@@ -436,7 +436,7 @@ function QuotaEvents({
             )}
           />
         ) : (
-          <ol className="divide-y divide-zinc-800/60">
+          <ol className="divide-y divide-line">
             {events.data.map((event) => (
               <li key={event.id} className="grid min-w-0 gap-3 px-5 py-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -452,7 +452,7 @@ function QuotaEvents({
                     >
                       {quotaLabel(event.scenario, text)}
                     </Badge>
-                    <span className="text-xs text-zinc-500">
+                    <span className="text-xs text-fg-tertiary">
                       #{event.sequence} ·{" "}
                       {new Date(event.occurredAt).toLocaleString()}
                     </span>
@@ -464,14 +464,14 @@ function QuotaEvents({
                     )}
                   </Badge>
                 </div>
-                <p className="break-words text-sm text-zinc-400">
+                <p className="break-words text-sm text-fg-secondary">
                   {text("事件样本", "Event sample")}:{" "}
                   {sampleBytes(event.usedBytes, text)} /{" "}
                   {sampleBytes(event.quotaBytes, text)} ·{" "}
                   {text("采样", "Sampled")}{" "}
                   {new Date(event.sampleAt).toLocaleString()}
                 </p>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-fg-tertiary">
                   {text("事件阈值", "Event thresholds")}:{" "}
                   {percent(event.policy.warningBasisPoints)} /{" "}
                   {percent(event.policy.criticalBasisPoints)} /{" "}
@@ -480,7 +480,7 @@ function QuotaEvents({
                   {new Date(event.evidenceSince).toLocaleString()}
                 </p>
                 {event.deliveryErrorCode && (
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-fg-tertiary">
                     {quotaLabel(event.deliveryErrorCode, text)}
                   </p>
                 )}
@@ -544,7 +544,7 @@ function QuotaDelivery({
   const item = delivery.data;
   return (
     <section
-      className="grid min-w-0 gap-3 border-t border-zinc-800/60 pt-4"
+      className="grid min-w-0 gap-3 border-t border-line pt-4"
       aria-label={text("邮件交付详情", "Email delivery details")}
     >
       {Boolean(delivery.error) && (
@@ -555,12 +555,12 @@ function QuotaDelivery({
           onRetry={() => void delivery.refresh()}
         />
       )}
-      <p className="text-sm text-zinc-400">
+      <p className="text-sm text-fg-secondary">
         {quotaLabel(item.state, text)} · {text("尝试次数", "Attempts")}:{" "}
         {item.attempts}
       </p>
       {item.state === "accepted" && (
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-fg-tertiary">
           {text(
             "SMTP accepted 仅表示服务器接受，不表示收件箱已送达。",
             "SMTP accepted only means the server accepted the message; it does not confirm inbox delivery.",
@@ -578,28 +578,28 @@ function QuotaDelivery({
         />
       )}
       {item.errorCode && (
-        <p className="text-sm text-zinc-400">
+        <p className="text-sm text-fg-secondary">
           {quotaLabel(item.errorCode, text)}
         </p>
       )}
       {item.automaticCancellationCode && (
-        <p className="text-sm text-zinc-400">
+        <p className="text-sm text-fg-secondary">
           {quotaLabel(item.automaticCancellationCode, text)}
         </p>
       )}
       {item.nextAttemptAt && (
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-fg-tertiary">
           {text("下一次尝试", "Next attempt")}:{" "}
           {new Date(item.nextAttemptAt).toLocaleString()}
         </p>
       )}
       {item.acceptedAt && (
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-fg-tertiary">
           {text("接受时间", "Accepted at")}:{" "}
           {new Date(item.acceptedAt).toLocaleString()}
         </p>
       )}
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-fg-tertiary">
         {text("模板", "Template")}: {item.templateVersion} ·{" "}
         {item.locale === "en" ? "English" : "中文"}
       </p>

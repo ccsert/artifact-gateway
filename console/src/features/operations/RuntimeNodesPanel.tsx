@@ -24,14 +24,14 @@ function runtimeNodeColumns(
       width: 190,
       render: (value: string, node) => (
         <div className="min-w-0">
-          <div className="font-mono text-xs text-zinc-200">{value}</div>
+          <div className="font-mono text-xs text-fg">{value}</div>
           {node.sessionId === currentSessionId && (
             <div className="text-xs text-[var(--ag-status-success)]">
               {text("当前连接节点", "Connected node")}
             </div>
           )}
           <div
-            className="truncate text-xs text-zinc-600"
+            className="truncate text-xs text-fg-disabled"
             title={node.sessionId}
           >
             {text("会话", "Session")} {node.sessionId.slice(0, 12)}…
@@ -45,14 +45,14 @@ function runtimeNodeColumns(
       width: 190,
       render: (_, node) => (
         <div className="text-xs">
-          <div className="text-zinc-200">
+          <div className="text-fg">
             {node.version && node.version !== "unknown"
               ? node.version === "dev"
                 ? text("开发构建", "Development build")
                 : node.version
               : text("版本未知", "Version unknown")}
           </div>
-          <div className="font-mono text-zinc-500">
+          <div className="font-mono text-fg-tertiary">
             {node.revision && node.revision !== "unknown"
               ? node.revision.slice(0, 12)
               : text("修订号未知", "Revision unknown")}
@@ -73,7 +73,7 @@ function runtimeNodeColumns(
       key: "roles",
       width: 150,
       render: (roles: string[]) => (
-        <span className="text-xs text-zinc-400">{roles.join(" · ")}</span>
+        <span className="text-xs text-fg-secondary">{roles.join(" · ")}</span>
       ),
     },
     {
@@ -87,12 +87,12 @@ function runtimeNodeColumns(
               <FormatBadge key={format} format={format} />
             ))
           ) : (
-            <span className="text-xs text-zinc-600">
+            <span className="text-xs text-fg-disabled">
               {text("无格式 Worker", "No format worker")}
             </span>
           )}
           {node.workerKinds.length > 0 && (
-            <span className="ml-1 text-xs text-zinc-500">
+            <span className="ml-1 text-xs text-fg-tertiary">
               {node.workerKinds.join(" · ")}
             </span>
           )}
@@ -105,7 +105,7 @@ function runtimeNodeColumns(
       key: "startedAt",
       width: 190,
       render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(value, locale)}
         </span>
       ),
@@ -117,11 +117,11 @@ function runtimeNodeColumns(
       width: 190,
       render: (value: string, node) =>
         node.stoppedAt ? (
-          <span className="whitespace-nowrap text-xs text-zinc-500">
+          <span className="whitespace-nowrap text-xs text-fg-tertiary">
             {text("已退出", "Stopped")} {formatDate(node.stoppedAt, locale)}
           </span>
         ) : (
-          <span className="whitespace-nowrap text-xs text-zinc-500">
+          <span className="whitespace-nowrap text-xs text-fg-tertiary">
             {formatDate(value, locale)}
           </span>
         ),
@@ -212,7 +212,7 @@ export function RuntimeNodesPanel({
         extra={
           <div className="flex items-center gap-2">
             {health && <StateBadge state={health.status} />}
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-fg-tertiary">
               {nodes
                 ? text(`${nodes.length} 个实例`, `${nodes.length} instances`)
                 : text("加载中", "Loading")}
@@ -243,12 +243,12 @@ export function RuntimeNodesPanel({
               <div className="space-y-1">
                 {(health.issues ?? []).map((issue) => (
                   <div key={issue.code}>
-                    <span className="font-mono text-xs text-zinc-500">
+                    <span className="font-mono text-xs text-fg-tertiary">
                       {issue.code}
                     </span>
                     <span className="ml-2">{issue.message}</span>
                     {issue.affectedNodes?.length ? (
-                      <div className="break-all font-mono text-xs text-zinc-500">
+                      <div className="break-all font-mono text-xs text-fg-tertiary">
                         {text("涉及会话", "Sessions")}:{" "}
                         {issue.affectedNodes.join(", ")}
                       </div>
@@ -261,7 +261,7 @@ export function RuntimeNodesPanel({
         </div>
       )}
       {nodes !== null && (
-        <p className="px-5 pt-3 text-xs text-zinc-500">
+        <p className="px-5 pt-3 text-xs text-fg-tertiary">
           {text(
             "发布版本源未配置，无法判断当前构建是否为最新版本。",
             "No release source is configured, so the latest version cannot be determined.",

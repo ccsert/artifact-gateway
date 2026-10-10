@@ -61,14 +61,14 @@ export function LocalCapacityPanel({
     <Card className="ag-local-capacity-card">
       <CardHeader title={text("本地挂载容量", "Local mount capacity")} />
       <div className="ag-local-capacity-content">
-        <p className="text-xs leading-5 text-zinc-500">
+        <p className="text-xs leading-5 text-fg-tertiary">
           {text(
             "当前进程的挂载视角，不代表 S3 或 NAS 后端物理池，也不是仓库逻辑配额。共享别名的容量不能相加。",
             "This process's mount view is not the S3 or NAS backend physical pool or a Repository logical quota. Do not add shared aliases' capacity.",
           )}
         </p>
         {!capacity ? (
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-fg-secondary">
             {text(
               "此节点未提供本地容量观察，容量未知",
               "This node does not report local capacity; capacity unknown",
@@ -76,7 +76,7 @@ export function LocalCapacityPanel({
           </p>
         ) : (
           <>
-            <p className="text-xs leading-5 text-zinc-500">
+            <p className="text-xs leading-5 text-fg-tertiary">
               {text("快照检查", "Snapshot checked")}:{" "}
               {formatDate(capacity.checkedAt, locale)} · statfs · bytes ·{" "}
               {text("刷新间隔", "Refresh interval")}{" "}
@@ -111,7 +111,7 @@ export function LocalCapacityPanel({
                     aria-label={text(...aliasLabels[alias])}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-medium text-zinc-200">
+                      <h3 className="text-sm font-medium text-fg">
                         {text(...aliasLabels[alias])}
                       </h3>
                       <Badge
@@ -125,7 +125,7 @@ export function LocalCapacityPanel({
                       </Badge>
                     </div>
                     {!valid && (
-                      <p className="text-xs leading-5 text-zinc-500">
+                      <p className="text-xs leading-5 text-fg-tertiary">
                         {reason
                           ? text(...reason)
                           : text(
@@ -155,7 +155,7 @@ export function LocalCapacityPanel({
                       </div>
                     </dl>
                     {valid && shared.length > 0 && (
-                      <p className="text-xs leading-5 text-zinc-500">
+                      <p className="text-xs leading-5 text-fg-tertiary">
                         {text(
                           `与${shared.map((other) => text(...aliasLabels[other])).join("、")}共享可见文件系统`,
                           `Shares the visible filesystem with ${shared.map((other) => text(...aliasLabels[other])).join(", ")}`,

@@ -293,11 +293,13 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
       width: 320,
       render: (value: string) => (
         <div>
-          <div className="font-mono text-xs text-zinc-200">
+          <div className="font-mono text-xs text-fg">
             {principalChoices.find((choice) => choice.value === value)?.label ??
               value}
           </div>
-          <div className="mt-0.5 font-mono text-xs text-zinc-600">{value}</div>
+          <div className="mt-0.5 font-mono text-xs text-fg-disabled">
+            {value}
+          </div>
         </div>
       ),
     },
@@ -317,7 +319,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
       key: "resourcePrefix",
       width: 240,
       render: (value?: string) => (
-        <span className="font-mono text-xs text-zinc-500">
+        <span className="font-mono text-xs text-fg-tertiary">
           {value || text("整个仓库", "Entire repository")}
         </span>
       ),

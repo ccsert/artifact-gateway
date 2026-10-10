@@ -32,9 +32,9 @@ function CopyButton({ text }: { text: string }) {
 
 function Snippet({ snippet }: { snippet: UsageSnippet }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
+    <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wider text-zinc-500">
+        <span className="text-xs uppercase tracking-wider text-fg-tertiary">
           {snippet.label}
         </span>
         <CopyButton text={snippet.code} />
@@ -111,12 +111,12 @@ export function ArtifactDetailView({
       {/* 元信息 */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {meta.publisher && (
-          <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-zinc-500">
+          <div className="rounded-lg border border-line px-3 py-2">
+            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
               {text("发布者", "Publisher")}
             </div>
             <div
-              className="mt-0.5 truncate font-mono text-xs text-zinc-100"
+              className="mt-0.5 truncate font-mono text-xs text-fg-strong"
               title={meta.publisher}
             >
               {meta.publisher}
@@ -124,32 +124,32 @@ export function ArtifactDetailView({
           </div>
         )}
         {meta.size !== undefined && (
-          <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-zinc-500">
+          <div className="rounded-lg border border-line px-3 py-2">
+            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
               {text("大小", "Size")}
             </div>
-            <div className="mt-0.5 text-xs font-semibold text-zinc-100">
+            <div className="mt-0.5 text-xs font-semibold text-fg-strong">
               {formatBytes(meta.size)}
             </div>
           </div>
         )}
         {meta.createdAt && (
-          <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-zinc-500">
+          <div className="rounded-lg border border-line px-3 py-2">
+            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
               {timestampLabel ?? text("发布时间", "Published")}
             </div>
-            <div className="mt-0.5 text-xs font-semibold text-zinc-100">
+            <div className="mt-0.5 text-xs font-semibold text-fg-strong">
               {formatDate(meta.createdAt, locale)}
             </div>
           </div>
         )}
         {meta.contentType && (
-          <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-zinc-500">
+          <div className="rounded-lg border border-line px-3 py-2">
+            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
               {text("内容类型", "Content type")}
             </div>
             <div
-              className="mt-0.5 truncate font-mono text-xs text-zinc-100"
+              className="mt-0.5 truncate font-mono text-xs text-fg-strong"
               title={meta.contentType}
             >
               {meta.contentType}
@@ -157,24 +157,24 @@ export function ArtifactDetailView({
           </div>
         )}
         {meta.state && (
-          <div className="rounded-lg border border-zinc-800 px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-zinc-500">
+          <div className="rounded-lg border border-line px-3 py-2">
+            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
               {text("状态", "State")}
             </div>
-            <div className="mt-0.5 text-xs font-semibold text-zinc-100">
+            <div className="mt-0.5 text-xs font-semibold text-fg-strong">
               {meta.state}
             </div>
           </div>
         )}
       </div>
       {meta.digest && (
-        <div className="rounded-lg border border-zinc-800 px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-zinc-500">
+        <div className="rounded-lg border border-line px-3 py-2">
+          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
             {text("摘要 (digest)", "Digest")}
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-2">
             <code
-              className="break-all font-mono text-xs text-zinc-300"
+              className="break-all font-mono text-xs text-fg-secondary"
               title={meta.digest}
             >
               {shortDigest(meta.digest)}
@@ -257,7 +257,7 @@ export function VersionList({
   if (items.length === 0) return null;
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 text-sm font-medium text-zinc-200">
+      <div className="flex items-center gap-2 text-sm font-medium text-fg">
         {title} <Badge tone="neutral">{items.length}</Badge>
       </div>
       <Select
@@ -289,7 +289,7 @@ export function VersionList({
                 {item?.label ?? option.label}
               </span>
               {item?.hint && (
-                <span className="truncate text-xs text-zinc-500">
+                <span className="truncate text-xs text-fg-tertiary">
                   {item.hint}
                 </span>
               )}

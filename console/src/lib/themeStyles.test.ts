@@ -46,6 +46,11 @@ describe("semantic theme CSS contract", () => {
       expect(source, path).not.toMatch(
         /\b(?:text|bg|border)-(?:red|rose|orange|amber|yellow|lime|green|emerald|cyan|sky|blue|indigo|violet|purple|fuchsia|pink)-/iu,
       );
+      // Neutral palette steps are colours too: components name a semantic
+      // role (text-fg-tertiary, border-line, bg-surface-translucent, ...).
+      expect(source, path).not.toMatch(
+        /(?<![\w-])(?:[a-z-]+:)*(?:text|bg|border(?:-[trblxy])?|divide|ring|outline|fill|stroke|from|via|to|placeholder|decoration|shadow)-(?:zinc|gray|slate|neutral|stone|white|black)(?:-\d{2,3})?(?:\/\d+)?(?![\w-])/u,
+      );
       expect(source, path).not.toMatch(
         /["'](?:red|rose|orange|amber|yellow|lime|green|emerald|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|magenta|gold|volcano|geekblue)["']/iu,
       );

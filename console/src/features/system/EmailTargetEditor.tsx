@@ -185,7 +185,7 @@ export function EmailTargetEditor({
               onChange={(e) => setRecipient(e.target.value)}
             />
           </Field>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-fg-tertiary">
             {current
               ? text(
                   `当前目标${current.enabled ? "已启用" : "已停用"}；保存保留该状态，不发送测试。`,

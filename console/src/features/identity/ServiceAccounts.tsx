@@ -83,7 +83,7 @@ function TokenReveal({
             "It cannot be viewed again. Put the token in a CI secret or external secret manager, never in source control.",
           )}
         />
-        <div className="rounded-xl border border-zinc-700 bg-zinc-950 p-4">
+        <div className="rounded-xl border border-line bg-canvas p-4">
           <Typography.Text
             className="block break-all font-mono text-xs"
             copyable={{
@@ -97,7 +97,7 @@ function TokenReveal({
             {credential.token}
           </Typography.Text>
         </div>
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-xs text-zinc-500">
+        <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2 text-xs text-fg-tertiary">
           {text("凭据名称", "Credential name")}: {credential.name} ·{" "}
           {text("到期", "Expires")}: {formatDate(credential.expiresAt)}
         </div>
@@ -358,8 +358,8 @@ export function ServiceAccountsPage() {
       key: "name",
       render: (name: string) => (
         <div className="flex items-center gap-2">
-          <KeyOutlined className="text-zinc-600" />
-          <span className="font-medium text-zinc-200">{name}</span>
+          <KeyOutlined className="text-fg-disabled!" />
+          <span className="font-medium text-fg">{name}</span>
         </div>
       ),
     },
@@ -377,7 +377,7 @@ export function ServiceAccountsPage() {
       key: "expiresAt",
       width: 180,
       render: (value?: string) => (
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-fg-tertiary">
           {formatDate(value, locale)}
         </span>
       ),
@@ -388,7 +388,7 @@ export function ServiceAccountsPage() {
       key: "lastUsedAt",
       width: 180,
       render: (value?: string) => (
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-fg-tertiary">
           {formatDate(value, locale)}
         </span>
       ),
@@ -501,7 +501,7 @@ export function ServiceAccountsPage() {
       ) : (
         <div className="ag-page-primary ag-service-account-workspace grid items-start gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
           <Card bodyClassName="p-2">
-            <div className="px-2 pb-2 pt-1 text-xs font-medium uppercase tracking-wider text-zinc-600">
+            <div className="px-2 pb-2 pt-1 text-xs font-medium uppercase tracking-wider text-fg-disabled">
               {text("机器主体", "Machine principals")}
             </div>
             <div className="space-y-1">
@@ -517,7 +517,7 @@ export function ServiceAccountsPage() {
                   onClick={() => setSelectedAccountId(account.id)}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-medium text-zinc-200">
+                    <span className="truncate text-sm font-medium text-fg">
                       {account.name}
                     </span>
                     <Badge
@@ -526,7 +526,7 @@ export function ServiceAccountsPage() {
                       {account.state}
                     </Badge>
                   </div>
-                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-600">
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-disabled">
                     {account.description ||
                       text("未填写用途", "No purpose documented")}
                   </p>
@@ -543,7 +543,7 @@ export function ServiceAccountsPage() {
 
           {selectedAccount && (
             <Card>
-              <div className="border-b border-zinc-800/70 px-5 py-4">
+              <div className="border-b border-line px-5 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex min-w-0 items-start gap-3">
                     <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-[var(--ag-border-default)] bg-[var(--ag-surface-hover)] text-[var(--ag-content-secondary)]">
@@ -551,7 +551,7 @@ export function ServiceAccountsPage() {
                     </div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-base font-semibold text-zinc-100">
+                        <h2 className="text-base font-semibold text-fg-strong">
                           {selectedAccount.name}
                         </h2>
                         <Badge
@@ -564,7 +564,7 @@ export function ServiceAccountsPage() {
                           {selectedAccount.state}
                         </Badge>
                       </div>
-                      <p className="mt-1 text-xs text-zinc-500">
+                      <p className="mt-1 text-xs text-fg-tertiary">
                         {selectedAccount.description ||
                           text("未填写用途", "No purpose documented")}
                       </p>
@@ -594,13 +594,13 @@ export function ServiceAccountsPage() {
                     </Button>
                   </Space>
                 </div>
-                <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2.5">
-                  <div className="text-xs font-medium uppercase tracking-wider text-zinc-600">
+                <div className="mt-4 rounded-lg border border-line bg-surface-translucent px-3 py-2.5">
+                  <div className="text-xs font-medium uppercase tracking-wider text-fg-disabled">
                     {text("稳定授权主体", "Stable grant principal")}
                   </div>
                   <CopyableValue
                     value={`service-account:${selectedAccount.id}`}
-                    className="mt-1 max-w-full text-xs text-zinc-300"
+                    className="mt-1 max-w-full text-xs text-fg-secondary"
                   />
                 </div>
               </div>
@@ -767,7 +767,7 @@ export function ServiceAccountsPage() {
               ]}
             />
           </Field>
-          <p className="text-xs leading-5 text-zinc-500">
+          <p className="text-xs leading-5 text-fg-tertiary">
             {text(
               "新旧凭据可以短暂并存：先部署新 Token、验证成功，再吊销旧 Token，实现零停机轮换。",
               "Old and new credentials may overlap briefly: deploy the new token, verify it, then revoke the old token for zero-downtime rotation.",

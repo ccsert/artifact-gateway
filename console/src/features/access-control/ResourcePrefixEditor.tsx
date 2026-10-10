@@ -262,7 +262,7 @@ export function ResourcePrefixEditor({
         <>
           {fields}
           <div
-            className="truncate font-mono text-xs text-zinc-500"
+            className="truncate font-mono text-xs text-fg-tertiary"
             title={value}
           >
             {text("实际前缀", "Canonical prefix")}: {value}

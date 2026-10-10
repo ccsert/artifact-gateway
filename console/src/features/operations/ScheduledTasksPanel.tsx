@@ -266,11 +266,11 @@ export function ScheduledTasksPanel() {
       width: 260,
       render: (_, task) => (
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-zinc-100">
+          <div className="truncate text-sm font-medium text-fg-strong">
             {task.name}
           </div>
           <div
-            className="mt-1 truncate text-xs text-zinc-500"
+            className="mt-1 truncate text-xs text-fg-tertiary"
             title={task.description}
           >
             {task.description || text("无备注", "No description")}
@@ -304,10 +304,10 @@ export function ScheduledTasksPanel() {
           ? repositoryById.get(task.repositoryId)
           : undefined;
         return (
-          <div className="text-xs text-zinc-400">
+          <div className="text-xs text-fg-secondary">
             {repository?.name ?? text("全局审计日志", "Global audit log")}
             {repository && (
-              <div className="mt-1 font-mono text-xs text-zinc-600">
+              <div className="mt-1 font-mono text-xs text-fg-disabled">
                 {repository.format}
               </div>
             )}
@@ -321,7 +321,7 @@ export function ScheduledTasksPanel() {
       key: "interval",
       width: 130,
       render: (minutes: number) => (
-        <span className="whitespace-nowrap text-xs text-zinc-400">
+        <span className="whitespace-nowrap text-xs text-fg-secondary">
           {formatTaskInterval(minutes, text)}
         </span>
       ),
@@ -332,7 +332,7 @@ export function ScheduledTasksPanel() {
       key: "nextRunAt",
       width: 180,
       render: (value: string, task) => (
-        <div className="whitespace-nowrap text-xs text-zinc-400">
+        <div className="whitespace-nowrap text-xs text-fg-secondary">
           {task.enabled ? formatDate(value, locale) : "—"}
         </div>
       ),
@@ -342,14 +342,14 @@ export function ScheduledTasksPanel() {
       key: "lastRun",
       width: 180,
       render: (_, task) => (
-        <div className="text-xs text-zinc-400">
+        <div className="text-xs text-fg-secondary">
           {task.lastRunState ? (
             <StateBadge state={task.lastRunState} />
           ) : (
-            <span className="text-zinc-600">—</span>
+            <span className="text-fg-disabled">—</span>
           )}
           {task.lastRunAt && (
-            <div className="mt-1 whitespace-nowrap text-xs text-zinc-600">
+            <div className="mt-1 whitespace-nowrap text-xs text-fg-disabled">
               {formatDate(task.lastRunAt, locale)}
             </div>
           )}
@@ -626,7 +626,7 @@ export function ScheduledTasksPanel() {
                     setForm((current) => ({ ...current, enabled }))
                   }
                 />
-                <span className="text-xs text-zinc-400">
+                <span className="text-xs text-fg-secondary">
                   {form.enabled
                     ? text("创建后启用", "Enabled")
                     : text("保持停用", "Disabled")}
@@ -673,7 +673,7 @@ function TaskRunHistory({
       dataIndex: "trigger",
       width: 120,
       render: (value: ScheduledTaskRun["trigger"]) => (
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-fg-secondary">
           {value === "manual"
             ? text("手动", "Manual")
             : text("计划", "Scheduled")}
@@ -691,7 +691,7 @@ function TaskRunHistory({
       dataIndex: "scheduledAt",
       width: 180,
       render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-400">
+        <span className="whitespace-nowrap text-xs text-fg-secondary">
           {formatDate(value, locale)}
         </span>
       ),
@@ -701,7 +701,7 @@ function TaskRunHistory({
       key: "target",
       width: 300,
       render: (_, run) => (
-        <div className="min-w-0 font-mono text-xs text-zinc-500">
+        <div className="min-w-0 font-mono text-xs text-fg-tertiary">
           <div>{run.targetKind ?? "—"}</div>
           {run.targetId && (
             <div className="mt-1 truncate" title={run.targetId}>
@@ -727,8 +727,8 @@ function TaskRunHistory({
   return (
     <div className="px-4 py-3">
       <div className="mb-3 flex items-center gap-2">
-        <HistoryOutlined className="text-zinc-500" />
-        <span className="text-xs font-medium text-zinc-300">
+        <HistoryOutlined className="text-fg-tertiary!" />
+        <span className="text-xs font-medium text-fg-secondary">
           {text("投递历史", "Dispatch history")} · {task.name}
         </span>
       </div>

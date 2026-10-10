@@ -99,10 +99,10 @@ function AuthorizedQuotaAlerts() {
     <div className="ag-page-stack ag-quota-alerts">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-zinc-100">
+          <h2 className="text-base font-semibold text-fg-strong">
             {text("仓库配额告警", "Repository quota alerts")}
           </h2>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-fg-tertiary">
             {text(
               "观察仓库逻辑用量，不表示 S3、NAS 或本地挂载物理容量。",
               "Observes logical repository usage, not the physical capacity of S3, NAS, or local mounts.",
@@ -146,7 +146,7 @@ function AuthorizedQuotaAlerts() {
         />
       )}
       {snapshot.readAt && (
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-fg-tertiary">
           {text("读取时间", "Read at")}:{" "}
           {new Date(snapshot.readAt).toLocaleString()}
         </p>
@@ -245,19 +245,19 @@ function AuthorizedQuotaAlerts() {
               )}
             />
           ) : (
-            <ul className="divide-y divide-zinc-800/60">
+            <ul className="divide-y divide-line">
               {rules.map((rule) => (
                 <li
                   key={rule.id}
                   className="flex flex-wrap items-start justify-between gap-4 px-5 py-4"
                 >
                   <div className="min-w-0">
-                    <h3 className="break-words text-sm font-semibold text-zinc-100">
+                    <h3 className="break-words text-sm font-semibold text-fg-strong">
                       {repositories.items.find(
                         (r) => r.id === rule.repositoryId,
                       )?.name ?? rule.repositoryId}
                     </h3>
-                    <p className="mt-2 text-xs text-zinc-500">
+                    <p className="mt-2 text-xs text-fg-tertiary">
                       {text("警告", "Warning")}{" "}
                       {percent(rule.policy.warningBasisPoints)} ·{" "}
                       {text("严重", "Critical")}{" "}

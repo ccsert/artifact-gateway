@@ -57,7 +57,7 @@ const scannerStatusTone: Record<DiagnosticScanner["status"], string> = {
   unhealthy: "text-[var(--ag-status-danger)]",
   unreachable: "text-[var(--ag-status-danger)]",
   unknown: "text-[var(--ag-status-warning)]",
-  not_configured: "text-zinc-500",
+  not_configured: "text-fg-tertiary",
 };
 
 type Localize = (chinese: string, english: string) => string;
@@ -233,7 +233,7 @@ export function SystemDiagnosticsPanel() {
       width: 190,
       responsive: ["lg"],
       render: (value?: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {value ? formatDate(value, locale) : "—"}
         </span>
       ),
@@ -291,10 +291,10 @@ export function SystemDiagnosticsPanel() {
       <Card className="ag-diagnostics-snapshot">
         <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold tracking-tight text-zinc-100">
+            <h2 className="text-sm font-semibold tracking-tight text-fg-strong">
               {text("诊断快照", "Diagnostic snapshot")}
             </h2>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-fg-tertiary">
               {text("生成于", "Generated")}{" "}
               {formatDate(diagnostics.generatedAt, locale)}
             </p>
@@ -397,20 +397,20 @@ export function SystemDiagnosticsPanel() {
           <CardHeader
             title={text("需要处理", "Needs attention")}
             extra={
-              <span className="text-xs text-zinc-500">
+              <span className="text-xs text-fg-tertiary">
                 {text(`${attentionCount} 项`, `${attentionCount} items`)}
               </span>
             }
           />
-          <div className="divide-y divide-zinc-800/60">
+          <div className="divide-y divide-line">
             {unavailableDependencies.map((dependency) => (
               <div key={dependency.name} className="ag-diagnostic-issue-row">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-zinc-200">
+                  <div className="text-sm font-medium text-fg">
                     {text("依赖不可用", "Dependency unavailable")} ·{" "}
                     {dependency.name}
                   </div>
-                  <div className="mt-1 break-words text-xs leading-5 text-zinc-500">
+                  <div className="mt-1 break-words text-xs leading-5 text-fg-tertiary">
                     {dependency.detail}
                   </div>
                 </div>
@@ -420,10 +420,10 @@ export function SystemDiagnosticsPanel() {
             {scannerNeedsAttention && scanner && scannerStatusLabel && (
               <div className="ag-diagnostic-issue-row">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-zinc-200">
+                  <div className="text-sm font-medium text-fg">
                     {text("扫描器可信度", "Scanner trust")} · {scanner.name}
                   </div>
-                  <div className="mt-1 break-words text-xs leading-5 text-zinc-500">
+                  <div className="mt-1 break-words text-xs leading-5 text-fg-tertiary">
                     {scannerDetail}
                   </div>
                 </div>
@@ -440,7 +440,7 @@ export function SystemDiagnosticsPanel() {
                   <div className="font-mono text-xs text-[var(--ag-status-warning)]">
                     {issue.code}
                   </div>
-                  <div className="mt-1 break-words text-xs leading-5 text-zinc-400">
+                  <div className="mt-1 break-words text-xs leading-5 text-fg-secondary">
                     {issue.message}
                   </div>
                 </div>
@@ -450,10 +450,10 @@ export function SystemDiagnosticsPanel() {
             {nodeStatusNeedsAttention && nodeIssues.length === 0 && (
               <div className="ag-diagnostic-issue-row">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-zinc-200">
+                  <div className="text-sm font-medium text-fg">
                     {text("运行节点状态异常", "Runtime node health degraded")}
                   </div>
-                  <div className="mt-1 text-xs leading-5 text-zinc-500">
+                  <div className="mt-1 text-xs leading-5 text-fg-tertiary">
                     {text(
                       `${diagnostics.nodes.stale} 个陈旧，${diagnostics.nodes.offline} 个离线`,
                       `${diagnostics.nodes.stale} stale and ${diagnostics.nodes.offline} offline`,
@@ -469,10 +469,10 @@ export function SystemDiagnosticsPanel() {
                 className="ag-diagnostic-issue-row"
               >
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-zinc-200">
+                  <div className="text-sm font-medium text-fg">
                     {text("失败队列", "Failed queue")} · {queue.kind}
                   </div>
-                  <div className="mt-1 text-xs leading-5 text-zinc-500">
+                  <div className="mt-1 text-xs leading-5 text-fg-tertiary">
                     {queue.format} ·{" "}
                     {text(`${queue.count} 个任务`, `${queue.count} jobs`)}
                   </div>
@@ -570,7 +570,7 @@ export function SystemDiagnosticsPanel() {
           <CardHeader
             title={text("依赖与扫描器", "Dependencies and scanner")}
           />
-          <div className="divide-y divide-zinc-800/60">
+          <div className="divide-y divide-line">
             {diagnostics.dependencies.map(
               (dependency: DiagnosticDependency) => {
                 const labels = dependencyLabels[dependency.name];
@@ -581,10 +581,10 @@ export function SystemDiagnosticsPanel() {
                     className="ag-diagnostic-status-row"
                   >
                     <div className="min-w-0">
-                      <div className="text-sm text-zinc-200">
+                      <div className="text-sm text-fg">
                         {labels ? text(labels[0], labels[1]) : dependency.name}
                       </div>
-                      <div className="mt-1 break-words text-xs leading-5 text-zinc-500">
+                      <div className="mt-1 break-words text-xs leading-5 text-fg-tertiary">
                         {dependency.detail}
                       </div>
                     </div>
@@ -613,29 +613,29 @@ export function SystemDiagnosticsPanel() {
               },
             )}
             {diagnostics.dependencies.length === 0 && (
-              <div className="px-5 py-5 text-sm text-zinc-500">
+              <div className="px-5 py-5 text-sm text-fg-tertiary">
                 {text("没有依赖检查结果", "No dependency checks reported")}
               </div>
             )}
             {scanner && scannerStatusLabel && (
               <div className="ag-diagnostic-status-row">
                 <div className="min-w-0">
-                  <div className="flex min-w-0 flex-wrap items-baseline gap-2 text-sm text-zinc-200">
+                  <div className="flex min-w-0 flex-wrap items-baseline gap-2 text-sm text-fg">
                     <span>
                       {text("制品扫描器", "Artifact scanner")} · {scanner.name}
                     </span>
                     {scanner.version && (
-                      <span className="font-mono text-xs text-zinc-500">
+                      <span className="font-mono text-xs text-fg-tertiary">
                         {scanner.version}
                       </span>
                     )}
                   </div>
-                  <div className="mt-1 break-words text-xs leading-5 text-zinc-500">
+                  <div className="mt-1 break-words text-xs leading-5 text-fg-tertiary">
                     {scannerDetail}
                   </div>
                   {scanner.formats.length > 0 && (
                     <Tooltip title={scanner.formats.join(" · ")}>
-                      <div className="mt-1 break-words font-mono text-xs leading-5 text-zinc-600">
+                      <div className="mt-1 break-words font-mono text-xs leading-5 text-fg-disabled">
                         {text("覆盖格式", "Formats")}:{" "}
                         {scanner.formats.join(" · ")}
                       </div>

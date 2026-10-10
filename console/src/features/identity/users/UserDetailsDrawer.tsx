@@ -212,7 +212,7 @@ export function UserDetailsDrawer({
               <div className="truncate text-sm font-semibold">
                 {user.displayName || user.name}
               </div>
-              <div className="truncate font-mono text-xs text-zinc-500">
+              <div className="truncate font-mono text-xs text-fg-tertiary">
                 {user.name}
               </div>
             </div>
@@ -279,7 +279,7 @@ export function UserDetailsDrawer({
         )}
 
         <section>
-          <h2 className="mb-3 text-sm font-semibold text-zinc-100">
+          <h2 className="mb-3 text-sm font-semibold text-fg-strong">
             {text("账户资料", "Account profile")}
           </h2>
           <Form<UpdateUser>
@@ -347,7 +347,7 @@ export function UserDetailsDrawer({
         <Divider />
 
         <section>
-          <h2 className="mb-3 text-sm font-semibold text-zinc-100">
+          <h2 className="mb-3 text-sm font-semibold text-fg-strong">
             {text("登录与安全", "Sign-in and security")}
           </h2>
           <Descriptions bordered size="small" column={2}>
@@ -430,10 +430,10 @@ export function UserDetailsDrawer({
         <Divider />
 
         <section>
-          <h2 className="mb-1 text-sm font-semibold text-zinc-100">
+          <h2 className="mb-1 text-sm font-semibold text-fg-strong">
             {text("删除账户", "Delete account")}
           </h2>
-          <p className="mb-3 text-xs text-zinc-500">
+          <p className="mb-3 text-xs text-fg-tertiary">
             {text(
               "删除不可撤销；最后一个有效管理员受到后端保护。",
               "Deletion cannot be undone. The final active administrator is protected.",

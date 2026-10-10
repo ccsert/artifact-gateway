@@ -159,7 +159,7 @@ export function CargoCrateDetail({
       {error && <ErrorBanner error={error} />}
       <div className="grid gap-4 lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
         <div>
-          <div className="mb-1 text-xs font-medium text-zinc-500">
+          <div className="mb-1 text-xs font-medium text-fg-tertiary">
             {text("选择 crate 版本", "Select crate version")}
           </div>
           <SearchableVersionSelect
@@ -190,9 +190,9 @@ export function CargoCrateDetail({
       </div>
       {selected && (
         <>
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface-translucent px-3 py-2">
             <span
-              className="font-mono text-xs text-zinc-400"
+              className="font-mono text-xs text-fg-secondary"
               title={selected.cksum}
             >
               SHA-256 {shortDigest(`sha256:${selected.cksum}`)}

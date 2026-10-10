@@ -88,19 +88,21 @@ function Decision({
   const { text } = usePreferences();
   return (
     <div className="min-w-0 px-4 py-3">
-      <div className="text-xs font-medium text-zinc-500">{label}</div>
+      <div className="text-xs font-medium text-fg-tertiary">{label}</div>
       <div
         className={`mt-1.5 flex items-center gap-1.5 text-sm font-semibold ${
-          decision.allowed ? "text-[var(--ag-status-success)]" : "text-zinc-400"
+          decision.allowed
+            ? "text-[var(--ag-status-success)]"
+            : "text-fg-secondary"
         }`}
       >
         {decision.allowed ? <CheckCircleFilled /> : <CloseCircleFilled />}
         {decision.allowed ? text("允许", "Allowed") : text("拒绝", "Denied")}
       </div>
-      <div className="mt-1 text-xs font-medium text-zinc-400">
+      <div className="mt-1 text-xs font-medium text-fg-secondary">
         {accessSourceLabel(decision.source, text)}
       </div>
-      <p className="mt-0.5 text-xs leading-4 text-zinc-600">
+      <p className="mt-0.5 text-xs leading-4 text-fg-disabled">
         {accessReasonLabel(decision.reason, text)}
       </p>
     </div>
@@ -127,7 +129,7 @@ export function AccessDecisionSummary({
     },
   ];
   return (
-    <div className="grid grid-cols-5 divide-x divide-zinc-800/70 overflow-hidden rounded-md border border-zinc-800/70 bg-zinc-950/20">
+    <div className="grid grid-cols-5 divide-x divide-line overflow-hidden rounded-md border border-line bg-surface-translucent">
       {decisions.map((item) => (
         <Decision key={item.label} {...item} />
       ))}

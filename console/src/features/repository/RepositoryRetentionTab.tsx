@@ -667,7 +667,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
         );
         return (
           <span
-            className="block max-w-md truncate font-mono text-xs text-zinc-200"
+            className="block max-w-md truncate font-mono text-xs text-fg"
             title={displayCoordinate}
             dir="auto"
           >
@@ -682,7 +682,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
       key: "digest",
       width: 180,
       render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-500">
+        <span className="font-mono text-xs text-fg-tertiary">
           {shortDigest(value)}
         </span>
       ),
@@ -692,7 +692,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
       key: "versionType",
       width: 140,
       render: (_, candidate) => (
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-fg-secondary">
           {retentionCandidateTypeLabel(
             candidate.versionType,
             copy.candidateType,
@@ -706,7 +706,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
       key: "reasons",
       width: 280,
       render: (_, candidate) => (
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-fg-secondary">
           {candidate.reasons
             .map((reason) =>
               reason === "maximum_versions"
@@ -731,14 +731,14 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
       width: 220,
       render: (_, candidate) =>
         candidate.downloadCount && candidate.downloadCount > 0 ? (
-          <span className="text-xs text-zinc-400">
+          <span className="text-xs text-fg-secondary">
             {text(
               `${candidate.downloadCount} 次 · 最近 ${formatDate(candidate.lastDownloadedAt)}`,
               `${candidate.downloadCount} · last ${formatDate(candidate.lastDownloadedAt)}`,
             )}
           </span>
         ) : (
-          <span className="text-xs text-zinc-600">
+          <span className="text-xs text-fg-disabled">
             {text("无下载记录", "Never downloaded")}
           </span>
         ),
@@ -751,7 +751,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
       key: "createdAt",
       width: 180,
       render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(value)}
         </span>
       ),
@@ -775,12 +775,12 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
           )}
         />
       )}
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+      <div className="flex items-center justify-between border-b border-line pb-4">
         <div>
-          <div className="text-sm font-medium text-zinc-200">
+          <div className="text-sm font-medium text-fg">
             {text("自动清理", "Automatic cleanup")}
           </div>
-          <div className="mt-1 text-xs text-zinc-500">
+          <div className="mt-1 text-xs text-fg-tertiary">
             {text(
               "关闭时不会创建定时或手动清理任务，已有墓碑不受影响。",
               "When disabled, no scheduled or manual cleanup task is created. Existing tombstones are unaffected.",
@@ -881,7 +881,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
           </Space.Compact>
         </Field>
       </div>
-      <div className="grid max-w-5xl grid-cols-2 gap-4 border-t border-zinc-800 pt-4">
+      <div className="grid max-w-5xl grid-cols-2 gap-4 border-t border-line pt-4">
         <Field label={copy.matchLabel} hint={copy.matchHint}>
           <Select
             mode="tags"
@@ -960,16 +960,16 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
               ) : undefined
             }
           />
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-b border-zinc-800/80 px-4 py-3 text-xs text-zinc-400">
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-b border-line px-4 py-3 text-xs text-fg-secondary">
             <span>
               {text("按期限", "By age")}{" "}
-              <strong className="font-medium text-zinc-200">
+              <strong className="font-medium text-fg">
                 {dryRun.summary.reasonCounts.age}
               </strong>
             </span>
             <span>
               {text("超过版本上限", "Exceeded version limit")}{" "}
-              <strong className="font-medium text-zinc-200">
+              <strong className="font-medium text-fg">
                 {dryRun.summary.reasonCounts.maximumVersions}
               </strong>
             </span>

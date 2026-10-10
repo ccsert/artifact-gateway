@@ -103,20 +103,20 @@ function OperationIdentity({
 }) {
   return (
     <div className="min-w-0">
-      <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-zinc-200">
-        <SyncOutlined className="shrink-0 text-zinc-500" />
+      <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-fg">
+        <SyncOutlined className="shrink-0 text-fg-tertiary!" />
         <span className="truncate" title={kindLabel(row.kind)}>
           {kindLabel(row.kind)}
         </span>
       </div>
       <div
-        className="mt-1 truncate text-xs text-zinc-400"
+        className="mt-1 truncate text-xs text-fg-secondary"
         title={row.repository ?? text("全局", "Global")}
       >
         {row.repository ?? text("全局", "Global")}
       </div>
       <div
-        className="mt-1 truncate font-mono text-xs text-zinc-600"
+        className="mt-1 truncate font-mono text-xs text-fg-disabled"
         title={row.id}
       >
         {row.id}
@@ -131,7 +131,7 @@ function OperationStatus({ row, text }: { row: OperationRow; text: Localize }) {
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
         <StateBadge state={row.state} />
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-fg-tertiary">
           {row.attempts === undefined
             ? text("未报告尝试次数", "Attempts not reported")
             : text(
@@ -157,12 +157,12 @@ function OperationStatus({ row, text }: { row: OperationRow; text: Localize }) {
           format={() => `${row.progressCurrent ?? 0}/${row.progressTotal}`}
         />
       ) : row.progressMessage ? (
-        <div className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-500">
+        <div className="mt-2 line-clamp-2 text-xs leading-5 text-fg-tertiary">
           {row.progressMessage}
         </div>
       ) : null}
       {hasProgress && row.progressMessage && (
-        <div className="mt-1 line-clamp-2 text-xs leading-4 text-zinc-500">
+        <div className="mt-1 line-clamp-2 text-xs leading-4 text-fg-tertiary">
           {row.progressMessage}
         </div>
       )}
@@ -191,16 +191,16 @@ function OperationTimeline({
       : text("创建", "Created");
   const primaryTime = row.nextAttemptAt ?? row.completedAt ?? row.createdAt;
   return (
-    <div className="space-y-1 text-xs text-zinc-500">
+    <div className="space-y-1 text-xs text-fg-tertiary">
       <div>
-        <span className="text-zinc-600">{primaryLabel}</span>
+        <span className="text-fg-disabled">{primaryLabel}</span>
         <span className="ml-2 whitespace-nowrap">
           {formatDate(primaryTime, locale)}
         </span>
       </div>
       {row.startedAt && (
         <div>
-          <span className="text-zinc-600">{text("开始", "Started")}</span>
+          <span className="text-fg-disabled">{text("开始", "Started")}</span>
           <span className="ml-2 whitespace-nowrap">
             {formatDate(row.startedAt, locale)}
           </span>
@@ -208,7 +208,7 @@ function OperationTimeline({
       )}
       {primaryTime !== row.createdAt && (
         <div>
-          <span className="text-zinc-600">{text("创建", "Created")}</span>
+          <span className="text-fg-disabled">{text("创建", "Created")}</span>
           <span className="ml-2 whitespace-nowrap">
             {formatDate(row.createdAt, locale)}
           </span>
@@ -332,7 +332,7 @@ function OperationDetailsPanel({
         </div>
       )}
       {!row.details && !row.lastError && (
-        <p className="text-xs leading-5 text-zinc-500">
+        <p className="text-xs leading-5 text-fg-tertiary">
           {text(
             "此任务没有报告额外的执行详情。",
             "This job did not report additional execution details.",
@@ -365,13 +365,13 @@ function OperationMobileCard({
   return (
     <article className="ag-operation-mobile-card">
       <OperationIdentity row={row} kindLabel={kindLabel} text={text} />
-      <div className="mt-4 border-t border-zinc-800/60 pt-4">
+      <div className="mt-4 border-t border-line pt-4">
         <OperationStatus row={row} text={text} />
       </div>
-      <div className="mt-4 border-t border-zinc-800/60 pt-4">
+      <div className="mt-4 border-t border-line pt-4">
         <OperationTimeline row={row} locale={locale} text={text} />
       </div>
-      <div className="mt-4 flex justify-end border-t border-zinc-800/60 pt-3">
+      <div className="mt-4 flex justify-end border-t border-line pt-3">
         <OperationActions
           row={row}
           acting={acting}
@@ -382,7 +382,7 @@ function OperationMobileCard({
         />
       </div>
       {detailsOpen && (
-        <div className="mt-4 border-t border-zinc-800/60 pt-4">
+        <div className="mt-4 border-t border-line pt-4">
           <OperationDetailsPanel row={row} text={text} />
         </div>
       )}
@@ -662,10 +662,10 @@ export function OperationsPage() {
                 <Card>
                   <div className="ag-operation-records-header">
                     <div className="min-w-0">
-                      <h2 className="text-sm font-semibold tracking-tight text-zinc-100">
+                      <h2 className="text-sm font-semibold tracking-tight text-fg-strong">
                         {text("执行记录", "Job history")}
                       </h2>
-                      <p className="mt-1 text-xs text-zinc-500">
+                      <p className="mt-1 text-xs text-fg-tertiary">
                         {rows
                           ? text(
                               `显示 ${visibleRows.length} / ${rows.length} 条任务`,

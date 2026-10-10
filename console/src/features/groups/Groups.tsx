@@ -191,7 +191,7 @@ function CreateGroupDialog({
             group
           >
             {candidates.length === 0 ? (
-              <div className="rounded-lg border border-zinc-800 px-2 py-3 text-center text-xs text-zinc-600">
+              <div className="rounded-lg border border-line px-2 py-3 text-center text-xs text-fg-disabled">
                 {text(
                   "该格式下暂无活跃仓库",
                   "No active repositories for this format",
@@ -205,12 +205,12 @@ function CreateGroupDialog({
               />
             )}
           </Field>
-          <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5">
+          <div className="flex items-center justify-between gap-6 rounded-lg border border-line bg-surface-translucent px-3 py-2.5">
             <div>
-              <div className="text-sm font-medium text-zinc-200">
+              <div className="text-sm font-medium text-fg">
                 {text("允许匿名读取", "Allow anonymous reads")}
               </div>
-              <div className="mt-0.5 text-xs text-zinc-500">
+              <div className="mt-0.5 text-xs text-fg-tertiary">
                 {text(
                   "Group 和成员 Repository 都允许匿名读取时，匿名请求才会解析该成员。",
                   "Anonymous requests resolve a member only when both the group and member repository allow anonymous reads.",
@@ -259,7 +259,7 @@ function CapacityDialog({ group }: { group: Group }) {
       key: "position",
       width: 70,
       render: (position: number) => (
-        <span className="text-zinc-500">{position + 1}</span>
+        <span className="text-fg-tertiary">{position + 1}</span>
       ),
     },
     {
@@ -268,7 +268,7 @@ function CapacityDialog({ group }: { group: Group }) {
       key: "repositoryId",
       width: 180,
       render: (id: string) => (
-        <span className="font-mono text-xs text-zinc-400">
+        <span className="font-mono text-xs text-fg-secondary">
           {id.slice(0, 8)}…
         </span>
       ),
@@ -288,7 +288,7 @@ function CapacityDialog({ group }: { group: Group }) {
       key: "usedBytes",
       width: 120,
       render: (value: number) => (
-        <span className="text-zinc-300">{formatBytes(value)}</span>
+        <span className="text-fg-secondary">{formatBytes(value)}</span>
       ),
     },
     {
@@ -296,7 +296,9 @@ function CapacityDialog({ group }: { group: Group }) {
       dataIndex: "objectCount",
       key: "objectCount",
       width: 90,
-      render: (value: number) => <span className="text-zinc-300">{value}</span>,
+      render: (value: number) => (
+        <span className="text-fg-secondary">{value}</span>
+      ),
     },
     {
       title: text("配额", "Quota"),
@@ -304,7 +306,7 @@ function CapacityDialog({ group }: { group: Group }) {
       key: "quotaBytes",
       width: 120,
       render: (value: number | undefined) => (
-        <span className="text-zinc-500">
+        <span className="text-fg-tertiary">
           {value ? formatBytes(value) : text("无限制", "Unlimited")}
         </span>
       ),
@@ -426,12 +428,12 @@ function RenameGroupDialog({
               onChange={(e) => setName(e.target.value)}
             />
           </Field>
-          <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5">
+          <div className="flex items-center justify-between gap-6 rounded-lg border border-line bg-surface-translucent px-3 py-2.5">
             <div>
-              <div className="text-sm font-medium text-zinc-200">
+              <div className="text-sm font-medium text-fg">
                 {text("允许匿名读取", "Allow anonymous reads")}
               </div>
-              <div className="mt-0.5 text-xs text-zinc-500">
+              <div className="mt-0.5 text-xs text-fg-tertiary">
                 {text(
                   "仍需成员 Repository 自身允许匿名读取。",
                   "Each member repository must also allow anonymous reads.",
@@ -536,7 +538,7 @@ function MembersDialog({
       >
         <div className="space-y-3">
           {error !== null && <ErrorBanner error={error} />}
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-fg-tertiary">
             {text(
               "配置顺序在同类型成员内生效；Hosted 始终优先于 Proxy。",
               "Set the order within each type; Hosted members are tried before Proxy members.",
@@ -657,33 +659,33 @@ export function GroupsPage() {
       width: 240,
       render: (name: string, group) => (
         <div className="min-w-0">
-          <div className="font-medium text-zinc-100">{name}</div>
+          <div className="font-medium text-fg-strong">{name}</div>
           {group.format === "npm" && (
             <CopyableValue
               value={npmRegistryURL(name)}
               label={`/npm/${name}/`}
-              className="mt-1 max-w-full text-xs text-zinc-500"
+              className="mt-1 max-w-full text-xs text-fg-tertiary"
             />
           )}
           {group.format === "pypi" && (
             <CopyableValue
               value={pypiIndexURL(name)}
               label={`/pypi/${name}/simple/`}
-              className="mt-1 max-w-full text-xs text-zinc-500"
+              className="mt-1 max-w-full text-xs text-fg-tertiary"
             />
           )}
           {group.format === "go" && (
             <CopyableValue
               value={goProxyURL(name)}
               label={`/go/${name}`}
-              className="mt-1 max-w-full text-xs text-zinc-500"
+              className="mt-1 max-w-full text-xs text-fg-tertiary"
             />
           )}
           {group.format === "cargo" && (
             <CopyableValue
               value={`sparse+${window.location.origin}/cargo/${name}/`}
               label={`/cargo/${name}/`}
-              className="mt-1 max-w-full text-xs text-zinc-500"
+              className="mt-1 max-w-full text-xs text-fg-tertiary"
             />
           )}
         </div>
@@ -722,7 +724,7 @@ export function GroupsPage() {
               return (
                 <span
                   key={member.repositoryId}
-                  className="rounded-md bg-zinc-800 px-2 py-0.5 font-mono text-xs text-zinc-300"
+                  className="rounded-md bg-surface-hover px-2 py-0.5 font-mono text-xs text-fg-secondary"
                   title={member.repositoryId}
                 >
                   {member.position + 1}. {repoName(member.repositoryId)} ·{" "}
@@ -732,7 +734,7 @@ export function GroupsPage() {
               );
             })}
           {(group.members ?? []).length === 0 && (
-            <span className="text-xs text-zinc-600">
+            <span className="text-xs text-fg-disabled">
               {text("无成员", "No members")}
             </span>
           )}
@@ -745,7 +747,7 @@ export function GroupsPage() {
       key: "version",
       width: 90,
       render: (version: string) => (
-        <span className="font-mono text-xs text-zinc-500">v{version}</span>
+        <span className="font-mono text-xs text-fg-tertiary">v{version}</span>
       ),
     },
     {
@@ -935,7 +937,7 @@ export function GroupsPage() {
         message={
           <>
             {text("确定删除分组", "Delete group")}{" "}
-            <span className="font-mono text-zinc-100">{toDelete?.name}</span>{" "}
+            <span className="font-mono text-fg-strong">{toDelete?.name}</span>{" "}
             {text(
               "吗？成员仓库本身不会被删除。",
               "? Member repositories are not deleted.",

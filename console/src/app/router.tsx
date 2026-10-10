@@ -5,7 +5,7 @@ import { RouteErrorPage } from "./RouteErrorPage";
 function RouteFallback() {
   const { t } = usePreferences();
   return (
-    <div className="ag-app-fallback flex min-h-screen items-center justify-center text-sm text-zinc-500">
+    <div className="ag-app-fallback flex min-h-screen items-center justify-center text-sm text-fg-tertiary">
       {t("common.loading")}
     </div>
   );

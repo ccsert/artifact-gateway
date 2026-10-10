@@ -417,7 +417,7 @@ export function RepositoryArtifactsTab({
             ellipsis: true,
             render: (value: string, record) => (
               <span
-                className="font-mono text-xs text-zinc-200"
+                className="font-mono text-xs text-fg"
                 title={record.coordinate}
               >
                 {value}
@@ -434,7 +434,7 @@ export function RepositoryArtifactsTab({
               ellipsis: true,
               render: (value: string, record) => (
                 <span
-                  className="font-mono text-xs text-zinc-200"
+                  className="font-mono text-xs text-fg"
                   title={record.coordinate}
                 >
                   {value}
@@ -459,7 +459,7 @@ export function RepositoryArtifactsTab({
               key: "size",
               width: 140,
               render: (_, record) => (
-                <span className="text-xs text-zinc-400">
+                <span className="text-xs text-fg-secondary">
                   {formatBytes(record.size)}
                 </span>
               ),
@@ -471,7 +471,7 @@ export function RepositoryArtifactsTab({
               width: 180,
               ellipsis: true,
               render: (value: string | undefined) => (
-                <span className="text-xs text-zinc-500">{value ?? "—"}</span>
+                <span className="text-xs text-fg-tertiary">{value ?? "—"}</span>
               ),
             },
           ]
@@ -484,7 +484,7 @@ export function RepositoryArtifactsTab({
                 ellipsis: true,
                 render: (value: string, record: ArtifactRow) => (
                   <span
-                    className="font-mono text-xs text-zinc-200"
+                    className="font-mono text-xs text-fg"
                     title={record.coordinate}
                   >
                     {value}
@@ -498,7 +498,9 @@ export function RepositoryArtifactsTab({
                 width: 220,
                 ellipsis: true,
                 render: (value: string | undefined) => (
-                  <span className="text-xs text-zinc-500">{value ?? "—"}</span>
+                  <span className="text-xs text-fg-tertiary">
+                    {value ?? "—"}
+                  </span>
                 ),
               },
               {
@@ -507,7 +509,7 @@ export function RepositoryArtifactsTab({
                 key: "size",
                 width: 120,
                 render: (value: number | undefined) => (
-                  <span className="text-xs text-zinc-400">
+                  <span className="text-xs text-fg-secondary">
                     {formatBytes(value)}
                   </span>
                 ),
@@ -520,7 +522,7 @@ export function RepositoryArtifactsTab({
                 ellipsis: true,
                 render: (value: string | undefined) => (
                   <span
-                    className="font-mono text-xs text-zinc-500"
+                    className="font-mono text-xs text-fg-tertiary"
                     title={value}
                   >
                     {shortDigest(value)}
@@ -535,7 +537,7 @@ export function RepositoryArtifactsTab({
                 key: "createdAt",
                 width: 180,
                 render: (value: string | undefined) => (
-                  <span className="whitespace-nowrap text-xs text-zinc-500">
+                  <span className="whitespace-nowrap text-xs text-fg-tertiary">
                     {formatDate(value)}
                   </span>
                 ),
@@ -563,7 +565,7 @@ export function RepositoryArtifactsTab({
                   ellipsis: true,
                   render: (value: string, record) => (
                     <span
-                      className="font-mono text-xs text-zinc-200"
+                      className="font-mono text-xs text-fg"
                       title={record.coordinate}
                     >
                       {value}
@@ -602,7 +604,7 @@ export function RepositoryArtifactsTab({
                   key: "createdAt",
                   width: 180,
                   render: (value: string | undefined) => (
-                    <span className="whitespace-nowrap text-xs text-zinc-500">
+                    <span className="whitespace-nowrap text-xs text-fg-tertiary">
                       {formatDate(value)}
                     </span>
                   ),
@@ -619,7 +621,7 @@ export function RepositoryArtifactsTab({
                     const displayPath = decodeRawPathForDisplay(value);
                     return (
                       <span
-                        className="font-mono text-xs text-zinc-200"
+                        className="font-mono text-xs text-fg"
                         title={displayPath}
                       >
                         {displayPath}
@@ -635,7 +637,7 @@ export function RepositoryArtifactsTab({
                   ellipsis: true,
                   render: (value: string | undefined) => (
                     <span
-                      className="font-mono text-xs text-zinc-500"
+                      className="font-mono text-xs text-fg-tertiary"
                       title={value}
                     >
                       {shortDigest(value)}
@@ -648,7 +650,7 @@ export function RepositoryArtifactsTab({
                   key: "size",
                   width: 120,
                   render: (value: number | undefined) => (
-                    <span className="text-xs text-zinc-400">
+                    <span className="text-xs text-fg-secondary">
                       {formatBytes(value)}
                     </span>
                   ),
@@ -659,7 +661,7 @@ export function RepositoryArtifactsTab({
                   key: "createdAt",
                   width: 180,
                   render: (value: string | undefined) => (
-                    <span className="whitespace-nowrap text-xs text-zinc-500">
+                    <span className="whitespace-nowrap text-xs text-fg-tertiary">
                       {formatDate(value)}
                     </span>
                   ),
@@ -930,7 +932,7 @@ export function RepositoryArtifactsTab({
                 setExpandedImage(null);
               }}
             />
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-fg-tertiary">
               {text(
                 `${formatNumber(proxyTotal)} 个 Maven 版本，当前显示 ${formatNumber(rows.length)} 个`,
                 `${formatNumber(proxyTotal)} Maven versions, showing ${formatNumber(rows.length)}`,
@@ -1047,7 +1049,7 @@ export function RepositoryArtifactsTab({
           />
           <Pagination hasMore={!!nextToken} onMore={() => load(q, nextToken)} />
           {proxyMaven && proxyTotal > 0 && (
-            <div className="border-t border-zinc-800/60 px-4 py-2 text-center text-xs text-zinc-500">
+            <div className="border-t border-line px-4 py-2 text-center text-xs text-fg-tertiary">
               {text(
                 `第 ${formatNumber(proxyPage)} 页，每页 ${formatNumber(PROXY_MAVEN_PAGE_SIZE)} 个 Maven 版本`,
                 `Page ${formatNumber(proxyPage)} with ${formatNumber(PROXY_MAVEN_PAGE_SIZE)} Maven versions per page`,

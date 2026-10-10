@@ -204,7 +204,7 @@ export function MavenPublishWizard({
       dataIndex: "name",
       key: "name",
       render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-200">{value}</span>
+        <span className="font-mono text-xs text-fg">{value}</span>
       ),
     },
     {
@@ -213,7 +213,7 @@ export function MavenPublishWizard({
       key: "digest",
       width: 180,
       render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-500" title={value}>
+        <span className="font-mono text-xs text-fg-tertiary" title={value}>
           {shortDigest(value)}
         </span>
       ),
@@ -224,7 +224,7 @@ export function MavenPublishWizard({
       key: "size",
       width: 110,
       render: (value: number) => (
-        <span className="text-xs text-zinc-400">{formatBytes(value)}</span>
+        <span className="text-xs text-fg-secondary">{formatBytes(value)}</span>
       ),
     },
     {
@@ -250,7 +250,7 @@ export function MavenPublishWizard({
       dataIndex: "name",
       key: "name",
       render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-200">{value}</span>
+        <span className="font-mono text-xs text-fg">{value}</span>
       ),
     },
     {
@@ -259,7 +259,7 @@ export function MavenPublishWizard({
       key: "size",
       width: 120,
       render: (value: number) => (
-        <span className="text-xs text-zinc-400">{formatBytes(value)}</span>
+        <span className="text-xs text-fg-secondary">{formatBytes(value)}</span>
       ),
     },
     {
@@ -369,10 +369,10 @@ export function MavenPublishWizard({
 
       {step === "upload" && session && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-800 px-4 py-3 text-xs text-zinc-400">
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line px-4 py-3 text-xs text-fg-secondary">
             <span>
               {text("会话", "Session")}{" "}
-              <code className="font-mono text-zinc-300">
+              <code className="font-mono text-fg-secondary">
                 {session.id.slice(0, 8)}…
               </code>
             </span>
