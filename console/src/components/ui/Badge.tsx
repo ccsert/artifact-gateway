@@ -115,9 +115,10 @@ export function StateBadge({ state }: { state: string | undefined }) {
   );
 }
 
-type StatusTone = "success" | "warning" | "danger" | "info" | "neutral";
+export type StatusTone = "success" | "warning" | "danger" | "info" | "neutral";
 
-function statusTone(tone: BadgeTone | undefined): StatusTone {
+/** Narrows a badge tone to the status families `StatusText` can render. */
+export function statusTone(tone: BadgeTone | undefined): StatusTone {
   return tone === "success" ||
     tone === "warning" ||
     tone === "danger" ||

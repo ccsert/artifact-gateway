@@ -2953,3 +2953,60 @@ html .ag-brand-mark.text-white {
   font: inherit;
   line-height: 1.6;
 }
+
+/* ========== Activity list (readable audit events) ========== */
+
+.ag-activity-list {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+
+.ag-activity-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 16px;
+}
+
+.ag-activity-item + .ag-activity-item {
+  border-top: 1px solid var(--ag-border-row);
+}
+
+.ag-activity-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ag-content-primary);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.ag-activity-target {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ag-content-secondary);
+  font-size: 12.5px;
+  font-weight: 400;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ag-activity-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--ag-content-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ag-activity-actor {
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
