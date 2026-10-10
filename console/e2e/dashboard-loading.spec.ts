@@ -83,6 +83,9 @@ for (const width of [1440, 390]) {
     );
     await page.goto("/");
     const rows = page.locator(".ag-activity-list .ag-activity-item");
+    const auditCard = page.locator(".ag-card").filter({
+      has: page.locator(".ag-activity-list"),
+    });
     await expect(rows).toHaveCount(3);
     await expect(rows.nth(0).locator(".ag-activity-actor")).toHaveText(
       en ? "Anonymous" : "匿名",
@@ -100,13 +103,10 @@ for (const width of [1440, 390]) {
     await expect(rows.nth(2)).toContainText("synthetic-raw/sample.zip");
     await expect(rows.nth(2)).toHaveAttribute("data-denied", "true");
     await expect(
-      page
-        .locator(".ag-card")
-        .filter({ has: page.locator(".ag-activity-list") })
-        .getByRole("link", {
-          name: en ? "View all →" : "查看全部 →",
-          exact: true,
-        }),
+      auditCard.getByRole("link", {
+        name: en ? "View all →" : "查看全部 →",
+        exact: true,
+      }),
     ).toHaveAttribute("href", "/audits");
     await rows.nth(2).scrollIntoViewIfNeeded();
     expect(
@@ -115,9 +115,9 @@ for (const width of [1440, 390]) {
         .evaluate((el) => el.scrollWidth - el.clientWidth),
     ).toBeLessThanOrEqual(0);
     expect(errors).toEqual([]);
-    await page.screenshot({
+    await auditCard.screenshot({
       path: info.outputPath(`audit-identities-${width}.png`),
-      fullPage: true,
+      animations: "disabled",
     });
   });
 
