@@ -50,7 +50,9 @@ export function RecentAuditList({ records }: { records: AuditRecord[] }) {
             </div>
             <div className="ag-activity-meta">
               <span className="ag-activity-actor" title={record.actor}>
-                {record.actor ?? text("匿名", "Anonymous")}
+                {record.actor === "anonymous"
+                  ? text("匿名", "Anonymous")
+                  : record.actor || text("未记录", "Not recorded")}
               </span>
               <span aria-hidden="true">·</span>
               <time dateTime={record.occurredAt}>

@@ -745,6 +745,18 @@ test("repository detail keeps operational content above the fold", async ({
   await expect(
     page.getByRole("tab", { name: "制品", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
+  await expect(table).toBeVisible();
+  await expect(
+    table.getByText("releases/example-1.zip", { exact: true }),
+  ).toBeVisible();
+  const secondaryTargets = await navigation
+    .locator(".ag-repository-subtabs .ant-tabs-tab")
+    .evaluateAll((tabs) =>
+      tabs.map((tab) => tab.getBoundingClientRect().height),
+    );
+  expect(secondaryTargets.length).toBeGreaterThan(0);
+  for (const height of secondaryTargets)
+    expect(height).toBeGreaterThanOrEqual(44);
   expect(
     await page.evaluate(
       () => document.body.scrollWidth - document.body.clientWidth,
@@ -1085,13 +1097,19 @@ test("scanning uses a frameless responsive workspace", async ({
   }
 
   await page.setViewportSize({ width: 390, height: 844 });
-  const narrowWarningBox = await scannerWarning.boundingBox();
-  const narrowCardBox = await artifactScanCard.boundingBox();
-  const mobileGap =
-    (narrowCardBox?.y ?? 0) -
-    ((narrowWarningBox?.y ?? 0) + (narrowWarningBox?.height ?? 0));
-  expect(mobileGap).toBeGreaterThanOrEqual(15);
-  expect(mobileGap).toBeLessThanOrEqual(17);
+  const warningElement = await scannerWarning.elementHandle();
+  // Resize and font reflow can occur between two separate boundingBox calls.
+  // Read both rectangles in one browser frame; keep the original 15–17px gate.
+  await expect(async () => {
+    const mobileGap = await artifactScanCard.evaluate((card, warning) => {
+      if (!warning) throw new Error("Scanner warning is missing");
+      const warningBox = warning.getBoundingClientRect();
+      const cardBox = card.getBoundingClientRect();
+      return cardBox.top - warningBox.bottom;
+    }, warningElement);
+    expect(mobileGap).toBeGreaterThanOrEqual(15);
+    expect(mobileGap).toBeLessThanOrEqual(17);
+  }).toPass({ timeout: 5000 });
   expect(
     await page.evaluate(
       () => document.body.scrollWidth - document.body.clientWidth,
@@ -1104,6 +1122,33 @@ test("scanning uses a frameless responsive workspace", async ({
       fullPage: true,
     });
   }
+});
+
+test.describe("touch repository task navigation", () => {
+  test.use({ hasTouch: true });
+  test("secondary tasks retain 44px targets on a wide touch viewport", async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mockRepositoryDetail(page);
+    await page.goto(`/repositories/${repositoryId}?tab=scanning`);
+    await expect(
+      page.getByRole("heading", { name: "制品扫描", exact: true }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(() => matchMedia("(pointer: coarse)").matches),
+    ).toBe(true);
+    const targets = await page
+      .locator(".ag-repository-subtabs .ant-tabs-tab")
+      .evaluateAll((tabs) =>
+        tabs.map((tab) => tab.getBoundingClientRect().height),
+      );
+    expect(targets.length).toBeGreaterThan(0);
+    for (const height of targets) expect(height).toBeGreaterThanOrEqual(44);
+    expect(errors).toEqual([]);
+  });
 });
 
 test("scanning selects a searchable immutable artifact before queuing", async ({

@@ -172,16 +172,41 @@ export const repositoryCapacities = repositories.map((item, index) => ({
 })) satisfies ListRepositoryCapacitiesResponses[200];
 
 export const formatProfiles = {
-  items: (["maven", "npm", "oci", "pypi", "raw", "go", "cargo"] as const).map(
-    (format) => ({
-      format,
-      repositoryTypes: ["hosted", "proxy"],
-      groupSupported: true,
-      anonymousRead: true,
-      hostedOperations: ["read", "publish", "browse", "delete"],
-      proxyOperations: ["read", "browse"],
-    }),
-  ),
+  items: (
+    [
+      "oci",
+      "maven",
+      "conan",
+      "raw",
+      "npm",
+      "pypi",
+      "go",
+      "cargo",
+      "apt",
+    ] as const
+  ).map((format) => ({
+    format,
+    repositoryTypes: format === "apt" ? ["proxy"] : ["hosted", "proxy"],
+    groupSupported: true,
+    anonymousRead: true,
+    hostedOperations:
+      format === "apt"
+        ? []
+        : [
+            "read",
+            "publish",
+            "browse",
+            "delete",
+            "restore",
+            "retain",
+            "reclaim",
+            "promote",
+            "replicate",
+          ],
+    proxyOperations: ["npm", "go", "cargo", "apt"].includes(format)
+      ? ["read", "browse"]
+      : ["read", "browse", "reclaim"],
+  })),
 } satisfies ListFormatProfilesResponses[200];
 
 export const artifactSearch = {
