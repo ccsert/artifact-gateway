@@ -299,8 +299,12 @@ test("cancel/navigation clears drafts and duplicate confirmation queues only onc
   await page
     .getByLabel("收件人地址", { exact: true })
     .fill("private@example.test");
-  await page.getByRole("tab", { name: "配额告警", exact: true }).click();
-  await page.getByRole("tab", { name: "邮件通知", exact: true }).click();
+  const alertsTab = page.getByRole("tab", { name: "配额告警", exact: true });
+  await alertsTab.click();
+  await expect(alertsTab).toHaveAttribute("aria-selected", "true");
+  const emailTab = page.getByRole("tab", { name: "邮件通知", exact: true });
+  await emailTab.click();
+  await expect(emailTab).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "新建邮件目标" }).click();
   await expect(page.getByLabel("收件人地址", { exact: true })).toHaveValue("");
   await page.getByRole("button", { name: "取消", exact: true }).click();
