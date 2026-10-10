@@ -1,6 +1,6 @@
 ---
 name: Artifact Gateway Console
-description: 面向可信制品操作的精确、协议原生控制面。
+description: 面向可信制品操作的精致、协议原生工程控制台。
 ---
 
 # 设计系统：Artifact Gateway Console
@@ -9,9 +9,11 @@ description: 面向可信制品操作的精确、协议原生控制面。
 
 ## 概览
 
-**创意北极星：“可验证的控制面”**
+**创意北极星：“精致工程控制台”**（设计语言 v2，[#319](https://github.com/ccsert/artifact-gateway/issues/319)）
 
-Console 应像一个所有声明都可被证明的系统控制台。视觉语言深色、精确、安静且面向运维：真实状态、不可变身份、策略边界和可恢复操作优先于装饰。默认深色主题是照明克制的工程控制台；浅色主题保持相同层级，不成为另一个产品。
+Console 应像一个所有声明都可被证明的系统控制台，并具有优秀开发者工具的做工。视觉语言安静、精确、留白充分：中性层级由细边框分隔，主操作只有一个前景色实底按钮。真实状态、不可变身份、策略边界和可恢复操作优先于装饰。默认深色主题是安静的近黑工作区而非发光仪表盘；浅色主题保持相同层级，不成为另一个产品。
+
+[v2 设计画布](https://claude.ai/artifact/V5Hyr915rnoPv477jcc8Xr)展示总览、仓库列表、仓库详情、命令面板与 token 的目标形态。
 
 这是一个 **Operate** 界面。信息密度、可扫描性、可预测的 Ant Design 行为、键盘访问和快速状态反馈高于视觉噱头。产品特征来自协议对象、等宽身份、源到分发的生命周期和克制的信号青色，而非渐变、大号营销字体或装饰动画。
 
@@ -19,8 +21,9 @@ Console 应像一个所有声明都可被证明的系统控制台。视觉语言
 
 - 证据优先：健康、风险、阻塞和必要操作先于装饰指标。
 - 协议原生：坐标、摘要、Repository 类型和生命周期阶段必须可见、可复制。
-- 信号色克制：青色只表示主操作、当前位置、焦点和可信链接；语义色保留状态含义。
-- 表面有层次但不漂浮：边框和色调形成结构，阴影只表达真实 elevation。
+- 信号色克制：青色只表示链接、当前位置和焦点；主操作使用前景色实底；语义色保留状态含义。
+- 表面分层而平坦：细边框和色调形成结构，阴影只用于浮层。
+- 标识即色块：格式与状态使用小色块搭配中性、可读的文字。
 - 动效清脆：短且可中断的反馈支持状态变化，不延迟高频导航。
 
 ## 颜色
@@ -29,32 +32,35 @@ Console 应像一个所有声明都可被证明的系统控制台。视觉语言
 
 运行时主题遵循 [ADR 0005](docs/adr/0005-console-semantic-theme-system.zh-CN.md)：受约束的 Theme Package 只解析一次，形成带类型的 Surface、Content、Border、Action、Link、Focus、Selection、Navigation、Status、Visualization、Identity 与 Effect 角色。Ant Design 组件 Token 与自定义 CSS 变量消费同一份投影；页面 CSS 必须命名语义角色，不能直接命名调色板颜色。
 
-### 主色
+### 动作色与信号色
 
-- **Signal Cyan**（`primary-dark`、`primary-light`）：主操作、链接、焦点、选中导航、可信生命周期操作和当前状态。
-- 默认 Gateway 填充主按钮在常态、悬浮及按下状态共用 `content.onAction` 前景色。浅色动作背景使用 `primary-light-action`，保持白色文字可读；链接、导航与状态角色继续使用各自 token。
-- **Signal Wash**（`primary-soft-dark`、`primary-soft-light`）：选中操作或当前位置背景，必须从属于正文；信息表面使用 `info` 状态家族。
+- **前景动作色**（`action-dark`、`action-light`）：每个决策面唯一的主操作使用最强文字色实底，上层文字为 `dark-text-on-action` / `light-text-on-action`。它取 `content.strong`，刻意区别于正文色，使派生的文本选中色保持中性。
+- **Signal Cyan**（`signal-dark`、`signal-light`）：链接、键盘焦点、当前位置指示，以及开关、Tab 等选中控件。内置主题中不再作为按钮填充色。
+- 扩展 Theme Package 的主操作继续使用其自身主色；前景动作色是内置主题的角色覆盖，不改变主题包 schema。
 
 ### 中性色
 
 - **Night Ledger**（`dark-bg`）：深色页面画布及最深凹层。
+- **Rail**（`dark-rail`、`light-rail`）：导航侧栏，比画布高一级。
 - **Verified Surface**（`dark-surface`）：卡片、表格、控件和主要工作区。
 - **Raised Instrument**（`dark-elevated`）：Modal、Drawer、Popover 等真实浮层。
 - **Operational/Decisive/Supporting Text**：依次用于正文、标题与关键值、仍有行动含义的解释。
 - **Muted Metadata**：时间戳和次要元数据，不能单独承载状态。
 - **Daylight Canvas**：浅色页面与表面，层级与深色主题一致。
 
-**信号稀缺规则：** 青色只用于动作、位置、焦点和可信系统链接，不作为普通装饰填充。
+**信号稀缺规则：** 青色只用于位置、焦点和可信系统链接，不作为按钮填充或普通装饰填充。
 
 **中性文本选择规则：** 浏览器原生文本选择属于内容状态，背景从前景文字与容器中性色推导，不能使用主操作色。
 
 **强调色预算规则：** 通用图标、中性 Badge、空状态、禁用控件、普通 Hover、卡片边框和大面积装饰光晕都不消耗主强调色；真正的产品/站点标志是唯一装饰性例外。
 
-**状态必须有文字规则：** 成功、警告和错误颜色必须搭配文字、图标或两者，不能只靠颜色表达。
+**状态必须有文字规则：** 成功、警告和错误颜色必须搭配文字、图标或两者，不能只靠颜色表达。没有数据的状态为中性色，不能显示为成功。
+
+**标识即色块规则：** 制品格式使用 8px 分类色块搭配中性等宽文字（`FormatBadge`）；状态使用状态色圆点搭配状态色文字（`StatusText`）；Hosted/Proxy 使用中性等宽文字（`RepositoryTypeBadge`）。彩色胶囊只用于计数与筛选，不用于身份标识，保证任何主题下都可读。
 
 ## 字体
 
-标题与正文使用 Inter 及系统 UI fallback；协议坐标、摘要、principal、request ID 和命令使用 JetBrains Mono 及平台等宽 fallback。
+标题与正文使用 Geist（自托管可变字体），中文回落 PingFang SC / Noto Sans SC；协议坐标、摘要、principal、request ID 和命令使用 Geist Mono 及平台等宽 fallback。两套字体通过 Fontsource 以 SIL Open Font License 随 Console 打包，不从第三方主机加载。
 
 ### 层级
 
@@ -82,23 +88,22 @@ Console 应像一个所有声明都可被证明的系统控制台。视觉语言
 
 ## 高度与深度
 
-默认分层但平坦。背景、表面、边框和 overlay 色调承担主要层级。卡片使用轻微结构阴影；Popover 和 Modal 使用更强 raised 阴影。Blur 只用于能澄清层级的 shell chrome 或半透明表面。
+默认分层但平坦。背景、表面、边框和 overlay 色调承担层级。卡片和按钮静止时没有阴影；Popover、Dropdown、Drawer 和 Modal 使用带细描边的 raised 阴影。Blur 只用于能澄清层级的 shell chrome 或 Modal 遮罩。
 
-- **Structural Card**：`--ag-shadow-card` 轻度分隔工作表面。
-- **Raised Instrument**：`--ag-shadow-pop` 用于 Modal、Drawer、Dropdown、Popover。
-- **Primary Action Signal**：紧凑的 Ant Design 主按钮阴影只强化主动作。
+- **Structural Card**：内置主题中 `--ag-shadow-structural` 为 `none`，由边框分隔工作表面。
+- **Raised Instrument**：`--ag-shadow-elevated` 用于 Modal、Drawer、Dropdown、Popover 与命令面板。
 
 **未抬升则保持平坦：** Hover 可调整边框或背景；只有组件真正高于上下文时才使用大阴影。
 
 ## 形状
 
-控件使用 8px 圆角，工作表面 10px，overlay 12px，Tooltip 6px。完整胶囊和圆形只用于紧凑状态点、Avatar 和真正的圆形控件。嵌套控件不应比容器更柔软、更装饰化。
+控件使用 8px 圆角，工作表面 12px，overlay 14px，Tooltip 6px。完整胶囊和圆形只用于紧凑状态点、Avatar 和真正的圆形控件。嵌套控件不应比容器更柔软、更装饰化。
 
 ## 组件
 
 ### 按钮
 
-桌面默认高度 34px，粗指针至少 44px。每个决策面只有一个主操作。Hover、Focus、Active 使用明确 token 和可见焦点；破坏性操作使用 danger 语义，不形成第二主色。
+桌面默认高度 34px，粗指针至少 44px。每个决策面只有一个主操作，使用前景动作色实底（深色主题为浅色按钮，浅色主题为深色按钮），没有发光或彩色阴影。Hover、Focus、Active 使用明确 token 和可见焦点；破坏性操作使用 danger 语义，不形成第二主色。
 
 ### 卡片与容器
 
@@ -110,7 +115,7 @@ Console 应像一个所有声明都可被证明的系统控制台。视觉语言
 
 ### 导航
 
-按运行时、治理和管理任务分组。选中项组合克制青色背景、可读青色文字和窄位置指示。桌面折叠应立即稳定；移动端 Drawer 有明确关闭标签和 44px 目标。
+按运行时、治理和管理任务分组。选中项使用中性底色、强文字和窄的 Signal Cyan 位置指示。桌面折叠应立即稳定；移动端 Drawer 有明确关闭标签和 44px 目标。
 
 ### 指标条与生命周期
 

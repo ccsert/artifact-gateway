@@ -40,7 +40,11 @@ import {
   EmptyState,
   isNotFound,
 } from "../../components/ui/Feedback";
-import { Badge, FormatBadge } from "../../components/ui/Badge";
+import {
+  Badge,
+  FormatBadge,
+  RepositoryTypeBadge,
+} from "../../components/ui/Badge";
 import { Modal, ConfirmDialog, useDisclosure } from "../../components/ui/Modal";
 import { MemberOrderPicker } from "./MemberOrderPicker";
 import {
@@ -275,9 +279,7 @@ function CapacityDialog({ group }: { group: Group }) {
       key: "type",
       width: 110,
       render: (type: GroupCapacityMember["type"]) => (
-        <Badge tone={type === "proxy" ? "visualization-5" : "visualization-4"}>
-          {type}
-        </Badge>
+        <RepositoryTypeBadge type={type} />
       ),
     },
     {

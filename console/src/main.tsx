@@ -6,6 +6,8 @@ import { AuthProvider } from "./lib/auth";
 import { PreferencesProvider } from "./lib/preferences";
 import { SiteSettingsProvider } from "./lib/siteSettings";
 import { router } from "./app/router";
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
 import "./styles.css";
 import "./app/layout.css";
 

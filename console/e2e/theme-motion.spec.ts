@@ -113,7 +113,7 @@ test("reduced motion switches the complete palette atomically", async ({
   );
   expect(commit).toBeDefined();
   expect(normalizeValues(commit!.variables)).toEqual(normalizeValues(expected));
-  expect(commit!.primaryButtonBackground).toBe("rgb(8, 127, 156)");
+  expect(commit!.primaryButtonBackground).toBe("rgb(9, 9, 11)");
   expect(commit!.transitionProperty).toBe("none");
   expect(commit!.transitionDuration).toBe("0s");
 });

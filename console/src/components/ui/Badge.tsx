@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { artifactFormatVisualizationTone } from "../../lib/artifactFormatVisuals";
+import { artifactFormatVisualizationSlot } from "../../lib/artifactFormatVisuals";
 import { usePreferences } from "../../lib/preferences";
 
 const toneClasses = {
@@ -109,17 +109,85 @@ export function StateBadge({ state }: { state: string | undefined }) {
   };
   const label = labels[value];
   return (
-    <Badge tone={stateTone[value] ?? "neutral"}>
+    <StatusText tone={statusTone(stateTone[value])}>
       {label ? text(label[0], label[1]) : value}
-    </Badge>
+    </StatusText>
   );
 }
 
+type StatusTone = "success" | "warning" | "danger" | "info" | "neutral";
+
+function statusTone(tone: BadgeTone | undefined): StatusTone {
+  return tone === "success" ||
+    tone === "warning" ||
+    tone === "danger" ||
+    tone === "info"
+    ? tone
+    : "neutral";
+}
+
+const statusColor: Record<StatusTone, string> = {
+  success: "var(--ag-status-success)",
+  warning: "var(--ag-status-warning)",
+  danger: "var(--ag-status-danger)",
+  info: "var(--ag-status-info)",
+  neutral: "var(--ag-content-tertiary)",
+};
+
+/**
+ * Design language v2 states: a dot plus readable text in the status color.
+ * The text always carries the meaning; the dot only aids scanning.
+ */
+export function StatusText({
+  children,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  tone?: StatusTone;
+}) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium leading-5"
+      style={{ color: statusColor[tone] }}
+    >
+      <span
+        aria-hidden="true"
+        className="size-1.5 shrink-0 rounded-full"
+        style={{ background: statusColor[tone] }}
+      />
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Design language v2 format identity: a categorical swatch beside neutral
+ * monospace text, so the label stays readable in every theme.
+ */
 export function FormatBadge({ format }: { format: string | undefined }) {
   const value = format ?? "?";
+  const slot = artifactFormatVisualizationSlot(value);
+  const swatch =
+    slot === undefined
+      ? "var(--ag-visualization-fallback)"
+      : `var(--ag-visualization-${slot + 1})`;
   return (
-    <Badge tone={artifactFormatVisualizationTone(value) ?? "neutral"}>
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-xs leading-5 text-[var(--ag-content-secondary)]">
+      <span
+        aria-hidden="true"
+        className="size-2 shrink-0 rounded-[2px]"
+        style={{ background: swatch }}
+      />
       {value}
-    </Badge>
+    </span>
+  );
+}
+
+/** Hosted/Proxy is structure, not data: neutral monospace text, no color. */
+export function RepositoryTypeBadge({ type }: { type: string | undefined }) {
+  return (
+    <span className="whitespace-nowrap font-mono text-xs leading-5 text-[var(--ag-content-secondary)]">
+      {type ?? "hosted"}
+    </span>
   );
 }

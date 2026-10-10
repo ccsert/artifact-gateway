@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { authenticateAsAdmin } from "./support/auth";
 
-test("Gateway Dark preserves the established shell and menu palette", async ({
+test("Gateway Dark projects the v2 shell and menu palette", async ({
   page,
 }, testInfo) => {
   await page.addInitScript(() => {
@@ -50,16 +50,16 @@ test("Gateway Dark preserves the established shell and menu palette", async ({
 
   expect(palette).toEqual({
     themeID: "gateway-dark",
-    sider: "rgba(12, 13, 16, 0.96)",
+    sider: "rgb(12, 12, 15)",
     menu: "rgba(0, 0, 0, 0)",
     selectedBackground: "rgba(0, 0, 0, 0)",
     selectedBackgroundImage:
-      "linear-gradient(90deg, rgba(6, 182, 212, 0.14), rgba(6, 182, 212, 0.05))",
-    selectedColor: "rgb(165, 243, 252)",
+      "linear-gradient(90deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.06))",
+    selectedColor: "rgb(250, 250, 250)",
     indicatorBackgroundImage:
-      "linear-gradient(rgb(34, 211, 238), rgb(8, 145, 178))",
-    surface: "rgba(24, 24, 27, 0.55)",
-    actionSoft: "rgba(6, 182, 212, 0.12)",
+      "linear-gradient(rgb(34, 211, 238), rgb(34, 211, 238))",
+    surface: "rgba(17, 17, 20, 0.82)",
+    actionSoft: "rgba(255, 255, 255, 0.08)",
   });
   if (process.env.CAPTURE_THEME_EVIDENCE === "1") {
     await page.screenshot({
@@ -69,7 +69,7 @@ test("Gateway Dark preserves the established shell and menu palette", async ({
   }
 });
 
-test("Gateway Light preserves the established shell and menu palette", async ({
+test("Gateway Light projects the v2 shell and menu palette", async ({
   page,
 }, testInfo) => {
   await page.addInitScript(() => {
@@ -118,16 +118,16 @@ test("Gateway Light preserves the established shell and menu palette", async ({
 
   expect(palette).toEqual({
     themeID: "gateway-light",
-    sider: "rgba(255, 255, 255, 0.96)",
-    menu: "rgb(255, 255, 255)",
+    sider: "rgb(251, 251, 252)",
+    menu: "rgba(0, 0, 0, 0)",
     selectedBackground: "rgba(0, 0, 0, 0)",
     selectedBackgroundImage:
-      "linear-gradient(90deg, rgba(6, 182, 212, 0.14), rgba(6, 182, 212, 0.05))",
-    selectedColor: "rgb(8, 145, 178)",
+      "linear-gradient(90deg, rgba(24, 24, 27, 0.05), rgba(24, 24, 27, 0.05))",
+    selectedColor: "rgb(9, 9, 11)",
     indicatorBackgroundImage:
-      "linear-gradient(rgb(34, 211, 238), rgb(8, 145, 178))",
+      "linear-gradient(rgb(14, 116, 144), rgb(14, 116, 144))",
     surface: "rgba(255, 255, 255, 0.9)",
-    actionSoft: "rgba(8, 145, 178, 0.1)",
+    actionSoft: "rgba(24, 24, 27, 0.06)",
   });
   if (process.env.CAPTURE_THEME_EVIDENCE === "1") {
     await page.screenshot({
@@ -196,16 +196,16 @@ test("switching back from an extension theme restores Gateway Dark exactly", asy
       menu: "rgba(0, 0, 0, 0)",
       selectedBackground: "rgba(0, 0, 0, 0)",
       selectedBackgroundImage:
-        "linear-gradient(90deg, rgba(6, 182, 212, 0.14), rgba(6, 182, 212, 0.05))",
-      selectedColor: "rgb(165, 243, 252)",
+        "linear-gradient(90deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.06))",
+      selectedColor: "rgb(250, 250, 250)",
       indicatorBackgroundImage:
-        "linear-gradient(rgb(34, 211, 238), rgb(8, 145, 178))",
+        "linear-gradient(rgb(34, 211, 238), rgb(34, 211, 238))",
     });
 });
 
 const semanticThemeCases = [
-  ["gateway-dark", "#06b6d4"],
-  ["gateway-light", "#087f9c"],
+  ["gateway-dark", "#fafafa"],
+  ["gateway-light", "#09090b"],
   ["aerok-dark", "#3258d0"],
   ["aerok-light", "#26499d"],
 ] as const;

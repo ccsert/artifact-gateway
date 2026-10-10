@@ -48,7 +48,7 @@ describe("console themes", () => {
     );
   });
 
-  it("preserves the established Gateway Dark shell palette", () => {
+  it("projects the Gateway Dark v2 shell palette", () => {
     const dark = defaultConsoleThemes.find(
       (theme) => theme.id === "gateway-dark",
     )!;
@@ -60,40 +60,42 @@ describe("console themes", () => {
     );
     expect(
       document.documentElement.style.getPropertyValue("--ag-surface-sider"),
-    ).toBe("rgba(12, 13, 16, 0.96)");
+    ).toBe("#0c0c0f");
     expect(
       document.documentElement.style.getPropertyValue(
         "--ag-surface-container-translucent",
       ),
-    ).toBe("rgba(24, 24, 27, 0.55)");
+    ).toBe("rgba(17, 17, 20, 0.82)");
     expect(
       document.documentElement.style.getPropertyValue(
         "--ag-action-primary-soft",
       ),
-    ).toBe("rgba(6, 182, 212, 0.12)");
+    ).toBe("rgba(255, 255, 255, 0.08)");
 
     const config = buildConsoleThemeConfig(dark);
     expect(config.components?.Menu?.darkItemBg).toBe("transparent");
-    expect(config.components?.Menu?.darkItemSelectedColor).toBe("#a5f3fc");
-    expect(config.components?.Button?.defaultBg).toBe("#141417");
+    expect(config.components?.Menu?.darkItemSelectedColor).toBe("#fafafa");
+    expect(config.components?.Button?.defaultBg).toBe("#111114");
     expect(config.components?.Input?.activeShadow).toBe(
-      "0 0 0 2px rgba(6, 182, 212, 0.35)",
+      "0 0 0 2px rgba(34, 211, 238, 0.4)",
     );
     expect(config.components?.Segmented?.trackBg).toBe(
-      "rgba(63, 63, 70, 0.16)",
+      "rgba(255, 255, 255, 0.04)",
     );
-    expect(config.components?.Table?.headerColor).toBe("#8f8f9a");
+    expect(config.components?.Table?.headerColor).toBe("#8b8b94");
   });
 
-  it("preserves the established Gateway Light menu surface", () => {
+  it("keeps the Gateway Light v2 menu on the sider surface", () => {
     const light = defaultConsoleThemes.find(
       (theme) => theme.id === "gateway-light",
     )!;
     const resolved = resolveConsoleTheme(light);
 
-    expect(resolved.roles.surface.menu).toBe("#ffffff");
-    expect(resolved.antDesign.components?.Menu?.itemBg).toBe("#ffffff");
-    expect(resolved.antDesign.components?.Menu?.subMenuItemBg).toBe("#ffffff");
+    expect(resolved.roles.surface.menu).toBe("transparent");
+    expect(resolved.antDesign.components?.Menu?.itemBg).toBe("transparent");
+    expect(resolved.antDesign.components?.Menu?.subMenuItemBg).toBe(
+      "transparent",
+    );
   });
 
   it("keeps extension menus on their package palette", () => {
@@ -237,8 +239,8 @@ describe("console themes", () => {
 });
 
 it.each([
-  ["gateway-dark", "#041b23", "#06b6d4"],
-  ["gateway-light", "#ffffff", "#087f9c"],
+  ["gateway-dark", "#09090b", "#fafafa"],
+  ["gateway-light", "#ffffff", "#09090b"],
 ])(
   "projects readable %s action tokens without replacing global solid text",
   (id, foreground, background) => {

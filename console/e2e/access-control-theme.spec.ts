@@ -138,7 +138,7 @@ test("compact public access controls use coherent light and dark themes", async 
   await page.goto("/access?tab=policies");
   const card = await expectCompactBoundary(page, 220);
   const heading = card.getByRole("heading", { name: "公开访问边界" });
-  await expect(heading).toHaveCSS("color", "rgb(24, 24, 27)");
+  await expect(heading).toHaveCSS("color", "rgb(9, 9, 11)");
   const navigation = await page.locator(".ag-sider-desktop").boundingBox();
   const cardBox = await card.boundingBox();
   expect(navigation).not.toBeNull();
