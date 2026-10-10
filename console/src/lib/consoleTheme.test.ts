@@ -98,6 +98,39 @@ describe("console themes", () => {
     );
   });
 
+  it.each(["success", "warning", "danger", "info"] as const)(
+    "keeps Gateway Light %s text above AA on resting and hovered surfaces",
+    (status) => {
+      const light = defaultConsoleThemes.find(
+        (theme) => theme.id === "gateway-light",
+      )!;
+      const { roles } = resolveConsoleTheme(light);
+      const luminance = (hex: string) => {
+        expect(hex).toMatch(/^#[\da-f]{6}$/i);
+        const channels = [1, 3, 5].map((offset) => {
+          const value =
+            Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+          return value <= 0.04045
+            ? value / 12.92
+            : ((value + 0.055) / 1.055) ** 2.4;
+        });
+        return (
+          channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
+        );
+      };
+      const foreground = luminance(roles.status[status].foreground);
+      for (const surface of ["canvas", "container", "hover"] as const) {
+        const background = luminance(roles.surface[surface]);
+        const contrast =
+          (Math.max(foreground, background) + 0.05) /
+          (Math.min(foreground, background) + 0.05);
+        expect(contrast, `${status} text on ${surface}`).toBeGreaterThanOrEqual(
+          4.5,
+        );
+      }
+    },
+  );
+
   it("keeps extension menus on their package palette", () => {
     const dark = defaultConsoleThemes.find(
       (theme) => theme.id === "aerok-dark",

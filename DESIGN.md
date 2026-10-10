@@ -36,8 +36,8 @@ colors:
   success-dark: "#4ade80"
   warning-dark: "#fbbf24"
   error-dark: "#f87171"
-  success-light: "#15803d"
-  warning-light: "#b45309"
+  success-light: "#147a3b"
+  warning-light: "#a94e09"
   error-light: "#b91c1c"
 typography:
   headline:

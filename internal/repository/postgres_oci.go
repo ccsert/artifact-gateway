@@ -38,39 +38,18 @@ func (s *PostgresStore) StageOCIObjectIntent(ctx context.Context, intent OCIObje
 	return err
 }
 
-// LockOCIUpload holds a PostgreSQL session advisory lock, rather than a
-// transaction lock, because the protected operation also includes S3 I/O.
-// The caller must invoke the returned release function exactly once.
-func (s *PostgresStore) LockOCIUpload(ctx context.Context, id string) (func(), error) {
-	conn, err := s.db.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, "native-oci-upload:"+id); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	return func() {
-		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, "native-oci-upload:"+id)
-		_ = conn.Close()
-	}, nil
+// LockOCIUpload carries a dedicated lock session through the upload interval,
+// including S3 I/O. Callers must use the returned context for nested object
+// locks so completing an upload does not borrow another lock-pool connection.
+func (s *PostgresStore) LockOCIUpload(ctx context.Context, id string) (context.Context, func(), error) {
+	return s.lockPostgresAdvisoryKeys(ctx, []string{"native-oci-upload:" + id})
 }
 
 // LockOCIObject serializes object publication with object-intent collection
 // across gateway instances. The interval includes object-store I/O.
 func (s *PostgresStore) LockOCIObject(ctx context.Context, objectKey string) (func(), error) {
-	conn, err := s.db.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, "native-oci-object:"+objectKey); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	return func() {
-		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, "native-oci-object:"+objectKey)
-		_ = conn.Close()
-	}, nil
+	_, release, err := s.lockPostgresAdvisoryKeys(ctx, []string{"native-oci-object:" + objectKey})
+	return release, err
 }
 func (s *PostgresStore) GetOCIUpload(ctx context.Context, id string) (OCIUpload, error) {
 	var v OCIUpload
