@@ -3,9 +3,11 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"sort"
 	"sync"
+	"time"
 )
 
 type postgresAdvisoryLockSessionContextKey struct{}
@@ -13,9 +15,9 @@ type postgresAdvisoryLockSessionContextKey struct{}
 var errPostgresAdvisoryLockSessionClosed = errors.New("postgres advisory lock session is closed")
 
 // postgresAdvisoryLockSession lets one logical operation extend its ordered
-// advisory-lock set without borrowing a second lock-pool connection. PyPI uses
-// this to hold object locks and then add source/target coordinate locks even
-// when the dedicated lock pool has MaxOpenConns=1.
+// advisory-lock set without borrowing a second lock-pool connection. OCI carries
+// the upload session into object publication; PyPI adds coordinate locks to its
+// object session. Both work with a dedicated lock pool of MaxOpenConns=1.
 type postgresAdvisoryLockSession struct {
 	owner  *PostgresStore
 	conn   *sql.Conn
@@ -91,9 +93,10 @@ func (s *postgresAdvisoryLockSession) acquire(ctx context.Context, keys []string
 	acquired := make([]string, 0, len(keys))
 	for _, key := range keys {
 		if _, err := s.conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, key); err != nil {
-			for index := len(acquired) - 1; index >= 0; index-- {
-				_, _ = s.conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, acquired[index])
-			}
+			// A cancelled/failed acquisition has an uncertain session state.
+			// Abort the operation and drop the physical connection, including
+			// any outer locks, instead of returning it with a possible lock.
+			s.discard()
 			return nil, err
 		}
 		acquired = append(acquired, key)
@@ -111,14 +114,28 @@ func (s *postgresAdvisoryLockSession) release(keys []string) {
 	if s.closed {
 		return
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	for index := len(keys) - 1; index >= 0; index-- {
-		_, _ = s.conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, keys[index])
+		if _, err := s.conn.ExecContext(ctx, `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, keys[index]); err != nil {
+			s.discard()
+			return
+		}
 	}
 	s.refs--
 	if s.refs == 0 {
 		s.closed = true
 		_ = s.conn.Close()
 	}
+}
+
+// sql.Conn.Close normally returns its session to the pool. ErrBadConn discards
+// the physical PostgreSQL session, which releases all session advisory locks.
+// The caller holds mu.
+func (s *postgresAdvisoryLockSession) discard() {
+	s.closed = true
+	_ = s.conn.Raw(func(any) error { return driver.ErrBadConn })
+	_ = s.conn.Close()
 }
 
 func (s *postgresAdvisoryLockSession) closeIfIdle() {

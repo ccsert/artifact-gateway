@@ -18,7 +18,8 @@ starts calling a new endpoint cannot leak an error state into the baseline.
 
 Screenshots only compare reliably with identical fonts and Chromium, so both
 targets run inside the pinned `mcr.microsoft.com/playwright` image (Docker
-required):
+required). The image version comes from the lockfile; each run uses an independent
+anonymous dependency volume, reclaimed by Docker when the container exits:
 
 ```bash
 make console-visual          # compare against the committed baseline
@@ -63,7 +64,8 @@ The behaviour each refactor must preserve, and where it is proven.
 ### Known gaps
 
 Flows without an end-to-end proof yet. Add the spec before refactoring the
-page that owns the flow.
+page that owns the flow. This PR establishes the first regression baseline;
+these gaps keep #270 open until its complete flow acceptance is met.
 
 - Create a repository (form validation through first artifact view).
 - Write a repository grant (create, edit, revoke) from Access Control.
