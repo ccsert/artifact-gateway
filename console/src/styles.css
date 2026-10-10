@@ -1034,6 +1034,12 @@ button:not(:disabled):active,
     color 120ms ease-out;
 }
 
+@media (max-width: 600px), (pointer: coarse) {
+  .ag-repository-subtabs.ant-tabs > .ant-tabs-nav .ant-tabs-tab {
+    min-height: 44px;
+  }
+}
+
 .ag-repository-subtabs.ant-tabs > .ant-tabs-nav .ant-tabs-tab:hover {
   color: var(--ag-content-strong);
 }
@@ -2619,7 +2625,8 @@ html .ag-brand-mark.text-white {
   *,
   *::before,
   *::after {
-    transition-duration: 0.01ms !important;
+    /* Popup alignment reads geometry immediately after resetting its offsets. */
+    transition: none !important;
     animation-duration: 0.01ms !important;
   }
 }
