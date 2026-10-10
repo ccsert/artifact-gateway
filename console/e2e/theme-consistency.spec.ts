@@ -110,7 +110,7 @@ test("theme and language preferences persist on the sign-in surface", async ({
         .locator("body")
         .evaluate((element) => getComputedStyle(element).backgroundColor),
     )
-    .toBe("rgb(246, 247, 249)");
+    .toBe("rgb(247, 247, 248)");
 
   const loginSurfaces = await page
     .locator(".ag-login-frame")
@@ -540,8 +540,8 @@ test("public browse surfaces stay aligned with the dark console palette", async 
   });
 
   expect(surface).toEqual({
-    background: "rgba(24, 24, 27, 0.55)",
-    border: "rgba(63, 63, 70, 0.35)",
+    background: "rgba(17, 17, 20, 0.82)",
+    border: "rgba(255, 255, 255, 0.07)",
     contentPadding: "40px",
   });
 });
@@ -648,7 +648,7 @@ test("management tables keep action columns opaque and cards separated", async (
     const style = getComputedStyle(element);
     return style.backgroundColor;
   });
-  expect(actionSurface).toBe("rgb(20, 20, 23)");
+  expect(actionSurface).toBe("rgb(17, 17, 20)");
 });
 
 test("deleted repositories stay archived unless explicitly requested", async ({

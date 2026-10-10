@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Console 设计语言 v2 基础层：内置 Gateway Dark / Light 主题改为中性细边框分层与前景色实底主操作，信号青色只用于链接、焦点和当前位置；Geist 与 Geist Mono 随 Console 自托管；格式与状态改为色块/圆点搭配可读文字，Hosted/Proxy 改为中性文字。扩展主题包及其 schema 不变。
+
 - Console 改动新增完全 mock 的视觉基线门禁：主要页面在 Gateway Dark 与 Light 下于固定版本 Playwright 容器中渲染比对（`make console-visual`）。夹具按生成客户端类型校验，端到端用例纳入 TypeScript 构建；Console 覆盖率下限提升至当前基线，并修复两条路径失效的单文件门槛。
 
 ## 0.8.1 - 2026-10-10

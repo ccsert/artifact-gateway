@@ -23,7 +23,12 @@ import {
   Field,
 } from "../../components/ui/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../../components/ui/Feedback";
-import { FormatBadge, StateBadge, Badge } from "../../components/ui/Badge";
+import {
+  Badge,
+  FormatBadge,
+  RepositoryTypeBadge,
+  StateBadge,
+} from "../../components/ui/Badge";
 import { Modal, ConfirmDialog, useDisclosure } from "../../components/ui/Modal";
 import { formatBytes, formatNumber } from "../../lib/format";
 import {
@@ -450,9 +455,7 @@ export function RepositoriesPage() {
       key: "type",
       width: 105,
       render: (type: Repository["type"]) => (
-        <Badge tone={type === "proxy" ? "visualization-2" : "visualization-1"}>
-          {type === "proxy" ? "proxy" : "hosted"}
-        </Badge>
+        <RepositoryTypeBadge type={type === "proxy" ? "proxy" : "hosted"} />
       ),
     },
     {

@@ -1,92 +1,106 @@
 ---
 name: Artifact Gateway Console
-description: A precise, protocol-native control plane for trusted artifact operations.
+description: A refined, protocol-native engineering console for trusted artifact operations.
 colors:
-  primary-dark: "#06b6d4"
-  primary-dark-hover: "#22d3ee"
-  primary-dark-active: "#0891b2"
-  primary-light: "#0891b2"
-  primary-light-action: "#087f9c"
-  dark-text-on-action: "#041b23"
-  primary-soft-dark: "rgba(6, 182, 212, 0.12)"
-  primary-soft-light: "rgba(8, 145, 178, 0.10)"
-  dark-bg: "#08090b"
-  dark-surface: "#141417"
-  dark-elevated: "#1b1b1f"
-  dark-text: "#e4e4e7"
+  action-dark: "#fafafa"
+  action-dark-hover: "#ffffff"
+  action-dark-active: "#e4e4e7"
+  action-light: "#09090b"
+  action-light-hover: "#27272a"
+  action-light-active: "#3f3f46"
+  dark-text-on-action: "#09090b"
+  light-text-on-action: "#ffffff"
+  signal-dark: "#22d3ee"
+  signal-dark-hover: "#67e8f9"
+  signal-light: "#0e7490"
+  signal-light-hover: "#164e63"
+  dark-bg: "#09090b"
+  dark-rail: "#0c0c0f"
+  dark-surface: "#111114"
+  dark-elevated: "#18181c"
+  dark-hover: "rgba(255, 255, 255, 0.045)"
+  dark-border: "rgba(255, 255, 255, 0.10)"
+  dark-text: "#ededef"
   dark-text-strong: "#fafafa"
-  dark-text-secondary: "#b4b4bd"
-  dark-text-muted: "#8f8f9a"
-  light-bg: "#f6f7f9"
+  dark-text-secondary: "#a1a1aa"
+  dark-text-muted: "#8b8b94"
+  light-bg: "#f7f7f8"
+  light-rail: "#fbfbfc"
   light-surface: "#ffffff"
-  light-text: "#27272a"
-  light-text-strong: "#18181b"
+  light-hover: "#f2f2f4"
+  light-border: "#e4e4e7"
+  light-text: "#18181b"
+  light-text-strong: "#09090b"
   light-text-secondary: "#52525b"
-  success-dark: "#34d399"
+  light-text-muted: "#63636c"
+  success-dark: "#4ade80"
   warning-dark: "#fbbf24"
-  error-dark: "#fb7185"
+  error-dark: "#f87171"
+  success-light: "#147a3b"
+  warning-light: "#a94e09"
+  error-light: "#b91c1c"
 typography:
   headline:
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
-    fontSize: "22px"
+    fontFamily: "'Geist Variable', ui-sans-serif, system-ui, 'PingFang SC', 'Noto Sans SC', sans-serif"
+    fontSize: "24px"
     fontWeight: 600
-    lineHeight: "30px"
-    letterSpacing: "-0.01em"
+    lineHeight: "32px"
+    letterSpacing: "-0.02em"
   title:
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
-    fontSize: "16px"
+    fontFamily: "'Geist Variable', ui-sans-serif, system-ui, 'PingFang SC', 'Noto Sans SC', sans-serif"
+    fontSize: "14px"
     fontWeight: 600
-    lineHeight: "24px"
-    letterSpacing: "-0.01em"
+    lineHeight: "20px"
+    letterSpacing: "-0.005em"
   body:
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
+    fontFamily: "'Geist Variable', ui-sans-serif, system-ui, 'PingFang SC', 'Noto Sans SC', sans-serif"
     fontSize: "14px"
     fontWeight: 400
-    lineHeight: "22px"
+    lineHeight: "20px"
     letterSpacing: "normal"
   label:
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
-    fontSize: "12px"
+    fontFamily: "'Geist Variable', ui-sans-serif, system-ui, 'PingFang SC', 'Noto Sans SC', sans-serif"
+    fontSize: "12.5px"
     fontWeight: 500
-    lineHeight: "20px"
-    letterSpacing: "0.04em"
+    lineHeight: "18px"
+    letterSpacing: "normal"
   technical:
-    fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
-    fontSize: "12px"
+    fontFamily: "'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace"
+    fontSize: "12.5px"
     fontWeight: 400
-    lineHeight: "20px"
+    lineHeight: "18px"
     letterSpacing: "normal"
 rounded:
   tooltip: "6px"
   control: "8px"
-  surface: "10px"
-  overlay: "12px"
+  surface: "12px"
+  overlay: "14px"
   pill: "9999px"
 spacing:
   xs: "4px"
   sm: "8px"
   md: "16px"
   lg: "24px"
-  xl: "32px"
+  xl: "40px"
 components:
   button-primary:
-    backgroundColor: "{colors.primary-dark}"
+    backgroundColor: "{colors.action-dark}"
     textColor: "{colors.dark-text-on-action}"
     typography: "{typography.body}"
     rounded: "{rounded.control}"
     height: "34px"
-    padding: "0 15px"
+    padding: "0 14px"
   button-primary-hover:
-    backgroundColor: "{colors.primary-dark-hover}"
+    backgroundColor: "{colors.action-dark-hover}"
   button-primary-active:
-    backgroundColor: "{colors.primary-dark-active}"
+    backgroundColor: "{colors.action-dark-active}"
   button-default:
     backgroundColor: "{colors.dark-surface}"
     textColor: "{colors.dark-text}"
     typography: "{typography.body}"
     rounded: "{rounded.control}"
     height: "34px"
-    padding: "0 15px"
+    padding: "0 14px"
   input-field:
     backgroundColor: "{colors.dark-surface}"
     textColor: "{colors.dark-text}"
@@ -100,16 +114,22 @@ components:
     rounded: "{rounded.surface}"
     padding: "16px"
   menu-item-selected:
-    backgroundColor: "{colors.primary-soft-dark}"
-    textColor: "{colors.primary-dark-hover}"
+    backgroundColor: "{colors.dark-hover}"
+    textColor: "{colors.dark-text-strong}"
+    indicatorColor: "{colors.signal-dark}"
     typography: "{typography.body}"
     rounded: "{rounded.control}"
     height: "38px"
   table-header:
-    backgroundColor: "{colors.dark-bg}"
+    backgroundColor: "transparent"
     textColor: "{colors.dark-text-muted}"
     typography: "{typography.label}"
     padding: "12px 16px"
+  format-identity:
+    swatchSize: "8px"
+    swatchRounded: "2px"
+    textColor: "{colors.dark-text-secondary}"
+    typography: "{typography.technical}"
 ---
 
 # Design System: Artifact Gateway Console
@@ -118,9 +138,11 @@ components:
 
 ## Overview
 
-**Creative North Star: "The Verified Control Plane"**
+**Creative North Star: "The Refined Engineering Console"** (design language v2, [#319](https://github.com/ccsert/artifact-gateway/issues/319))
 
-Artifact Gateway Console should feel like the control surface for a system whose claims can be proved. The visual language is dark, precise, operational, and quiet: real status, immutable identity, policy boundaries, and recoverable actions receive attention before decoration. The default dark theme resembles a carefully lit engineering console rather than a generic black dashboard; the light theme preserves the same hierarchy instead of becoming a separate product.
+Artifact Gateway Console should feel like the control surface for a system whose claims can be proved, built with the care of a well-made developer tool. The visual language is calm, precise, and generous: neutral layers separated by hairline borders, open spacing, and a single foreground-colored primary action. Real status, immutable identity, policy boundaries, and recoverable actions receive attention before decoration. The default dark theme is a quiet, near-black workspace rather than a glowing dashboard; the light theme preserves the same hierarchy instead of becoming a separate product.
+
+The [v2 design canvas](https://claude.ai/artifact/V5Hyr915rnoPv477jcc8Xr) shows the target dashboard, repository list, repository detail, command palette, and tokens.
 
 The interface is an **Operate** surface. Density, scanability, predictable Ant Design behavior, keyboard access, and fast state feedback outrank spectacle. Product character comes from protocol-aware objects, monospaced identities, the source-to-distribution lifecycle, and restrained signal cyan—not from gradients, oversized marketing type, or ornamental motion.
 
@@ -128,8 +150,9 @@ The interface is an **Operate** surface. Density, scanability, predictable Ant D
 
 - Evidence-led hierarchy: health, risk, blocked work, and required action appear before decorative metrics.
 - Protocol-native specificity: coordinates, digests, Repository types, and lifecycle stages remain visible and copyable.
-- Restrained signal color: cyan identifies primary action, current location, focus, and trusted links; semantic colors retain their status meanings.
-- Layered but grounded surfaces: borders and tonal separation establish structure; shadows are reserved for real elevation.
+- Restrained signal color: cyan identifies links, current location, and focus only; the primary action is a solid foreground fill; semantic colors retain their status meanings.
+- Layered but flat surfaces: hairline borders and tonal separation establish structure; shadows are reserved for overlays.
+- Identity as a swatch: formats and states are a small colored mark beside neutral, readable text.
 - Crisp motion: short, interruptible feedback supports state change and never delays frequent navigation.
 
 ## Colors
@@ -138,15 +161,16 @@ The palette is neutral-first with a single cool signal family and explicit seman
 
 Runtime themes follow [ADR 0005](docs/adr/0005-console-semantic-theme-system.md): a constrained Theme Package is resolved once into typed surface, content, border, action, link, focus, selection, navigation, status, visualization, identity, and effect roles. Ant Design component tokens and custom CSS variables consume that same projection. Page CSS must name a semantic role rather than a palette color.
 
-### Primary
+### Action and Signal
 
-- **Signal Cyan** (`primary-dark`, `primary-light`): primary actions, links, focus, selected navigation, trusted lifecycle affordances, and current-state emphasis.
-- Default Gateway filled primary actions use the `content.onAction` foreground across normal, hover and active states. The light action background uses `primary-light-action` for readable white text; link, navigation and status roles retain their own tokens.
-- **Signal Wash** (`primary-soft-dark`, `primary-soft-light`): selected action or current-location backgrounds that must remain subordinate to content. Informational surfaces use the `info` status family instead.
+- **Foreground Action** (`action-dark`, `action-light`): the one primary action per decision surface is a solid fill in the strongest text color, with `dark-text-on-action` / `light-text-on-action` on top. It is `content.strong`, deliberately distinct from body text so derived selection stays neutral.
+- **Signal Cyan** (`signal-dark`, `signal-light`): links, keyboard focus, the current-location indicator, and selected controls such as switches and tabs. It is never a button fill in the built-in themes.
+- Extension Theme Packages keep their own primary color for actions; the foreground action is a built-in role override, not a package schema change.
 
 ### Neutral
 
 - **Night Ledger** (`dark-bg`): the dark page canvas and strongest visual recess.
+- **Rail** (`dark-rail`, `light-rail`): the navigation rail, one step off the canvas.
 - **Verified Surface** (`dark-surface`): cards, tables, controls, and primary work areas.
 - **Raised Instrument** (`dark-elevated`): modals, drawers, popovers, and other genuine overlays.
 - **Operational Text** (`dark-text`, `light-text`): default readable content.
@@ -157,19 +181,23 @@ Runtime themes follow [ADR 0005](docs/adr/0005-console-semantic-theme-system.md)
 
 ### Named Rules
 
-**The Signal Rarity Rule.** Cyan is reserved for action, location, focus, and trusted system links; it should not become a general decorative fill.
+**The Signal Rarity Rule.** Cyan is reserved for location, focus, and trusted system links; it should not become a button fill or a general decorative fill.
 
 **The Neutral Selection Rule.** Native text selection is a content state. Its background is derived from foreground and container neutrals, never from the primary action color.
 
 **The Accent Budget Rule.** Generic icons, neutral badges, empty states, disabled controls, ordinary hover, card borders, and large decorative washes do not spend the primary accent. Actual identity marks are the only decorative exception.
 
-**The Status Has Words Rule.** Success, warning, and error colors must be paired with text, an icon, or both. Color alone never communicates operational state.
+**The Status Has Words Rule.** Success, warning, and error colors must be paired with text, an icon, or both. Color alone never communicates operational state. A state with no data is neutral, never success.
+
+**The Identity Is a Swatch Rule.** Artifact formats are an 8px categorical swatch beside neutral monospace text (`FormatBadge`); states are a status-colored dot beside status-colored text (`StatusText`); Hosted/Proxy is neutral monospace text (`RepositoryTypeBadge`). Colored pills are reserved for counts and filters, never for identity, so labels stay readable in every theme.
 
 ## Typography
 
-**Display Font:** Inter with system UI fallbacks
-**Body Font:** Inter with system UI fallbacks
-**Label/Mono Font:** JetBrains Mono with platform monospace fallbacks
+**Display Font:** Geist (self-hosted variable font) with PingFang SC / Noto Sans SC for Chinese
+**Body Font:** Geist with the same fallbacks
+**Label/Mono Font:** Geist Mono (self-hosted) with platform monospace fallbacks
+
+Both families ship with the Console bundle through Fontsource under the SIL Open Font License; no font is fetched from a third-party host.
 
 **Character:** The primary stack is neutral and compact so dense management tasks remain legible. The monospace stack gives protocol coordinates, digests, principals, request IDs, and commands a distinct evidentiary voice without turning general copy into code.
 
@@ -201,19 +229,18 @@ At narrow widths, filters and headings stack, metric grids reduce columns, touch
 
 ## Elevation & Depth
 
-The system is layered and flat by default. Background, surface, border, and overlay tones carry most hierarchy. Cards use a low structural shadow; popovers and modals use the stronger raised shadow. Blur is limited to shell chrome and translucent surfaces where it clarifies layering, not as a universal visual effect.
+The system is layered and flat by default. Background, surface, border, and overlay tones carry the hierarchy. Cards and buttons have no shadow at rest; popovers, dropdowns, drawers, and modals use the raised shadow with a hairline ring. Blur is limited to shell chrome and modal scrims where it clarifies layering.
 
 ### Shadow Vocabulary
 
-- **Structural Card:** the low `--ag-shadow-card` shadow separates work surfaces without making every card float.
-- **Raised Instrument:** the stronger `--ag-shadow-pop` shadow belongs to modals, drawers, dropdowns, and popovers.
-- **Primary Action Signal:** the compact Ant Design primary-button shadow reinforces the principal action without spreading glow across the page.
+- **Structural Card:** `--ag-shadow-structural` resolves to `none` in the built-in themes; the border separates work surfaces.
+- **Raised Instrument:** `--ag-shadow-elevated` belongs to modals, drawers, dropdowns, popovers, and the command palette.
 
 **The Flat-Until-Raised Rule.** Hover may adjust border or tonal background. Large shadows appear only when the component has actually moved above its context.
 
 ## Shapes
 
-Controls use gently curved 8px corners, standard work surfaces use 10px corners, and overlays may use 12px corners. Tooltips are tighter at 6px. Full pills and circles are reserved for compact status dots, avatars, and truly circular controls. Borders are quiet and semi-transparent in dark mode, becoming crisp neutral dividers in light mode.
+Controls use gently curved 8px corners, work surfaces use 12px corners, and overlays use 14px corners. Tooltips are tighter at 6px. Full pills and circles are reserved for compact status dots, avatars, and truly circular controls. Borders are quiet and semi-transparent in dark mode, becoming crisp neutral dividers in light mode.
 
 Adjacent elements should share a compatible radius family. A nested control must not look softer and more decorative than the surface that contains it.
 
@@ -222,7 +249,7 @@ Adjacent elements should share a compatible radius family. A nested control must
 ### Buttons
 
 - **Shape:** compact and stable (`control` radius, 34px default height; 44px minimum on coarse pointers).
-- **Primary:** one dominant action per decision surface, using Signal Cyan and strong readable text.
+- **Primary:** one dominant action per decision surface, filled with the foreground action color (light on dark, dark on light). No glow or colored shadow.
 - **Hover / Focus / Active:** explicit Ant Design state tokens, visible focus, and subtle press scale. Transitions name exact properties and stay within the fast interaction range.
 - **Secondary / Text:** secondary work remains neutral; destructive actions use the semantic danger treatment instead of becoming a second primary color.
 
@@ -243,7 +270,7 @@ Adjacent elements should share a compatible radius family. A nested control must
 ### Navigation
 
 - Navigation is grouped by runtime, governance, and management tasks.
-- The selected item combines a restrained cyan wash, readable cyan text, and a narrow location indicator.
+- The selected item uses a neutral wash, strong text, and a narrow Signal Cyan location indicator.
 - Desktop collapse is immediate and stable. Mobile navigation uses a Drawer with labelled close behavior and 44px targets.
 
 ### Metric Strip

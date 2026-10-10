@@ -451,8 +451,8 @@ for (const mode of ["dark", "light"]) {
     const results = [];
     const expectedBackground =
       mode === "dark"
-        ? ["rgb(6, 182, 212)", "rgb(34, 211, 238)", "rgb(8, 145, 178)"]
-        : ["rgb(8, 127, 156)", "rgb(14, 116, 144)", "rgb(21, 94, 117)"];
+        ? ["rgb(250, 250, 250)", "rgb(255, 255, 255)", "rgb(228, 228, 231)"]
+        : ["rgb(9, 9, 11)", "rgb(39, 39, 42)", "rgb(63, 63, 70)"];
     for (const state of ["normal", "hover", "active"]) {
       if (state === "hover") await button.hover();
       if (state === "active") await page.mouse.down();
