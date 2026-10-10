@@ -198,7 +198,7 @@ export function RepositorySummary({
           <Button
             type="link"
             size="small"
-            className="h-auto p-0 text-xs text-fg-secondary"
+            className="h-auto p-0 text-xs text-fg-secondary!"
             onClick={onOpenCapacity}
           >
             {capacity

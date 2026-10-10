@@ -104,7 +104,7 @@ function OperationIdentity({
   return (
     <div className="min-w-0">
       <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-fg">
-        <SyncOutlined className="shrink-0 text-fg-tertiary" />
+        <SyncOutlined className="shrink-0 text-fg-tertiary!" />
         <span className="truncate" title={kindLabel(row.kind)}>
           {kindLabel(row.kind)}
         </span>

@@ -358,7 +358,7 @@ export function ServiceAccountsPage() {
       key: "name",
       render: (name: string) => (
         <div className="flex items-center gap-2">
-          <KeyOutlined className="text-fg-disabled" />
+          <KeyOutlined className="text-fg-disabled!" />
           <span className="font-medium text-fg">{name}</span>
         </div>
       ),

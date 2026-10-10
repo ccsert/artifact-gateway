@@ -32,6 +32,8 @@ Console 应像一个所有声明都可被证明的系统控制台，并具有优
 
 运行时主题遵循 [ADR 0005](docs/adr/0005-console-semantic-theme-system.zh-CN.md)：受约束的 Theme Package 只解析一次，形成带类型的 Surface、Content、Border、Action、Link、Focus、Selection、Navigation、Status、Visualization、Identity 与 Effect 角色。Ant Design 组件 Token 与自定义 CSS 变量消费同一份投影；页面 CSS 必须命名语义角色，不能直接命名调色板颜色。标记中同样使用 `console/src/styles.css` 定义的语义工具类（`text-fg-strong`、`text-fg`、`text-fg-secondary`、`text-fg-tertiary`、`text-fg-disabled`、`border-line`、`divide-line`、`bg-surface`、`bg-surface-translucent`、`bg-surface-hover`、`bg-canvas`、`text-on-identity`）；单元测试会拒绝 `text-zinc-500`、`bg-white/10` 等原始色板类。
 
+直接给 Ant Design 按钮或图标指定前景角色时，使用 Tailwind 的重要性修饰符（例如 `text-fg-tertiary!`），让明确指定的角色优先于 Ant Design 未分层的组件样式。必须在深浅主题和相关交互状态中验证实际前景色。
+
 ### 动作色与信号色
 
 - **前景动作色**（`action-dark`、`action-light`）：每个决策面唯一的主操作使用最强文字色实底，上层文字为 `dark-text-on-action` / `light-text-on-action`。它取 `content.strong`，刻意区别于正文色，使派生的文本选中色保持中性。

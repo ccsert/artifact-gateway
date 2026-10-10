@@ -1,6 +1,175 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { defaultConsoleThemes } from "../src/lib/consoleTheme";
-import { authenticateAsAdmin } from "./support/auth";
+import { authenticateAsAdmin, authenticateWithIdentity } from "./support/auth";
+import { mockGateway } from "./visual/mockGateway";
+
+for (const theme of ["dark", "light"] as const) {
+  test(`semantic foreground roles survive Ant Design styles in ${theme}`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({
+      width: theme === "light" ? 390 : 1440,
+      height: 1000,
+    });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const gateway = await mockGateway(page, { authenticated: true });
+    await page.route("**/api/v2/lifecycle-jobs**", (route) =>
+      route.fulfill({
+        json: [
+          {
+            repositoryId: "repo-maven-releases",
+            repositoryName: "maven-releases",
+            job: {
+              id: "synthetic-job",
+              kind: "retention",
+              state: "completed",
+              attempts: 1,
+              maxAttempts: 3,
+              progressCurrent: 1,
+              progressTotal: 1,
+              createdAt: "2026-10-01T00:00:00Z",
+            },
+          },
+        ],
+      }),
+    );
+    await page.route("**/api/v2/audit-retention/jobs**", (route) =>
+      route.fulfill({ json: [] }),
+    );
+    await page.route(
+      "**/api/v2/scheduled-tasks/task-retention/runs**",
+      (route) => route.fulfill({ json: [] }),
+    );
+    await page.addInitScript(
+      (theme) => localStorage.setItem("ag.console.theme", theme),
+      theme,
+    );
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const expectRole = async (element: Locator, variable: string) => {
+      await expect(element).toBeVisible();
+      const colors = await element.evaluate((node, variable) => {
+        const probe = document.createElement("span");
+        probe.style.color = `var(${variable})`;
+        document.body.append(probe);
+        const colors = {
+          actual: getComputedStyle(node).color,
+          role: getComputedStyle(probe).color,
+        };
+        probe.remove();
+        return colors;
+      }, variable);
+      await info.attach(variable, {
+        body: JSON.stringify(colors),
+        contentType: "application/json",
+      });
+      expect(colors.actual).toBe(colors.role);
+    };
+    await page.goto("/browse");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await expectRole(
+      page.locator(".ant-input-prefix .anticon-search"),
+      "--ag-content-tertiary",
+    );
+    await page.screenshot({
+      path: info.outputPath("semantic-public.png"),
+      fullPage: true,
+    });
+    await page.goto("/service-accounts");
+    await expectRole(
+      page.locator(".ant-table-cell .anticon-key"),
+      "--ag-content-disabled",
+    );
+    await page.screenshot({
+      path: info.outputPath("semantic-credentials.png"),
+      fullPage: true,
+    });
+    await page.goto("/operations");
+    await page.getByRole("tab", { name: "执行记录", exact: true }).click();
+    await expectRole(
+      page.locator("main .anticon-sync"),
+      "--ag-content-tertiary",
+    );
+    await page.screenshot({
+      path: info.outputPath("semantic-operations.png"),
+      fullPage: true,
+    });
+    await page.goto("/operations?tab=schedules");
+    await page.getByRole("button", { name: "投递历史", exact: true }).click();
+    await expectRole(
+      page.locator('main .anticon-history[class*="text-fg-tertiary"]'),
+      "--ag-content-tertiary",
+    );
+    await page.goto("/repositories/repo-maven-releases");
+    const summary = page.getByRole("group", { name: "仓库摘要", exact: true });
+    const capacity = summary.getByRole("button", { name: /个对象/ });
+    await expectRole(capacity.locator("span").last(), "--ag-content-secondary");
+    await capacity.hover();
+    await expectRole(capacity.locator("span").last(), "--ag-content-secondary");
+    await capacity.focus();
+    await expectRole(capacity.locator("span").last(), "--ag-content-secondary");
+    await summary.screenshot({ path: info.outputPath("semantic-summary.png") });
+    expect(
+      await page
+        .locator("html")
+        .evaluate((node) => node.scrollWidth - node.clientWidth),
+    ).toBeLessThanOrEqual(0);
+    expect(gateway.unmatched).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
+
+test("pending authorization uses the light surface without exposing management", async ({
+  page,
+}, info) => {
+  const errors: string[] = [];
+  const unexpected: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.route("**/api/v2/**", (route) => {
+    unexpected.push(new URL(route.request().url()).pathname);
+    return route.fulfill({ status: 500, json: {} });
+  });
+  await mockDefaultSiteSettings(page);
+  await authenticateWithIdentity(page, {
+    actor: "synthetic-awaiting",
+    kind: "local_session",
+    role: "none",
+    administrator: false,
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem("ag.console.theme", "light");
+    localStorage.setItem("ag.console.locale", "zh-CN");
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    const heading = page.getByRole("heading", { name: "等待管理员授权" });
+    const panel = heading.locator("..");
+    await expect(heading).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "检查授权状态", exact: true }),
+    ).toBeEnabled();
+    await expect(page.getByRole("navigation")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /仓库|仪表盘/ })).toHaveCount(
+      0,
+    );
+    expect(
+      await panel.evaluate((node) => getComputedStyle(node).backgroundColor),
+    ).toBe("rgb(255, 255, 255)");
+    expect(
+      await page
+        .locator("html")
+        .evaluate((node) => node.scrollWidth - node.clientWidth),
+    ).toBeLessThanOrEqual(0);
+    await panel.screenshot({
+      path: info.outputPath(`pending-light-${width}.png`),
+    });
+  }
+  expect(unexpected).toEqual([]);
+  expect(errors).toEqual([]);
+});
 
 async function mockDefaultSiteSettings(page: Page) {
   await page.route("**/api/v2/site-settings", (route) =>

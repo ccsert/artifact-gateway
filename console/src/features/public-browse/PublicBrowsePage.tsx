@@ -1344,7 +1344,7 @@ export function PublicBrowsePage() {
                   <Input
                     allowClear
                     size="large"
-                    prefix={<SearchOutlined className="text-fg-tertiary" />}
+                    prefix={<SearchOutlined className="text-fg-tertiary!" />}
                     className="mt-6 max-w-2xl"
                     placeholder={text(
                       "搜索仓库名称或格式",

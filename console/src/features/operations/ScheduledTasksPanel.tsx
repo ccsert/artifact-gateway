@@ -727,7 +727,7 @@ function TaskRunHistory({
   return (
     <div className="px-4 py-3">
       <div className="mb-3 flex items-center gap-2">
-        <HistoryOutlined className="text-fg-tertiary" />
+        <HistoryOutlined className="text-fg-tertiary!" />
         <span className="text-xs font-medium text-fg-secondary">
           {text("投递历史", "Dispatch history")} · {task.name}
         </span>
