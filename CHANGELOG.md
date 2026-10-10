@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Console changes are gated by a fully mocked visual baseline of the main surfaces in Gateway Dark and Light, rendered in the pinned Playwright container (`make console-visual`). Fixtures are type-checked against the generated client, end-to-end specs join the TypeScript build, and Console coverage floors rise to the current baseline with two stale per-file thresholds restored.
+
 ## 0.8.1 - 2026-10-10
 
 - OCI upload and object-publication locks use the bounded artifact-lock pool instead of holding metadata-pool connections during object I/O. Upload completion carries one lock session into nested object locking, including with a one-connection lock pool. Cancelled acquisitions and failed unlocks discard their physical session; unlock cleanup has a bounded timeout. Existing advisory keys, schema and object bytes are unchanged.

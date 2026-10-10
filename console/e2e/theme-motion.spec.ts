@@ -79,7 +79,7 @@ test("reduced motion switches the complete palette atomically", async ({
       if (root.dataset.themeTransition !== "instant") return;
       const button = document.querySelector<HTMLElement>(".ant-btn-primary");
       const buttonStyle = button ? getComputedStyle(button) : null;
-      window.__themeMotionQA.instantCommits.push({
+      window.__themeMotionQA.instantCommits?.push({
         themeId: root.dataset.themeId ?? null,
         variables: Object.fromEntries(
           variableNames.map((name) => [
@@ -145,7 +145,8 @@ test("rapid theme choices cancel stale reveals and leave one complete contract",
         return {
           finished,
           skipTransition: () => {
-            window.__themeMotionQA.skipCalls += 1;
+            window.__themeMotionQA.skipCalls =
+              (window.__themeMotionQA.skipCalls ?? 0) + 1;
             finish();
           },
         };
