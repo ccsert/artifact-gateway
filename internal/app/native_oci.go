@@ -440,12 +440,13 @@ func (h nativeOCIHandler) startUpload(w http.ResponseWriter, r *http.Request, re
 }
 
 func (h nativeOCIHandler) upload(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, name, id string) {
-	release, err := h.store.LockOCIUpload(r.Context(), id)
+	ctx, release, err := h.store.LockOCIUpload(r.Context(), id)
 	if err != nil {
 		writeOCIError(w, http.StatusServiceUnavailable, "UNKNOWN", "upload coordination is unavailable")
 		return
 	}
 	defer release()
+	r = r.WithContext(ctx)
 	upload, err := h.store.GetOCIUpload(r.Context(), id)
 	if err != nil || upload.RepositoryID != repo.ID || upload.Name != name || upload.State != "open" || time.Now().After(upload.ExpiresAt) {
 		writeOCIError(w, 404, "BLOB_UPLOAD_UNKNOWN", "blob upload unknown to registry")

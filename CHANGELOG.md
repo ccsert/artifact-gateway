@@ -11,6 +11,10 @@ their meaning.
 
 ## Unreleased
 
+## 0.8.1 - 2026-10-10
+
+- OCI upload and object-publication locks use the bounded artifact-lock pool instead of holding metadata-pool connections during object I/O. Upload completion carries one lock session into nested object locking, including with a one-connection lock pool. Cancelled acquisitions and failed unlocks discard their physical session; unlock cleanup has a bounded timeout. Existing advisory keys, schema and object bytes are unchanged.
+
 ## 0.8.0 - 2026-10-08
 
 - Build Gateway and Go sidecars with Go 1.26.9 to address the standard-library vulnerabilities detected by release dependency audit, and update `golang.org/x/net` to v0.60.0 with its required module closure; retain strict audit with no new exception.
