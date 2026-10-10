@@ -16,6 +16,7 @@ interface Surface {
   path: string;
   /** Visible once the page has rendered its fixture data. */
   ready: (page: Page) => ReturnType<Page["getByText"]>;
+  prepareScreenshot?: (page: Page) => Promise<void>;
   authenticated?: boolean;
 }
 
@@ -36,6 +37,52 @@ const surfaces: Surface[] = [
     name: "dashboard",
     path: "/",
     ready: (page) => page.getByText("maven-releases").first(),
+    prepareScreenshot: async (page) => {
+      // This plot loads on intersection and paints after its React wrapper.
+      // A full-page screenshot can otherwise accept an empty canvas.
+      await page
+        .getByTestId("storage-by-format-chart")
+        .scrollIntoViewIfNeeded();
+      const canvas = page.getByTestId("ant-design-pie-ready").locator("canvas");
+      await expect(canvas).toBeVisible();
+      await expect
+        .poll(() =>
+          canvas.evaluate((element) => {
+            const plot = element as HTMLCanvasElement;
+            const context = plot.getContext("2d");
+            if (!context || !plot.width || !plot.height) return false;
+            const pixels = context.getImageData(
+              0,
+              0,
+              plot.width,
+              plot.height,
+            ).data;
+            // The fixture has categorical slices; neutral canvas/background
+            // pixels do not establish that those data have been painted.
+            for (let offset = 0; offset < pixels.length; offset += 4) {
+              if (
+                pixels[offset + 3] > 0 &&
+                Math.max(
+                  pixels[offset],
+                  pixels[offset + 1],
+                  pixels[offset + 2],
+                ) -
+                  Math.min(
+                    pixels[offset],
+                    pixels[offset + 1],
+                    pixels[offset + 2],
+                  ) >
+                  32
+              ) {
+                return true;
+              }
+            }
+            return false;
+          }),
+        )
+        .toBe(true);
+      await page.evaluate(() => window.scrollTo(0, 0));
+    },
   },
   {
     name: "repositories",
@@ -102,6 +149,7 @@ for (const theme of themes) {
         await page.goto(surface.path);
         await expect(surface.ready(page)).toBeVisible();
         await page.evaluate(() => document.fonts.ready);
+        await surface.prepareScreenshot?.(page);
 
         expect(gateway.unmatched, "requests without a fixture").toEqual([]);
         await expect(page).toHaveScreenshot([theme, `${surface.name}.png`], {
