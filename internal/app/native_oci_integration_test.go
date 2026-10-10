@@ -660,14 +660,14 @@ func TestPostgresNativeOCIUploadLockSerializesConnections(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer second.Close()
-	release, err := first.LockOCIUpload(context.Background(), "cross-instance-upload")
+	_, release, err := first.LockOCIUpload(context.Background(), "cross-instance-upload")
 	if err != nil {
 		t.Fatal(err)
 	}
 	acquired := make(chan func(), 1)
 	errs := make(chan error, 1)
 	go func() {
-		unlock, lockErr := second.LockOCIUpload(context.Background(), "cross-instance-upload")
+		_, unlock, lockErr := second.LockOCIUpload(context.Background(), "cross-instance-upload")
 		if lockErr != nil {
 			errs <- lockErr
 			return

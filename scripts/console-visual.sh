@@ -6,14 +6,13 @@ set -euo pipefail
 # the pinned Playwright container. Pass --update-snapshots to accept changes.
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-version=$(node -p "require('$root/console/node_modules/@playwright/test/package.json').version" 2>/dev/null ||
-  node -p "require('$root/console/package-lock.json').packages['node_modules/@playwright/test'].version")
+version=$(node -p 'require(process.argv[1]).packages["node_modules/@playwright/test"].version' "$root/console/package-lock.json")
 image="mcr.microsoft.com/playwright:v${version}-noble"
 
 docker run --rm --init --ipc=host \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$root:/work" \
-  -v artifact-gateway-console-visual-node-modules:/work/console/node_modules \
+  -v /work/console/node_modules \
   -w /work/console \
   "$image" \
   bash -c '

@@ -50,8 +50,8 @@ export const defaultConsoleThemes: ConsoleTheme[] = [
     mode: "light",
     token: {
       colorPrimary: "#0891B2",
-      colorSuccess: "#15803D",
-      colorWarning: "#B45309",
+      colorSuccess: "#147A3B",
+      colorWarning: "#A94E09",
       colorError: "#B91C1C",
       colorInfo: "#0E7490",
       colorTextBase: "#18181B",
