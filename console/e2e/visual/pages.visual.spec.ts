@@ -107,6 +107,10 @@ for (const theme of themes) {
         await expect(page).toHaveScreenshot([theme, `${surface.name}.png`], {
           fullPage: true,
         });
+        expect(
+          gateway.unmatched,
+          "requests during screenshot without a fixture",
+        ).toEqual([]);
       });
     }
   });

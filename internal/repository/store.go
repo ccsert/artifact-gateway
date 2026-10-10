@@ -348,7 +348,7 @@ type NativeMavenStore interface {
 
 type NativeOCIStore interface {
 	CreateOCIUpload(context.Context, OCIUpload) (OCIUpload, error)
-	LockOCIUpload(context.Context, string) (func(), error)
+	LockOCIUpload(context.Context, string) (context.Context, func(), error)
 	LockOCIObject(context.Context, string) (func(), error)
 	GetOCIUpload(context.Context, string) (OCIUpload, error)
 	UpdateOCIUpload(context.Context, string, int64) (OCIUpload, error)

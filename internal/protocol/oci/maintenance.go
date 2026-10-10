@@ -132,7 +132,7 @@ func (m NativeMaintenance) runReclaimJob(ctx context.Context, job repository.Lif
 }
 
 func (m NativeMaintenance) runUploadReclaimJob(ctx context.Context, job repository.LifecycleJob, payload reclaimPayload) error {
-	release, err := m.Store.LockOCIUpload(ctx, payload.UploadID)
+	ctx, release, err := m.Store.LockOCIUpload(ctx, payload.UploadID)
 	if err != nil {
 		return m.failReclaimJob(ctx, job, "OCI upload coordination failed")
 	}
