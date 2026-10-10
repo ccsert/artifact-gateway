@@ -35,7 +35,7 @@ func (s *MemoryStore) StageOCIObjectIntent(_ context.Context, intent OCIObjectIn
 	}
 	return nil
 }
-func (s *MemoryStore) LockOCIUpload(_ context.Context, id string) (func(), error) {
+func (s *MemoryStore) LockOCIUpload(ctx context.Context, id string) (context.Context, func(), error) {
 	s.mu.Lock()
 	lock := s.ociUploadLocks[id]
 	if lock == nil {
@@ -44,7 +44,7 @@ func (s *MemoryStore) LockOCIUpload(_ context.Context, id string) (func(), error
 	}
 	s.mu.Unlock()
 	lock.Lock()
-	return lock.Unlock, nil
+	return ctx, lock.Unlock, nil
 }
 func (s *MemoryStore) LockOCIObject(_ context.Context, objectKey string) (func(), error) {
 	s.mu.Lock()

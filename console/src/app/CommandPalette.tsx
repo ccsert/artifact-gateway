@@ -18,6 +18,7 @@ import { Input, Modal, type InputRef } from "antd";
 import { useNavigate } from "react-router-dom";
 import { listRepositories, type Repository } from "../client";
 import { FormatBadge, RepositoryTypeBadge } from "../components/ui/Badge";
+import { ErrorBanner } from "../components/ui/Feedback";
 import { usePreferences } from "../lib/preferences";
 
 export interface CommandPage {
@@ -71,21 +72,58 @@ export function CommandPalette({
   const { t, text, locale, setLocale, toggleColorMode } = usePreferences();
   const navigate = useNavigate();
   const inputRef = useRef<InputRef>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const repositoriesComplete = useRef(false);
   const listId = useId();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [repositories, setRepositories] = useState<Repository[] | null>(null);
+  const [repositoryError, setRepositoryError] = useState<unknown>(null);
+  const [repositoriesLoading, setRepositoriesLoading] = useState(false);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
-    if (!open || !canBrowseRepositories || repositories) return;
+    if (!open || !canBrowseRepositories || repositoriesComplete.current) return;
     let cancelled = false;
-    void listRepositories({ query: { pageSize: 100 } }).then(({ data }) => {
-      if (!cancelled) setRepositories(data?.items ?? []);
-    });
+    const controller = new AbortController();
+    const load = async () => {
+      setRepositoriesLoading(true);
+      setRepositoryError(null);
+      const loaded = new Map<string, Repository>();
+      const tokens = new Set<string>();
+      let pageToken: string | undefined;
+      try {
+        do {
+          const { data, error } = await listRepositories({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            signal: controller.signal,
+          });
+          if (cancelled) return;
+          if (error) throw error;
+          if (!data) throw new Error("Repository response is missing");
+          for (const repository of data.items)
+            loaded.set(repository.id, repository);
+          setRepositories([...loaded.values()]);
+          pageToken = data.nextPageToken;
+          if (pageToken) {
+            if (tokens.has(pageToken))
+              throw new Error("Repository pagination did not advance");
+            tokens.add(pageToken);
+          }
+        } while (pageToken);
+        repositoriesComplete.current = true;
+      } catch (error) {
+        if (!cancelled) setRepositoryError(error);
+      } finally {
+        if (!cancelled) setRepositoriesLoading(false);
+      }
+    };
+    void load();
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [open, canBrowseRepositories, repositories]);
+  }, [open, canBrowseRepositories, retry]);
 
   const commands = useMemo<Command[]>(() => {
     const term = query.trim().toLocaleLowerCase();
@@ -105,7 +143,9 @@ export function CommandPalette({
         run: go(page.to),
       }));
 
-    const repositoryCommands: Command[] = (repositories ?? [])
+    const repositoryCommands: Command[] = (
+      canBrowseRepositories ? (repositories ?? []) : []
+    )
       .filter((repository) => repository.state !== "deleted")
       .filter((repository) =>
         matches(repository.name, repository.format, repository.type),
@@ -165,6 +205,7 @@ export function CommandPalette({
     query,
     pages,
     repositories,
+    canBrowseRepositories,
     navigate,
     t,
     locale,
@@ -174,6 +215,13 @@ export function CommandPalette({
   ]);
 
   useEffect(() => setActive(0), [query]);
+  useEffect(() => {
+    if (!open) return;
+    const selected = listRef.current?.querySelector<HTMLElement>(
+      '[aria-selected="true"]',
+    );
+    selected?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [open, active, commands]);
 
   const close = () => {
     onClose();
@@ -187,9 +235,13 @@ export function CommandPalette({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)
+      return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActive((index) => Math.min(index + 1, commands.length - 1));
+      setActive((index) =>
+        Math.max(0, Math.min(index + 1, commands.length - 1)),
+      );
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
       setActive((index) => Math.max(index - 1, 0));
@@ -240,13 +292,31 @@ export function CommandPalette({
         }
         aria-label={t("palette.title")}
       />
+      {canBrowseRepositories &&
+        (repositoriesLoading || repositoryError !== null) && (
+          <div className="ag-command-status">
+            {repositoryError ? (
+              <ErrorBanner
+                error={repositoryError}
+                title={text("仓库列表加载失败", "Could not load repositories")}
+                tone={repositories?.length ? "warning" : "error"}
+                onRetry={() => setRetry((value) => value + 1)}
+              />
+            ) : (
+              <p role="status" aria-live="polite">
+                {text("正在加载仓库…", "Loading repositories…")}
+              </p>
+            )}
+          </div>
+        )}
       <div
+        ref={listRef}
         id={listId}
         role="listbox"
         aria-label={t("palette.results")}
         className="ag-command-list"
       >
-        {commands.length === 0 ? (
+        {commands.length === 0 && !repositoriesLoading && !repositoryError ? (
           <p className="ag-command-empty">
             {text(
               `没有匹配“${query.trim()}”的页面或仓库。`,
