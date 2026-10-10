@@ -97,7 +97,7 @@ console-visual:
 	@./scripts/console-visual.sh
 
 console-visual-update:
-	@./scripts/console-visual.sh --update-snapshots
+	@./scripts/console-visual.sh --update-snapshots=all
 
 up:
 	@./scripts/local-dev.sh guard

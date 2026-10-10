@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { authenticateAsAdmin } from "./support/auth";
 import { mockDefaultSiteSettings } from "./support/siteSettings";
+import { mockGateway } from "./visual/mockGateway";
+import { repositories } from "./visual/fixtures";
 
 async function shellGeometry(page: Page) {
   return page.evaluate(() => {
@@ -158,3 +160,119 @@ test("desktop navigation collapses within one aligned and stable rail", async ({
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);
 });
+
+for (const width of [1440, 390]) {
+  test(`command palette reveals keyboard selection and later repositories at ${width}px`, async ({
+    page,
+  }, testInfo) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.addInitScript(() =>
+      localStorage.setItem("ag.console.locale", "zh-CN"),
+    );
+    const gateway = await mockGateway(page, { authenticated: true });
+    await page.goto("/repositories");
+    await expect(page.getByText("cargo-hosted", { exact: true })).toBeVisible();
+    const tokens: (string | null)[] = [];
+    let failFirstRequest = true;
+    await page.route(
+      (url) => url.pathname === "/api/v2/repositories",
+      async (route) => {
+        const token = new URL(route.request().url()).searchParams.get(
+          "pageToken",
+        );
+        tokens.push(token);
+        if (failFirstRequest) {
+          failFirstRequest = false;
+          await route.fulfill({
+            status: 503,
+            json: {
+              code: "temporarily_unavailable",
+              message: "Repository list unavailable",
+            },
+          });
+          return;
+        }
+        await route.fulfill({
+          json:
+            token === "opaque-next"
+              ? {
+                  items: [
+                    {
+                      ...repositories[0],
+                      id: "later-release",
+                      name: "later-release",
+                    },
+                  ],
+                }
+              : {
+                  items: Array.from({ length: 100 }, (_, index) => ({
+                    ...repositories[0],
+                    id: `repo-${index}`,
+                    name: `repo-${index}`,
+                  })),
+                  nextPageToken: "opaque-next",
+                },
+        });
+      },
+    );
+    await page.keyboard.press("ControlOrMeta+k");
+    const input = page.getByRole("combobox", { name: "命令面板" });
+    const alert = page.getByRole("alert");
+    await expect(alert).toContainText("Repository list unavailable");
+    const errorBounds = await alert.boundingBox();
+    expect(errorBounds!.x).toBeGreaterThanOrEqual(0);
+    expect(errorBounds!.x + errorBounds!.width).toBeLessThanOrEqual(width);
+    if (process.env.CAPTURE_SIDER_LAYOUT === "1") {
+      await page.screenshot({
+        path: testInfo.outputPath(`command-palette-error-${width}.png`),
+        fullPage: true,
+      });
+    }
+    await page.getByRole("button", { name: /重\s*试/ }).click();
+    await expect(alert).toHaveCount(0);
+    await expect.poll(() => tokens).toEqual([null, null, "opaque-next"]);
+    await input.press("ArrowDown");
+    for (let index = 0; index < 18; index += 1) await input.press("ArrowDown");
+    await expect
+      .poll(() =>
+        page
+          .locator('.ag-command-option[aria-selected="true"]')
+          .evaluate((option) => {
+            const list = option.closest(".ag-command-list")!;
+            const bounds = list.getBoundingClientRect();
+            const selected = option.getBoundingClientRect();
+            return (
+              selected.top >= bounds.top && selected.bottom <= bounds.bottom
+            );
+          }),
+      )
+      .toBe(true);
+    await input.fill("later-release");
+    await expect(
+      page.getByRole("option", { name: /^later-release/ }),
+    ).toHaveAttribute("aria-selected", "true");
+    await input.dispatchEvent("keydown", {
+      key: "Enter",
+      isComposing: true,
+      keyCode: 229,
+    });
+    await expect(input).toBeVisible();
+    await expect(page).toHaveURL(/\/repositories$/);
+    expect(
+      await page.evaluate(
+        () => document.body.scrollWidth - document.body.clientWidth,
+      ),
+    ).toBe(0);
+    if (process.env.CAPTURE_SIDER_LAYOUT === "1") {
+      await page.screenshot({
+        path: testInfo.outputPath(`command-palette-${width}.png`),
+        fullPage: true,
+      });
+    }
+    expect(errors).toEqual([]);
+    expect(gateway.unmatched).toEqual([]);
+  });
+}

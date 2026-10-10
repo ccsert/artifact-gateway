@@ -2006,14 +2006,6 @@ html .ag-brand-mark.text-white {
   ) !important;
 }
 
-/* ========== 顶栏 ========== */
-
-.ag-topbar {
-  background: var(--ag-surface-topbar);
-  backdrop-filter: blur(14px) saturate(1.3);
-  border-bottom: 1px solid var(--ag-border-subtle);
-}
-
 .ag-theme-toggle-icon {
   display: inline-flex;
   transform: rotate(0deg) scale(1);
@@ -2621,11 +2613,6 @@ html .ag-brand-mark.text-white {
     padding-inline: max(20px, env(safe-area-inset-left))
       max(20px, env(safe-area-inset-right));
   }
-
-  .ag-topbar {
-    padding-inline: max(12px, env(safe-area-inset-left))
-      max(12px, env(safe-area-inset-right));
-  }
 }
 
 @media (max-width: 900px) {
@@ -2692,33 +2679,6 @@ html .ag-brand-mark.text-white {
 }
 
 @media (max-width: 720px) {
-  .ag-topbar {
-    min-height: 104px;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding-block: 8px;
-  }
-
-  .ag-global-search {
-    order: 3;
-    max-width: none !important;
-    flex-basis: 100%;
-  }
-
-  .ag-topbar-actions {
-    order: 2;
-  }
-
-  .ag-token-label,
-  .ag-topbar-action-label {
-    display: none;
-  }
-
-  .ag-topbar .ant-btn {
-    min-width: 44px;
-    min-height: 44px;
-  }
-
   .ag-diagnostic-issue-row,
   .ag-diagnostic-status-row {
     align-items: flex-start;

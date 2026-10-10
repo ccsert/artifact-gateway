@@ -18,6 +18,8 @@ interface Surface {
   ready: (page: Page) => ReturnType<Page["getByText"]>;
   prepareScreenshot?: (page: Page) => Promise<void>;
   authenticated?: boolean;
+  /** Puts the page into the state to capture once it is ready. */
+  prepare?: (page: Page) => Promise<void>;
 }
 
 const surfaces: Surface[] = [
@@ -125,6 +127,18 @@ const surfaces: Surface[] = [
     ready: (page) => page.getByText("nightly-retention").first(),
   },
   {
+    name: "command-palette",
+    path: "/",
+    ready: (page) => page.getByText("maven-releases").first(),
+    prepare: async (page) => {
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("combobox", { name: "命令面板" }).fill("maven");
+      await expect(
+        page.getByRole("option", { name: /maven-central/ }),
+      ).toBeVisible();
+    },
+  },
+  {
     name: "system",
     path: "/system",
     ready: (page) => page.getByText("gateway-0").first(),
@@ -148,6 +162,7 @@ for (const theme of themes) {
 
         await page.goto(surface.path);
         await expect(surface.ready(page)).toBeVisible();
+        await surface.prepare?.(page);
         await page.evaluate(() => document.fonts.ready);
         await surface.prepareScreenshot?.(page);
 

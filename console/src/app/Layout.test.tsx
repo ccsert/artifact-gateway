@@ -10,14 +10,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { PreferencesProvider } from "../lib/preferences";
 import { AppLayout } from "./Layout";
-import { getDiagnostics } from "../client";
+import { getDiagnostics, listRepositories } from "../client";
 
 vi.mock("../client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../client")>()),
   getDiagnostics: vi.fn(),
+  listRepositories: vi.fn(),
 }));
 
 const mockGetDiagnostics = vi.mocked(getDiagnostics);
+const mockListRepositories = vi.mocked(listRepositories);
 
 const auth = vi.hoisted(() => ({
   token: "operator-token",
@@ -92,8 +94,33 @@ beforeEach(() => {
   mockGetDiagnostics.mockResolvedValue({
     data: { build: { version: "v0.4.3", revision: "abc123" } },
   } as never);
+  mockListRepositories.mockReset();
+  mockListRepositories.mockResolvedValue({
+    data: {
+      items: [
+        {
+          id: "repo-1",
+          name: "release-files",
+          format: "raw",
+          type: "hosted",
+          anonymousRead: false,
+          mavenStrictPublication: false,
+          state: "active",
+          version: "1",
+        },
+      ],
+    },
+  } as never);
   window.localStorage.clear();
 });
+
+function sider() {
+  return document.querySelector<HTMLElement>(".ag-sider-desktop")!;
+}
+
+async function openAccountMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(within(sider()).getByRole("button", { name: /^账户菜单/ }));
+}
 
 afterEach(() => {
   cleanup();
@@ -247,15 +274,25 @@ describe("AppLayout", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("provides global search, persistent navigation collapse, and logout", async () => {
+  it("searches artifacts from the command palette, collapses navigation, and signs out", async () => {
     const user = userEvent.setup();
     renderLayout("/repositories");
 
     expect(await screen.findByText("repository catalog")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /仓库/ })).toBeInTheDocument();
+    expect(
+      within(sider()).getByRole("link", { name: /仓库/ }),
+    ).toBeInTheDocument();
 
-    const search = screen.getByPlaceholderText("跨仓库搜索制品…");
-    await user.type(search, " release/widget ");
+    await user.click(
+      within(sider()).getByRole("button", { name: "搜索或跳转…" }),
+    );
+    const palette = await screen.findByRole("combobox", { name: "命令面板" });
+    await user.type(palette, " release/widget ");
+    expect(
+      screen.getByRole("option", {
+        name: /在所有仓库中搜索制品“release\/widget”/,
+      }),
+    ).toHaveAttribute("aria-selected", "true");
     await user.keyboard("{Enter}");
     expect(await screen.findByTestId("location")).toHaveTextContent(
       "/search?q=release%2Fwidget",
@@ -276,8 +313,44 @@ describe("AppLayout", () => {
       }),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /退出/ }));
+    await openAccountMenu(user);
+    await user.click(await screen.findByRole("menuitem", { name: /退出/ }));
     expect(auth.clearToken).toHaveBeenCalledOnce();
+  });
+
+  it("opens the command palette with ⌘K and jumps to a repository", async () => {
+    const user = userEvent.setup();
+    renderLayout("/search");
+
+    await screen.findByTestId("location");
+    await user.keyboard("{Meta>}k{/Meta}");
+    const palette = await screen.findByRole("combobox", { name: "命令面板" });
+    await user.type(palette, "release");
+    const option = await screen.findByRole("option", {
+      name: /release-files/,
+    });
+    expect(option).toHaveAttribute("aria-selected", "true");
+    expect(palette).toHaveAttribute("aria-activedescendant", option.id);
+    await user.keyboard("{Enter}");
+    expect(await screen.findByText("repository detail")).toBeInTheDocument();
+  });
+
+  it("names the authentication method in the account menu", async () => {
+    Object.assign(auth, {
+      identity: {
+        administrator: true,
+        actor: "user:alice",
+        kind: "local_session",
+        role: "admin",
+      },
+    });
+    renderLayout("/repositories");
+
+    const account = await within(sider()).findByRole("button", {
+      name: "账户菜单: user:alice",
+    });
+    expect(account).toHaveTextContent("管理员 · 账号登录");
+    expect(within(sider()).queryByText("已配置 Token")).toBeNull();
   });
 
   it("opens diagnostics from the connected build version", async () => {
@@ -299,7 +372,10 @@ describe("AppLayout", () => {
     const user = userEvent.setup();
     renderLayout("/repositories");
 
-    await user.click(screen.getByRole("button", { name: "已配置 Token" }));
+    await openAccountMenu(user);
+    await user.click(
+      await screen.findByRole("menuitem", { name: /已配置 Token/ }),
+    );
     const dialog = await screen.findByRole("dialog", { name: "API 访问令牌" });
     const input = within(dialog).getByRole("textbox");
     expect(input).toHaveValue("operator-token");
@@ -318,7 +394,10 @@ describe("AppLayout", () => {
     expect(auth.setToken).not.toHaveBeenCalled();
     expect(auth.clearToken).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "已配置 Token" }));
+    await openAccountMenu(user);
+    await user.click(
+      await screen.findByRole("menuitem", { name: /已配置 Token/ }),
+    );
     const reopened = await screen.findByRole("dialog", {
       name: "API 访问令牌",
     });
