@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Console changes are gated by a fully mocked visual baseline of the main surfaces in Gateway Dark and Light, rendered in the pinned Playwright container (`make console-visual`). Fixtures are type-checked against the generated client, end-to-end specs join the TypeScript build, and Console coverage floors rise to the current baseline with two stale per-file thresholds restored.
+
 ## 0.8.0 - 2026-10-08
 
 - Build Gateway and Go sidecars with Go 1.26.9 to address the standard-library vulnerabilities detected by release dependency audit, and update `golang.org/x/net` to v0.60.0 with its required module closure; retain strict audit with no new exception.

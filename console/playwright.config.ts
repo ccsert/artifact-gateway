@@ -5,6 +5,8 @@ const externalServer = process.env.PLAYWRIGHT_EXTERNAL_SERVER === "1";
 
 export default defineConfig({
   testDir: "./e2e",
+  // Visual baselines run fully mocked through playwright.visual.config.ts.
+  testIgnore: "visual/**",
   timeout: 30_000,
   use: {
     baseURL: `http://127.0.0.1:${port}`,

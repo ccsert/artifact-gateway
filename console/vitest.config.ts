@@ -19,10 +19,10 @@ export default defineConfig({
         // as public-boundary tests cover more pages and workflows.
         // Vitest 4 uses AST coverage; the same-source v3/v4 migration baseline
         // and its changed denominators are in docs/project-quality-assessment.md.
-        lines: 50,
-        functions: 45,
-        statements: 48.5,
-        branches: 43.5,
+        lines: 63,
+        functions: 58,
+        statements: 61,
+        branches: 55.5,
         "src/app/Layout.tsx": {
           lines: 90,
           functions: 60,
@@ -47,13 +47,13 @@ export default defineConfig({
           statements: 95,
           branches: 90,
         },
-        "src/components/PublicBrowsePrimitives.tsx": {
+        "src/components/ui/PublicBrowsePrimitives.tsx": {
           lines: 70,
           functions: 70,
           statements: 70,
           branches: 60,
         },
-        "src/components/RuntimeNodesPanel.tsx": {
+        "src/features/operations/RuntimeNodesPanel.tsx": {
           lines: 70,
           functions: 70,
           statements: 70,

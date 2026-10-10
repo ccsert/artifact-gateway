@@ -161,6 +161,15 @@ jobs:
       - name: Verify built Console identity
         run: npx playwright test --config playwright.build.config.ts
         working-directory: console
+      - name: Compare Console visual baseline
+        run: make console-visual
+      - name: Upload Console visual diff
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: console-visual-diff
+          path: console/test-results/
+          retention-days: 7
       - name: Start gateway for Console E2E
         env:
           GATEWAY_ENV_FILE: ${{ runner.temp }}/artifact-gateway.env

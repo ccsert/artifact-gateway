@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Console 改动新增完全 mock 的视觉基线门禁：主要页面在 Gateway Dark 与 Light 下于固定版本 Playwright 容器中渲染比对（`make console-visual`）。夹具按生成客户端类型校验，端到端用例纳入 TypeScript 构建；Console 覆盖率下限提升至当前基线，并修复两条路径失效的单文件门槛。
+
 ## 0.8.0 - 2026-10-08
 
 - Gateway 与 Go sidecar 使用 Go 1.26.9 构建，修复发行依赖审计发现的标准库漏洞，并将 `golang.org/x/net` 更新至 v0.60.0 及必要依赖版本；保留严格审计，不增加例外。

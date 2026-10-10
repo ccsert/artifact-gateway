@@ -61,7 +61,10 @@ test("site identity and theme transition stay coordinated across desktop and mob
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
   await page.addInitScript(() => {
-    const transitionDocument = document as Document & {
+    const transitionDocument = document as Omit<
+      Document,
+      "startViewTransition"
+    > & {
       startViewTransition?: (update: () => void | Promise<void>) => {
         finished: Promise<void>;
         skipTransition: () => void;

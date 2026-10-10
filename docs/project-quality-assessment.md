@@ -121,7 +121,7 @@ create more risk than it removes.
 
 The repository-wide Go floor is 40%. Stable packages have stronger focused
 floors, but authorization begins at 38%. The Console tracks all hand-written
-code with 50% line, 48.5% statement, 45% function, and 43.5% branch floors plus stronger
+code with 63% line, 61% statement, 58% function, and 55.5% branch floors plus stronger
 per-module thresholds. These are useful non-regression guards, but they should
 rise as the large modules are split and public-boundary tests become cheaper.
 
