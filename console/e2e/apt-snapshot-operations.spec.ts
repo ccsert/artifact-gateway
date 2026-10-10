@@ -307,19 +307,23 @@ for (const [width, theme, locale] of [
         exact: true,
       })
       .click();
-    await page
-      .getByRole("combobox", {
-        name: en ? "Search and select a source artifact" : "搜索并选择源制品",
-      })
-      .click();
+    // Open each picker from the middle of the viewport: Ant Design aligns a
+    // popup opened near the bottom edge only after the next scroll, so a
+    // picker at the fold can leave its options parked off-screen.
+    const openPicker = async (name: string) => {
+      const picker = page.getByRole("combobox", { name });
+      await picker.evaluate((element) =>
+        element.scrollIntoView({ block: "center" }),
+      );
+      await picker.click();
+    };
+    await openPicker(
+      en ? "Search and select a source artifact" : "搜索并选择源制品",
+    );
     await page
       .getByText("artifact-gateway-console 1.2.3 · amd64", { exact: true })
       .click();
-    await page
-      .getByRole("combobox", {
-        name: en ? "Select target repository" : "选择目标仓库",
-      })
-      .click();
+    await openPicker(en ? "Select target repository" : "选择目标仓库");
     await page.getByText("debian-production", { exact: true }).click();
     await page
       .getByRole("textbox", {
