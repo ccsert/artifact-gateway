@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Recent activity on the overview reads as events (operation, object, actor, time, outcome) through the same labels as the audit log, which now also shows outcomes as status text and localizes the actor column. Previously the overview printed raw operation and outcome codes.
+
 - Repository detail groups its thirteen tasks into Artifacts, Governance, Distribution and Settings, with the group's tasks as a secondary bar. Existing `?tab=` deep links keep working; the Artifacts and Settings tasks are labelled Browse and General to stay distinct from their groups.
 
 - Console shell v2: the top bar is replaced by a navigation rail that carries a ⌘K / Ctrl+K command palette (pages, repositories, artifact search, theme, language, sign-out), the connected node, theme and language controls, and an account menu that names the signed-in actor and authentication method. Token management and sign-out move into that menu.

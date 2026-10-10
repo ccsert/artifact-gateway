@@ -18,8 +18,8 @@ import {
   EmptyState,
   isNotFound,
 } from "../../components/ui/Feedback";
-import { FormatBadge, StateBadge } from "../../components/ui/Badge";
-import { formatBytes, formatDate, formatNumber } from "../../lib/format";
+import { FormatBadge } from "../../components/ui/Badge";
+import { formatBytes, formatNumber } from "../../lib/format";
 import {
   ConsoleTable,
   MetricStrip,
@@ -27,6 +27,7 @@ import {
 import { StorageByFormatChart } from "../../components/ui/DashboardCharts";
 import { usePreferences } from "../../lib/preferences";
 import { useDashboardResource } from "./useDashboardResource";
+import { RecentAuditList } from "./RecentAuditList";
 import { preloadDashboardPiePlot } from "../../components/ui/dashboard-charts/loadDashboardPiePlot";
 
 type StatisticsWindow = keyof OverviewWindowCounts;
@@ -144,48 +145,6 @@ export function DashboardPage() {
       key: "usedBytes",
       width: 125,
       render: (value: number) => formatBytes(value),
-    },
-  ];
-  const auditColumns: ColumnsType<AuditRecord> = [
-    {
-      title: text("时间", "Time"),
-      dataIndex: "occurredAt",
-      key: "occurredAt",
-      width: 180,
-      render: (value: string) => (
-        <span className="whitespace-nowrap font-mono text-xs text-zinc-400">
-          {formatDate(value, locale)}
-        </span>
-      ),
-    },
-    {
-      title: text("操作", "Operation"),
-      dataIndex: "operation",
-      key: "operation",
-      width: 140,
-      render: (value: string | undefined) => (
-        <span className="text-xs text-zinc-300">{value ?? "—"}</span>
-      ),
-    },
-    {
-      title: text("结果", "Outcome"),
-      dataIndex: "outcome",
-      key: "outcome",
-      width: 120,
-      render: (value: string) => <StateBadge state={value} />,
-    },
-    {
-      title: "Actor",
-      dataIndex: "actor",
-      key: "actor",
-      render: (value: string | undefined) => (
-        <span
-          className="block max-w-32 truncate text-xs text-zinc-500"
-          title={value}
-        >
-          {value ?? "—"}
-        </span>
-      ),
     },
   ];
 
@@ -399,28 +358,17 @@ export function DashboardPage() {
             />
           ) : null}
           {audits ? (
-            <ConsoleTable<AuditRecord>
-              rowKey={(record) =>
-                record.requestId ??
-                record.traceId ??
-                `${record.occurredAt}-${record.actor ?? ""}-${record.operation ?? ""}-${record.resource ?? ""}`
-              }
-              dataSource={audits}
-              columns={auditColumns}
-              pagination={false}
-              locale={{
-                emptyText: (
-                  <EmptyState
-                    title={text("暂无审计记录", "No audit records")}
-                    hint={text(
-                      "产生访问或发布行为后，这里会列出最近的判定记录。",
-                      "Recent decisions appear here once access or publishing is recorded.",
-                    )}
-                  />
-                ),
-              }}
-              scroll={{ x: 520 }}
-            />
+            audits.length > 0 ? (
+              <RecentAuditList records={audits} />
+            ) : (
+              <EmptyState
+                title={text("暂无审计记录", "No audit records")}
+                hint={text(
+                  "产生访问或发布行为后，这里会列出最近的判定记录。",
+                  "Recent decisions appear here once access or publishing is recorded.",
+                )}
+              />
+            )
           ) : auditsResource.loading ? (
             <Loading
               label={text("正在加载审计事件…", "Loading audit events…")}

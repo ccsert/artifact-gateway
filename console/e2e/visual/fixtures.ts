@@ -127,8 +127,8 @@ export const auditPage = {
     {
       occurredAt: "2026-10-01T09:12:44Z",
       actor: "user:alice",
-      operation: "repository.update",
-      outcome: "success",
+      operation: "repository.grants.upsert",
+      outcome: "resolved",
       repository: "maven-releases",
       format: "maven",
       status: 200,
@@ -137,8 +137,8 @@ export const auditPage = {
     {
       occurredAt: "2026-10-01T08:47:10Z",
       actor: "service-account:ci-publisher",
-      operation: "publish",
-      outcome: "success",
+      operation: "put",
+      outcome: "resolved",
       repository: "npm-hosted",
       format: "npm",
       resource: "@acme/web-ui/-/web-ui-2.4.1.tgz",
@@ -149,8 +149,8 @@ export const auditPage = {
     {
       occurredAt: "2026-10-01T08:03:59Z",
       actor: "user:bob",
-      operation: "read",
-      outcome: "denied",
+      operation: "get",
+      outcome: "access_denied",
       repository: "containers",
       format: "oci",
       resource: "platform/api",

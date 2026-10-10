@@ -17,7 +17,7 @@ import {
   EmptyState,
   isNotFound,
 } from "../../components/ui/Feedback";
-import { Badge, FormatBadge } from "../../components/ui/Badge";
+import { FormatBadge, StatusText, statusTone } from "../../components/ui/Badge";
 import { formatBytes, formatDate } from "../../lib/format";
 import { toCsv, downloadCsv } from "../../lib/csv";
 import {
@@ -281,11 +281,11 @@ export function AuditsPage() {
       width: 170,
       render: (_, row) => (
         <span title={row.record.outcome}>
-          <Badge tone={auditOutcomeTone(row.record.outcome)}>
+          <StatusText tone={statusTone(auditOutcomeTone(row.record.outcome))}>
             {row.record.outcome
               ? auditOutcomeLabel(row.record.outcome, text)
               : "—"}
-          </Badge>
+          </StatusText>
         </span>
       ),
     },
@@ -327,7 +327,7 @@ export function AuditsPage() {
       ),
     },
     {
-      title: "Actor",
+      title: text("访问主体", "Actor"),
       key: "actor",
       width: 170,
       render: (_, row) => (

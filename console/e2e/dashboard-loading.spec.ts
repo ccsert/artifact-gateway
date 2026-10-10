@@ -37,6 +37,90 @@ async function setup(page: Page) {
 }
 
 for (const width of [1440, 390]) {
+  test(`recent audit identities remain explicit at ${width}px`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const errors = await setup(page);
+    const en = width === 390;
+    await page.addInitScript((en) => {
+      localStorage.setItem("ag.console.theme", en ? "light" : "dark");
+      localStorage.setItem("ag.console.locale", en ? "en-US" : "zh-CN");
+    }, en);
+    await page.route("**/api/v2/groups**", (route) =>
+      route.fulfill({ json: { items: [] } }),
+    );
+    await page.route("**/api/v2/overview-statistics", (route) =>
+      route.fulfill({ json: statistics }),
+    );
+    await page.route("**/api/v2/audits**", (route) =>
+      route.fulfill({
+        json: [
+          {
+            occurredAt: "2026-10-01T09:12:44Z",
+            actor: "anonymous",
+            operation: "get",
+            outcome: "resolved",
+            requestId: "anonymous",
+          },
+          {
+            occurredAt: "2026-10-01T09:12:44Z",
+            operation: "future.operation",
+            outcome: "future_outcome",
+            requestId: "missing",
+          },
+          {
+            occurredAt: "2026-10-01T09:12:44Z",
+            actor: "synthetic-operator",
+            operation: "get",
+            outcome: "access_denied",
+            repository: "synthetic-raw",
+            resource: "sample.zip",
+            requestId: "named",
+          },
+        ],
+      }),
+    );
+    await page.goto("/");
+    const rows = page.locator(".ag-activity-list .ag-activity-item");
+    const auditCard = page.locator(".ag-card").filter({
+      has: page.locator(".ag-activity-list"),
+    });
+    await expect(rows).toHaveCount(3);
+    await expect(rows.nth(0).locator(".ag-activity-actor")).toHaveText(
+      en ? "Anonymous" : "匿名",
+    );
+    await expect(rows.nth(0).locator(".ag-activity-actor")).toHaveAttribute(
+      "title",
+      "anonymous",
+    );
+    await expect(rows.nth(1).locator(".ag-activity-actor")).toHaveText(
+      en ? "Not recorded" : "未记录",
+    );
+    await expect(rows.nth(1)).toContainText("future.operation");
+    await expect(rows.nth(1)).toContainText("future_outcome");
+    await expect(rows.nth(2)).toContainText("synthetic-operator");
+    await expect(rows.nth(2)).toContainText("synthetic-raw/sample.zip");
+    await expect(rows.nth(2)).toHaveAttribute("data-denied", "true");
+    await expect(
+      auditCard.getByRole("link", {
+        name: en ? "View all →" : "查看全部 →",
+        exact: true,
+      }),
+    ).toHaveAttribute("href", "/audits");
+    await rows.nth(2).scrollIntoViewIfNeeded();
+    expect(
+      await page
+        .locator("html")
+        .evaluate((el) => el.scrollWidth - el.clientWidth),
+    ).toBeLessThanOrEqual(0);
+    expect(errors).toEqual([]);
+    await auditCard.screenshot({
+      path: info.outputPath(`audit-identities-${width}.png`),
+      animations: "disabled",
+    });
+  });
+
   test(`storage renders before pending optional sources at ${width}px`, async ({
     page,
   }, info) => {
