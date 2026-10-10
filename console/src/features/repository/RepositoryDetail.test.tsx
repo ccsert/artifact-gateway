@@ -1,4 +1,10 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -66,6 +72,27 @@ afterEach(() => {
   vi.clearAllMocks();
   auth.identity = { administrator: true, role: "admin" };
 });
+
+/**
+ * Repository tasks are grouped (#274): open each group and read its tasks so
+ * role checks still see every surface a user can reach.
+ */
+async function collectTasks(user: ReturnType<typeof userEvent.setup>) {
+  const navigation = screen.getByRole("navigation", { name: "仓库任务" });
+  const groupList = within(navigation).getAllByRole("tablist")[0];
+  const groups = within(groupList)
+    .getAllByRole("tab")
+    .map((tab) => tab.textContent ?? "");
+  const tasks: Record<string, string[]> = {};
+  for (const group of groups) {
+    await user.click(within(groupList).getByRole("tab", { name: group }));
+    const taskList = within(navigation).getAllByRole("tablist")[1];
+    tasks[group] = within(taskList)
+      .getAllByRole("tab")
+      .map((tab) => tab.textContent ?? "");
+  }
+  return tasks;
+}
 
 describe("RepositoryDetailPage scanning deep link", () => {
   it("discovers and renders the scanning workspace from ?tab=scanning", async () => {
@@ -138,9 +165,11 @@ describe("RepositoryDetailPage scanning deep link", () => {
       await screen.findByRole("tab", { name: "制品扫描", selected: true }),
     ).toBeInTheDocument();
     expect(
+      screen.getByRole("tab", { name: "治理与安全", selected: true }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("navigation", { name: "仓库任务" }),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(12);
     expect(
       screen.queryByRole("tab", { name: "策略与安全" }),
     ).not.toBeInTheDocument();
@@ -152,6 +181,13 @@ describe("RepositoryDetailPage scanning deep link", () => {
       capabilitiesError: null,
       canManage: true,
       canViewJobs: true,
+    });
+
+    expect(await collectTasks(userEvent.setup())).toEqual({
+      制品: ["浏览", "使用统计", "发布"],
+      治理与安全: ["访问授权", "保留策略", "制品扫描", "安全准入", "墓碑"],
+      分发: ["晋升 / 复制"],
+      设置: ["基本设置", "容量", "生命周期任务"],
     });
   });
 });
@@ -179,6 +215,7 @@ describe("RepositoryDetailPage role-scoped tabs", () => {
       admin: boolean;
       intelligence: boolean;
     }> = {},
+    accessPending = false,
   ) {
     mockGetRepository.mockResolvedValue({
       data: { ...repository, format },
@@ -191,16 +228,19 @@ describe("RepositoryDetailPage role-scoped tabs", () => {
       },
     } as never);
     mockGetCapacity.mockResolvedValue({ data: undefined } as never);
-    mockGetEffectiveAccess.mockResolvedValue({
-      data: {
-        permissions: {
-          read: { allowed: authority.read ?? true },
-          write: { allowed: authority.write ?? canWrite },
-          admin: { allowed: authority.admin ?? false },
-          intelligence: { allowed: authority.intelligence ?? false },
+    if (accessPending) {
+      mockGetEffectiveAccess.mockReturnValue(new Promise(() => {}) as never);
+    } else
+      mockGetEffectiveAccess.mockResolvedValue({
+        data: {
+          permissions: {
+            read: { allowed: authority.read ?? true },
+            write: { allowed: authority.write ?? canWrite },
+            admin: { allowed: authority.admin ?? false },
+            intelligence: { allowed: authority.intelligence ?? false },
+          },
         },
-      },
-    } as never);
+      } as never);
     return render(
       <PreferencesProvider>
         <MemoryRouter
@@ -250,23 +290,23 @@ describe("RepositoryDetailPage role-scoped tabs", () => {
     auth.identity = { administrator: false, role: "member" };
     renderRole(false, "maven", "artifacts", { admin: true });
     expect(await screen.findByText("制品视图已加载")).toBeInTheDocument();
-    for (const name of [
-      "访问授权",
-      "保留策略",
-      "安全准入",
-      "容量",
-      "设置",
-      "墓碑",
-      "晋升 / 复制",
-      "生命周期任务",
-    ]) {
-      expect(screen.getByRole("tab", { name })).toBeInTheDocument();
-    }
     // Scanning needs the independent intelligence scope, so it stays hidden even
     // for a repository administrator.
-    expect(
-      screen.queryByRole("tab", { name: "制品扫描" }),
-    ).not.toBeInTheDocument();
+    expect(await collectTasks(userEvent.setup())).toEqual({
+      制品: ["浏览", "使用统计"],
+      治理与安全: ["访问授权", "保留策略", "安全准入", "墓碑"],
+      分发: ["晋升 / 复制"],
+      设置: ["基本设置", "容量", "生命周期任务"],
+    });
+  });
+
+  it("keeps the artifacts view while repository access is still loading", async () => {
+    // No task is allowed until the access answer arrives; the grouped
+    // navigation must wait instead of failing the whole page.
+    auth.identity = { administrator: false, role: "member" };
+    renderRole(false, "maven", "artifacts", {}, true);
+    expect(await screen.findByText("制品视图已加载")).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   });
 
   it("shows OCI Docker publication instructions on a publisher deep link", async () => {
@@ -347,17 +387,13 @@ describe("RepositoryDetailPage Go lifecycle surfaces", () => {
       </PreferencesProvider>,
     );
 
-    expect(
-      await screen.findByRole("tab", { name: "保留策略" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "安全准入" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("tab", { name: "晋升 / 复制" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("tab", { name: "生命周期任务" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "墓碑" })).toBeInTheDocument();
+    await screen.findByRole("tab", { name: "治理与安全" });
+    const tasks = await collectTasks(userEvent.setup());
+    expect(tasks["治理与安全"]).toEqual(
+      expect.arrayContaining(["保留策略", "安全准入", "墓碑"]),
+    );
+    expect(tasks["分发"]).toEqual(["晋升 / 复制"]);
+    expect(tasks["设置"]).toContain("生命周期任务");
   });
 });
 

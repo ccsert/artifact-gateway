@@ -4,6 +4,7 @@ import {
   type APIRequestContext,
   type Page,
 } from "@playwright/test";
+import { openRepositoryTask } from "./support/repositoryTasks";
 
 const token = process.env.GATEWAY_ADMIN_TOKEN;
 
@@ -173,7 +174,7 @@ test("retention dry-run and lifecycle jobs are visible in the repository console
 
   await authenticate(page);
   await page.goto(`/repositories/${repositoryId}`);
-  await page.getByRole("tab", { name: "保留策略" }).click();
+  await openRepositoryTask(page, "治理与安全", "保留策略");
   await expect(page.getByRole("switch")).toBeChecked();
   await page.getByRole("button", { name: "试运行" }).click();
   await expect(page.getByText("没有需要清理的路径资产")).toBeVisible();
@@ -190,7 +191,7 @@ test("retention dry-run and lifecycle jobs are visible in the repository console
   );
   await expectOK(execute, "enqueue Raw retention job");
 
-  await page.getByRole("tab", { name: "生命周期任务" }).click();
+  await openRepositoryTask(page, "设置", "生命周期任务");
   await expect(
     page.getByRole("row").filter({ hasText: "retention" }).first(),
   ).toBeVisible();
@@ -208,9 +209,7 @@ test("a deleted artifact can be restored from the repository tombstone tab", asy
 
   await authenticate(page);
   await page.goto(`/repositories/${repositoryId}`);
-  const tombstoneTab = page.getByRole("tab", { name: "墓碑", exact: true });
-  await tombstoneTab.click();
-  await expect(tombstoneTab).toHaveAttribute("aria-selected", "true");
+  await openRepositoryTask(page, "治理与安全", "墓碑");
   const tombstoneTable = page
     .getByRole("table")
     .filter({ has: page.getByRole("columnheader", { name: "坐标" }) });

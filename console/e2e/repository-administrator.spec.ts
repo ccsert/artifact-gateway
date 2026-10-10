@@ -5,6 +5,10 @@ import {
   authenticateAsMember,
   authenticateAsRepositoryAdministrator,
 } from "./support/auth";
+import {
+  openRepositoryTask,
+  repositoryNavigationState,
+} from "./support/repositoryTasks";
 
 const repositoryId = "11111111-1111-1111-1111-111111111111";
 
@@ -143,7 +147,7 @@ const managementTabs = [
   "晋升 / 复制",
   "生命周期任务",
   "墓碑",
-  "设置",
+  "基本设置",
 ];
 
 test("a repository administrator manages its repository without platform navigation", async ({
@@ -159,18 +163,12 @@ test("a repository administrator manages its repository without platform navigat
 
   await page.goto(`/repositories/${repositoryId}`);
 
-  const navigation = page.getByRole("navigation", { name: "仓库任务" });
-  await expect(
-    navigation.getByRole("tab", { name: "制品", exact: true }),
-  ).toBeVisible();
-  for (const label of managementTabs) {
-    await expect(
-      navigation.getByRole("tab", { name: label, exact: true }),
-    ).toBeVisible();
-  }
-  await expect(
-    navigation.getByRole("tab", { name: "发布", exact: true }),
-  ).toHaveCount(0);
+  // Management lives in the governance, distribution and settings groups;
+  // without a write grant the artifacts group offers no publication.
+  expect(await repositoryNavigationState(page)).toEqual({
+    groups: ["制品", "治理与安全", "分发", "设置"],
+    tasks: ["浏览", "使用统计"],
+  });
 
   for (const platformLink of ["访问控制", "API 密钥", "用户", "审计日志"]) {
     await expect(
@@ -179,12 +177,8 @@ test("a repository administrator manages its repository without platform navigat
   }
   await expect(page.getByRole("button", { name: /新建仓库/ })).toHaveCount(0);
 
-  await page.getByRole("tab", { name: "访问授权", exact: true }).click();
+  await openRepositoryTask(page, "治理与安全", "访问授权");
   await expect(page).toHaveURL(/\?tab=grants$/);
-  await expect(page.getByRole("tab", { name: "访问授权" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
   await expect(page.getByText("暂无授权规则", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /添加授权/ })).toBeVisible();
 });
@@ -207,6 +201,10 @@ test("a reader keeps only the read surfaces and cannot reach a management tab by
     ).toHaveCount(0);
   }
   await expect(page.getByRole("tab", { name: "使用统计" })).toBeVisible();
+  expect(await repositoryNavigationState(page)).toEqual({
+    groups: ["制品"],
+    tasks: ["浏览", "使用统计"],
+  });
 });
 
 test("a repository administrator is redirected away from platform administration", async ({
@@ -246,10 +244,10 @@ test("a platform administrator keeps every tab without repository grants", async
 
   await page.goto(`/repositories/${repositoryId}`);
 
-  const navigation = page.getByRole("navigation", { name: "仓库任务" });
-  for (const label of [...managementTabs, "制品", "使用统计", "制品扫描"]) {
-    await expect(
-      navigation.getByRole("tab", { name: label, exact: true }),
-    ).toBeVisible();
-  }
+  expect((await repositoryNavigationState(page)).groups).toEqual([
+    "制品",
+    "治理与安全",
+    "分发",
+    "设置",
+  ]);
 });

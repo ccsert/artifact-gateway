@@ -1002,11 +1002,54 @@ button:not(:disabled):active,
 }
 
 .ag-repository-navigation {
-  border-bottom: 1px solid var(--ag-border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .ag-repository-tabs > .ant-tabs-nav {
   margin: 0;
+  border-bottom: 1px solid var(--ag-border-subtle);
+}
+
+/* Secondary tasks inside the selected group: neutral pills, no ink bar. */
+.ag-repository-subtabs > .ant-tabs-nav {
+  margin: 0;
+}
+
+.ag-repository-subtabs > .ant-tabs-nav::before,
+.ag-repository-subtabs .ant-tabs-ink-bar,
+.ag-repository-subtabs > .ant-tabs-content-holder {
+  display: none;
+}
+
+.ag-repository-subtabs.ant-tabs > .ant-tabs-nav .ant-tabs-tab {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: var(--ag-radius-control);
+  color: var(--ag-content-secondary);
+  font-size: 13px;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.ag-repository-subtabs.ant-tabs > .ant-tabs-nav .ant-tabs-tab:hover {
+  color: var(--ag-content-strong);
+}
+
+.ag-repository-subtabs.ant-tabs
+  > .ant-tabs-nav
+  .ant-tabs-tab.ant-tabs-tab-active {
+  background: var(--ag-surface-hover);
+}
+
+.ag-repository-subtabs.ant-tabs
+  > .ant-tabs-nav
+  .ant-tabs-tab.ant-tabs-tab-active
+  .ant-tabs-tab-btn {
+  color: var(--ag-content-strong);
+  font-weight: 500;
 }
 
 .ag-repository-tabs > .ant-tabs-nav::before {

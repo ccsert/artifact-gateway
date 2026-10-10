@@ -1,6 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { defaultSiteSettings } from "../src/lib/siteSettings";
 import { authenticateAsAdmin } from "./support/auth";
+import {
+  openRepositoryTask,
+  repositoryNavigationState,
+} from "./support/repositoryTasks";
 import { waitForModalOpen } from "./support/motion";
 import {
   attachThemeEvidence,
@@ -529,31 +533,29 @@ test("repository detail keeps the whole content region stable when security beco
   });
   await page.setViewportSize({ width: 1920, height: 900 });
   await mockRepositoryDetail(page, { format: "npm" });
+  // Opening the governance group passes through its first task (access
+  // grants), so the grants picker reads must be synthetic as well.
+  for (const endpoint of ["users", "api-keys", "service-accounts"]) {
+    await page.route(`**/api/v2/${endpoint}**`, (route) =>
+      route.fulfill({ json: { items: [] } }),
+    );
+  }
+  await page.route("**/api/v2/authorization-roles**", (route) =>
+    route.fulfill({ json: [] }),
+  );
 
   await page.goto(`/repositories/${repositoryId}`);
 
   const navigation = page.getByRole("navigation", { name: "仓库任务" });
   const taskTabs = navigation.locator(".ag-repository-tabs").getByRole("tab");
-  await expect(taskTabs).toHaveCount(12);
-  for (const label of [
-    "制品",
-    "使用统计",
-    "发布",
-    "访问授权",
-    "保留策略",
-    "制品扫描",
-    "安全准入",
-    "容量",
-    "晋升 / 复制",
-    "生命周期任务",
-    "墓碑",
-    "设置",
-  ]) {
-    await expect(
-      navigation.getByRole("tab", { name: label, exact: true }),
-    ).toBeVisible();
-  }
-  await expect(navigation.locator(".ant-tabs-nav-more")).toBeHidden();
+  expect(await repositoryNavigationState(page)).toEqual({
+    groups: ["制品", "治理与安全", "分发", "设置"],
+    tasks: ["浏览", "使用统计", "发布"],
+  });
+  await expect(
+    navigation.locator(".ag-repository-tabs .ant-tabs-nav-more"),
+  ).toBeHidden();
+  await openRepositoryTask(page, "制品", "浏览");
 
   const beforeSecurity = await page.evaluate(() => {
     const main = document.querySelector<HTMLElement>(".ag-main");
@@ -579,7 +581,7 @@ test("repository detail keeps the whole content region stable when security beco
       fullPage: false,
     });
   }
-  await navigation.getByRole("tab", { name: "安全准入", exact: true }).click();
+  await openRepositoryTask(page, "治理与安全", "安全准入");
   await expect(
     page.getByRole("heading", {
       name: "安全准入与隔离读取",
@@ -677,29 +679,15 @@ test("repository detail keeps operational content above the fold", async ({
   await page.keyboard.press("Escape");
 
   const navigation = page.getByRole("navigation", { name: "仓库任务" });
-  const taskTabs = navigation.locator(".ag-repository-tabs").getByRole("tab");
-  await expect(taskTabs).toHaveCount(11);
-  for (const label of [
-    "制品",
-    "使用统计",
-    "访问授权",
-    "保留策略",
-    "制品扫描",
-    "安全准入",
-    "容量",
-    "晋升 / 复制",
-    "生命周期任务",
-    "墓碑",
-    "设置",
-  ]) {
-    await expect(
-      navigation.getByRole("tab", { name: label, exact: true }),
-    ).toBeVisible();
-  }
+  const taskGroups = navigation.locator(".ag-repository-tabs").getByRole("tab");
+  expect(await repositoryNavigationState(page)).toEqual({
+    groups: ["制品", "治理与安全", "分发", "设置"],
+    tasks: ["浏览", "使用统计"],
+  });
+  await openRepositoryTask(page, "制品", "浏览");
   await expect(
-    navigation.getByRole("tab", { name: "发布", exact: true }),
-  ).toHaveCount(0);
-  await expect(page.getByRole("tab", { name: "设置" })).toBeVisible();
+    page.getByRole("tab", { name: "设置", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "设置" })).toHaveCount(0);
 
   const table = page.locator(".ag-console-table");
@@ -721,7 +709,7 @@ test("repository detail keeps operational content above the fold", async ({
 
   // Tab labels are separated by the 24px gutter alone — no tab padding doubles
   // the gap — and the first tab sits flush with the content edge.
-  const firstTabBoxes = await taskTabs.evaluateAll((tabs) =>
+  const firstTabBoxes = await taskGroups.evaluateAll((tabs) =>
     tabs.slice(0, 4).map((tab) => {
       const box = tab.getBoundingClientRect();
       return { x: box.x, right: box.x + box.width };
@@ -747,17 +735,13 @@ test("repository detail keeps operational content above the fold", async ({
     });
   }
 
-  await page.getByRole("tab", { name: "访问授权" }).click();
-  await expect(page.getByRole("tab", { name: "访问授权" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  await openRepositoryTask(page, "治理与安全", "访问授权");
   await expect(page).toHaveURL(/\?tab=grants$/);
 
   await page.goto(`/repositories/${repositoryId}`);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(taskTabs).toHaveCount(11);
+  await expect(taskGroups).toHaveCount(4);
   await expect(
     page.getByRole("tab", { name: "制品", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
@@ -923,7 +907,7 @@ test("repository settings live in a tab and keep the update workflow", async ({
   );
 
   await page.goto(`/repositories/${repositoryId}`);
-  const settingsTab = page.getByRole("tab", { name: "设置" });
+  const settingsTab = page.getByRole("tab", { name: "设置", exact: true });
   await settingsTab.click();
 
   await expect(page.getByRole("heading", { name: "仓库设置" })).toBeVisible();
@@ -931,7 +915,7 @@ test("repository settings live in a tab and keep the update workflow", async ({
     .poll(async () => {
       const [tabBox, indicatorBox] = await Promise.all([
         settingsTab.boundingBox(),
-        page.locator(".ant-tabs-ink-bar").boundingBox(),
+        page.locator(".ag-repository-tabs .ant-tabs-ink-bar").boundingBox(),
       ]);
       if (!tabBox || !indicatorBox) return Number.POSITIVE_INFINITY;
       const tabCenter = tabBox.x + tabBox.width / 2;

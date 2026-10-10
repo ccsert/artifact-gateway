@@ -3,12 +3,16 @@ import type {
   GetDiagnosticsResponses,
   GetOidcSettingsResponses,
   GetOverviewStatisticsResponses,
+  GetRepositoryCapabilitiesResponses,
+  GetRepositoryCapacityResponses,
+  GetRepositoryEffectiveAccessResponses,
   GetRepositoryResponses,
   ListApiKeysResponses,
   ListAuditPageResponses,
   ListAuditsResponses,
   ListFormatProfilesResponses,
   ListGroupsResponses,
+  ListMavenCoordinatesResponses,
   ListRepositoriesResponses,
   ListRepositoryCapacitiesResponses,
   ListRepositoryGrantsResponses,
@@ -390,3 +394,63 @@ export const publicRepositories = {
     .filter((item) => item.anonymousRead)
     .map(({ id, name, format, type }) => ({ id, name, format, type })),
 };
+
+/** Detail-page answers for maven-releases, seen by the platform admin. */
+export const mavenReleases = repositories[0];
+
+export const mavenReleasesCapabilities = {
+  format: "maven",
+  type: "hosted",
+  operations: ["read", "publish", "browse", "delete", "retain", "promote"],
+  artifactScanning: true,
+  publicationScanning: true,
+} satisfies GetRepositoryCapabilitiesResponses[200];
+
+const allow = { allowed: true, source: "platform", reason: "administrator" };
+
+export const mavenReleasesAccess = {
+  actor: "mock-admin",
+  identity: {
+    actor: "mock-admin",
+    kind: "local_session",
+    role: "admin",
+    administrator: true,
+  },
+  resource: "",
+  simulated: false,
+  repository: {
+    id: mavenReleases.id,
+    name: mavenReleases.name,
+    format: "maven",
+    type: "hosted",
+    state: "active",
+  },
+  anonymousRead: { allowed: true, source: "repository", reason: "enabled" },
+  permissions: { read: allow, write: allow, admin: allow, intelligence: allow },
+} satisfies GetRepositoryEffectiveAccessResponses[200];
+
+export const mavenReleasesCapacity = {
+  repositoryId: mavenReleases.id,
+  format: "maven",
+  usedBytes: 8 * 1_073_741_824,
+  objectCount: 1240,
+  quotaBytes: 20 * 1_073_741_824,
+} satisfies GetRepositoryCapacityResponses[200];
+
+export const mavenReleasesCoordinates = {
+  items: [
+    ["com.acme:demo-service:1.8.2", "9f86d081884c7d65", "2026-09-28T14:02:11Z"],
+    ["com.acme:billing-core:3.2.0", "3c0a1d8e5b7f2a91", "2026-09-27T09:41:03Z"],
+    ["com.acme:auth-client:0.9.7", "e4b2c91f07ad6630", "2026-09-25T17:20:44Z"],
+    [
+      "com.acme.platform:bom:2026.10.0",
+      "71fd2e09a3c4b850",
+      "2026-09-24T08:05:12Z",
+    ],
+  ].map(([coordinate, digest, createdAt]) => ({
+    coordinate,
+    digest: `sha256:${digest.repeat(4)}`,
+    createdAt,
+    publisher: "service-account:ci-publisher",
+  })),
+} satisfies ListMavenCoordinatesResponses[200];
