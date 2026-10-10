@@ -197,12 +197,12 @@ export function RepositorySettingsTab({
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-5 flex items-start justify-between gap-6 border-b border-zinc-800/70 pb-4">
+      <div className="mb-5 flex items-start justify-between gap-6 border-b border-line pb-4">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-100">
+          <h2 className="text-sm font-semibold text-fg-strong">
             {text("仓库设置", "Repository settings")}
           </h2>
-          <p className="mt-1 text-xs leading-5 text-zinc-500">
+          <p className="mt-1 text-xs leading-5 text-fg-tertiary">
             {text(
               "管理读取方式与代理仓库的上游连接。仓库名称、格式和类型创建后不可修改。",
               "Manage read access and upstream connectivity for proxy repositories. Repository name, format, and type cannot be changed after creation.",
@@ -222,12 +222,12 @@ export function RepositorySettingsTab({
         <Notice tone="success" title={notice} onClose={() => setNotice("")} />
       )}
       <Space orientation="vertical" size="large" className="w-full">
-        <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+        <div className="flex items-center justify-between gap-6 rounded-lg border border-line bg-surface-translucent px-4 py-3">
           <div>
-            <div className="text-sm font-medium text-zinc-200">
+            <div className="text-sm font-medium text-fg">
               {text("允许匿名读取", "Allow anonymous reads")}
             </div>
-            <div className="mt-1 text-xs leading-5 text-zinc-500">
+            <div className="mt-1 text-xs leading-5 text-fg-tertiary">
               {text(
                 "开启后协议层 GET/HEAD 可在无需凭据时读取该仓库。",
                 "When enabled, protocol GET/HEAD requests can read this repository without credentials.",
@@ -241,12 +241,12 @@ export function RepositorySettingsTab({
           />
         </div>
         {repo.type === "hosted" && repo.format === "maven" && (
-          <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+          <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-line bg-surface-translucent px-4 py-3">
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-zinc-200">
+              <div className="text-sm font-medium text-fg">
                 {text("严格发布", "Strict publication")}
               </div>
-              <div className="mt-1 max-w-[72ch] text-xs leading-5 text-zinc-500">
+              <div className="mt-1 max-w-[72ch] text-xs leading-5 text-fg-tertiary">
                 {text(
                   "默认关闭时与 Nexus 的直接可见行为一致，标准 Maven/Gradle 客户端无需额外集成。开启后，上传内容会在 Gateway 坐标提交成功前保持不可见。请不要在发布任务进行中切换。",
                   "When off, Nexus-style direct visibility lets standard Maven/Gradle clients publish without an extra integration. When enabled, uploads stay hidden until the Gateway coordinate commit succeeds. Do not change this policy during an active publication.",
@@ -295,11 +295,11 @@ export function RepositorySettingsTab({
                 onChange={(e) => setHosts(e.target.value)}
               />
             </Field>
-            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
-              <div className="text-sm font-medium text-zinc-200">
+            <div className="rounded-lg border border-line bg-surface-translucent px-4 py-3">
+              <div className="text-sm font-medium text-fg">
                 {text("出口代理", "Egress proxy")}
               </div>
-              <div className="mt-1 text-xs leading-5 text-zinc-500">
+              <div className="mt-1 text-xs leading-5 text-fg-tertiary">
                 {text(
                   "配置此代理仓库访问上游时的出口网络代理，用于企业内网或受限网络环境。",
                   "Configure the egress proxy used when this proxy repository reaches its upstream, for private or restricted networks.",
@@ -314,10 +314,10 @@ export function RepositorySettingsTab({
                 }}
               >
                 <Radio value="direct">
-                  <span className="text-sm text-zinc-200">
+                  <span className="text-sm text-fg">
                     {text("直连", "Direct")}
                   </span>
-                  <span className="ml-2 text-xs text-zinc-500">
+                  <span className="ml-2 text-xs text-fg-tertiary">
                     {text(
                       "不经过任何代理，保留私网地址防护",
                       "Do not use a proxy; retain private-address protection",
@@ -325,10 +325,10 @@ export function RepositorySettingsTab({
                   </span>
                 </Radio>
                 <Radio value="environment">
-                  <span className="text-sm text-zinc-200">
+                  <span className="text-sm text-fg">
                     {text("跟随环境变量", "Use environment variables")}
                   </span>
-                  <span className="ml-2 text-xs text-zinc-500">
+                  <span className="ml-2 text-xs text-fg-tertiary">
                     {text(
                       "沿用进程级 HTTP(S)_PROXY 与 NO_PROXY",
                       "Use process-level HTTP(S)_PROXY and NO_PROXY",
@@ -336,10 +336,10 @@ export function RepositorySettingsTab({
                   </span>
                 </Radio>
                 <Radio value="custom">
-                  <span className="text-sm text-zinc-200">
+                  <span className="text-sm text-fg">
                     {text("自定义代理", "Custom proxy")}
                   </span>
-                  <span className="ml-2 text-xs text-zinc-500">
+                  <span className="ml-2 text-xs text-fg-tertiary">
                     {text(
                       "为此仓库单独指定 HTTP 或 SOCKS5 代理",
                       "Set an HTTP or SOCKS5 proxy specifically for this repository",
@@ -351,7 +351,7 @@ export function RepositorySettingsTab({
                 <Space
                   orientation="vertical"
                   size="middle"
-                  className="mt-3 w-full border-t border-zinc-800/60 pt-3"
+                  className="mt-3 w-full border-t border-line pt-3"
                 >
                   <div className="flex flex-wrap gap-3">
                     <Field label={text("协议", "Protocol")}>
@@ -390,10 +390,10 @@ export function RepositorySettingsTab({
                   {egressProtocol === "socks5" && (
                     <div className="flex items-center justify-between gap-6">
                       <div>
-                        <div className="text-xs font-medium text-zinc-400">
+                        <div className="text-xs font-medium text-fg-secondary">
                           {text("远程 DNS（socks5h）", "Remote DNS (socks5h)")}
                         </div>
-                        <div className="mt-1 text-xs leading-5 text-zinc-600">
+                        <div className="mt-1 text-xs leading-5 text-fg-disabled">
                           {text(
                             "开启后由代理服务器解析上游域名，适用于本地 DNS 不可达上游的网络。",
                             "When enabled, the proxy resolves the upstream hostname. Use this when the local DNS cannot reach the upstream network.",
@@ -452,7 +452,7 @@ export function RepositorySettingsTab({
                         setEgressClearCredentials(e.target.checked)
                       }
                     >
-                      <span className="text-xs text-zinc-400">
+                      <span className="text-xs text-fg-secondary">
                         {text(
                           "清除已存储的代理凭据",
                           "Clear stored proxy credentials",
@@ -475,11 +475,11 @@ export function RepositorySettingsTab({
                   </Field>
                 </Space>
               )}
-              <div className="mt-3 flex items-center gap-3 border-t border-zinc-800/60 pt-3">
+              <div className="mt-3 flex items-center gap-3 border-t border-line pt-3">
                 <Button onClick={runEgressTest} loading={egressTesting}>
                   {text("测试连接", "Test connection")}
                 </Button>
-                <span className="text-xs text-zinc-600">
+                <span className="text-xs text-fg-disabled">
                   {text(
                     "测试使用已保存的配置",
                     "The test uses the saved configuration",
@@ -506,11 +506,11 @@ export function RepositorySettingsTab({
               </div>
             </div>
             {repo.format === "go" && (
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3">
-                <div className="text-sm font-medium text-zinc-200">
+              <div className="rounded-lg border border-line bg-surface-translucent px-4 py-3">
+                <div className="text-sm font-medium text-fg">
                   {text("上游认证", "Upstream authentication")}
                 </div>
-                <div className="mt-1 text-xs leading-5 text-zinc-500">
+                <div className="mt-1 text-xs leading-5 text-fg-tertiary">
                   {text(
                     "当上游 Go 模块代理或代码托管要求认证时，为拉取请求附带凭据。凭据只发送给上游端点主机；跨主机重定向会剥离凭据。",
                     "Attach a credential to upstream fetches when the Go module proxy or code host requires authentication. The credential is sent only to the upstream endpoint host and is stripped on any cross-host redirect.",
@@ -522,10 +522,10 @@ export function RepositorySettingsTab({
                   onChange={(e) => setUpstreamScheme(e.target.value)}
                 >
                   <Radio value="none">
-                    <span className="text-sm text-zinc-200">
+                    <span className="text-sm text-fg">
                       {text("匿名访问", "Anonymous")}
                     </span>
-                    <span className="ml-2 text-xs text-zinc-500">
+                    <span className="ml-2 text-xs text-fg-tertiary">
                       {repo.upstreamAuth?.credentialsConfigured
                         ? text(
                             "不附带凭据，并清除已存储的凭据",
@@ -535,10 +535,10 @@ export function RepositorySettingsTab({
                     </span>
                   </Radio>
                   <Radio value="basic">
-                    <span className="text-sm text-zinc-200">
+                    <span className="text-sm text-fg">
                       {text("基本认证", "Basic")}
                     </span>
-                    <span className="ml-2 text-xs text-zinc-500">
+                    <span className="ml-2 text-xs text-fg-tertiary">
                       {text(
                         "发送 HTTP Basic 用户名与密码",
                         "Send an HTTP Basic username and password",
@@ -546,10 +546,10 @@ export function RepositorySettingsTab({
                     </span>
                   </Radio>
                   <Radio value="bearer">
-                    <span className="text-sm text-zinc-200">
+                    <span className="text-sm text-fg">
                       {text("Bearer 令牌", "Bearer token")}
                     </span>
-                    <span className="ml-2 text-xs text-zinc-500">
+                    <span className="ml-2 text-xs text-fg-tertiary">
                       {text(
                         "发送 Authorization: Bearer 令牌",
                         "Send Authorization: Bearer <token>",
@@ -561,7 +561,7 @@ export function RepositorySettingsTab({
                   <Space
                     orientation="vertical"
                     size="middle"
-                    className="mt-3 w-full border-t border-zinc-800/60 pt-3"
+                    className="mt-3 w-full border-t border-line pt-3"
                   >
                     <div className="flex flex-wrap gap-3">
                       {upstreamScheme === "basic" && (
@@ -609,7 +609,7 @@ export function RepositorySettingsTab({
           </Space>
         )}
         {capabilities && (
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-zinc-800/70 pt-4 text-xs text-zinc-500">
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-line pt-4 text-xs text-fg-tertiary">
             <span className="mr-1">
               {text("支持的操作", "Supported operations")}
             </span>

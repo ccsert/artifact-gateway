@@ -46,7 +46,7 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
             key: "actor",
             label: text("主体", "Principal"),
             children: (
-              <span className="font-mono text-xs text-zinc-200">
+              <span className="font-mono text-xs text-fg">
                 {identity.actor}
               </span>
             ),
@@ -68,7 +68,7 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
                 {roleLabels[role]}
               </Badge>
             ) : (
-              <span className="text-xs text-zinc-500">
+              <span className="text-xs text-fg-tertiary">
                 {text("无，由仓库规则判定", "None; repository rules decide")}
               </span>
             ),
@@ -85,8 +85,8 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
         ]}
       />
       {identity.oidc && (
-        <div className="mt-3 flex min-w-0 items-start gap-4 border-t border-zinc-800/70 pt-3 text-xs">
-          <span className="shrink-0 text-zinc-500">
+        <div className="mt-3 flex min-w-0 items-start gap-4 border-t border-line pt-3 text-xs">
+          <span className="shrink-0 text-fg-tertiary">
             {text("OIDC 映射", "OIDC mapping")}
           </span>
           <div className="flex min-w-0 flex-wrap gap-2">
@@ -112,7 +112,7 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
             ))}
             {!identity.oidc.adminSubject &&
               identity.oidc.roleMappings.length === 0 && (
-                <span className="text-zinc-500">
+                <span className="text-fg-tertiary">
                   {text(
                     "未命中已配置的角色映射",
                     "No configured role mapping matched",

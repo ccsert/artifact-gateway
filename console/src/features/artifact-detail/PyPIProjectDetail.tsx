@@ -193,7 +193,7 @@ export function PyPIProjectDetail({
       key: "python",
       width: 130,
       render: (_, file) => (
-        <span className="font-mono text-xs text-zinc-500">
+        <span className="font-mono text-xs text-fg-tertiary">
           {file["requires-python"] ||
             file["_artifact-gateway"]?.["python-version"] ||
             "—"}
@@ -205,7 +205,7 @@ export function PyPIProjectDetail({
       key: "size",
       width: 110,
       render: (_, file) => (
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-fg-tertiary">
           {file["_artifact-gateway"]?.cached
             ? formatBytes(file["_artifact-gateway"]?.size)
             : text("首次下载后", "After download")}
@@ -217,7 +217,7 @@ export function PyPIProjectDetail({
       key: "digest",
       width: 145,
       render: (_, file) => (
-        <span className="font-mono text-xs text-zinc-500">
+        <span className="font-mono text-xs text-fg-tertiary">
           {shortDigest(file.hashes.sha256)}
         </span>
       ),
@@ -252,7 +252,7 @@ export function PyPIProjectDetail({
         digest={selectedDigest}
       />
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-zinc-500">
+        <label className="mb-1.5 block text-xs font-medium text-fg-tertiary">
           {text("选择版本", "Select version")} ({versions.length})
         </label>
         <SearchableVersionSelect
@@ -270,7 +270,7 @@ export function PyPIProjectDetail({
       </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-xs text-zinc-100">
+          <span className="font-mono text-xs text-fg-strong">
             {project}=={selectedVersion}
           </span>
           <Tag
@@ -285,7 +285,7 @@ export function PyPIProjectDetail({
                 )}
           </Tag>
         </div>
-        <div className="mt-3 grid grid-cols-4 gap-x-4 border-y border-zinc-800/80 py-3 text-xs">
+        <div className="mt-3 grid grid-cols-4 gap-x-4 border-y border-line py-3 text-xs">
           <MetadataItem
             label={text("发布时间", "Published")}
             value={formatDate(latestMetadata?.["created-at"], locale)}

@@ -75,7 +75,7 @@ function RepositoryUsageContent({ repo }: { repo: Repository }) {
       dataIndex: "resource",
       render: (resource: string) => (
         <Tooltip title={resource}>
-          <span className="block max-w-[32rem] truncate font-mono text-xs text-zinc-300">
+          <span className="block max-w-[32rem] truncate font-mono text-xs text-fg-secondary">
             {resource}
           </span>
         </Tooltip>
@@ -152,7 +152,7 @@ function RepositoryUsageContent({ repo }: { repo: Repository }) {
           {text("刷新", "Refresh")}
         </Button>
       </FilterBar>
-      <div className="text-sm text-zinc-400" role="status">
+      <div className="text-sm text-fg-secondary" role="status">
         {text(
           `全仓库：${formatNumber(usage.totals.resources, locale)} 个地址 · ${formatNumber(usage.totals.downloadCount, locale)} 次下载 · ${formatBytes(usage.totals.totalBytes)}`,
           `Whole repository: ${formatNumber(usage.totals.resources, locale)} addresses · ${formatNumber(usage.totals.downloadCount, locale)} downloads · ${formatBytes(usage.totals.totalBytes)}`,

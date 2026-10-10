@@ -183,13 +183,13 @@ export function MavenArtifactDetail({
 
       versions={
         <div className="space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2">
             <div className="min-w-0">
-              <div className="text-xs font-medium text-zinc-200">
+              <div className="text-xs font-medium text-fg">
                 {text("当前版本", "Current version")}
               </div>
               <div
-                className="mt-0.5 truncate font-mono text-xs text-zinc-500"
+                className="mt-0.5 truncate font-mono text-xs text-fg-tertiary"
                 title={effectiveMeta.coordinate}
               >
                 {effectiveMeta.coordinate}
@@ -480,8 +480,8 @@ export function ConanArtifactDetail({
               }}
             />
             {packageRevisions.length > 0 && (
-              <div className="overflow-hidden rounded-lg border border-zinc-800">
-                <div className="border-b border-zinc-800 px-3 py-2 text-sm font-medium text-zinc-200">
+              <div className="overflow-hidden rounded-lg border border-line">
+                <div className="border-b border-line px-3 py-2 text-sm font-medium text-fg">
                   {text("Package revisions", "Package revisions")}
                 </div>
                 {packageRevisions.map((item) => {
@@ -491,13 +491,13 @@ export function ConanArtifactDetail({
                   return (
                     <div
                       key={packageKey}
-                      className={`flex items-center justify-between gap-3 border-b border-zinc-800/60 px-3 py-2 last:border-0 ${selected ? "bg-[var(--ag-navigation-selected-start)]" : ""}`}
+                      className={`flex items-center justify-between gap-3 border-b border-line px-3 py-2 last:border-0 ${selected ? "bg-[var(--ag-navigation-selected-start)]" : ""}`}
                     >
                       <div className="min-w-0">
-                        <div className="font-mono text-xs text-zinc-200">
+                        <div className="font-mono text-xs text-fg">
                           {item.packageId}#{item.revision}
                         </div>
-                        <div className="mt-0.5 text-xs text-zinc-500">
+                        <div className="mt-0.5 text-xs text-fg-tertiary">
                           {item.digest.slice(0, 18)} ·{" "}
                           {formatDate(item.createdAt, locale)}
                         </div>
@@ -607,9 +607,9 @@ export function RawArtifactDetail({
         canQuarantine={canQuarantine}
       />
       {canDelete && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2">
           <div>
-            <div className="text-xs font-medium text-zinc-200">
+            <div className="text-xs font-medium text-fg">
               {text("Raw 文件", "Raw file")}
             </div>
             {deleteError && (

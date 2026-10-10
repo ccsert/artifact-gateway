@@ -111,7 +111,7 @@ export function ConfirmDialog({
         </Space>
       }
     >
-      <div className="text-sm text-zinc-300">{message}</div>
+      <div className="text-sm text-fg-secondary">{message}</div>
     </Modal>
   );
 }

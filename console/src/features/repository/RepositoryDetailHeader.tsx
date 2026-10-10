@@ -109,8 +109,8 @@ export function RepositoryConceptHelp({ repo }: { repo: Repository }) {
         <div className="grid max-w-[34rem] grid-cols-2 gap-x-5 gap-y-3 text-xs">
           {concepts.map(([term, description]) => (
             <div key={term}>
-              <div className="font-medium text-zinc-200">{term}</div>
-              <div className="mt-0.5 leading-5 text-zinc-500">
+              <div className="font-medium text-fg">{term}</div>
+              <div className="mt-0.5 leading-5 text-fg-tertiary">
                 {description}
               </div>
             </div>
@@ -144,20 +144,20 @@ export function RepositorySummary({
 
   return (
     <div
-      className="border-b border-zinc-800/70 pb-3"
+      className="border-b border-line pb-3"
       role="group"
       aria-label={text("仓库摘要", "Repository summary")}
     >
       <div className="ag-repository-summary-heading flex min-w-0 items-start justify-between gap-6">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
-            <h1 className="truncate text-xl font-semibold text-zinc-50">
+            <h1 className="truncate text-xl font-semibold text-fg-strong">
               {repo.name}
             </h1>
             <FormatBadge format={repo.format} />
             <StateBadge state={repo.state} />
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-tertiary">
             <span>{repo.type ?? "hosted"}</span>
             <span aria-hidden="true">·</span>
             <span>
@@ -173,11 +173,11 @@ export function RepositorySummary({
         </div>
         <div className="ag-repository-summary-endpoint flex min-w-0 shrink-0 items-center gap-2 pt-0.5">
           <RepositoryConceptHelp repo={repo} />
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs text-fg-tertiary">
             {text("协议入口", "Protocol endpoint")}
           </span>
           <code
-            className="min-w-0 max-w-[32rem] flex-1 truncate font-mono text-xs text-zinc-300"
+            className="min-w-0 max-w-[32rem] flex-1 truncate font-mono text-xs text-fg-secondary"
             title={protocolPath}
           >
             {protocolPath}
@@ -198,7 +198,7 @@ export function RepositorySummary({
           <Button
             type="link"
             size="small"
-            className="h-auto p-0 text-xs text-zinc-400"
+            className="h-auto p-0 text-xs text-fg-secondary"
             onClick={onOpenCapacity}
           >
             {capacity
@@ -223,20 +223,20 @@ export function EffectiveAccessPanel({
   return (
     <Collapse
       ghost
-      className="mb-4 border-b border-zinc-800/60"
+      className="mb-4 border-b border-line"
       items={[
         {
           key: "effective-access",
           label: (
-            <span className="text-xs text-zinc-400">
+            <span className="text-xs text-fg-secondary">
               {text("当前访问判定", "Effective access")}
-              <span className="ml-2 font-mono text-zinc-600">
+              <span className="ml-2 font-mono text-fg-disabled">
                 {effectiveAccess.actor}
               </span>
             </span>
           ),
           children: (
-            <div className="border-t border-zinc-800/70 pt-3 text-xs">
+            <div className="border-t border-line pt-3 text-xs">
               <IdentitySummary identity={effectiveAccess.identity} />
               <div className="mt-4">
                 <AccessDecisionSummary access={effectiveAccess} />

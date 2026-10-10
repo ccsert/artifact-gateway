@@ -22,7 +22,7 @@ export interface MetricItem {
 }
 
 const metricTone: Record<NonNullable<MetricItem["tone"]>, string> = {
-  default: "text-zinc-100",
+  default: "text-fg-strong",
   success: "text-[var(--ag-status-success)]",
   warning: "text-[var(--ag-status-warning)]",
   danger: "text-[var(--ag-status-danger)]",
@@ -39,7 +39,7 @@ export function MetricStrip({ items }: { items: MetricItem[] }) {
     >
       {items.map((item) => (
         <div key={item.label} className="min-w-0 px-5 py-3.5">
-          <div className="text-xs font-medium tracking-wide text-zinc-500">
+          <div className="text-xs font-medium tracking-wide text-fg-tertiary">
             {item.label}
           </div>
           <div
@@ -48,7 +48,7 @@ export function MetricStrip({ items }: { items: MetricItem[] }) {
             {item.value}
           </div>
           {item.hint && (
-            <div className="mt-0.5 text-xs leading-5 text-zinc-600">
+            <div className="mt-0.5 text-xs leading-5 text-fg-disabled">
               {item.hint}
             </div>
           )}
@@ -69,7 +69,7 @@ export function FilterField({
 }) {
   return (
     <label className={`block min-w-0 ${className}`}>
-      <span className="mb-1.5 block text-xs font-medium text-zinc-500">
+      <span className="mb-1.5 block text-xs font-medium text-fg-tertiary">
         {label}
       </span>
       {children}
@@ -192,7 +192,7 @@ export function CopyableValue({
 
 export function TechnicalLabel({ children }: { children: ReactNode }) {
   return (
-    <span className="font-mono text-xs leading-5 text-zinc-500">
+    <span className="font-mono text-xs leading-5 text-fg-tertiary">
       {children}
     </span>
   );

@@ -334,7 +334,7 @@ export function DashboardPage() {
             title={text("最近审计事件", "Recent audit events")}
             extra={
               <div className="flex items-center gap-3 text-xs">
-                <span className="text-zinc-500">
+                <span className="text-fg-tertiary">
                   {text(
                     audits ? `${audits.length} 条最新记录` : "",
                     audits ? `${audits.length} latest` : "",

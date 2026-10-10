@@ -56,15 +56,15 @@ export function EmailTargetAction({
         <CardHeader title={title} />
         <div className="grid min-w-0 gap-5 p-5">
           <dl className="grid min-w-0 gap-2 text-sm">
-            <dt className="text-zinc-500">{text("目标", "Target")}</dt>
+            <dt className="text-fg-tertiary">{text("目标", "Target")}</dt>
             <dd className="break-words font-semibold">{target.name}</dd>
-            <dt className="text-zinc-500">
+            <dt className="text-fg-tertiary">
               {text("标识与确认版本", "Identity and confirmed version")}
             </dt>
             <dd className="break-all font-mono text-xs">
               {target.id} · {target.version}
             </dd>
-            <dt className="text-zinc-500">
+            <dt className="text-fg-tertiary">
               {text("邮件语言与收件人", "Email language and recipient")}
             </dt>
             <dd>
@@ -102,7 +102,7 @@ export function EmailTargetAction({
                 )}
               />
               {attempted && Boolean(action.error) && (
-                <p className="text-sm text-zinc-500">
+                <p className="text-sm text-fg-tertiary">
                   {text(
                     "重试沿用本次目标、版本、场景和测试标识，不会自动创建另一次测试。",
                     "Retry keeps this target, version, scenario, and test key; it does not automatically create another test.",

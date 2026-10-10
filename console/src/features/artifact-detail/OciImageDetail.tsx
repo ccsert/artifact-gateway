@@ -271,7 +271,7 @@ export function OciImageDetail({
     );
   if (manifests.length === 0)
     return (
-      <p className="py-6 text-center text-sm text-zinc-500">
+      <p className="py-6 text-center text-sm text-fg-tertiary">
         {text("该镜像没有可见 Manifest", "This image has no visible manifests")}
       </p>
     );
@@ -321,7 +321,7 @@ export function OciImageDetail({
       {/* 版本选择 */}
       <div className="flex items-center gap-3">
         <label
-          className="shrink-0 text-xs text-zinc-500"
+          className="shrink-0 text-xs text-fg-tertiary"
           htmlFor="oci-version-select"
         >
           {text("版本", "Version")}
@@ -383,10 +383,10 @@ export function OciImageDetail({
       </div>
 
       {selectedVersion && (
-        <div className="flex min-w-0 items-center gap-2 rounded border border-zinc-800 px-3 py-2 text-xs">
-          <span className="shrink-0 text-zinc-500">Digest</span>
+        <div className="flex min-w-0 items-center gap-2 rounded border border-line px-3 py-2 text-xs">
+          <span className="shrink-0 text-fg-tertiary">Digest</span>
           <code
-            className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-zinc-300"
+            className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-fg-secondary"
             title={selectedVersion.digest}
           >
             {selectedVersion.digest}
@@ -422,12 +422,12 @@ export function OciImageDetail({
       )}
 
       {selectedVersion && (
-        <div className="rounded-lg border border-zinc-800/90 bg-zinc-950/30 p-3">
+        <div className="rounded-lg border border-line bg-surface-translucent p-3">
           <div className="mb-2">
-            <div className="text-xs font-medium text-zinc-300">
+            <div className="text-xs font-medium text-fg-secondary">
               {text("使用方式", "Usage")}
             </div>
-            <div className="mt-1 text-xs text-zinc-500">
+            <div className="mt-1 text-xs text-fg-tertiary">
               {text(
                 "使用当前选中的标签或 Digest 访问镜像。",
                 "Use the selected tag or digest to pull this image.",
@@ -455,45 +455,45 @@ export function OciImageDetail({
         <>
           {/* 概要 */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-lg border border-zinc-800 px-3 py-2">
-              <div className="text-xs uppercase tracking-wider text-zinc-500">
+            <div className="rounded-lg border border-line px-3 py-2">
+              <div className="text-xs uppercase tracking-wider text-fg-tertiary">
                 {text("镜像大小", "Image size")}
               </div>
-              <div className="mt-0.5 text-sm font-semibold text-zinc-100">
+              <div className="mt-0.5 text-sm font-semibold text-fg-strong">
                 {hasImageDescriptors
                   ? formatBytes(totalSize)
                   : text("无层数据", "No layer data")}
               </div>
               {!hasImageDescriptors && (
-                <div className="mt-1 text-xs leading-4 text-zinc-600">
+                <div className="mt-1 text-xs leading-4 text-fg-disabled">
                   {text("仅包含 Manifest 元数据", "Manifest metadata only")}
                 </div>
               )}
-              <div className="mt-1 text-xs leading-4 text-zinc-600">
+              <div className="mt-1 text-xs leading-4 text-fg-disabled">
                 Manifest JSON {formatBytes(selectedVersion?.size)}
               </div>
             </div>
-            <div className="rounded-lg border border-zinc-800 px-3 py-2">
-              <div className="text-xs uppercase tracking-wider text-zinc-500">
+            <div className="rounded-lg border border-line px-3 py-2">
+              <div className="text-xs uppercase tracking-wider text-fg-tertiary">
                 {text("层数", "Layers")}
               </div>
-              <div className="mt-0.5 text-sm font-semibold text-zinc-100">
+              <div className="mt-0.5 text-sm font-semibold text-fg-strong">
                 {manifest.layers?.length ?? 0}
               </div>
             </div>
-            <div className="rounded-lg border border-zinc-800 px-3 py-2">
-              <div className="text-xs uppercase tracking-wider text-zinc-500">
+            <div className="rounded-lg border border-line px-3 py-2">
+              <div className="text-xs uppercase tracking-wider text-fg-tertiary">
                 {text("架构 / 系统", "Architecture / OS")}
               </div>
-              <div className="mt-0.5 text-sm font-semibold text-zinc-100">
+              <div className="mt-0.5 text-sm font-semibold text-fg-strong">
                 {config?.architecture ?? "—"} / {config?.os ?? "—"}
               </div>
             </div>
-            <div className="rounded-lg border border-zinc-800 px-3 py-2">
-              <div className="text-xs uppercase tracking-wider text-zinc-500">
+            <div className="rounded-lg border border-line px-3 py-2">
+              <div className="text-xs uppercase tracking-wider text-fg-tertiary">
                 {text("创建时间", "Created")}
               </div>
-              <div className="mt-0.5 text-sm font-semibold text-zinc-100">
+              <div className="mt-0.5 text-sm font-semibold text-fg-strong">
                 {config?.created ? formatDate(config.created, locale) : "—"}
               </div>
             </div>
@@ -501,33 +501,35 @@ export function OciImageDetail({
 
           {/* 启动配置 */}
           {config?.config && (
-            <div className="rounded-lg border border-zinc-800 px-3 py-2.5 text-xs">
-              <div className="mb-1.5 text-xs uppercase tracking-wider text-zinc-500">
+            <div className="rounded-lg border border-line px-3 py-2.5 text-xs">
+              <div className="mb-1.5 text-xs uppercase tracking-wider text-fg-tertiary">
                 {text("启动配置", "Runtime configuration")}
               </div>
               <div className="space-y-1 font-mono">
                 {config.config.Entrypoint && (
                   <div className="flex gap-2">
-                    <span className="w-20 shrink-0 text-zinc-600">
+                    <span className="w-20 shrink-0 text-fg-disabled">
                       Entrypoint
                     </span>
-                    <span className="text-zinc-300">
+                    <span className="text-fg-secondary">
                       {config.config.Entrypoint.join(" ")}
                     </span>
                   </div>
                 )}
                 {config.config.Cmd && (
                   <div className="flex gap-2">
-                    <span className="w-20 shrink-0 text-zinc-600">Cmd</span>
-                    <span className="text-zinc-300">
+                    <span className="w-20 shrink-0 text-fg-disabled">Cmd</span>
+                    <span className="text-fg-secondary">
                       {config.config.Cmd.join(" ")}
                     </span>
                   </div>
                 )}
                 {config.config.User && (
                   <div className="flex gap-2">
-                    <span className="w-20 shrink-0 text-zinc-600">User</span>
-                    <span className="text-zinc-300">{config.config.User}</span>
+                    <span className="w-20 shrink-0 text-fg-disabled">User</span>
+                    <span className="text-fg-secondary">
+                      {config.config.User}
+                    </span>
                   </div>
                 )}
               </div>
@@ -536,7 +538,7 @@ export function OciImageDetail({
 
           {/* 层列表 */}
           <div>
-            <div className="mb-1.5 flex items-center gap-2 text-xs uppercase tracking-wider text-zinc-500">
+            <div className="mb-1.5 flex items-center gap-2 text-xs uppercase tracking-wider text-fg-tertiary">
               {text("文件层", "Layers")} ({manifest.layers?.length ?? 0})
               {manifest.mediaType && (
                 <Badge tone="neutral">
@@ -557,7 +559,7 @@ export function OciImageDetail({
                     key: "index",
                     width: 64,
                     render: (_, __, index) => (
-                      <span className="font-mono text-xs text-zinc-500">
+                      <span className="font-mono text-xs text-fg-tertiary">
                         #{index + 1}
                       </span>
                     ),
@@ -569,7 +571,7 @@ export function OciImageDetail({
                     ellipsis: true,
                     render: (value: string) => (
                       <span
-                        className="font-mono text-xs text-zinc-300"
+                        className="font-mono text-xs text-fg-secondary"
                         title={value}
                       >
                         {shortDigest(value)}
@@ -588,7 +590,9 @@ export function OciImageDetail({
                           ? "tar"
                           : (value.split(".").pop() ?? value);
                       return (
-                        <span className="text-xs text-zinc-400">{kind}</span>
+                        <span className="text-xs text-fg-secondary">
+                          {kind}
+                        </span>
                       );
                     },
                   },
@@ -599,7 +603,7 @@ export function OciImageDetail({
                     width: 120,
                     align: "right",
                     render: (value: number) => (
-                      <span className="text-xs text-zinc-300">
+                      <span className="text-xs text-fg-secondary">
                         {formatBytes(value)}
                       </span>
                     ),

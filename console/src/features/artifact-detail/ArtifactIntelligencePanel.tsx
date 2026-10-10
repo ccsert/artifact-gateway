@@ -96,15 +96,15 @@ export function ArtifactIntelligencePanel({
     <Card
       size="small"
       title={text("制品情报", "Artifact intelligence")}
-      className="col-span-full border-zinc-800/90 bg-zinc-950/20"
+      className="col-span-full border-line bg-surface-translucent"
       extra={<Tag>{format.toUpperCase()}</Tag>}
     >
       <div className="grid gap-4 lg:grid-cols-4">
         <div>
-          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-fg-tertiary">
             {text("签名", "Signatures")}
           </div>
-          <div className="text-sm text-zinc-200">
+          <div className="text-sm text-fg">
             {metadata.signatures.length > 0
               ? text(
                   `${metadata.signatures.length} 条记录`,
@@ -115,7 +115,7 @@ export function ArtifactIntelligencePanel({
           {metadata.signatures.slice(0, 2).map((signature) => (
             <div
               key={`${signature.keyId}:${signature.signature}`}
-              className="mt-1 truncate text-xs text-zinc-500"
+              className="mt-1 truncate text-xs text-fg-tertiary"
               title={signature.identity}
             >
               {signature.verified ? "✓ " : "○ "}
@@ -124,10 +124,10 @@ export function ArtifactIntelligencePanel({
           ))}
         </div>
         <div>
-          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-fg-tertiary">
             SBOM
           </div>
-          <div className="text-sm text-zinc-200">
+          <div className="text-sm text-fg">
             {metadata.sboms.length > 0
               ? text(
                   `${metadata.sboms.length} 份清单`,
@@ -138,7 +138,7 @@ export function ArtifactIntelligencePanel({
           {metadata.sboms.slice(0, 2).map((sbom) => (
             <div
               key={sbom.digest}
-              className="mt-1 truncate font-mono text-xs text-zinc-500"
+              className="mt-1 truncate font-mono text-xs text-fg-tertiary"
               title={sbom.digest}
             >
               {sbom.mediaType}
@@ -146,19 +146,19 @@ export function ArtifactIntelligencePanel({
           ))}
         </div>
         <div>
-          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-fg-tertiary">
             {text("构建来源", "Provenance")}
           </div>
           {metadata.provenance ? (
             <>
               <div
-                className="truncate text-sm text-zinc-200"
+                className="truncate text-sm text-fg"
                 title={metadata.provenance.builder}
               >
                 {metadata.provenance.builder}
               </div>
               <div
-                className="mt-1 truncate font-mono text-xs text-zinc-500"
+                className="mt-1 truncate font-mono text-xs text-fg-tertiary"
                 title={metadata.provenance.sourceCommit}
               >
                 {metadata.provenance.sourceCommit ||
@@ -166,29 +166,27 @@ export function ArtifactIntelligencePanel({
               </div>
             </>
           ) : (
-            <div className="text-sm text-zinc-500">
+            <div className="text-sm text-fg-tertiary">
               {text("未关联", "None linked")}
             </div>
           )}
         </div>
         <div>
-          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-fg-tertiary">
             {text("漏洞摘要", "Vulnerabilities")}
           </div>
           {vulnerability ? (
             <>
               <Tag color={vulnerabilityTone}>{vulnerabilityLabel}</Tag>
-              <div className="mt-2 text-sm text-zinc-200">
-                {vulnerabilitySummary}
-              </div>
+              <div className="mt-2 text-sm text-fg">{vulnerabilitySummary}</div>
               {vulnerability.scannedAt && (
-                <div className="mt-1 text-xs text-zinc-500">
+                <div className="mt-1 text-xs text-fg-tertiary">
                   {formatDate(vulnerability.scannedAt, locale)}
                 </div>
               )}
             </>
           ) : (
-            <div className="text-sm text-zinc-500">
+            <div className="text-sm text-fg-tertiary">
               {text("未扫描", "Not scanned")}
             </div>
           )}
@@ -197,7 +195,7 @@ export function ArtifactIntelligencePanel({
       {vulnerability?.findings && vulnerability.findings.length > 0 && (
         <ArtifactVulnerabilityFindings findings={vulnerability.findings} />
       )}
-      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-zinc-800/80 pt-3 text-xs text-zinc-500">
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3 text-xs text-fg-tertiary">
         <span>{text("许可证", "Licenses")}:</span>
         {metadata.licenses.length > 0 ? (
           metadata.licenses.map((license) => (

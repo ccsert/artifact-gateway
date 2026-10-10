@@ -255,7 +255,7 @@ export function AuditsPage() {
       key: "occurredAt",
       width: 180,
       render: (_, row) => (
-        <span className="whitespace-nowrap font-mono text-xs text-zinc-400">
+        <span className="whitespace-nowrap font-mono text-xs text-fg-secondary">
           {formatDate(row.record.occurredAt, locale)}
         </span>
       ),
@@ -266,7 +266,7 @@ export function AuditsPage() {
       width: 190,
       render: (_, row) => (
         <span
-          className="block max-w-52 truncate text-xs text-zinc-200"
+          className="block max-w-52 truncate text-xs text-fg"
           title={row.record.operation}
         >
           {row.record.operation
@@ -294,7 +294,7 @@ export function AuditsPage() {
       key: "repository",
       width: 180,
       render: (_, row) => (
-        <span className="block max-w-40 truncate font-mono text-xs text-zinc-400">
+        <span className="block max-w-40 truncate font-mono text-xs text-fg-secondary">
           {row.record.repository ?? row.record.groupName ?? "—"}
         </span>
       ),
@@ -311,7 +311,7 @@ export function AuditsPage() {
       key: "status",
       width: 90,
       render: (_, row) => (
-        <span className="font-mono text-xs text-zinc-400">
+        <span className="font-mono text-xs text-fg-secondary">
           {row.record.status ?? "—"}
         </span>
       ),
@@ -321,7 +321,7 @@ export function AuditsPage() {
       key: "bytes",
       width: 110,
       render: (_, row) => (
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-fg-secondary">
           {formatBytes(row.record.bytes)}
         </span>
       ),
@@ -332,7 +332,7 @@ export function AuditsPage() {
       width: 170,
       render: (_, row) => (
         <span
-          className="block max-w-32 truncate text-xs text-zinc-500"
+          className="block max-w-32 truncate text-xs text-fg-tertiary"
           title={row.record.actor}
         >
           {row.record.actor ?? "—"}
@@ -364,7 +364,7 @@ export function AuditsPage() {
         ] as const
       ).map(([label, value]) => (
         <div key={label} className="flex min-w-0 gap-2">
-          <span className="w-20 shrink-0 text-zinc-600">{label}</span>
+          <span className="w-20 shrink-0 text-fg-disabled">{label}</span>
           {value && (label === "Request ID" || label === "Trace ID") ? (
             <Link
               className="min-w-0 break-all font-mono"
@@ -373,7 +373,7 @@ export function AuditsPage() {
               {value}
             </Link>
           ) : (
-            <span className="min-w-0 break-all font-mono text-zinc-400">
+            <span className="min-w-0 break-all font-mono text-fg-secondary">
               {value ?? "—"}
             </span>
           )}
@@ -510,14 +510,14 @@ export function AuditsPage() {
         </FilterBar>
         <Collapse
           ghost
-          className="border-t border-zinc-800/70"
+          className="border-t border-line"
           items={[
             {
               key: "advanced",
               label: (
-                <span className="text-xs text-zinc-400">
+                <span className="text-xs text-fg-secondary">
                   {text("高级筛选", "Advanced filters")}{" "}
-                  <span className="ml-2 text-zinc-600">
+                  <span className="ml-2 text-fg-disabled">
                     {text(
                       "操作、访问主体、分组、格式",
                       "Operation, actor, group, and format",
@@ -619,7 +619,7 @@ export function AuditsPage() {
               },
             }}
           />
-          <div className="ag-pagination-footer flex items-center justify-end gap-3 border-t border-zinc-800/60 px-4 py-3 text-xs text-zinc-500">
+          <div className="ag-pagination-footer flex items-center justify-end gap-3 border-t border-line px-4 py-3 text-xs text-fg-tertiary">
             <span>
               {text(
                 `第 ${currentPage} 页 · 当前页 ${pageRecords.length} 条`,

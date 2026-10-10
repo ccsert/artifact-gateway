@@ -30,7 +30,7 @@ Console 应像一个所有声明都可被证明的系统控制台，并具有优
 
 调色板以中性色为主，只包含一组冷色信号色和明确的语义状态色。权威 token 值保存在英文页 frontmatter 与 Console 主题变量中。
 
-运行时主题遵循 [ADR 0005](docs/adr/0005-console-semantic-theme-system.zh-CN.md)：受约束的 Theme Package 只解析一次，形成带类型的 Surface、Content、Border、Action、Link、Focus、Selection、Navigation、Status、Visualization、Identity 与 Effect 角色。Ant Design 组件 Token 与自定义 CSS 变量消费同一份投影；页面 CSS 必须命名语义角色，不能直接命名调色板颜色。
+运行时主题遵循 [ADR 0005](docs/adr/0005-console-semantic-theme-system.zh-CN.md)：受约束的 Theme Package 只解析一次，形成带类型的 Surface、Content、Border、Action、Link、Focus、Selection、Navigation、Status、Visualization、Identity 与 Effect 角色。Ant Design 组件 Token 与自定义 CSS 变量消费同一份投影；页面 CSS 必须命名语义角色，不能直接命名调色板颜色。标记中同样使用 `console/src/styles.css` 定义的语义工具类（`text-fg-strong`、`text-fg`、`text-fg-secondary`、`text-fg-tertiary`、`text-fg-disabled`、`border-line`、`divide-line`、`bg-surface`、`bg-surface-translucent`、`bg-surface-hover`、`bg-canvas`、`text-on-identity`）；单元测试会拒绝 `text-zinc-500`、`bg-white/10` 等原始色板类。
 
 ### 动作色与信号色
 

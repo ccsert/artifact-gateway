@@ -436,10 +436,10 @@ export function UserRepositoryAccessPanel({
     <section className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-zinc-100">
+          <h2 className="text-sm font-semibold text-fg-strong">
             {text("仓库授权", "Repository access")}
           </h2>
-          <p className="mt-1 text-xs text-zinc-500">
+          <p className="mt-1 text-xs text-fg-tertiary">
             {text(
               "单独授予该用户仓库的读取、写入、管理或制品情报权限，可限定资源范围；全局角色不受影响。",
               "Grant this user read, write, admin, or artifact intelligence access to individual repositories, optionally limited to a resource scope. Global roles are unaffected.",
@@ -500,7 +500,7 @@ export function UserRepositoryAccessPanel({
         <div
           role="list"
           aria-busy={loading}
-          className="divide-y divide-zinc-800/80 overflow-hidden rounded-md border border-zinc-800/80 bg-zinc-950/20"
+          className="divide-y divide-line overflow-hidden rounded-md border border-line bg-surface-translucent"
         >
           {rows.map((record) => (
             <div
@@ -510,7 +510,7 @@ export function UserRepositoryAccessPanel({
             >
               <div className="min-w-0 flex-1 py-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="truncate text-xs font-medium text-zinc-200">
+                  <span className="truncate text-xs font-medium text-fg">
                     {record.repositoryName}
                   </span>
                   <FormatBadge format={record.format} />
@@ -518,7 +518,7 @@ export function UserRepositoryAccessPanel({
                     {grantedCapabilitiesLabel(record.scopes, text)}
                   </Badge>
                 </div>
-                <div className="mt-1 font-mono text-xs text-zinc-500">
+                <div className="mt-1 font-mono text-xs text-fg-tertiary">
                   {record.resourcePrefix ||
                     text("整个仓库", "Entire repository")}
                 </div>
@@ -606,7 +606,7 @@ export function UserRepositoryAccessPanel({
           ) : null}
           {saveError !== null ? <ErrorBanner error={saveError} /> : null}
           <div>
-            <div className="mb-1 text-xs font-medium text-zinc-500">
+            <div className="mb-1 text-xs font-medium text-fg-tertiary">
               {text("仓库", "Repository")}
             </div>
             <Select

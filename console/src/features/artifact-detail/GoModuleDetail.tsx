@@ -223,7 +223,7 @@ export function GoModuleDetail({
       {error && <Alert type="warning" showIcon title={error} />}
       <div className="grid gap-4 lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
         <div>
-          <div className="mb-1 text-xs font-medium text-zinc-500">
+          <div className="mb-1 text-xs font-medium text-fg-tertiary">
             {text("选择模块版本", "Select module version")}
           </div>
           <SearchableVersionSelect
@@ -266,7 +266,7 @@ export function GoModuleDetail({
       </div>
 
       <div>
-        <div className="mb-2 text-xs font-medium text-zinc-500">
+        <div className="mb-2 text-xs font-medium text-fg-tertiary">
           {text(
             "协议资产（首次访问时缓存）",
             "Protocol assets (cached on first access)",
@@ -276,7 +276,7 @@ export function GoModuleDetail({
           {assets.map((asset) => (
             <div
               key={asset.kind}
-              className="flex min-w-0 items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2"
+              className="flex min-w-0 items-center gap-2 rounded-lg border border-line bg-surface-translucent px-3 py-2"
             >
               <a
                 className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"

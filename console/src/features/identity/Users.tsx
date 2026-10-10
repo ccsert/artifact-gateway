@@ -110,10 +110,10 @@ export function UsersPage() {
       width: 270,
       render: (_value, user) => (
         <div className="min-w-0">
-          <div className="truncate font-medium text-zinc-100">
+          <div className="truncate font-medium text-fg-strong">
             {user.displayName || user.name}
           </div>
-          <div className="mt-0.5 truncate text-xs text-zinc-500">
+          <div className="mt-0.5 truncate text-xs text-fg-tertiary">
             <span className="font-mono">{user.name}</span>
             {user.email ? ` · ${user.email}` : ""}
           </div>
@@ -152,7 +152,7 @@ export function UsersPage() {
       key: "lastLoginAt",
       width: 190,
       render: (value?: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {value
             ? formatDate(value, locale)
             : text("从未登录", "Never signed in")}
@@ -165,7 +165,7 @@ export function UsersPage() {
       width: 180,
       render: (_value, user) => (
         <div className="text-xs">
-          <div className="text-zinc-400">
+          <div className="text-fg-secondary">
             {!user.localPasswordEnabled
               ? text("仅 SSO", "SSO only")
               : user.mustChangePassword
@@ -173,7 +173,7 @@ export function UsersPage() {
                 : text("可正常使用", "Ready")}
           </div>
           {user.localPasswordEnabled && user.passwordChangedAt ? (
-            <div className="mt-0.5 text-zinc-600">
+            <div className="mt-0.5 text-fg-disabled">
               {text("更新于", "Changed")}{" "}
               {formatDate(user.passwordChangedAt, locale)}
             </div>
@@ -187,7 +187,7 @@ export function UsersPage() {
       key: "createdAt",
       width: 190,
       render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(value, locale)}
         </span>
       ),

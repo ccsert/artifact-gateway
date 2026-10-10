@@ -112,10 +112,10 @@ function AuthorizedEmailNotifications() {
     <div className="ag-page-stack ag-email-notifications">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-zinc-100">
+          <h2 className="text-base font-semibold text-fg-strong">
             {text("邮件通知", "Email notifications")}
           </h2>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-fg-tertiary">
             {text(
               "管理只写收件目标、预览模板并明确发送合成测试。",
               "Manage write-only recipient targets, preview templates, and explicitly send synthetic tests.",
@@ -210,11 +210,11 @@ function AuthorizedEmailNotifications() {
                 )}
               />
             ) : (
-              <ul className="divide-y divide-zinc-800/60">
+              <ul className="divide-y divide-line">
                 {targets.map((target) => (
                   <li key={target.id} className="grid min-w-0 gap-3 px-5 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <h3 className="break-words text-sm font-semibold text-zinc-100">
+                      <h3 className="break-words text-sm font-semibold text-fg-strong">
                         {target.name}
                       </h3>
                       <QuotaBadge>
@@ -223,7 +223,7 @@ function AuthorizedEmailNotifications() {
                           : text("已停用", "Disabled")}
                       </QuotaBadge>
                     </div>
-                    <p className="text-xs text-zinc-500">
+                    <p className="text-xs text-fg-tertiary">
                       {target.locale === "en" ? "English" : "简体中文"} ·{" "}
                       {target.recipientConfigured
                         ? text(
@@ -297,7 +297,7 @@ function AuthorizedEmailNotifications() {
           />
           <EmailDeliveryResults deliveries={deliveries} targets={targets} />
           {snapshot.readAt && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-fg-tertiary">
               {text("读取时间", "Read at")}:{" "}
               {new Date(snapshot.readAt).toLocaleString()} ·{" "}
               {text(

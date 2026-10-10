@@ -19,14 +19,14 @@ export function APTSigningStatePanel({
   const current = state.currentSnapshot;
   return (
     <div className="space-y-4">
-      <div className="border-b border-zinc-800/80 pb-4">
+      <div className="border-b border-line pb-4">
         <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ag-content-tertiary)]">
           {text("APT 发布信任", "APT publication trust")}
         </div>
-        <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-zinc-100">
+        <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-fg-strong">
           {text("签名信任与当前快照", "Signing trust and current snapshot")}
         </h2>
-        <p className="mt-1.5 max-w-3xl text-sm leading-6 text-zinc-500">
+        <p className="mt-1.5 max-w-3xl text-sm leading-6 text-fg-tertiary">
           {text(
             "核对 Gateway 当前允许的签名密钥、轮换窗口，以及最近一次原子发布实际使用的不可变签名证据。这里不会展示 signer 地址、令牌或私钥信息。",
             "Verify the signing keys currently trusted by Gateway, the rotation window, and immutable evidence from the latest atomic publication. Signer endpoints, tokens, and private-key material are never shown here.",
@@ -49,7 +49,7 @@ export function APTSigningStatePanel({
             title={presentation.warning.title}
           />
         )}
-        <div className="grid gap-px overflow-hidden rounded-lg border border-zinc-800/80 bg-[var(--ag-border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-px overflow-hidden rounded-lg border border-line bg-[var(--ag-border-subtle)] sm:grid-cols-2 lg:grid-cols-4">
           <ScopeFact
             label={text("签名器模式", "Signer mode")}
             value={aptSignerModeLabel(state.signerMode, text)}
@@ -76,7 +76,7 @@ export function APTSigningStatePanel({
           )}
         />
         {state.trustedFingerprints.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-zinc-800 px-4 py-4 text-sm text-zinc-500">
+          <div className="rounded-lg border border-dashed border-line px-4 py-4 text-sm text-fg-tertiary">
             {text(
               "未配置远程可信指纹。",
               "No remote trusted fingerprints configured.",
@@ -92,7 +92,7 @@ export function APTSigningStatePanel({
                   className={`flex flex-col gap-2 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
                     isCurrent
                       ? "border-[var(--ag-border-default)] bg-[var(--ag-navigation-selected-start)]"
-                      : "border-zinc-800/80 bg-[var(--ag-surface-table-header)]"
+                      : "border-line bg-[var(--ag-surface-table-header)]"
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -107,7 +107,7 @@ export function APTSigningStatePanel({
                       <Tag color="success">{text("当前使用", "In use")}</Tag>
                     )}
                   </div>
-                  <code className="break-all font-mono text-xs text-zinc-300">
+                  <code className="break-all font-mono text-xs text-fg-secondary">
                     {fingerprint}
                   </code>
                 </div>
@@ -155,7 +155,7 @@ export function APTSigningStatePanel({
             />
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-zinc-800 px-4 py-4 text-sm text-zinc-500">
+          <div className="rounded-lg border border-dashed border-line px-4 py-4 text-sm text-fg-tertiary">
             {text(
               "该仓库尚未发布可见快照。",
               "This repository has no visible snapshot yet.",
@@ -177,10 +177,10 @@ function SigningEvidence({
   mono?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-lg border border-zinc-800/80 bg-[var(--ag-surface-table-header)] px-4 py-3">
-      <div className="text-xs font-medium text-zinc-600">{label}</div>
+    <div className="min-w-0 rounded-lg border border-line bg-[var(--ag-surface-table-header)] px-4 py-3">
+      <div className="text-xs font-medium text-fg-disabled">{label}</div>
       <div
-        className={`mt-1 break-all text-xs text-zinc-300 ${mono ? "font-mono" : "font-medium"}`}
+        className={`mt-1 break-all text-xs text-fg-secondary ${mono ? "font-mono" : "font-medium"}`}
       >
         {value}
       </div>

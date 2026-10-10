@@ -56,9 +56,9 @@ export function UsageSnippetBlock({
 }) {
   const { text } = usePreferences();
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3">
+    <div className="rounded-lg border border-line bg-surface-translucent p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-zinc-400">
+        <span className="text-xs font-medium text-fg-secondary">
           {snippet.label}
         </span>
         <Tooltip
@@ -97,9 +97,9 @@ export function MetadataItem({
 }) {
   return (
     <div className="min-w-0">
-      <div className="text-xs font-medium text-zinc-600">{label}</div>
+      <div className="text-xs font-medium text-fg-disabled">{label}</div>
       <div
-        className={`mt-1 truncate text-zinc-300 ${mono ? "font-mono text-xs" : "text-xs"}`}
+        className={`mt-1 truncate text-fg-secondary ${mono ? "font-mono text-xs" : "text-xs"}`}
         title={value}
       >
         {value}

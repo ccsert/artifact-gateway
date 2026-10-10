@@ -118,19 +118,19 @@ export function ArtifactScanStatus({
   const job = status.job;
   const canRescan = !activeStates.has(status.state);
   return (
-    <div className="col-span-full border-b border-zinc-800/80 pb-3">
+    <div className="col-span-full border-b border-line pb-3">
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-zinc-500">
+        <span className="text-fg-tertiary">
           {text("扫描状态", "Scan status")} · {format.toUpperCase()}
         </span>
         <StateBadge state={status.state} />
         {job?.completedAt && (
-          <span className="text-zinc-500">
+          <span className="text-fg-tertiary">
             {formatDate(job.completedAt, locale)}
           </span>
         )}
         {job?.attempts !== undefined && job.attempts > 0 && (
-          <span className="text-zinc-500">
+          <span className="text-fg-tertiary">
             {text(
               `尝试 ${job.attempts}/${job.maxAttempts}`,
               `Attempt ${job.attempts}/${job.maxAttempts}`,

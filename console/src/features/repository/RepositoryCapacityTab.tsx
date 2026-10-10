@@ -113,7 +113,7 @@ export function RepositoryCapacityTab({ repo }: { repo: Repository }) {
       />
       {capacity.quotaBytes > 0 && (
         <div>
-          <div className="mb-1.5 flex justify-between text-xs text-zinc-500">
+          <div className="mb-1.5 flex justify-between text-xs text-fg-tertiary">
             <span>{text("使用率", "Utilization")}</span>
             <span>{pct.toFixed(1)}%</span>
           </div>

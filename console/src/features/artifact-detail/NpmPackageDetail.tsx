@@ -173,7 +173,7 @@ export function NpmPackageDetail({
         digest={artifactMetadata?.digest}
       />
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-zinc-500">
+        <label className="mb-1.5 block text-xs font-medium text-fg-tertiary">
           {text("选择版本", "Select version")} ({versions.length})
         </label>
         <SearchableVersionSelect
@@ -192,14 +192,14 @@ export function NpmPackageDetail({
           placeholder={text("搜索并选择 npm 版本", "Search npm versions")}
         />
         {manifest?.description ? (
-          <p className="mt-3 text-xs leading-5 text-zinc-500">
+          <p className="mt-3 text-xs leading-5 text-fg-tertiary">
             {manifest.description}
           </p>
         ) : null}
       </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-xs text-zinc-100">
+          <span className="font-mono text-xs text-fg-strong">
             {packageName}@{selectedVersion}
           </span>
           {packument["dist-tags"].latest === selectedVersion ? (
@@ -218,7 +218,7 @@ export function NpmPackageDetail({
             </Tag>
           ) : null}
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-line py-3 text-xs sm:grid-cols-4">
           <MetadataItem
             label={text("发布时间", "Published")}
             value={formatDate(publishedAt, locale)}
@@ -267,7 +267,7 @@ export function NpmPackageDetail({
           />
         </div>
         {artifactMetadata?.source === "proxy" ? (
-          <p className="mt-3 text-xs text-zinc-500">
+          <p className="mt-3 text-xs text-fg-tertiary">
             {metadataOnly
               ? text(
                   "该版本已从上游发现；首次安装会校验完整性并缓存 tarball。",

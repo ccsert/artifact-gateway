@@ -172,13 +172,13 @@ export function RepositoryArtifactSelect({
           return (
             <div className="flex min-w-0 items-center justify-between gap-4 py-1">
               <div className="min-w-0">
-                <div className="truncate font-mono text-xs text-zinc-200">
+                <div className="truncate font-mono text-xs text-fg">
                   {artifactCoordinateForDisplay(
                     repo.format,
                     artifact.coordinate,
                   )}
                 </div>
-                <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-zinc-500">
+                <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-fg-tertiary">
                   <span className="font-mono">
                     {shortDigest(artifact.digest)}
                   </span>

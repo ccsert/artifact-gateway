@@ -230,9 +230,11 @@ export function LoginPage() {
       <main className="ag-login-frame">
         <aside className="ag-login-brand-panel">
           <div className="ag-login-brand-lockup">
-            <SiteBrandMark className="flex h-11 w-11 items-center justify-center rounded-lg text-base font-bold text-white" />
+            <SiteBrandMark className="flex h-11 w-11 items-center justify-center rounded-lg text-base font-bold text-on-identity" />
             <div>
-              <div className="text-sm font-semibold text-white">Console</div>
+              <div className="text-sm font-semibold text-fg-strong">
+                Console
+              </div>
               <div className="mt-0.5 font-mono text-xs uppercase tracking-wider text-[var(--ag-content-secondary)]">
                 Native Hosted API v2
               </div>
@@ -240,10 +242,10 @@ export function LoginPage() {
           </div>
 
           <div className="ag-login-brand-copy">
-            <h1 className="break-words text-3xl font-semibold leading-tight text-white xl:text-4xl">
+            <h1 className="break-words text-3xl font-semibold leading-tight text-fg-strong xl:text-4xl">
               <SiteName />
             </h1>
-            <p className="mt-3 max-w-xs text-sm leading-6 text-zinc-400">
+            <p className="mt-3 max-w-xs text-sm leading-6 text-fg-secondary">
               {t("auth.controlPlane")}
             </p>
           </div>
@@ -251,10 +253,10 @@ export function LoginPage() {
           <div className="ag-login-security-note">
             <SafetyCertificateOutlined />
             <div>
-              <div className="text-xs font-medium text-zinc-200">
+              <div className="text-xs font-medium text-fg">
                 {t("auth.protectedAccess")}
               </div>
-              <div className="mt-1 font-mono text-xs text-zinc-500">
+              <div className="mt-1 font-mono text-xs text-fg-tertiary">
                 OIDC · Local session · Bearer token
               </div>
             </div>
@@ -265,11 +267,13 @@ export function LoginPage() {
           <header>
             <h2
               id="login-heading"
-              className="text-2xl font-semibold text-zinc-100"
+              className="text-2xl font-semibold text-fg-strong"
             >
               {t("auth.welcome")}
             </h2>
-            <p className="mt-2 text-sm text-zinc-500">{t("auth.signInHint")}</p>
+            <p className="mt-2 text-sm text-fg-tertiary">
+              {t("auth.signInHint")}
+            </p>
           </header>
 
           {!pendingPasswordChange && (
@@ -351,12 +355,12 @@ export function LoginPage() {
                 <div className="ag-login-mode-icon">
                   <SafetyCertificateOutlined />
                 </div>
-                <div className="mt-4 text-sm font-medium text-zinc-100">
+                <div className="mt-4 text-sm font-medium text-fg-strong">
                   {t("auth.ssoConfigured")}
                 </div>
                 {oidc.issuer && (
                   <div
-                    className="mt-2 truncate font-mono text-xs text-zinc-500"
+                    className="mt-2 truncate font-mono text-xs text-fg-tertiary"
                     title={oidc.issuer}
                   >
                     {oidc.issuer}

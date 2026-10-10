@@ -12,6 +12,24 @@
   --ease-in-out-soft: cubic-bezier(0.45, 0, 0.15, 1);
 }
 
+/* Semantic colour utilities (issue 273). Components name a role, never a
+ * palette step: text-fg-tertiary, border-line, bg-surface-translucent, ...
+ * Inline so each utility reads the runtime theme variable directly. */
+@theme inline {
+  --color-fg-strong: var(--ag-content-strong);
+  --color-fg: var(--ag-content-primary);
+  --color-fg-secondary: var(--ag-content-secondary);
+  --color-fg-tertiary: var(--ag-content-tertiary);
+  --color-fg-disabled: var(--ag-content-disabled);
+  --color-on-identity: var(--ag-content-on-identity);
+  --color-line: var(--ag-border-subtle);
+  --color-line-strong: var(--ag-border-default);
+  --color-surface: var(--ag-surface-container);
+  --color-surface-translucent: var(--ag-surface-container-translucent);
+  --color-surface-hover: var(--ag-surface-hover);
+  --color-canvas: var(--ag-surface-canvas);
+}
+
 /*
  * Semantic theme bootstrap. These two palettes prevent an unthemed first
  * paint while site settings load; the runtime replaces every value from one
@@ -245,29 +263,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Neutral utility compatibility. Every theme resolves these legacy hierarchy
- * hints through semantic roles, so extension themes never inherit Zinc as an
- * accidental second palette. New chromatic utilities are rejected by tests. */
-html .text-white,
-html .text-zinc-50,
-html .text-zinc-100 {
-  color: var(--ag-content-strong) !important;
-}
-html .text-zinc-200 {
-  color: var(--ag-content-primary) !important;
-}
-html .text-zinc-300,
-html .text-zinc-400 {
-  color: var(--ag-content-secondary) !important;
-}
-html .text-zinc-500 {
-  color: var(--ag-content-tertiary) !important;
-}
-html .text-zinc-600,
-html .text-zinc-700 {
-  color: var(--ag-content-disabled) !important;
-}
-
 .ag-visualization-tone {
   border-color: color-mix(
     in srgb,
@@ -308,34 +303,6 @@ html .text-zinc-700 {
 }
 .ag-visualization-tone-9 {
   --ag-visualization-tone: var(--ag-visualization-9);
-}
-html .border-zinc-700,
-html .border-zinc-800,
-html .border-zinc-800\/60,
-html .border-zinc-800\/70,
-html .border-zinc-800\/80,
-html .border-zinc-800\/90 {
-  border-color: var(--ag-border-subtle) !important;
-}
-
-html .bg-zinc-800 {
-  background-color: var(--ag-surface-hover) !important;
-}
-html .bg-zinc-900\/20,
-html .bg-zinc-900\/40,
-html .bg-zinc-900\/50,
-html .bg-zinc-900\/60,
-html .bg-zinc-950\/20,
-html .bg-zinc-950\/30,
-html .bg-zinc-950\/35,
-html .bg-zinc-950\/40,
-html .bg-zinc-950\/50,
-html .bg-zinc-950\/60,
-html .bg-zinc-950\/70 {
-  background-color: var(--ag-surface-container-translucent) !important;
-}
-html .bg-zinc-950 {
-  background-color: var(--ag-surface-canvas) !important;
 }
 
 .ag-app-fallback,
@@ -1983,10 +1950,6 @@ button:not(:disabled):active,
   transition:
     box-shadow 220ms var(--ease-out-expo),
     transform 220ms var(--ease-out-expo);
-}
-
-html .ag-brand-mark.text-white {
-  color: var(--ag-content-on-identity) !important;
 }
 
 .ag-brand-mark-image {

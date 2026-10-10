@@ -83,7 +83,7 @@ export function GroupResolutionDialog({ group }: { group: Group }) {
         }
       >
         <div className="ag-page-stack ag-group-resolution">
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-fg-secondary">
             {text(
               "Hosted 优先，同类型成员按配置位置排序。这里展示候选顺序，具体命中还取决于制品、读取权限和协议规则。",
               "Hosted members come first; members of the same type follow their configured positions. These are candidates, while actual hits depend on the artifact, read permissions and protocol rules.",
@@ -98,7 +98,7 @@ export function GroupResolutionDialog({ group }: { group: Group }) {
             plan && (
               <>
                 {plan.excludedMemberCount > 0 && (
-                  <p className="text-sm text-zinc-400">
+                  <p className="text-sm text-fg-secondary">
                     {text(
                       `${plan.excludedMemberCount} 个配置成员当前未参与解析。`,
                       `${plan.excludedMemberCount} configured member(s) are currently excluded from resolution.`,
@@ -121,10 +121,10 @@ export function GroupResolutionDialog({ group }: { group: Group }) {
                     {plan.members.map((member) => (
                       <li
                         key={member.repositoryId}
-                        className="flex min-w-0 items-start gap-3 border-b border-zinc-800 pb-3"
+                        className="flex min-w-0 items-start gap-3 border-b border-line pb-3"
                         data-testid="resolution-member"
                       >
-                        <span className="shrink-0 font-mono text-sm text-zinc-500">
+                        <span className="shrink-0 font-mono text-sm text-fg-tertiary">
                           {member.resolutionOrder}.
                         </span>
                         <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -136,7 +136,7 @@ export function GroupResolutionDialog({ group }: { group: Group }) {
                           </Link>
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge>{member.type}</Badge>
-                            <span className="text-xs text-zinc-500">
+                            <span className="text-xs text-fg-tertiary">
                               {text(
                                 `配置位置 ${member.configuredPosition + 1}`,
                                 `Configured position ${member.configuredPosition + 1}`,

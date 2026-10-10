@@ -112,10 +112,10 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
     <section>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-100">
+          <h2 className="text-sm font-semibold text-fg-strong">
             {text("外部身份", "External identities")}
           </h2>
-          <p className="mt-1 text-xs text-zinc-500">
+          <p className="mt-1 text-xs text-fg-tertiary">
             {text(
               "绑定后，OIDC 登录会使用此账户的状态、角色和会话撤销策略。",
               "Linked OIDC sign-ins use this account's state, role, and session revocation policy.",
@@ -158,7 +158,7 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
           {items.map((identity) => (
             <div
               key={identity.id}
-              className="flex items-start justify-between gap-3 border border-zinc-800/80 bg-zinc-950/20 px-3 py-3"
+              className="flex items-start justify-between gap-3 border border-line bg-surface-translucent px-3 py-3"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -171,15 +171,15 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
                   ) : null}
                 </div>
                 <div
-                  className="mt-2 truncate text-xs text-zinc-400"
+                  className="mt-2 truncate text-xs text-fg-secondary"
                   title={identity.issuer}
                 >
                   {identity.issuer}
                 </div>
-                <div className="mt-1 break-all font-mono text-xs text-zinc-200">
+                <div className="mt-1 break-all font-mono text-xs text-fg">
                   {identity.subject}
                 </div>
-                <div className="mt-2 text-xs text-zinc-500">
+                <div className="mt-2 text-xs text-fg-tertiary">
                   {text("最近登录", "Last sign-in")}：
                   {identity.lastLoginAt
                     ? formatDate(identity.lastLoginAt, locale)

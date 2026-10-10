@@ -338,10 +338,10 @@ export function AuthenticationPage() {
                 <SafetyCertificateOutlined />
               </div>
               <div className="min-w-0">
-                <h2 className="text-sm font-semibold text-zinc-100">
+                <h2 className="text-sm font-semibold text-fg-strong">
                   {text("企业身份提供方", "Enterprise identity provider")}
                 </h2>
-                <p className="mt-1 text-xs text-zinc-500">
+                <p className="mt-1 text-xs text-fg-tertiary">
                   {text(
                     "使用 Authorization Code + PKCE；会话仅保存已验证的受限身份。",
                     "Uses Authorization Code + PKCE; sessions retain only the validated bounded identity.",
@@ -486,7 +486,7 @@ export function AuthenticationPage() {
                 </div>
               )}
               <div className="ag-auth-runtime-context">
-                <div className="mb-3 text-xs font-semibold text-zinc-200">
+                <div className="mb-3 text-xs font-semibold text-fg">
                   {text("生效上下文", "Effective context")}
                 </div>
                 <dl>
@@ -530,7 +530,7 @@ export function AuthenticationPage() {
                 <SafetyCertificateOutlined />
                 <span>{text("角色映射", "Role mapping")}</span>
               </div>
-              <p className="mb-4 text-xs text-zinc-500">
+              <p className="mb-4 text-xs text-fg-tertiary">
                 {text(
                   "支持 Keycloak Realm/Client Roles、顶层 roles、groups 等常见声明；匹配 admin 映射即成为管理员，匹配 member 映射则通过审批但不附带仓库权限（仓库访问始终来自按仓库授权），两者同时匹配时 admin 优先。",
                   "Supports common Keycloak realm/client roles, top-level roles, and groups claims. A matched admin mapping makes the account an administrator; a matched member mapping approves it without repository access, which always comes from per-repository grants. Admin wins when both match.",
@@ -631,7 +631,7 @@ export function AuthenticationPage() {
           </div>
 
           <div className="ag-auth-settings-footer">
-            <div className="min-w-0 text-xs text-zinc-500">
+            <div className="min-w-0 text-xs text-fg-tertiary">
               <span>{text("当前回调：", "Current callback: ")}</span>
               {form.getFieldValue("redirectUrl") ? (
                 <CopyableValue value={form.getFieldValue("redirectUrl")} />

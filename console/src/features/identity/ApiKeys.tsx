@@ -162,7 +162,7 @@ function CreateKeyDialog({
               ]}
             />
           </Field>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-fg-tertiary">
             {text(
               "创建后只会显示一次明文 Token，请立即保存。",
               "The plaintext token is shown once. Save it immediately.",
@@ -204,7 +204,7 @@ function TokenReveal({
             "It cannot be viewed again after closing. Store it securely now.",
           )}
         />
-        <div className="rounded-lg border border-zinc-700 bg-zinc-950 p-3">
+        <div className="rounded-lg border border-line bg-canvas p-3">
           <Typography.Text
             className="block break-all font-mono text-xs"
             copyable={{
@@ -294,7 +294,7 @@ export function ApiKeysPage() {
       key: "name",
       width: 210,
       render: (name: string) => (
-        <span className="font-medium text-zinc-100">{name}</span>
+        <span className="font-medium text-fg-strong">{name}</span>
       ),
     },
     {
@@ -327,7 +327,7 @@ export function ApiKeysPage() {
       key: "createdAt",
       width: 170,
       render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(value, locale)}
         </span>
       ),
@@ -338,7 +338,7 @@ export function ApiKeysPage() {
       key: "expiresAt",
       width: 170,
       render: (value: string | undefined) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(value, locale)}
         </span>
       ),
@@ -349,7 +349,7 @@ export function ApiKeysPage() {
       key: "lastUsedAt",
       width: 170,
       render: (value: string | undefined) => (
-        <span className="whitespace-nowrap text-xs text-zinc-500">
+        <span className="whitespace-nowrap text-xs text-fg-tertiary">
           {formatDate(value, locale)}
         </span>
       ),
@@ -363,7 +363,7 @@ export function ApiKeysPage() {
         <CopyableValue
           value={id}
           label={`${id.slice(0, 8)}…`}
-          className="text-xs text-zinc-500"
+          className="text-xs text-fg-tertiary"
         />
       ),
     },
@@ -520,7 +520,7 @@ export function ApiKeysPage() {
         message={
           <>
             {text("确定吊销密钥", "Revoke key")}{" "}
-            <span className="font-mono text-zinc-100">{toRevoke?.name}</span>{" "}
+            <span className="font-mono text-fg-strong">{toRevoke?.name}</span>{" "}
             {text(
               "吗？ 吊销后该 Token 立即失效。",
               "? Its token becomes invalid immediately.",

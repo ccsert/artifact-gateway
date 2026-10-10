@@ -84,7 +84,7 @@ export function buildStorageChartData(
 
 function EmptyChart({ children }: { children: string }) {
   return (
-    <div className="flex min-h-48 items-center justify-center px-4 text-center text-sm text-zinc-600">
+    <div className="flex min-h-48 items-center justify-center px-4 text-center text-sm text-fg-disabled">
       {children}
     </div>
   );
@@ -99,7 +99,7 @@ function ChartLoadingPlaceholder({
 }) {
   return (
     <div
-      className="flex items-center justify-center px-4 text-center text-xs text-zinc-600"
+      className="flex items-center justify-center px-4 text-center text-xs text-fg-disabled"
       style={{ height }}
       role="status"
     >
@@ -259,10 +259,10 @@ export function StorageByFormatChart({
             <DashboardPiePlot key={colorMode} config={config} />
           </DeferredChart>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-lg font-semibold tabular-nums text-zinc-100">
+            <span className="text-lg font-semibold tabular-nums text-fg-strong">
               {formatBytes(totalBytes)}
             </span>
-            <span className="text-xs uppercase tracking-wider text-zinc-500">
+            <span className="text-xs uppercase tracking-wider text-fg-tertiary">
               {text("合计", "Total")}
             </span>
           </div>
@@ -282,8 +282,8 @@ export function StorageByFormatChart({
               style={{ backgroundColor: datum.color }}
               aria-hidden="true"
             />
-            <span className="text-zinc-300">{datum.label}</span>
-            <span className="tabular-nums text-zinc-500">
+            <span className="text-fg-secondary">{datum.label}</span>
+            <span className="tabular-nums text-fg-tertiary">
               {Math.round((datum.bytes / totalBytes) * 100)}%
             </span>
           </li>

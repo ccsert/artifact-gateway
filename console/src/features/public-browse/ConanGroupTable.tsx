@@ -192,7 +192,7 @@ export function ConanGroupTable({
       key: "key",
       width: 260,
       render: (value: string) => (
-        <span className="font-mono text-xs text-zinc-100">{value}</span>
+        <span className="font-mono text-xs text-fg-strong">{value}</span>
       ),
     },
     {
@@ -200,7 +200,7 @@ export function ConanGroupTable({
       key: "latest",
       width: 160,
       render: (_, row) => (
-        <span className="font-mono text-xs text-zinc-400">
+        <span className="font-mono text-xs text-fg-secondary">
           {conanReferenceParts(row.latest.coordinate).version}
         </span>
       ),
@@ -210,7 +210,7 @@ export function ConanGroupTable({
       key: "versionCount",
       width: 100,
       render: (_, row) => (
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-fg-tertiary">
           {row.group.versions.length}
         </span>
       ),
@@ -221,7 +221,7 @@ export function ConanGroupTable({
       width: 240,
       render: (_, row) => (
         <span
-          className="block max-w-[220px] truncate font-mono text-xs text-zinc-500"
+          className="block max-w-[220px] truncate font-mono text-xs text-fg-tertiary"
           title={row.selectedRevisionItem?.revision}
         >
           {row.selectedRevisionItem?.revision ??
@@ -288,13 +288,15 @@ export function ConanGroupTable({
     <div className="grid gap-5 px-2 py-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
       <div>
         <div className="flex items-center justify-between gap-3">
-          <label className="text-xs font-medium text-zinc-500">
+          <label className="text-xs font-medium text-fg-tertiary">
             {text("选择包版本", "Select package version")}{" "}
-            <span className="font-normal text-zinc-600">
+            <span className="font-normal text-fg-disabled">
               ({row.group.versions.length})
             </span>
           </label>
-          <span className="text-xs text-zinc-600">{row.referenceVersion}</span>
+          <span className="text-xs text-fg-disabled">
+            {row.referenceVersion}
+          </span>
         </div>
         <SearchableVersionSelect
           className="mt-1.5"
@@ -314,7 +316,7 @@ export function ConanGroupTable({
             "Search Conan package versions",
           )}
         />
-        <p className="mt-2 text-xs leading-5 text-zinc-600">
+        <p className="mt-2 text-xs leading-5 text-fg-disabled">
           {text(
             "同一 name@user/channel 下收拢不同版本；选定版本后再查看 recipe revision。",
             "Versions are grouped under the same name@user/channel; select one to inspect its recipe revision.",
@@ -323,10 +325,10 @@ export function ConanGroupTable({
       </div>
       <div className="min-w-0">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-medium text-zinc-500">
+          <span className="text-xs font-medium text-fg-tertiary">
             Recipe revision
           </span>
-          <span className="text-xs text-zinc-600">
+          <span className="text-xs text-fg-disabled">
             {row.visibleRevisions.length}/{row.revisions.length}
           </span>
         </div>
@@ -403,7 +405,7 @@ export function ConanGroupTable({
         {row.selectedRevisionItem ? (
           <>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="font-mono text-xs text-zinc-100">
+              <span className="font-mono text-xs text-fg-strong">
                 {row.selectedReference}
               </span>
               <span
@@ -429,7 +431,7 @@ export function ConanGroupTable({
                   : text("复制链接", "Copy link")}
               </Button>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
+            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-line py-3 text-xs sm:grid-cols-4">
               <MetadataItem
                 label="Conan reference"
                 value={row.selectedReference}
@@ -470,7 +472,7 @@ export function ConanGroupTable({
             </div>
           </>
         ) : (
-          <div className="mt-3 rounded-md border border-dashed border-zinc-800 px-4 py-6 text-sm text-zinc-600">
+          <div className="mt-3 rounded-md border border-dashed border-line px-4 py-6 text-sm text-fg-disabled">
             {text(
               "选择一个 recipe revision 查看详情与使用方式。",
               "Select a recipe revision to view details and usage.",

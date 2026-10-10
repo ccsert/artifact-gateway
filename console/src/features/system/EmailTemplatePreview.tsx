@@ -33,7 +33,7 @@ export function EmailTemplatePreview({
     <Card>
       <CardHeader title={text("邮件模板预览", "Email template preview")} />
       <div className="grid min-w-0 gap-4 p-5">
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-fg-tertiary">
           {text(
             "离线合成样例，不读取收件人、不入队、不发送。链接与外部资源在沙箱预览中禁用。",
             "Offline synthetic sample: no recipient read, queue entry, or send. Links and external resources are disabled in the sandbox preview.",
@@ -108,7 +108,7 @@ export function EmailTemplatePreview({
             <p className="break-words text-sm font-semibold">
               {preview.subject}
             </p>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-fg-tertiary">
               {text("模板版本", "Template version")}: {preview.templateVersion}{" "}
               · {quotaLabel(scenario, text)} · {locale}
             </p>

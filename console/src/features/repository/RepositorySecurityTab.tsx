@@ -286,14 +286,14 @@ export function RepositorySecurityTab({
 
   return (
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(320px,0.78fr)_minmax(0,1.55fr)]">
-      <div className="border-b border-zinc-800/80 pb-4 xl:col-span-2">
+      <div className="border-b border-line pb-4 xl:col-span-2">
         <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ag-content-tertiary)]">
           {text("仓库安全防线", "Repository guardrails")}
         </div>
-        <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-zinc-100">
+        <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-fg-strong">
           {text("安全准入与隔离读取", "Admission and quarantined reads")}
         </h2>
-        <p className="mt-1.5 max-w-3xl text-sm leading-6 text-zinc-500">
+        <p className="mt-1.5 max-w-3xl text-sm leading-6 text-fg-tertiary">
           {text(
             "这里有两条彼此独立的防线：读取策略决定已隔离制品能否被下载；晋升准入决定制品能否进入当前仓库。",
             "Two independent guardrails live here: the read policy decides whether quarantined artifacts can be downloaded, while admission decides whether artifacts may enter this repository.",
@@ -349,7 +349,7 @@ export function RepositorySecurityTab({
                 onClose={() => setReadNotice("")}
               />
             )}
-            <div className="grid gap-px overflow-hidden rounded-lg border border-zinc-800/80 bg-[var(--ag-border-subtle)] sm:grid-cols-2">
+            <div className="grid gap-px overflow-hidden rounded-lg border border-line bg-[var(--ag-border-subtle)] sm:grid-cols-2">
               <ScopeFact
                 label={text("影响请求", "Affected requests")}
                 value="GET / HEAD"
@@ -367,15 +367,15 @@ export function RepositorySecurityTab({
                 value={text("不降级回退", "No lower-priority fallback")}
               />
             </div>
-            <div className="flex flex-col gap-4 border-t border-zinc-800/70 pt-4">
-              <p className="max-w-2xl text-xs leading-5 text-zinc-500">
+            <div className="flex flex-col gap-4 border-t border-line pt-4">
+              <p className="max-w-2xl text-xs leading-5 text-fg-tertiary">
                 {text(
                   "默认允许读取以保持升级兼容。启用阻断前，请先检查当前仓库已有的隔离记录。",
                   "Reads remain allowed by default for upgrade compatibility. Review existing quarantine records before enabling enforcement.",
                 )}
               </p>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="text-xs text-zinc-600">
+                <span className="text-xs text-fg-disabled">
                   {text(
                     `读取策略当前版本 ${readPolicy.version}`,
                     `Read policy version ${readPolicy.version}`,
@@ -575,8 +575,8 @@ export function RepositorySecurityTab({
           </Field>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-zinc-800/70 pt-4">
-          <span className="text-xs text-zinc-600">
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-4">
+          <span className="text-xs text-fg-disabled">
             {text(
               `当前版本 ${policy.version}`,
               `Current version ${policy.version}`,
@@ -674,13 +674,13 @@ function SettingRow({
   children: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-6 rounded-lg border border-zinc-800/80 bg-[var(--ag-surface-table-header)] px-4 py-3.5">
+    <div className="flex items-center justify-between gap-6 rounded-lg border border-line bg-[var(--ag-surface-table-header)] px-4 py-3.5">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-zinc-200">{label}</span>
+          <span className="text-sm font-medium text-fg">{label}</span>
           {meta}
         </div>
-        <p className="mt-1 text-xs leading-5 text-zinc-500">{hint}</p>
+        <p className="mt-1 text-xs leading-5 text-fg-tertiary">{hint}</p>
       </div>
       <div className="shrink-0">{children}</div>
     </div>
@@ -703,12 +703,12 @@ function PolicySwitch({
       className={`flex min-h-24 items-start justify-between gap-5 rounded-lg border px-4 py-3.5 transition-colors ${
         checked
           ? "border-[var(--ag-border-default)] bg-[var(--ag-navigation-selected-start)]"
-          : "border-zinc-800/80 bg-[var(--ag-surface-table-header)]"
+          : "border-line bg-[var(--ag-surface-table-header)]"
       }`}
     >
       <div className="min-w-0">
-        <div className="text-sm font-medium text-zinc-200">{label}</div>
-        <div className="mt-1 text-xs leading-5 text-zinc-500">{hint}</div>
+        <div className="text-sm font-medium text-fg">{label}</div>
+        <div className="mt-1 text-xs leading-5 text-fg-tertiary">{hint}</div>
       </div>
       <Switch aria-label={label} checked={checked} onChange={onChange} />
     </div>

@@ -764,7 +764,7 @@ export function PublicBrowsePage() {
         );
         return (
           <span
-            className="block max-w-md truncate font-mono text-xs text-zinc-100"
+            className="block max-w-md truncate font-mono text-xs text-fg-strong"
             title={displayCoordinate}
             dir="auto"
           >
@@ -780,7 +780,7 @@ export function PublicBrowsePage() {
             key: "loadedVersions",
             width: 130,
             render: (_: unknown, row: PublicArtifactTableRow) => (
-              <span className="whitespace-nowrap text-xs text-zinc-500">
+              <span className="whitespace-nowrap text-xs text-fg-tertiary">
                 {row.protocolVersionsLoading && !row.protocolVersionsLoaded
                   ? text("读取中…", "Loading…")
                   : !row.protocolVersionsLoaded
@@ -799,7 +799,7 @@ export function PublicBrowsePage() {
             key: "selectedVersion",
             width: 190,
             render: (_: unknown, row: PublicArtifactTableRow) => (
-              <span className="block max-w-[180px] truncate font-mono text-xs text-zinc-500">
+              <span className="block max-w-[180px] truncate font-mono text-xs text-fg-tertiary">
                 {row.protocolVersionsLoading && !row.protocolVersionsLoaded
                   ? text("读取中…", "Loading…")
                   : !row.protocolVersionsLoaded
@@ -813,7 +813,7 @@ export function PublicBrowsePage() {
             key: "digest",
             width: 160,
             render: (_: unknown, row: PublicArtifactTableRow) => (
-              <span className="font-mono text-xs text-zinc-500">
+              <span className="font-mono text-xs text-fg-tertiary">
                 {shortDigest(
                   row.ociDetail?.digest ??
                     row.selectedProtocolVersionItem?.digest ??
@@ -829,7 +829,7 @@ export function PublicBrowsePage() {
             key: "digest",
             width: 180,
             render: (_: unknown, row: PublicArtifactTableRow) => (
-              <span className="font-mono text-xs text-zinc-500">
+              <span className="font-mono text-xs text-fg-tertiary">
                 {shortDigest(row.item.digest)}
               </span>
             ),
@@ -839,7 +839,7 @@ export function PublicBrowsePage() {
             key: "size",
             width: 120,
             render: (_: unknown, row: PublicArtifactTableRow) => (
-              <span className="text-xs text-zinc-400">
+              <span className="text-xs text-fg-secondary">
                 {formatBytes(row.item.size)}
               </span>
             ),
@@ -851,7 +851,7 @@ export function PublicBrowsePage() {
                   key: "contentType",
                   width: 220,
                   render: (_: unknown, row: PublicArtifactTableRow) => (
-                    <span className="block max-w-[210px] truncate font-mono text-xs text-zinc-500">
+                    <span className="block max-w-[210px] truncate font-mono text-xs text-fg-tertiary">
                       {row.item.contentType ?? "—"}
                     </span>
                   ),
@@ -866,7 +866,7 @@ export function PublicBrowsePage() {
             key: "createdAt",
             width: 180,
             render: (_: unknown, row: PublicArtifactTableRow) => (
-              <span className="whitespace-nowrap text-xs text-zinc-500">
+              <span className="whitespace-nowrap text-xs text-fg-tertiary">
                 {formatDate(row.item.createdAt, locale)}
               </span>
             ),
@@ -1059,7 +1059,7 @@ export function PublicBrowsePage() {
     if (!row.isOci) {
       return (
         <div className="px-2 py-1">
-          <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3 border-b border-zinc-800/80 pb-4 text-xs sm:grid-cols-4">
+          <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3 border-b border-line pb-4 text-xs sm:grid-cols-4">
             <MetadataItem
               label={text("仓库", "Repository")}
               value={selectedRepository?.name ?? "—"}
@@ -1100,10 +1100,10 @@ export function PublicBrowsePage() {
       <div className="grid gap-5 px-2 py-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
         <div>
           <div className="flex items-center justify-between gap-3">
-            <span className="block text-xs font-medium text-zinc-500">
+            <span className="block text-xs font-medium text-fg-tertiary">
               {text("选择镜像版本", "Select image version")}
             </span>
-            <span className="text-xs text-zinc-600">
+            <span className="text-xs text-fg-disabled">
               {text("已加载", "Loaded")} {row.protocolVersions.length}
             </span>
           </div>
@@ -1161,7 +1161,7 @@ export function PublicBrowsePage() {
                   )}
             </Button>
           )}
-          <p className="mt-2 text-xs leading-5 text-zinc-600">
+          <p className="mt-2 text-xs leading-5 text-fg-disabled">
             {text(
               `每次最多读取 ${VERSION_PAGE_SIZE} 个版本；选择后可查看详情与使用方式。`,
               `Up to ${VERSION_PAGE_SIZE} versions are loaded at a time; select one to view details and usage.`,
@@ -1172,7 +1172,7 @@ export function PublicBrowsePage() {
           {row.selectedProtocolVersionItem ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-xs text-zinc-100">
+                <span className="font-mono text-xs text-fg-strong">
                   {row.item.coordinate}
                 </span>
                 <span className="rounded bg-[var(--ag-surface-hover)] px-1.5 py-0.5 text-xs text-[var(--ag-content-secondary)]">
@@ -1196,7 +1196,7 @@ export function PublicBrowsePage() {
                     : text("复制链接", "Copy link")}
                 </Button>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-zinc-800/80 py-3 text-xs sm:grid-cols-4">
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-line py-3 text-xs sm:grid-cols-4">
                 <MetadataItem
                   label={text("镜像", "Image")}
                   value={row.item.coordinate}
@@ -1276,7 +1276,7 @@ export function PublicBrowsePage() {
               </div>
             </>
           ) : (
-            <div className="rounded-md border border-dashed border-zinc-800 px-4 py-6 text-sm text-zinc-600">
+            <div className="rounded-md border border-dashed border-line px-4 py-6 text-sm text-fg-disabled">
               {text(
                 "版本加载完成后，可在左侧搜索并选择一个版本。",
                 "Once versions load, search and select one on the left.",
@@ -1289,16 +1289,16 @@ export function PublicBrowsePage() {
   };
 
   return (
-    <main className="ag-public-browse-shell min-h-screen px-4 py-6 text-zinc-200 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+    <main className="ag-public-browse-shell min-h-screen px-4 py-6 text-fg sm:px-6 sm:py-8 lg:px-8 lg:py-10">
       <div className="ag-public-browse-page ag-page-stack mx-auto w-full max-w-[1440px]">
         <div className="ag-public-browse-header ag-page-header flex flex-wrap items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <SiteBrandMark className="flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white" />
+            <SiteBrandMark className="flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-on-identity" />
             <div className="min-w-0">
-              <div className="break-words font-semibold tracking-tight text-zinc-100">
+              <div className="break-words font-semibold tracking-tight text-fg-strong">
                 <SiteName />
               </div>
-              <div className="mt-0.5 text-xs text-zinc-500">
+              <div className="mt-0.5 text-xs text-fg-tertiary">
                 {t("public.browseTitle")}
               </div>
             </div>
@@ -1319,7 +1319,7 @@ export function PublicBrowsePage() {
         </div>
         {!repositoryId ? (
           <Card
-            className="ag-page-primary overflow-hidden border-zinc-800/90 bg-zinc-950/35"
+            className="ag-page-primary overflow-hidden border-line bg-surface-translucent"
             bodyClassName="p-6 sm:p-8 lg:p-10"
           >
             <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
@@ -1328,13 +1328,13 @@ export function PublicBrowsePage() {
                   <SafetyCertificateOutlined />
                   {text("公开只读", "Public read-only")}
                 </div>
-                <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-50">
+                <h1 className="mt-4 text-2xl font-semibold tracking-tight text-fg-strong">
                   {text(
                     "查找并使用可信的公开制品",
                     "Discover and consume trusted public artifacts",
                   )}
                 </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-fg-secondary">
                   {text(
                     "从团队明确公开的仓库中检索镜像、依赖和软件包。读取无需登录，发布、授权和仓库管理始终需要身份认证。",
                     "Search images, dependencies, and packages from repositories explicitly published by your team. Reading needs no sign-in; publishing, grants, and repository administration always require authentication.",
@@ -1344,7 +1344,7 @@ export function PublicBrowsePage() {
                   <Input
                     allowClear
                     size="large"
-                    prefix={<SearchOutlined className="text-zinc-500" />}
+                    prefix={<SearchOutlined className="text-fg-tertiary" />}
                     className="mt-6 max-w-2xl"
                     placeholder={text(
                       "搜索仓库名称或格式",
@@ -1355,35 +1355,35 @@ export function PublicBrowsePage() {
                   />
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10 shadow-2xl shadow-black/20">
-                <div className="bg-zinc-950/70 p-4">
-                  <div className="text-2xl font-semibold text-zinc-50">
+              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line">
+                <div className="bg-surface-translucent p-4">
+                  <div className="text-2xl font-semibold text-fg-strong">
                     {repositories?.length ?? "—"}
                   </div>
-                  <div className="mt-1 text-xs text-zinc-500">
+                  <div className="mt-1 text-xs text-fg-tertiary">
                     {text("个公开来源", "public sources")}
                   </div>
                 </div>
-                <div className="bg-zinc-950/70 p-4">
-                  <div className="text-2xl font-semibold text-zinc-50">
+                <div className="bg-surface-translucent p-4">
+                  <div className="text-2xl font-semibold text-fg-strong">
                     {repositories ? publicFormats.length : "—"}
                   </div>
-                  <div className="mt-1 text-xs text-zinc-500">
+                  <div className="mt-1 text-xs text-fg-tertiary">
                     {text("种制品格式", "artifact formats")}
                   </div>
                 </div>
-                <div className="col-span-2 flex items-center gap-3 bg-zinc-950/70 p-4">
+                <div className="col-span-2 flex items-center gap-3 bg-surface-translucent p-4">
                   <div className="flex size-9 items-center justify-center rounded-lg bg-[var(--ag-surface-hover)] text-[var(--ag-content-secondary)]">
                     <SafetyCertificateOutlined />
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-zinc-200">
+                    <div className="text-sm font-medium text-fg">
                       {text(
                         "管理操作需要登录",
                         "Management actions require sign-in",
                       )}
                     </div>
-                    <div className="mt-0.5 text-xs text-zinc-500">
+                    <div className="mt-0.5 text-xs text-fg-tertiary">
                       {text(
                         "公开目录不会授予写入或管理权限",
                         "The public catalog never grants write or admin access",
@@ -1396,7 +1396,7 @@ export function PublicBrowsePage() {
           </Card>
         ) : (
           <Card bodyClassName="p-5 sm:p-6">
-            <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-300">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-fg-secondary">
               <Button
                 type="text"
                 size="small"
@@ -1405,8 +1405,8 @@ export function PublicBrowsePage() {
               >
                 {text("公开仓库", "Public repositories")}
               </Button>
-              <span className="text-zinc-700">/</span>
-              <span className="font-medium text-zinc-100">
+              <span className="text-fg-disabled">/</span>
+              <span className="font-medium text-fg-strong">
                 {selectedRepository?.name ??
                   text("未知仓库", "Unknown repository")}
               </span>
@@ -1526,10 +1526,10 @@ export function PublicBrowsePage() {
                 <div>
                   <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                      <h2 className="text-lg font-semibold text-zinc-100">
+                      <h2 className="text-lg font-semibold text-fg-strong">
                         {text("选择制品来源", "Choose an artifact source")}
                       </h2>
-                      <p className="mt-1 text-sm text-zinc-500">
+                      <p className="mt-1 text-sm text-fg-tertiary">
                         {text(
                           `${repositories.length} 个公开来源 · ${publicFormats.length} 种制品格式`,
                           `${repositories.length} public sources · ${publicFormats.length} artifact formats`,
@@ -1537,7 +1537,7 @@ export function PublicBrowsePage() {
                       </p>
                     </div>
                     <div
-                      className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950/40 p-1"
+                      className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-line bg-surface-translucent p-1"
                       aria-label={text(
                         "按制品格式筛选",
                         "Filter by artifact format",
@@ -1620,10 +1620,10 @@ export function PublicBrowsePage() {
                                 <FormatBadge format={repository.format} />
                               </div>
                             </div>
-                            <div className="mt-5 min-w-0 truncate text-base font-semibold text-zinc-100">
+                            <div className="mt-5 min-w-0 truncate text-base font-semibold text-fg-strong">
                               {repository.name}
                             </div>
-                            <p className="mt-2 text-sm leading-5 text-zinc-500">
+                            <p className="mt-2 text-sm leading-5 text-fg-tertiary">
                               {repository.type === "proxy"
                                 ? text(
                                     "缓存并加速经过管理员信任的上游制品。",
@@ -1640,7 +1640,7 @@ export function PublicBrowsePage() {
                                     )}
                             </p>
                             <div className="mt-auto flex items-center justify-between pt-5 text-xs">
-                              <span className="text-zinc-600">
+                              <span className="text-fg-disabled">
                                 {text("无需登录即可读取", "No sign-in to read")}
                               </span>
                               <span className="flex items-center gap-1 font-medium text-[var(--ag-link)] transition-colors group-hover:text-[var(--ag-link-hover)]">
@@ -1681,17 +1681,17 @@ export function PublicBrowsePage() {
               </PublicBrowseStateSurface>
             ) : (
               <Card>
-                <div className="flex items-center justify-between border-b border-zinc-800/80 px-4 py-3">
-                  <div className="text-xs text-zinc-500">
+                <div className="flex items-center justify-between border-b border-line px-4 py-3">
+                  <div className="text-xs text-fg-tertiary">
                     {text("找到", "Found")}{" "}
-                    <span className="font-medium text-zinc-300">
+                    <span className="font-medium text-fg-secondary">
                       {groupedItems?.length ??
                         groupedConanItems?.length ??
                         items.length}
                     </span>{" "}
                     {text("个制品", "artifacts")}
                     {(groupedItems || groupedConanItems) && (
-                      <span className="ml-1 text-zinc-600">
+                      <span className="ml-1 text-fg-disabled">
                         {text(
                           `（${items.length} 个版本）`,
                           ` (${items.length} versions)`,
@@ -1699,7 +1699,7 @@ export function PublicBrowsePage() {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-zinc-600">
+                  <div className="text-xs text-fg-disabled">
                     {text("匿名只读", "Anonymous read-only")}
                   </div>
                 </div>
@@ -1804,13 +1804,13 @@ export function PublicBrowsePage() {
           {selectedRepository && (
             <aside className="lg:sticky lg:top-24">
               <Card className="overflow-hidden">
-                <div className="border-b border-zinc-800/80 px-4 py-3">
-                  <div className="text-sm font-medium text-zinc-100">
+                <div className="border-b border-line px-4 py-3">
+                  <div className="text-sm font-medium text-fg-strong">
                     {usageLabel}
                   </div>
-                  <div className="mt-1 text-xs text-zinc-500">
+                  <div className="mt-1 text-xs text-fg-tertiary">
                     {text("适用于仓库", "For repository")}{" "}
-                    <span className="font-mono text-zinc-300">
+                    <span className="font-mono text-fg-secondary">
                       {selectedRepository.name}
                     </span>
                   </div>
@@ -1825,7 +1825,7 @@ export function PublicBrowsePage() {
                       compact
                     />
                   ))}
-                  <div className="border-t border-zinc-800/80 pt-3 text-xs leading-5 text-zinc-600">
+                  <div className="border-t border-line pt-3 text-xs leading-5 text-fg-disabled">
                     {text(
                       "匿名浏览无需 Token；推送、私有仓库和管理操作仍需登录。",
                       "Anonymous browsing needs no token. Publishing, private repositories, and management still require sign-in.",
