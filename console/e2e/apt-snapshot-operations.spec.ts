@@ -307,15 +307,21 @@ for (const [width, theme, locale] of [
         exact: true,
       })
       .click();
-    // Open each picker from the middle of the viewport: Ant Design aligns a
-    // popup opened near the bottom edge only after the next scroll, so a
-    // picker at the fold can leave its options parked off-screen.
+    // Ant Design first measures its popup outside the viewport. Wait for its
+    // real placement before clicking an option so Playwright does not scroll
+    // the page to the temporary measurement coordinates.
     const openPicker = async (name: string) => {
+      await expect(page.locator(".ant-select-dropdown:visible")).toHaveCount(0);
       const picker = page.getByRole("combobox", { name });
       await picker.evaluate((element) =>
         element.scrollIntoView({ block: "center" }),
       );
       await picker.click();
+      await expect(page.locator(".ant-select-dropdown:visible")).toBeInViewport(
+        {
+          ratio: 1,
+        },
+      );
     };
     await openPicker(
       en ? "Search and select a source artifact" : "搜索并选择源制品",
@@ -323,6 +329,11 @@ for (const [width, theme, locale] of [
     await page
       .getByText("artifact-gateway-console 1.2.3 · amd64", { exact: true })
       .click();
+    await expect(
+      page
+        .locator(".ag-distribution")
+        .getByTitle("artifact-gateway-console 1.2.3 · amd64", { exact: true }),
+    ).toBeVisible();
     await openPicker(en ? "Select target repository" : "选择目标仓库");
     await page.getByText("debian-production", { exact: true }).click();
     await page

@@ -92,6 +92,11 @@ const surfaces: Surface[] = [
     ready: (page) => page.getByText("cargo-hosted").first(),
   },
   {
+    name: "repository-detail",
+    path: "/repositories/repo-maven-releases",
+    ready: (page) => page.getByText("com.acme:demo-service").first(),
+  },
+  {
     name: "groups",
     path: "/groups",
     ready: (page) => page.getByText("maven-public").first(),
@@ -170,10 +175,11 @@ for (const theme of themes) {
         await expect(page).toHaveScreenshot([theme, `${surface.name}.png`], {
           fullPage: true,
         });
-        expect(
-          gateway.unmatched,
-          "requests during screenshot without a fixture",
-        ).toEqual([]);
+        // A request that started after the first check must not have put an
+        // error state into the screenshot either.
+        expect(gateway.unmatched, "late requests without a fixture").toEqual(
+          [],
+        );
       });
     }
   });

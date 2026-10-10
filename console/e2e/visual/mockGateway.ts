@@ -34,6 +34,13 @@ const routes: Record<string, Json> = {
 for (const item of fixtures.repositories) {
   routes[`/api/v2/repositories/${item.id}`] = item;
 }
+const mavenReleasesPath = `/api/v2/repositories/${fixtures.mavenReleases.id}`;
+routes[`${mavenReleasesPath}/capabilities`] =
+  fixtures.mavenReleasesCapabilities;
+routes[`${mavenReleasesPath}/effective-access`] = fixtures.mavenReleasesAccess;
+routes[`${mavenReleasesPath}/capacity`] = fixtures.mavenReleasesCapacity;
+routes[`${mavenReleasesPath}/maven/coordinates`] =
+  fixtures.mavenReleasesCoordinates;
 
 export interface MockGateway {
   /** Requests that reached the Gateway without a fixture. */

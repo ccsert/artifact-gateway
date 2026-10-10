@@ -178,7 +178,7 @@ const consoleTokenInvariants: NonNullable<ThemeConfig["token"]> = {
 const mix = (color: string, percentage: number, background = "transparent") =>
   `color-mix(in srgb, ${color} ${percentage}%, ${background})`;
 
-// Design language v2 ("refined engineering console", #319): neutral layers
+// Design language v2 ("refined engineering console", issue 319): neutral layers
 // carry hierarchy, the primary action is a solid foreground fill, and the
 // signal color is reserved for links, focus, and current location.
 const builtInRoleOverrides: Readonly<Record<string, RoleOverrides>> = {
