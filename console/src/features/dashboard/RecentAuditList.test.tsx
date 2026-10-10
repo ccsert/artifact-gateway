@@ -1,9 +1,10 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RecentAuditList } from "./RecentAuditList";
 
 describe("RecentAuditList", () => {
+  afterEach(cleanup);
   it("states audit events in words instead of operation and outcome codes", () => {
     render(
       <PreferencesProvider>
@@ -51,6 +52,34 @@ describe("RecentAuditList", () => {
     // Codes a newer backend writes degrade to the raw code, never a blank.
     expect(unknown).toHaveTextContent("future.operation");
     expect(unknown).toHaveTextContent("future_outcome");
-    expect(unknown).toHaveTextContent("匿名");
+    expect(unknown).toHaveTextContent("未记录");
+    expect(unknown).not.toHaveTextContent("匿名");
+  });
+
+  it("distinguishes explicit anonymous actors from missing identities", () => {
+    render(
+      <PreferencesProvider>
+        <RecentAuditList
+          records={[
+            {
+              occurredAt: "2026-10-01T09:12:44Z",
+              actor: "anonymous",
+              outcome: "resolved",
+              requestId: "anonymous",
+            },
+            {
+              occurredAt: "2026-10-01T09:12:44Z",
+              actor: "",
+              outcome: "resolved",
+              requestId: "empty",
+            },
+          ]}
+        />
+      </PreferencesProvider>,
+    );
+    const [anonymous, empty] = screen.getAllByRole("listitem");
+    expect(anonymous).toHaveTextContent("匿名");
+    expect(empty).toHaveTextContent("未记录");
+    expect(empty).not.toHaveTextContent("匿名");
   });
 });
