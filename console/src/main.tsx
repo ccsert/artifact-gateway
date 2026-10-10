@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { AntdProvider } from "./app/AntdProvider";
 import { AuthProvider } from "./lib/auth";
+import { ConsoleQueryProvider } from "./lib/query/QueryProvider";
 import { PreferencesProvider } from "./lib/preferences";
 import { SiteSettingsProvider } from "./lib/siteSettings";
 import { router } from "./app/router";
@@ -14,13 +15,15 @@ import "./app/layout.css";
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <AuthProvider>
-      <SiteSettingsProvider>
-        <PreferencesProvider>
-          <AntdProvider>
-            <RouterProvider router={router} />
-          </AntdProvider>
-        </PreferencesProvider>
-      </SiteSettingsProvider>
+      <ConsoleQueryProvider>
+        <SiteSettingsProvider>
+          <PreferencesProvider>
+            <AntdProvider>
+              <RouterProvider router={router} />
+            </AntdProvider>
+          </PreferencesProvider>
+        </SiteSettingsProvider>
+      </ConsoleQueryProvider>
     </AuthProvider>
   </StrictMode>,
 );

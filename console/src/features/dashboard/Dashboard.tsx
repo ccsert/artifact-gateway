@@ -28,6 +28,7 @@ import { StorageByFormatChart } from "../../components/ui/DashboardCharts";
 import { usePreferences } from "../../lib/preferences";
 import { useDashboardResource } from "./useDashboardResource";
 import { RecentAuditList } from "./RecentAuditList";
+import { SectionBoundary } from "../../components/ui/SectionBoundary";
 import { preloadDashboardPiePlot } from "../../components/ui/dashboard-charts/loadDashboardPiePlot";
 
 type StatisticsWindow = keyof OverviewWindowCounts;
@@ -248,133 +249,163 @@ export function DashboardPage() {
         ]}
       />
 
-      <Card className="ag-page-primary">
-        <CardHeader
-          title={text("仓库活动", "Repository activity")}
-          extra={
-            <Link
-              to="/repositories"
-              className="text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
-            >
-              {text("查看全部 →", "View all →")}
-            </Link>
-          }
-        />
-        {statistics ? (
-          <ConsoleTable<OverviewRepositoryStatistics>
-            rowKey="repositoryId"
-            dataSource={rankedRepositories.slice(0, 10)}
-            columns={repositoryColumns}
-            pagination={false}
-            locale={{
-              emptyText: (
-                <EmptyState
-                  title={text("暂无仓库", "No repositories")}
-                  hint={text(
-                    "创建仓库后，这里会展示请求量、对象数与存储占用。",
-                    "Create a repository to see requests, objects, and storage here.",
-                  )}
-                />
-              ),
-            }}
-            scroll={{ x: 700 }}
-          />
-        ) : statisticsResource.loading ? (
-          <Loading
-            label={text("正在加载仓库统计…", "Loading repository statistics…")}
-          />
-        ) : (
-          <EmptyState
-            compact
-            title={text("仓库统计不可用", "Repository statistics unavailable")}
-          />
+      <SectionBoundary
+        title={text(
+          "仓库活动暂时无法显示",
+          "Repository activity is unavailable",
         )}
-      </Card>
-
-      <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-2">
-        <Card>
+        onReset={() => void statisticsResource.reload()}
+      >
+        <Card className="ag-page-primary">
           <CardHeader
-            title={text("存储占用（按格式）", "Storage by format")}
+            title={text("仓库活动", "Repository activity")}
             extra={
               <Link
                 to="/repositories"
                 className="text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
               >
-                {text("查看仓库 →", "View repositories →")}
+                {text("查看全部 →", "View all →")}
               </Link>
             }
           />
-          <div className="px-5 py-6">
-            {statistics ? (
-              <StorageByFormatChart
-                bytesByFormat={bytesByFormat ?? {}}
-                totalBytes={statistics.totals.usedBytes}
-              />
-            ) : statisticsResource.loading ? (
-              <Loading
-                label={text(
-                  "正在加载容量统计…",
-                  "Loading capacity statistics…",
-                )}
-              />
-            ) : (
-              <EmptyState
-                compact
-                title={text(
-                  "容量统计不可用",
-                  "Capacity statistics unavailable",
-                )}
-              />
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader
-            title={text("最近审计事件", "Recent audit events")}
-            extra={
-              <div className="flex items-center gap-3 text-xs">
-                <span className="text-fg-tertiary">
-                  {text(
-                    audits ? `${audits.length} 条最新记录` : "",
-                    audits ? `${audits.length} latest` : "",
-                  )}
-                </span>
-                <Link
-                  to="/audits"
-                  className="text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
-                >
-                  {text("查看全部 →", "View all →")}
-                </Link>
-              </div>
-            }
-          />
-          {auditsResource.error ? (
-            <ErrorBanner
-              title={text("审计事件加载失败", "Audit events unavailable")}
-              error={auditsResource.error}
-              onRetry={auditsResource.reload}
-              tone={audits ? "warning" : "error"}
+          {statistics ? (
+            <ConsoleTable<OverviewRepositoryStatistics>
+              rowKey="repositoryId"
+              dataSource={rankedRepositories.slice(0, 10)}
+              columns={repositoryColumns}
+              pagination={false}
+              locale={{
+                emptyText: (
+                  <EmptyState
+                    title={text("暂无仓库", "No repositories")}
+                    hint={text(
+                      "创建仓库后，这里会展示请求量、对象数与存储占用。",
+                      "Create a repository to see requests, objects, and storage here.",
+                    )}
+                  />
+                ),
+              }}
+              scroll={{ x: 700 }}
             />
-          ) : null}
-          {audits ? (
-            audits.length > 0 ? (
-              <RecentAuditList records={audits} />
-            ) : (
-              <EmptyState
-                title={text("暂无审计记录", "No audit records")}
-                hint={text(
-                  "产生访问或发布行为后，这里会列出最近的判定记录。",
-                  "Recent decisions appear here once access or publishing is recorded.",
-                )}
-              />
-            )
-          ) : auditsResource.loading ? (
+          ) : statisticsResource.loading ? (
             <Loading
-              label={text("正在加载审计事件…", "Loading audit events…")}
+              label={text(
+                "正在加载仓库统计…",
+                "Loading repository statistics…",
+              )}
             />
-          ) : null}
+          ) : (
+            <EmptyState
+              compact
+              title={text(
+                "仓库统计不可用",
+                "Repository statistics unavailable",
+              )}
+            />
+          )}
         </Card>
+      </SectionBoundary>
+
+      <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-2">
+        <SectionBoundary
+          title={text(
+            "存储占用暂时无法显示",
+            "Storage by format is unavailable",
+          )}
+          onReset={() => void statisticsResource.reload()}
+        >
+          <Card>
+            <CardHeader
+              title={text("存储占用（按格式）", "Storage by format")}
+              extra={
+                <Link
+                  to="/repositories"
+                  className="text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
+                >
+                  {text("查看仓库 →", "View repositories →")}
+                </Link>
+              }
+            />
+            <div className="px-5 py-6">
+              {statistics ? (
+                <StorageByFormatChart
+                  bytesByFormat={bytesByFormat ?? {}}
+                  totalBytes={statistics.totals.usedBytes}
+                />
+              ) : statisticsResource.loading ? (
+                <Loading
+                  label={text(
+                    "正在加载容量统计…",
+                    "Loading capacity statistics…",
+                  )}
+                />
+              ) : (
+                <EmptyState
+                  compact
+                  title={text(
+                    "容量统计不可用",
+                    "Capacity statistics unavailable",
+                  )}
+                />
+              )}
+            </div>
+          </Card>
+        </SectionBoundary>
+
+        <SectionBoundary
+          title={text(
+            "最近审计事件暂时无法显示",
+            "Recent audit events are unavailable",
+          )}
+          onReset={() => void auditsResource.reload()}
+        >
+          <Card>
+            <CardHeader
+              title={text("最近审计事件", "Recent audit events")}
+              extra={
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-fg-tertiary">
+                    {text(
+                      audits ? `${audits.length} 条最新记录` : "",
+                      audits ? `${audits.length} latest` : "",
+                    )}
+                  </span>
+                  <Link
+                    to="/audits"
+                    className="text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
+                  >
+                    {text("查看全部 →", "View all →")}
+                  </Link>
+                </div>
+              }
+            />
+            {auditsResource.error ? (
+              <ErrorBanner
+                title={text("审计事件加载失败", "Audit events unavailable")}
+                error={auditsResource.error}
+                onRetry={auditsResource.reload}
+                tone={audits ? "warning" : "error"}
+              />
+            ) : null}
+            {audits ? (
+              audits.length > 0 ? (
+                <RecentAuditList records={audits} />
+              ) : (
+                <EmptyState
+                  title={text("暂无审计记录", "No audit records")}
+                  hint={text(
+                    "产生访问或发布行为后，这里会列出最近的判定记录。",
+                    "Recent decisions appear here once access or publishing is recorded.",
+                  )}
+                />
+              )
+            ) : auditsResource.loading ? (
+              <Loading
+                label={text("正在加载审计事件…", "Loading audit events…")}
+              />
+            ) : null}
+          </Card>
+        </SectionBoundary>
       </div>
     </div>
   );

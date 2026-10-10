@@ -16,6 +16,7 @@ import {
   updateRepository,
 } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import type { Repository } from "../../client";
 import { RepositoryDetailPage } from "./RepositoryDetail";
 import { RepositorySettingsTab } from "./RepositorySettingsTab";
@@ -79,7 +80,8 @@ afterEach(() => {
  */
 async function collectTasks(user: ReturnType<typeof userEvent.setup>) {
   const navigation = screen.getByRole("navigation", { name: "仓库任务" });
-  const groupList = within(navigation).getAllByRole("tablist")[0];
+  // The access answer arrives after the repository; wait for the groups.
+  const groupList = (await within(navigation).findAllByRole("tablist"))[0];
   const groups = within(groupList)
     .getAllByRole("tab")
     .map((tab) => tab.textContent ?? "");
@@ -147,18 +149,20 @@ describe("RepositoryDetailPage scanning deep link", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <MemoryRouter
-          initialEntries={[`/repositories/${repositoryId}?tab=scanning`]}
-        >
-          <Routes>
-            <Route
-              path="/repositories/:repositoryId"
-              element={<RepositoryDetailPage />}
-            />
-          </Routes>
-        </MemoryRouter>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter
+            initialEntries={[`/repositories/${repositoryId}?tab=scanning`]}
+          >
+            <Routes>
+              <Route
+                path="/repositories/:repositoryId"
+                element={<RepositoryDetailPage />}
+              />
+            </Routes>
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -242,18 +246,20 @@ describe("RepositoryDetailPage role-scoped tabs", () => {
         },
       } as never);
     return render(
-      <PreferencesProvider>
-        <MemoryRouter
-          initialEntries={[`/repositories/${repositoryId}?tab=${initialTab}`]}
-        >
-          <Routes>
-            <Route
-              path="/repositories/:repositoryId"
-              element={<RepositoryDetailPage />}
-            />
-          </Routes>
-        </MemoryRouter>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter
+            initialEntries={[`/repositories/${repositoryId}?tab=${initialTab}`]}
+          >
+            <Routes>
+              <Route
+                path="/repositories/:repositoryId"
+                element={<RepositoryDetailPage />}
+              />
+            </Routes>
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
   }
 
@@ -263,7 +269,9 @@ describe("RepositoryDetailPage role-scoped tabs", () => {
     expect(await screen.findByText("制品视图已加载")).toBeInTheDocument();
     // The read-gated surfaces come from the same access answer, so a write grant
     // also reaches usage; nothing that needs administration does.
-    expect(screen.getByRole("tab", { name: "使用统计" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("tab", { name: "使用统计" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "发布" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "设置" })).not.toBeInTheDocument();
     expect(
@@ -278,7 +286,9 @@ describe("RepositoryDetailPage role-scoped tabs", () => {
     auth.identity = { administrator: false, role: "member" };
     renderRole(false, "maven", "artifacts");
     expect(await screen.findByText("制品视图已加载")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "使用统计" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("tab", { name: "使用统计" }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "发布" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "设置" })).not.toBeInTheDocument();
     expect(artifactsTab.render.mock.calls.at(-1)?.[0]).toMatchObject({
@@ -375,16 +385,18 @@ describe("RepositoryDetailPage Go lifecycle surfaces", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <MemoryRouter initialEntries={[`/repositories/${repositoryId}`]}>
-          <Routes>
-            <Route
-              path="/repositories/:repositoryId"
-              element={<RepositoryDetailPage />}
-            />
-          </Routes>
-        </MemoryRouter>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter initialEntries={[`/repositories/${repositoryId}`]}>
+            <Routes>
+              <Route
+                path="/repositories/:repositoryId"
+                element={<RepositoryDetailPage />}
+              />
+            </Routes>
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await screen.findByRole("tab", { name: "治理与安全" });
@@ -416,13 +428,15 @@ describe("RepositorySettingsTab upstream authentication", () => {
     mockUpdateRepository.mockResolvedValue({ data: goProxy } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySettingsTab
-          repo={goProxy}
-          capabilities={null}
-          onUpdated={vi.fn()}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySettingsTab
+            repo={goProxy}
+            capabilities={null}
+            onUpdated={vi.fn()}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(screen.getByText("上游认证")).toBeInTheDocument();
@@ -452,13 +466,15 @@ describe("RepositorySettingsTab upstream authentication", () => {
     } as const;
 
     render(
-      <PreferencesProvider>
-        <RepositorySettingsTab
-          repo={mavenProxy}
-          capabilities={null}
-          onUpdated={vi.fn()}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySettingsTab
+            repo={mavenProxy}
+            capabilities={null}
+            onUpdated={vi.fn()}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(screen.queryByText("上游认证")).not.toBeInTheDocument();
@@ -481,13 +497,15 @@ describe("RepositorySettingsTab Maven publication policy", () => {
     mockUpdateRepository.mockResolvedValue({ data: repository } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySettingsTab
-          repo={repository}
-          capabilities={null}
-          onUpdated={vi.fn()}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySettingsTab
+            repo={repository}
+            capabilities={null}
+            onUpdated={vi.fn()}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     const strictSwitch = screen.getByRole("switch", { name: "严格发布" });

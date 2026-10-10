@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Console reads repository data through a shared query layer: cancelled superseded requests, de-duplicated reads, precise invalidation after create/update/delete, one retry for network or server failures only, and a cache cleared whenever the signed-in principal changes. A failing overview card or repository task now shows its own error and Retry instead of replacing the whole page.
+
 - Console markup names semantic colour roles (`text-fg-tertiary`, `border-line`, `bg-surface-translucent`, ...) instead of Zinc palette steps; the `!important` compatibility layer that remapped 35 palette classes is removed and a unit test rejects new raw palette utilities. Dividers, the pending-approval card and the public-browse summary grid now follow the light theme instead of staying dark.
 
 - Recent activity on the overview reads as events (operation, object, actor, time, outcome) through the same labels as the audit log, which now also shows outcomes as status text and localizes the actor column. Previously the overview printed raw operation and outcome codes.

@@ -18,6 +18,7 @@ import {
 } from "../../client";
 import type { FormatProfile } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { RepositoriesPage } from "./Repositories";
 
 const auth = vi.hoisted(() => ({
@@ -81,11 +82,13 @@ describe("RepositoriesPage role-scoped catalog", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <MemoryRouter>
-          <RepositoriesPage />
-        </MemoryRouter>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter>
+            <RepositoriesPage />
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -110,11 +113,13 @@ describe("RepositoriesPage role-scoped catalog", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <MemoryRouter>
-          <RepositoriesPage />
-        </MemoryRouter>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter>
+            <RepositoriesPage />
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -153,11 +158,13 @@ describe("RepositoriesPage role-scoped catalog", () => {
     );
 
     render(
-      <PreferencesProvider>
-        <MemoryRouter>
-          <RepositoriesPage />
-        </MemoryRouter>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter>
+            <RepositoriesPage />
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await user.click(await screen.findByRole("button", { name: /新建仓库/ }));
@@ -209,11 +216,13 @@ describe("RepositoriesPage role-scoped catalog", () => {
     );
 
     render(
-      <PreferencesProvider>
-        <MemoryRouter>
-          <RepositoriesPage />
-        </MemoryRouter>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter>
+            <RepositoriesPage />
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await user.click(
