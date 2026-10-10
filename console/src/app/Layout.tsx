@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ClockCircleOutlined,
   DashboardOutlined,
+  DownOutlined,
   FileSearchOutlined,
   InboxOutlined,
   KeyOutlined,
   LoginOutlined,
+  LogoutOutlined,
   MenuOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -19,16 +21,9 @@ import {
   TeamOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { Button, Drawer, Input, Menu, Space, Tooltip } from "antd";
+import { Button, Drawer, Dropdown, Input, Menu, Space, Tooltip } from "antd";
 import type { MenuProps } from "antd";
-import {
-  Link,
-  Navigate,
-  Outlet,
-  useLocation,
-  useNavigate,
-  useSearchParams,
-} from "react-router-dom";
+import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { platformCapabilities } from "../lib/authorization";
 import { Modal, useDisclosure } from "../components/ui/Modal";
@@ -37,7 +32,8 @@ import { Loading } from "../components/ui/Feedback";
 import { PreferenceControls } from "../components/ui/PreferenceControls";
 import { usePreferences } from "../lib/preferences";
 import { SiteBrandMark, SiteName } from "../components/ui/SiteBrand";
-import { getDiagnostics } from "../client";
+import { getDiagnostics, type CurrentIdentity } from "../client";
+import { CommandPalette, useCommandPaletteShortcut } from "./CommandPalette";
 
 const navItems = [
   {
@@ -158,100 +154,173 @@ function BrandLockup({ collapsed = false }: { collapsed?: boolean }) {
   );
 }
 
-function GlobalSearchBox() {
+function CommandTrigger({
+  collapsed,
+  onOpen,
+}: {
+  collapsed: boolean;
+  onOpen: () => void;
+}) {
   const { t } = usePreferences();
-  const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const [value, setValue] = useState(params.get("q") ?? "");
-
-  useEffect(() => {
-    setValue(params.get("q") ?? "");
-  }, [params]);
-
-  const search = (nextValue: string) => {
-    const query = nextValue.trim();
-    if (query) navigate(`/search?q=${encodeURIComponent(query)}`);
-  };
-
+  const shortcut =
+    typeof navigator !== "undefined" &&
+    /Mac|iP(hone|ad)/.test(navigator.platform)
+      ? "⌘K"
+      : "Ctrl K";
   return (
-    <Input.Search
-      allowClear
-      className="ag-global-search w-full max-w-md"
-      placeholder={t("header.search")}
-      value={value}
-      onChange={(event) => setValue(event.target.value)}
-      onSearch={search}
-    />
+    <Tooltip
+      title={collapsed ? t("palette.trigger") : undefined}
+      placement="right"
+    >
+      <button
+        type="button"
+        className="ag-command-trigger"
+        data-collapsed={collapsed ? "true" : "false"}
+        aria-label={t("palette.trigger")}
+        aria-keyshortcuts="Meta+K Control+K"
+        onClick={onOpen}
+      >
+        <SearchOutlined aria-hidden="true" />
+        <span className="ag-command-trigger-label">{t("palette.trigger")}</span>
+        <kbd className="ag-command-trigger-kbd">{shortcut}</kbd>
+      </button>
+    </Tooltip>
   );
 }
 
-function TokenDialog() {
+function TokenDialog({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
   const { token, setToken, clearToken } = useAuth();
   const { t } = usePreferences();
-  const dialog = useDisclosure();
   const [draft, setDraft] = useState("");
+
+  useEffect(() => {
+    if (open) setDraft(token);
+  }, [open, token]);
+
+  return (
+    <Modal
+      open={open}
+      title={t("auth.tokenDialog")}
+      onClose={onClose}
+      footer={
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            {token && (
+              <Button
+                danger
+                onClick={() => {
+                  clearToken();
+                  onClose();
+                }}
+              >
+                {t("auth.clearToken")}
+              </Button>
+            )}
+          </div>
+          <Space>
+            <Button onClick={onClose}>{t("common.cancel")}</Button>
+            <Button
+              type="primary"
+              disabled={!draft.trim()}
+              onClick={() => {
+                setToken(draft);
+                window.location.reload();
+              }}
+            >
+              {t("auth.saveToken")}
+            </Button>
+          </Space>
+        </div>
+      }
+    >
+      <Field label="Bearer Token" hint={t("auth.tokenDialogHint")}>
+        <Input.TextArea
+          className="font-mono text-xs"
+          autoSize={{ minRows: 4, maxRows: 8 }}
+          placeholder={t("auth.tokenPlaceholder")}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+      </Field>
+    </Modal>
+  );
+}
+
+/**
+ * Who is signed in, and how. Token management and sign-out live here instead
+ * of the old top bar, so the button states the real authentication method.
+ */
+function AccountMenu({
+  identity,
+  collapsed = false,
+  onSignOut,
+}: {
+  identity: CurrentIdentity | null;
+  collapsed?: boolean;
+  onSignOut: () => void;
+}) {
+  const { token } = useAuth();
+  const { t } = usePreferences();
+  const tokenDialog = useDisclosure();
+  const actor = identity?.actor ?? "—";
+  const initial =
+    actor
+      .replace(/^[a-z-]+:/, "")
+      .charAt(0)
+      .toUpperCase() || "?";
+  const kind = identity ? t(`account.kind.${identity.kind}`) : "";
+  const role =
+    identity?.role && identity.role !== "none"
+      ? t(`account.role.${identity.role}`)
+      : "";
+  const summary = [role, kind].filter(Boolean).join(" · ");
 
   return (
     <>
-      <Button
-        color="default"
-        variant="filled"
-        icon={<KeyOutlined />}
-        aria-label={token ? t("auth.tokenConfigured") : t("auth.setToken")}
-        onClick={() => {
-          setDraft(token);
-          dialog.show();
+      <Dropdown
+        trigger={["click"]}
+        placement="topLeft"
+        menu={{
+          items: [
+            {
+              key: "token",
+              icon: <KeyOutlined />,
+              label: token ? t("auth.tokenConfigured") : t("auth.setToken"),
+              onClick: tokenDialog.show,
+            },
+            { type: "divider" },
+            {
+              key: "sign-out",
+              icon: <LogoutOutlined />,
+              label: t("auth.logout"),
+              onClick: onSignOut,
+            },
+          ],
         }}
       >
-        <span className="ag-token-label">
-          {token ? t("auth.tokenConfigured") : t("auth.setToken")}
-        </span>
-      </Button>
-      <Modal
-        open={dialog.open}
-        title={t("auth.tokenDialog")}
-        onClose={dialog.hide}
-        footer={
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              {token && (
-                <Button
-                  danger
-                  onClick={() => {
-                    clearToken();
-                    dialog.hide();
-                  }}
-                >
-                  {t("auth.clearToken")}
-                </Button>
-              )}
-            </div>
-            <Space>
-              <Button onClick={dialog.hide}>{t("common.cancel")}</Button>
-              <Button
-                type="primary"
-                disabled={!draft.trim()}
-                onClick={() => {
-                  setToken(draft);
-                  window.location.reload();
-                }}
-              >
-                {t("auth.saveToken")}
-              </Button>
-            </Space>
-          </div>
-        }
-      >
-        <Field label="Bearer Token" hint={t("auth.tokenDialogHint")}>
-          <Input.TextArea
-            className="font-mono text-xs"
-            autoSize={{ minRows: 4, maxRows: 8 }}
-            placeholder={t("auth.tokenPlaceholder")}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-          />
-        </Field>
-      </Modal>
+        <button
+          type="button"
+          className="ag-account-button"
+          data-collapsed={collapsed ? "true" : "false"}
+          aria-label={`${t("account.menu")}: ${actor}`}
+        >
+          <span className="ag-account-avatar" aria-hidden="true">
+            {initial}
+          </span>
+          <span className="ag-account-copy">
+            <span className="ag-account-name">{actor}</span>
+            {summary && <span className="ag-account-meta">{summary}</span>}
+          </span>
+          <DownOutlined className="ag-account-caret" aria-hidden="true" />
+        </button>
+      </Dropdown>
+      <TokenDialog open={tokenDialog.open} onClose={tokenDialog.hide} />
     </>
   );
 }
@@ -313,6 +382,9 @@ export function AppLayout() {
   const { colorMode, t } = usePreferences();
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const openPalette = useCallback(() => setPaletteOpen(true), []);
+  useCommandPaletteShortcut(openPalette);
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return window.localStorage.getItem("ag:sider-collapsed") === "1";
@@ -481,6 +553,7 @@ export function AppLayout() {
         data-collapsed={collapsed ? "true" : "false"}
       >
         <BrandLockup collapsed={collapsed} />
+        <CommandTrigger collapsed={collapsed} onOpen={openPalette} />
         <Menu
           className="ag-nav ag-desktop-nav flex-1 border-0 bg-transparent"
           mode="inline"
@@ -494,6 +567,7 @@ export function AppLayout() {
           data-collapsed={collapsed ? "true" : "false"}
         >
           {capabilities.platformAdmin && <ConnectedVersion />}
+          {!collapsed && <PreferenceControls compact />}
           <Tooltip
             title={collapsed ? t("nav.expand") : t("nav.collapse")}
             placement="right"
@@ -508,6 +582,17 @@ export function AppLayout() {
               onClick={toggleCollapsed}
             />
           </Tooltip>
+        </div>
+        <div
+          className="ag-sider-account"
+          data-collapsed={collapsed ? "true" : "false"}
+        >
+          {collapsed && <PreferenceControls compact />}
+          <AccountMenu
+            identity={identity}
+            collapsed={collapsed}
+            onSignOut={clearToken}
+          />
         </div>
       </aside>
       <Drawer
@@ -536,7 +621,7 @@ export function AppLayout() {
         </div>
       </Drawer>
       <div className="ag-shell-main flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="ag-topbar sticky top-0 z-20 flex min-h-14 items-center gap-3 px-6">
+        <header className="ag-mobile-bar sticky top-0 z-20 flex min-h-14 items-center gap-2">
           <Button
             className="ag-mobile-nav-trigger"
             type="text"
@@ -545,25 +630,37 @@ export function AppLayout() {
             icon={<MenuOutlined />}
             onClick={() => setMobileNavOpen(true)}
           />
-          <GlobalSearchBox />
-          <Space className="ag-topbar-actions ml-auto" size={4}>
-            <PreferenceControls compact />
-            <TokenDialog />
+          <BrandLockup />
+          <Space className="ml-auto" size={4}>
             <Button
-              icon={<LoginOutlined />}
-              aria-label={t("auth.logout")}
-              onClick={clearToken}
-            >
-              <span className="ag-topbar-action-label">{t("auth.logout")}</span>
-            </Button>
+              type="text"
+              shape="circle"
+              className="ag-mobile-bar-action"
+              aria-label={t("palette.trigger")}
+              icon={<SearchOutlined />}
+              onClick={openPalette}
+            />
+            <PreferenceControls compact />
+            <AccountMenu identity={identity} collapsed onSignOut={clearToken} />
           </Space>
         </header>
-        <main className="ag-main mx-auto w-full max-w-[1440px] flex-1 px-6 py-6">
+        <main className="ag-main mx-auto w-full max-w-[1440px] flex-1 px-6 py-6 lg:px-10 lg:py-8">
           <div>
             <Outlet />
           </div>
         </main>
       </div>
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        pages={visibleNavItems.map((item) => ({
+          to: item.to,
+          label: t(item.label),
+          icon: item.icon,
+        }))}
+        canBrowseRepositories={capabilities.browseRepositories}
+        onSignOut={clearToken}
+      />
     </div>
   );
 }

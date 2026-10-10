@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Console shell v2: the top bar is replaced by a navigation rail that carries a ⌘K / Ctrl+K command palette (pages, repositories, artifact search, theme, language, sign-out), the connected node, theme and language controls, and an account menu that names the signed-in actor and authentication method. Token management and sign-out move into that menu.
+
 - Console design language v2 foundation: the built-in Gateway Dark and Light themes move to neutral hairline layering with a solid foreground primary action, reserving signal cyan for links, focus and current location. Geist and Geist Mono are self-hosted with the Console bundle. Formats and states render as a swatch or dot beside readable text, and Hosted/Proxy as neutral text. Extension Theme Packages and the package schema are unchanged.
 
 - Console changes are gated by a fully mocked visual baseline of the main surfaces in Gateway Dark and Light, rendered in the pinned Playwright container (`make console-visual`). Fixtures are type-checked against the generated client, end-to-end specs join the TypeScript build, and Console coverage floors rise to the current baseline with two stale per-file thresholds restored.
