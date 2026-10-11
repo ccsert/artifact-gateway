@@ -1,3 +1,4 @@
+import { hasPackageVersions } from "../../formats";
 import { useEffect, useMemo, useState } from "react";
 import { DownOutlined, LinkOutlined, UpOutlined } from "@ant-design/icons";
 import { Button, Descriptions, Input, Space, Tooltip } from "antd";
@@ -57,24 +58,14 @@ export function artifactTarget(hit: GlobalArtifactSearchHit): string {
   if (hit.buildNumber && hit.buildNumber > 0)
     params.set("build", String(hit.buildNumber));
   if (hit.format === "oci" && hit.digest) params.set("reference", hit.digest);
-  if (
-    (hit.format === "npm" ||
-      hit.format === "pypi" ||
-      hit.format === "go" ||
-      hit.format === "cargo") &&
-    hit.version
-  )
+  if (hasPackageVersions(hit.format) && hit.version)
     params.set("version", hit.version);
   return `/repositories/${hit.repositoryId}?${params.toString()}`;
 }
 
 export function artifactVersionSizeLabel(hit: GlobalArtifactSearchHit): string {
   const size = formatBytes(hit.size);
-  return (hit.format === "npm" ||
-    hit.format === "pypi" ||
-    hit.format === "go" ||
-    hit.format === "cargo") &&
-    hit.version
+  return hasPackageVersions(hit.format) && hit.version
     ? `${hit.version} · ${size}`
     : size;
 }

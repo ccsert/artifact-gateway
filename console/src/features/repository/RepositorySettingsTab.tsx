@@ -1,3 +1,4 @@
+import { formatDescriptor } from "../../formats";
 import { useState } from "react";
 import {
   Button,
@@ -75,13 +76,7 @@ export function RepositorySettingsTab({
   const [upstreamSecret, setUpstreamSecret] = useState("");
 
   const requiresHosts =
-    repo.format === "raw" ||
-    repo.format === "conan" ||
-    repo.format === "npm" ||
-    repo.format === "pypi" ||
-    repo.format === "go" ||
-    repo.format === "cargo" ||
-    repo.format === "apt";
+    formatDescriptor(repo.format)?.upstreamHostAllowList ?? false;
 
   const resetForm = () => {
     setEndpoint(repo.endpoint ?? "");

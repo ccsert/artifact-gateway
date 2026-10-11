@@ -1,3 +1,4 @@
+import { hasPackageVersions } from "../../formats";
 import {
   CheckOutlined,
   CopyOutlined,
@@ -228,10 +229,7 @@ export function PublicArtifactTable({
                     undefined,
                     undefined,
                     undefined,
-                    selectedRepository?.format === "npm" ||
-                      selectedRepository?.format === "pypi" ||
-                      selectedRepository?.format === "go" ||
-                      selectedRepository?.format === "cargo"
+                    hasPackageVersions(selectedRepository?.format)
                       ? (row.item.version ?? versionParam)
                       : undefined,
                   )

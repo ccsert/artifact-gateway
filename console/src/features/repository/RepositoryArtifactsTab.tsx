@@ -31,6 +31,7 @@ import { GoModuleDetail } from "../artifact-detail/GoModuleDetail";
 import { CargoCrateDetail } from "../artifact-detail/CargoCrateDetail";
 import { APTAssetDetail } from "../artifact-detail/APTAssetDetail";
 import { RawUploadDialog } from "./RawUploadDialog";
+import { formatDescriptor, supportsDirectoryBrowse } from "../../formats";
 import { useAuth } from "../../lib/auth";
 import {
   formatBytes,
@@ -40,7 +41,8 @@ import {
 } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import {
-  canonicalRawSearchPrefix,
+  artifactCoordinateForDisplay,
+  artifactSearchPrefix,
   decodeRawPathForDisplay,
 } from "../../lib/rawPath";
 import { mavenGA, mavenVersion } from "../../lib/usage";
@@ -110,10 +112,9 @@ export function RepositoryArtifactsTab({
 }) {
   const { token } = useAuth();
   const { text } = usePreferences();
+  const descriptor = formatDescriptor(repo.format);
   const [q, setQ] = useState(
-    repo.format === "raw"
-      ? decodeRawPathForDisplay(artifactTarget)
-      : artifactTarget,
+    artifactCoordinateForDisplay(repo.format, artifactTarget),
   );
   const [view, setView] = useState<"directory" | "list">("list");
   const [rows, setRows] = useState<ArtifactRow[]>([]);
@@ -127,7 +128,6 @@ export function RepositoryArtifactsTab({
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   const format = repo.format;
-  const cargoHosted = String(format) === "cargo" && repo.type === "hosted";
   const cargoRepository = format === "cargo";
   const proxyMaven = format === "maven" && repo.type === "proxy";
   const proxyNpm = format === "npm" && repo.type === "proxy";
@@ -136,9 +136,7 @@ export function RepositoryArtifactsTab({
   const proxyAPT = format === "apt" && repo.type === "proxy";
   const hostedAPT = format === "apt" && repo.type === "hosted";
   const canUploadRaw = canWrite && format === "raw" && repo.type !== "proxy";
-  const supportsDirectory =
-    (repo.type === "hosted" || repo.type === "proxy") &&
-    (format === "maven" || format === "raw" || cargoHosted);
+  const supportsDirectory = supportsDirectoryBrowse(format, repo.type);
 
   useEffect(() => {
     setView("list");
@@ -275,12 +273,7 @@ export function RepositoryArtifactsTab({
           });
           next = r.data?.nextPageToken;
         }
-      } else if (
-        format === "npm" ||
-        format === "pypi" ||
-        format === "go" ||
-        cargoRepository
-      ) {
+      } else if (descriptor?.packageVersions) {
         const r = await searchRepositoryArtifacts({
           path: { repositoryId: repo.id },
           query: { q: query || undefined, ...page },
@@ -312,13 +305,11 @@ export function RepositoryArtifactsTab({
             publisher: x.publisher,
           }));
         next = r.data?.nextPageToken;
-      } else if (format === "raw" || format === "apt") {
+      } else if (descriptor?.pathAddressed) {
         const r = await searchRepositoryArtifacts({
           path: { repositoryId: repo.id },
           query: {
-            q:
-              (format === "raw" ? canonicalRawSearchPrefix(query) : query) ||
-              undefined,
+            q: artifactSearchPrefix(format, query) || undefined,
             ...page,
           },
         });
@@ -356,7 +347,7 @@ export function RepositoryArtifactsTab({
     [
       repo.id,
       format,
-      cargoRepository,
+      descriptor,
       proxyMaven,
       proxyAssetFilter,
       artifactTarget,
@@ -367,37 +358,23 @@ export function RepositoryArtifactsTab({
   );
 
   useEffect(() => {
-    const targetQuery =
-      format === "raw"
-        ? decodeRawPathForDisplay(artifactTarget)
-        : proxyMaven
-          ? (assetTarget ?? artifactTarget)
-          : artifactTarget;
+    const targetQuery = proxyMaven
+      ? (assetTarget ?? artifactTarget)
+      : artifactCoordinateForDisplay(format, artifactTarget);
     setQ(targetQuery);
     void load(targetQuery);
   }, [artifactTarget, assetTarget, format, proxyMaven, load]);
 
-  const searchPlaceholder: Record<string, string> = {
-    oci: text("按镜像名前缀过滤…", "Filter by image name prefix…"),
-    maven: text("搜索 GAV 坐标…", "Search GAV coordinates…"),
-    conan: text("按引用名过滤…", "Filter by reference…"),
-    npm: text("按包名前缀过滤…", "Filter by package name prefix…"),
-    pypi: text("按项目名前缀过滤…", "Filter by project name prefix…"),
-    go: text("按模块路径前缀过滤…", "Filter by module path prefix…"),
-    cargo: text("搜索 crate 名称…", "Search crate names…"),
-    apt: text(
-      "按 dists/ 或 pool/ 路径过滤…",
-      "Filter by dists/ or pool/ path…",
-    ),
-    raw: text("搜索路径…", "Search paths…"),
-  };
+  const searchPlaceholder = descriptor
+    ? text(...descriptor.searchPlaceholder)
+    : undefined;
 
+  // Proxy Maven rows are cache entries, which carry no security summary.
   const showSecurityColumn =
-    format === "npm" ||
-    format === "pypi" ||
-    format === "go" ||
-    format === "raw" ||
-    (format === "maven" && Boolean(q) && !proxyMaven);
+    descriptor?.securityColumn === "always" ||
+    (descriptor?.securityColumn === "versionSearch" &&
+      Boolean(q) &&
+      !proxyMaven);
   const securityColumn: ColumnsType<ArtifactRow>[number] = {
     title: text("安全", "Security"),
     key: "intelligence",
@@ -407,11 +384,27 @@ export function RepositoryArtifactsTab({
     ),
   };
 
-  const columns: ColumnsType<ArtifactRow> =
-    format === "oci" || format === "conan"
+  const columns: ColumnsType<ArtifactRow> = descriptor?.nameListing
+    ? [
+        {
+          title: text("名称", "Name"),
+          dataIndex: "coordinate",
+          key: "coordinate",
+          ellipsis: true,
+          render: (value: string, record) => (
+            <span
+              className="font-mono text-xs text-fg"
+              title={record.coordinate}
+            >
+              {value}
+            </span>
+          ),
+        },
+      ]
+    : proxyMaven
       ? [
           {
-            title: text("名称", "Name"),
+            title: text("Maven 坐标", "Maven coordinate"),
             dataIndex: "coordinate",
             key: "coordinate",
             ellipsis: true,
@@ -424,15 +417,48 @@ export function RepositoryArtifactsTab({
               </span>
             ),
           },
+          {
+            title: text("文件", "Files"),
+            key: "fileCount",
+            width: 120,
+            render: (_, record) => (
+              <Badge tone="neutral">
+                {text(
+                  `${record.fileCount ?? record.files?.length ?? 0} 个文件`,
+                  `${record.fileCount ?? record.files?.length ?? 0} files`,
+                )}
+              </Badge>
+            ),
+          },
+          {
+            title: text("主文件大小", "Primary size"),
+            key: "size",
+            width: 140,
+            render: (_, record) => (
+              <span className="text-xs text-fg-secondary">
+                {formatBytes(record.size)}
+              </span>
+            ),
+          },
+          {
+            title: text("类型", "Type"),
+            dataIndex: "contentType",
+            key: "contentType",
+            width: 180,
+            ellipsis: true,
+            render: (value: string | undefined) => (
+              <span className="text-xs text-fg-tertiary">{value ?? "—"}</span>
+            ),
+          },
         ]
-      : proxyMaven
+      : format === "apt"
         ? [
             {
-              title: text("Maven 坐标", "Maven coordinate"),
+              title: text("APT 路径", "APT path"),
               dataIndex: "coordinate",
               key: "coordinate",
               ellipsis: true,
-              render: (value: string, record) => (
+              render: (value: string, record: ArtifactRow) => (
                 <span
                   className="font-mono text-xs text-fg"
                   title={record.coordinate}
@@ -442,47 +468,63 @@ export function RepositoryArtifactsTab({
               ),
             },
             {
-              title: text("文件", "Files"),
-              key: "fileCount",
-              width: 120,
-              render: (_, record) => (
-                <Badge tone="neutral">
-                  {text(
-                    `${record.fileCount ?? record.files?.length ?? 0} 个文件`,
-                    `${record.fileCount ?? record.files?.length ?? 0} files`,
-                  )}
-                </Badge>
-              ),
-            },
-            {
-              title: text("主文件大小", "Primary size"),
-              key: "size",
-              width: 140,
-              render: (_, record) => (
-                <span className="text-xs text-fg-secondary">
-                  {formatBytes(record.size)}
-                </span>
-              ),
-            },
-            {
-              title: text("类型", "Type"),
+              title: text("内容类型", "Content type"),
               dataIndex: "contentType",
               key: "contentType",
-              width: 180,
+              width: 220,
               ellipsis: true,
               render: (value: string | undefined) => (
                 <span className="text-xs text-fg-tertiary">{value ?? "—"}</span>
               ),
             },
+            {
+              title: text("大小", "Size"),
+              dataIndex: "size",
+              key: "size",
+              width: 120,
+              render: (value: number | undefined) => (
+                <span className="text-xs text-fg-secondary">
+                  {formatBytes(value)}
+                </span>
+              ),
+            },
+            {
+              title: text("摘要", "Digest"),
+              dataIndex: "digest",
+              key: "digest",
+              width: 180,
+              ellipsis: true,
+              render: (value: string | undefined) => (
+                <span
+                  className="font-mono text-xs text-fg-tertiary"
+                  title={value}
+                >
+                  {shortDigest(value)}
+                </span>
+              ),
+            },
+            {
+              title: proxyAPT
+                ? text("首次缓存", "First cached")
+                : text("已发布", "Published"),
+              dataIndex: "createdAt",
+              key: "createdAt",
+              width: 180,
+              render: (value: string | undefined) => (
+                <span className="whitespace-nowrap text-xs text-fg-tertiary">
+                  {formatDate(value)}
+                </span>
+              ),
+            },
           ]
-        : format === "apt"
+        : descriptor && (format === "maven" || descriptor.packageVersions)
           ? [
               {
-                title: text("APT 路径", "APT path"),
+                title: text(...descriptor.artifactColumn),
                 dataIndex: "coordinate",
                 key: "coordinate",
                 ellipsis: true,
-                render: (value: string, record: ArtifactRow) => (
+                render: (value: string, record) => (
                   <span
                     className="font-mono text-xs text-fg"
                     title={record.coordinate}
@@ -492,27 +534,61 @@ export function RepositoryArtifactsTab({
                 ),
               },
               {
-                title: text("内容类型", "Content type"),
-                dataIndex: "contentType",
-                key: "contentType",
-                width: 220,
-                ellipsis: true,
+                title: text("版本", "Versions"),
+                key: "versionCount",
+                width: 120,
+                render: (_, record) => (
+                  <Badge tone="neutral">
+                    {record.versionCount !== undefined
+                      ? text(
+                          `${record.versionCount} 个版本`,
+                          `${record.versionCount} versions`,
+                        )
+                      : text("展开查看", "Open to inspect")}
+                  </Badge>
+                ),
+              },
+              {
+                title: text("最新版本", "Latest version"),
+                dataIndex: "latestVersion",
+                key: "latestVersion",
+                width: 160,
                 render: (value: string | undefined) => (
-                  <span className="text-xs text-fg-tertiary">
+                  <span className="font-mono text-xs text-[var(--ag-content-secondary)]">
                     {value ?? "—"}
                   </span>
                 ),
               },
               {
-                title: text("大小", "Size"),
-                dataIndex: "size",
-                key: "size",
-                width: 120,
-                render: (value: number | undefined) => (
-                  <span className="text-xs text-fg-secondary">
-                    {formatBytes(value)}
+                title: text("更新时间", "Updated"),
+                dataIndex: "createdAt",
+                key: "createdAt",
+                width: 180,
+                render: (value: string | undefined) => (
+                  <span className="whitespace-nowrap text-xs text-fg-tertiary">
+                    {formatDate(value)}
                   </span>
                 ),
+              },
+              ...(showSecurityColumn ? [securityColumn] : []),
+            ]
+          : [
+              {
+                title: text("文件路径", "File path"),
+                dataIndex: "coordinate",
+                key: "coordinate",
+                ellipsis: true,
+                render: (value: string) => {
+                  const displayPath = decodeRawPathForDisplay(value);
+                  return (
+                    <span
+                      className="font-mono text-xs text-fg"
+                      title={displayPath}
+                    >
+                      {displayPath}
+                    </span>
+                  );
+                },
               },
               {
                 title: text("摘要", "Digest"),
@@ -530,9 +606,18 @@ export function RepositoryArtifactsTab({
                 ),
               },
               {
-                title: proxyAPT
-                  ? text("首次缓存", "First cached")
-                  : text("已发布", "Published"),
+                title: text("大小", "Size"),
+                dataIndex: "size",
+                key: "size",
+                width: 120,
+                render: (value: number | undefined) => (
+                  <span className="text-xs text-fg-secondary">
+                    {formatBytes(value)}
+                  </span>
+                ),
+              },
+              {
+                title: text("最后更新时间", "Last updated"),
                 dataIndex: "createdAt",
                 key: "createdAt",
                 width: 180,
@@ -542,132 +627,8 @@ export function RepositoryArtifactsTab({
                   </span>
                 ),
               },
-            ]
-          : format === "maven" ||
-              format === "npm" ||
-              format === "pypi" ||
-              format === "go" ||
-              cargoRepository
-            ? [
-                {
-                  title:
-                    format === "npm"
-                      ? text("包", "Package")
-                      : format === "pypi"
-                        ? text("项目", "Project")
-                        : format === "go"
-                          ? text("模块", "Module")
-                          : cargoRepository
-                            ? "Crate"
-                            : text("制品", "Artifact"),
-                  dataIndex: "coordinate",
-                  key: "coordinate",
-                  ellipsis: true,
-                  render: (value: string, record) => (
-                    <span
-                      className="font-mono text-xs text-fg"
-                      title={record.coordinate}
-                    >
-                      {value}
-                    </span>
-                  ),
-                },
-                {
-                  title: text("版本", "Versions"),
-                  key: "versionCount",
-                  width: 120,
-                  render: (_, record) => (
-                    <Badge tone="neutral">
-                      {record.versionCount !== undefined
-                        ? text(
-                            `${record.versionCount} 个版本`,
-                            `${record.versionCount} versions`,
-                          )
-                        : text("展开查看", "Open to inspect")}
-                    </Badge>
-                  ),
-                },
-                {
-                  title: text("最新版本", "Latest version"),
-                  dataIndex: "latestVersion",
-                  key: "latestVersion",
-                  width: 160,
-                  render: (value: string | undefined) => (
-                    <span className="font-mono text-xs text-[var(--ag-content-secondary)]">
-                      {value ?? "—"}
-                    </span>
-                  ),
-                },
-                {
-                  title: text("更新时间", "Updated"),
-                  dataIndex: "createdAt",
-                  key: "createdAt",
-                  width: 180,
-                  render: (value: string | undefined) => (
-                    <span className="whitespace-nowrap text-xs text-fg-tertiary">
-                      {formatDate(value)}
-                    </span>
-                  ),
-                },
-                ...(showSecurityColumn ? [securityColumn] : []),
-              ]
-            : [
-                {
-                  title: text("文件路径", "File path"),
-                  dataIndex: "coordinate",
-                  key: "coordinate",
-                  ellipsis: true,
-                  render: (value: string) => {
-                    const displayPath = decodeRawPathForDisplay(value);
-                    return (
-                      <span
-                        className="font-mono text-xs text-fg"
-                        title={displayPath}
-                      >
-                        {displayPath}
-                      </span>
-                    );
-                  },
-                },
-                {
-                  title: text("摘要", "Digest"),
-                  dataIndex: "digest",
-                  key: "digest",
-                  width: 180,
-                  ellipsis: true,
-                  render: (value: string | undefined) => (
-                    <span
-                      className="font-mono text-xs text-fg-tertiary"
-                      title={value}
-                    >
-                      {shortDigest(value)}
-                    </span>
-                  ),
-                },
-                {
-                  title: text("大小", "Size"),
-                  dataIndex: "size",
-                  key: "size",
-                  width: 120,
-                  render: (value: number | undefined) => (
-                    <span className="text-xs text-fg-secondary">
-                      {formatBytes(value)}
-                    </span>
-                  ),
-                },
-                {
-                  title: text("最后更新时间", "Last updated"),
-                  dataIndex: "createdAt",
-                  key: "createdAt",
-                  width: 180,
-                  render: (value: string | undefined) => (
-                    <span className="whitespace-nowrap text-xs text-fg-tertiary">
-                      {formatDate(value)}
-                    </span>
-                  ),
-                },
-                ...(showSecurityColumn ? [securityColumn] : []),
-              ];
+              ...(showSecurityColumn ? [securityColumn] : []),
+            ];
 
   const expandedRowRender = (r: ArtifactRow) => {
     if (format === "oci") {
@@ -857,10 +818,9 @@ export function RepositoryArtifactsTab({
               onBrowseArtifact(node);
               return;
             }
-            const query =
-              format === "raw"
-                ? decodeRawPathForDisplay(coordinate)
-                : (node.path ?? coordinate);
+            const query = descriptor?.encodedPaths
+              ? artifactCoordinateForDisplay(format, coordinate)
+              : (node.path ?? coordinate);
             setView("list");
             setQ(query);
             setExpandedImage(null);
@@ -896,7 +856,7 @@ export function RepositoryArtifactsTab({
         <Input.Search
           allowClear
           className="ag-artifact-view-search"
-          placeholder={searchPlaceholder[format] ?? text("搜索…", "Search…")}
+          placeholder={searchPlaceholder ?? text("搜索…", "Search…")}
           value={q}
           onChange={(e) => {
             const value = e.target.value;
@@ -1036,7 +996,7 @@ export function RepositoryArtifactsTab({
             columns={columns}
             pagination={false}
             scroll={{
-              x: format === "oci" || format === "conan" ? 520 : 980,
+              x: descriptor?.nameListing ? 520 : 980,
               y: "calc(100vh - 350px)",
             }}
             expandable={{

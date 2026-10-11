@@ -4,7 +4,7 @@ import type { ArtifactSummary } from "../../client";
 import { missingDeepLinkedArtifact } from "../../lib/publicBrowseModel";
 import { unwrap } from "../../lib/query/client";
 import { publicKeys } from "../../lib/query/keys";
-import { canonicalRawSearchPrefix } from "../../lib/rawPath";
+import { artifactSearchPrefix } from "../../lib/rawPath";
 import type { PublicRepository } from "./types";
 
 interface PublicRepositoryCatalogResponse {
@@ -85,9 +85,8 @@ export function usePublicArtifacts(
           path: { repositoryId },
           query: {
             q:
-              (repository?.format === "raw"
-                ? canonicalRawSearchPrefix(query)
-                : query) || undefined,
+              artifactSearchPrefix(repository?.format ?? "", query) ||
+              undefined,
             pageSize: 100,
           },
           signal,
