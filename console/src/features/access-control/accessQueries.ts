@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import {
   getAnonymousAccessPolicy,
+  listAuthorizationRoles,
+  listAuthorizationTemplates,
   listRepositories,
   listRepositoryGrants,
   listServiceAccounts,
@@ -106,4 +109,30 @@ export function useAccessDirectory() {
       for (const query of [...required, serviceAccounts]) void query.refetch();
     },
   };
+}
+
+/** Custom roles. The roles panel is their only writer and invalidates them. */
+export function useAuthorizationRoles() {
+  return useQuery({
+    queryKey: accessKeys.roles(),
+    queryFn: ({ signal }) => unwrap(listAuthorizationRoles({ signal })),
+  });
+}
+
+/** Saved templates. The templates panel is their only writer. */
+export function useAuthorizationTemplates() {
+  return useQuery({
+    queryKey: accessKeys.templates(),
+    queryFn: ({ signal }) => unwrap(listAuthorizationTemplates({ signal })),
+  });
+}
+
+/** Re-read one access list after a write. */
+export function useInvalidateAccess() {
+  const queryClient = useQueryClient();
+  return useCallback(
+    (queryKey: readonly unknown[]) =>
+      queryClient.invalidateQueries({ queryKey }),
+    [queryClient],
+  );
 }

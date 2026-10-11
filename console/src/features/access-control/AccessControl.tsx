@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Tabs } from "antd";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "../../components/ui/Layout";
@@ -51,7 +51,6 @@ export function AccessControlPage() {
   const publicRepositoryCount = directory.repositories.filter(
     (repository) => repository.anonymousRead,
   ).length;
-  const [rolesRevision, setRolesRevision] = useState(0);
 
   const principalOptions = useMemo<PrincipalOption[]>(() => {
     const options: PrincipalOption[] = [];
@@ -197,13 +196,10 @@ export function AccessControlPage() {
                     repositoryCount={directory.repositories.length}
                   />
                 </SectionBoundary>
-                <AuthorizationRolesPanel
-                  onChanged={() => setRolesRevision((value) => value + 1)}
-                />
+                <AuthorizationRolesPanel />
                 <AuthorizationTemplatesPanel
                   repositories={directory.repositories}
                   principalOptions={principalOptions}
-                  rolesRevision={rolesRevision}
                 />
               </div>
             ),

@@ -252,3 +252,103 @@ test("an API key is created, authenticates, and is revoked", async ({
     .click();
   await expect.poll(() => identityStatus(request, plaintext!)).toBe(401);
 });
+
+test("a custom role feeds a template that is applied to a repository", async ({
+  page,
+  request,
+}) => {
+  await authenticate(page);
+  const roleName = `e2e-role-${suffix}`;
+  const templateName = `e2e-template-${suffix}`;
+  const principal = `service-account:${grantAccountId}`;
+  const named = async (path: string, name: string) => {
+    const response = await request.get(path, { headers: admin() });
+    await expectOK(response, `list ${path}`);
+    return ((await response.json()) as Array<{ name: string }>).filter(
+      (item) => item.name === name,
+    );
+  };
+
+  await page.goto("/access?tab=policies");
+  await page.getByRole("button", { name: /新建角色/ }).click();
+  const roleDialog = page.getByRole("dialog", { name: "新建授权角色" });
+  await waitForModalOpen(roleDialog);
+  await roleDialog.getByLabel("角色名称").fill(roleName);
+  await roleDialog.getByLabel("仓库权限").click();
+  await page
+    .locator(".ant-select-item-option")
+    .filter({ hasText: "写入" })
+    .click();
+  await roleDialog.getByRole("button", { name: /^保\s*存$/ }).click();
+  await expect(roleDialog).toBeHidden();
+  await expect
+    .poll(
+      async () => (await named("/api/v2/authorization-roles", roleName)).length,
+    )
+    .toBe(1);
+
+  // The template editor reads the same roles list, so the new role is offered
+  // without reloading the page.
+  await page.getByRole("button", { name: /新建模板/ }).click();
+  const editor = page.getByRole("dialog", { name: "新建授权模板" });
+  await waitForModalOpen(editor);
+  await editor.getByPlaceholder("模板名称").fill(templateName);
+  await editor.getByRole("combobox").first().fill(principal);
+  await editor.getByText("自定义权限").click();
+  await page
+    .locator(".ant-select-item-option")
+    .filter({ hasText: roleName })
+    .click();
+  await editor.getByRole("button", { name: /^保\s*存$/ }).click();
+  await expect(editor).toBeHidden();
+  const templateRow = page.getByRole("row").filter({ hasText: templateName });
+  await expect(templateRow).toBeVisible();
+
+  await templateRow.getByRole("button", { name: /应\s*用/ }).click();
+  const apply = page.getByRole("dialog", { name: "应用授权模板" });
+  await waitForModalOpen(apply);
+  await apply.getByRole("combobox").click();
+  await page.keyboard.type(repositoryName);
+  await page
+    .locator(".ant-select-item-option")
+    .filter({ hasText: repositoryName })
+    .click();
+  await apply.getByRole("button", { name: /^应\s*用$/ }).click();
+  await expect(apply).toBeHidden();
+  await expect
+    .poll(async () => (await grantsFor(request, principal))[0]?.scopes)
+    .toEqual(
+      expect.arrayContaining(["repositories:read", "repositories:write"]),
+    );
+
+  // Applying refreshes the cross-repository list on the grants tab.
+  await page.getByRole("tab", { name: /授权记录/ }).click();
+  await expect(
+    page.getByRole("row").filter({ hasText: repositoryName }),
+  ).toBeVisible();
+
+  await page.getByRole("tab", { name: /策略与模板/ }).click();
+  await templateRow.getByRole("button", { name: "删除模板" }).click();
+  await page
+    .getByRole("button", { name: /^删\s*除$/ })
+    .last()
+    .click();
+  await expect(templateRow).toHaveCount(0);
+  expect(
+    await named("/api/v2/authorization-templates", templateName),
+  ).toHaveLength(0);
+
+  await page
+    .getByRole("row")
+    .filter({ hasText: roleName })
+    .getByRole("button", { name: "删除角色" })
+    .click();
+  await page
+    .getByRole("button", { name: /^删\s*除$/ })
+    .last()
+    .click();
+  await expect(page.getByRole("row").filter({ hasText: roleName })).toHaveCount(
+    0,
+  );
+  expect(await named("/api/v2/authorization-roles", roleName)).toHaveLength(0);
+});

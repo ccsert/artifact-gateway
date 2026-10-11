@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Button,
   Input,
@@ -18,7 +18,6 @@ import {
 import {
   createAuthorizationRole,
   deleteAuthorizationRole,
-  listAuthorizationRoles,
   updateAuthorizationRole,
 } from "../../client";
 import type { AuthorizationRole } from "../../client";
@@ -27,17 +26,19 @@ import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { Card, CardHeader } from "../../components/ui/Layout";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 import { Modal } from "../../components/ui/Modal";
+import { accessKeys } from "../../lib/query/keys";
+import { useAuthorizationRoles, useInvalidateAccess } from "./accessQueries";
 
 export type AuthorizationScope = AuthorizationRole["scopes"][number];
 
-type Props = {
-  onChanged?: () => void;
-};
-
-export function AuthorizationRolesPanel({ onChanged }: Props) {
+/** Custom roles, shared with the templates panel through the roles query. */
+export function AuthorizationRolesPanel() {
   const { text } = usePreferences();
-  const [roles, setRoles] = useState<AuthorizationRole[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const rolesQuery = useAuthorizationRoles();
+  const roles = rolesQuery.data ?? null;
+  const invalidate = useInvalidateAccess();
+  const [actionError, setActionError] = useState<unknown>(null);
+  const error = actionError ?? rolesQuery.error;
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<AuthorizationRole | null>(null);
   const [name, setName] = useState("");
@@ -56,24 +57,10 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
     { value: "repositories:admin", label: text("管理", "Admin") },
   ];
 
-  const load = useCallback(async () => {
-    setError(null);
-    const result = await listAuthorizationRoles();
-    if (result.error || !result.data) {
-      setError(
-        result.error ??
-          new Error(
-            text("加载授权角色失败", "Failed to load authorization roles"),
-          ),
-      );
-      return;
-    }
-    setRoles(result.data);
-  }, [text]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const load = async () => {
+    setActionError(null);
+    await invalidate(accessKeys.roles());
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -131,7 +118,6 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
       }
       setEditorOpen(false);
       await load();
-      onChanged?.();
     } catch (nextError) {
       setSaveError(nextError);
     } finally {
@@ -198,11 +184,10 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
                 path: { roleId: role.id },
               });
               if (result.error) {
-                setError(result.error);
+                setActionError(result.error);
                 return;
               }
               await load();
-              onChanged?.();
             }}
           >
             <Button
