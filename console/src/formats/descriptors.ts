@@ -1,9 +1,15 @@
 import type { Format } from "../client";
-import { goProxyURL, npmRegistryURL, pypiIndexURL } from "../lib/usage";
+import {
+  goProxyURL,
+  mavenGA,
+  npmRegistryURL,
+  pypiIndexURL,
+} from "../lib/usage";
 import type { FormatDescriptor } from "./types";
 
 const base = {
   packageVersions: false,
+  versionColumns: false,
   pathAddressed: false,
   encodedPaths: false,
   nameListing: false,
@@ -13,6 +19,18 @@ const base = {
   searchDetail: true,
   publicDetail: false,
   publishGuide: false,
+  assetColumns: false,
+  consoleUpload: false,
+  emptyHint: {},
+  strictPublicationSetting: false,
+  upstreamAuthentication: false,
+  retentionModel: "versions",
+  separateAssetPath: false,
+  signedIndexes: false,
+  hostedOnlyJobs: false,
+  distributionSuite: false,
+  digestReferences: false,
+  publicArtifactColumn: "coordinate",
 } as const satisfies Partial<FormatDescriptor>;
 
 /**
@@ -28,6 +46,9 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     nameListing: true,
     upstreamHostAllowList: false,
     publishGuide: true,
+    digestReferences: true,
+    publicArtifactColumn: "image",
+    publicVersionSource: "ociTags",
   },
   maven: {
     ...base,
@@ -39,6 +60,18 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     securityColumn: "versionSearch",
     searchDetail: false,
     publishGuide: true,
+    emptyHint: {
+      proxy: [
+        "通过 Maven 客户端拉取依赖后会显示代理缓存",
+        "The proxy cache appears after a Maven client retrieves dependencies.",
+      ],
+    },
+    versionColumns: true,
+    strictPublicationSetting: true,
+    retentionModel: "snapshots",
+    separateAssetPath: true,
+    groupKey: mavenGA,
+    publicGrouping: "mavenBuilds",
   },
   npm: {
     ...base,
@@ -46,6 +79,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     artifactColumn: ["包", "Package"],
     searchPlaceholder: ["按包名前缀过滤…", "Filter by package name prefix…"],
     packageVersions: true,
+    versionColumns: true,
     securityColumn: "always",
     publicDetail: true,
     groupEndpoint: (name) => ({
@@ -53,6 +87,12 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
       label: `/npm/${name}/`,
     }),
     publishGuide: true,
+    emptyHint: {
+      proxy: [
+        "通过 npm install 拉取包后会显示上游元数据与缓存状态",
+        "Upstream metadata and cache status appear after npm install retrieves a package.",
+      ],
+    },
   },
   pypi: {
     ...base,
@@ -60,6 +100,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     artifactColumn: ["项目", "Project"],
     searchPlaceholder: ["按项目名前缀过滤…", "Filter by project name prefix…"],
     packageVersions: true,
+    versionColumns: true,
     securityColumn: "always",
     publicDetail: true,
     groupEndpoint: (name) => ({
@@ -67,6 +108,12 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
       label: `/pypi/${name}/simple/`,
     }),
     publishGuide: true,
+    emptyHint: {
+      proxy: [
+        "通过 pip install 拉取项目后会显示上游文件与缓存状态",
+        "Upstream files and cache status appear after pip install retrieves a project.",
+      ],
+    },
   },
   go: {
     ...base,
@@ -74,12 +121,20 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     artifactColumn: ["模块", "Module"],
     searchPlaceholder: ["按模块路径前缀过滤…", "Filter by module path prefix…"],
     packageVersions: true,
+    versionColumns: true,
     securityColumn: "always",
     publicDetail: true,
     groupEndpoint: (name) => ({
       value: goProxyURL(name),
       label: `/go/${name}`,
     }),
+    emptyHint: {
+      proxy: [
+        "通过 go mod download 拉取模块后会显示上游版本与缓存资产",
+        "Upstream versions and cached assets appear after go mod download retrieves a module.",
+      ],
+    },
+    upstreamAuthentication: true,
   },
   cargo: {
     ...base,
@@ -87,6 +142,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     artifactColumn: ["Crate", "Crate"],
     searchPlaceholder: ["搜索 crate 名称…", "Search crate names…"],
     packageVersions: true,
+    versionColumns: true,
     directoryBrowse: ["hosted"],
     publicDetail: true,
     groupEndpoint: (name) => ({
@@ -101,6 +157,8 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     artifactColumn: ["名称", "Name"],
     searchPlaceholder: ["按引用名过滤…", "Filter by reference…"],
     nameListing: true,
+    publicVersionSource: "conanRevisions",
+    publicGrouping: "conanRevisions",
   },
   raw: {
     ...base,
@@ -111,6 +169,8 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     encodedPaths: true,
     directoryBrowse: ["hosted", "proxy", "group"],
     securityColumn: "always",
+    consoleUpload: true,
+    retentionModel: "paths",
   },
   apt: {
     ...base,
@@ -123,5 +183,20 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     pathAddressed: true,
     publicDetail: true,
     searchDetail: false,
+    assetColumns: true,
+    emptyHint: {
+      proxy: [
+        "通过 apt update、apt install 或直接请求 APT 路径后会显示代理缓存",
+        "The proxy cache appears after apt update, apt install, or a direct APT path request.",
+      ],
+      hosted: [
+        "通过发布会话上传 .deb，并提交签名快照后会显示当前可见版本",
+        "Upload .deb files through publication sessions and publish a signed snapshot to display the current visible version.",
+      ],
+    },
+    signedIndexes: true,
+    hostedOnlyJobs: true,
+    distributionSuite: true,
+    publicArtifactColumn: "aptPath",
   },
 };

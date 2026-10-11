@@ -2,13 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { FolderOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import { Button, Input, Segmented, Select } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-  listConanReferences,
-  listMavenCoordinates,
-  listOciImages,
-  listProxyCacheEntries,
-  searchRepositoryArtifacts,
-} from "../../client";
+import { listProxyCacheEntries } from "../../client";
 import type { BrowseNode, Repository } from "../../client";
 import { Badge } from "../../components/ui/Badge";
 import { ArtifactSecurityBadge } from "../artifact-detail/ArtifactSecurityBadge";
@@ -22,10 +16,10 @@ import { Pagination } from "../../components/ui/Layout";
 import { RawUploadDialog } from "./RawUploadDialog";
 import {
   artifactCoordinateForDisplay,
-  artifactSearchPrefix,
   formatDescriptor,
   supportsDirectoryBrowse,
 } from "../../formats";
+import { listArtifactPage, type ArtifactPage } from "../../formats/listers";
 import { formatViews } from "../../formats/views";
 import { useAuth } from "../../lib/auth";
 import {
@@ -36,7 +30,6 @@ import {
 } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { decodeRawPathForDisplay } from "../../lib/rawPath";
-import { mavenGA, mavenVersion } from "../../lib/usage";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 import { RepositoryBrowseTree } from "./RepositoryBrowseTree";
 import {
@@ -48,34 +41,54 @@ import {
 import type { ArtifactRow } from "./artifactRow";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
-async function fetchMavenArtifactPage(
+/** The proxy cache answered without a page; shown as its own message. */
+const PROXY_CACHE_UNAVAILABLE = Symbol("proxy-cache-unavailable");
+
+/** One page of a Maven proxy's cache, grouped by version. */
+async function listProxyMavenPage(
   repositoryId: string,
   query: string,
+  assetFilter: ProxyMavenAssetFilter | "all",
   pageToken?: string,
-): Promise<{
-  items: ArtifactRow[];
-  nextPageToken?: string;
-  error: unknown;
-}> {
-  const response = await searchRepositoryArtifacts({
-    path: { repositoryId },
-    query: { q: query, pageSize: 50, pageToken },
-  });
-  return {
-    items: (response.data?.items ?? []).map((item) => ({
-      key: `${item.coordinate}-${item.buildNumber ?? 0}`,
-      coordinate: item.coordinate,
-      digest: item.digest,
-      createdAt: item.createdAt,
-      size: item.size,
-      contentType: item.contentType,
-      publisher: item.publisher,
-      buildNumber: item.buildNumber,
-      intelligence: item.intelligence,
-    })),
-    nextPageToken: response.data?.nextPageToken,
-    error: response.error,
-  };
+): Promise<ArtifactPage & { totalEstimate?: number }> {
+  try {
+    const { data: pageData, error: requestError } = await listProxyCacheEntries(
+      {
+        path: { repositoryId },
+        query: {
+          groupBy: "version",
+          assetFilter,
+          q: query || undefined,
+          pageSize: PROXY_MAVEN_PAGE_SIZE,
+          pageToken,
+        },
+      },
+    );
+    if (requestError || !pageData) {
+      return { items: [], error: PROXY_CACHE_UNAVAILABLE };
+    }
+    return {
+      items: pageData.items.map((item) => {
+        const primary = item.assets?.filter((asset) => !asset.sidecar) ?? [];
+        return {
+          key: item.key,
+          coordinate: item.coordinate,
+          latestVersion: item.version,
+          size: item.size,
+          contentType: item.extensions?.join(", ") || item.contentType,
+          publisher: item.member,
+          fileCount: item.assetCount,
+          primaryFiles: primary.map((asset) => asset.name),
+          files: item.assets,
+        } satisfies ArtifactRow;
+      }),
+      nextPageToken: pageData.nextPageToken,
+      totalEstimate: pageData.totalEstimate,
+      error: null,
+    };
+  } catch (error) {
+    return { items: [], error };
+  }
 }
 
 export function RepositoryArtifactsTab({
@@ -120,12 +133,12 @@ export function RepositoryArtifactsTab({
 
   const format = repo.format;
   const proxyMaven = format === "maven" && repo.type === "proxy";
-  const proxyNpm = format === "npm" && repo.type === "proxy";
-  const proxyPyPI = format === "pypi" && repo.type === "proxy";
-  const proxyGo = format === "go" && repo.type === "proxy";
-  const proxyAPT = format === "apt" && repo.type === "proxy";
-  const hostedAPT = format === "apt" && repo.type === "hosted";
-  const canUploadRaw = canWrite && format === "raw" && repo.type !== "proxy";
+  const canUploadRaw =
+    canWrite && Boolean(descriptor?.consoleUpload) && repo.type !== "proxy";
+  const emptyHint =
+    repo.type === "hosted" || repo.type === "proxy"
+      ? descriptor?.emptyHint[repo.type]
+      : undefined;
   const supportsDirectory = supportsDirectoryBrowse(format, repo.type);
 
   useEffect(() => {
@@ -138,184 +151,32 @@ export function RepositoryArtifactsTab({
         setLoading(true);
         setError(null);
       }
-      const page = { pageSize: 50, pageToken };
-      let items: ArtifactRow[] = [];
-      let next: string | undefined;
-      let err: unknown = null;
-
-      if (format === "oci") {
-        const r = await listOciImages({
-          path: { repositoryId: repo.id },
-          query: { q: query || undefined, ...page },
-        });
-        err = r.error;
-        items = (r.data?.items ?? []).map((x) => ({
-          key: x.name,
-          coordinate: x.name,
-        }));
-        next = r.data?.nextPageToken;
-      } else if (format === "maven") {
-        if (proxyMaven) {
-          try {
-            const { data: pageData, error: requestError } =
-              await listProxyCacheEntries({
-                path: { repositoryId: repo.id },
-                query: {
-                  groupBy: "version",
-                  assetFilter: assetTarget ? "all" : proxyAssetFilter,
-                  q: query || undefined,
-                  pageSize: PROXY_MAVEN_PAGE_SIZE,
-                  pageToken,
-                },
-              });
-            if (requestError || !pageData)
-              throw new Error(
-                text("读取 Proxy 缓存失败", "Failed to load proxy cache"),
-              );
-            setProxyTotal(pageData.totalEstimate);
-            items = pageData.items.map((item) => {
-              const primary =
-                item.assets?.filter((asset) => !asset.sidecar) ?? [];
-              return {
-                key: item.key,
-                coordinate: item.coordinate,
-                latestVersion: item.version,
-                size: item.size,
-                contentType: item.extensions?.join(", ") || item.contentType,
-                publisher: item.member,
-                fileCount: item.assetCount,
-                primaryFiles: primary.map((asset) => asset.name),
-                files: item.assets,
-              } satisfies ArtifactRow;
-            });
-            next = pageData.nextPageToken;
-            setProxyPage((current) => (pageToken ? current + 1 : 1));
-          } catch (e) {
-            err = e;
-          }
-        } else if (query) {
-          let result = await fetchMavenArtifactPage(repo.id, query, pageToken);
-          err = result.error;
-          items = result.items;
-          next = result.nextPageToken;
-          if (!pageToken && artifactTarget && buildTarget && !err) {
-            let target = items.find(
-              (item) =>
-                item.coordinate === artifactTarget &&
-                item.buildNumber === buildTarget,
-            );
-            while (!target && next) {
-              result = await fetchMavenArtifactPage(repo.id, query, next);
-              if (result.error) {
-                err = result.error;
-                break;
-              }
-              target = result.items.find(
-                (item) =>
-                  item.coordinate === artifactTarget &&
-                  item.buildNumber === buildTarget,
-              );
-              next = result.nextPageToken;
-            }
-            if (target) {
-              items = [target];
-              next = undefined;
-            }
-          }
-        } else {
-          const r = await listMavenCoordinates({
-            path: { repositoryId: repo.id },
-            query: page,
-          });
-          err = r.error;
-          // 按 group:artifact 聚合：每个制品一行，显示版本数与最新版本
-          const byGA = new Map<
-            string,
-            {
-              versions: {
-                coordinate: string;
-                digest?: string;
-                createdAt?: string;
-                publisher?: string;
-              }[];
-            }
-          >();
-          for (const x of r.data?.items ?? []) {
-            const ga = mavenGA(x.coordinate) ?? x.coordinate;
-            if (!byGA.has(ga)) byGA.set(ga, { versions: [] });
-            byGA.get(ga)!.versions.push(x);
-          }
-          items = Array.from(byGA.entries()).map(([ga, { versions }]) => {
-            const sorted = [...versions].sort((a, b) =>
-              (b.createdAt ?? "").localeCompare(a.createdAt ?? ""),
-            );
-            const latest = sorted[0];
-            return {
-              key: ga,
-              coordinate: ga,
-              digest: latest?.digest,
-              createdAt: latest?.createdAt,
-              publisher: latest?.publisher,
-              versionCount: versions.length,
-              latestVersion:
-                mavenVersion(latest?.coordinate ?? "") ?? undefined,
-            };
-          });
-          next = r.data?.nextPageToken;
-        }
-      } else if (descriptor?.packageVersions) {
-        const r = await searchRepositoryArtifacts({
-          path: { repositoryId: repo.id },
-          query: { q: query || undefined, ...page },
-        });
-        err = r.error;
-        items = (r.data?.items ?? []).map((item) => ({
-          key: item.coordinate,
-          coordinate: item.coordinate,
-          digest: item.digest,
-          createdAt: item.createdAt,
-          size: item.size,
-          publisher: item.publisher,
-          intelligence: item.intelligence,
-          versionCount: item.versionCount,
-          latestVersion: item.version,
-        }));
-        next = r.data?.nextPageToken;
-      } else if (format === "conan") {
-        const r = await listConanReferences({
-          path: { repositoryId: repo.id },
-          query: page,
-        });
-        err = r.error;
-        items = (r.data?.items ?? [])
-          .filter((x) => !query || x.reference.includes(query))
-          .map((x) => ({
-            key: x.reference,
-            coordinate: x.reference,
-            publisher: x.publisher,
-          }));
-        next = r.data?.nextPageToken;
-      } else if (descriptor?.pathAddressed) {
-        const r = await searchRepositoryArtifacts({
-          path: { repositoryId: repo.id },
-          query: {
-            q: artifactSearchPrefix(format, query) || undefined,
-            ...page,
-          },
-        });
-        err = r.error;
-        items = (r.data?.items ?? []).map((x, i) => ({
-          key: `${x.coordinate}-${i}`,
-          coordinate: x.coordinate,
-          digest: x.digest,
-          createdAt: x.createdAt,
-          size: x.size,
-          contentType: x.contentType,
-          cachedAt: x.cachedAt,
-          sourceUrl: x.sourceUrl,
-          intelligence: x.intelligence,
-        }));
-        next = r.data?.nextPageToken;
+      // One await for either source: the proxy cache or the format's list.
+      const result: ArtifactPage & { totalEstimate?: number } =
+        await (proxyMaven
+          ? listProxyMavenPage(
+              repo.id,
+              query,
+              assetTarget ? "all" : proxyAssetFilter,
+              pageToken,
+            )
+          : listArtifactPage(format, {
+              repositoryId: repo.id,
+              query,
+              pageToken,
+              pageSize: 50,
+              artifactTarget,
+              buildTarget,
+            }));
+      const err =
+        result.error === PROXY_CACHE_UNAVAILABLE
+          ? new Error(text("读取 Proxy 缓存失败", "Failed to load proxy cache"))
+          : result.error;
+      const items = result.items;
+      const next = result.nextPageToken;
+      if (proxyMaven && !err) {
+        setProxyTotal(result.totalEstimate ?? 0);
+        setProxyPage((current) => (pageToken ? current + 1 : 1));
       }
 
       setLoading(false);
@@ -337,13 +198,15 @@ export function RepositoryArtifactsTab({
     [
       repo.id,
       format,
-      descriptor,
       proxyMaven,
       proxyAssetFilter,
       artifactTarget,
       buildTarget,
       assetTarget,
       text,
+      // A state setter never changes; the React Compiler infers it as a
+      // dependency of this callback, and listing it keeps the memoization.
+      setExpandedImage,
     ],
   );
 
@@ -441,7 +304,7 @@ export function RepositoryArtifactsTab({
             ),
           },
         ]
-      : format === "apt"
+      : descriptor?.assetColumns
         ? [
             {
               title: text("APT 路径", "APT path"),
@@ -494,9 +357,10 @@ export function RepositoryArtifactsTab({
               ),
             },
             {
-              title: proxyAPT
-                ? text("首次缓存", "First cached")
-                : text("已发布", "Published"),
+              title:
+                repo.type === "proxy"
+                  ? text("首次缓存", "First cached")
+                  : text("已发布", "Published"),
               dataIndex: "createdAt",
               key: "createdAt",
               width: 180,
@@ -507,7 +371,7 @@ export function RepositoryArtifactsTab({
               ),
             },
           ]
-        : descriptor && (format === "maven" || descriptor.packageVersions)
+        : descriptor?.versionColumns
           ? [
               {
                 title: text(...descriptor.artifactColumn),
@@ -805,40 +669,12 @@ export function RepositoryArtifactsTab({
             hint={
               q
                 ? text("换个关键词试试", "Try a different search term")
-                : proxyMaven
-                  ? text(
-                      "通过 Maven 客户端拉取依赖后会显示代理缓存",
-                      "The proxy cache appears after a Maven client retrieves dependencies.",
+                : emptyHint
+                  ? text(...emptyHint)
+                  : text(
+                      `通过 ${format} 客户端推送制品后会显示在这里`,
+                      "Push artifacts with the matching client to display them here.",
                     )
-                  : proxyNpm
-                    ? text(
-                        "通过 npm install 拉取包后会显示上游元数据与缓存状态",
-                        "Upstream metadata and cache status appear after npm install retrieves a package.",
-                      )
-                    : proxyPyPI
-                      ? text(
-                          "通过 pip install 拉取项目后会显示上游文件与缓存状态",
-                          "Upstream files and cache status appear after pip install retrieves a project.",
-                        )
-                      : proxyGo
-                        ? text(
-                            "通过 go mod download 拉取模块后会显示上游版本与缓存资产",
-                            "Upstream versions and cached assets appear after go mod download retrieves a module.",
-                          )
-                        : proxyAPT
-                          ? text(
-                              "通过 apt update、apt install 或直接请求 APT 路径后会显示代理缓存",
-                              "The proxy cache appears after apt update, apt install, or a direct APT path request.",
-                            )
-                          : hostedAPT
-                            ? text(
-                                "通过发布会话上传 .deb，并提交签名快照后会显示当前可见版本",
-                                "Upload .deb files through publication sessions and publish a signed snapshot to display the current visible version.",
-                              )
-                            : text(
-                                `通过 ${format} 客户端推送制品后会显示在这里`,
-                                "Push artifacts with the matching client to display them here.",
-                              )
             }
           />
         </>

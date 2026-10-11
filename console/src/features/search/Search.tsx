@@ -16,7 +16,7 @@ import { Loading, ErrorBanner, EmptyState } from "../../components/ui/Feedback";
 import { Badge, FormatBadge } from "../../components/ui/Badge";
 import { ArtifactSecurityBadge } from "../artifact-detail/ArtifactSecurityBadge";
 import { formatBytes, formatDate } from "../../lib/format";
-import { mavenGA, mavenVersion } from "../../lib/usage";
+import { mavenVersion } from "../../lib/usage";
 import { MavenArtifactDetail } from "../artifact-detail/ArtifactRowDetail";
 import {
   ConsoleTable,
@@ -45,14 +45,15 @@ type SearchTableRow = {
 };
 
 function isMavenGroup(row: SearchRow): row is MavenGroup {
-  return row.format === "maven" && "hits" in row;
+  return "hits" in row;
 }
 
 export function artifactTarget(hit: GlobalArtifactSearchHit): string {
   const params = new URLSearchParams({ artifact: hit.coordinate });
   if (hit.buildNumber && hit.buildNumber > 0)
     params.set("build", String(hit.buildNumber));
-  if (hit.format === "oci" && hit.digest) params.set("reference", hit.digest);
+  if (formatDescriptor(hit.format)?.digestReferences && hit.digest)
+    params.set("reference", hit.digest);
   if (hasPackageVersions(hit.format) && hit.version)
     params.set("version", hit.version);
   return `/repositories/${hit.repositoryId}?${params.toString()}`;
@@ -69,7 +70,7 @@ function buildRows(hits: GlobalArtifactSearchHit[]): SearchRow[] {
   const rows: SearchRow[] = [];
   const groups = new Map<string, MavenGroup>();
   for (const hit of hits) {
-    const ga = hit.format === "maven" ? mavenGA(hit.coordinate) : null;
+    const ga = formatDescriptor(hit.format)?.groupKey?.(hit.coordinate) ?? null;
     if (!ga) {
       rows.push(hit);
       continue;

@@ -34,6 +34,7 @@ import {
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
+import { formatDescriptor } from "../../formats";
 
 function securityReason(
   reason: string,
@@ -88,6 +89,8 @@ export function RepositoryDistributionTab({
   disabled?: boolean;
 }) {
   const { text } = usePreferences();
+  // APT promotes and replicates into a named distribution suite.
+  const suiteTarget = Boolean(formatDescriptor(repo.format)?.distributionSuite);
   const [repos, setRepos] = useState<Repository[]>([]);
   const [targetId, setTargetId] = useState("");
   const [aptTargetSuite, setAptTargetSuite] = useState("");
@@ -186,7 +189,7 @@ export function RepositoryDistributionTab({
     if (
       submitting.current ||
       disabled ||
-      (repo.format === "apt" && !aptTargetSuite.trim())
+      (suiteTarget && !aptTargetSuite.trim())
     )
       return;
     submitting.current = true;
@@ -197,9 +200,7 @@ export function RepositoryDistributionTab({
       targetRepositoryId: targetId,
       coordinate: coordinate.trim(),
       digest: digest.trim(),
-      ...(repo.format === "apt"
-        ? { aptTargetSuite: aptTargetSuite.trim() }
-        : {}),
+      ...(suiteTarget ? { aptTargetSuite: aptTargetSuite.trim() } : {}),
     };
     const identity = JSON.stringify([kind, body]);
     try {
@@ -323,7 +324,7 @@ export function RepositoryDistributionTab({
     return <ErrorBanner error={error} onRetry={load} />;
 
   const planColumns: ColumnsType<ReplicationPlan> = [
-    ...(repo.format === "apt"
+    ...(suiteTarget
       ? [
           {
             title: text("目标套件", "Target suite"),
@@ -589,7 +590,7 @@ export function RepositoryDistributionTab({
           </Field>
         </div>
 
-        {repo.format === "apt" && (
+        {suiteTarget && (
           <div className="ag-apt-distribution-scope">
             <Field
               label={text("目标发行套件", "Target suite")}
@@ -697,7 +698,7 @@ export function RepositoryDistributionTab({
                 busy !== null ||
                 promotionBlocked ||
                 evaluating ||
-                (repo.format === "apt" && !aptTargetSuite.trim()) ||
+                (suiteTarget && !aptTargetSuite.trim()) ||
                 !targetId ||
                 !coordinate.trim() ||
                 !digest.trim()
@@ -713,7 +714,7 @@ export function RepositoryDistributionTab({
                 busy !== null ||
                 artifactQuarantined ||
                 evaluating ||
-                (repo.format === "apt" && !aptTargetSuite.trim()) ||
+                (suiteTarget && !aptTargetSuite.trim()) ||
                 !targetId ||
                 !coordinate.trim() ||
                 !digest.trim()

@@ -32,6 +32,7 @@ import {
 } from "./publicBrowseQueries";
 import { PUBLIC_FORMAT_ORDER } from "./publicFormats";
 import { usePublicVersionPages } from "./usePublicVersionPages";
+import { formatDescriptor } from "../../formats";
 
 /**
  * Anonymous browsing of public repositories (issue 275 split): this page owns
@@ -113,17 +114,20 @@ export function PublicBrowsePage() {
     });
   }, [catalogFormat, catalogQuery, repositories]);
 
+  const versionSource = formatDescriptor(
+    selectedRepository?.format,
+  )?.publicVersionSource;
   useEffect(() => {
     if (
       !artifactParam ||
       !items?.some((item) => item?.coordinate === artifactParam)
     )
       return;
-    if (selectedRepository?.format === "oci" && !ociTagPages[artifactParam]) {
+    if (versionSource === "ociTags" && !ociTagPages[artifactParam]) {
       void loadOciTags(artifactParam);
     }
     if (
-      selectedRepository?.format === "conan" &&
+      versionSource === "conanRevisions" &&
       !conanRevisionPages[artifactParam]
     ) {
       if (revisionParam) setProtocolVersionFilter(revisionParam);
@@ -137,7 +141,7 @@ export function PublicBrowsePage() {
     loadOciTags,
     ociTagPages,
     revisionParam,
-    selectedRepository?.format,
+    versionSource,
   ]);
 
   const submit = (event: FormEvent) => {

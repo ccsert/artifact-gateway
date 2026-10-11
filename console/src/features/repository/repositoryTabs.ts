@@ -1,4 +1,5 @@
 import type { Repository } from "../../client";
+import { formatDescriptor } from "../../formats";
 
 /**
  * The authority a tab's data and actions need on the repository. The server
@@ -181,6 +182,10 @@ export function repositoryTabAvailable(
     (!item.formats || item.formats.includes(repo.format)) &&
     (!item.hostedOnly || repo.type === "hosted") &&
     !(item.key === "publish" && repo.type === "proxy") &&
-    !(repo.format === "apt" && item.key === "jobs" && repo.type !== "hosted")
+    !(
+      item.key === "jobs" &&
+      formatDescriptor(repo.format)?.hostedOnlyJobs &&
+      repo.type !== "hosted"
+    )
   );
 }

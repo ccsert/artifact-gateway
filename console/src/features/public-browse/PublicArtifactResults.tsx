@@ -19,6 +19,7 @@ import {
   type PublicArtifactTableRow,
 } from "./publicArtifactRows";
 import type { PublicRepository } from "./types";
+import { formatDescriptor } from "../../formats";
 
 export interface PublicBrowseActions {
   artifactHref: (
@@ -124,14 +125,11 @@ export function PublicArtifactResults({
     setSelectedConanReferences({});
   }, [selectedRepository?.id]);
 
+  const grouping = formatDescriptor(selectedRepository?.format)?.publicGrouping;
   const groupedItems =
-    selectedRepository?.format === "maven"
-      ? mavenArtifactGroups(items ?? [])
-      : null;
+    grouping === "mavenBuilds" ? mavenArtifactGroups(items ?? []) : null;
   const groupedConanItems =
-    selectedRepository?.format === "conan"
-      ? conanArtifactGroups(items ?? [])
-      : null;
+    grouping === "conanRevisions" ? conanArtifactGroups(items ?? []) : null;
   const artifactTableRows = buildPublicArtifactRows({
     ...artifactRowOptions,
     items: items ?? [],

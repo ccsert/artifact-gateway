@@ -75,8 +75,8 @@ export function RepositorySettingsTab({
   );
   const [upstreamSecret, setUpstreamSecret] = useState("");
 
-  const requiresHosts =
-    formatDescriptor(repo.format)?.upstreamHostAllowList ?? false;
+  const descriptor = formatDescriptor(repo.format);
+  const requiresHosts = descriptor?.upstreamHostAllowList ?? false;
 
   const resetForm = () => {
     setEndpoint(repo.endpoint ?? "");
@@ -148,7 +148,7 @@ export function RepositorySettingsTab({
         headers: { "If-Match": repo.version },
         body: {
           anonymousRead,
-          ...(repo.type === "hosted" && repo.format === "maven"
+          ...(repo.type === "hosted" && descriptor?.strictPublicationSetting
             ? { mavenStrictPublication }
             : {}),
           ...(repo.type === "proxy"
@@ -156,7 +156,7 @@ export function RepositorySettingsTab({
                 endpoint: endpoint.trim(),
                 allowedHosts,
                 egressProxy: buildEgressProxyBody(),
-                ...(repo.format === "go"
+                ...(descriptor?.upstreamAuthentication
                   ? { upstreamAuth: buildUpstreamAuthBody() }
                   : {}),
               }
@@ -235,7 +235,7 @@ export function RepositorySettingsTab({
             aria-label={text("允许匿名读取", "Allow anonymous reads")}
           />
         </div>
-        {repo.type === "hosted" && repo.format === "maven" && (
+        {repo.type === "hosted" && descriptor?.strictPublicationSetting && (
           <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-line bg-surface-translucent px-4 py-3">
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium text-fg">
@@ -500,7 +500,7 @@ export function RepositorySettingsTab({
                   ))}
               </div>
             </div>
-            {repo.format === "go" && (
+            {descriptor?.upstreamAuthentication && (
               <div className="rounded-lg border border-line bg-surface-translucent px-4 py-3">
                 <div className="text-sm font-medium text-fg">
                   {text("上游认证", "Upstream authentication")}

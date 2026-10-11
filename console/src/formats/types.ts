@@ -25,6 +25,11 @@ export interface FormatDescriptor {
    * (npm, PyPI, Go, Cargo); links carry the selected version.
    */
   packageVersions: boolean;
+  /**
+   * Artifact tables show a version count and the newest version (Maven and
+   * the package formats).
+   */
+  versionColumns: boolean;
   /** Artifacts are addressed by repository path (Raw, APT). */
   pathAddressed: boolean;
   /**
@@ -50,6 +55,45 @@ export interface FormatDescriptor {
   searchDetail: boolean;
   /** Anonymous public browse opens an artifact in the format's detail. */
   publicDetail: boolean;
+  /**
+   * Rows are repository assets (APT): tables list their content type, and a
+   * proxy's are dated by when they were first cached.
+   */
+  assetColumns: boolean;
+  /** Hosted repositories accept file uploads from the Console (Raw). */
+  consoleUpload: boolean;
+  /** What an empty repository of each type should do to show content. */
+  emptyHint: Partial<Record<"hosted" | "proxy", Localized>>;
+  /** Hosted repositories offer the strict publication setting (Maven). */
+  strictPublicationSetting: boolean;
+  /** Proxy repositories can authenticate to their upstream (Go). */
+  upstreamAuthentication: boolean;
+  /**
+   * How retention counts what it keeps: versions, versions plus a separate
+   * snapshot period (Maven), or stored paths (Raw).
+   */
+  retentionModel: "versions" | "snapshots" | "paths";
+  /** Tree assets have a file path apart from their coordinate (Maven). */
+  separateAssetPath: boolean;
+  /** Hosted repositories publish signed indexes and manage keys (APT). */
+  signedIndexes: boolean;
+  /** Lifecycle jobs run only on hosted repositories (APT). */
+  hostedOnlyJobs: boolean;
+  /** Promotion and replication target a distribution suite (APT). */
+  distributionSuite: boolean;
+  /** Links to an artifact carry its digest as the reference (OCI). */
+  digestReferences: boolean;
+  /**
+   * Groups search hits that belong to one artifact, e.g. a Maven
+   * group:artifact; `null` leaves a hit on its own.
+   */
+  groupKey?: (coordinate: string) => string | null;
+  /** Title of the artifact column on public browse. */
+  publicArtifactColumn: "image" | "aptPath" | "coordinate";
+  /** Where public browse reads an artifact's versions from, if not inline. */
+  publicVersionSource?: "ociTags" | "conanRevisions";
+  /** How public browse groups listed artifacts, if it does. */
+  publicGrouping?: "mavenBuilds" | "conanRevisions";
   /** Hosted repositories of this format have a publish guide. */
   publishGuide: boolean;
   /** The client endpoint a group of this format serves, if it has one. */

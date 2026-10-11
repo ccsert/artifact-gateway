@@ -41,6 +41,66 @@ describe("format registry", () => {
     ]);
   });
 
+  it("shows version columns for Maven and the package formats", () => {
+    expect(pick((f) => FORMAT_DESCRIPTORS[f].versionColumns)).toEqual([
+      "cargo",
+      "go",
+      "maven",
+      "npm",
+      "pypi",
+    ]);
+  });
+
+  it("keeps per-format table and upload traits", () => {
+    expect(pick((f) => FORMAT_DESCRIPTORS[f].assetColumns)).toEqual(["apt"]);
+    expect(pick((f) => FORMAT_DESCRIPTORS[f].consoleUpload)).toEqual(["raw"]);
+    expect(pick((f) => Boolean(FORMAT_DESCRIPTORS[f].emptyHint.proxy))).toEqual(
+      ["apt", "go", "maven", "npm", "pypi"],
+    );
+    expect(
+      pick((f) => Boolean(FORMAT_DESCRIPTORS[f].emptyHint.hosted)),
+    ).toEqual(["apt"]);
+  });
+
+  it("keeps each single-format behaviour on its format", () => {
+    const only = (trait: (format: Format) => unknown) =>
+      pick((format) => Boolean(trait(format)));
+    const d = (format: Format) => FORMAT_DESCRIPTORS[format];
+    expect(only((f) => d(f).strictPublicationSetting)).toEqual(["maven"]);
+    expect(only((f) => d(f).upstreamAuthentication)).toEqual(["go"]);
+    expect(only((f) => d(f).separateAssetPath)).toEqual(["maven"]);
+    expect(only((f) => d(f).signedIndexes)).toEqual(["apt"]);
+    expect(only((f) => d(f).hostedOnlyJobs)).toEqual(["apt"]);
+    expect(only((f) => d(f).distributionSuite)).toEqual(["apt"]);
+    expect(only((f) => d(f).digestReferences)).toEqual(["oci"]);
+    expect(only((f) => d(f).groupKey)).toEqual(["maven"]);
+    expect(only((f) => d(f).retentionModel === "snapshots")).toEqual(["maven"]);
+    expect(only((f) => d(f).retentionModel === "paths")).toEqual(["raw"]);
+  });
+
+  it("describes public browse per format", () => {
+    const d = (format: Format) => FORMAT_DESCRIPTORS[format];
+    expect(pick((f) => d(f).publicArtifactColumn === "image")).toEqual(["oci"]);
+    expect(pick((f) => d(f).publicArtifactColumn === "aptPath")).toEqual([
+      "apt",
+    ]);
+    expect(pick((f) => d(f).publicVersionSource === "ociTags")).toEqual([
+      "oci",
+    ]);
+    expect(pick((f) => d(f).publicVersionSource === "conanRevisions")).toEqual([
+      "conan",
+    ]);
+    expect(pick((f) => d(f).publicGrouping === "mavenBuilds")).toEqual([
+      "maven",
+    ]);
+    expect(pick((f) => d(f).publicGrouping === "conanRevisions")).toEqual([
+      "conan",
+    ]);
+    expect(d("maven").groupKey?.("org.example:core:1.0")).toBe(
+      "org.example:core",
+    );
+  });
+
   it("offers a directory view for Maven and Raw, and for hosted Cargo", () => {
     expect(pick((f) => supportsDirectoryBrowse(f, "hosted"))).toEqual([
       "cargo",
