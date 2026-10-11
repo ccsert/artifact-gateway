@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- The public browse page is split into focused sections (catalog, repository bar, artifact results, OCI version panel, usage), with its page messages in typed feature dictionaries. Catalog and artifact searches use the shared query layer; anonymous refusals stay on the page, never end a session, and are not retried. Refresh failures keep previously loaded content with a warning and Retry. Results and usage calculations stay inside their section boundaries, and section Retry awaits the refreshed source data. OCI/Conan incremental loaders remain a separate query migration.
+
 - Console theme changes handle rejected native capture and update promises in the application. Skipped or invalid browser captures keep the accepted palette without uncaught page errors.
 
 - Overview Retry keeps the failed section contained until every requested data source finishes. A faster statistics response no longer renders an older damaged groups answer again; navigation still invalidates a previous section's Retry.

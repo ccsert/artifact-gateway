@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { searchRepositoryArtifacts } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { PublicBrowsePage } from "./PublicBrowsePage";
 
 vi.mock("../../client", async (importOriginal) => ({
@@ -45,9 +46,11 @@ describe("PublicBrowsePage APT browse", () => {
 
     render(
       <MemoryRouter initialEntries={["/browse"]}>
-        <PreferencesProvider>
-          <PublicBrowsePage />
-        </PreferencesProvider>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <PublicBrowsePage />
+          </PreferencesProvider>
+        </TestQueryProvider>
       </MemoryRouter>,
     );
 
@@ -78,9 +81,11 @@ describe("PublicBrowsePage APT browse", () => {
 
     render(
       <MemoryRouter initialEntries={["/browse"]}>
-        <PreferencesProvider>
-          <PublicBrowsePage />
-        </PreferencesProvider>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <PublicBrowsePage />
+          </PreferencesProvider>
+        </TestQueryProvider>
       </MemoryRouter>,
     );
 
@@ -134,9 +139,11 @@ describe("PublicBrowsePage APT browse", () => {
 
     render(
       <MemoryRouter initialEntries={[`/browse?${query.toString()}`]}>
-        <PreferencesProvider>
-          <PublicBrowsePage />
-        </PreferencesProvider>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <PublicBrowsePage />
+          </PreferencesProvider>
+        </TestQueryProvider>
       </MemoryRouter>,
     );
 
@@ -148,6 +155,7 @@ describe("PublicBrowsePage APT browse", () => {
     expect(mockSearchRepositoryArtifacts).toHaveBeenCalledWith({
       path: { repositoryId },
       query: { q: undefined, pageSize: 100 },
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -183,9 +191,11 @@ describe("PublicBrowsePage APT browse", () => {
 
     render(
       <MemoryRouter initialEntries={["/browse"]}>
-        <PreferencesProvider>
-          <PublicBrowsePage />
-        </PreferencesProvider>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <PublicBrowsePage />
+          </PreferencesProvider>
+        </TestQueryProvider>
       </MemoryRouter>,
     );
 
@@ -195,7 +205,8 @@ describe("PublicBrowsePage APT browse", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("公开只读")).toBeInTheDocument();
-    expect(screen.getByText(/3 个公开来源/)).toBeInTheDocument();
+    // The catalog lands a scheduler tick after the static introduction.
+    expect(await screen.findByText(/3 个公开来源/)).toBeInTheDocument();
     expect(screen.getByText(/3 种制品格式/)).toBeInTheDocument();
     expect(screen.getByText("管理操作需要登录")).toBeInTheDocument();
 
@@ -251,9 +262,11 @@ describe("PublicBrowsePage APT browse", () => {
 
     render(
       <MemoryRouter initialEntries={[`/browse?${params.toString()}`]}>
-        <PreferencesProvider>
-          <PublicBrowsePage />
-        </PreferencesProvider>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <PublicBrowsePage />
+          </PreferencesProvider>
+        </TestQueryProvider>
       </MemoryRouter>,
     );
 
@@ -265,6 +278,7 @@ describe("PublicBrowsePage APT browse", () => {
     expect(mockSearchRepositoryArtifacts).toHaveBeenLastCalledWith({
       path: { repositoryId },
       query: { q: canonical, pageSize: 100 },
+      signal: expect.any(AbortSignal),
     });
   });
 });

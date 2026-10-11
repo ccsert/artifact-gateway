@@ -1,185 +1,46 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
-import {
-  ArrowLeftOutlined,
-  ArrowRightOutlined,
-  CheckOutlined,
-  CopyOutlined,
-  DatabaseOutlined,
-  DownOutlined,
-  LinkOutlined,
-  ReloadOutlined,
-  SafetyCertificateOutlined,
-  SearchOutlined,
-  UpOutlined,
-} from "@ant-design/icons";
-import { Button, Input, Tooltip } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import { useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
+import { SafetyCertificateOutlined, SearchOutlined } from "@ant-design/icons";
+import { Button } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
-import {
-  listConanRecipeRevisions,
-  listOciManifests,
-  searchRepositoryArtifacts,
-} from "../../client";
-import type { ArtifactSummary } from "../../client";
-import { Card } from "../../components/ui/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../../components/ui/Feedback";
-import { FormatBadge, Badge } from "../../components/ui/Badge";
-import { formatBytes, formatDate, shortDigest } from "../../lib/format";
-import { usageFor, type UsageSnippet } from "../../lib/usage";
-import { PreferenceControls } from "../../components/ui/PreferenceControls";
+import { SectionBoundary } from "../../components/ui/SectionBoundary";
+import type { UsageSnippet } from "../../lib/usage";
 import { usePreferences } from "../../lib/preferences";
-import { artifactFormatVisualizationClass } from "../../lib/artifactFormatVisuals";
 import {
   artifactBrowseParams,
   artifactBrowsePath,
   clearArtifactBrowseParams,
-  conanArtifactGroups,
-  mavenArtifactGroups,
-  mavenVersionKey,
-  missingDeepLinkedArtifact,
 } from "../../lib/publicBrowseModel";
-import {
-  nextPublicOciTagCursor,
-  readPublicOciManifestDetail,
-  type PublicOciManifestDetail,
-} from "../../lib/publicOci";
-import {
-  publicRepositoryUsage,
-  type PublicRepositoryFormat,
-} from "../../lib/publicRepositoryUsage";
-import {
-  MetadataItem,
-  SearchableVersionSelect,
-  UsageSnippetBlock,
-} from "../../components/ui/PublicBrowsePrimitives";
-import { NpmPackageDetail } from "../artifact-detail/NpmPackageDetail";
-import { PyPIProjectDetail } from "../artifact-detail/PyPIProjectDetail";
-import { GoModuleDetail } from "../artifact-detail/GoModuleDetail";
-import { CargoCrateDetail } from "../artifact-detail/CargoCrateDetail";
-import { APTAssetDetail } from "../artifact-detail/APTAssetDetail";
-import {
-  ConsoleTable,
-  useClipboardAction,
-} from "../../components/ui/ConsolePrimitives";
-import { SiteBrandMark, SiteName } from "../../components/ui/SiteBrand";
+import type { PublicRepositoryFormat } from "../../lib/publicRepositoryUsage";
+import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 import { useAuth } from "../../lib/auth";
+import { PublicArtifactResults } from "./PublicArtifactResults";
 import {
-  artifactCoordinateForDisplay,
-  canonicalRawSearchPrefix,
-} from "../../lib/rawPath";
-import { ConanGroupTable, type ConanRevisionPage } from "./ConanGroupTable";
-import { MavenGroupTable } from "./MavenGroupTable";
-import { VERSION_PAGE_SIZE } from "./constants";
-import type { PublicRepository } from "./types";
+  PublicBrowseHeader,
+  PublicBrowseStateSurface,
+} from "./PublicBrowseChrome";
+import { PublicCatalog } from "./PublicCatalog";
+import { PublicCatalogHero } from "./PublicCatalogHero";
+import { PublicRepositoryBar } from "./PublicRepositoryBar";
+import { PublicUsageAside } from "./PublicUsageAside";
+import type { PublicArtifactTableRow } from "./publicArtifactRows";
+import {
+  refetchPublicSources,
+  usePublicArtifacts,
+  usePublicCatalog,
+} from "./publicBrowseQueries";
+import { PUBLIC_FORMAT_ORDER } from "./publicFormats";
+import { usePublicVersionPages } from "./usePublicVersionPages";
 
-interface PublicRepositoryCatalogResponse {
-  enabled?: boolean;
-  items?: PublicRepository[];
-}
-
-function PublicBrowseStateSurface({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <Card
-      className={`ag-public-state-surface overflow-hidden ${className}`}
-      bodyClassName="p-5 sm:p-6"
-    >
-      {children}
-    </Card>
-  );
-}
-
-interface OciTagPage {
-  items: string[];
-  nextCursor?: string;
-  loaded: boolean;
-  loading: boolean;
-  error?: string;
-}
-
-interface OciManifestDetail extends PublicOciManifestDetail {
-  loading: boolean;
-  error?: string;
-}
-
-const PUBLIC_FORMAT_ORDER: PublicRepositoryFormat[] = [
-  "oci",
-  "maven",
-  "npm",
-  "pypi",
-  "go",
-  "cargo",
-  "apt",
-  "conan",
-  "raw",
-];
-
-const PUBLIC_FORMAT_STYLE: Record<PublicRepositoryFormat, { icon: string }> = {
-  oci: {
-    icon: "OCI",
-  },
-  maven: {
-    icon: "MVN",
-  },
-  npm: {
-    icon: "NPM",
-  },
-  pypi: {
-    icon: "PY",
-  },
-  go: {
-    icon: "GO",
-  },
-  cargo: {
-    icon: "CRG",
-  },
-  apt: {
-    icon: "APT",
-  },
-  conan: {
-    icon: "C++",
-  },
-  raw: {
-    icon: "RAW",
-  },
-};
-
-type ProtocolVersion = {
-  value: string;
-  label: string;
-  searchText: string;
-  createdAt?: string;
-  digest?: string;
-};
-
-interface PublicArtifactTableRow {
-  key: string;
-  item: ArtifactSummary;
-  isOci: boolean;
-  expanded: boolean;
-  page?: OciTagPage;
-  protocolVersions: ProtocolVersion[];
-  protocolVersionsLoaded: boolean;
-  protocolVersionsLoading: boolean;
-  protocolVersionsError?: string;
-  nextProtocolPage?: string;
-  selectedProtocolVersionValue: string;
-  selectedProtocolVersionItem?: ProtocolVersion;
-  selectedTag?: string;
-  ociDetail?: OciManifestDetail;
-  selectedProtocolHref: string;
-  snippets: UsageSnippet[];
-}
-
+/**
+ * Anonymous browsing of public repositories (issue 275 split): this page owns
+ * the URL state and wires the catalog, the repository workspace and the
+ * usage card together; the sections render in their own components.
+ */
 export function PublicBrowsePage() {
   const { authenticated } = useAuth();
-  const { locale, t, text } = usePreferences();
+  const { t } = usePreferences();
   const [params, setParams] = useSearchParams();
   const repositoryId = params.get("repository") ?? "";
   const query = params.get("q") ?? "";
@@ -189,15 +50,10 @@ export function PublicBrowsePage() {
   const revisionParam = params.get("revision") ?? "";
   const versionParam = params.get("version") ?? "";
   const [queryDraft, setQueryDraft] = useState(query);
-  const [items, setItems] = useState<ArtifactSummary[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [repositories, setRepositories] = useState<PublicRepository[] | null>(
-    null,
-  );
-  const [anonymousEnabled, setAnonymousEnabled] = useState<boolean | null>(
-    null,
-  );
-  const [catalogError, setCatalogError] = useState<unknown>(null);
+  const catalog = usePublicCatalog();
+  const repositories = catalog.data?.repositories ?? null;
+  const anonymousEnabled = catalog.data?.anonymousEnabled ?? null;
+  const catalogError = catalog.error;
   const [catalogQuery, setCatalogQuery] = useState("");
   const [catalogFormat, setCatalogFormat] = useState<
     PublicRepositoryFormat | "all"
@@ -206,34 +62,36 @@ export function PublicBrowsePage() {
   const [expandedCoordinate, setExpandedCoordinate] = useState<string | null>(
     null,
   );
-  const [expandedMavenGroup, setExpandedMavenGroup] = useState<string | null>(
-    null,
-  );
-  const [expandedConanGroup, setExpandedConanGroup] = useState<string | null>(
-    null,
-  );
-  const [selectedMavenVersion, setSelectedMavenVersion] = useState<
-    string | null
-  >(null);
   const [protocolVersionFilter, setProtocolVersionFilter] = useState("");
   const [selectedProtocolVersions, setSelectedProtocolVersions] = useState<
     Record<string, string>
   >({});
-  const [selectedConanReferences, setSelectedConanReferences] = useState<
-    Record<string, string>
-  >({});
-  const [ociTagPages, setOciTagPages] = useState<Record<string, OciTagPage>>(
-    {},
-  );
-  const [ociManifestDetails, setOciManifestDetails] = useState<
-    Record<string, OciManifestDetail>
-  >({});
-  const [conanRevisionPages, setConanRevisionPages] = useState<
-    Record<string, ConanRevisionPage>
-  >({});
   const selectedRepository = repositories?.find(
     (repository) => repository.id === repositoryId,
   );
+  const {
+    items,
+    error,
+    recoveryKeys: artifactRecoveryKeys,
+    refetch: refetchArtifacts,
+  } = usePublicArtifacts(
+    repositoryId ? selectedRepository : undefined,
+    query,
+    artifactParam,
+  );
+  const {
+    ociTagPages,
+    ociManifestDetails,
+    conanRevisionPages,
+    loadOciTags,
+    loadOciManifest,
+    loadConanRevisions,
+  } = usePublicVersionPages({
+    repositoryId,
+    selectedRepository,
+    artifactParam,
+    tagParam,
+  });
   const publicFormats = useMemo(
     () =>
       PUBLIC_FORMAT_ORDER.filter((format) =>
@@ -256,276 +114,9 @@ export function PublicBrowsePage() {
   }, [catalogFormat, catalogQuery, repositories]);
 
   useEffect(() => {
-    void fetch("/api/v2/public/repositories")
-      .then(async (response) => {
-        if (!response.ok)
-          throw new Error(`读取公开仓库失败 (${response.status})`);
-        return response.json() as Promise<PublicRepositoryCatalogResponse>;
-      })
-      .then((data) => {
-        setAnonymousEnabled(data.enabled !== false);
-        setRepositories(data.items ?? []);
-      })
-      .catch(setCatalogError);
-  }, []);
-
-  useEffect(() => {
-    if (!repositoryId) {
-      setItems(null);
-      setError(null);
-      return;
-    }
-    if (!selectedRepository) return;
-    let cancelled = false;
-    setItems(null);
-    setError(null);
-    void searchRepositoryArtifacts({
-      path: { repositoryId },
-      query: {
-        q:
-          (selectedRepository.format === "raw"
-            ? canonicalRawSearchPrefix(query)
-            : query) || undefined,
-        pageSize: 100,
-      },
-    }).then(({ data, error: requestError }) => {
-      if (cancelled) return;
-      if (requestError) setError(requestError);
-      else setItems(data?.items ?? []);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [query, repositoryId, selectedRepository]);
-
-  useEffect(() => {
-    if (!repositoryId || !items) return;
-    const coordinate = missingDeepLinkedArtifact(items, artifactParam);
-    if (!coordinate) return;
-
-    let cancelled = false;
-    void searchRepositoryArtifacts({
-      path: { repositoryId },
-      query: { q: coordinate, pageSize: 100 },
-    }).then(({ data, error: requestError }) => {
-      if (cancelled) return;
-      if (requestError) {
-        setError(requestError);
-        return;
-      }
-      const matches = (data?.items ?? []).filter(
-        (item) => item.coordinate === coordinate,
-      );
-      if (matches.length === 0) return;
-      setItems((current) => [
-        ...(current ?? []),
-        ...matches.filter(
-          (match) =>
-            !(current ?? []).some(
-              (item) =>
-                item.coordinate === match.coordinate &&
-                item.buildNumber === match.buildNumber,
-            ),
-        ),
-      ]);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [artifactParam, items, repositoryId]);
-
-  useEffect(() => {
-    setOciTagPages({});
-    setOciManifestDetails({});
-    setConanRevisionPages({});
-    setExpandedConanGroup(null);
-    setSelectedConanReferences({});
-  }, [repositoryId]);
-
-  const loadOciManifest = useCallback(
-    async (coordinate: string, tag: string) => {
-      if (selectedRepository?.format !== "oci" || !tag) return;
-      const key = `${coordinate}\x00${tag}`;
-      setOciManifestDetails((current) => ({
-        ...current,
-        [key]: { ...(current[key] ?? {}), loading: true, error: undefined },
-      }));
-      try {
-        const detail = await readPublicOciManifestDetail({
-          repositoryName: selectedRepository.name,
-          imageName: coordinate,
-          reference: tag,
-        });
-        setOciManifestDetails((current) => ({
-          ...current,
-          [key]: { ...detail, loading: false },
-        }));
-      } catch (requestError) {
-        setOciManifestDetails((current) => ({
-          ...current,
-          [key]: {
-            ...(current[key] ?? {}),
-            loading: false,
-            error:
-              requestError instanceof Error
-                ? requestError.message
-                : "读取 OCI manifest 失败",
-          },
-        }));
-      }
-    },
-    [selectedRepository],
-  );
-
-  const loadOciTags = useCallback(
-    async (coordinate: string, after = "") => {
-      if (selectedRepository?.format !== "oci") return;
-      setOciTagPages((current) => ({
-        ...current,
-        [coordinate]: {
-          items: after ? (current[coordinate]?.items ?? []) : [],
-          loaded: current[coordinate]?.loaded ?? false,
-          loading: true,
-        },
-      }));
-      const imagePath = coordinate.split("/").map(encodeURIComponent).join("/");
-      try {
-        if (selectedRepository.type !== "group") {
-          const { data, error: requestError } = await listOciManifests({
-            path: { repositoryId: selectedRepository.id },
-            query: {
-              name: coordinate,
-              pageSize: VERSION_PAGE_SIZE,
-              pageToken: after || undefined,
-            },
-          });
-          if (requestError || !data) throw new Error("读取 OCI 版本失败");
-          const page = data.items.flatMap((manifest) =>
-            manifest.tags.length > 0 ? manifest.tags : [manifest.digest],
-          );
-          setOciTagPages((current) => ({
-            ...current,
-            [coordinate]: {
-              items: after
-                ? [...new Set([...(current[coordinate]?.items ?? []), ...page])]
-                : page,
-              nextCursor: data.nextPageToken,
-              loaded: true,
-              loading: false,
-            },
-          }));
-          const selectedVersion =
-            tagParam && artifactParam === coordinate ? tagParam : page[0];
-          if (!after && selectedVersion)
-            void loadOciManifest(coordinate, selectedVersion);
-          return;
-        }
-        const query = new URLSearchParams({ n: String(VERSION_PAGE_SIZE) });
-        if (after) query.set("last", after);
-        const response = await fetch(
-          `/v2/${encodeURIComponent(selectedRepository.name)}/${imagePath}/tags/list?${query}`,
-        );
-        if (!response.ok)
-          throw new Error(`读取 OCI 标签失败 (${response.status})`);
-        const data = (await response.json()) as { tags?: string[] };
-        const page = data.tags ?? [];
-        setOciTagPages((current) => ({
-          ...current,
-          [coordinate]: {
-            items: after
-              ? [...new Set([...(current[coordinate]?.items ?? []), ...page])]
-              : page,
-            nextCursor: nextPublicOciTagCursor(
-              response,
-              page,
-              VERSION_PAGE_SIZE,
-              window.location.origin,
-            ),
-            loaded: true,
-            loading: false,
-          },
-        }));
-        const selectedTag =
-          tagParam && artifactParam === coordinate ? tagParam : page[0];
-        if (!after && selectedTag)
-          void loadOciManifest(coordinate, selectedTag);
-      } catch (requestError) {
-        setOciTagPages((current) => ({
-          ...current,
-          [coordinate]: {
-            items: current[coordinate]?.items ?? [],
-            loaded: true,
-            loading: false,
-            error:
-              requestError instanceof Error
-                ? requestError.message
-                : "读取 OCI 标签失败",
-          },
-        }));
-      }
-    },
-    [artifactParam, loadOciManifest, selectedRepository, tagParam],
-  );
-
-  const loadConanRevisions = useCallback(
-    async (coordinate: string, query = "", pageToken = "") => {
-      if (selectedRepository?.format !== "conan") return;
-      const normalizedQuery = query.trim();
-      setConanRevisionPages((current) => ({
-        ...current,
-        [coordinate]: {
-          items:
-            pageToken && current[coordinate]?.query === normalizedQuery
-              ? (current[coordinate]?.items ?? [])
-              : [],
-          query: normalizedQuery,
-          loaded: current[coordinate]?.loaded ?? false,
-          loading: true,
-        },
-      }));
-      const { data, error: requestError } = await listConanRecipeRevisions({
-        path: { repositoryId: selectedRepository.id },
-        query: {
-          reference: coordinate,
-          q: normalizedQuery || undefined,
-          pageSize: VERSION_PAGE_SIZE,
-          pageToken: pageToken || undefined,
-        },
-      });
-      if (requestError || !data) {
-        setConanRevisionPages((current) => ({
-          ...current,
-          [coordinate]: {
-            items: current[coordinate]?.items ?? [],
-            query: normalizedQuery,
-            loaded: true,
-            loading: false,
-            error: "读取 Conan revisions 失败",
-          },
-        }));
-        return;
-      }
-      setConanRevisionPages((current) => ({
-        ...current,
-        [coordinate]: {
-          items:
-            pageToken && current[coordinate]?.query === normalizedQuery
-              ? [...current[coordinate].items, ...data.items]
-              : data.items,
-          nextPageToken: data.nextPageToken,
-          query: normalizedQuery,
-          loaded: true,
-          loading: false,
-        },
-      }));
-    },
-    [selectedRepository],
-  );
-
-  useEffect(() => {
     if (
       !artifactParam ||
-      !items?.some((item) => item.coordinate === artifactParam)
+      !items?.some((item) => item?.coordinate === artifactParam)
     )
       return;
     if (selectedRepository?.format === "oci" && !ociTagPages[artifactParam]) {
@@ -557,24 +148,6 @@ export function PublicBrowsePage() {
       ...(queryDraft.trim() ? { q: queryDraft.trim() } : {}),
     });
   };
-
-  const globalUsage = selectedRepository
-    ? publicRepositoryUsage({
-        format: selectedRepository.format,
-        repositoryName: selectedRepository.name,
-        origin: window.location.origin,
-        host: window.location.host,
-        text,
-      })
-    : [];
-  const groupedItems =
-    selectedRepository?.format === "maven"
-      ? mavenArtifactGroups(items ?? [])
-      : null;
-  const groupedConanItems =
-    selectedRepository?.format === "conan"
-      ? conanArtifactGroups(items ?? [])
-      : null;
 
   const copyCoordinate = (coordinate: string) => copy(coordinate);
 
@@ -621,114 +194,17 @@ export function PublicBrowsePage() {
   const copyPageLink = (href: string) =>
     copy(new URL(href, window.location.origin).toString(), href);
 
-  const usageLabel =
-    selectedRepository?.format === "oci"
-      ? text("注册 OCI 镜像源", "Register an OCI registry")
-      : selectedRepository?.format === "maven"
-        ? text("注册 Maven 仓库源", "Register a Maven repository")
-        : selectedRepository?.format === "conan"
-          ? text("注册 Conan remote", "Register a Conan remote")
-          : selectedRepository?.format === "npm"
-            ? text("注册 npm 仓库源", "Register an npm registry")
-            : selectedRepository?.format === "pypi"
-              ? text("注册 PyPI 仓库源", "Register a PyPI repository")
-              : selectedRepository?.format === "go"
-                ? text("注册 Go Module Proxy", "Register a Go module proxy")
-                : selectedRepository?.format === "cargo"
-                  ? text("注册 Cargo 仓库源", "Register a Cargo registry")
-                  : selectedRepository?.format === "apt"
-                    ? text("注册 APT 软件源", "Register an APT source")
-                    : text("注册 Raw 源地址", "Register a Raw source");
-
-  const artifactTableRows: PublicArtifactTableRow[] = (items ?? []).map(
-    (item, index) => {
-      const isOci = selectedRepository?.format === "oci";
-      const expanded =
-        expandedCoordinate === item.coordinate ||
-        artifactParam === item.coordinate;
-      const page = isOci ? ociTagPages[item.coordinate] : undefined;
-      const tags = isOci ? (page?.items ?? []) : [];
-      const protocolVersions: ProtocolVersion[] = isOci
-        ? [
-            ...new Set(
-              tagParam &&
-                artifactParam === item.coordinate &&
-                !tags.includes(tagParam)
-                ? [...tags, tagParam]
-                : tags,
-            ),
-          ].map((tag) => ({
-            value: tag,
-            label: tag.startsWith("sha256:")
-              ? `无标签 · ${shortDigest(tag)}`
-              : tag,
-            searchText: tag,
-            digest: tag.startsWith("sha256:") ? tag : undefined,
-          }))
-        : [];
-      const protocolVersionsLoaded = isOci ? page?.loaded === true : true;
-      const protocolVersionsLoading = isOci ? page?.loading === true : false;
-      const protocolVersionsError = isOci ? page?.error : undefined;
-      const nextProtocolPage = isOci ? page?.nextCursor : undefined;
-      const preferredProtocolVersion =
-        (selectedProtocolVersions[item.coordinate] &&
-          protocolVersions.some(
-            (version) =>
-              version.value === selectedProtocolVersions[item.coordinate],
-          ) &&
-          selectedProtocolVersions[item.coordinate]) ||
-        (tagParam &&
-          artifactParam === item.coordinate &&
-          protocolVersions.some((version) => version.value === tagParam) &&
-          tagParam) ||
-        protocolVersions[0]?.value ||
-        "";
-      const selectedProtocolVersionValue = protocolVersions.some(
-        (version) => version.value === preferredProtocolVersion,
-      )
-        ? preferredProtocolVersion
-        : protocolVersions[0]?.value || preferredProtocolVersion;
-      const selectedProtocolVersionItem = protocolVersions.find(
-        (version) => version.value === selectedProtocolVersionValue,
-      );
-      const selectedTag = isOci
-        ? selectedProtocolVersionItem?.value
-        : undefined;
-      const ociDetail =
-        isOci && selectedTag
-          ? ociManifestDetails[`${item.coordinate}\x00${selectedTag}`]
-          : undefined;
-      return {
-        key: `${item.coordinate}-${index}`,
-        item,
-        isOci,
-        expanded,
-        page,
-        protocolVersions,
-        protocolVersionsLoaded,
-        protocolVersionsLoading,
-        protocolVersionsError,
-        nextProtocolPage,
-        selectedProtocolVersionValue,
-        selectedProtocolVersionItem,
-        selectedTag,
-        ociDetail,
-        selectedProtocolHref: artifactHref(
-          item.coordinate,
-          undefined,
-          selectedTag,
-        ),
-        snippets: selectedRepository
-          ? usageFor(
-              selectedRepository.format,
-              selectedRepository.name,
-              item.coordinate,
-              selectedTag,
-            )
-          : [],
-      };
-    },
-  );
+  const resetWorkspace = () =>
+    refetchPublicSources([
+      catalog.refetch({ throwOnError: true }),
+      refetchArtifacts(),
+    ]);
+  const retryCatalog = () => {
+    void catalog.refetch({ throwOnError: true }).catch(() => {});
+  };
+  const retryArtifacts = () => {
+    void refetchArtifacts().catch(() => {});
+  };
 
   const toggleArtifactRow = (row: PublicArtifactTableRow) => {
     if (row.expanded) {
@@ -747,692 +223,34 @@ export function PublicBrowsePage() {
     }
   };
 
-  const artifactColumns: ColumnsType<PublicArtifactTableRow> = [
-    {
-      title:
-        selectedRepository?.format === "oci"
-          ? text("镜像", "Image")
-          : selectedRepository?.format === "apt"
-            ? text("APT 路径", "APT path")
-            : text("制品坐标", "Artifact coordinate"),
-      key: "coordinate",
-      width: 320,
-      render: (_, row) => {
-        const displayCoordinate = artifactCoordinateForDisplay(
-          selectedRepository?.format ?? "",
-          row.item.coordinate,
-        );
-        return (
-          <span
-            className="block max-w-md truncate font-mono text-xs text-fg-strong"
-            title={displayCoordinate}
-            dir="auto"
-          >
-            {displayCoordinate}
-          </span>
-        );
-      },
-    },
-    ...(selectedRepository?.format === "oci"
-      ? [
-          {
-            title: text("已加载版本", "Loaded versions"),
-            key: "loadedVersions",
-            width: 130,
-            render: (_: unknown, row: PublicArtifactTableRow) => (
-              <span className="whitespace-nowrap text-xs text-fg-tertiary">
-                {row.protocolVersionsLoading && !row.protocolVersionsLoaded
-                  ? text("读取中…", "Loading…")
-                  : !row.protocolVersionsLoaded
-                    ? text("展开后加载", "Load when expanded")
-                    : row.protocolVersions.length > 0
-                      ? text(
-                          `${row.protocolVersions.length}${row.nextProtocolPage ? "+" : ""} 个`,
-                          `${row.protocolVersions.length}${row.nextProtocolPage ? "+" : ""}`,
-                        )
-                      : "—"}
-              </span>
-            ),
-          },
-          {
-            title: text("当前版本", "Selected version"),
-            key: "selectedVersion",
-            width: 190,
-            render: (_: unknown, row: PublicArtifactTableRow) => (
-              <span className="block max-w-[180px] truncate font-mono text-xs text-fg-tertiary">
-                {row.protocolVersionsLoading && !row.protocolVersionsLoaded
-                  ? text("读取中…", "Loading…")
-                  : !row.protocolVersionsLoaded
-                    ? "—"
-                    : (row.selectedProtocolVersionItem?.label ?? "—")}
-              </span>
-            ),
-          },
-          {
-            title: text("镜像摘要", "Image digest"),
-            key: "digest",
-            width: 160,
-            render: (_: unknown, row: PublicArtifactTableRow) => (
-              <span className="font-mono text-xs text-fg-tertiary">
-                {shortDigest(
-                  row.ociDetail?.digest ??
-                    row.selectedProtocolVersionItem?.digest ??
-                    row.item.digest,
-                )}
-              </span>
-            ),
-          },
-        ]
-      : [
-          {
-            title: text("摘要", "Digest"),
-            key: "digest",
-            width: 180,
-            render: (_: unknown, row: PublicArtifactTableRow) => (
-              <span className="font-mono text-xs text-fg-tertiary">
-                {shortDigest(row.item.digest)}
-              </span>
-            ),
-          },
-          {
-            title: text("大小", "Size"),
-            key: "size",
-            width: 120,
-            render: (_: unknown, row: PublicArtifactTableRow) => (
-              <span className="text-xs text-fg-secondary">
-                {formatBytes(row.item.size)}
-              </span>
-            ),
-          },
-          ...(selectedRepository?.format === "apt"
-            ? [
-                {
-                  title: text("内容类型", "Content type"),
-                  key: "contentType",
-                  width: 220,
-                  render: (_: unknown, row: PublicArtifactTableRow) => (
-                    <span className="block max-w-[210px] truncate font-mono text-xs text-fg-tertiary">
-                      {row.item.contentType ?? "—"}
-                    </span>
-                  ),
-                },
-              ]
-            : []),
-          {
-            title:
-              selectedRepository?.format === "apt"
-                ? text("首次缓存", "First cached")
-                : text("创建时间", "Created"),
-            key: "createdAt",
-            width: 180,
-            render: (_: unknown, row: PublicArtifactTableRow) => (
-              <span className="whitespace-nowrap text-xs text-fg-tertiary">
-                {formatDate(row.item.createdAt, locale)}
-              </span>
-            ),
-          },
-        ]),
-    {
-      title: text("操作", "Actions"),
-      key: "actions",
-      fixed: "right",
-      width: 230,
-      render: (_, row) => (
-        <div className="whitespace-nowrap text-right">
-          <Button
-            type="text"
-            size="small"
-            icon={row.expanded ? <UpOutlined /> : <DownOutlined />}
-            onClick={() => toggleArtifactRow(row)}
-          >
-            {row.expanded
-              ? text("收起", "Collapse")
-              : row.isOci
-                ? text("选择版本", "Select version")
-                : text("使用方式", "Usage")}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<LinkOutlined />}
-            href={
-              row.isOci
-                ? row.selectedProtocolHref
-                : artifactHref(
-                    row.item.coordinate,
-                    undefined,
-                    undefined,
-                    undefined,
-                    selectedRepository?.format === "npm" ||
-                      selectedRepository?.format === "pypi" ||
-                      selectedRepository?.format === "go" ||
-                      selectedRepository?.format === "cargo"
-                      ? (row.item.version ?? versionParam)
-                      : undefined,
-                  )
-            }
-          >
-            {row.isOci && row.selectedProtocolVersionItem
-              ? text("打开版本", "Open version")
-              : text("打开", "Open")}
-          </Button>
-          <Tooltip
-            title={
-              copiedCoordinate === row.item.coordinate
-                ? text("已复制", "Copied")
-                : text("复制制品坐标", "Copy coordinate")
-            }
-          >
-            <Button
-              type="text"
-              size="small"
-              aria-label={text(
-                `复制 ${artifactCoordinateForDisplay(selectedRepository?.format ?? "", row.item.coordinate)}`,
-                `Copy ${artifactCoordinateForDisplay(selectedRepository?.format ?? "", row.item.coordinate)}`,
-              )}
-              onClick={() => void copyCoordinate(row.item.coordinate)}
-              icon={
-                copiedCoordinate === row.item.coordinate ? (
-                  <CheckOutlined />
-                ) : (
-                  <CopyOutlined />
-                )
-              }
-            />
-          </Tooltip>
-        </div>
-      ),
-    },
-  ];
-
-  const expandedArtifactRowRender = (row: PublicArtifactTableRow) => {
-    if (selectedRepository?.format === "npm") {
-      return (
-        <NpmPackageDetail
-          repoName={selectedRepository.name}
-          packageName={row.item.coordinate}
-          initialVersion={
-            artifactParam === row.item.coordinate
-              ? versionParam || row.item.version
-              : row.item.version
-          }
-          size={row.item.size}
-          publisher={row.item.publisher}
-          onVersionChange={(version) =>
-            openArtifact(
-              row.item.coordinate,
-              undefined,
-              undefined,
-              undefined,
-              version,
-            )
-          }
-        />
-      );
-    }
-    if (selectedRepository?.format === "pypi") {
-      return (
-        <PyPIProjectDetail
-          repoName={selectedRepository.name}
-          project={row.item.coordinate}
-          initialVersion={
-            artifactParam === row.item.coordinate
-              ? versionParam || row.item.version
-              : row.item.version
-          }
-          size={row.item.size}
-          publisher={row.item.publisher}
-          onVersionChange={(version) =>
-            openArtifact(
-              row.item.coordinate,
-              undefined,
-              undefined,
-              undefined,
-              version,
-            )
-          }
-        />
-      );
-    }
-    if (selectedRepository?.format === "go") {
-      return (
-        <GoModuleDetail
-          repoName={selectedRepository.name}
-          modulePath={row.item.coordinate}
-          initialVersion={
-            artifactParam === row.item.coordinate
-              ? versionParam || row.item.version
-              : row.item.version
-          }
-          size={row.item.size}
-          publisher={row.item.publisher}
-          onVersionChange={(version) =>
-            openArtifact(
-              row.item.coordinate,
-              undefined,
-              undefined,
-              undefined,
-              version,
-            )
-          }
-        />
-      );
-    }
-    if (selectedRepository?.format === "cargo") {
-      return (
-        <CargoCrateDetail
-          repoName={selectedRepository.name}
-          crateName={row.item.coordinate}
-          initialVersion={
-            artifactParam === row.item.coordinate
-              ? versionParam || row.item.version
-              : row.item.version
-          }
-          onVersionChange={(version) =>
-            openArtifact(
-              row.item.coordinate,
-              undefined,
-              undefined,
-              undefined,
-              version,
-            )
-          }
-        />
-      );
-    }
-    if (selectedRepository?.format === "apt") {
-      return (
-        <APTAssetDetail
-          repoName={selectedRepository.name}
-          meta={{
-            coordinate: row.item.coordinate,
-            digest: row.item.digest,
-            size: row.item.size,
-            contentType: row.item.contentType,
-            createdAt: row.item.createdAt,
-            cachedAt: row.item.cachedAt,
-            sourceUrl: row.item.sourceUrl,
-          }}
-        />
-      );
-    }
-    if (!row.isOci) {
-      return (
-        <div className="px-2 py-1">
-          <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3 border-b border-line pb-4 text-xs sm:grid-cols-4">
-            <MetadataItem
-              label={text("仓库", "Repository")}
-              value={selectedRepository?.name ?? "—"}
-              mono
-            />
-            <MetadataItem
-              label={text("制品坐标", "Artifact coordinate")}
-              value={artifactCoordinateForDisplay(
-                selectedRepository?.format ?? "",
-                row.item.coordinate,
-              )}
-              mono
-            />
-            <MetadataItem
-              label={text("发布时间", "Published")}
-              value={formatDate(row.item.createdAt, locale)}
-            />
-            <MetadataItem
-              label={text("发布者", "Publisher")}
-              value={row.item.publisher ?? text("未记录", "Not recorded")}
-              mono
-            />
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {row.snippets.map((snippet) => (
-              <UsageSnippetBlock
-                key={snippet.label}
-                snippet={snippet}
-                copied={copiedCoordinate === snippet.code}
-                onCopy={() => void copyUsage(snippet)}
-              />
-            ))}
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div className="grid gap-5 px-2 py-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-        <div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="block text-xs font-medium text-fg-tertiary">
-              {text("选择镜像版本", "Select image version")}
-            </span>
-            <span className="text-xs text-fg-disabled">
-              {text("已加载", "Loaded")} {row.protocolVersions.length}
-            </span>
-          </div>
-          {row.protocolVersionsError && (
-            <div className="mt-2 flex items-center justify-between gap-2 text-xs text-[var(--ag-status-danger)]">
-              <span>{row.protocolVersionsError}</span>
-              <Button
-                type="link"
-                size="small"
-                icon={<ReloadOutlined />}
-                onClick={() => void loadOciTags(row.item.coordinate)}
-              >
-                {text("重试", "Retry")}
-              </Button>
-            </div>
-          )}
-          <SearchableVersionSelect
-            className="mt-1.5"
-            value={row.selectedProtocolVersionValue}
-            options={row.protocolVersions.map((version) => ({
-              value: version.value,
-              label: version.label,
-            }))}
-            loading={row.protocolVersionsLoading}
-            notFoundContent={
-              row.protocolVersionsLoading && row.protocolVersions.length === 0
-                ? text("正在读取版本…", "Loading versions…")
-                : text("没有匹配版本", "No matching versions")
-            }
-            placeholder={text("搜索并选择镜像版本", "Search image versions")}
-            onChange={(value) => {
-              setSelectedProtocolVersions((current) => ({
-                ...current,
-                [row.item.coordinate]: value,
-              }));
-              void loadOciManifest(row.item.coordinate, value);
-              openArtifact(row.item.coordinate, undefined, value);
-            }}
-          />
-          {row.nextProtocolPage && (
-            <Button
-              block
-              size="small"
-              loading={row.protocolVersionsLoading}
-              onClick={() =>
-                void loadOciTags(row.item.coordinate, row.nextProtocolPage)
-              }
-              className="mt-2"
-            >
-              {row.protocolVersionsLoading
-                ? text("加载中…", "Loading…")
-                : text(
-                    `再加载 ${VERSION_PAGE_SIZE} 个版本`,
-                    `Load ${VERSION_PAGE_SIZE} more versions`,
-                  )}
-            </Button>
-          )}
-          <p className="mt-2 text-xs leading-5 text-fg-disabled">
-            {text(
-              `每次最多读取 ${VERSION_PAGE_SIZE} 个版本；选择后可查看详情与使用方式。`,
-              `Up to ${VERSION_PAGE_SIZE} versions are loaded at a time; select one to view details and usage.`,
-            )}
-          </p>
-        </div>
-        <div className="min-w-0">
-          {row.selectedProtocolVersionItem ? (
-            <>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-xs text-fg-strong">
-                  {row.item.coordinate}
-                </span>
-                <span className="rounded bg-[var(--ag-surface-hover)] px-1.5 py-0.5 text-xs text-[var(--ag-content-secondary)]">
-                  {row.selectedProtocolVersionItem.label}
-                </span>
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<LinkOutlined />}
-                  href={row.selectedProtocolHref}
-                >
-                  {text("打开版本页", "Open version")}
-                </Button>
-                <Button
-                  type="link"
-                  size="small"
-                  onClick={() => void copyPageLink(row.selectedProtocolHref)}
-                >
-                  {copiedCoordinate === row.selectedProtocolHref
-                    ? text("链接已复制", "Link copied")
-                    : text("复制链接", "Copy link")}
-                </Button>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-line py-3 text-xs sm:grid-cols-4">
-                <MetadataItem
-                  label={text("镜像", "Image")}
-                  value={row.item.coordinate}
-                  mono
-                />
-                <MetadataItem
-                  label={text("版本", "Version")}
-                  value={row.selectedProtocolVersionItem.value}
-                  mono
-                />
-                <MetadataItem
-                  label={text("发布时间", "Published")}
-                  value={
-                    row.ociDetail?.loading
-                      ? text("读取中…", "Loading…")
-                      : formatDate(
-                          row.ociDetail?.createdAt ?? row.item.createdAt,
-                          locale,
-                        )
-                  }
-                />
-                <MetadataItem
-                  label={text("发布者", "Publisher")}
-                  value={
-                    row.ociDetail?.publisher ??
-                    row.item.publisher ??
-                    text("未记录", "Not recorded")
-                  }
-                  mono
-                />
-                <MetadataItem
-                  label={text("校验摘要", "Digest")}
-                  value={
-                    row.ociDetail?.loading
-                      ? text("读取中…", "Loading…")
-                      : (row.ociDetail?.digest ??
-                        row.selectedProtocolVersionItem.digest ??
-                        row.item.digest ??
-                        text("未记录", "Not recorded"))
-                  }
-                  mono
-                />
-                <MetadataItem
-                  label={text("镜像大小", "Image size")}
-                  value={
-                    row.ociDetail?.loading
-                      ? text("读取中…", "Loading…")
-                      : formatBytes(row.ociDetail?.size ?? row.item.size)
-                  }
-                />
-              </div>
-              {row.ociDetail?.error && (
-                <div className="mt-2 flex items-center gap-2 text-xs text-[var(--ag-status-danger)]">
-                  <span>{row.ociDetail.error}</span>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<ReloadOutlined />}
-                    onClick={() =>
-                      row.selectedTag &&
-                      void loadOciManifest(row.item.coordinate, row.selectedTag)
-                    }
-                  >
-                    {text("重试", "Retry")}
-                  </Button>
-                </div>
-              )}
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {row.snippets.map((snippet) => (
-                  <UsageSnippetBlock
-                    key={snippet.label}
-                    snippet={snippet}
-                    copied={copiedCoordinate === snippet.code}
-                    onCopy={() => void copyUsage(snippet)}
-                  />
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="rounded-md border border-dashed border-line px-4 py-6 text-sm text-fg-disabled">
-              {text(
-                "版本加载完成后，可在左侧搜索并选择一个版本。",
-                "Once versions load, search and select one on the left.",
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    );
+  const selectOciVersion = (coordinate: string, value: string) => {
+    setSelectedProtocolVersions((current) => ({
+      ...current,
+      [coordinate]: value,
+    }));
+    void loadOciManifest(coordinate, value);
+    openArtifact(coordinate, undefined, value);
   };
 
   return (
     <main className="ag-public-browse-shell min-h-screen px-4 py-6 text-fg sm:px-6 sm:py-8 lg:px-8 lg:py-10">
       <div className="ag-public-browse-page ag-page-stack mx-auto w-full max-w-[1440px]">
-        <div className="ag-public-browse-header ag-page-header flex flex-wrap items-center justify-between gap-4">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <SiteBrandMark className="flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-on-identity" />
-            <div className="min-w-0">
-              <div className="break-words font-semibold tracking-tight text-fg-strong">
-                <SiteName />
-              </div>
-              <div className="mt-0.5 text-xs text-fg-tertiary">
-                {t("public.browseTitle")}
-              </div>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-3">
-            <PreferenceControls compact />
-            <Link
-              to={authenticated ? "/" : "/login"}
-              className="text-sm text-[var(--ag-content-secondary)] hover:text-[var(--ag-link-hover)]"
-            >
-              {t(
-                authenticated
-                  ? "public.managementConsole"
-                  : "public.managementLogin",
-              )}
-            </Link>
-          </div>
-        </div>
+        <PublicBrowseHeader authenticated={authenticated} />
         {!repositoryId ? (
-          <Card
-            className="ag-page-primary overflow-hidden border-line bg-surface-translucent"
-            bodyClassName="p-6 sm:p-8 lg:p-10"
-          >
-            <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
-              <div className="max-w-3xl">
-                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--ag-status-success-border)] bg-[var(--ag-status-success-soft)] px-3 py-1 text-xs font-medium text-[var(--ag-status-success)]">
-                  <SafetyCertificateOutlined />
-                  {text("公开只读", "Public read-only")}
-                </div>
-                <h1 className="mt-4 text-2xl font-semibold tracking-tight text-fg-strong">
-                  {text(
-                    "查找并使用可信的公开制品",
-                    "Discover and consume trusted public artifacts",
-                  )}
-                </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-fg-secondary">
-                  {text(
-                    "从团队明确公开的仓库中检索镜像、依赖和软件包。读取无需登录，发布、授权和仓库管理始终需要身份认证。",
-                    "Search images, dependencies, and packages from repositories explicitly published by your team. Reading needs no sign-in; publishing, grants, and repository administration always require authentication.",
-                  )}
-                </p>
-                {(!repositories || repositories.length > 0) && (
-                  <Input
-                    allowClear
-                    size="large"
-                    prefix={<SearchOutlined className="text-fg-tertiary!" />}
-                    className="mt-6 max-w-2xl"
-                    placeholder={text(
-                      "搜索仓库名称或格式",
-                      "Search repository name or format",
-                    )}
-                    value={catalogQuery}
-                    onChange={(event) => setCatalogQuery(event.target.value)}
-                  />
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line">
-                <div className="bg-surface-translucent p-4">
-                  <div className="text-2xl font-semibold text-fg-strong">
-                    {repositories?.length ?? "—"}
-                  </div>
-                  <div className="mt-1 text-xs text-fg-tertiary">
-                    {text("个公开来源", "public sources")}
-                  </div>
-                </div>
-                <div className="bg-surface-translucent p-4">
-                  <div className="text-2xl font-semibold text-fg-strong">
-                    {repositories ? publicFormats.length : "—"}
-                  </div>
-                  <div className="mt-1 text-xs text-fg-tertiary">
-                    {text("种制品格式", "artifact formats")}
-                  </div>
-                </div>
-                <div className="col-span-2 flex items-center gap-3 bg-surface-translucent p-4">
-                  <div className="flex size-9 items-center justify-center rounded-lg bg-[var(--ag-surface-hover)] text-[var(--ag-content-secondary)]">
-                    <SafetyCertificateOutlined />
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-fg">
-                      {text(
-                        "管理操作需要登录",
-                        "Management actions require sign-in",
-                      )}
-                    </div>
-                    <div className="mt-0.5 text-xs text-fg-tertiary">
-                      {text(
-                        "公开目录不会授予写入或管理权限",
-                        "The public catalog never grants write or admin access",
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
+          <PublicCatalogHero
+            repositories={repositories}
+            publicFormats={publicFormats}
+            catalogQuery={catalogQuery}
+            onCatalogQueryChange={setCatalogQuery}
+          />
         ) : (
-          <Card bodyClassName="p-5 sm:p-6">
-            <div className="flex flex-wrap items-center gap-2 text-sm text-fg-secondary">
-              <Button
-                type="text"
-                size="small"
-                icon={<ArrowLeftOutlined />}
-                onClick={() => setParams({})}
-              >
-                {text("公开仓库", "Public repositories")}
-              </Button>
-              <span className="text-fg-disabled">/</span>
-              <span className="font-medium text-fg-strong">
-                {selectedRepository?.name ??
-                  text("未知仓库", "Unknown repository")}
-              </span>
-              {selectedRepository && (
-                <FormatBadge format={selectedRepository.format} />
-              )}
-            </div>
-            <form onSubmit={submit} className="mt-5 flex items-center gap-2">
-              <Input
-                className="min-w-0 flex-1 font-mono text-xs"
-                placeholder={text(
-                  "坐标、路径或名称前缀（可选）",
-                  "Coordinate, path, or name prefix (optional)",
-                )}
-                value={queryDraft}
-                onChange={(event) => setQueryDraft(event.target.value)}
-              />
-              <Button
-                type="primary"
-                htmlType="submit"
-                className="shrink-0 whitespace-nowrap"
-              >
-                {text("搜索", "Search")}
-              </Button>
-            </form>
-          </Card>
+          <PublicRepositoryBar
+            selectedRepository={selectedRepository}
+            queryDraft={queryDraft}
+            onQueryDraftChange={setQueryDraft}
+            onSubmit={submit}
+            onBack={() => setParams({})}
+          />
         )}
         <div
           data-public-browse-workspace
@@ -1443,396 +261,130 @@ export function PublicBrowsePage() {
           }
         >
           <section>
-            {catalogError ? (
-              <PublicBrowseStateSurface>
-                <ErrorBanner error={catalogError} />
-              </PublicBrowseStateSurface>
-            ) : !repositories ? (
-              <PublicBrowseStateSurface>
-                <Loading
-                  label={text(
-                    "正在读取公开仓库…",
-                    "Loading public repositories…",
-                  )}
-                />
-              </PublicBrowseStateSurface>
-            ) : anonymousEnabled === false ? (
-              <PublicBrowseStateSurface>
-                <EmptyState
-                  icon={<SafetyCertificateOutlined />}
-                  title={text(
-                    "全局匿名读取未启用",
-                    "Global anonymous reads are disabled",
-                  )}
-                  hint={text(
-                    "请管理员在访问控制中启用全局匿名读取，仓库的匿名读取设置才会生效。",
-                    "An administrator must enable global anonymous reads before repository settings take effect.",
-                  )}
-                  action={
-                    <Link
-                      to="/access"
-                      className="text-sm text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
-                    >
-                      {text("前往访问控制", "Open access control")}
-                    </Link>
-                  }
-                />
-              </PublicBrowseStateSurface>
-            ) : repositoryId && !selectedRepository ? (
-              <PublicBrowseStateSurface>
-                <EmptyState
-                  icon={<SearchOutlined />}
-                  title={text(
-                    "公开仓库不存在或不可见",
-                    "Public repository not found or visible",
-                  )}
-                  hint={text(
-                    "返回公开仓库目录，选择一个已启用匿名读取的仓库。",
-                    "Return to the catalog and choose a repository with anonymous reads enabled.",
-                  )}
-                  action={
-                    <Button type="primary" onClick={() => setParams({})}>
-                      {text("返回目录", "Back to catalog")}
-                    </Button>
-                  }
-                />
-              </PublicBrowseStateSurface>
-            ) : !repositoryId ? (
-              repositories.length === 0 ? (
-                <PublicBrowseStateSurface className="ag-public-catalog-empty-surface">
-                  <EmptyState
-                    className="ag-public-catalog-empty"
-                    icon={<DatabaseOutlined />}
-                    title={text("暂无公开仓库", "No public repositories")}
-                    hint={text(
-                      "管理员需先启用全局匿名访问，并在仓库上允许匿名读取。公开仓库出现后，这里会直接展示可匿名使用的来源与格式。",
-                      "An administrator must enable global anonymous access and allow reads on a repository. Public sources and formats will appear here as soon as they are available.",
-                    )}
-                    action={
-                      <Button
-                        type="primary"
-                        href={authenticated ? "/" : "/login"}
-                      >
-                        {t(
-                          authenticated
-                            ? "public.managementConsole"
-                            : "public.managementLogin",
-                        )}
-                      </Button>
-                    }
-                  />
-                </PublicBrowseStateSurface>
-              ) : (
-                <div>
-                  <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold text-fg-strong">
-                        {text("选择制品来源", "Choose an artifact source")}
-                      </h2>
-                      <p className="mt-1 text-sm text-fg-tertiary">
-                        {text(
-                          `${repositories.length} 个公开来源 · ${publicFormats.length} 种制品格式`,
-                          `${repositories.length} public sources · ${publicFormats.length} artifact formats`,
-                        )}
-                      </p>
-                    </div>
-                    <div
-                      className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-line bg-surface-translucent p-1"
-                      aria-label={text(
-                        "按制品格式筛选",
-                        "Filter by artifact format",
-                      )}
-                    >
-                      <Button
-                        size="small"
-                        type={catalogFormat === "all" ? "primary" : "text"}
-                        aria-pressed={catalogFormat === "all"}
-                        onClick={() => setCatalogFormat("all")}
-                      >
-                        {text("全部", "All")}
-                      </Button>
-                      {publicFormats.map((format) => (
-                        <Button
-                          key={format}
-                          size="small"
-                          type={catalogFormat === format ? "primary" : "text"}
-                          aria-pressed={catalogFormat === format}
-                          onClick={() => setCatalogFormat(format)}
-                        >
-                          {format.toUpperCase()}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                  {visibleRepositories.length === 0 ? (
+            <SectionBoundary
+              resetKeys={[repositoryId, query]}
+              recoveryKeys={[catalog.data, ...artifactRecoveryKeys]}
+              onReset={resetWorkspace}
+            >
+              <div className="grid gap-4">
+                {catalogError && repositories && (
+                  <PublicBrowseStateSurface>
+                    <ErrorBanner
+                      error={catalogError}
+                      tone="warning"
+                      onRetry={retryCatalog}
+                    />
+                  </PublicBrowseStateSurface>
+                )}
+                {catalogError && !repositories ? (
+                  <PublicBrowseStateSurface>
+                    <ErrorBanner error={catalogError} onRetry={retryCatalog} />
+                  </PublicBrowseStateSurface>
+                ) : !repositories ? (
+                  <PublicBrowseStateSurface>
+                    <Loading
+                      label={t("publicBrowse.loadingPublicRepositories")}
+                    />
+                  </PublicBrowseStateSurface>
+                ) : anonymousEnabled === false ? (
+                  <PublicBrowseStateSurface>
                     <EmptyState
-                      compact
-                      icon={<SearchOutlined />}
-                      title={text(
-                        "没有匹配的公开仓库",
-                        "No matching public repositories",
-                      )}
-                      hint={text(
-                        "调整搜索词或格式筛选后重试。",
-                        "Adjust the search term or format filter and try again.",
-                      )}
+                      icon={<SafetyCertificateOutlined />}
+                      title={t("publicBrowse.globalAnonymousReadsAreDisabled")}
+                      hint={t("publicBrowse.anonymousDisabledHint")}
                       action={
-                        <Button
-                          onClick={() => {
-                            setCatalogQuery("");
-                            setCatalogFormat("all");
-                          }}
+                        <Link
+                          to="/access"
+                          className="text-sm text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
                         >
-                          {text("清除筛选", "Clear filters")}
+                          {t("publicBrowse.openAccessControl")}
+                        </Link>
+                      }
+                    />
+                  </PublicBrowseStateSurface>
+                ) : repositoryId && !selectedRepository ? (
+                  <PublicBrowseStateSurface>
+                    <EmptyState
+                      icon={<SearchOutlined />}
+                      title={t(
+                        "publicBrowse.publicRepositoryNotFoundOrVisible",
+                      )}
+                      hint={t("publicBrowse.repositoryMissingHint")}
+                      action={
+                        <Button type="primary" onClick={() => setParams({})}>
+                          {t("publicBrowse.backToCatalog")}
                         </Button>
                       }
                     />
-                  ) : (
-                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                      {visibleRepositories.map((repository) => (
-                        <Link
-                          key={repository.id}
-                          to={`/browse?repository=${encodeURIComponent(repository.id)}`}
-                          className="group block text-left"
-                        >
-                          <Card
-                            className="ag-public-repository-card h-full border-[var(--ag-border-subtle)] bg-[var(--ag-surface-container-translucent)] group-hover:border-[var(--ag-border-default)] group-hover:bg-[var(--ag-surface-hover)]"
-                            bodyClassName="flex h-full min-h-52 flex-col p-5"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div
-                                className={`flex h-11 min-w-11 items-center justify-center rounded-xl border px-2 text-xs font-semibold tracking-wide ${artifactFormatVisualizationClass(repository.format)}`}
-                              >
-                                {PUBLIC_FORMAT_STYLE[repository.format].icon}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Badge
-                                  tone={
-                                    repository.type === "proxy"
-                                      ? "visualization-2"
-                                      : repository.type === "group"
-                                        ? "visualization-6"
-                                        : "visualization-1"
-                                  }
-                                >
-                                  {(repository.type ?? "hosted").toUpperCase()}
-                                </Badge>
-                                <FormatBadge format={repository.format} />
-                              </div>
-                            </div>
-                            <div className="mt-5 min-w-0 truncate text-base font-semibold text-fg-strong">
-                              {repository.name}
-                            </div>
-                            <p className="mt-2 text-sm leading-5 text-fg-tertiary">
-                              {repository.type === "proxy"
-                                ? text(
-                                    "缓存并加速经过管理员信任的上游制品。",
-                                    "Caches and accelerates artifacts from an administrator-trusted upstream.",
-                                  )
-                                : repository.type === "group"
-                                  ? text(
-                                      "通过一个稳定入口聚合多个公开仓库。",
-                                      "Aggregates multiple public repositories behind one stable endpoint.",
-                                    )
-                                  : text(
-                                      "由团队直接发布和维护的公开制品。",
-                                      "Public artifacts published and maintained directly by the team.",
-                                    )}
-                            </p>
-                            <div className="mt-auto flex items-center justify-between pt-5 text-xs">
-                              <span className="text-fg-disabled">
-                                {text("无需登录即可读取", "No sign-in to read")}
-                              </span>
-                              <span className="flex items-center gap-1 font-medium text-[var(--ag-link)] transition-colors group-hover:text-[var(--ag-link-hover)]">
-                                {text("进入仓库", "Open repository")}
-                                <ArrowRightOutlined />
-                              </span>
-                            </div>
-                          </Card>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            ) : error ? (
-              <PublicBrowseStateSurface>
-                <ErrorBanner error={error} />
-              </PublicBrowseStateSurface>
-            ) : !items ? (
-              <PublicBrowseStateSurface>
-                <Loading
-                  label={text("正在读取公开制品…", "Loading public artifacts…")}
-                />
-              </PublicBrowseStateSurface>
-            ) : items.length === 0 ? (
-              <PublicBrowseStateSurface>
-                <EmptyState
-                  icon={<SearchOutlined />}
-                  title={text(
-                    "没有匹配的公开制品",
-                    "No matching public artifacts",
-                  )}
-                  hint={text(
-                    "确认仓库已启用匿名读取，或调整上方查询条件。",
-                    "Confirm anonymous reads are enabled or adjust the query above.",
-                  )}
-                />
-              </PublicBrowseStateSurface>
-            ) : (
-              <Card>
-                <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                  <div className="text-xs text-fg-tertiary">
-                    {text("找到", "Found")}{" "}
-                    <span className="font-medium text-fg-secondary">
-                      {groupedItems?.length ??
-                        groupedConanItems?.length ??
-                        items.length}
-                    </span>{" "}
-                    {text("个制品", "artifacts")}
-                    {(groupedItems || groupedConanItems) && (
-                      <span className="ml-1 text-fg-disabled">
-                        {text(
-                          `（${items.length} 个版本）`,
-                          ` (${items.length} versions)`,
-                        )}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-fg-disabled">
-                    {text("匿名只读", "Anonymous read-only")}
-                  </div>
-                </div>
-                {groupedItems && selectedRepository ? (
-                  <MavenGroupTable
-                    groups={groupedItems}
-                    repository={selectedRepository}
-                    artifactParam={artifactParam}
-                    buildParam={buildParam}
-                    expandedGroup={expandedMavenGroup}
-                    selectedVersionKey={selectedMavenVersion}
-                    copiedCoordinate={copiedCoordinate}
-                    onExpand={(groupKey, versionKey) => {
-                      setExpandedMavenGroup(groupKey);
-                      setSelectedMavenVersion(versionKey);
+                  </PublicBrowseStateSurface>
+                ) : !repositoryId ? (
+                  <PublicCatalog
+                    authenticated={authenticated}
+                    repositories={repositories}
+                    publicFormats={publicFormats}
+                    visibleRepositories={visibleRepositories}
+                    catalogFormat={catalogFormat}
+                    onCatalogFormatChange={setCatalogFormat}
+                    onClearFilters={() => {
+                      setCatalogQuery("");
+                      setCatalogFormat("all");
                     }}
-                    onCollapse={() => {
-                      setExpandedMavenGroup(null);
-                      clearArtifactParams();
-                    }}
-                    onSelectVersion={(group, versionKey) => {
-                      setSelectedMavenVersion(versionKey);
-                      const version = group.versions.find(
-                        (item, index) =>
-                          mavenVersionKey(item, index) === versionKey,
-                      );
-                      if (version)
-                        openArtifact(version.coordinate, version.buildNumber);
-                    }}
-                    artifactHref={artifactHref}
-                    onCopyPageLink={(href) => void copyPageLink(href)}
-                    onCopyUsage={(snippet) => void copyUsage(snippet)}
-                  />
-                ) : groupedConanItems && selectedRepository ? (
-                  <ConanGroupTable
-                    groups={groupedConanItems}
-                    repository={selectedRepository}
-                    artifactParam={artifactParam}
-                    revisionParam={revisionParam}
-                    expandedGroup={expandedConanGroup}
-                    selectedReferences={selectedConanReferences}
-                    selectedRevisions={selectedProtocolVersions}
-                    revisionPages={conanRevisionPages}
-                    versionFilter={protocolVersionFilter}
-                    copiedCoordinate={copiedCoordinate}
-                    onExpand={(key, reference) => {
-                      setExpandedConanGroup(key);
-                      setSelectedConanReferences((current) => ({
-                        ...current,
-                        [key]: reference,
-                      }));
-                    }}
-                    onCollapse={() => setExpandedConanGroup(null)}
-                    onSelectReference={(key, reference) =>
-                      setSelectedConanReferences((current) => ({
-                        ...current,
-                        [key]: reference,
-                      }))
-                    }
-                    onSelectRevision={(reference, revision) =>
-                      setSelectedProtocolVersions((current) => ({
-                        ...current,
-                        [reference]: revision,
-                      }))
-                    }
-                    onFilterChange={setProtocolVersionFilter}
-                    onLoadRevisions={(reference, filter, pageToken) =>
-                      void loadConanRevisions(reference, filter, pageToken)
-                    }
-                    onOpenArtifact={(reference, revision) =>
-                      openArtifact(reference, undefined, undefined, revision)
-                    }
-                    onClearArtifactParams={clearArtifactParams}
-                    artifactHref={(reference, revision) =>
-                      artifactHref(reference, undefined, undefined, revision)
-                    }
-                    onCopyCoordinate={(value) => void copyCoordinate(value)}
-                    onCopyPageLink={(value) => void copyPageLink(value)}
-                    onCopyUsage={(snippet) => void copyUsage(snippet)}
                   />
                 ) : (
-                  <ConsoleTable<PublicArtifactTableRow>
-                    rowKey="key"
-                    dataSource={artifactTableRows}
-                    columns={artifactColumns}
-                    pagination={false}
-                    scroll={{
-                      x: selectedRepository?.format === "oci" ? 1100 : 900,
+                  <PublicArtifactResults
+                    selectedRepository={selectedRepository}
+                    items={items}
+                    error={error}
+                    artifactRowOptions={{
+                      expandedCoordinate,
+                      artifactParam,
+                      tagParam,
+                      ociTagPages,
+                      ociManifestDetails,
+                      selectedProtocolVersions,
                     }}
-                    expandable={{
-                      expandedRowKeys: artifactTableRows
-                        .filter((row) => row.expanded)
-                        .map((row) => row.key),
-                      expandedRowRender: expandedArtifactRowRender,
-                      showExpandColumn: false,
+                    onRetry={retryArtifacts}
+                    artifactParam={artifactParam}
+                    buildParam={buildParam}
+                    revisionParam={revisionParam}
+                    versionParam={versionParam}
+                    copiedCoordinate={copiedCoordinate}
+                    conanRevisionPages={conanRevisionPages}
+                    selectedProtocolVersions={selectedProtocolVersions}
+                    protocolVersionFilter={protocolVersionFilter}
+                    actions={{
+                      artifactHref,
+                      openArtifact,
+                      clearArtifactParams,
+                      copyCoordinate,
+                      copyPageLink,
+                      copyUsage,
+                      toggleArtifactRow,
+                      selectOciVersion,
+                      loadOciTags,
+                      loadOciManifest,
+                      loadConanRevisions,
+                      setSelectedProtocolVersions,
+                      setProtocolVersionFilter,
                     }}
                   />
                 )}
-              </Card>
-            )}
+              </div>
+            </SectionBoundary>
           </section>
           {selectedRepository && (
             <aside className="lg:sticky lg:top-24">
-              <Card className="overflow-hidden">
-                <div className="border-b border-line px-4 py-3">
-                  <div className="text-sm font-medium text-fg-strong">
-                    {usageLabel}
-                  </div>
-                  <div className="mt-1 text-xs text-fg-tertiary">
-                    {text("适用于仓库", "For repository")}{" "}
-                    <span className="font-mono text-fg-secondary">
-                      {selectedRepository.name}
-                    </span>
-                  </div>
-                </div>
-                <div className="space-y-3 p-3">
-                  {globalUsage.map((snippet) => (
-                    <UsageSnippetBlock
-                      key={snippet.label}
-                      snippet={snippet}
-                      copied={copiedCoordinate === snippet.code}
-                      onCopy={() => void copyUsage(snippet)}
-                      compact
-                    />
-                  ))}
-                  <div className="border-t border-line pt-3 text-xs leading-5 text-fg-disabled">
-                    {text(
-                      "匿名浏览无需 Token；推送、私有仓库和管理操作仍需登录。",
-                      "Anonymous browsing needs no token. Publishing, private repositories, and management still require sign-in.",
-                    )}
-                  </div>
-                </div>
-              </Card>
+              <SectionBoundary
+                resetKeys={[repositoryId]}
+                recoveryKeys={[catalog.data]}
+                onReset={() => catalog.refetch({ throwOnError: true })}
+              >
+                <PublicUsageAside
+                  selectedRepository={selectedRepository}
+                  copiedCoordinate={copiedCoordinate}
+                  onCopyUsage={copyUsage}
+                />
+              </SectionBoundary>
             </aside>
           )}
         </div>

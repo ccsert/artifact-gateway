@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { shouldRetry, unwrap } from "./client";
+import { describe, expect, it, vi } from "vitest";
+import { createQueryClient, shouldRetry, unwrap } from "./client";
 
 describe("unwrap", () => {
   it("returns data and rethrows the SDK error value unchanged", async () => {
@@ -28,5 +28,29 @@ describe("shouldRetry", () => {
       expect(shouldRetry(0, { status })).toBe(false);
     }
     expect(shouldRetry(0, "404 page not found")).toBe(false);
+  });
+});
+
+describe("createQueryClient", () => {
+  it("reports authentication failures unless a query opts out", async () => {
+    const onAuthFailure = vi.fn();
+    const client = createQueryClient(onAuthFailure);
+    const refused = () => Promise.reject({ status: 401 });
+
+    await client
+      .fetchQuery({ queryKey: ["private"], queryFn: refused, retry: false })
+      .catch(() => undefined);
+    expect(onAuthFailure).toHaveBeenCalledWith(401);
+
+    onAuthFailure.mockClear();
+    await client
+      .fetchQuery({
+        queryKey: ["public"],
+        queryFn: refused,
+        retry: false,
+        meta: { authFailure: "ignore" },
+      })
+      .catch(() => undefined);
+    expect(onAuthFailure).not.toHaveBeenCalled();
   });
 });
