@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- The public browse page is split into focused sections (catalog, repository bar, artifact results, OCI version panel, usage) and reads through the shared query layer; anonymous refusals stay on the page and never end a session. A failing results or usage section shows its own Retry.
+
 - Console theme changes handle rejected native capture and update promises in the application. Skipped or invalid browser captures keep the accepted palette without uncaught page errors.
 
 - Overview Retry keeps the failed section contained until every requested data source finishes. A faster statistics response no longer renders an older damaged groups answer again; navigation still invalidates a previous section's Retry.
