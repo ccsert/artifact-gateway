@@ -8,6 +8,8 @@ interface SectionBoundaryProps {
   title?: string;
   /** A change in any value (a route, a tab) clears a previous failure. */
   resetKeys?: readonly unknown[];
+  /** Refreshed data clears a failure only after a pending Retry completes. */
+  recoveryKeys?: readonly unknown[];
   /** Runs before the section re-renders after Retry, e.g. to refetch. */
   onReset?: () => void | Promise<unknown>;
 }
@@ -61,6 +63,7 @@ export class SectionBoundary extends Component<
 > {
   state: SectionBoundaryState = { error: null, failed: false };
   private resetGeneration = 0;
+  private retryPending = false;
 
   static getDerivedStateFromError(error: unknown): SectionBoundaryState {
     return { error, failed: true };
@@ -71,9 +74,14 @@ export class SectionBoundary extends Component<
   }
 
   componentDidUpdate(previous: SectionBoundaryProps) {
-    if (
+    if (!sameKeys(previous.resetKeys, this.props.resetKeys)) {
+      ++this.resetGeneration;
+      this.retryPending = false;
+      if (this.state.failed) this.setState({ error: null, failed: false });
+    } else if (
       this.state.failed &&
-      !sameKeys(previous.resetKeys, this.props.resetKeys)
+      !this.retryPending &&
+      !sameKeys(previous.recoveryKeys, this.props.recoveryKeys)
     ) {
       ++this.resetGeneration;
       this.setState({ error: null, failed: false });
@@ -86,13 +94,18 @@ export class SectionBoundary extends Component<
 
   private retry = async () => {
     const generation = ++this.resetGeneration;
+    this.retryPending = true;
     try {
       await this.props.onReset?.();
-      if (generation === this.resetGeneration)
+      if (generation === this.resetGeneration) {
+        this.retryPending = false;
         this.setState({ error: null, failed: false });
+      }
     } catch (error) {
-      if (generation === this.resetGeneration)
+      if (generation === this.resetGeneration) {
+        this.retryPending = false;
         this.setState({ error, failed: true });
+      }
     }
   };
 

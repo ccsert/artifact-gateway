@@ -23,6 +23,8 @@ export type ColorMode = "dark" | "light";
 export type AppLocale = "zh-CN" | "en-US";
 
 interface ThemeViewTransition {
+  ready?: Promise<void>;
+  updateCallbackDone?: Promise<void>;
   finished: Promise<void>;
   skipTransition: () => void;
 }
@@ -465,6 +467,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         commit();
         return;
       }
+      // Native capture failures/skips can reject ready while finished fulfills.
+      // Both promises report unhandled rejections even when never accessed.
+      void transition.ready?.catch(() => undefined);
+      void transition.updateCallbackDone?.catch(() => undefined);
       activeThemeTransition.current = transition;
       const finish = () => {
         if (activeThemeTransition.current === transition) {

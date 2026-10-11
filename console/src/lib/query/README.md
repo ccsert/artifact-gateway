@@ -39,8 +39,11 @@ Retry inside that section only, instead of replacing the page with the route
 error page. Give it `resetKeys` (route id, selected task) so moving elsewhere
 clears a previous failure, and `onReset` to refetch the section's data. Return
 the refetch promise so Retry waits for its answer before rendering again;
-completions from a previous section are ignored. Shared source answers can
-also be reset keys so sibling sections recover when that source is refreshed.
+completions from a previous section are ignored. Give shared source answers as
+`recoveryKeys`, so sibling sections recover when that source is refreshed.
+These data changes cannot clear a failure while Retry is waiting for its
+refetch promises; all sources must finish first. Navigation `resetKeys` still
+clear the failure immediately and invalidate a previous section's Retry.
 
 ## Migration checklist
 

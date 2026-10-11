@@ -11,6 +11,10 @@ their meaning.
 
 ## Unreleased
 
+- Console theme changes handle rejected native capture and update promises in the application. Skipped or invalid browser captures keep the accepted palette without uncaught page errors.
+
+- Overview Retry keeps the failed section contained until every requested data source finishes. A faster statistics response no longer renders an older damaged groups answer again; navigation still invalidates a previous section's Retry.
+
 - Maven Hosted accepts unchanged ISO-8859-1 POMs and resolves an exact `${project.parent.version}` identity from the POM's literal parent version in standard PUT and strict coordinate commit. Original bytes and release checksum sidecars are preserved; malformed XML, unsupported encodings, unresolved identities and coordinate mismatches still fail validation. Real Maven cold-cache parent and dependency-tree consumption is part of the protocol gate.
 
 - Console markup names semantic colour roles (`text-fg-tertiary`, `border-line`, `bg-surface-translucent`, ...) instead of Zinc palette steps; the `!important` compatibility layer that remapped 35 palette classes is removed and a unit test rejects new raw palette utilities. Dividers, the pending-approval card and the public-browse summary grid now follow the light theme instead of staying dark.

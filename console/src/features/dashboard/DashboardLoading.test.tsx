@@ -95,33 +95,51 @@ describe("independent dashboard requests", () => {
     }
   });
 
-  it("refreshes both summary sources after malformed groups and waits for recovery", async () => {
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    const groups = deferred<{ data: { items: never[] } }>();
-    api.listGroups
-      .mockResolvedValueOnce({ data: { items: { length: 1 } } })
-      .mockReturnValueOnce(groups.promise);
-    try {
-      renderDashboard();
-      const title = await screen.findByText("运行统计暂时无法显示");
-      const section = title.closest('[role="alert"]') as HTMLElement;
-      expect(screen.getByText("synthetic-raw")).toBeVisible();
-      expect(screen.getByText("暂无审计记录")).toBeVisible();
-      fireEvent.click(within(section).getByRole("button", { name: /重试/ }));
-      expect(api.listGroups).toHaveBeenCalledTimes(2);
-      expect(api.getOverviewStatistics).toHaveBeenCalledTimes(2);
-      expect(screen.getByText("运行统计暂时无法显示")).toBeVisible();
-      await act(async () => {
-        groups.resolve({ data: { items: [] } });
-      });
-      expect(await screen.findByText("共 0 个成员引用")).toBeVisible();
-      expect(screen.getByText("总请求量")).toBeVisible();
-      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-      expect(api.listAudits).toHaveBeenCalledTimes(1);
-    } finally {
-      error.mockRestore();
-    }
-  });
+  it.each(["statistics", "groups"] as const)(
+    "waits for both Retry answers without rendering damaged groups (%s first)",
+    async (first) => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const groups = deferred<{ data: { items: never[] } }>();
+      const statistics = deferred<{ data: typeof snapshot }>();
+      api.listGroups
+        .mockResolvedValueOnce({ data: { items: { length: 1 } } })
+        .mockReturnValueOnce(groups.promise);
+      api.getOverviewStatistics
+        .mockResolvedValueOnce({ data: snapshot })
+        .mockReturnValueOnce(statistics.promise);
+      try {
+        renderDashboard();
+        const title = await screen.findByText("运行统计暂时无法显示");
+        const section = title.closest('[role="alert"]') as HTMLElement;
+        expect(screen.getByText("synthetic-raw")).toBeVisible();
+        expect(screen.getByText("暂无审计记录")).toBeVisible();
+        error.mockClear();
+        fireEvent.click(within(section).getByRole("button", { name: /重试/ }));
+        expect(api.listGroups).toHaveBeenCalledTimes(2);
+        expect(api.getOverviewStatistics).toHaveBeenCalledTimes(2);
+        await act(async () => {
+          if (first === "statistics")
+            statistics.resolve({ data: { ...snapshot } });
+          else groups.resolve({ data: { items: [] } });
+        });
+        expect(error).not.toHaveBeenCalled();
+        expect(screen.getByText("运行统计暂时无法显示")).toBeVisible();
+        expect(screen.getByText("synthetic-raw")).toBeVisible();
+        expect(screen.getByText("暂无审计记录")).toBeVisible();
+        await act(async () => {
+          if (first === "statistics") groups.resolve({ data: { items: [] } });
+          else statistics.resolve({ data: { ...snapshot } });
+        });
+        expect(await screen.findByText("共 0 个成员引用")).toBeVisible();
+        expect(screen.getByText("总请求量")).toBeVisible();
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        expect(error).not.toHaveBeenCalled();
+        expect(api.listAudits).toHaveBeenCalledTimes(1);
+      } finally {
+        error.mockRestore();
+      }
+    },
+  );
 
   it.each([
     ["repository collection", { ...snapshot, repositories: null }],

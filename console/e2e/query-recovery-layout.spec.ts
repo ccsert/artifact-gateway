@@ -179,18 +179,33 @@ for (const width of [1440, 390]) {
     let groupsReads = 0;
     let statisticsReads = 0;
     let auditsReads = 0;
-    await page.route("**/api/v2/groups**", (route) =>
-      route.fulfill({
-        json: { items: ++groupsReads === 1 ? { length: 1 } : [] },
-      }),
-    );
+    let releaseGroups!: () => void;
+    const pendingGroups = new Promise<void>((resolve) => {
+      releaseGroups = resolve;
+    });
+    const refreshedStatistics = {
+      ...statistics,
+      repositories: statistics.repositories.map((item) => ({
+        ...item,
+        name: `${item.name}-refreshed`,
+      })),
+    };
+    await page.route("**/api/v2/groups**", async (route) => {
+      groupsReads++;
+      if (groupsReads > 1) await pendingGroups;
+      await route.fulfill({
+        json: { items: groupsReads === 1 ? { length: 1 } : [] },
+      });
+    });
     await page.route("**/api/v2/audits**", (route) => {
       auditsReads++;
       return route.fulfill({ json: [] });
     });
     await page.route("**/api/v2/overview-statistics", (route) => {
       statisticsReads++;
-      return route.fulfill({ json: statistics });
+      return route.fulfill({
+        json: statisticsReads === 1 ? statistics : refreshedStatistics,
+      });
     });
     await page.goto("/");
     const summary = page.getByRole("alert").filter({
@@ -206,6 +221,14 @@ for (const width of [1440, 390]) {
     await geometry(page);
     await capture(page, info, "groups-malformed");
     expect(errors.pageErrors).toEqual([]);
+    await expect
+      .poll(
+        () =>
+          errors.consoleErrors.filter((message) =>
+            message.startsWith("Console section failed"),
+          ).length,
+      )
+      .toBeGreaterThanOrEqual(1);
     expect(errors.consoleErrors.length).toBeGreaterThan(0);
     for (const message of errors.consoleErrors) {
       expect(message).toMatch(
@@ -214,6 +237,19 @@ for (const width of [1440, 390]) {
     }
     errors.consoleErrors.length = 0;
     await summary.getByRole("button", { name: en ? "Retry" : "重试" }).click();
+    try {
+      await expect(
+        page.getByRole("link", {
+          name: `${repository.name}-refreshed`,
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(summary).toBeVisible();
+      expect(errors.pageErrors).toEqual([]);
+      expect(errors.consoleErrors).toEqual([]);
+    } finally {
+      releaseGroups();
+    }
     await expect(
       page.getByText(en ? "0 member references" : "共 0 个成员引用", {
         exact: true,

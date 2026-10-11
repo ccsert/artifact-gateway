@@ -10,10 +10,17 @@ import {
   recordThemeEvidence,
 } from "./support/themeEvidence";
 
-test.beforeEach(async ({ page }) => recordThemeEvidence(page));
-test.afterEach(async ({ page }, testInfo) =>
-  attachThemeEvidence(page, testInfo),
-);
+const runtimeErrors = new WeakMap<Page, string[]>();
+test.beforeEach(async ({ page }) => {
+  const errors: string[] = [];
+  runtimeErrors.set(page, errors);
+  page.on("pageerror", (error) => errors.push(error.message));
+  await recordThemeEvidence(page);
+});
+test.afterEach(async ({ page }, testInfo) => {
+  await attachThemeEvidence(page, testInfo);
+  expect(runtimeErrors.get(page)).toEqual([]);
+});
 
 async function mockThemeSurface(page: Page) {
   await page.route("**/api/v2/site-settings", (route) =>
@@ -254,16 +261,11 @@ test("a single native theme choice commits when its visual capture fails", async
     }
     const start = document.startViewTransition.bind(document);
     window.__singleThemeCaptureCallsQA = 0;
-    window.__singleThemeCaptureErrorsQA = [];
     document.startViewTransition = (options) => {
       window.__singleThemeCaptureCallsQA += 1;
-      const transition = start(options);
-      void transition.ready.catch((error: unknown) => {
-        window.__singleThemeCaptureErrorsQA.push(
-          error instanceof DOMException ? error.name : "unknown",
-        );
-      });
-      return transition;
+      // The application must handle a rejected native ready promise itself.
+      // Catching it in this fixture would hide an uncaught browser failure.
+      return start(options);
     };
   });
   await page.getByRole("button", { name: /选择主题/ }).click();
@@ -272,9 +274,6 @@ test("a single native theme choice commits when its visual capture fails", async
     "data-theme-id",
     "gateway-light",
   );
-  await expect
-    .poll(() => page.evaluate(() => window.__singleThemeCaptureErrorsQA))
-    .toEqual(["InvalidStateError"]);
   expect(await page.evaluate(() => window.__singleThemeCaptureCallsQA)).toBe(1);
   await expect
     .poll(() => page.locator("html").getAttribute("data-theme-transition"))
@@ -329,7 +328,6 @@ test("a single theme choice survives SPA navigation before its capture update", 
         await gate;
         await update?.();
       });
-      void transition.ready.catch(() => undefined);
       return transition;
     };
   });
@@ -367,7 +365,6 @@ test("a single theme choice survives document navigation before its capture upda
         await gate;
         await update?.();
       });
-      void transition.ready.catch(() => undefined);
       return transition;
     };
   });
@@ -413,8 +410,7 @@ test("native skipped snapshots preserve a newer choice of the current theme", as
         await update?.();
         window.__nativeThemeUpdatesQA.push(index);
       });
-      // A deliberately skipped native capture rejects only its ready promise.
-      void transition.ready.catch(() => undefined);
+      // A skipped native capture must be handled by the application.
       return transition;
     };
     window.__releaseNativeThemeCaptureQA = (index) => releases[index]();
@@ -468,7 +464,6 @@ declare global {
     __nativeThemeUpdatesQA: number[];
     __releaseNativeThemeCaptureQA?: (index: number) => void;
     __singleThemeCaptureCallsQA: number;
-    __singleThemeCaptureErrorsQA: string[];
     __releaseSingleThemeCaptureQA?: () => void;
   }
 }

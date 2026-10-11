@@ -12,13 +12,22 @@ function Flaky() {
   return <p>panel content</p>;
 }
 
-function Page({ resetKey = "a", onReset = () => {} }) {
+function Page({
+  resetKey = "a",
+  recoveryKey,
+  onReset = () => {},
+}: {
+  resetKey?: string;
+  recoveryKey?: string;
+  onReset?: () => void | Promise<unknown>;
+}) {
   return (
     <PreferencesProvider>
       <h1>page title</h1>
       <SectionBoundary
         title="面板不可用"
         resetKeys={[resetKey]}
+        recoveryKeys={recoveryKey === undefined ? undefined : [recoveryKey]}
         onReset={onReset}
       >
         <Flaky />
@@ -109,6 +118,36 @@ describe("SectionBoundary", () => {
     broken = false;
     rerender(<Page resetKey="b" />);
     expect(screen.getByText("panel content")).toBeInTheDocument();
+  });
+
+  it("recovers when a refreshed answer changes outside Retry", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { rerender } = render(<Page recoveryKey="old answer" />);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+
+    broken = false;
+    rerender(<Page recoveryKey="new answer" />);
+    expect(screen.getByText("panel content")).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("retains a failed Retry and allows a later refreshed answer to recover", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onReset = vi.fn().mockRejectedValue(new Error("refresh failed"));
+    const { rerender } = render(
+      <Page recoveryKey="old answer" onReset={onReset} />,
+    );
+    error.mockClear();
+    await userEvent.setup().click(screen.getByRole("button", { name: /重试/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent("refresh failed");
+    expect(onReset).toHaveBeenCalledOnce();
+    expect(screen.getByText("sibling section")).toBeVisible();
+
+    broken = false;
+    rerender(<Page recoveryKey="new answer" onReset={onReset} />);
+    expect(screen.getByText("panel content")).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(error).not.toHaveBeenCalled();
   });
 
   it("ignores a previous section's late Retry failure after navigation", async () => {
