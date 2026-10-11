@@ -2,6 +2,12 @@ import type { Format, Repository } from "../client";
 
 type Localized = readonly [chinese: string, english: string];
 
+/** A copyable client endpoint for a group of this format. */
+export interface GroupEndpoint {
+  value: string;
+  label: string;
+}
+
 /**
  * What the Console needs to know about one artifact format, declared once.
  * Pages ask the descriptor instead of branching on format names; the server's
@@ -31,8 +37,8 @@ export interface FormatDescriptor {
    * images, Conan references).
    */
   nameListing: boolean;
-  /** Repository types that offer a directory view. */
-  directoryBrowse: readonly Repository["type"][];
+  /** Repository types, and groups, that offer a directory view. */
+  directoryBrowse: readonly (Repository["type"] | "group")[];
   /** A proxy repository of this format needs an upstream host allow-list. */
   upstreamHostAllowList: boolean;
   /**
@@ -40,4 +46,12 @@ export interface FormatDescriptor {
    * search results, or never.
    */
   securityColumn: "always" | "versionSearch" | "never";
+  /** Global search opens a hit in the format's artifact detail. */
+  searchDetail: boolean;
+  /** Anonymous public browse opens an artifact in the format's detail. */
+  publicDetail: boolean;
+  /** Hosted repositories of this format have a publish guide. */
+  publishGuide: boolean;
+  /** The client endpoint a group of this format serves, if it has one. */
+  groupEndpoint?: (groupName: string) => GroupEndpoint;
 }

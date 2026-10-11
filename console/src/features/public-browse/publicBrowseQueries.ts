@@ -4,7 +4,7 @@ import type { ArtifactSummary } from "../../client";
 import { missingDeepLinkedArtifact } from "../../lib/publicBrowseModel";
 import { unwrap } from "../../lib/query/client";
 import { publicKeys } from "../../lib/query/keys";
-import { artifactSearchPrefix } from "../../lib/rawPath";
+import { artifactSearchPrefix } from "../../formats";
 import type { PublicRepository } from "./types";
 
 interface PublicRepositoryCatalogResponse {

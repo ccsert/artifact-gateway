@@ -38,7 +38,7 @@ import { useAuth } from "../../lib/auth";
 import { downloadCsv } from "../../lib/csv";
 import { formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-import { artifactCoordinateForDisplay } from "../../lib/rawPath";
+import { artifactCoordinateForDisplay } from "../../formats";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 

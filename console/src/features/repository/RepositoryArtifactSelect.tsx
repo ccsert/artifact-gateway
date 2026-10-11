@@ -11,7 +11,7 @@ import { usePreferences } from "../../lib/preferences";
 import {
   artifactCoordinateForDisplay,
   artifactSearchPrefix,
-} from "../../lib/rawPath";
+} from "../../formats";
 
 export type RepositoryArtifactIdentity = {
   key: string;

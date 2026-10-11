@@ -19,19 +19,14 @@ import {
   isNotFound,
 } from "../../components/ui/Feedback";
 import { Pagination } from "../../components/ui/Layout";
-import { OciImageDetail } from "../artifact-detail/OciImageDetail";
-import {
-  ConanArtifactDetail,
-  MavenArtifactDetail,
-  RawArtifactDetail,
-} from "../artifact-detail/ArtifactRowDetail";
-import { NpmPackageDetail } from "../artifact-detail/NpmPackageDetail";
-import { PyPIProjectDetail } from "../artifact-detail/PyPIProjectDetail";
-import { GoModuleDetail } from "../artifact-detail/GoModuleDetail";
-import { CargoCrateDetail } from "../artifact-detail/CargoCrateDetail";
-import { APTAssetDetail } from "../artifact-detail/APTAssetDetail";
 import { RawUploadDialog } from "./RawUploadDialog";
-import { formatDescriptor, supportsDirectoryBrowse } from "../../formats";
+import {
+  artifactCoordinateForDisplay,
+  artifactSearchPrefix,
+  formatDescriptor,
+  supportsDirectoryBrowse,
+} from "../../formats";
+import { formatViews } from "../../formats/views";
 import { useAuth } from "../../lib/auth";
 import {
   formatBytes,
@@ -40,11 +35,7 @@ import {
   shortDigest,
 } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-import {
-  artifactCoordinateForDisplay,
-  artifactSearchPrefix,
-  decodeRawPathForDisplay,
-} from "../../lib/rawPath";
+import { decodeRawPathForDisplay } from "../../lib/rawPath";
 import { mavenGA, mavenVersion } from "../../lib/usage";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 import { RepositoryBrowseTree } from "./RepositoryBrowseTree";
@@ -128,7 +119,6 @@ export function RepositoryArtifactsTab({
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   const format = repo.format;
-  const cargoRepository = format === "cargo";
   const proxyMaven = format === "maven" && repo.type === "proxy";
   const proxyNpm = format === "npm" && repo.type === "proxy";
   const proxyPyPI = format === "pypi" && repo.type === "proxy";
@@ -630,156 +620,28 @@ export function RepositoryArtifactsTab({
               ...(showSecurityColumn ? [securityColumn] : []),
             ];
 
+  const FormatDetail = formatViews(format).ArtifactDetail;
   const expandedRowRender = (r: ArtifactRow) => {
-    if (format === "oci") {
-      return (
-        <OciImageDetail
-          repositoryId={repo.id}
-          repository={repo.name}
-          image={r.coordinate}
-          initialReference={referenceTarget}
-          canQuarantine={canQuarantine}
-          onDeleted={() => void load(q)}
-        />
-      );
-    }
-    if (format === "maven" && !proxyMaven) {
-      return (
-        <MavenArtifactDetail
-          repoId={repo.id}
-          repoName={repo.name}
-          canQuarantine={canQuarantine}
-          onDeleted={() => void load(q)}
-          meta={{
-            coordinate: r.coordinate,
-            digest: r.digest,
-            size: r.size,
-            createdAt: r.createdAt,
-            publisher: r.publisher,
-            buildNumber: r.buildNumber,
-          }}
-        />
-      );
-    }
+    // Proxy Maven lists cache entries, which have their own detail.
     if (proxyMaven) {
       return <ProxyMavenCacheDetail repoName={repo.name} meta={r} />;
     }
-    if (format === "npm") {
-      return (
-        <NpmPackageDetail
-          repositoryId={repo.id}
-          repoName={repo.name}
-          packageName={r.coordinate}
-          initialVersion={
-            artifactTarget === r.coordinate ? versionTarget : undefined
-          }
-          size={r.size}
-          publisher={r.publisher}
-          canQuarantine={canQuarantine}
-          onVersionChange={(version) =>
-            onVersionChange?.(r.coordinate, version)
-          }
-        />
-      );
-    }
-    if (format === "pypi") {
-      return (
-        <PyPIProjectDetail
-          repositoryId={repo.id}
-          repoName={repo.name}
-          project={r.coordinate}
-          initialVersion={
-            artifactTarget === r.coordinate ? versionTarget : undefined
-          }
-          size={r.size}
-          publisher={r.publisher}
-          canQuarantine={canQuarantine}
-          onVersionChange={(version) =>
-            onVersionChange?.(r.coordinate, version)
-          }
-        />
-      );
-    }
-    if (format === "go") {
-      return (
-        <GoModuleDetail
-          repositoryId={repo.id}
-          repoName={repo.name}
-          modulePath={r.coordinate}
-          initialVersion={
-            artifactTarget === r.coordinate ? versionTarget : undefined
-          }
-          size={r.size}
-          publisher={r.publisher}
-          canQuarantine={canQuarantine}
-          onVersionChange={(version) =>
-            onVersionChange?.(r.coordinate, version)
-          }
-        />
-      );
-    }
-    if (cargoRepository) {
-      return (
-        <CargoCrateDetail
-          repoName={repo.name}
-          crateName={r.coordinate}
-          initialVersion={
-            artifactTarget === r.coordinate && versionTarget
-              ? versionTarget
-              : r.latestVersion
-          }
-          onVersionChange={(version) =>
-            onVersionChange?.(r.coordinate, version)
-          }
-        />
-      );
-    }
-    if (format === "conan") {
-      return (
-        <ConanArtifactDetail
-          repoId={repo.id}
-          repoName={repo.name}
-          managed={repo.type !== "proxy"}
-          canDelete={repo.type !== "proxy" && canWrite}
-          canQuarantine={canQuarantine}
-          onDeleted={() => void load(q)}
-          meta={{ coordinate: r.coordinate, publisher: r.publisher }}
-        />
-      );
-    }
-    if (format === "apt") {
-      return (
-        <APTAssetDetail
-          repositoryId={repo.id}
-          repoName={repo.name}
-          canQuarantine={canQuarantine}
-          published={hostedAPT}
-          meta={{
-            coordinate: r.coordinate,
-            digest: r.digest,
-            size: r.size,
-            contentType: r.contentType,
-            createdAt: r.createdAt,
-            cachedAt: r.cachedAt,
-            sourceUrl: r.sourceUrl,
-          }}
-        />
-      );
-    }
+    if (!FormatDetail) return null;
     return (
-      <RawArtifactDetail
-        canDelete={canWrite && repo.type === "hosted"}
+      <FormatDetail
         repositoryId={repo.id}
-        repoName={repo.name}
+        repositoryName={repo.name}
+        repositoryType={repo.type === "proxy" ? "proxy" : "hosted"}
+        artifact={r}
+        initialVersion={
+          artifactTarget === r.coordinate ? versionTarget : undefined
+        }
+        initialReference={referenceTarget}
+        managed={repo.type !== "proxy"}
+        canDelete={canWrite && repo.type === "hosted"}
         canQuarantine={canQuarantine}
         onDeleted={() => void load(q)}
-        meta={{
-          coordinate: r.coordinate,
-          digest: r.digest,
-          size: r.size,
-          contentType: r.contentType,
-          createdAt: r.createdAt,
-        }}
+        onVersionChange={(version) => onVersionChange?.(r.coordinate, version)}
       />
     );
   };

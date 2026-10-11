@@ -1,4 +1,5 @@
 import type { Format } from "../client";
+import { goProxyURL, npmRegistryURL, pypiIndexURL } from "../lib/usage";
 import type { FormatDescriptor } from "./types";
 
 const base = {
@@ -9,6 +10,9 @@ const base = {
   directoryBrowse: [],
   upstreamHostAllowList: true,
   securityColumn: "never",
+  searchDetail: true,
+  publicDetail: false,
+  publishGuide: false,
 } as const satisfies Partial<FormatDescriptor>;
 
 /**
@@ -23,15 +27,18 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     searchPlaceholder: ["按镜像名前缀过滤…", "Filter by image name prefix…"],
     nameListing: true,
     upstreamHostAllowList: false,
+    publishGuide: true,
   },
   maven: {
     ...base,
     format: "maven",
     artifactColumn: ["制品", "Artifact"],
     searchPlaceholder: ["搜索 GAV 坐标…", "Search GAV coordinates…"],
-    directoryBrowse: ["hosted", "proxy"],
+    directoryBrowse: ["hosted", "proxy", "group"],
     upstreamHostAllowList: false,
     securityColumn: "versionSearch",
+    searchDetail: false,
+    publishGuide: true,
   },
   npm: {
     ...base,
@@ -40,6 +47,12 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     searchPlaceholder: ["按包名前缀过滤…", "Filter by package name prefix…"],
     packageVersions: true,
     securityColumn: "always",
+    publicDetail: true,
+    groupEndpoint: (name) => ({
+      value: npmRegistryURL(name),
+      label: `/npm/${name}/`,
+    }),
+    publishGuide: true,
   },
   pypi: {
     ...base,
@@ -48,6 +61,12 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     searchPlaceholder: ["按项目名前缀过滤…", "Filter by project name prefix…"],
     packageVersions: true,
     securityColumn: "always",
+    publicDetail: true,
+    groupEndpoint: (name) => ({
+      value: pypiIndexURL(name),
+      label: `/pypi/${name}/simple/`,
+    }),
+    publishGuide: true,
   },
   go: {
     ...base,
@@ -56,6 +75,11 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     searchPlaceholder: ["按模块路径前缀过滤…", "Filter by module path prefix…"],
     packageVersions: true,
     securityColumn: "always",
+    publicDetail: true,
+    groupEndpoint: (name) => ({
+      value: goProxyURL(name),
+      label: `/go/${name}`,
+    }),
   },
   cargo: {
     ...base,
@@ -64,6 +88,12 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     searchPlaceholder: ["搜索 crate 名称…", "Search crate names…"],
     packageVersions: true,
     directoryBrowse: ["hosted"],
+    publicDetail: true,
+    groupEndpoint: (name) => ({
+      value: `sparse+${window.location.origin}/cargo/${name}/`,
+      label: `/cargo/${name}/`,
+    }),
+    publishGuide: true,
   },
   conan: {
     ...base,
@@ -79,7 +109,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     searchPlaceholder: ["搜索路径…", "Search paths…"],
     pathAddressed: true,
     encodedPaths: true,
-    directoryBrowse: ["hosted", "proxy"],
+    directoryBrowse: ["hosted", "proxy", "group"],
     securityColumn: "always",
   },
   apt: {
@@ -91,5 +121,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
       "Filter by dists/ or pool/ path…",
     ],
     pathAddressed: true,
+    publicDetail: true,
+    searchDetail: false,
   },
 };

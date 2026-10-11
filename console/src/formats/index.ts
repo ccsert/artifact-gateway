@@ -1,4 +1,8 @@
 import type { Format } from "../client";
+import {
+  canonicalRawSearchPrefix,
+  decodeRawPathForDisplay,
+} from "../lib/rawPath";
 import { FORMAT_DESCRIPTORS } from "./descriptors";
 import type { FormatDescriptor } from "./types";
 
@@ -24,9 +28,26 @@ export function hasPackageVersions(format: string | undefined): boolean {
 /** Whether a repository of this format and type offers a directory view. */
 export function supportsDirectoryBrowse(
   format: string | undefined,
-  repositoryType: string | undefined,
+  repositoryType: "hosted" | "proxy" | "group" | (string & {}) | undefined,
 ): boolean {
   return (formatDescriptor(format)?.directoryBrowse ?? []).some(
     (type) => type === repositoryType,
   );
+}
+
+/** A stored coordinate as the reader sees it, for any format. */
+export function artifactCoordinateForDisplay(
+  format: string,
+  coordinate: string,
+): string {
+  return formatDescriptor(format)?.encodedPaths
+    ? decodeRawPathForDisplay(coordinate)
+    : coordinate;
+}
+
+/** A search box value as the API's coordinate prefix, for any format. */
+export function artifactSearchPrefix(format: string, query: string): string {
+  return formatDescriptor(format)?.encodedPaths
+    ? canonicalRawSearchPrefix(query)
+    : query;
 }

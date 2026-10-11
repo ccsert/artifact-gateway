@@ -1,4 +1,3 @@
-import { formatDescriptor } from "../formats";
 const rawPathSegmentSafeEscapes: Record<string, string> = {
   "%24": "$",
   "%26": "&",
@@ -40,23 +39,6 @@ export function decodeRawPathForDisplay(path: string): string {
   } catch {
     return path;
   }
-}
-
-/** A stored coordinate as the reader sees it, for any format. */
-export function artifactCoordinateForDisplay(
-  format: string,
-  coordinate: string,
-): string {
-  return formatDescriptor(format)?.encodedPaths
-    ? decodeRawPathForDisplay(coordinate)
-    : coordinate;
-}
-
-/** A search box value as the API's coordinate prefix, for any format. */
-export function artifactSearchPrefix(format: string, query: string): string {
-  return formatDescriptor(format)?.encodedPaths
-    ? canonicalRawSearchPrefix(query)
-    : query;
 }
 
 // Console search boxes contain presentation text. Always encode their value,

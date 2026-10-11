@@ -1,4 +1,9 @@
-import { hasPackageVersions } from "../../formats";
+import {
+  artifactCoordinateForDisplay,
+  formatDescriptor,
+  hasPackageVersions,
+} from "../../formats";
+import { formatViews } from "../../formats/views";
 import { useEffect, useMemo, useState } from "react";
 import { DownOutlined, LinkOutlined, UpOutlined } from "@ant-design/icons";
 import { Button, Descriptions, Input, Space, Tooltip } from "antd";
@@ -12,23 +17,13 @@ import { Badge, FormatBadge } from "../../components/ui/Badge";
 import { ArtifactSecurityBadge } from "../artifact-detail/ArtifactSecurityBadge";
 import { formatBytes, formatDate } from "../../lib/format";
 import { mavenGA, mavenVersion } from "../../lib/usage";
-import {
-  MavenArtifactDetail,
-  ConanArtifactDetail,
-  RawArtifactDetail,
-} from "../artifact-detail/ArtifactRowDetail";
-import { OciImageDetail } from "../artifact-detail/OciImageDetail";
-import { NpmPackageDetail } from "../artifact-detail/NpmPackageDetail";
-import { PyPIProjectDetail } from "../artifact-detail/PyPIProjectDetail";
-import { GoModuleDetail } from "../artifact-detail/GoModuleDetail";
-import { CargoCrateDetail } from "../artifact-detail/CargoCrateDetail";
+import { MavenArtifactDetail } from "../artifact-detail/ArtifactRowDetail";
 import {
   ConsoleTable,
   CopyableValue,
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
-import { artifactCoordinateForDisplay } from "../../lib/rawPath";
 
 const SEARCH_PAGE_SIZE = 100;
 
@@ -539,6 +534,11 @@ export function SearchPage() {
         </div>
       );
     }
+    // Maven hits are grouped above; formats without a search detail show
+    // only the summary.
+    const SearchDetail = formatDescriptor(row.format)?.searchDetail
+      ? formatViews(row.format).ArtifactDetail
+      : undefined;
     return (
       <div className="px-2 py-1">
         <Descriptions
@@ -589,78 +589,16 @@ export function SearchPage() {
             />
           </div>
         )}
-        {row.format === "oci" && (
-          <OciImageDetail
+        {SearchDetail && (
+          <SearchDetail
             repositoryId={row.repositoryId}
-            repository={row.repositoryName}
-            image={row.coordinate}
+            repositoryName={row.repositoryName}
+            artifact={row}
+            initialVersion={
+              hasPackageVersions(row.format) ? row.version : undefined
+            }
             initialReference={row.digest}
-          />
-        )}
-        {row.format === "conan" && (
-          <ConanArtifactDetail
-            repoId={row.repositoryId}
-            repoName={row.repositoryName}
             managed
-            canDelete={false}
-            meta={{
-              coordinate: row.coordinate,
-              digest: row.digest,
-              size: row.size,
-              createdAt: row.createdAt,
-              publisher: row.publisher,
-            }}
-          />
-        )}
-        {row.format === "raw" && (
-          <RawArtifactDetail
-            repositoryId={row.repositoryId}
-            repoName={row.repositoryName}
-            meta={{
-              coordinate: row.coordinate,
-              digest: row.digest,
-              size: row.size,
-              contentType: row.contentType,
-              createdAt: row.createdAt,
-              publisher: row.publisher,
-            }}
-          />
-        )}
-        {row.format === "npm" && (
-          <NpmPackageDetail
-            repositoryId={row.repositoryId}
-            repoName={row.repositoryName}
-            packageName={row.coordinate}
-            initialVersion={row.version}
-            size={row.size}
-            publisher={row.publisher}
-          />
-        )}
-        {row.format === "pypi" && (
-          <PyPIProjectDetail
-            repositoryId={row.repositoryId}
-            repoName={row.repositoryName}
-            project={row.coordinate}
-            initialVersion={row.version}
-            size={row.size}
-            publisher={row.publisher}
-          />
-        )}
-        {row.format === "go" && (
-          <GoModuleDetail
-            repositoryId={row.repositoryId}
-            repoName={row.repositoryName}
-            modulePath={row.coordinate}
-            initialVersion={row.version}
-            size={row.size}
-            publisher={row.publisher}
-          />
-        )}
-        {row.format === "cargo" && (
-          <CargoCrateDetail
-            repoName={row.repositoryName}
-            crateName={row.coordinate}
-            initialVersion={row.version}
           />
         )}
         <div className="mt-4 flex justify-end">

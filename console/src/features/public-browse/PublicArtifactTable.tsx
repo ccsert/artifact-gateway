@@ -1,4 +1,7 @@
-import { hasPackageVersions } from "../../formats";
+import {
+  artifactCoordinateForDisplay,
+  hasPackageVersions,
+} from "../../formats";
 import {
   CheckOutlined,
   CopyOutlined,
@@ -11,7 +14,6 @@ import type { ColumnsType } from "antd/es/table";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-import { artifactCoordinateForDisplay } from "../../lib/rawPath";
 import type { UsageSnippet } from "../../lib/usage";
 import { PublicArtifactDetail } from "./PublicArtifactDetail";
 import type { PublicArtifactTableRow } from "./publicArtifactRows";

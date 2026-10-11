@@ -51,6 +51,39 @@ describe("format registry", () => {
       "maven",
       "raw",
     ]);
+    expect(pick((f) => supportsDirectoryBrowse(f, "group"))).toEqual([
+      "maven",
+      "raw",
+    ]);
+  });
+
+  it("offers publish guides for the formats that had one", () => {
+    expect(pick((f) => FORMAT_DESCRIPTORS[f].publishGuide)).toEqual([
+      "cargo",
+      "maven",
+      "npm",
+      "oci",
+      "pypi",
+    ]);
+  });
+
+  it("opens shared artifact detail where each page showed it", () => {
+    expect(pick((f) => FORMAT_DESCRIPTORS[f].searchDetail)).toEqual([
+      "cargo",
+      "conan",
+      "go",
+      "npm",
+      "oci",
+      "pypi",
+      "raw",
+    ]);
+    expect(pick((f) => FORMAT_DESCRIPTORS[f].publicDetail)).toEqual([
+      "apt",
+      "cargo",
+      "go",
+      "npm",
+      "pypi",
+    ]);
   });
 
   it("asks for an upstream host allow-list except for OCI and Maven", () => {
