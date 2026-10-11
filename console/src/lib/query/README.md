@@ -46,6 +46,9 @@ This directory owns the shared pieces; feature folders own their query hooks
 - **Permission-gated reads use `enabled`.** Do not request what the signed-in
   identity cannot read: a refusal reaches the session handling above. Gate
   the query on the capability (`platformCapabilities(identity)`) instead.
+- **Polling is `refetchInterval`, not an interval effect.** Return `false`
+  when nothing on screen needs fresh data (an inactive tab, no active job),
+  so a hidden section stops polling and a failed poll keeps the last answer.
 - **Dialogs own their drafts.** An editor dialog keeps its form state, and the
   page mounts it with a new `key` per opening while keeping it mounted to
   close. Each opening then starts from its target, and closing still animates.
@@ -105,13 +108,16 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/identity/users/UserIdentitiesPanel.tsx`
 - [x] `features/identity/users/UserRepositoryAccessPanel.tsx`
 - [x] `features/identity/users/UserSessionsPanel.tsx`
-- [ ] `features/operations/HTTPErrorRatePanel.tsx`
-- [ ] `features/operations/Operations.tsx`
-- [ ] `features/operations/RuntimeLogsPanel.tsx`
-- [ ] `features/operations/RuntimeNodesPanel.tsx`
-- [ ] `features/operations/ScheduledTasksPanel.tsx`
-- [ ] `features/operations/SystemDiagnosticsPanel.tsx`
-- [ ] `features/operations/WebhookDeliveriesPanel.tsx`
+- [x] `features/operations/HTTPErrorRatePanel.tsx` — its effect is an elapsed-time
+      clock over props, not a read.
+- [x] `features/operations/Operations.tsx`
+- [x] `features/operations/RuntimeLogsPanel.tsx` — the log stream stays on
+      `useRuntimeLogStream`: a followed stream with gap detection is not a cached
+      read.
+- [x] `features/operations/RuntimeNodesPanel.tsx`
+- [x] `features/operations/ScheduledTasksPanel.tsx`
+- [x] `features/operations/SystemDiagnosticsPanel.tsx`
+- [x] `features/operations/WebhookDeliveriesPanel.tsx`
 - [x] `features/public-browse/PublicBrowsePage.tsx`
 - [ ] `features/public-browse/usePublicVersionPages.ts` — OCI/Conan incremental
       state was extracted unchanged under issue 275; migrate its reads separately.

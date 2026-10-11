@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Operations and System status read through the shared query layer and are split into focused sections. Opening the job history tab directly (a link or a reload) now loads it instead of waiting indefinitely; job history polls only while a job is active and the tab is visible. Webhook delivery filters can no longer show a slower answer for a previous filter, and schedule and webhook editors report a failed save only inside the dialog. Schedule and webhook writes and the job history link are covered end to end against a live Gateway.
+
 - Console access and identity splits keep section Retry tied to its read sources, retain cached grants after refresh failures, and use typed feature message dictionaries without changing display text. Malformed credential pages stay local with Retry, refresh failures retain credential rows, and interpolated names preserve literal dollar characters and placeholder-like text.
 
 - The public browse page is split into focused sections (catalog, repository bar, artifact results, OCI version panel, usage), with its page messages in typed feature dictionaries. Catalog and artifact searches use the shared query layer; anonymous refusals stay on the page, never end a session, and are not retried. Refresh failures keep previously loaded content with a warning and Retry. Results and usage calculations stay inside their section boundaries, and section Retry awaits the refreshed source data. OCI/Conan incremental loaders remain a separate query migration.
