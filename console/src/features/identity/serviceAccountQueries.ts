@@ -7,11 +7,28 @@ import { useCallback } from "react";
 import {
   listServiceAccountCredentials,
   listServiceAccounts,
+  type ServiceAccountCredentialList,
 } from "../../client";
 import { unwrap } from "../../lib/query/client";
 import { identityKeys } from "../../lib/query/keys";
 
 const PAGE_SIZE = 200;
+
+function validateCredentialPage(page: ServiceAccountCredentialList) {
+  if (
+    !page ||
+    !Array.isArray(page.items) ||
+    page.items.some(
+      (credential) =>
+        !credential ||
+        typeof credential.id !== "string" ||
+        typeof credential.name !== "string",
+    )
+  ) {
+    throw new Error("Invalid service account credentials response");
+  }
+  return page;
+}
 
 export function flattenPages<T>(
   data: InfiniteData<{ items: T[] }> | undefined,
@@ -49,7 +66,7 @@ export function useCredentialPages(serviceAccountId: string) {
           query: { pageSize: PAGE_SIZE, pageToken: pageParam },
           signal,
         }),
-      ),
+      ).then(validateCredentialPage),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextPageToken || undefined,
     enabled: Boolean(serviceAccountId),

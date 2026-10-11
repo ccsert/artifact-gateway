@@ -69,7 +69,10 @@ boundaries. Its directory uses a query selector for active repositories so a
 bad directory answer becomes a query error, and Retry waits for every directory
 source with `Promise.allSettled`. Grant refresh errors retain cached rows under
 a warning with Retry. Service Account details refetch their credentials before
-clearing a failed section.
+clearing a failed section. Credential queries reject malformed pages before
+they reach the cache or page projections. An initial failure shows a local error
+and Retry without a loading placeholder; a refresh failure retains cached rows
+under a warning.
 
 ## Migration checklist
 

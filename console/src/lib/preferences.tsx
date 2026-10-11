@@ -527,7 +527,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     (key: MessageKey, variables?: Record<string, string | number>) => {
       let message: string = (locale === "zh-CN" ? zhCN : enUS)[key];
       for (const [name, value] of Object.entries(variables ?? {})) {
-        message = message.replaceAll(`{${name}}`, String(value));
+        message = message.replaceAll(`{${name}}`, () => String(value));
       }
       return message;
     },

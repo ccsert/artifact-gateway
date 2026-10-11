@@ -188,13 +188,19 @@ export function ServiceAccountDetail({
       />
       {credentialsError !== null && (
         <div className="px-5 pt-4">
-          <ErrorBanner error={credentialsError} onRetry={onRefresh} />
+          <ErrorBanner
+            error={credentialsError}
+            onRetry={onRefresh}
+            tone={credentials === null ? "error" : "warning"}
+          />
         </div>
       )}
       {credentials === null ? (
-        <div className="p-8">
-          <Loading label={t("identity.loadingCredentials")} />
-        </div>
+        credentialsError === null ? (
+          <div className="p-8">
+            <Loading label={t("identity.loadingCredentials")} />
+          </div>
+        ) : null
       ) : credentials.length === 0 ? (
         <div className="p-8">
           <EmptyState

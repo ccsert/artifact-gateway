@@ -11,7 +11,7 @@ their meaning.
 
 ## Unreleased
 
-- Console access and identity splits keep section Retry tied to its read sources, retain cached grants after refresh failures, and use typed feature message dictionaries without changing display text.
+- Console access and identity splits keep section Retry tied to its read sources, retain cached grants after refresh failures, and use typed feature message dictionaries without changing display text. Malformed credential pages stay local with Retry, refresh failures retain credential rows, and interpolated names preserve literal dollar characters.
 
 - The public browse page is split into focused sections (catalog, repository bar, artifact results, OCI version panel, usage), with its page messages in typed feature dictionaries. Catalog and artifact searches use the shared query layer; anonymous refusals stay on the page, never end a session, and are not retried. Refresh failures keep previously loaded content with a warning and Retry. Results and usage calculations stay inside their section boundaries, and section Retry awaits the refreshed source data. OCI/Conan incremental loaders remain a separate query migration.
 
