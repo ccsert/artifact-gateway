@@ -127,6 +127,11 @@ const surfaces: Surface[] = [
     ready: (page) => page.getByText("ci-publisher").first(),
   },
   {
+    name: "api-keys",
+    path: "/keys",
+    ready: (page) => page.getByText("legacy-ci").first(),
+  },
+  {
     name: "operations",
     path: "/operations",
     ready: (page) => page.getByText("nightly-retention").first(),

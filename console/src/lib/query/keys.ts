@@ -17,6 +17,37 @@ export const repositoryKeys = {
   capacity: (id: string) => [...repositoryKeys.detail(id), "capacity"] as const,
 };
 
+export const identityKeys = {
+  all: ["identity"] as const,
+  apiKeys: () => [...identityKeys.all, "api-keys"] as const,
+  serviceAccounts: () => [...identityKeys.all, "service-accounts"] as const,
+  credentials: (serviceAccountId: string) =>
+    [
+      ...identityKeys.serviceAccounts(),
+      serviceAccountId,
+      "credentials",
+    ] as const,
+  users: () => [...identityKeys.all, "users"] as const,
+  userSessions: (userId: string) =>
+    [...identityKeys.all, "user-sessions", userId] as const,
+  userIdentities: (userId: string) =>
+    [...identityKeys.all, "user-identities", userId] as const,
+  oidcIssuer: () => [...identityKeys.all, "oidc-issuer"] as const,
+};
+
+export const accessKeys = {
+  all: ["access"] as const,
+  grants: () => [...accessKeys.all, "grants"] as const,
+  anonymousPolicy: () => [...accessKeys.all, "anonymous-policy"] as const,
+  templates: () => [...accessKeys.all, "templates"] as const,
+  roles: () => [...accessKeys.all, "roles"] as const,
+  repositoryGrants: (repositoryId: string) =>
+    [...accessKeys.all, "repository-grants", repositoryId] as const,
+  /** Single 200-item pages used to choose principals and repositories. */
+  directory: (source: "users" | "service-accounts" | "repositories") =>
+    [...accessKeys.all, "directory", source] as const,
+};
+
 export const formatKeys = {
   profiles: ["formats", "profiles"] as const,
 };

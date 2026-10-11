@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApiKey, listApiKeys, revokeApiKey } from "../../client";
 import { AntdProvider } from "../../app/AntdProvider";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { ApiKeysPage } from "./ApiKeys";
 
 vi.mock("../../client", () => ({
@@ -33,11 +34,13 @@ function clickMask() {
 
 function renderPage() {
   return render(
-    <PreferencesProvider>
-      <AntdProvider>
-        <ApiKeysPage />
-      </AntdProvider>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <AntdProvider>
+          <ApiKeysPage />
+        </AntdProvider>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 

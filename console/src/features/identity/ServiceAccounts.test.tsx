@@ -19,6 +19,7 @@ import {
 } from "../../client";
 import { AntdProvider } from "../../app/AntdProvider";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { ServiceAccountsPage } from "./ServiceAccounts";
 
 vi.mock("../../client", async () => {
@@ -87,17 +88,105 @@ const mockUpdateServiceAccount = vi.mocked(updateServiceAccount);
 
 function renderPage() {
   return render(
-    <PreferencesProvider>
-      <AntdProvider>
-        <ServiceAccountsPage />
-      </AntdProvider>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <AntdProvider>
+          <ServiceAccountsPage />
+        </AntdProvider>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+describe("service account read containment", () => {
+  it.each([null, [null]])(
+    "keeps a malformed credential page local and retries the read (%j)",
+    async (items) => {
+      mockListServiceAccounts.mockResolvedValue({
+        data: { items: [activeAccount] },
+      } as never);
+      mockListServiceAccountCredentials.mockResolvedValue({
+        data: { items },
+      } as never);
+      const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        renderPage();
+        expect(
+          await screen.findByText(
+            "Invalid service account credentials response",
+          ),
+        ).toBeVisible();
+        expect(
+          screen.getByRole("button", { name: /新建服务账号/ }),
+        ).toBeVisible();
+        expect(screen.queryByText("加载凭据…")).not.toBeInTheDocument();
+        mockListServiceAccountCredentials.mockResolvedValue({
+          data: { items: [oldCredential] },
+        } as never);
+        fireEvent.click(screen.getByRole("button", { name: /重试/ }));
+        expect(await screen.findByText(oldCredential.name)).toBeVisible();
+        expect(mockListServiceAccountCredentials).toHaveBeenCalledTimes(2);
+        expect(errors).not.toHaveBeenCalled();
+      } finally {
+        errors.mockRestore();
+      }
+    },
+  );
+
+  it("retains verified credential rows when a refresh returns a malformed page", async () => {
+    mockListServiceAccounts.mockResolvedValue({
+      data: { items: [activeAccount] },
+    } as never);
+    mockListServiceAccountCredentials
+      .mockResolvedValueOnce({ data: { items: [oldCredential] } } as never)
+      .mockResolvedValueOnce({ data: { items: null } } as never)
+      .mockResolvedValueOnce({ data: { items: [newCredential] } } as never);
+    renderPage();
+    expect(await screen.findByText(oldCredential.name)).toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: /刷新/ }));
+    expect(
+      await screen.findByText("Invalid service account credentials response"),
+    ).toBeVisible();
+    expect(screen.getByText(oldCredential.name)).toBeVisible();
+    expect(screen.queryByText("加载凭据…")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /重试/ }));
+    expect(await screen.findByText(newCredential.name)).toBeVisible();
+    expect(screen.queryByText(oldCredential.name)).not.toBeInTheDocument();
+    expect(mockListServiceAccountCredentials).toHaveBeenCalledTimes(3);
+  });
+
+  it.each(["ci-$&", "ci-$'", "ci-$`", "ci-$$"])(
+    "preserves the literal credential name in revoke controls (%s)",
+    async (name) => {
+      mockListServiceAccounts.mockResolvedValue({
+        data: { items: [activeAccount] },
+      } as never);
+      mockListServiceAccountCredentials.mockResolvedValue({
+        data: { items: [{ ...oldCredential, name }] },
+      } as never);
+      renderPage();
+
+      const revoke = await screen.findByRole("button", {
+        name: `吊销 ${name}`,
+      });
+      await userEvent.click(revoke);
+      await waitFor(() =>
+        expect(
+          screen.getByText(
+            `吊销 ${name} 后，使用该 Token 的任务会立即认证失败；同一服务账号的其他凭据不受影响。`,
+          ),
+        ).toBeVisible(),
+      );
+      expect(mockRevokeServiceAccountCredential).not.toHaveBeenCalled();
+    },
+  );
 });
 
 // The mask is the dismissal route the dialogs' `busy` flag controls, and it
@@ -197,6 +286,7 @@ describe("ServiceAccountsPage", () => {
     expect(await screen.findByText("release-bot")).toBeInTheDocument();
     expect(mockListServiceAccounts).toHaveBeenLastCalledWith({
       query: { pageSize: 200, pageToken: "accounts-page-2" },
+      signal: expect.any(AbortSignal),
     });
 
     await user.click(
@@ -206,6 +296,7 @@ describe("ServiceAccountsPage", () => {
     expect(mockListServiceAccountCredentials).toHaveBeenLastCalledWith({
       path: { serviceAccountId: accountId },
       query: { pageSize: 200, pageToken: "credentials-page-2" },
+      signal: expect.any(AbortSignal),
     });
   });
 

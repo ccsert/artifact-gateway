@@ -33,6 +33,23 @@ This directory owns the shared pieces; feature folders own their query hooks
   tick after the mocked request resolves, so wait with `findBy…` for anything
   that depends on a second read.
 
+## Data shared across pages
+
+- **Writers on unmigrated pages.** A read whose data other pages still write
+  without invalidating its key sets `staleTime: 0`, so returning to the page
+  always shows their writes (the access directory, grant lists, sessions).
+  Drop it once every writer invalidates.
+- **One key per resource, everywhere.** Pages that show the same list share a
+  key and a `queryFn`; a page that needs another shape uses `select`
+  (`useGrantRows` over `useRepositoryGrantRecords`). A write updates or
+  invalidates that one key, and every page follows.
+- **Permission-gated reads use `enabled`.** Do not request what the signed-in
+  identity cannot read: a refusal reaches the session handling above. Gate
+  the query on the capability (`platformCapabilities(identity)`) instead.
+- **Dialogs own their drafts.** An editor dialog keeps its form state, and the
+  page mounts it with a new `key` per opening while keeping it mounted to
+  close. Each opening then starts from its target, and closing still animates.
+
 ## Failure containment
 
 Wrap independent page sections in `SectionBoundary`
@@ -47,6 +64,16 @@ These data changes cannot clear a failure while Retry is waiting for its
 refetch promises; all sources must finish first. Navigation `resetKeys` still
 clear the failure immediately and invalidate a previous section's Retry.
 
+Access Control keeps grant metrics and principal projections inside their
+boundaries. Its directory uses a query selector for active repositories so a
+bad directory answer becomes a query error, and Retry waits for every directory
+source with `Promise.allSettled`. Grant refresh errors retain cached rows under
+a warning with Retry. Service Account details refetch their credentials before
+clearing a failed section. Credential queries reject malformed pages before
+they reach the cache or page projections. An initial failure shows a local error
+and Retry without a loading placeholder; a refresh failure retains cached rows
+under a warning.
+
 ## Migration checklist
 
 Components that still read in `useEffect` and import the SDK. Migrate a page
@@ -55,9 +82,9 @@ entries only use effects for non-data work and leave the list once checked.
 
 - [ ] `app/CommandPalette.tsx`
 - [ ] `app/Layout.tsx`
-- [ ] `features/access-control/AccessControl.tsx`
-- [ ] `features/access-control/AuthorizationRolesPanel.tsx`
-- [ ] `features/access-control/AuthorizationTemplatesPanel.tsx`
+- [x] `features/access-control/AccessControl.tsx`
+- [x] `features/access-control/AuthorizationRolesPanel.tsx`
+- [x] `features/access-control/AuthorizationTemplatesPanel.tsx`
 - [ ] `features/artifact-detail/ArtifactIntelligencePanel.tsx`
 - [ ] `features/artifact-detail/ArtifactQuarantinePanel.tsx`
 - [ ] `features/artifact-detail/ArtifactRowDetail.tsx`
@@ -70,14 +97,14 @@ entries only use effects for non-data work and leave the list once checked.
 - [ ] `features/groups/Groups.tsx`
 - [ ] `features/groups/pages/GroupBrowsePage.tsx`
 - [ ] `features/groups/pages/GroupResolutionDialog.tsx`
-- [ ] `features/identity/ApiKeys.tsx`
-- [ ] `features/identity/ServiceAccounts.tsx`
-- [ ] `features/identity/Users.tsx`
-- [ ] `features/identity/users/UserCreateDialog.tsx`
-- [ ] `features/identity/users/UserDetailsDrawer.tsx`
-- [ ] `features/identity/users/UserIdentitiesPanel.tsx`
-- [ ] `features/identity/users/UserRepositoryAccessPanel.tsx`
-- [ ] `features/identity/users/UserSessionsPanel.tsx`
+- [x] `features/identity/ApiKeys.tsx`
+- [x] `features/identity/ServiceAccounts.tsx`
+- [x] `features/identity/Users.tsx`
+- [x] `features/identity/users/UserCreateDialog.tsx`
+- [x] `features/identity/users/UserDetailsDrawer.tsx`
+- [x] `features/identity/users/UserIdentitiesPanel.tsx`
+- [x] `features/identity/users/UserRepositoryAccessPanel.tsx`
+- [x] `features/identity/users/UserSessionsPanel.tsx`
 - [ ] `features/operations/HTTPErrorRatePanel.tsx`
 - [ ] `features/operations/Operations.tsx`
 - [ ] `features/operations/RuntimeLogsPanel.tsx`
@@ -95,7 +122,7 @@ entries only use effects for non-data work and leave the list once checked.
 - [ ] `features/repository/RepositoryBrowseTree.tsx`
 - [ ] `features/repository/RepositoryCapacityTab.tsx`
 - [ ] `features/repository/RepositoryDistributionTab.tsx`
-- [ ] `features/repository/RepositoryGrantsTab.tsx`
+- [x] `features/repository/RepositoryGrantsTab.tsx`
 - [ ] `features/repository/RepositoryLifecycleTabs.tsx`
 - [ ] `features/repository/RepositoryRetentionTab.tsx`
 - [ ] `features/repository/RepositoryScanningTab.tsx`

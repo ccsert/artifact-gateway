@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   DeleteOutlined,
   LinkOutlined,
@@ -6,13 +7,12 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import { Alert, App, Button, Form, Input, Popconfirm, Space, Tag } from "antd";
-import {
-  createUserIdentity,
-  deleteUserIdentity,
-  getOidcSettings,
-  listUserIdentities,
+import { createUserIdentity, deleteUserIdentity } from "../../../client";
+import type {
+  CreateUserIdentity,
+  ListUserIdentitiesResponse,
+  UserIdentity,
 } from "../../../client";
-import type { CreateUserIdentity, UserIdentity } from "../../../client";
 import { Badge } from "../../../components/ui/Badge";
 import {
   EmptyState,
@@ -22,6 +22,8 @@ import {
 import { Modal } from "../../../components/ui/Modal";
 import { formatDate } from "../../../lib/format";
 import { usePreferences } from "../../../lib/preferences";
+import { identityKeys } from "../../../lib/query/keys";
+import { useOidcIssuer, useUserIdentities } from "../userQueries";
 
 interface UserIdentitiesPanelProps {
   userId: string;
@@ -29,40 +31,31 @@ interface UserIdentitiesPanelProps {
 
 export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
   const { message } = App.useApp();
-  const { locale, text } = usePreferences();
-  const [items, setItems] = useState<UserIdentity[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<unknown>(null);
+  const { locale, t } = usePreferences();
+  const queryClient = useQueryClient();
+  const identitiesQuery = useUserIdentities(userId);
+  const issuerQuery = useOidcIssuer();
+  const issuer = issuerQuery.data ?? "";
+  const items = identitiesQuery.data?.items ?? [];
+  const loading = identitiesQuery.isFetching;
+  const [actionError, setActionError] = useState<unknown>(null);
+  const error = actionError ?? identitiesQuery.error;
   // A failed link belongs to the dialog that started it; the panel banner
   // stays reserved for loading the identity list.
   const [linkError, setLinkError] = useState<unknown>(null);
   const [open, setOpen] = useState(false);
-  const [issuer, setIssuer] = useState("");
   const [subject, setSubject] = useState("");
   const [busy, setBusy] = useState(false);
+  const updateItems = (change: (items: UserIdentity[]) => UserIdentity[]) =>
+    queryClient.setQueryData<ListUserIdentitiesResponse>(
+      identityKeys.userIdentities(userId),
+      (current) => current && { ...current, items: change(current.items) },
+    );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const [identitiesResult, settingsResult] = await Promise.all([
-      listUserIdentities({ path: { userId } }),
-      getOidcSettings(),
-    ]);
-    setLoading(false);
-    if (identitiesResult.error || !identitiesResult.data) {
-      setError(
-        identitiesResult.error ??
-          new Error(text("加载身份失败", "Failed to load identities")),
-      );
-      return;
-    }
-    setItems(identitiesResult.data.items);
-    setIssuer(settingsResult.data?.issuer ?? "");
-  }, [text, userId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const load = () => {
+    setActionError(null);
+    return Promise.all([identitiesQuery.refetch(), issuerQuery.refetch()]);
+  };
 
   const link = async () => {
     const body: CreateUserIdentity = {
@@ -79,15 +72,14 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
       });
       if (requestError || !data) {
         setLinkError(
-          requestError ??
-            new Error(text("绑定身份失败", "Failed to link identity")),
+          requestError ?? new Error(t("identity.failedToLinkIdentity")),
         );
         return;
       }
-      setItems((current) => [...current, data]);
+      updateItems((current) => [...current, data]);
       setSubject("");
       setOpen(false);
-      void message.success(text("身份已绑定", "Identity linked"));
+      void message.success(t("identity.identityLinked"));
     } catch (nextError) {
       setLinkError(nextError);
     } finally {
@@ -96,16 +88,16 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
   };
 
   const unlink = async (identity: UserIdentity) => {
-    setError(null);
+    setActionError(null);
     const { error: requestError } = await deleteUserIdentity({
       path: { userId, identityId: identity.id },
     });
     if (requestError) {
-      setError(requestError);
+      setActionError(requestError);
       return;
     }
-    setItems((current) => current.filter((item) => item.id !== identity.id));
-    void message.success(text("身份已解绑", "Identity unlinked"));
+    updateItems((current) => current.filter((item) => item.id !== identity.id));
+    void message.success(t("identity.identityUnlinked"));
   };
 
   return (
@@ -113,20 +105,17 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-fg-strong">
-            {text("外部身份", "External identities")}
+            {t("identity.externalIdentities")}
           </h2>
           <p className="mt-1 text-xs text-fg-tertiary">
-            {text(
-              "绑定后，OIDC 登录会使用此账户的状态、角色和会话撤销策略。",
-              "Linked OIDC sign-ins use this account's state, role, and session revocation policy.",
-            )}
+            {t("identity.linkedOidcSignInsUseThisAccountSState")}
           </p>
         </div>
         <Space size={6}>
           <Button
             size="small"
             icon={<ReloadOutlined />}
-            aria-label={text("刷新外部身份", "Refresh external identities")}
+            aria-label={t("identity.refreshExternalIdentities")}
             onClick={() => void load()}
           />
           <Button
@@ -134,13 +123,13 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => {
-              setError(null);
+              setActionError(null);
               setLinkError(null);
               setSubject("");
               setOpen(true);
             }}
           >
-            {text("绑定身份", "Link identity")}
+            {t("identity.linkIdentity")}
           </Button>
         </Space>
       </div>
@@ -149,10 +138,7 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
       {loading ? (
         <Loading />
       ) : items.length === 0 ? (
-        <EmptyState
-          compact
-          title={text("尚未绑定外部身份", "No external identity linked")}
-        />
+        <EmptyState compact title={t("identity.noExternalIdentityLinked")} />
       ) : (
         <div className="space-y-2">
           {items.map((identity) => (
@@ -165,9 +151,7 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
                   <LinkOutlined className="text-[var(--ag-link)]" />
                   <Badge tone="visualization-5">OIDC</Badge>
                   {identity.emailVerified ? (
-                    <Tag color="success">
-                      {text("邮箱已验证", "Email verified")}
-                    </Tag>
+                    <Tag color="success">{t("identity.emailVerified")}</Tag>
                   ) : null}
                 </div>
                 <div
@@ -180,20 +164,19 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
                   {identity.subject}
                 </div>
                 <div className="mt-2 text-xs text-fg-tertiary">
-                  {text("最近登录", "Last sign-in")}：
+                  {t("identity.lastSignIn2")}：
                   {identity.lastLoginAt
                     ? formatDate(identity.lastLoginAt, locale)
-                    : text("尚未登录", "Never")}
+                    : t("identity.never2")}
                 </div>
               </div>
               <Popconfirm
-                title={text("解绑这个身份？", "Unlink this identity?")}
-                description={text(
-                  "解绑后，该 OIDC 身份不能再进入此账户。",
-                  "This OIDC identity will no longer enter this account.",
+                title={t("identity.unlinkThisIdentity")}
+                description={t(
+                  "identity.thisOidcIdentityWillNoLongerEnterThisAccount",
                 )}
-                okText={text("解绑", "Unlink")}
-                cancelText={text("取消", "Cancel")}
+                okText={t("identity.unlink")}
+                cancelText={t("identity.cancel")}
                 okButtonProps={{ danger: true }}
                 onConfirm={() => unlink(identity)}
               >
@@ -202,7 +185,7 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
                   danger
                   type="text"
                   icon={<DeleteOutlined />}
-                  aria-label={text("解绑身份", "Unlink identity")}
+                  aria-label={t("identity.unlinkIdentity")}
                 />
               </Popconfirm>
             </div>
@@ -212,13 +195,13 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
 
       <Modal
         open={open}
-        title={text("绑定 OIDC 身份", "Link OIDC identity")}
+        title={t("identity.linkOidcIdentity")}
         onClose={() => setOpen(false)}
         busy={busy}
         footer={
           <Space>
             <Button onClick={() => setOpen(false)} disabled={busy}>
-              {text("取消", "Cancel")}
+              {t("identity.cancel")}
             </Button>
             <Button
               type="primary"
@@ -226,7 +209,7 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
               disabled={!issuer.trim() || !subject.trim()}
               onClick={() => void link()}
             >
-              {text("绑定", "Link")}
+              {t("identity.link")}
             </Button>
           </Space>
         }
@@ -240,17 +223,11 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
           className="mb-4"
           type="info"
           showIcon
-          title={text(
-            "身份提供方已从当前 OIDC 配置读取。",
-            "The identity provider is read from the current OIDC configuration.",
-          )}
+          title={t("identity.theIdentityProviderIsReadFromTheCurrentOidc")}
           description={
             issuer
-              ? `${text("Issuer", "Issuer")}: ${issuer}`
-              : text(
-                  "尚未配置 OIDC 提供方，暂时无法绑定身份。",
-                  "No OIDC provider is configured, so identities cannot be linked yet.",
-                )
+              ? `${t("identity.issuer")}: ${issuer}`
+              : t("identity.noOidcProviderIsConfiguredSoIdentitiesCannotBe")
           }
         />
         <Form layout="vertical">
@@ -259,16 +236,13 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
           </Form.Item>
           <Form.Item
             label="Subject"
-            extra={text(
-              "填写 OIDC ID Token 中的 sub 值，这是提供方用户的稳定唯一标识。",
-              "Enter the sub claim from the OIDC ID Token, the provider's stable unique user identifier.",
-            )}
+            extra={t("identity.enterTheSubClaimFromTheOidcIdToken")}
             required
           >
             <Input
               value={subject}
               onChange={(event) => setSubject(event.target.value)}
-              placeholder={text("例如：00u123…", "For example: 00u123…")}
+              placeholder={t("identity.forExample00u123")}
               aria-label="Subject"
             />
           </Form.Item>

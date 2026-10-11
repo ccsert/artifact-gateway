@@ -11,11 +11,15 @@ their meaning.
 
 ## Unreleased
 
+- Console access and identity splits keep section Retry tied to its read sources, retain cached grants after refresh failures, and use typed feature message dictionaries without changing display text. Malformed credential pages stay local with Retry, refresh failures retain credential rows, and interpolated names preserve literal dollar characters and placeholder-like text.
+
 - The public browse page is split into focused sections (catalog, repository bar, artifact results, OCI version panel, usage), with its page messages in typed feature dictionaries. Catalog and artifact searches use the shared query layer; anonymous refusals stay on the page, never end a session, and are not retried. Refresh failures keep previously loaded content with a warning and Retry. Results and usage calculations stay inside their section boundaries, and section Retry awaits the refreshed source data. OCI/Conan incremental loaders remain a separate query migration.
 
 - Console theme changes handle rejected native capture and update promises in the application. Skipped or invalid browser captures keep the accepted palette without uncaught page errors.
 
 - Overview Retry keeps the failed section contained until every requested data source finishes. A faster statistics response no longer renders an older damaged groups answer again; navigation still invalidates a previous section's Retry.
+
+- Access control, API keys, service accounts, users and repository grants read through the shared query layer, so a grant saved on a repository, in Access Control or in the user drawer, and a saved role or template, shows everywhere without a manual refresh. A repository administrator's grants tab no longer requests the platform-wide user and key directory it cannot read. Access Control is split into separate grants, evaluator and policy sections, each contained by its own error boundary. Editor dialogs open from a clean draft each time. Grant, credential, API key, role, template and user-drawer writes are covered end to end against a live Gateway.
 
 - Maven Hosted accepts unchanged ISO-8859-1 POMs and resolves an exact `${project.parent.version}` identity from the POM's literal parent version in standard PUT and strict coordinate commit. Original bytes and release checksum sidecars are preserved; malformed XML, unsupported encodings, unresolved identities and coordinate mismatches still fail validation. Real Maven cold-cache parent and dependency-tree consumption is part of the protocol gate.
 
@@ -235,7 +239,6 @@ their meaning.
 - Updated the indirect gRPC dependency to v1.83.1 to address GO-2026-6348.
 
 - Added lifecycle artifact download usage. Every successful content download resolved through the Gateway — Hosted, Proxy, or Group, across Maven, OCI, Raw, Conan, npm, PyPI, Go, and APT — is folded at the single audit write point into a durable per-artifact aggregate (`artifact_usage_stats`), so counts accumulate for the artifact's whole lifecycle and survive audit log retention: download count, total bytes, first and last download time, and last actor, keyed by the artifact address clients resolved (a Group download counts for the Group). The management API serves `GET /api/v2/repositories/{repositoryId}/artifact-usage`, and each repository Console gains a Usage (使用统计) tab with lifetime totals and a per-artifact table. HEAD probes, 304 revalidations, publishes, and management operations never count. Repository retention now consumes the same aggregates as cleanup evidence: the dry-run JSON and CSV export attach each candidate's download count and last download time, and a new `keepDownloadedDays` policy field (default 0, preserving current behavior) exempts cleanup units downloaded within the window from the current round regardless of age or version-count reasons, with per-format matching for npm, PyPI, Go, Maven, Raw, OCI manifest pulls, and Conan v2 revisions.
-
 
 - Added Go Proxy checksum database mirroring, closing the last known Go compatibility gap. A Go Proxy repository that lists a checksum database host in its egress allowlist now serves the go command's `/go/<repository>/sumdb/<name>/supported` probe and forwards `/latest`, `/lookup/`, and `/tile/` requests over allowlisted HTTPS egress. Signed tree bytes, status codes, and content types pass through verbatim and are never cached; the upstream credential is never attached; and mirrored requests follow the repository read policy, so the go command can verify module downloads against a checksum database it can only reach through the Gateway. The native Go E2E gate now proves a real `go` client verifies module downloads through the mirror.
 

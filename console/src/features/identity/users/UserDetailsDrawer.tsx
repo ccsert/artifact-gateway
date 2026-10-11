@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   DeleteOutlined,
   KeyOutlined,
@@ -33,6 +34,7 @@ import { ErrorBanner } from "../../../components/ui/Feedback";
 import { ConfirmDialog, Modal } from "../../../components/ui/Modal";
 import { formatDate } from "../../../lib/format";
 import { usePreferences } from "../../../lib/preferences";
+import { identityKeys } from "../../../lib/query/keys";
 import {
   localPasswordFitsBcrypt,
   localPasswordMeetsMinimum,
@@ -58,7 +60,7 @@ export function UserDetailsDrawer({
   onDeleted,
 }: UserDetailsDrawerProps) {
   const { message } = App.useApp();
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const { token } = antdTheme.useToken();
   const [profileForm] = Form.useForm<UpdateUser>();
   const [passwordForm] = Form.useForm<ResetUserPassword>();
@@ -68,7 +70,11 @@ export function UserDetailsDrawer({
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(
     null,
   );
-  const [sessionsRefreshKey, setSessionsRefreshKey] = useState(0);
+  const queryClient = useQueryClient();
+  const refreshSessions = (userId: string) =>
+    void queryClient.invalidateQueries({
+      queryKey: identityKeys.userSessions(userId),
+    });
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
@@ -102,12 +108,10 @@ export function UserDetailsDrawer({
     });
     setProfileBusy(false);
     if (requestError || !data) {
-      setError(
-        requestError ?? new Error(text("保存用户失败", "Failed to save user")),
-      );
+      setError(requestError ?? new Error(t("identity.failedToSaveUser")));
       return;
     }
-    void message.success(text("用户资料已保存", "User profile saved"));
+    void message.success(t("identity.userProfileSaved"));
     onChanged(data);
   };
 
@@ -123,21 +127,13 @@ export function UserDetailsDrawer({
     });
     setActionBusy(false);
     if (requestError || !data) {
-      setError(
-        requestError ??
-          new Error(text("重置密码失败", "Failed to reset password")),
-      );
+      setError(requestError ?? new Error(t("identity.failedToResetPassword")));
       return;
     }
     setPasswordOpen(false);
     passwordForm.resetFields();
-    void message.success(
-      text(
-        "密码已重置，现有会话已失效",
-        "Password reset and existing sessions revoked",
-      ),
-    );
-    setSessionsRefreshKey((current) => current + 1);
+    void message.success(t("identity.passwordResetAndExistingSessionsRevoked"));
+    refreshSessions(user.id);
     onChanged(data);
   };
 
@@ -167,15 +163,12 @@ export function UserDetailsDrawer({
     });
     setActionBusy(false);
     if (requestError || !data) {
-      setError(
-        requestError ??
-          new Error(text("撤销会话失败", "Failed to revoke sessions")),
-      );
+      setError(requestError ?? new Error(t("identity.failedToRevokeSessions")));
       return;
     }
     setPendingAction(null);
-    void message.success(text("全部会话已撤销", "All sessions revoked"));
-    setSessionsRefreshKey((current) => current + 1);
+    void message.success(t("identity.allSessionsRevoked"));
+    refreshSessions(user.id);
     onChanged(data);
   };
 
@@ -191,7 +184,7 @@ export function UserDetailsDrawer({
       return;
     }
     setPendingAction(null);
-    void message.success(text("用户已删除", "User deleted"));
+    void message.success(t("identity.userDeleted"));
     onDeleted();
   };
 
@@ -221,10 +214,10 @@ export function UserDetailsDrawer({
         extra={
           <Space size={8}>
             <Badge tone={roleTone(user.role)}>
-              {user.role === "none" ? text("待授权", "Pending") : user.role}
+              {user.role === "none" ? t("identity.pending") : user.role}
             </Badge>
             {locked ? (
-              <Badge tone="warning">{text("已锁定", "Locked")}</Badge>
+              <Badge tone="warning">{t("identity.locked")}</Badge>
             ) : (
               <StateBadge state={user.state} />
             )}
@@ -232,14 +225,14 @@ export function UserDetailsDrawer({
         }
         footer={
           <div className="flex justify-end gap-2">
-            <Button onClick={onClose}>{text("关闭", "Close")}</Button>
+            <Button onClick={onClose}>{t("identity.close")}</Button>
             <Button
               type="primary"
               icon={<SaveOutlined />}
               loading={profileBusy}
               onClick={() => void saveProfile()}
             >
-              {text("保存更改", "Save changes")}
+              {t("identity.saveChanges")}
             </Button>
           </div>
         }
@@ -258,21 +251,14 @@ export function UserDetailsDrawer({
             type={locked ? "warning" : "info"}
             title={
               locked
-                ? text(
-                    "账户因连续登录失败而暂时锁定",
-                    "Account temporarily locked after failed sign-ins",
-                  )
-                : text(
-                    "用户下次登录只能修改密码",
-                    "The user must change their password at next sign-in",
-                  )
+                ? t("identity.accountTemporarilyLockedAfterFailedSignIns")
+                : t("identity.theUserMustChangeTheirPasswordAtNextSign")
             }
             description={
               locked
-                ? text(
-                    `锁定至 ${formatDate(user.lockedUntil, locale)}`,
-                    `Locked until ${formatDate(user.lockedUntil, locale)}`,
-                  )
+                ? t("identity.lockedUntil", {
+                    locale: String(formatDate(user.lockedUntil, locale)),
+                  })
                 : undefined
             }
           />
@@ -280,7 +266,7 @@ export function UserDetailsDrawer({
 
         <section>
           <h2 className="mb-3 text-sm font-semibold text-fg-strong">
-            {text("账户资料", "Account profile")}
+            {t("identity.accountProfile")}
           </h2>
           <Form<UpdateUser>
             form={profileForm}
@@ -291,53 +277,47 @@ export function UserDetailsDrawer({
             colon={false}
             requiredMark="optional"
           >
-            <Form.Item
-              name="displayName"
-              label={text("显示名", "Display name")}
-            >
+            <Form.Item name="displayName" label={t("identity.displayName")}>
               <Input maxLength={128} />
             </Form.Item>
             <Form.Item
               name="email"
-              label={text("邮箱", "Email")}
+              label={t("identity.email")}
               rules={[
                 {
                   type: "email",
-                  message: text("请输入有效邮箱", "Enter a valid email"),
+                  message: t("identity.enterAValidEmail"),
                 },
               ]}
             >
               <Input maxLength={254} />
             </Form.Item>
-            <Form.Item name="description" label={text("说明", "Description")}>
+            <Form.Item name="description" label={t("identity.description")}>
               <Input.TextArea rows={3} maxLength={512} showCount />
             </Form.Item>
-            <Form.Item name="role" label={text("角色", "Role")}>
+            <Form.Item name="role" label={t("identity.role")}>
               <Select
                 options={[
                   {
                     value: "member",
-                    label: text(
-                      "member · 成员（无仓库权限，按仓库授权）",
-                      "member · no repository access until granted",
-                    ),
+                    label: t("identity.memberNoRepositoryAccessUntilGranted"),
                   },
                   {
                     value: "none",
-                    label: text("none · 待授权", "none · awaiting approval"),
+                    label: t("identity.noneAwaitingApproval"),
                   },
                   {
                     value: "admin",
-                    label: text("admin · 管理员", "admin · administrator"),
+                    label: t("identity.adminAdministrator"),
                   },
                 ]}
               />
             </Form.Item>
-            <Form.Item name="state" label={text("账户状态", "Account state")}>
+            <Form.Item name="state" label={t("identity.accountState")}>
               <Select
                 options={[
-                  { value: "active", label: text("有效", "Active") },
-                  { value: "disabled", label: text("已停用", "Disabled") },
+                  { value: "active", label: t("identity.active") },
+                  { value: "disabled", label: t("identity.disabled") },
                 ]}
               />
             </Form.Item>
@@ -348,15 +328,15 @@ export function UserDetailsDrawer({
 
         <section>
           <h2 className="mb-3 text-sm font-semibold text-fg-strong">
-            {text("登录与安全", "Sign-in and security")}
+            {t("identity.signInAndSecurity")}
           </h2>
           <Descriptions bordered size="small" column={2}>
-            <Descriptions.Item label={text("最后登录", "Last sign-in")}>
+            <Descriptions.Item label={t("identity.lastSignIn")}>
               {user.lastLoginAt
                 ? formatDate(user.lastLoginAt, locale)
-                : text("从未登录", "Never")}
+                : t("identity.never")}
             </Descriptions.Item>
-            <Descriptions.Item label={text("失败次数", "Failed attempts")}>
+            <Descriptions.Item label={t("identity.failedAttempts")}>
               <AntdBadge
                 count={user.failedLoginAttempts}
                 showZero
@@ -367,23 +347,23 @@ export function UserDetailsDrawer({
                 }
               />
             </Descriptions.Item>
-            <Descriptions.Item label={text("密码更新时间", "Password changed")}>
+            <Descriptions.Item label={t("identity.passwordChanged")}>
               {user.localPasswordEnabled
                 ? formatDate(user.passwordChangedAt, locale)
-                : text("未设置本地密码", "Not configured")}
+                : t("identity.notConfigured")}
             </Descriptions.Item>
-            <Descriptions.Item label={text("本地密码", "Local password")}>
+            <Descriptions.Item label={t("identity.localPassword")}>
               {user.localPasswordEnabled
-                ? text("已启用", "Enabled")
-                : text("未启用（外部身份）", "Not enabled (external identity)")}
+                ? t("identity.enabled")
+                : t("identity.notEnabledExternalIdentity")}
             </Descriptions.Item>
-            <Descriptions.Item label={text("下次登录改密", "Change required")}>
-              {user.mustChangePassword ? text("是", "Yes") : text("否", "No")}
+            <Descriptions.Item label={t("identity.changeRequired2")}>
+              {user.mustChangePassword ? t("identity.yes") : t("identity.no")}
             </Descriptions.Item>
-            <Descriptions.Item label={text("创建时间", "Created")}>
+            <Descriptions.Item label={t("identity.created")}>
               {formatDate(user.createdAt, locale)}
             </Descriptions.Item>
-            <Descriptions.Item label={text("最后更新", "Updated")}>
+            <Descriptions.Item label={t("identity.updated")}>
               {formatDate(user.updatedAt, locale)}
             </Descriptions.Item>
           </Descriptions>
@@ -398,26 +378,23 @@ export function UserDetailsDrawer({
                 setPasswordOpen(true);
               }}
             >
-              {text(
-                user.localPasswordEnabled ? "重置密码" : "设置本地密码",
-                user.localPasswordEnabled
-                  ? "Reset password"
-                  : "Set local password",
-              )}
+              {user.localPasswordEnabled
+                ? t("identity.resetPassword")
+                : t("identity.setLocalPassword")}
             </Button>
             <Button
               icon={<LogoutOutlined />}
               loading={actionBusy}
               onClick={() => openConfirm("revoke-sessions")}
             >
-              {text("撤销全部会话", "Revoke all sessions")}
+              {t("identity.revokeAllSessions")}
             </Button>
           </Space>
         </section>
 
         <Divider />
 
-        <UserSessionsPanel userId={user.id} refreshKey={sessionsRefreshKey} />
+        <UserSessionsPanel userId={user.id} />
 
         <Divider />
 
@@ -425,19 +402,16 @@ export function UserDetailsDrawer({
 
         <Divider />
 
-        <UserRepositoryAccessPanel userId={user.id} username={user.name} />
+        <UserRepositoryAccessPanel username={user.name} />
 
         <Divider />
 
         <section>
           <h2 className="mb-1 text-sm font-semibold text-fg-strong">
-            {text("删除账户", "Delete account")}
+            {t("identity.deleteAccount")}
           </h2>
           <p className="mb-3 text-xs text-fg-tertiary">
-            {text(
-              "删除不可撤销；最后一个有效管理员受到后端保护。",
-              "Deletion cannot be undone. The final active administrator is protected.",
-            )}
+            {t("identity.deletionCannotBeUndoneTheFinalActiveAdministratorIs")}
           </p>
           <Button
             danger
@@ -445,30 +419,27 @@ export function UserDetailsDrawer({
             loading={actionBusy}
             onClick={() => openConfirm("delete-account")}
           >
-            {text("删除用户", "Delete user")}
+            {t("identity.deleteUser")}
           </Button>
         </section>
       </Drawer>
 
       <Modal
         open={passwordOpen}
-        title={text(
-          `重置 ${user.name} 的密码`,
-          `Reset password for ${user.name}`,
-        )}
+        title={t("identity.resetPasswordFor", { user: String(user.name) })}
         onClose={closePassword}
         busy={actionBusy}
         footer={
           <Space>
             <Button onClick={closePassword} disabled={actionBusy}>
-              {text("取消", "Cancel")}
+              {t("identity.cancel")}
             </Button>
             <Button
               type="primary"
               loading={actionBusy}
               onClick={() => void resetPassword()}
             >
-              {text("重置密码", "Reset password")}
+              {t("identity.resetPassword")}
             </Button>
           </Space>
         }
@@ -481,26 +452,19 @@ export function UserDetailsDrawer({
         <Form<ResetUserPassword> form={passwordForm} layout="vertical">
           <Form.Item
             name="password"
-            label={text("新密码", "New password")}
+            label={t("identity.newPassword")}
             rules={[
               {
                 required: true,
-                message: text("请输入新密码", "Enter a new password"),
+                message: t("identity.enterANewPassword"),
               },
               {
                 validator: async (_rule, value?: string) => {
                   if (value && !localPasswordMeetsMinimum(value)) {
-                    throw new Error(
-                      text(
-                        "密码至少需要 8 个字符",
-                        "Use at least 8 characters",
-                      ),
-                    );
+                    throw new Error(t("identity.useAtLeast8Characters"));
                   }
                   if (value && !localPasswordFitsBcrypt(value)) {
-                    throw new Error(
-                      text("密码不能超过 72 字节", "Use no more than 72 bytes"),
-                    );
+                    throw new Error(t("identity.useNoMoreThan72Bytes"));
                   }
                 },
               },
@@ -510,12 +474,12 @@ export function UserDetailsDrawer({
           </Form.Item>
           <Form.Item
             name="mustChangePassword"
-            label={text("下次登录", "Next sign-in")}
+            label={t("identity.nextSignIn")}
             valuePropName="checked"
           >
             <Switch
-              checkedChildren={text("必须修改密码", "Change required")}
-              unCheckedChildren={text("直接使用", "Ready to use")}
+              checkedChildren={t("identity.changeRequired3")}
+              unCheckedChildren={t("identity.readyToUse")}
             />
           </Form.Item>
         </Form>
@@ -527,24 +491,24 @@ export function UserDetailsDrawer({
         danger={pendingAction === "delete-account"}
         title={
           pendingAction === "delete-account"
-            ? text("删除用户", "Delete user")
-            : text("撤销全部会话", "Revoke all sessions")
+            ? t("identity.deleteUser")
+            : t("identity.revokeAllSessions")
         }
         confirmLabel={
           pendingAction === "delete-account"
-            ? text("删除用户", "Delete user")
-            : text("撤销会话", "Revoke sessions")
+            ? t("identity.deleteUser")
+            : t("identity.revokeSessions")
         }
         message={
           <>
             {pendingAction === "delete-account"
-              ? text(
-                  `确定永久删除用户 ${user.name}？该账户将立即无法访问系统。`,
-                  `Permanently delete ${user.name}? The account immediately loses access.`,
+              ? t(
+                  "identity.permanentlyDeleteTheAccountImmediatelyLosesAccess",
+                  { user: String(user.name) },
                 )
-              : text(
-                  `用户 ${user.name} 已签发的本地登录令牌将立即失效，需要重新登录。`,
-                  `All local session tokens issued to ${user.name} become invalid immediately.`,
+              : t(
+                  "identity.allLocalSessionTokensIssuedToBecomeInvalidImmediately",
+                  { user: String(user.name) },
                 )}
             {error ? (
               <div className="mt-3">

@@ -54,6 +54,7 @@ The behaviour each refactor must preserve, and where it is proven.
 | Retention, tombstone restore, lifecycle jobs | `artifact-workflows`                                                                                                   |
 | Public browse and search deep links          | `artifact-workflows`, `global-search`, `public-version-selection`                                                      |
 | Access control and authorization templates   | `access-control-theme`, `authorization-template-dialog`                                                                |
+| Grant, credential and API key writes         | `access-identity-workflows` (live Gateway, confirmed through the API)                                                  |
 | Audit log and retention                      | `audit-layout`, `audits-date-filter`, `admin-list-behavior`                                                            |
 | Service accounts and API keys                | `service-accounts-layout`, `admin-list-behavior`, `artifact-workflows`                                                 |
 | Operations, runtime nodes, logs, diagnostics | `runtime-nodes-health`, `runtime-logs-layout`, `runtime-log-window`, `http-error-rate-layout`, `local-capacity-layout` |
@@ -68,7 +69,5 @@ page that owns the flow. This PR establishes the first regression baseline;
 these gaps keep #270 open until its complete flow acceptance is met.
 
 - Create a repository (form validation through first artifact view).
-- Write a repository grant (create, edit, revoke) from Access Control.
-- Issue and rotate a service account credential; create an API key.
 - Sign out and session expiry.
 - Artifact detail for PyPI, Go, Raw, and APT.

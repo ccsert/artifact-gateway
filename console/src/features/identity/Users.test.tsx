@@ -13,6 +13,7 @@ import {
 import type { User } from "../../client";
 import { AntdProvider } from "../../app/AntdProvider";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { UsersPage } from "./Users";
 
 vi.mock("../../client", () => ({
@@ -62,11 +63,13 @@ const alice: User = {
 
 function renderPage() {
   return render(
-    <PreferencesProvider>
-      <AntdProvider>
-        <UsersPage />
-      </AntdProvider>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <AntdProvider>
+          <UsersPage />
+        </AntdProvider>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 
@@ -126,6 +129,7 @@ describe("UsersPage", () => {
         limit: 20,
         offset: 0,
       },
+      signal: expect.any(AbortSignal),
     });
 
     await user.click(screen.getByText("Alice Chen"));
@@ -159,6 +163,7 @@ describe("UsersPage", () => {
           limit: 20,
           offset: 0,
         },
+        signal: expect.any(AbortSignal),
       });
     });
   });

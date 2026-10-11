@@ -1,3 +1,9 @@
+import { repositoryGrantsZhCN } from "../messages/repository-grants.zh-CN";
+import { repositoryGrantsEnUS } from "../messages/repository-grants.en-US";
+import { accessZhCN } from "../messages/access.zh-CN";
+import { accessEnUS } from "../messages/access.en-US";
+import { identityZhCN } from "../messages/identity.zh-CN";
+import { identityEnUS } from "../messages/identity.en-US";
 import { publicBrowseZhCN } from "../messages/public-browse.zh-CN";
 import { publicBrowseEnUS } from "../messages/public-browse.en-US";
 import {
@@ -48,6 +54,9 @@ const LOCALE_KEY = "ag.console.locale";
 
 const zhCN = {
   ...publicBrowseZhCN,
+  ...repositoryGrantsZhCN,
+  ...accessZhCN,
+  ...identityZhCN,
   "common.cancel": "取消",
   "common.save": "保存",
   "common.loading": "正在加载…",
@@ -151,6 +160,9 @@ type MessageKey = keyof typeof zhCN;
 
 const enUS: Record<MessageKey, string> = {
   ...publicBrowseEnUS,
+  ...repositoryGrantsEnUS,
+  ...accessEnUS,
+  ...identityEnUS,
   "common.cancel": "Cancel",
   "common.save": "Save",
   "common.loading": "Loading…",
@@ -513,11 +525,14 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, [activeTheme.id, availableThemes, colorMode, setThemeId]);
   const t = useCallback(
     (key: MessageKey, variables?: Record<string, string | number>) => {
-      let message: string = (locale === "zh-CN" ? zhCN : enUS)[key];
-      for (const [name, value] of Object.entries(variables ?? {})) {
-        message = message.replaceAll(`{${name}}`, String(value));
-      }
-      return message;
+      const message: string = (locale === "zh-CN" ? zhCN : enUS)[key];
+      if (!variables) return message;
+      // Match the original template once; inserted names stay literal.
+      return message.replace(/\{([^{}]+)\}/g, (placeholder, name: string) =>
+        variables && Object.hasOwn(variables, name)
+          ? String(variables[name])
+          : placeholder,
+      );
     },
     [locale],
   );

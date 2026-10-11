@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Button,
   Input,
@@ -18,7 +18,6 @@ import {
 import {
   createAuthorizationRole,
   deleteAuthorizationRole,
-  listAuthorizationRoles,
   updateAuthorizationRole,
 } from "../../client";
 import type { AuthorizationRole } from "../../client";
@@ -27,17 +26,19 @@ import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { Card, CardHeader } from "../../components/ui/Layout";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 import { Modal } from "../../components/ui/Modal";
+import { accessKeys } from "../../lib/query/keys";
+import { useAuthorizationRoles, useInvalidateAccess } from "./accessQueries";
 
 export type AuthorizationScope = AuthorizationRole["scopes"][number];
 
-type Props = {
-  onChanged?: () => void;
-};
-
-export function AuthorizationRolesPanel({ onChanged }: Props) {
-  const { text } = usePreferences();
-  const [roles, setRoles] = useState<AuthorizationRole[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
+/** Custom roles, shared with the templates panel through the roles query. */
+export function AuthorizationRolesPanel() {
+  const { t } = usePreferences();
+  const rolesQuery = useAuthorizationRoles();
+  const roles = rolesQuery.data ?? null;
+  const invalidate = useInvalidateAccess();
+  const [actionError, setActionError] = useState<unknown>(null);
+  const error = actionError ?? rolesQuery.error;
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<AuthorizationRole | null>(null);
   const [name, setName] = useState("");
@@ -47,33 +48,19 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
   const [saveError, setSaveError] = useState<unknown>(null);
 
   const scopeOptions: Array<{ value: AuthorizationScope; label: string }> = [
-    { value: "repositories:read", label: text("读取", "Read") },
-    { value: "repositories:write", label: text("写入", "Write") },
+    { value: "repositories:read", label: t("access.read") },
+    { value: "repositories:write", label: t("access.write") },
     {
       value: "repositories:intelligence",
-      label: text("制品情报", "Artifact intelligence"),
+      label: t("access.artifactIntelligence"),
     },
-    { value: "repositories:admin", label: text("管理", "Admin") },
+    { value: "repositories:admin", label: t("access.admin") },
   ];
 
-  const load = useCallback(async () => {
-    setError(null);
-    const result = await listAuthorizationRoles();
-    if (result.error || !result.data) {
-      setError(
-        result.error ??
-          new Error(
-            text("加载授权角色失败", "Failed to load authorization roles"),
-          ),
-      );
-      return;
-    }
-    setRoles(result.data);
-  }, [text]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const load = async () => {
+    setActionError(null);
+    await invalidate(accessKeys.roles());
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -96,12 +83,7 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
   const save = async () => {
     if (!name.trim() || scopes.length === 0) {
       setSaveError(
-        new Error(
-          text(
-            "角色名称和至少一项权限不能为空",
-            "Role name and at least one permission are required",
-          ),
-        ),
+        new Error(t("access.roleNameAndAtLeastOnePermissionAreRequired")),
       );
       return;
     }
@@ -122,16 +104,12 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
         : await createAuthorizationRole({ body });
       if (result.error || !result.data) {
         setSaveError(
-          result.error ??
-            new Error(
-              text("保存授权角色失败", "Failed to save authorization role"),
-            ),
+          result.error ?? new Error(t("access.failedToSaveAuthorizationRole")),
         );
         return;
       }
       setEditorOpen(false);
       await load();
-      onChanged?.();
     } catch (nextError) {
       setSaveError(nextError);
     } finally {
@@ -141,19 +119,19 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
 
   const columns: ColumnsType<AuthorizationRole> = [
     {
-      title: text("角色", "Role"),
+      title: t("access.role"),
       key: "role",
       render: (_, role) => (
         <div>
           <Typography.Text strong>{role.name}</Typography.Text>
           <div className="text-xs text-fg-tertiary">
-            {role.description || text("无描述", "No description")}
+            {role.description || t("access.noDescription")}
           </div>
         </div>
       ),
     },
     {
-      title: text("权限", "Permissions"),
+      title: t("access.permissions"),
       dataIndex: "scopes",
       width: 380,
       render: (values: AuthorizationScope[]) => (
@@ -167,13 +145,13 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
       ),
     },
     {
-      title: text("更新时间", "Updated"),
+      title: t("access.updated"),
       dataIndex: "updatedAt",
       width: 190,
       render: (value: string) => new Date(value).toLocaleString(),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("access.actions"),
       key: "actions",
       width: 120,
       render: (_, role) => (
@@ -181,35 +159,33 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
           <Button
             type="text"
             icon={<EditOutlined />}
-            aria-label={text("编辑角色", "Edit role")}
+            aria-label={t("access.editRole")}
             onClick={() => openEdit(role)}
           />
           <Popconfirm
-            title={text("删除此角色？", "Delete this role?")}
-            description={text(
-              "已保存的模板和仓库规则不会改变。",
-              "Saved templates and repository grants will not change.",
+            title={t("access.deleteThisRole")}
+            description={t(
+              "access.savedTemplatesAndRepositoryGrantsWillNotChange",
             )}
-            okText={text("删除", "Delete")}
-            cancelText={text("取消", "Cancel")}
+            okText={t("access.delete")}
+            cancelText={t("access.cancel")}
             okButtonProps={{ danger: true }}
             onConfirm={async () => {
               const result = await deleteAuthorizationRole({
                 path: { roleId: role.id },
               });
               if (result.error) {
-                setError(result.error);
+                setActionError(result.error);
                 return;
               }
               await load();
-              onChanged?.();
             }}
           >
             <Button
               danger
               type="text"
               icon={<DeleteOutlined />}
-              aria-label={text("删除角色", "Delete role")}
+              aria-label={t("access.deleteRole")}
             />
           </Popconfirm>
         </Space>
@@ -220,19 +196,16 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
   return (
     <Card bodyClassName="p-0">
       <CardHeader
-        title={text("自定义授权角色", "Custom authorization roles")}
+        title={t("access.customAuthorizationRoles")}
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            {text("新建角色", "New role")}
+            {t("access.newRole")}
           </Button>
         }
       />
       <div className="px-5 py-3 text-xs text-fg-tertiary">
         <SafetyCertificateOutlined className="mr-2 text-[var(--ag-content-tertiary)]" />
-        {text(
-          "角色复用一组权限。选入模板或授权规则时会复制权限快照，之后修改或删除角色不会改变已有授权。",
-          "Roles reuse permission sets. Templates and grants copy a scope snapshot, so later role edits or deletion never change saved access.",
-        )}
+        {t("access.rolesReusePermissionSetsTemplatesAndGrantsCopyA")}
       </div>
       {error ? (
         <div className="px-5 pb-4">
@@ -243,10 +216,9 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
       ) : roles.length === 0 ? (
         <EmptyState
           compact
-          title={text("尚未创建自定义角色", "No custom roles yet")}
-          hint={text(
-            "把经常一起授予的权限保存成角色，编辑模板时可以直接复用。",
-            "Save permissions that are commonly granted together and reuse them while editing templates.",
+          title={t("access.noCustomRolesYet")}
+          hint={t(
+            "access.savePermissionsThatAreCommonlyGrantedTogetherAndReuse",
           )}
         />
       ) : (
@@ -262,8 +234,8 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
         open={editorOpen}
         title={
           editing
-            ? text("编辑授权角色", "Edit authorization role")
-            : text("新建授权角色", "New authorization role")
+            ? t("access.editAuthorizationRole")
+            : t("access.newAuthorizationRole")
         }
         onClose={() => setEditorOpen(false)}
         width={680}
@@ -271,10 +243,10 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
         footer={
           <Space>
             <Button onClick={() => setEditorOpen(false)} disabled={saving}>
-              {text("取消", "Cancel")}
+              {t("access.cancel")}
             </Button>
             <Button type="primary" loading={saving} onClick={() => void save()}>
-              {text("保存", "Save")}
+              {t("access.save")}
             </Button>
           </Space>
         }
@@ -289,40 +261,34 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
             htmlFor="authorization-role-name"
             className="pt-2 text-right text-sm text-fg-tertiary"
           >
-            {text("角色名称", "Role name")}
+            {t("access.roleName")}
           </label>
           <Input
             id="authorization-role-name"
             value={name}
             maxLength={128}
-            placeholder={text(
-              "例如 发布审核员",
-              "For example Release reviewer",
-            )}
+            placeholder={t("access.forExampleReleaseReviewer")}
             onChange={(event) => setName(event.target.value)}
           />
           <label
             htmlFor="authorization-role-description"
             className="pt-2 text-right text-sm text-fg-tertiary"
           >
-            {text("用途描述", "Description")}
+            {t("access.description")}
           </label>
           <Input.TextArea
             id="authorization-role-description"
             value={description}
             maxLength={1000}
             autoSize={{ minRows: 2, maxRows: 4 }}
-            placeholder={text(
-              "说明该角色适用的职责",
-              "Describe the responsibility this role serves",
-            )}
+            placeholder={t("access.describeTheResponsibilityThisRoleServes")}
             onChange={(event) => setDescription(event.target.value)}
           />
           <label
             htmlFor="authorization-role-scopes"
             className="pt-2 text-right text-sm text-fg-tertiary"
           >
-            {text("仓库权限", "Permissions")}
+            {t("access.permissions2")}
           </label>
           <Select<AuthorizationScope[]>
             id="authorization-role-scopes"
@@ -330,10 +296,7 @@ export function AuthorizationRolesPanel({ onChanged }: Props) {
             value={scopes}
             options={scopeOptions}
             maxTagCount="responsive"
-            placeholder={text(
-              "选择一项或多项权限",
-              "Select one or more permissions",
-            )}
+            placeholder={t("access.selectOneOrMorePermissions")}
             onChange={setScopes}
           />
         </div>

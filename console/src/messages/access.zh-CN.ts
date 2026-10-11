@@ -1,0 +1,199 @@
+export const accessZhCN = {
+  "access.accessControl": "访问控制",
+  "access.evaluateEffectivePermissionsAndReviewAnonymousAndRepositoryAccess":
+    "检查主体的最终权限，集中查看匿名策略与逐仓库授权",
+  "access.grants": "授权记录（{grants}）",
+  "access.accessEvaluation": "权限检查",
+  "access.policiesTemplates": "策略与模板",
+  "access.currentIdentity": "当前登录身份",
+  "access.noGlobalRole": "无全局角色",
+  "access.user": "用户",
+  "access.globalRole": "全局角色",
+  "access.none": "无",
+  "access.serviceAccount": "服务账号",
+  "access.noGlobalRoleRepositoryGrantsDecide": "无全局角色，由仓库授权决定",
+  "access.oidcCustomActor": "OIDC / 自定义 actor",
+  "access.enterTheCompleteAuthenticatedActorAndSelectItsGlobal":
+    "输入认证后产生的完整 actor，并选择其全局角色",
+  "access.selectAPrincipalAndRepository": "请选择主体和仓库",
+  "access.enterTheCompleteActorProducedByTheAuthenticationSystem":
+    "请输入认证系统产生的完整 actor",
+  "access.accessEvaluationFailed": "权限检查失败",
+  "access.runTheGatewayDecisionChainAcrossGlobalRolesRepository":
+    "使用网关真实判定链检查全局角色、仓库授权和资源前缀叠加后的结果。",
+  "access.someIdentitySourcesAreUnavailable": "部分身份来源不可用",
+  "access.serviceAccountsAreTemporarilyUnavailableYouCanStillEvaluate":
+    "服务账号暂时不可用，仍可检查当前身份、用户、API Key 和自定义 actor。",
+  "access.retry": "重试",
+  "access.principal": "授权主体",
+  "access.none2": "无",
+  "access.repository": "仓库",
+  "access.selectRepository": "选择仓库",
+  "access.resourceOptional": "具体资源（可选）",
+  "access.blankEvaluatesRepositoryWideAccess": "留空检查整个仓库",
+  "access.evaluate": "检查",
+  "access.completeActorIdentifier": "完整 actor 标识",
+  "access.forExampleOidcGitlabTeamReleaseOrCiBot":
+    "例如 oidc:gitlab:team/release 或 ci-bot",
+  "access.thisMustExactlyMatchTheAuthenticatedActorChooseThe":
+    "该值必须与认证完成后产生的 actor 完全一致；OIDC 角色需按实际映射结果选择。",
+  "access.simulated": "模拟结果",
+  "access.currentIdentity2": "当前身份",
+  "access.entireRepository": "整个仓库",
+  "access.authorizationOrderAndRoles": "权限判定顺序与角色能力",
+  "access.howRulesCombine": "了解规则如何叠加",
+  "access.repositoryRulesAddPermissionsTheyCannotRevokeAGlobal":
+    "仓库规则只追加权限，不能撤销全局角色。",
+  "access.failedToLoadRepositoryGrantVersion": "加载仓库授权版本失败",
+  "access.applyAuthorizationTemplate": "应用授权模板",
+  "access.cancel": "取消",
+  "access.apply": "应用",
+  "access.chooseATargetRepositoryApplyingReplacesItsCurrentGrants":
+    "选择目标仓库。应用会替换该仓库现有授权规则，并保留并发版本保护。",
+  "access.read": "读取",
+  "access.write": "写入",
+  "access.artifactIntelligence": "制品情报",
+  "access.admin": "管理",
+  "access.roleNameAndAtLeastOnePermissionAreRequired":
+    "角色名称和至少一项权限不能为空",
+  "access.failedToSaveAuthorizationRole": "保存授权角色失败",
+  "access.role": "角色",
+  "access.noDescription": "无描述",
+  "access.permissions": "权限",
+  "access.updated": "更新时间",
+  "access.actions": "操作",
+  "access.editRole": "编辑角色",
+  "access.deleteThisRole": "删除此角色？",
+  "access.savedTemplatesAndRepositoryGrantsWillNotChange":
+    "已保存的模板和仓库规则不会改变。",
+  "access.delete": "删除",
+  "access.deleteRole": "删除角色",
+  "access.customAuthorizationRoles": "自定义授权角色",
+  "access.newRole": "新建角色",
+  "access.rolesReusePermissionSetsTemplatesAndGrantsCopyA":
+    "角色复用一组权限。选入模板或授权规则时会复制权限快照，之后修改或删除角色不会改变已有授权。",
+  "access.noCustomRolesYet": "尚未创建自定义角色",
+  "access.savePermissionsThatAreCommonlyGrantedTogetherAndReuse":
+    "把经常一起授予的权限保存成角色，编辑模板时可以直接复用。",
+  "access.editAuthorizationRole": "编辑授权角色",
+  "access.newAuthorizationRole": "新建授权角色",
+  "access.save": "保存",
+  "access.roleName": "角色名称",
+  "access.forExampleReleaseReviewer": "例如 发布审核员",
+  "access.description": "用途描述",
+  "access.describeTheResponsibilityThisRoleServes": "说明该角色适用的职责",
+  "access.permissions2": "仓库权限",
+  "access.selectOneOrMorePermissions": "选择一项或多项权限",
+  "access.teamReadOnly": "团队只读",
+  "access.forPrincipalsThatOnlyDownloadSearchAndBrowseArtifacts":
+    "适合下载、搜索和浏览制品的主体。",
+  "access.releasePublisher": "发布机器人",
+  "access.forCiPrincipalsThatPublishAndEditArtifacts":
+    "适合 CI 发布和编辑制品的主体。",
+  "access.artifactIntelligenceBot": "制品情报机器人",
+  "access.onlyAllowsSecurityAndArtifactIntelligenceMetadataWrites":
+    "只允许写入安全与制品情报元数据。",
+  "access.repositoryOwner": "仓库管理员",
+  "access.forPrincipalsResponsibleForRepositoryConfigurationGrantsAndLifecycle":
+    "适合负责仓库配置、授权和制品生命周期的主体。",
+  "access.template": "模板",
+  "access.rules": "规则",
+  "access.edit": "编辑",
+  "access.deleteThisTemplate": "删除此模板？",
+  "access.deleteTemplate": "删除模板",
+  "access.authorizationTemplates": "授权模板",
+  "access.builtInTemplates": "内置模板",
+  "access.newTemplate": "新建模板",
+  "access.templatesStoreReusableRulesOnlyApplyingOneUpdatesA":
+    "模板只保存可复用规则，不会自动修改仓库；应用时会检查仓库当前版本。",
+  "access.noAuthorizationTemplatesYet": "尚未创建授权模板",
+  "access.templatesReuseASetOfPrincipalScopeAndResource":
+    "模板适合复用一组主体、权限和资源前缀规则。",
+  "access.principal2": "主体",
+  "access.format": "格式",
+  "access.permission": "权限",
+  "access.elevated": "高权限",
+  "access.resourcePrefix": "资源前缀",
+  "access.edit2": "编辑 →",
+  "access.repositoryGrants": "逐仓库授权（{filtered}）",
+  "access.clear": "清除",
+  "access.usernameApiKeyOrActor": "用户名、API Key 或 actor",
+  "access.repositoryName": "仓库名称",
+  "access.permissionLevel": "权限级别",
+  "access.allPermissions": "全部权限",
+  "access.readBrowsePull": "读取 · 浏览 / 拉取",
+  "access.writePublishEdit": "写入 · 发布 / 编辑",
+  "access.adminGrantDelete": "管理员 · 授权 / 删除",
+  "access.noRepositoryGrants": "暂无逐仓库授权",
+  "access.noMatchingGrants": "没有匹配的授权记录",
+  "access.addAPrincipalFromARepositorySAccessGrants":
+    "在各仓库的「访问授权」Tab 添加主体即可在此汇总",
+  "access.tryAnotherFilter": "换个过滤条件试试",
+  "access.oidcCustom": "OIDC / 自定义",
+  "access.publicAccessBoundary": "公开访问边界",
+  "access.repositoriesPublic":
+    "{publicRepositoryCount} / {repositoryCount} 个仓库公开",
+  "access.disableGlobalAnonymousReads": "确认停用全局匿名读取？",
+  "access.enableGlobalAnonymousReads": "确认启用全局匿名读取？",
+  "access.allUnauthenticatedProtocolReadsWillBeRejected":
+    "停用后所有未认证协议读取都会被拒绝。",
+  "access.artifactsAllowedByRepositoryOrGroupPolicyBecomeReadable":
+    "启用后满足仓库或组策略的制品可被未认证客户端读取。",
+  "access.continue": "继续",
+  "access.toggleGlobalAnonymousReads": "切换全局匿名读取",
+  "access.loading": "加载中…",
+  "access.globalGateOnReadOnly": "总闸已开启 · 只读",
+  "access.globalGateOffReadOnly": "总闸已关闭 · 只读",
+  "access.readOnly": "只读",
+  "access.anonymousReadsRequireGlobalRepositoryAndApplicableGroupOpt":
+    "匿名读取须全局、仓库及适用的分组同时允许，写入、删除和管理仍需认证。",
+  "access.templateNameAndEveryGrantPrincipalAreRequired":
+    "模板名称和每条规则的主体不能为空",
+  "access.principalAndResourcePrefixPairsMustBeUnique":
+    "主体和资源前缀不能重复",
+  "access.failedToSaveAuthorizationTemplate": "保存授权模板失败",
+  "access.editAuthorizationTemplate": "编辑授权模板",
+  "access.newAuthorizationTemplate": "新建授权模板",
+  "access.templateName": "模板名称",
+  "access.descriptionOptional": "用途描述（可选）",
+  "access.chooseAKnownUserOrApiKeyOrEnter":
+    "主体支持选择已知用户或 API Key，也可以直接填写 OIDC / CI actor。资源前缀留空表示整个仓库；下拉建议按仓库格式提供常见写法。",
+  "access.chooseOrEnterAnActorEGUserRelease":
+    "选择或输入 actor，例如 user:release",
+  "access.scopes": "权限",
+  "access.customPermissions": "自定义权限",
+  "access.admin2": "管理员",
+  "access.removeRule": "移除规则",
+  "access.addRule": "添加规则",
+  "access.allOperationsBrowsePublishDeleteGrantsAndKeyManagement":
+    "全部操作：浏览、发布、删除、授权、密钥管理",
+  "access.noImplicitCapabilityRepositoryAccessComesOnlyFromPer":
+    "不含隐式权限：仓库访问完全由按仓库授权决定",
+  "access.awaitingApprovalNoRepositoryPathIsReachable":
+    "待授权：不能访问任何仓库路径",
+  "access.identifyThePrincipal": "先看身份",
+  "access.administratorIdentitiesPassDirectlyUsersApiKeysAndOidc":
+    "管理员身份直接放行；用户、API Key 或 OIDC 身份会先带着自己的全局角色进入判定。",
+  "access.applyTheGlobalRole": "再看全局角色",
+  "access.adminAllowsAllOperationsIncludingArtifactIntelligenceWritesA":
+    "admin 允许全部操作（包括写入制品情报）；member 等级不附带任何仓库权限，仓库访问由按仓库授权决定；制品情报是独立的最小权限。",
+  "access.applyRepositoryRules": "再看仓库规则",
+  "access.thePrincipalPermissionAndResourcePrefixMustAllMatch":
+    "主体、权限级别和资源前缀都匹配才放行；制品情报权限只允许写安全元数据，未匹配会拒绝。",
+  "access.legacyCompatibility": "兼容旧策略",
+  "access.unmanagedRepositoriesCanFallBackToLegacyStaticPolicy":
+    "仓库还没有被正式管理时，才回退到旧版静态仓库策略；匿名访问另按全局和仓库开关判断。",
+  "access.principals": "授权主体",
+  "access.usersApiKeysOrOtherPrincipals": "用户、API Key 或其他主体",
+  "access.writeGrants": "写入授权",
+  "access.canPublishOrEditArtifacts": "可发布或编辑制品",
+  "access.adminGrants": "管理员授权",
+  "access.canManageGrantsAndDelete": "具备授权与删除能力",
+  "access.scopeIntelligence": "制品情报",
+  "access.scopeAdmin": "管理员",
+  "access.scopeWrite": "写入",
+  "access.scopeRead": "读取",
+  "access.scopeUnknown": "未配置",
+} as const;
+
+export type AccessMessageKey = keyof typeof accessZhCN;

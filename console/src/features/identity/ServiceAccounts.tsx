@@ -1,20 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
+import { PlusOutlined } from "@ant-design/icons";
+import { Button } from "antd";
 import {
-  ApiOutlined,
-  KeyOutlined,
-  PlusOutlined,
-  ReloadOutlined,
-  RobotOutlined,
-  SafetyCertificateOutlined,
-  StopOutlined,
-} from "@ant-design/icons";
-import { Alert, Button, Input, Select, Space, Typography } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import {
-  createServiceAccount,
-  createServiceAccountCredential,
-  listServiceAccountCredentials,
-  listServiceAccounts,
   revokeServiceAccountCredential,
   updateServiceAccount,
 } from "../../client";
@@ -23,119 +10,63 @@ import type {
   ServiceAccount,
   ServiceAccountCredential,
 } from "../../client";
-import { Badge, StateBadge } from "../../components/ui/Badge";
-import {
-  ConsoleTable,
-  CopyableValue,
-  MetricStrip,
-} from "../../components/ui/ConsolePrimitives";
+import { Badge } from "../../components/ui/Badge";
+import { MetricStrip } from "../../components/ui/ConsolePrimitives";
 import {
   EmptyState,
   ErrorBanner,
   Loading,
   Notice,
 } from "../../components/ui/Feedback";
-import {
-  Card,
-  CardHeader,
-  Field,
-  PageHeader,
-  Pagination,
-} from "../../components/ui/Layout";
-import { ConfirmDialog, Modal, useDisclosure } from "../../components/ui/Modal";
+import { Card, PageHeader, Pagination } from "../../components/ui/Layout";
+import { ConfirmDialog, useDisclosure } from "../../components/ui/Modal";
+import { OneTimeTokenDialog } from "../../components/ui/OneTimeTokenDialog";
+import { SectionBoundary } from "../../components/ui/SectionBoundary";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-
-const credentialState = (credential: ServiceAccountCredential) => {
-  if (credential.revokedAt) return "revoked";
-  if (
-    credential.expiresAt &&
-    new Date(credential.expiresAt).getTime() <= Date.now()
-  )
-    return "expired";
-  return "active";
-};
-
-function TokenReveal({
-  credential,
-  onDone,
-}: {
-  credential: CreatedServiceAccountCredential;
-  onDone: () => void;
-}) {
-  const { text } = usePreferences();
-  return (
-    <Modal
-      open
-      onClose={onDone}
-      title={text(
-        "凭据已签发：立即保存 Token",
-        "Credential issued: save the token",
-      )}
-    >
-      <div className="space-y-4">
-        <Alert
-          type="warning"
-          showIcon
-          title={text("明文只显示一次", "Plaintext is shown once")}
-          description={text(
-            "关闭后无法重新查看。请把 Token 写入 CI Secret 或外部密钥管理系统，不要提交到仓库。",
-            "It cannot be viewed again. Put the token in a CI secret or external secret manager, never in source control.",
-          )}
-        />
-        <div className="rounded-xl border border-line bg-canvas p-4">
-          <Typography.Text
-            className="block break-all font-mono text-xs"
-            copyable={{
-              text: credential.token,
-              tooltips: [
-                text("复制 Token", "Copy token"),
-                text("已复制", "Copied"),
-              ],
-            }}
-          >
-            {credential.token}
-          </Typography.Text>
-        </div>
-        <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2 text-xs text-fg-tertiary">
-          {text("凭据名称", "Credential name")}: {credential.name} ·{" "}
-          {text("到期", "Expires")}: {formatDate(credential.expiresAt)}
-        </div>
-        <div className="flex justify-end">
-          <Button type="primary" onClick={onDone}>
-            {text("我已安全保存", "I stored it securely")}
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
+import {
+  CreateServiceAccountDialog,
+  IssueCredentialDialog,
+} from "./ServiceAccountDialogs";
+import { ServiceAccountDetail, credentialState } from "./ServiceAccountDetail";
+import {
+  flattenPages,
+  useCredentialPages,
+  useInvalidateCredentials,
+  useInvalidateServiceAccounts,
+  useServiceAccountPages,
+} from "./serviceAccountQueries";
 
 export function ServiceAccountsPage() {
-  const { locale, text } = usePreferences();
+  const { t } = usePreferences();
   const createDialog = useDisclosure();
   const credentialDialog = useDisclosure();
-  const [accounts, setAccounts] = useState<ServiceAccount[] | null>(null);
-  const [nextAccountsPageToken, setNextAccountsPageToken] = useState("");
-  const [loadingMoreAccounts, setLoadingMoreAccounts] = useState(false);
+  const accountsQuery = useServiceAccountPages();
+  const invalidateAccounts = useInvalidateServiceAccounts();
+  const invalidateCredentials = useInvalidateCredentials();
+  const accounts: ServiceAccount[] | null = flattenPages(accountsQuery.data);
+  const nextAccountsPageToken = accountsQuery.hasNextPage ? "more" : "";
+  const loadingMoreAccounts = accountsQuery.isFetchingNextPage;
   const [selectedAccountId, setSelectedAccountId] = useState("");
-  const [credentials, setCredentials] = useState<
-    ServiceAccountCredential[] | null
-  >(null);
-  const [nextCredentialsPageToken, setNextCredentialsPageToken] = useState("");
-  const [loadingMoreCredentials, setLoadingMoreCredentials] = useState(false);
-  const credentialRequestId = useRef(0);
-  const [error, setError] = useState<unknown>(null);
-  const [credentialsError, setCredentialsError] = useState<unknown>(null);
-  // Save failures belong to the dialog that started the write: the page
-  // banners stay reserved for loading the account and credential lists.
-  const [createError, setCreateError] = useState<unknown>(null);
-  const [issueError, setIssueError] = useState<unknown>(null);
+  // The chosen account while it exists, otherwise the first one.
+  const effectiveAccountId = accounts?.some(
+    (account) => account.id === selectedAccountId,
+  )
+    ? selectedAccountId
+    : (accounts?.[0]?.id ?? "");
+  const selectedAccount =
+    accounts?.find((account) => account.id === effectiveAccountId) ?? null;
+  const credentialsQuery = useCredentialPages(effectiveAccountId);
+  const credentials: ServiceAccountCredential[] | null = effectiveAccountId
+    ? flattenPages(credentialsQuery.data)
+    : [];
+  const nextCredentialsPageToken = credentialsQuery.hasNextPage ? "more" : "";
+  // Write failures on the page itself; dialogs keep their own.
+  const [accountError, setAccountError] = useState<unknown>(null);
+  const [revokeError, setRevokeError] = useState<unknown>(null);
+  const error = accountError ?? accountsQuery.error ?? null;
+  const credentialsError = revokeError ?? credentialsQuery.error ?? null;
   const [busy, setBusy] = useState(false);
-  const [accountName, setAccountName] = useState("");
-  const [accountDescription, setAccountDescription] = useState("");
-  const [credentialName, setCredentialName] = useState("");
-  const [validDays, setValidDays] = useState<30 | 90 | 180 | 365>(90);
   const [reveal, setReveal] = useState<CreatedServiceAccountCredential | null>(
     null,
   );
@@ -144,158 +75,13 @@ export function ServiceAccountsPage() {
   const [accountStateChange, setAccountStateChange] =
     useState<ServiceAccount | null>(null);
 
-  const selectedAccount = useMemo(
-    () => accounts?.find((account) => account.id === selectedAccountId) ?? null,
-    [accounts, selectedAccountId],
-  );
-
-  const loadAccounts = useCallback(
-    async (pageToken?: string) => {
-      setError(null);
-      if (pageToken) setLoadingMoreAccounts(true);
-      try {
-        const { data, error: loadError } = await listServiceAccounts({
-          query: { pageSize: 200, pageToken },
-        });
-        if (loadError || !data) {
-          setError(
-            loadError ??
-              new Error(
-                text("加载服务账号失败", "Failed to load service accounts"),
-              ),
-          );
-          return;
-        }
-        setAccounts((current) =>
-          pageToken && current ? [...current, ...data.items] : data.items,
-        );
-        setNextAccountsPageToken(data.nextPageToken ?? "");
-        setSelectedAccountId((current) =>
-          pageToken || data.items.some((account) => account.id === current)
-            ? current
-            : (data.items[0]?.id ?? ""),
-        );
-      } catch (nextError) {
-        setError(nextError);
-      } finally {
-        if (pageToken) setLoadingMoreAccounts(false);
-      }
-    },
-    [text],
-  );
-
-  const loadCredentials = useCallback(
-    async (pageToken?: string) => {
-      const requestId = ++credentialRequestId.current;
-      if (!selectedAccountId) {
-        setCredentials([]);
-        setNextCredentialsPageToken("");
-        setLoadingMoreCredentials(false);
-        return;
-      }
-      setCredentialsError(null);
-      if (pageToken) setLoadingMoreCredentials(true);
-      else setLoadingMoreCredentials(false);
-      try {
-        const { data, error: loadError } = await listServiceAccountCredentials({
-          path: { serviceAccountId: selectedAccountId },
-          query: { pageSize: 200, pageToken },
-        });
-        if (requestId !== credentialRequestId.current) return;
-        if (loadError || !data) {
-          setCredentialsError(
-            loadError ??
-              new Error(text("加载凭据失败", "Failed to load credentials")),
-          );
-          return;
-        }
-        setCredentials((current) =>
-          pageToken && current ? [...current, ...data.items] : data.items,
-        );
-        setNextCredentialsPageToken(data.nextPageToken ?? "");
-      } catch (nextError) {
-        if (requestId === credentialRequestId.current) {
-          setCredentialsError(nextError);
-        }
-      } finally {
-        if (requestId === credentialRequestId.current) {
-          setLoadingMoreCredentials(false);
-        }
-      }
-    },
-    [selectedAccountId, text],
-  );
-
-  useEffect(() => {
-    void loadAccounts();
-  }, [loadAccounts]);
-
-  useEffect(() => {
-    setCredentials(null);
-    setNextCredentialsPageToken("");
-    void loadCredentials();
-  }, [loadCredentials]);
-
-  const submitAccount = async () => {
-    setBusy(true);
-    setCreateError(null);
-    try {
-      const { data, error: createError } = await createServiceAccount({
-        body: {
-          name: accountName.trim(),
-          description: accountDescription.trim() || undefined,
-        },
-      });
-      if (createError || !data) {
-        setCreateError(
-          createError ?? new Error(text("创建失败", "Creation failed")),
-        );
-        return;
-      }
-      createDialog.hide();
-      setAccountName("");
-      setAccountDescription("");
-      await loadAccounts();
-      setSelectedAccountId(data.id);
-    } catch (nextError) {
-      setCreateError(nextError);
-    } finally {
-      setBusy(false);
-    }
+  const loadAccounts = () => {
+    setAccountError(null);
+    void invalidateAccounts();
   };
-
-  const submitCredential = async () => {
-    if (!selectedAccount) return;
-    setBusy(true);
-    setIssueError(null);
-    try {
-      const { data, error: createError } = await createServiceAccountCredential(
-        {
-          path: { serviceAccountId: selectedAccount.id },
-          body: {
-            name: credentialName.trim(),
-            expiresAt: new Date(
-              Date.now() + validDays * 86_400_000,
-            ).toISOString(),
-          },
-        },
-      );
-      if (createError || !data) {
-        setIssueError(
-          createError ?? new Error(text("签发失败", "Issuance failed")),
-        );
-        return;
-      }
-      credentialDialog.hide();
-      setCredentialName("");
-      setValidDays(90);
-      setReveal(data);
-      await loadCredentials();
-    } catch (nextError) {
-      setIssueError(nextError);
-    } finally {
-      setBusy(false);
-    }
+  const loadCredentials = () => {
+    setRevokeError(null);
+    if (effectiveAccountId) void invalidateCredentials(effectiveAccountId);
   };
 
   const confirmAccountState = async () => {
@@ -310,13 +96,13 @@ export function ServiceAccountsPage() {
         body: { state: nextState },
       });
       if (updateError) {
-        setError(updateError);
+        setAccountError(updateError);
         return;
       }
       setAccountStateChange(null);
-      await loadAccounts();
+      await invalidateAccounts();
     } catch (nextError) {
-      setError(nextError);
+      setAccountError(nextError);
     } finally {
       setBusy(false);
     }
@@ -333,13 +119,13 @@ export function ServiceAccountsPage() {
         },
       });
       if (revokeError) {
-        setCredentialsError(revokeError);
+        setRevokeError(revokeError);
         return;
       }
       setCredentialToRevoke(null);
-      await loadCredentials();
+      await invalidateCredentials(selectedAccount.id);
     } catch (nextError) {
-      setCredentialsError(nextError);
+      setRevokeError(nextError);
     } finally {
       setBusy(false);
     }
@@ -351,89 +137,21 @@ export function ServiceAccountsPage() {
     credentials?.filter(
       (credential) => credentialState(credential) === "active",
     ) ?? [];
-  const columns: ColumnsType<ServiceAccountCredential> = [
-    {
-      title: text("凭据", "Credential"),
-      dataIndex: "name",
-      key: "name",
-      render: (name: string) => (
-        <div className="flex items-center gap-2">
-          <KeyOutlined className="text-fg-disabled!" />
-          <span className="font-medium text-fg">{name}</span>
-        </div>
-      ),
-    },
-    {
-      title: text("状态", "State"),
-      key: "state",
-      width: 120,
-      render: (_value, credential) => (
-        <StateBadge state={credentialState(credential)} />
-      ),
-    },
-    {
-      title: text("到期时间", "Expires"),
-      dataIndex: "expiresAt",
-      key: "expiresAt",
-      width: 180,
-      render: (value?: string) => (
-        <span className="text-xs text-fg-tertiary">
-          {formatDate(value, locale)}
-        </span>
-      ),
-    },
-    {
-      title: text("最后使用", "Last used"),
-      dataIndex: "lastUsedAt",
-      key: "lastUsedAt",
-      width: 180,
-      render: (value?: string) => (
-        <span className="text-xs text-fg-tertiary">
-          {formatDate(value, locale)}
-        </span>
-      ),
-    },
-    {
-      title: text("操作", "Actions"),
-      key: "actions",
-      align: "right",
-      width: 92,
-      render: (_value, credential) =>
-        credentialState(credential) === "active" ? (
-          <Button
-            danger
-            type="text"
-            size="small"
-            aria-label={text(
-              `吊销 ${credential.name}`,
-              `Revoke ${credential.name}`,
-            )}
-            onClick={() => setCredentialToRevoke(credential)}
-          >
-            {text("吊销", "Revoke")}
-          </Button>
-        ) : null,
-    },
-  ];
 
   return (
     <div className="ag-page-stack">
       <PageHeader
-        title={text("服务账号", "Service accounts")}
-        description={text(
-          "为 Jenkins、CI 机器人和第三方应用提供稳定身份；凭据可以独立签发、轮换和吊销。",
-          "Give Jenkins, CI robots, and third-party applications a stable identity while credentials rotate independently.",
+        title={t("identity.serviceAccounts")}
+        description={t(
+          "identity.giveJenkinsCiRobotsAndThirdPartyApplicationsA",
         )}
         actions={
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => {
-              setCreateError(null);
-              createDialog.show();
-            }}
+            onClick={createDialog.show}
           >
-            {text("新建服务账号", "New service account")}
+            {t("identity.newServiceAccount")}
           </Button>
         }
       />
@@ -441,36 +159,32 @@ export function ServiceAccountsPage() {
       <Notice
         tone="info"
         closable={false}
-        title={text(
-          "机器身份与凭据分离",
-          "Machine identity is separate from credentials",
-        )}
-        description={text(
-          "Repository Grant 绑定稳定的 service-account:<id> 主体。轮换 Token 时无需修改仓库授权；禁用账号会一次性拒绝它的全部凭据。",
-          "Repository grants bind to the stable service-account:<id> principal. Token rotation does not change grants, and disabling the account rejects every credential at once.",
+        title={t("identity.machineIdentityIsSeparateFromCredentials")}
+        description={t(
+          "identity.repositoryGrantsBindToTheStableServiceAccountId",
         )}
       />
 
       <MetricStrip
         items={[
           {
-            label: text("服务账号", "Service accounts"),
+            label: t("identity.serviceAccounts"),
             value:
               accounts === null
                 ? "—"
                 : `${accounts.length}${nextAccountsPageToken ? "+" : ""}`,
-            hint: text("稳定机器主体", "Stable machine principals"),
+            hint: t("identity.stableMachinePrincipals"),
           },
           {
-            label: text("启用", "Active"),
+            label: t("identity.active2"),
             value: `${activeAccounts.length}${nextAccountsPageToken ? "+" : ""}`,
-            hint: text("可接受凭据认证", "May accept credential auth"),
+            hint: t("identity.mayAcceptCredentialAuth"),
             tone: "success",
           },
           {
-            label: text("当前账号有效凭据", "Active credentials"),
+            label: t("identity.activeCredentials"),
             value: `${activeCredentials.length}${nextCredentialsPageToken ? "+" : ""}`,
-            hint: text("支持零停机轮换", "Supports zero-downtime rotation"),
+            hint: t("identity.supportsZeroDowntimeRotation"),
           },
         ]}
       />
@@ -483,26 +197,21 @@ export function ServiceAccountsPage() {
           <ErrorBanner error={error} onRetry={loadAccounts} />
         ) : (
           <Card bodyClassName="p-8">
-            <Loading
-              label={text("加载服务账号…", "Loading service accounts…")}
-            />
+            <Loading label={t("identity.loadingServiceAccounts")} />
           </Card>
         )
       ) : accounts.length === 0 ? (
         <Card bodyClassName="p-8">
           <EmptyState
-            title={text("暂无服务账号", "No service accounts")}
-            hint={text(
-              "为第一个 CI 机器人创建稳定身份。",
-              "Create a stable identity for your first CI robot.",
-            )}
+            title={t("identity.noServiceAccounts")}
+            hint={t("identity.createAStableIdentityForYourFirstCiRobot")}
           />
         </Card>
       ) : (
         <div className="ag-page-primary ag-service-account-workspace grid items-start gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
           <Card bodyClassName="p-2">
             <div className="px-2 pb-2 pt-1 text-xs font-medium uppercase tracking-wider text-fg-disabled">
-              {text("机器主体", "Machine principals")}
+              {t("identity.machinePrincipals")}
             </div>
             <div className="space-y-1">
               {accounts.map((account) => (
@@ -510,7 +219,7 @@ export function ServiceAccountsPage() {
                   key={account.id}
                   type="button"
                   className={`w-full rounded-lg border px-3 py-3 text-left transition-colors ${
-                    account.id === selectedAccountId
+                    account.id === effectiveAccountId
                       ? "border-[var(--ag-border-default)] bg-[var(--ag-navigation-selected-start)]"
                       : "border-transparent hover:border-[var(--ag-border-subtle)] hover:bg-[var(--ag-surface-hover)]"
                   }`}
@@ -527,8 +236,7 @@ export function ServiceAccountsPage() {
                     </Badge>
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-disabled">
-                    {account.description ||
-                      text("未填写用途", "No purpose documented")}
+                    {account.description || t("identity.noPurposeDocumented")}
                   </p>
                 </button>
               ))}
@@ -536,257 +244,80 @@ export function ServiceAccountsPage() {
             <Pagination
               hasMore={!!nextAccountsPageToken}
               loading={loadingMoreAccounts}
-              onMore={() => void loadAccounts(nextAccountsPageToken)}
-              label={text("加载更多账号", "Load more accounts")}
+              onMore={() => void accountsQuery.fetchNextPage()}
+              label={t("identity.loadMoreAccounts")}
             />
           </Card>
 
           {selectedAccount && (
-            <Card>
-              <div className="border-b border-line px-5 py-4">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-[var(--ag-border-default)] bg-[var(--ag-surface-hover)] text-[var(--ag-content-secondary)]">
-                      <RobotOutlined />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-base font-semibold text-fg-strong">
-                          {selectedAccount.name}
-                        </h2>
-                        <Badge
-                          tone={
-                            selectedAccount.state === "active"
-                              ? "success"
-                              : "neutral"
-                          }
-                        >
-                          {selectedAccount.state}
-                        </Badge>
-                      </div>
-                      <p className="mt-1 text-xs text-fg-tertiary">
-                        {selectedAccount.description ||
-                          text("未填写用途", "No purpose documented")}
-                      </p>
-                    </div>
-                  </div>
-                  <Space wrap>
-                    <Button
-                      icon={<ReloadOutlined />}
-                      onClick={() => void loadCredentials()}
-                    >
-                      {text("刷新", "Refresh")}
-                    </Button>
-                    <Button
-                      danger={selectedAccount.state === "active"}
-                      icon={
-                        selectedAccount.state === "active" ? (
-                          <StopOutlined />
-                        ) : (
-                          <SafetyCertificateOutlined />
-                        )
-                      }
-                      onClick={() => setAccountStateChange(selectedAccount)}
-                    >
-                      {selectedAccount.state === "active"
-                        ? text("禁用账号", "Disable account")
-                        : text("重新启用", "Enable account")}
-                    </Button>
-                  </Space>
-                </div>
-                <div className="mt-4 rounded-lg border border-line bg-surface-translucent px-3 py-2.5">
-                  <div className="text-xs font-medium uppercase tracking-wider text-fg-disabled">
-                    {text("稳定授权主体", "Stable grant principal")}
-                  </div>
-                  <CopyableValue
-                    value={`service-account:${selectedAccount.id}`}
-                    className="mt-1 max-w-full text-xs text-fg-secondary"
-                  />
-                </div>
-              </div>
-              <CardHeader
-                title={text("可轮换凭据", "Rotating credentials")}
-                extra={
-                  <Button
-                    type="primary"
-                    icon={<ApiOutlined />}
-                    disabled={selectedAccount.state !== "active"}
-                    onClick={() => {
-                      setIssueError(null);
-                      credentialDialog.show();
-                    }}
-                  >
-                    {text("签发新凭据", "Issue credential")}
-                  </Button>
-                }
+            <SectionBoundary
+              resetKeys={[selectedAccount.id]}
+              recoveryKeys={[selectedAccount, credentialsQuery.data]}
+              onReset={() => credentialsQuery.refetch({ throwOnError: true })}
+            >
+              <ServiceAccountDetail
+                account={selectedAccount}
+                credentials={credentials}
+                credentialsError={credentialsError}
+                nextCredentialsPageToken={nextCredentialsPageToken}
+                loadingMoreCredentials={credentialsQuery.isFetchingNextPage}
+                onRefresh={loadCredentials}
+                onMoreCredentials={() => void credentialsQuery.fetchNextPage()}
+                onIssue={credentialDialog.show}
+                onRevoke={setCredentialToRevoke}
+                onToggleState={() => setAccountStateChange(selectedAccount)}
               />
-              {credentialsError !== null && (
-                <div className="px-5 pt-4">
-                  <ErrorBanner
-                    error={credentialsError}
-                    onRetry={loadCredentials}
-                  />
-                </div>
-              )}
-              {credentials === null ? (
-                <div className="p-8">
-                  <Loading label={text("加载凭据…", "Loading credentials…")} />
-                </div>
-              ) : credentials.length === 0 ? (
-                <div className="p-8">
-                  <EmptyState
-                    title={text("暂无凭据", "No credentials")}
-                    hint={text(
-                      "签发第一枚短期凭据，并保存到 CI Secret。",
-                      "Issue the first short-lived credential and store it in a CI secret.",
-                    )}
-                  />
-                </div>
-              ) : (
-                <>
-                  <ConsoleTable<ServiceAccountCredential>
-                    rowKey="id"
-                    columns={columns}
-                    dataSource={credentials}
-                    pagination={false}
-                    size="small"
-                    scroll={{ x: 760 }}
-                  />
-                  <Pagination
-                    hasMore={!!nextCredentialsPageToken}
-                    loading={loadingMoreCredentials}
-                    onMore={() =>
-                      void loadCredentials(nextCredentialsPageToken)
-                    }
-                    label={text("加载更多凭据", "Load more credentials")}
-                  />
-                </>
-              )}
-            </Card>
+            </SectionBoundary>
           )}
         </div>
       )}
 
-      <Modal
+      <CreateServiceAccountDialog
         open={createDialog.open}
-        title={text("新建服务账号", "New service account")}
         onClose={createDialog.hide}
-        busy={busy}
-        footer={
-          <Space>
-            <Button onClick={createDialog.hide} disabled={busy}>
-              {text("取消", "Cancel")}
-            </Button>
-            <Button
-              type="primary"
-              loading={busy}
-              disabled={!accountName.trim()}
-              onClick={() => void submitAccount()}
-            >
-              {text("创建", "Create")}
-            </Button>
-          </Space>
-        }
-      >
-        <div className="space-y-4">
-          {createError !== null && <ErrorBanner error={createError} />}
-          <Field
-            label={text("账号名称", "Account name")}
-            hint={text(
-              "例如 pipeone-ci 或 release-bot",
-              "For example pipeone-ci or release-bot",
-            )}
-          >
-            <Input
-              value={accountName}
-              maxLength={128}
-              onChange={(event) => setAccountName(event.target.value)}
-            />
-          </Field>
-          <Field label={text("用途说明", "Purpose")}>
-            <Input.TextArea
-              value={accountDescription}
-              maxLength={1024}
-              rows={3}
-              onChange={(event) => setAccountDescription(event.target.value)}
-            />
-          </Field>
-        </div>
-      </Modal>
-
-      <Modal
-        open={credentialDialog.open}
-        title={text("签发新凭据", "Issue credential")}
-        onClose={credentialDialog.hide}
-        busy={busy}
-        footer={
-          <Space>
-            <Button onClick={credentialDialog.hide} disabled={busy}>
-              {text("取消", "Cancel")}
-            </Button>
-            <Button
-              type="primary"
-              loading={busy}
-              disabled={!credentialName.trim()}
-              onClick={() => void submitCredential()}
-            >
-              {text("签发", "Issue")}
-            </Button>
-          </Space>
-        }
-      >
-        <div className="space-y-4">
-          {issueError !== null && <ErrorBanner error={issueError} />}
-          <Field
-            label={text("凭据名称", "Credential name")}
-            hint={text(
-              "建议包含使用方和轮换批次",
-              "Include the consumer and rotation batch",
-            )}
-          >
-            <Input
-              value={credentialName}
-              maxLength={128}
-              placeholder="jenkins-blue"
-              onChange={(event) => setCredentialName(event.target.value)}
-            />
-          </Field>
-          <Field label={text("有效期", "Validity")}>
-            <Select<typeof validDays>
-              className="w-full"
-              value={validDays}
-              onChange={setValidDays}
-              options={[
-                { value: 30, label: text("30 天", "30 days") },
-                {
-                  value: 90,
-                  label: text("90 天（推荐）", "90 days (recommended)"),
-                },
-                { value: 180, label: text("180 天", "180 days") },
-                { value: 365, label: text("365 天", "365 days") },
-              ]}
-            />
-          </Field>
-          <p className="text-xs leading-5 text-fg-tertiary">
-            {text(
-              "新旧凭据可以短暂并存：先部署新 Token、验证成功，再吊销旧 Token，实现零停机轮换。",
-              "Old and new credentials may overlap briefly: deploy the new token, verify it, then revoke the old token for zero-downtime rotation.",
-            )}
-          </p>
-        </div>
-      </Modal>
+        onCreated={async (account) => {
+          createDialog.hide();
+          await invalidateAccounts();
+          setSelectedAccountId(account.id);
+        }}
+      />
+      {selectedAccount && (
+        <IssueCredentialDialog
+          open={credentialDialog.open}
+          account={selectedAccount}
+          onClose={credentialDialog.hide}
+          onIssued={async (credential) => {
+            credentialDialog.hide();
+            setReveal(credential);
+            await invalidateCredentials(selectedAccount.id);
+          }}
+        />
+      )}
 
       {reveal && (
-        <TokenReveal credential={reveal} onDone={() => setReveal(null)} />
+        <OneTimeTokenDialog
+          title={t("identity.credentialIssuedSaveTheToken")}
+          warningTitle={t("identity.plaintextIsShownOnce")}
+          warningDescription={t("identity.itCannotBeViewedAgainPutTheTokenIn")}
+          token={reveal.token}
+          details={
+            <>
+              {t("identity.credentialName")}: {reveal.name} ·{" "}
+              {t("identity.expires2")}: {formatDate(reveal.expiresAt)}
+            </>
+          }
+          doneLabel={t("identity.iStoredItSecurely")}
+          onDone={() => setReveal(null)}
+        />
       )}
       <ConfirmDialog
         open={credentialToRevoke !== null}
-        title={text("吊销凭据", "Revoke credential")}
-        message={text(
-          `吊销 ${credentialToRevoke?.name ?? ""} 后，使用该 Token 的任务会立即认证失败；同一服务账号的其他凭据不受影响。`,
-          `After revoking ${credentialToRevoke?.name ?? ""}, jobs using that token fail authentication immediately. Other credentials remain valid.`,
+        title={t("identity.revokeCredential")}
+        message={t(
+          "identity.afterRevokingJobsUsingThatTokenFailAuthenticationImmediately",
+          { credentialToRevoke: String(credentialToRevoke?.name ?? "") },
         )}
-        confirmLabel={text("确认吊销", "Revoke")}
+        confirmLabel={t("identity.revoke3")}
         danger
         busy={busy}
         onClose={() => setCredentialToRevoke(null)}
@@ -796,24 +327,20 @@ export function ServiceAccountsPage() {
         open={accountStateChange !== null}
         title={
           accountStateChange?.state === "active"
-            ? text("禁用服务账号", "Disable service account")
-            : text("重新启用服务账号", "Enable service account")
+            ? t("identity.disableServiceAccount")
+            : t("identity.enableServiceAccount")
         }
         message={
           accountStateChange?.state === "active"
-            ? text(
-                "该账号的全部现有凭据会立即停止认证。仓库授权与审计主体会保留，重新启用后未过期且未吊销的凭据可再次使用。",
-                "Every existing credential stops authenticating immediately. Grants and audit identity remain, and non-expired credentials work again after re-enabling.",
+            ? t(
+                "identity.everyExistingCredentialStopsAuthenticatingImmediatelyGrantsAndAudit",
               )
-            : text(
-                "未过期且未吊销的凭据将重新具备认证能力。",
-                "Non-expired, non-revoked credentials will authenticate again.",
-              )
+            : t("identity.nonExpiredNonRevokedCredentialsWillAuthenticateAgain")
         }
         confirmLabel={
           accountStateChange?.state === "active"
-            ? text("确认禁用", "Disable")
-            : text("确认启用", "Enable")
+            ? t("identity.disable")
+            : t("identity.enable")
         }
         danger={accountStateChange?.state === "active"}
         busy={busy}
