@@ -20,6 +20,7 @@ import {
 } from "../../client";
 import { AntdProvider } from "../../app/AntdProvider";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { AccessControlPage } from "./AccessControl";
 
 vi.mock("../../client", async () => {
@@ -137,13 +138,15 @@ describe("AccessControlPage", () => {
 
     const user = userEvent.setup();
     render(
-      <PreferencesProvider>
-        <AntdProvider>
-          <MemoryRouter initialEntries={["/access?tab=evaluate"]}>
-            <AccessControlPage />
-          </MemoryRouter>
-        </AntdProvider>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            <MemoryRouter initialEntries={["/access?tab=evaluate"]}>
+              <AccessControlPage />
+            </MemoryRouter>
+          </AntdProvider>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -244,13 +247,15 @@ describe("AccessControlPage", () => {
 
     const user = userEvent.setup();
     render(
-      <PreferencesProvider>
-        <AntdProvider>
-          <MemoryRouter initialEntries={["/access?tab=evaluate"]}>
-            <AccessControlPage />
-          </MemoryRouter>
-        </AntdProvider>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            <MemoryRouter initialEntries={["/access?tab=evaluate"]}>
+              <AccessControlPage />
+            </MemoryRouter>
+          </AntdProvider>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     const principalPicker = await screen.findByRole("combobox", {
@@ -361,13 +366,15 @@ describe("AccessControlPage", () => {
       );
 
       render(
-        <PreferencesProvider>
-          <AntdProvider>
-            <MemoryRouter initialEntries={["/access?tab=policies"]}>
-              <AccessControlPage />
-            </MemoryRouter>
-          </AntdProvider>
-        </PreferencesProvider>,
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <AntdProvider>
+              <MemoryRouter initialEntries={["/access?tab=policies"]}>
+                <AccessControlPage />
+              </MemoryRouter>
+            </AntdProvider>
+          </PreferencesProvider>
+        </TestQueryProvider>,
       );
 
       expect(await screen.findByText("公开访问边界")).toBeInTheDocument();
@@ -470,13 +477,15 @@ describe("AccessControlPage", () => {
     mockListServiceAccounts.mockResolvedValue({ data: { items: [] } } as never);
 
     render(
-      <PreferencesProvider>
-        <AntdProvider>
-          <MemoryRouter initialEntries={["/access"]}>
-            <AccessControlPage />
-          </MemoryRouter>
-        </AntdProvider>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            <MemoryRouter initialEntries={["/access"]}>
+              <AccessControlPage />
+            </MemoryRouter>
+          </AntdProvider>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("用户 · alice")).toBeInTheDocument();

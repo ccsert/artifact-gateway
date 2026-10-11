@@ -17,6 +17,27 @@ export const repositoryKeys = {
   capacity: (id: string) => [...repositoryKeys.detail(id), "capacity"] as const,
 };
 
+export const identityKeys = {
+  all: ["identity"] as const,
+  apiKeys: () => [...identityKeys.all, "api-keys"] as const,
+  serviceAccounts: () => [...identityKeys.all, "service-accounts"] as const,
+  credentials: (serviceAccountId: string) =>
+    [
+      ...identityKeys.serviceAccounts(),
+      serviceAccountId,
+      "credentials",
+    ] as const,
+  users: () => [...identityKeys.all, "users"] as const,
+};
+
+export const accessKeys = {
+  all: ["access"] as const,
+  grants: () => [...accessKeys.all, "grants"] as const,
+  anonymousPolicy: () => [...accessKeys.all, "anonymous-policy"] as const,
+  templates: () => [...accessKeys.all, "templates"] as const,
+  roles: () => [...accessKeys.all, "roles"] as const,
+};
+
 export const formatKeys = {
   profiles: ["formats", "profiles"] as const,
 };

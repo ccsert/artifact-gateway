@@ -17,6 +17,7 @@ import {
 } from "../../../client";
 import { AntdProvider } from "../../../app/AntdProvider";
 import { PreferencesProvider } from "../../../lib/preferences";
+import { TestQueryProvider } from "../../../test/queryClient";
 import { UserRepositoryAccessPanel } from "./UserRepositoryAccessPanel";
 
 vi.mock("../../../client", () => ({
@@ -85,11 +86,13 @@ function record(overrides: Record<string, unknown> = {}) {
 
 function renderPanel() {
   return render(
-    <PreferencesProvider>
-      <AntdProvider>
-        <UserRepositoryAccessPanel userId={userId} username={username} />
-      </AntdProvider>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <AntdProvider>
+          <UserRepositoryAccessPanel userId={userId} username={username} />
+        </AntdProvider>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 

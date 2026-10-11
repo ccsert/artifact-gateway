@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
-import { PlusOutlined, SearchOutlined, StopOutlined } from "@ant-design/icons";
-import { Alert, Button, Input, Select, Space, Typography } from "antd";
+import { useState } from "react";
+import { SearchOutlined, StopOutlined } from "@ant-design/icons";
+import { Button, Input, Select } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { listApiKeys, createApiKey, revokeApiKey } from "../../client";
+import { revokeApiKey } from "../../client";
 import type { ApiKey, CreatedApiKey } from "../../client";
-import { PageHeader, Card, Field } from "../../components/ui/Layout";
+import { PageHeader, Card } from "../../components/ui/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../../components/ui/Feedback";
 import { StateBadge, Badge } from "../../components/ui/Badge";
-import { Modal, ConfirmDialog, useDisclosure } from "../../components/ui/Modal";
+import { ConfirmDialog } from "../../components/ui/Modal";
+import { OneTimeTokenDialog } from "../../components/ui/OneTimeTokenDialog";
 import { formatDate } from "../../lib/format";
 import {
   ConsoleTable,
@@ -17,221 +18,16 @@ import {
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
-
-function CreateKeyDialog({
-  onCreated,
-}: {
-  onCreated: (key: CreatedApiKey) => void;
-}) {
-  const { text } = usePreferences();
-  const dialog = useDisclosure();
-  const [name, setName] = useState("");
-  const [role, setRole] = useState<"member" | "admin">("member");
-  const [validDays, setValidDays] = useState<30 | 90 | 180 | 365>(90);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-
-  const submit = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const { data, error: err } = await createApiKey({
-        body: {
-          name: name.trim(),
-          roles: [role],
-          expiresAt: new Date(
-            Date.now() + validDays * 86_400_000,
-          ).toISOString(),
-        },
-      });
-      if (err) {
-        setError(err);
-        return;
-      }
-      if (data) {
-        dialog.hide();
-        setName("");
-        setRole("member");
-        setValidDays(90);
-        onCreated(data);
-      }
-    } catch (nextError) {
-      setError(nextError);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <>
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        onClick={() => {
-          setError(null);
-          dialog.show();
-        }}
-      >
-        {text("新建密钥", "New key")}
-      </Button>
-      <Modal
-        open={dialog.open}
-        title={text("新建 API 密钥", "New API key")}
-        onClose={dialog.hide}
-        busy={busy}
-        footer={
-          <Space>
-            <Button onClick={dialog.hide} disabled={busy}>
-              {text("取消", "Cancel")}
-            </Button>
-            <Button
-              type="primary"
-              onClick={submit}
-              loading={busy}
-              disabled={!name.trim()}
-            >
-              {text("创建", "Create")}
-            </Button>
-          </Space>
-        }
-      >
-        <div className="space-y-4">
-          {error !== null && <ErrorBanner error={error} />}
-          <Field
-            label={text("密钥名称", "Key name")}
-            hint={text(
-              "用于标识用途，例如 ci-deploy",
-              "Describe its purpose, for example ci-deploy",
-            )}
-          >
-            <Input
-              className="font-mono"
-              placeholder="my-key"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </Field>
-          <Field
-            label={text("角色", "Role")}
-            hint={text(
-              "按最小权限选择。角色在全仓库范围内生效，优先于逐仓库授权。",
-              "Choose the least privilege. This global role applies across repositories before repository grants.",
-            )}
-          >
-            <Select<typeof role>
-              className="w-full"
-              value={role}
-              onChange={setRole}
-              options={[
-                {
-                  value: "member",
-                  label: text(
-                    "member · 成员（无全局权限，按仓库授权）",
-                    "member · no global access, repository grants only",
-                  ),
-                },
-                {
-                  value: "admin",
-                  label: text(
-                    "admin · 管理员（全部权限）",
-                    "admin · all permissions",
-                  ),
-                },
-              ]}
-            />
-          </Field>
-          <Field
-            label={text("有效期", "Validity")}
-            hint={text(
-              "到期后密钥会自动拒绝认证，无需手动吊销。",
-              "Authentication is rejected automatically after expiry.",
-            )}
-          >
-            <Select<typeof validDays>
-              className="w-full"
-              value={validDays}
-              onChange={setValidDays}
-              options={[
-                { value: 30, label: text("30 天", "30 days") },
-                {
-                  value: 90,
-                  label: text("90 天（推荐）", "90 days (recommended)"),
-                },
-                { value: 180, label: text("180 天", "180 days") },
-                { value: 365, label: text("365 天", "365 days") },
-              ]}
-            />
-          </Field>
-          <p className="text-xs text-fg-tertiary">
-            {text(
-              "创建后只会显示一次明文 Token，请立即保存。",
-              "The plaintext token is shown once. Save it immediately.",
-            )}
-          </p>
-        </div>
-      </Modal>
-    </>
-  );
-}
-
-function TokenReveal({
-  tokenKey,
-  onDone,
-}: {
-  tokenKey: CreatedApiKey;
-  onDone: () => void;
-}) {
-  const { text } = usePreferences();
-  return (
-    <Modal
-      open
-      onClose={onDone}
-      title={text(
-        "密钥已创建：请立即保存 Token",
-        "API key created: save the token now",
-      )}
-    >
-      <div className="space-y-3">
-        <Alert
-          type="warning"
-          showIcon
-          title={text(
-            "这是唯一一次显示明文 Token",
-            "This is the only plaintext token display",
-          )}
-          description={text(
-            "关闭弹窗后将无法再次查看，请立即复制并保存到安全位置。",
-            "It cannot be viewed again after closing. Store it securely now.",
-          )}
-        />
-        <div className="rounded-lg border border-line bg-canvas p-3">
-          <Typography.Text
-            className="block break-all font-mono text-xs"
-            copyable={{
-              text: tokenKey.token,
-              tooltips: [
-                text("复制 Token", "Copy token"),
-                text("已复制", "Copied"),
-              ],
-            }}
-          >
-            {tokenKey.token}
-          </Typography.Text>
-        </div>
-        <div className="flex justify-end">
-          <Button type="primary" onClick={onDone}>
-            {text("我已保存", "I saved it")}
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
+import { ApiKeyCreateDialog } from "./ApiKeyCreateDialog";
+import { useApiKeys, useInvalidateApiKeys } from "./apiKeyQueries";
 
 export function ApiKeysPage() {
   const { locale, text } = usePreferences();
-  const [keys, setKeys] = useState<ApiKey[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const keysQuery = useApiKeys();
+  const invalidateKeys = useInvalidateApiKeys();
+  const keys: ApiKey[] | null = keysQuery.data?.items ?? null;
+  const [mutationError, setError] = useState<unknown>(null);
+  const error = mutationError ?? keysQuery.error ?? null;
   const [reveal, setReveal] = useState<CreatedApiKey | null>(null);
   const [toRevoke, setToRevoke] = useState<ApiKey | null>(null);
   const [revoking, setRevoking] = useState(false);
@@ -240,19 +36,10 @@ export function ApiKeysPage() {
     "all" | "active" | "expired" | "revoked"
   >("active");
 
-  const load = useCallback(async () => {
+  const load = () => {
     setError(null);
-    const { data, error: err } = await listApiKeys();
-    if (err) {
-      setError(err);
-      return;
-    }
-    setKeys(data?.items ?? []);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+    void invalidateKeys();
+  };
 
   const confirmRevoke = async () => {
     if (!toRevoke) return;
@@ -263,7 +50,7 @@ export function ApiKeysPage() {
       });
       if (!err) {
         setToRevoke(null);
-        void load();
+        load();
       } else {
         setError(err);
       }
@@ -394,7 +181,7 @@ export function ApiKeysPage() {
           "管理可调用管理 API 的访问密钥（member / admin）",
           "Manage member and admin credentials for management APIs",
         )}
-        actions={<CreateKeyDialog onCreated={setReveal} />}
+        actions={<ApiKeyCreateDialog onCreated={setReveal} />}
       />
       {error !== null && !keys ? (
         <ErrorBanner error={error} onRetry={load} />
@@ -506,11 +293,24 @@ export function ApiKeysPage() {
         </>
       )}
       {reveal && (
-        <TokenReveal
-          tokenKey={reveal}
+        <OneTimeTokenDialog
+          title={text(
+            "密钥已创建：请立即保存 Token",
+            "API key created: save the token now",
+          )}
+          warningTitle={text(
+            "这是唯一一次显示明文 Token",
+            "This is the only plaintext token display",
+          )}
+          warningDescription={text(
+            "关闭弹窗后将无法再次查看，请立即复制并保存到安全位置。",
+            "It cannot be viewed again after closing. Store it securely now.",
+          )}
+          token={reveal.token}
+          doneLabel={text("我已保存", "I saved it")}
           onDone={() => {
             setReveal(null);
-            void load();
+            load();
           }}
         />
       )}

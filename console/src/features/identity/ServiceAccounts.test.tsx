@@ -19,6 +19,7 @@ import {
 } from "../../client";
 import { AntdProvider } from "../../app/AntdProvider";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { ServiceAccountsPage } from "./ServiceAccounts";
 
 vi.mock("../../client", async () => {
@@ -87,11 +88,13 @@ const mockUpdateServiceAccount = vi.mocked(updateServiceAccount);
 
 function renderPage() {
   return render(
-    <PreferencesProvider>
-      <AntdProvider>
-        <ServiceAccountsPage />
-      </AntdProvider>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <AntdProvider>
+          <ServiceAccountsPage />
+        </AntdProvider>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 
@@ -197,6 +200,7 @@ describe("ServiceAccountsPage", () => {
     expect(await screen.findByText("release-bot")).toBeInTheDocument();
     expect(mockListServiceAccounts).toHaveBeenLastCalledWith({
       query: { pageSize: 200, pageToken: "accounts-page-2" },
+      signal: expect.any(AbortSignal),
     });
 
     await user.click(
@@ -206,6 +210,7 @@ describe("ServiceAccountsPage", () => {
     expect(mockListServiceAccountCredentials).toHaveBeenLastCalledWith({
       path: { serviceAccountId: accountId },
       query: { pageSize: 200, pageToken: "credentials-page-2" },
+      signal: expect.any(AbortSignal),
     });
   });
 
