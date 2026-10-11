@@ -418,7 +418,7 @@ export function DashboardPage() {
       ) : null}
       <SectionBoundary
         title={text("运行统计暂时无法显示", "Runtime summary is unavailable")}
-        resetKeys={[statisticsResource.data, groupsResource.data]}
+        recoveryKeys={[statisticsResource.data, groupsResource.data]}
         onReset={() =>
           Promise.all([statisticsResource.reload(), groupsResource.reload()])
         }
@@ -434,7 +434,7 @@ export function DashboardPage() {
           "仓库活动暂时无法显示",
           "Repository activity is unavailable",
         )}
-        resetKeys={[statisticsResource.data]}
+        recoveryKeys={[statisticsResource.data]}
         onReset={statisticsResource.reload}
       >
         <RepositoryActivity
@@ -448,7 +448,7 @@ export function DashboardPage() {
             "存储占用暂时无法显示",
             "Storage by format is unavailable",
           )}
-          resetKeys={[statisticsResource.data]}
+          recoveryKeys={[statisticsResource.data]}
           onReset={statisticsResource.reload}
         >
           <StorageByFormat statisticsResource={statisticsResource} />
@@ -458,7 +458,7 @@ export function DashboardPage() {
             "最近审计事件暂时无法显示",
             "Recent audit events are unavailable",
           )}
-          resetKeys={[auditsResource.data]}
+          recoveryKeys={[auditsResource.data]}
           onReset={auditsResource.reload}
         >
           <RecentAudits auditsResource={auditsResource} />
