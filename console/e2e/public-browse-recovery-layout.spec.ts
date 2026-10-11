@@ -97,6 +97,112 @@ async function capture(page: Page, info: TestInfo, state: string) {
   }
 }
 
+test("public Retry waits for catalog, search and deep-link lookup after an early refusal", async ({
+  page,
+}) => {
+  const errors = await setup(page, 1440);
+  const target = { ...artifact, coordinate: "target.tgz" };
+  const reads = { catalog: 0, search: 0, lookup: 0 };
+  let attempt = 0;
+  let releaseSearch: (() => void) | undefined;
+  let releaseLookup: (() => void) | undefined;
+  const searchGate = new Promise<void>((resolve) => {
+    releaseSearch = resolve;
+  });
+  const lookupGate = new Promise<void>((resolve) => {
+    releaseLookup = resolve;
+  });
+  let catalogRefused = false;
+  let searchCompleted = false;
+  await page.route("**/api/v2/public/repositories", async (route) => {
+    ++reads.catalog;
+    if (attempt === 1) {
+      await route.fulfill({ status: 401, json: { message: "refused" } });
+      catalogRefused = true;
+    } else {
+      await route.fulfill({ json: { enabled: true, items: [repository] } });
+    }
+  });
+  await page.route(
+    `**/api/v2/repositories/${repository.id}/artifact-search**`,
+    async (route) => {
+      const lookup =
+        new URL(route.request().url()).searchParams.get("q") ===
+        target.coordinate;
+      ++reads[lookup ? "lookup" : "search"];
+      if (attempt === 1) await (lookup ? lookupGate : searchGate);
+      await route.fulfill({
+        json: {
+          items: lookup
+            ? [
+                {
+                  ...target,
+                  ...(attempt === 0 ? { digest: { broken: true } } : {}),
+                },
+              ]
+            : [{ ...artifact, ...(attempt > 0 ? { size: 2048 } : {}) }],
+        },
+      });
+      if (!lookup && attempt === 1) searchCompleted = true;
+    },
+  );
+  try {
+    await page.goto(
+      `/browse?repository=${repository.id}&artifact=${target.coordinate}`,
+    );
+    await expect(
+      page.getByText("digest.slice is not a function"),
+    ).toBeVisible();
+    errors.consoleErrors.length = 0;
+    const initialReads = { ...reads };
+    attempt = 1;
+    await page.getByRole("button", { name: "重试" }).click();
+    await expect
+      .poll(() => reads)
+      .toEqual({
+        catalog: initialReads.catalog + 1,
+        search: initialReads.search + 1,
+        lookup: initialReads.lookup + 1,
+      });
+    await expect.poll(() => catalogRefused).toBe(true);
+    releaseSearch?.();
+    await expect.poll(() => searchCompleted).toBe(true);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    await expect(
+      page.getByText("digest.slice is not a function"),
+    ).toBeVisible();
+    await expect(page.getByText("读取公开仓库失败 (401)")).toHaveCount(0);
+    expect(
+      errors.consoleErrors.filter((message) =>
+        message.startsWith("Console section failed"),
+      ),
+    ).toEqual([]);
+    await expect(
+      page.getByText("注册 Raw 源地址", { exact: true }),
+    ).toBeVisible();
+    releaseLookup?.();
+    await expect(page.getByText("读取公开仓库失败 (401)")).toBeVisible();
+    errors.consoleErrors.length = 0;
+    attempt = 2;
+    await page.getByRole("button", { name: "重试" }).click();
+    await expect(
+      page.getByText(target.coordinate, { exact: true }).first(),
+    ).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect(reads.catalog).toBe(initialReads.catalog + 2);
+    expect(errors.pageErrors).toEqual([]);
+    expect(errors.consoleErrors).toEqual([]);
+  } finally {
+    releaseSearch?.();
+    releaseLookup?.();
+  }
+});
+
 for (const width of [1440, 390]) {
   const en = width === 390;
 

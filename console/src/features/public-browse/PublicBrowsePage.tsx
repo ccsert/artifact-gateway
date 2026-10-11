@@ -25,7 +25,11 @@ import { PublicCatalogHero } from "./PublicCatalogHero";
 import { PublicRepositoryBar } from "./PublicRepositoryBar";
 import { PublicUsageAside } from "./PublicUsageAside";
 import type { PublicArtifactTableRow } from "./publicArtifactRows";
-import { usePublicArtifacts, usePublicCatalog } from "./publicBrowseQueries";
+import {
+  refetchPublicSources,
+  usePublicArtifacts,
+  usePublicCatalog,
+} from "./publicBrowseQueries";
 import { PUBLIC_FORMAT_ORDER } from "./publicFormats";
 import { usePublicVersionPages } from "./usePublicVersionPages";
 
@@ -191,7 +195,10 @@ export function PublicBrowsePage() {
     copy(new URL(href, window.location.origin).toString(), href);
 
   const resetWorkspace = () =>
-    Promise.all([catalog.refetch({ throwOnError: true }), refetchArtifacts()]);
+    refetchPublicSources([
+      catalog.refetch({ throwOnError: true }),
+      refetchArtifacts(),
+    ]);
   const retryCatalog = () => {
     void catalog.refetch({ throwOnError: true }).catch(() => {});
   };

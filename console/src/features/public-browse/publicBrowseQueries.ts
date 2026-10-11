@@ -15,6 +15,16 @@ interface PublicRepositoryCatalogResponse {
 /** Anonymous reads report a refusal on the page and never touch the session. */
 const publicMeta = { authFailure: "ignore" } as const;
 
+/** Retry stays pending until every source settles, even if one fails first. */
+export async function refetchPublicSources(
+  requests: readonly Promise<unknown>[],
+) {
+  const results = await Promise.allSettled(requests);
+  for (const result of results) {
+    if (result.status === "rejected") throw result.reason;
+  }
+}
+
 function publicArtifactAnswer<T extends { items: ArtifactSummary[] }>(data: T) {
   if (!data || !Array.isArray(data.items)) {
     throw new Error("Invalid public artifact search response");
@@ -129,7 +139,7 @@ export function usePublicArtifacts(
     error: search.error ?? lookup.error ?? null,
     recoveryKeys: [search.data, lookup.data],
     refetch: () =>
-      Promise.all([
+      refetchPublicSources([
         ...(repository ? [search.refetch({ throwOnError: true })] : []),
         ...(repository && missing
           ? [lookup.refetch({ throwOnError: true })]

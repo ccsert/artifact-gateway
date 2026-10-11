@@ -140,6 +140,75 @@ describe("public browse section recovery", () => {
     expect(search).toHaveBeenCalledTimes(2);
   });
 
+  it("waits for a pending artifact source before reporting a failed catalog Retry", async () => {
+    const fetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(catalog())
+      .mockResolvedValueOnce(new Response("offline", { status: 503 }));
+    let complete: (() => void) | undefined;
+    search
+      .mockResolvedValueOnce({ data: { items: [null] } } as never)
+      .mockImplementationOnce(
+        () =>
+          new Promise<never>((resolve) => {
+            complete = () => resolve({ data: { items: [artifact] } } as never);
+          }),
+      );
+    browse(`/browse?repository=${repository.id}`);
+    expect(await screen.findByText(/reading 'coordinate'/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /重试/ }));
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(search).toHaveBeenCalledTimes(2);
+    });
+    await act(async () => {});
+
+    expect(screen.getByText(/reading 'coordinate'/)).toBeInTheDocument();
+    expect(
+      screen.queryByText("读取公开仓库失败 (503)"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "管理登录" })).toBeInTheDocument();
+    await act(async () => complete?.());
+    expect(
+      await screen.findByText("读取公开仓库失败 (503)"),
+    ).toBeInTheDocument();
+  });
+
+  it("waits for the primary search when a deep-link lookup Retry fails first", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => catalog());
+    const target = { ...artifact, coordinate: "target.tgz" };
+    let complete: (() => void) | undefined;
+    search
+      .mockResolvedValueOnce({ data: { items: [artifact] } } as never)
+      .mockResolvedValueOnce({
+        data: { items: [{ ...target, digest: { broken: true } }] },
+      } as never)
+      .mockImplementationOnce(
+        () =>
+          new Promise<never>((resolve) => {
+            complete = () => resolve({ data: { items: [artifact] } } as never);
+          }),
+      )
+      .mockResolvedValueOnce({
+        error: { status: 503, message: "lookup offline" },
+      } as never);
+    browse(`/browse?repository=${repository.id}&artifact=target.tgz`);
+    expect(
+      await screen.findByText("digest.slice is not a function"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /重试/ }));
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(4));
+    await act(async () => {});
+
+    expect(
+      screen.getByText("digest.slice is not a function"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("lookup offline")).not.toBeInTheDocument();
+    expect(screen.getByText("注册 Raw 源地址")).toBeInTheDocument();
+    await act(async () => complete?.());
+    expect(await screen.findByText("lookup offline")).toBeInTheDocument();
+  });
+
   it("keeps a loaded catalog visible after a failed refresh and offers retry", async () => {
     const fetch = vi
       .spyOn(globalThis, "fetch")
