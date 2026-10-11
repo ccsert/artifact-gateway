@@ -111,7 +111,7 @@ export function RepositoryDetailPage() {
       isAdmin || permissions[item.authority] === true,
     [isAdmin, permissions],
   );
-  const error = repo ? null : (repositoryQuery.error ?? null);
+  const error = repositoryQuery.error ?? null;
   const [tab, setTab] = useState<Tab>(() =>
     repositoryTabFromQuery(requestedTab),
   );
@@ -133,7 +133,7 @@ export function RepositoryDetailPage() {
   );
 
   const load = useCallback(
-    () => void invalidateRepositories(),
+    () => invalidateRepositories(),
     [invalidateRepositories],
   );
 
@@ -152,7 +152,7 @@ export function RepositoryDetailPage() {
     if (!available) selectTab("artifacts");
   }, [repo, selectTab, tab, tabAllowed, isAdmin, accessResolved]);
 
-  if (error !== null) {
+  if (error !== null && !repo) {
     return (
       <div className="ag-page-stack">
         <PageHeader title={text("仓库详情", "Repository details")} />
@@ -179,6 +179,9 @@ export function RepositoryDetailPage() {
 
   return (
     <div className="ag-page-stack">
+      {error !== null && (
+        <ErrorBanner error={error} onRetry={load} tone="warning" />
+      )}
       <div>
         <div className="mb-1 text-xs text-fg-tertiary">
           <Link

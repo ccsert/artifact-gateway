@@ -25,7 +25,8 @@ function IdentityCacheScope() {
 
 /** Must sit inside AuthProvider. */
 export function ConsoleQueryProvider({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(createQueryClient);
+  const { handleAuthFailure } = useAuth();
+  const [queryClient] = useState(() => createQueryClient(handleAuthFailure));
   return (
     <QueryClientProvider client={queryClient}>
       <IdentityCacheScope />

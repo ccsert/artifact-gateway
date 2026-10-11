@@ -349,6 +349,7 @@ export function RepositoriesPage() {
       return;
     }
     setDeleting(true);
+    setError(null);
     try {
       const { error: err } = await deleteRepository({
         path: { repositoryId: toDelete.id },

@@ -11,7 +11,7 @@ their meaning.
 
 ## Unreleased
 
-- Console reads repository data through a shared query layer: cancelled superseded requests, de-duplicated reads, precise invalidation after create/update/delete, one retry for network or server failures only, and a cache cleared whenever the signed-in principal changes. A failing overview card or repository task now shows its own error and Retry instead of replacing the whole page.
+- Console reads repository data through a shared query layer: cancelled superseded requests, de-duplicated reads, precise invalidation after create/update/delete, one retry for network or server failures only, and a cache cleared whenever the signed-in principal changes. Failed detail refreshes retain previous data with a warning and Retry; 401 ends an expired session while 403 stays a permission error. Overview calculations and repository tasks fail inside their own section boundaries, and Retry awaits refreshed data while ignoring completions from a previous section. A successful deletion retry clears its earlier failure.
 
 - Console markup names semantic colour roles (`text-fg-tertiary`, `border-line`, `bg-surface-translucent`, ...) instead of Zinc palette steps; the `!important` compatibility layer that remapped 35 palette classes is removed and a unit test rejects new raw palette utilities. Dividers, the pending-approval card and the public-browse summary grid now follow the light theme instead of staying dark.
 

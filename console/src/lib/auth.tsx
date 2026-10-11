@@ -20,6 +20,7 @@ interface AuthContextValue {
   identityLoading: boolean;
   setToken: (token: string, role?: string) => void;
   clearToken: () => void;
+  handleAuthFailure: (status: 401 | 403) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -70,6 +71,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIdentityLoading(false);
     void fetch("/auth/logout", { method: "POST", credentials: "include" });
   }, []);
+
+  const handleAuthFailure = useCallback(
+    (status: 401 | 403) => {
+      // Forbidden is a resource decision, not an expired session. Its caller
+      // keeps the identity and shows the permission error instead of logging out.
+      if (status === 401) clearToken();
+    },
+    [clearToken],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -124,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         identityLoading,
         setToken,
         clearToken,
+        handleAuthFailure,
       }}
     >
       {children}

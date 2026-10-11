@@ -9,7 +9,7 @@ interface SectionBoundaryProps {
   /** A change in any value (a route, a tab) clears a previous failure. */
   resetKeys?: readonly unknown[];
   /** Runs before the section re-renders after Retry, e.g. to refetch. */
-  onReset?: () => void;
+  onReset?: () => void | Promise<unknown>;
 }
 
 interface SectionBoundaryState {
@@ -60,6 +60,7 @@ export class SectionBoundary extends Component<
   SectionBoundaryState
 > {
   state: SectionBoundaryState = { error: null, failed: false };
+  private resetGeneration = 0;
 
   static getDerivedStateFromError(error: unknown): SectionBoundaryState {
     return { error, failed: true };
@@ -74,13 +75,25 @@ export class SectionBoundary extends Component<
       this.state.failed &&
       !sameKeys(previous.resetKeys, this.props.resetKeys)
     ) {
+      ++this.resetGeneration;
       this.setState({ error: null, failed: false });
     }
   }
 
-  private retry = () => {
-    this.props.onReset?.();
-    this.setState({ error: null, failed: false });
+  componentWillUnmount() {
+    ++this.resetGeneration;
+  }
+
+  private retry = async () => {
+    const generation = ++this.resetGeneration;
+    try {
+      await this.props.onReset?.();
+      if (generation === this.resetGeneration)
+        this.setState({ error: null, failed: false });
+    } catch (error) {
+      if (generation === this.resetGeneration)
+        this.setState({ error, failed: true });
+    }
   };
 
   render() {

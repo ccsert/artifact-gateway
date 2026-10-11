@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryCache, QueryClient } from "@tanstack/react-query";
 import type { Problem } from "../../client";
 
 /**
@@ -33,8 +33,14 @@ export function shouldRetry(failureCount: number, error: unknown): boolean {
   return status === undefined ? typeof error !== "string" : status >= 500;
 }
 
-export function createQueryClient() {
+export function createQueryClient(onAuthFailure?: (status: 401 | 403) => void) {
   return new QueryClient({
+    queryCache: new QueryCache({
+      onError: (error) => {
+        const status = statusOf(error);
+        if (status === 401 || status === 403) onAuthFailure?.(status);
+      },
+    }),
     defaultOptions: {
       queries: {
         // Operators expect what they just changed to be on screen; mutations

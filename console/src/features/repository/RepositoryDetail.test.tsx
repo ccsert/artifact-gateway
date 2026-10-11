@@ -71,6 +71,7 @@ const mockUpdateRepository = vi.mocked(updateRepository);
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  mockGetRepository.mockReset();
   auth.identity = { administrator: true, role: "admin" };
 });
 
@@ -193,6 +194,73 @@ describe("RepositoryDetailPage scanning deep link", () => {
       分发: ["晋升 / 复制"],
       设置: ["基本设置", "容量", "生命周期任务"],
     });
+  });
+});
+
+describe("RepositoryDetailPage cached refresh", () => {
+  it("keeps the repository after a failed settings refresh and recovers with Retry", async () => {
+    const user = userEvent.setup();
+    const repository = {
+      id: "11111111-1111-4111-8111-111111111111",
+      name: "cached-maven",
+      format: "maven",
+      type: "hosted",
+      anonymousRead: false,
+      mavenStrictPublication: false,
+      state: "active",
+      version: "1",
+    } as const;
+    mockGetRepository
+      .mockResolvedValueOnce({ data: repository } as never)
+      .mockResolvedValueOnce({
+        error: { status: 503, message: "Repository refresh unavailable" },
+      } as never)
+      .mockResolvedValue({
+        data: { ...repository, version: "2" },
+      } as never);
+    mockGetCapabilities.mockResolvedValue({
+      data: {
+        format: "maven",
+        type: "hosted",
+        operations: ["read", "publish"],
+      },
+    } as never);
+    mockGetCapacity.mockResolvedValue({
+      data: { usedBytes: 0, quotaBytes: 0, objectCount: 0 },
+    } as never);
+    mockGetEffectiveAccess.mockResolvedValue({ data: {} } as never);
+    mockUpdateRepository.mockResolvedValue({ data: repository } as never);
+    render(
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter
+            initialEntries={[`/repositories/${repository.id}?tab=settings`]}
+          >
+            <Routes>
+              <Route
+                path="/repositories/:repositoryId"
+                element={<RepositoryDetailPage />}
+              />
+            </Routes>
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "保存更改" }));
+    expect(
+      await screen.findByText("Repository refresh unavailable"),
+    ).toBeVisible();
+    expect(screen.getByRole("heading", { name: "cached-maven" })).toBeVisible();
+    expect(screen.getByRole("navigation", { name: "仓库任务" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /重试/ }));
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Repository refresh unavailable"),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("heading", { name: "cached-maven" })).toBeVisible();
+    expect(mockGetRepository).toHaveBeenCalledTimes(3);
   });
 });
 

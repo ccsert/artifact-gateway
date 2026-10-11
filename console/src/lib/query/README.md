@@ -20,6 +20,9 @@ This directory owns the shared pieces; feature folders own their query hooks
   previous data while the refetch runs.
 - **Retries** happen once, and only for a network failure or a 5xx answer.
   Authorization, validation and not-found answers are final.
+- **Authorization failures** go through `lib/auth`: 401 ends the expired
+  session, clears credentials and drops its cache; 403 keeps the signed-in
+  identity and shows the resource's permission error.
 - **Identity scope.** `ConsoleQueryProvider` clears the whole cache when the
   token or the signed-in actor changes, so protected answers never outlive
   their principal. It must sit inside `AuthProvider`.
@@ -34,7 +37,10 @@ Wrap independent page sections in `SectionBoundary`
 (`components/ui/SectionBoundary.tsx`). A render failure then shows an error and
 Retry inside that section only, instead of replacing the page with the route
 error page. Give it `resetKeys` (route id, selected task) so moving elsewhere
-clears a previous failure, and `onReset` to refetch the section's data.
+clears a previous failure, and `onReset` to refetch the section's data. Return
+the refetch promise so Retry waits for its answer before rendering again;
+completions from a previous section are ignored. Shared source answers can
+also be reset keys so sibling sections recover when that source is refreshed.
 
 ## Migration checklist
 
