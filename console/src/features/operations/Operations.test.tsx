@@ -128,4 +128,31 @@ describe("OperationsPage job history", () => {
     await screen.findByRole("tab", { name: "执行记录" });
     expect(mockListLifecycleJobs).not.toHaveBeenCalled();
   });
+
+  it("re-reads malformed job data when the operator retries", async () => {
+    const record = lifecycleRecord("failed");
+    mockListLifecycleJobs
+      .mockResolvedValueOnce({
+        data: [
+          { ...record, repositoryName: null },
+          {
+            ...record,
+            repositoryId: "00000000-0000-4000-8000-000000000002",
+            repositoryName: null,
+            job: { ...record.job, id: "job-2" },
+          },
+        ],
+      } as never)
+      .mockResolvedValue({ data: [record] } as never);
+    mockListAuditRetentionJobs.mockResolvedValue({ data: [] } as never);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    renderPage("/operations?tab=jobs");
+    await userEvent.click(await screen.findByRole("button", { name: /重试/ }));
+
+    expect(await screen.findByText("releases")).toBeInTheDocument();
+    expect(mockListLifecycleJobs).toHaveBeenCalledTimes(2);
+    expect(mockListAuditRetentionJobs).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("请求出错")).not.toBeInTheDocument();
+  });
 });

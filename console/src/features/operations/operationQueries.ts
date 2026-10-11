@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback } from "react";
 import {
   cancelRepositoryLifecycleJob,
   listAuditRetentionJobs,
   listLifecycleJobs,
   retryRepositoryLifecycleJob,
   runRepositoryLifecycleJobNow,
+  type ListAuditRetentionJobsResponse,
+  type ListLifecycleJobsResponse,
 } from "../../client";
 import { unwrap } from "../../lib/query/client";
 import { operationKeys } from "../../lib/query/keys";
@@ -26,6 +28,25 @@ const POLL_INTERVAL = 15_000;
  */
 export function useOperationJobs({ poll }: { poll: boolean }) {
   const { text } = usePreferences();
+  // Selector failures are query errors, so the panel stays mounted and
+  // its Retry can fetch a corrected answer instead of reusing bad data.
+  const select = useCallback(
+    (data: {
+      lifecycle: ListLifecycleJobsResponse;
+      auditRetention: ListAuditRetentionJobsResponse;
+    }) => ({
+      rows: toOperationRows(data.lifecycle, data.auditRetention, text),
+      repositories: Array.from(
+        new Map(
+          data.lifecycle.map((record) => [
+            record.repositoryId,
+            { id: record.repositoryId, name: record.repositoryName },
+          ]),
+        ).values(),
+      ).sort((a, b) => a.name.localeCompare(b.name)),
+    }),
+    [text],
+  );
   const query = useQuery({
     queryKey: operationKeys.jobs(),
     queryFn: async ({ signal }) => {
@@ -35,6 +56,7 @@ export function useOperationJobs({ poll }: { poll: boolean }) {
       ]);
       return { lifecycle, auditRetention };
     },
+    select,
     staleTime: 0,
     refetchInterval: (current) => {
       const data = current.state.data;
@@ -48,27 +70,9 @@ export function useOperationJobs({ poll }: { poll: boolean }) {
       return poll && active ? POLL_INTERVAL : false;
     },
   });
-  const data = query.data;
-  const rows = useMemo(
-    () =>
-      data ? toOperationRows(data.lifecycle, data.auditRetention, text) : null,
-    [data, text],
-  );
-  const repositories = useMemo(
-    () =>
-      Array.from(
-        new Map(
-          (data?.lifecycle ?? []).map((record) => [
-            record.repositoryId,
-            { id: record.repositoryId, name: record.repositoryName },
-          ]),
-        ).values(),
-      ).sort((a, b) => a.name.localeCompare(b.name)),
-    [data],
-  );
   return {
-    rows,
-    repositories,
+    rows: query.data?.rows ?? null,
+    repositories: query.data?.repositories ?? [],
     error: query.error,
     isFetching: query.isFetching,
     refetch: query.refetch,

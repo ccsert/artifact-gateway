@@ -1,11 +1,13 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getDiagnostics } from "../../client";
 import type { Diagnostics } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { SystemDiagnosticsPanel } from "./SystemDiagnosticsPanel";
 import { TestQueryProvider } from "../../test/queryClient";
+import { createQueryClient } from "../../lib/query/client";
 
 vi.mock("../../client", () => ({ getDiagnostics: vi.fn() }));
 const mockGetDiagnostics = vi.mocked(getDiagnostics);
@@ -330,6 +332,38 @@ describe("SystemDiagnosticsPanel", () => {
         screen.queryByRole("heading", { name: "本地挂载容量" }),
       ).not.toBeInTheDocument();
       expect(screen.queryByText("加载系统诊断…")).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([401, 403])(
+    "handles HTTP %i with the SDK's empty-object error and hides cached diagnostics",
+    async (status) => {
+      const user = userEvent.setup();
+      const onAuthFailure = vi.fn();
+      const client = createQueryClient(onAuthFailure);
+      client.setDefaultOptions({ queries: { retry: false } });
+      mockGetDiagnostics
+        .mockResolvedValueOnce({ data: diagnostics } as never)
+        .mockResolvedValue({
+          error: {},
+          response: new Response("", { status }),
+        } as never);
+      render(
+        <QueryClientProvider client={client}>
+          <PreferencesProvider>
+            <SystemDiagnosticsPanel />
+          </PreferencesProvider>
+        </QueryClientProvider>,
+      );
+
+      await user.click(await screen.findByRole("button", { name: "刷新诊断" }));
+      await screen.findByText("请求出错");
+      expect(onAuthFailure).toHaveBeenCalledExactlyOnceWith(status);
+      expect(screen.queryByText("gateway-01")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: "本地挂载容量" }),
+      ).not.toBeInTheDocument();
+      client.clear();
     },
   );
 });

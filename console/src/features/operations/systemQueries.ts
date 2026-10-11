@@ -30,14 +30,18 @@ export function useDiagnostics() {
       // A refusal can arrive with an empty or plain-text body; give it a
       // Problem shape so the banner and the auth handling read its status.
       const body: unknown = result.error;
-      if (
-        (status === 401 || status === 403) &&
-        (typeof body !== "object" || body === null)
-      ) {
-        const message = typeof body === "string" ? body.trim() : "";
+      if (status === 401 || status === 403) {
+        const problem =
+          typeof body === "object" && body !== null
+            ? (body as Problem)
+            : undefined;
+        const message =
+          typeof body === "string" ? body.trim() : problem?.message;
         throw {
+          ...problem,
           status,
-          code: status === 401 ? "unauthorized" : "forbidden",
+          code:
+            problem?.code ?? (status === 401 ? "unauthorized" : "forbidden"),
           ...(message ? { message } : {}),
         };
       }
