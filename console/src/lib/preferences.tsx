@@ -525,11 +525,13 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, [activeTheme.id, availableThemes, colorMode, setThemeId]);
   const t = useCallback(
     (key: MessageKey, variables?: Record<string, string | number>) => {
-      let message: string = (locale === "zh-CN" ? zhCN : enUS)[key];
-      for (const [name, value] of Object.entries(variables ?? {})) {
-        message = message.replaceAll(`{${name}}`, () => String(value));
-      }
-      return message;
+      const message: string = (locale === "zh-CN" ? zhCN : enUS)[key];
+      // Match the original template once; inserted names stay literal.
+      return message.replace(/\{([^{}]+)\}/g, (placeholder, name: string) =>
+        variables && Object.hasOwn(variables, name)
+          ? String(variables[name])
+          : placeholder,
+      );
     },
     [locale],
   );

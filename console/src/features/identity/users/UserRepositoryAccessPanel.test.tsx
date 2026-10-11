@@ -83,12 +83,12 @@ function record(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function renderPanel() {
+function renderPanel(accountUsername = username) {
   return render(
     <TestQueryProvider>
       <PreferencesProvider>
         <AntdProvider>
-          <UserRepositoryAccessPanel username={username} />
+          <UserRepositoryAccessPanel username={accountUsername} />
         </AntdProvider>
       </PreferencesProvider>
     </TestQueryProvider>,
@@ -108,6 +108,36 @@ afterEach(() => {
 });
 
 describe("UserRepositoryAccessPanel", () => {
+  it.each([
+    "operator {repositoryName}",
+    "operator {username}",
+    "operator {{repositoryName}}",
+    "operator ${repositoryName}",
+    "operator {unknown}",
+    "operator $&-$'-$`-$$",
+  ])(
+    "keeps the literal username in grant-removal confirmation (%s)",
+    async (accountUsername) => {
+      mockListRepositoryGrants.mockResolvedValue({
+        data: [record({ principal: `user:${accountUsername}` })],
+      } as never);
+      mockOkSources();
+      renderPanel(accountUsername);
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: "移除仓库授权" }),
+      );
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            `移除后，${accountUsername} 在「artifacts」上的全部仓库授权都会被删除，其他用户不受影响。`,
+          ),
+        ).toBeVisible();
+      });
+      expect(mockDeleteGrant).not.toHaveBeenCalled();
+    },
+  );
+
   it("lists only this account's grants with capability and prefix", async () => {
     mockListRepositoryGrants.mockResolvedValue({
       data: [
