@@ -4,7 +4,7 @@ import type { ArtifactSummary } from "../../client";
 import { missingDeepLinkedArtifact } from "../../lib/publicBrowseModel";
 import { unwrap } from "../../lib/query/client";
 import { publicKeys } from "../../lib/query/keys";
-import { canonicalRawSearchPrefix } from "../../lib/rawPath";
+import { artifactSearchPrefix, formatDescriptor } from "../../formats";
 import type { PublicRepository } from "./types";
 
 interface PublicRepositoryCatalogResponse {
@@ -77,6 +77,7 @@ export function usePublicArtifacts(
   artifactParam: string,
 ) {
   const repositoryId = repository?.id ?? "";
+  const supported = Boolean(formatDescriptor(repository?.format));
   const search = useQuery({
     queryKey: publicKeys.artifacts(repositoryId, query),
     queryFn: ({ signal }) =>
@@ -85,15 +86,14 @@ export function usePublicArtifacts(
           path: { repositoryId },
           query: {
             q:
-              (repository?.format === "raw"
-                ? canonicalRawSearchPrefix(query)
-                : query) || undefined,
+              artifactSearchPrefix(repository?.format ?? "", query) ||
+              undefined,
             pageSize: 100,
           },
           signal,
         }),
       ).then(publicArtifactAnswer),
-    enabled: Boolean(repository),
+    enabled: Boolean(repository) && supported,
     meta: publicMeta,
   });
   const found = search.data?.items;
@@ -112,7 +112,7 @@ export function usePublicArtifacts(
           signal,
         }),
       ).then(publicArtifactAnswer),
-    enabled: Boolean(repository && missing),
+    enabled: Boolean(repository && missing) && supported,
     meta: publicMeta,
   });
 
@@ -140,8 +140,10 @@ export function usePublicArtifacts(
     recoveryKeys: [search.data, lookup.data],
     refetch: () =>
       refetchPublicSources([
-        ...(repository ? [search.refetch({ throwOnError: true })] : []),
-        ...(repository && missing
+        ...(repository && supported
+          ? [search.refetch({ throwOnError: true })]
+          : []),
+        ...(repository && supported && missing
           ? [lookup.refetch({ throwOnError: true })]
           : []),
       ]),

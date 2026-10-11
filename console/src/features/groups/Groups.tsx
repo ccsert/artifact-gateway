@@ -56,7 +56,7 @@ import {
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 import { groupFormats, loadFormatProfiles } from "../../lib/formatProfiles";
-import { goProxyURL, npmRegistryURL, pypiIndexURL } from "../../lib/usage";
+import { formatDescriptor, supportsDirectoryBrowse } from "../../formats";
 import { GroupResolutionDialog } from "./pages/GroupResolutionDialog";
 
 function CreateGroupDialog({
@@ -657,39 +657,21 @@ export function GroupsPage() {
       dataIndex: "name",
       key: "name",
       width: 240,
-      render: (name: string, group) => (
-        <div className="min-w-0">
-          <div className="font-medium text-fg-strong">{name}</div>
-          {group.format === "npm" && (
-            <CopyableValue
-              value={npmRegistryURL(name)}
-              label={`/npm/${name}/`}
-              className="mt-1 max-w-full text-xs text-fg-tertiary"
-            />
-          )}
-          {group.format === "pypi" && (
-            <CopyableValue
-              value={pypiIndexURL(name)}
-              label={`/pypi/${name}/simple/`}
-              className="mt-1 max-w-full text-xs text-fg-tertiary"
-            />
-          )}
-          {group.format === "go" && (
-            <CopyableValue
-              value={goProxyURL(name)}
-              label={`/go/${name}`}
-              className="mt-1 max-w-full text-xs text-fg-tertiary"
-            />
-          )}
-          {group.format === "cargo" && (
-            <CopyableValue
-              value={`sparse+${window.location.origin}/cargo/${name}/`}
-              label={`/cargo/${name}/`}
-              className="mt-1 max-w-full text-xs text-fg-tertiary"
-            />
-          )}
-        </div>
-      ),
+      render: (name: string, group) => {
+        const endpoint = formatDescriptor(group.format)?.groupEndpoint?.(name);
+        return (
+          <div className="min-w-0">
+            <div className="font-medium text-fg-strong">{name}</div>
+            {endpoint && (
+              <CopyableValue
+                value={endpoint.value}
+                label={endpoint.label}
+                className="mt-1 max-w-full text-xs text-fg-tertiary"
+              />
+            )}
+          </div>
+        );
+      },
     },
     {
       title: text("格式", "Format"),
@@ -757,7 +739,7 @@ export function GroupsPage() {
       align: "right",
       render: (_value, group) => (
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {(group.format === "maven" || group.format === "raw") && (
+          {supportsDirectoryBrowse(group.format, "group") && (
             <Button
               size="small"
               href={`/groups/${group.id}/browse`}

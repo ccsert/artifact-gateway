@@ -32,6 +32,24 @@ const repository: Repository = {
   version: "1",
 };
 
+it("shows an unavailable format instead of an empty repository", async () => {
+  const newerRepository: Repository = JSON.parse(
+    JSON.stringify({ ...repository, format: "nuget" }),
+  );
+  render(
+    <PreferencesProvider>
+      <RepositoryArtifactsTab repo={newerRepository} canWrite />
+    </PreferencesProvider>,
+  );
+  expect(await screen.findByText("制品浏览功能未启用")).toBeInTheDocument();
+  expect(
+    screen.getByText("当前 Console 尚未支持 nuget 格式"),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("暂无制品")).not.toBeInTheDocument();
+  expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+  expect(mockSearchRepositoryArtifacts).not.toHaveBeenCalled();
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();

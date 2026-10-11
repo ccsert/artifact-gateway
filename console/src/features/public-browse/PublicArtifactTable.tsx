@@ -1,4 +1,9 @@
 import {
+  artifactCoordinateForDisplay,
+  formatDescriptor,
+  hasPackageVersions,
+} from "../../formats";
+import {
   CheckOutlined,
   CopyOutlined,
   DownOutlined,
@@ -10,7 +15,6 @@ import type { ColumnsType } from "antd/es/table";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-import { artifactCoordinateForDisplay } from "../../lib/rawPath";
 import type { UsageSnippet } from "../../lib/usage";
 import { PublicArtifactDetail } from "./PublicArtifactDetail";
 import type { PublicArtifactTableRow } from "./publicArtifactRows";
@@ -69,15 +73,18 @@ export function PublicArtifactTable({
 }) {
   const { locale, t } = usePreferences();
   const selectedRepository: PublicRepository | undefined = repository;
+  const descriptor = formatDescriptor(selectedRepository?.format);
+  // Images list the versions loaded so far from their tag pages.
+  const ociVersions = descriptor?.publicVersionSource === "ociTags";
   const toggleArtifactRow = onToggleRow;
   const copyCoordinate = onCopyCoordinate;
 
   const artifactColumns: ColumnsType<PublicArtifactTableRow> = [
     {
       title:
-        selectedRepository?.format === "oci"
+        descriptor?.publicArtifactColumn === "image"
           ? t("publicBrowse.image")
-          : selectedRepository?.format === "apt"
+          : descriptor?.publicArtifactColumn === "aptPath"
             ? t("publicBrowse.aptPath")
             : t("publicBrowse.artifactCoordinate"),
       key: "coordinate",
@@ -98,7 +105,7 @@ export function PublicArtifactTable({
         );
       },
     },
-    ...(selectedRepository?.format === "oci"
+    ...(ociVersions
       ? [
           {
             title: t("publicBrowse.loadedVersions"),
@@ -169,7 +176,7 @@ export function PublicArtifactTable({
               </span>
             ),
           },
-          ...(selectedRepository?.format === "apt"
+          ...(descriptor?.assetColumns
             ? [
                 {
                   title: t("publicBrowse.contentType"),
@@ -184,10 +191,9 @@ export function PublicArtifactTable({
               ]
             : []),
           {
-            title:
-              selectedRepository?.format === "apt"
-                ? t("publicBrowse.firstCached")
-                : t("publicBrowse.created"),
+            title: descriptor?.assetColumns
+              ? t("publicBrowse.firstCached")
+              : t("publicBrowse.created"),
             key: "createdAt",
             width: 180,
             render: (_: unknown, row: PublicArtifactTableRow) => (
@@ -228,10 +234,7 @@ export function PublicArtifactTable({
                     undefined,
                     undefined,
                     undefined,
-                    selectedRepository?.format === "npm" ||
-                      selectedRepository?.format === "pypi" ||
-                      selectedRepository?.format === "go" ||
-                      selectedRepository?.format === "cargo"
+                    hasPackageVersions(selectedRepository?.format)
                       ? (row.item.version ?? versionParam)
                       : undefined,
                   )
@@ -295,7 +298,7 @@ export function PublicArtifactTable({
       columns={artifactColumns}
       pagination={false}
       scroll={{
-        x: selectedRepository?.format === "oci" ? 1100 : 900,
+        x: ociVersions ? 1100 : 900,
       }}
       expandable={{
         expandedRowKeys: rows

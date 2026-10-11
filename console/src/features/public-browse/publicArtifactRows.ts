@@ -3,6 +3,7 @@ import { shortDigest } from "../../lib/format";
 import { usageFor, type UsageSnippet } from "../../lib/usage";
 import type { PublicRepository } from "./types";
 import type { OciManifestDetail, OciTagPage } from "./usePublicVersionPages";
+import { formatDescriptor } from "../../formats";
 
 export type ProtocolVersion = {
   value: string;
@@ -64,7 +65,9 @@ export function buildPublicArtifactRows({
   artifactHref: ArtifactHref;
 }): PublicArtifactTableRow[] {
   return items.map((item, index) => {
-    const isOci = selectedRepository?.format === "oci";
+    const isOci =
+      formatDescriptor(selectedRepository?.format)?.publicVersionSource ===
+      "ociTags";
     const expanded =
       expandedCoordinate === item.coordinate ||
       artifactParam === item.coordinate;

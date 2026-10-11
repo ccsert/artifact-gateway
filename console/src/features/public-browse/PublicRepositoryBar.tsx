@@ -5,6 +5,7 @@ import { FormatBadge } from "../../components/ui/Badge";
 import { Card } from "../../components/ui/Layout";
 import { usePreferences } from "../../lib/preferences";
 import type { PublicRepository } from "./types";
+import { formatDescriptor } from "../../formats";
 
 /** Inside a repository: the way back to the catalog and the artifact search. */
 export function PublicRepositoryBar({
@@ -40,21 +41,23 @@ export function PublicRepositoryBar({
           <FormatBadge format={selectedRepository.format} />
         )}
       </div>
-      <form onSubmit={onSubmit} className="mt-5 flex items-center gap-2">
-        <Input
-          className="min-w-0 flex-1 font-mono text-xs"
-          placeholder={t("publicBrowse.coordinatePathOrNamePrefixOptional")}
-          value={queryDraft}
-          onChange={(event) => onQueryDraftChange(event.target.value)}
-        />
-        <Button
-          type="primary"
-          htmlType="submit"
-          className="shrink-0 whitespace-nowrap"
-        >
-          {t("publicBrowse.search")}
-        </Button>
-      </form>
+      {formatDescriptor(selectedRepository?.format) && (
+        <form onSubmit={onSubmit} className="mt-5 flex items-center gap-2">
+          <Input
+            className="min-w-0 flex-1 font-mono text-xs"
+            placeholder={t("publicBrowse.coordinatePathOrNamePrefixOptional")}
+            value={queryDraft}
+            onChange={(event) => onQueryDraftChange(event.target.value)}
+          />
+          <Button
+            type="primary"
+            htmlType="submit"
+            className="shrink-0 whitespace-nowrap"
+          >
+            {t("publicBrowse.search")}
+          </Button>
+        </form>
+      )}
     </Card>
   );
 }

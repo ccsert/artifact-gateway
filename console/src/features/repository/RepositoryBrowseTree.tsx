@@ -30,7 +30,7 @@ import { Badge } from "../../components/ui/Badge";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-import { decodeRawPathForDisplay } from "../../lib/rawPath";
+import { artifactCoordinateForDisplay, formatDescriptor } from "../../formats";
 import { CopyButton } from "./RepositoryUsageGuides";
 
 interface RepositoryTreeDataNode extends TreeDataNode {
@@ -491,11 +491,10 @@ export function RepositoryBrowseTree({
                 <span>{text("规范位置", "Canonical location")}</span>
                 <div>
                   <code>
-                    {repo.format === "raw"
-                      ? decodeRawPathForDisplay(
-                          selected.coordinate ?? selected.path ?? "",
-                        )
-                      : (selected.coordinate ?? selected.path)}
+                    {artifactCoordinateForDisplay(
+                      repo.format,
+                      selected.coordinate ?? selected.path ?? "",
+                    )}
                   </code>
                   <CopyButton
                     text={selected.coordinate ?? selected.path ?? ""}
@@ -586,7 +585,7 @@ export function RepositoryBrowseTree({
                 />
               )}
             </dl>
-            {repo.format === "maven" &&
+            {formatDescriptor(repo.format)?.separateAssetPath &&
               selected.kind === "asset" &&
               selected.path && (
                 <div className="ag-repository-tree-field">

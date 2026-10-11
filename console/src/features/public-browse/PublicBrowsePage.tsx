@@ -32,6 +32,7 @@ import {
 } from "./publicBrowseQueries";
 import { PUBLIC_FORMAT_ORDER } from "./publicFormats";
 import { usePublicVersionPages } from "./usePublicVersionPages";
+import { formatDescriptor } from "../../formats";
 
 /**
  * Anonymous browsing of public repositories (issue 275 split): this page owns
@@ -113,17 +114,19 @@ export function PublicBrowsePage() {
     });
   }, [catalogFormat, catalogQuery, repositories]);
 
+  const descriptor = formatDescriptor(selectedRepository?.format);
+  const versionSource = descriptor?.publicVersionSource;
   useEffect(() => {
     if (
       !artifactParam ||
       !items?.some((item) => item?.coordinate === artifactParam)
     )
       return;
-    if (selectedRepository?.format === "oci" && !ociTagPages[artifactParam]) {
+    if (versionSource === "ociTags" && !ociTagPages[artifactParam]) {
       void loadOciTags(artifactParam);
     }
     if (
-      selectedRepository?.format === "conan" &&
+      versionSource === "conanRevisions" &&
       !conanRevisionPages[artifactParam]
     ) {
       if (revisionParam) setProtocolVersionFilter(revisionParam);
@@ -137,7 +140,7 @@ export function PublicBrowsePage() {
     loadOciTags,
     ociTagPages,
     revisionParam,
-    selectedRepository?.format,
+    versionSource,
   ]);
 
   const submit = (event: FormEvent) => {
@@ -255,7 +258,7 @@ export function PublicBrowsePage() {
         <div
           data-public-browse-workspace
           className={
-            selectedRepository
+            selectedRepository && descriptor
               ? "grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start"
               : ""
           }
@@ -372,7 +375,7 @@ export function PublicBrowsePage() {
               </div>
             </SectionBoundary>
           </section>
-          {selectedRepository && (
+          {selectedRepository && descriptor && (
             <aside className="lg:sticky lg:top-24">
               <SectionBoundary
                 resetKeys={[repositoryId]}

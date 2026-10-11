@@ -10,8 +10,8 @@ import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import {
   artifactCoordinateForDisplay,
-  canonicalRawSearchPrefix,
-} from "../../lib/rawPath";
+  artifactSearchPrefix,
+} from "../../formats";
 
 export type RepositoryArtifactIdentity = {
   key: string;
@@ -97,10 +97,7 @@ export function RepositoryArtifactSelect({
                 purpose,
                 ...(trimmedQuery
                   ? {
-                      q:
-                        repo.format === "raw"
-                          ? canonicalRawSearchPrefix(trimmedQuery)
-                          : trimmedQuery,
+                      q: artifactSearchPrefix(repo.format, trimmedQuery),
                     }
                   : {}),
                 pageSize: 50,

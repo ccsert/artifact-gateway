@@ -11,6 +11,10 @@ their meaning.
 
 ## Unreleased
 
+- Unknown artifact formats now show the unified unavailable state in repository detail, public browse, and search detail. Format-specific task entrypoints are resolved from the registry for each repository type.
+
+- The Console describes each artifact format once, in a format registry, instead of repeating format checks across pages. Repository detail no longer downloads every format's detail panels and the Maven publish wizard up front, which shrinks its bundle by about 71 kB; public browse and global search load only the formats they show. Behaviour and layout are unchanged.
+
 - Operations and System status read through the shared query layer and are split into focused sections. Opening the job history tab directly (a link or a reload) now loads it instead of waiting indefinitely; job history polls only while a job is active and the tab is visible. Webhook delivery filters can no longer show a slower answer for a previous filter, and schedule and webhook editors report a failed save only inside the dialog. Schedule and webhook writes and the job history link are covered end to end against a live Gateway. Malformed job projections stay local and Retry re-reads the history; empty-body HTTP 401/403 diagnostic refusals hide cached snapshots and reach shared authorization handling.
 
 - Console access and identity splits keep section Retry tied to its read sources, retain cached grants after refresh failures, and use typed feature message dictionaries without changing display text. Malformed credential pages stay local with Retry, refresh failures retain credential rows, and interpolated names preserve literal dollar characters and placeholder-like text.

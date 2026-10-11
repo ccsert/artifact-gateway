@@ -41,13 +41,6 @@ export function decodeRawPathForDisplay(path: string): string {
   }
 }
 
-export function artifactCoordinateForDisplay(
-  format: string,
-  coordinate: string,
-): string {
-  return format === "raw" ? decodeRawPathForDisplay(coordinate) : coordinate;
-}
-
 // Console search boxes contain presentation text. Always encode their value,
 // including literal percent signs, before sending the canonical API prefix.
 export function canonicalRawSearchPrefix(value: string): string {

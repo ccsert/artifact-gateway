@@ -8,6 +8,12 @@ import {
 import type { ConanRevisionPage } from "./ConanGroupTable";
 import { VERSION_PAGE_SIZE } from "./constants";
 import type { PublicRepository } from "./types";
+import { formatDescriptor } from "../../formats";
+
+/** Which version protocol public browse uses for a repository's artifacts. */
+function versionSource(repository: { format?: string } | undefined) {
+  return formatDescriptor(repository?.format)?.publicVersionSource;
+}
 
 /**
  * Per-artifact version pages for the public browser: OCI tags with their
@@ -58,7 +64,12 @@ export function usePublicVersionPages({
 
   const loadOciManifest = useCallback(
     async (coordinate: string, tag: string) => {
-      if (selectedRepository?.format !== "oci" || !tag) return;
+      if (
+        !selectedRepository ||
+        versionSource(selectedRepository) !== "ociTags" ||
+        !tag
+      )
+        return;
       const key = `${coordinate}\x00${tag}`;
       setOciManifestDetails((current) => ({
         ...current,
@@ -93,7 +104,11 @@ export function usePublicVersionPages({
 
   const loadOciTags = useCallback(
     async (coordinate: string, after = "") => {
-      if (selectedRepository?.format !== "oci") return;
+      if (
+        !selectedRepository ||
+        versionSource(selectedRepository) !== "ociTags"
+      )
+        return;
       setOciTagPages((current) => ({
         ...current,
         [coordinate]: {
@@ -183,7 +198,11 @@ export function usePublicVersionPages({
 
   const loadConanRevisions = useCallback(
     async (coordinate: string, query = "", pageToken = "") => {
-      if (selectedRepository?.format !== "conan") return;
+      if (
+        !selectedRepository ||
+        versionSource(selectedRepository) !== "conanRevisions"
+      )
+        return;
       const normalizedQuery = query.trim();
       setConanRevisionPages((current) => ({
         ...current,

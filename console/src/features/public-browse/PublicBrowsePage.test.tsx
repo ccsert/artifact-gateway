@@ -36,6 +36,77 @@ afterEach(() => {
 });
 
 describe("PublicBrowsePage APT browse", () => {
+  it("can open an unknown-format repository from the public catalog", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          enabled: true,
+          items: [
+            {
+              id: "future",
+              name: "nuget-public",
+              format: "nuget",
+              type: "proxy",
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    render(
+      <MemoryRouter initialEntries={["/browse"]}>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <PublicBrowsePage />
+          </PreferencesProvider>
+        </TestQueryProvider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole("link", { name: /nuget-public/ }));
+    expect(
+      await screen.findByText("当前 Console 尚未支持 nuget 格式"),
+    ).toBeInTheDocument();
+    expect(mockSearchRepositoryArtifacts).not.toHaveBeenCalled();
+  });
+  it("shows the unified unavailable state for a newer server format", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          enabled: true,
+          items: [
+            {
+              id: "new-format",
+              name: "nuget-public",
+              format: "nuget",
+              type: "proxy",
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    mockSearchRepositoryArtifacts.mockResolvedValue({
+      data: { items: [] },
+    } as never);
+    render(
+      <MemoryRouter initialEntries={["/browse?repository=new-format"]}>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <PublicBrowsePage />
+          </PreferencesProvider>
+        </TestQueryProvider>
+      </MemoryRouter>,
+    );
+    expect(
+      await screen.findByText("当前 Console 尚未支持 nuget 格式"),
+    ).toBeInTheDocument();
+    expect(mockSearchRepositoryArtifacts).not.toHaveBeenCalled();
+    expect(screen.queryByText("Raw 仓库地址")).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText("坐标、路径或名称前缀（可选）"),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps the zero-data catalog on the same full-width surface as populated states", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ enabled: true, items: [] }), {

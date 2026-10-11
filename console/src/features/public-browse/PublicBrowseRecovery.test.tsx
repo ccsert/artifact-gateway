@@ -113,7 +113,17 @@ describe("public browse section recovery", () => {
   it("refetches a broken catalog section before retrying its render", async () => {
     const fetch = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(catalog("future-format"))
+      // A newer format is valid and has an unavailable state. Use a malformed
+      // type to exercise containment and refetch of a genuinely broken render.
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            enabled: true,
+            items: [{ ...repository, type: { broken: true } }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
       .mockResolvedValueOnce(catalog());
     browse();
 

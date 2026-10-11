@@ -36,6 +36,31 @@ afterEach(() => {
 });
 
 describe("RepositoryRetentionTab", () => {
+  it("renders an enabled registered Cargo retention policy", async () => {
+    mockGetRetentionPolicy.mockResolvedValue({
+      data: {
+        version: "1",
+        enabled: false,
+        keepDays: 30,
+        snapshotKeepDays: 14,
+        minimumVersions: 1,
+        maximumVersions: 0,
+        coordinatePatterns: [],
+        protectedPatterns: [],
+      },
+    } as never);
+    render(
+      <PreferencesProvider>
+        <RepositoryRetentionTab repo={{ ...repository, format: "cargo" }} />
+      </PreferencesProvider>,
+    );
+    expect(
+      await screen.findByRole("button", { name: "保存策略" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Hosted 仓库保留策略功能未启用"),
+    ).not.toBeInTheDocument();
+  });
   it.each([
     {
       format: "maven" as const,

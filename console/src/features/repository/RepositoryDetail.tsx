@@ -4,19 +4,15 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { PageHeader } from "../../components/ui/Layout";
 import { SectionBoundary } from "../../components/ui/SectionBoundary";
-import { MavenPublishWizard } from "./MavenPublishWizard";
 import { usePreferences } from "../../lib/preferences";
 import { useAuth } from "../../lib/auth";
 import {
   platformCapabilities,
   repositoryPermissions,
 } from "../../lib/authorization";
-import {
-  CargoPublishGuide,
-  NpmPublishGuide,
-  OCIPublishGuide,
-  PyPIPublishGuide,
-} from "./RepositoryUsageGuides";
+import { formatViews } from "../../formats/views";
+import { formatDescriptor } from "../../formats";
+import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 const RepositoryArtifactsTab = lazy(async () => ({
   default: (await import("./RepositoryArtifactsTab")).RepositoryArtifactsTab,
 }));
@@ -161,6 +157,18 @@ export function RepositoryDetailPage() {
     );
   }
   if (!repo) return <Loading />;
+  if (!formatDescriptor(repo.format)) {
+    return (
+      <div className="ag-page-stack">
+        <PageHeader title={text("仓库详情", "Repository details")} />
+        <RepositoryFeatureUnavailable
+          feature={text("制品浏览", "Artifact browser")}
+          unsupportedFormat={repo.format}
+        />
+      </div>
+    );
+  }
+  const PublishGuide = formatViews(repo.format).PublishGuide;
 
   const availableTabs = TABS.filter(
     (item) => repositoryTabAvailable(item, repo) && tabAllowed(item),
@@ -290,28 +298,13 @@ export function RepositoryDetailPage() {
               />
             )}
             {activeTab === "publish" &&
-              repo.format === "maven" &&
-              repo.type !== "proxy" && (
-                <MavenPublishWizard
+              repo.type !== "proxy" &&
+              PublishGuide && (
+                <PublishGuide
                   repositoryId={repo.id}
+                  repositoryName={repo.name}
                   onPublished={() => selectTab("artifacts")}
                 />
-              )}
-            {activeTab === "publish" &&
-              repo.format === "npm" &&
-              repo.type !== "proxy" && <NpmPublishGuide repoName={repo.name} />}
-            {activeTab === "publish" &&
-              repo.format === "oci" &&
-              repo.type !== "proxy" && <OCIPublishGuide repoName={repo.name} />}
-            {activeTab === "publish" &&
-              repo.format === "pypi" &&
-              repo.type !== "proxy" && (
-                <PyPIPublishGuide repoName={repo.name} />
-              )}
-            {activeTab === "publish" &&
-              repo.format === "cargo" &&
-              repo.type !== "proxy" && (
-                <CargoPublishGuide repoName={repo.name} />
               )}
             {activeTab === "grants" && (
               <>

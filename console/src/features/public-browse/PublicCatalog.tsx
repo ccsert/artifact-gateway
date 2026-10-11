@@ -119,7 +119,9 @@ export function PublicCatalog({
                   <div
                     className={`flex h-11 min-w-11 items-center justify-center rounded-xl border px-2 text-xs font-semibold tracking-wide ${artifactFormatVisualizationClass(repository.format)}`}
                   >
-                    {PUBLIC_FORMAT_STYLE[repository.format].icon}
+                    {PUBLIC_FORMAT_STYLE[repository.format]?.icon ?? (
+                      <DatabaseOutlined />
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge

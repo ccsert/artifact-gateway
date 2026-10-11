@@ -3,14 +3,10 @@ import {
   UsageSnippetBlock,
 } from "../../components/ui/PublicBrowsePrimitives";
 import { formatDate } from "../../lib/format";
+import { artifactCoordinateForDisplay, formatDescriptor } from "../../formats";
+import { formatViews } from "../../formats/views";
 import { usePreferences } from "../../lib/preferences";
-import { artifactCoordinateForDisplay } from "../../lib/rawPath";
 import type { UsageSnippet } from "../../lib/usage";
-import { APTAssetDetail } from "../artifact-detail/APTAssetDetail";
-import { CargoCrateDetail } from "../artifact-detail/CargoCrateDetail";
-import { GoModuleDetail } from "../artifact-detail/GoModuleDetail";
-import { NpmPackageDetail } from "../artifact-detail/NpmPackageDetail";
-import { PyPIProjectDetail } from "../artifact-detail/PyPIProjectDetail";
 import { OciVersionPanel } from "./OciVersionPanel";
 import type { PublicArtifactTableRow } from "./publicArtifactRows";
 import type { PublicRepository } from "./types";
@@ -51,83 +47,16 @@ export function PublicArtifactDetail({
   const selectedRepository: PublicRepository | undefined = repository;
   const openArtifact = onOpenArtifact;
   const copyUsage = onCopyUsage;
-  if (selectedRepository?.format === "npm") {
+  const PublicDetail =
+    selectedRepository &&
+    formatDescriptor(selectedRepository.format)?.publicDetail
+      ? formatViews(selectedRepository.format).ArtifactDetail
+      : undefined;
+  if (selectedRepository && PublicDetail) {
     return (
-      <NpmPackageDetail
-        repoName={selectedRepository.name}
-        packageName={row.item.coordinate}
-        initialVersion={
-          artifactParam === row.item.coordinate
-            ? versionParam || row.item.version
-            : row.item.version
-        }
-        size={row.item.size}
-        publisher={row.item.publisher}
-        onVersionChange={(version) =>
-          openArtifact(
-            row.item.coordinate,
-            undefined,
-            undefined,
-            undefined,
-            version,
-          )
-        }
-      />
-    );
-  }
-  if (selectedRepository?.format === "pypi") {
-    return (
-      <PyPIProjectDetail
-        repoName={selectedRepository.name}
-        project={row.item.coordinate}
-        initialVersion={
-          artifactParam === row.item.coordinate
-            ? versionParam || row.item.version
-            : row.item.version
-        }
-        size={row.item.size}
-        publisher={row.item.publisher}
-        onVersionChange={(version) =>
-          openArtifact(
-            row.item.coordinate,
-            undefined,
-            undefined,
-            undefined,
-            version,
-          )
-        }
-      />
-    );
-  }
-  if (selectedRepository?.format === "go") {
-    return (
-      <GoModuleDetail
-        repoName={selectedRepository.name}
-        modulePath={row.item.coordinate}
-        initialVersion={
-          artifactParam === row.item.coordinate
-            ? versionParam || row.item.version
-            : row.item.version
-        }
-        size={row.item.size}
-        publisher={row.item.publisher}
-        onVersionChange={(version) =>
-          openArtifact(
-            row.item.coordinate,
-            undefined,
-            undefined,
-            undefined,
-            version,
-          )
-        }
-      />
-    );
-  }
-  if (selectedRepository?.format === "cargo") {
-    return (
-      <CargoCrateDetail
-        repoName={selectedRepository.name}
-        crateName={row.item.coordinate}
+      <PublicDetail
+        repositoryName={selectedRepository.name}
+        artifact={row.item}
         initialVersion={
           artifactParam === row.item.coordinate
             ? versionParam || row.item.version
@@ -142,22 +71,6 @@ export function PublicArtifactDetail({
             version,
           )
         }
-      />
-    );
-  }
-  if (selectedRepository?.format === "apt") {
-    return (
-      <APTAssetDetail
-        repoName={selectedRepository.name}
-        meta={{
-          coordinate: row.item.coordinate,
-          digest: row.item.digest,
-          size: row.item.size,
-          contentType: row.item.contentType,
-          createdAt: row.item.createdAt,
-          cachedAt: row.item.cachedAt,
-          sourceUrl: row.item.sourceUrl,
-        }}
       />
     );
   }

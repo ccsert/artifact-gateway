@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { searchArtifacts } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { SearchPage } from "./Search";
+import userEvent from "@testing-library/user-event";
 
 vi.mock("../../client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../client")>()),
@@ -17,6 +18,34 @@ vi.mock("../../lib/auth", () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+it("shows unavailable detail for a search hit from a newer server format", async () => {
+  vi.mocked(searchArtifacts).mockResolvedValue({
+    data: {
+      searchedRepositories: 1,
+      items: [
+        {
+          repositoryId: "new-format",
+          repositoryName: "nuget-hosted",
+          format: "nuget",
+          matchKind: "coordinate",
+          coordinate: "Widget:1.0",
+        },
+      ],
+    },
+  } as never);
+  render(
+    <MemoryRouter initialEntries={["/search?q=Widget"]}>
+      <PreferencesProvider>
+        <SearchPage />
+      </PreferencesProvider>
+    </MemoryRouter>,
+  );
+  await userEvent.setup().click(await screen.findByText("Widget:1.0"));
+  expect(
+    await screen.findByText("当前 Console 尚未支持 nuget 格式"),
+  ).toBeInTheDocument();
 });
 
 it("presents Raw global-search hits with a readable file path", async () => {

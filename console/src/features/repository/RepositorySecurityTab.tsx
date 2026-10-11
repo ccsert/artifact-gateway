@@ -34,6 +34,7 @@ import {
   PolicySectionHeader,
   ScopeFact,
 } from "./RepositorySecurityPrimitives";
+import { formatDescriptor } from "../../formats";
 
 type SecurityPolicyDraft = Required<
   Pick<
@@ -104,7 +105,9 @@ export function RepositorySecurityTab({
     useState<AptRepositorySigningState | null>(null);
   const [aptSigningError, setAptSigningError] = useState<unknown>(null);
   const aptSigningRequest = useRef(0);
-  const aptSigningApplicable = repo.format === "apt" && repo.type === "hosted";
+  const aptSigningApplicable =
+    Boolean(formatDescriptor(repo.format)?.signedIndexes) &&
+    repo.type === "hosted";
 
   const load = useCallback(async () => {
     setError(null);
