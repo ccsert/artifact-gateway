@@ -58,6 +58,7 @@ The behaviour each refactor must preserve, and where it is proven.
 | Audit log and retention                      | `audit-layout`, `audits-date-filter`, `admin-list-behavior`                                                            |
 | Service accounts and API keys                | `service-accounts-layout`, `admin-list-behavior`, `artifact-workflows`                                                 |
 | Operations, runtime nodes, logs, diagnostics | `runtime-nodes-health`, `runtime-logs-layout`, `runtime-log-window`, `http-error-rate-layout`, `local-capacity-layout` |
+| Job history, schedules and webhook writes    | `operations-workflows` (live Gateway; webhooks need `GATEWAY_SETTINGS_ENCRYPTION_KEY`)                                 |
 | Quota alerts and email notifications         | `quota-alerts`, `email-notifications`                                                                                  |
 | Site settings and themes                     | `site-settings`, `gateway-theme-compatibility`, `theme-motion`                                                         |
 | APT signed snapshots                         | `apt-snapshot-operations`                                                                                              |

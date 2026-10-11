@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { PreferencesProvider } from "../../lib/preferences";
 import { SystemPage } from "./System";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../operations/SystemDiagnosticsPanel", () => ({
   SystemDiagnosticsPanel: () => <p>diagnostics fixture</p>,
@@ -19,9 +20,11 @@ afterEach(cleanup);
 it("opens quota alerts through the System route tab", () => {
   render(
     <MemoryRouter initialEntries={["/system?tab=alerts"]}>
-      <PreferencesProvider>
-        <SystemPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <SystemPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
   expect(

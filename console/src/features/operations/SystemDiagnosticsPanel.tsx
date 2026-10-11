@@ -1,178 +1,43 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
-import {
-  CheckCircleOutlined,
-  CopyOutlined,
-  ReloadOutlined,
-  WarningOutlined,
-} from "@ant-design/icons";
+import { useMemo } from "react";
+import { CopyOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Space, Tooltip } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { getDiagnostics } from "../../client";
-import type {
-  DiagnosticDependency,
-  DiagnosticQueueStat,
-  DiagnosticScanner,
-  Diagnostics,
-  Problem,
-} from "../../client";
 import { formatDate } from "../../lib/format";
-import {
-  buildVersionsMismatch,
-  getConsoleBuildVersion,
-} from "../../lib/buildVersion";
+import { getConsoleBuildVersion } from "../../lib/buildVersion";
 import { usePreferences } from "../../lib/preferences";
-import { FormatBadge, StateBadge } from "../../components/ui/Badge";
 import {
-  ConsoleTable,
   MetricStrip,
   useClipboardAction,
 } from "../../components/ui/ConsolePrimitives";
-import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
-import { Card, CardHeader } from "../../components/ui/Layout";
+import { ErrorBanner, Loading } from "../../components/ui/Feedback";
+import { Card } from "../../components/ui/Layout";
 import { LocalCapacityPanel } from "./LocalCapacityPanel";
 import { HTTPErrorRatePanel } from "./HTTPErrorRatePanel";
+import {
+  DiagnosticsAttentionCard,
+  DiagnosticsIdentityCard,
+} from "./DiagnosticsCards";
+import {
+  DiagnosticsDependenciesCard,
+  DiagnosticsQueueCard,
+} from "./DiagnosticsDetailCards";
+import { scannerNeedsAttentionFor } from "./diagnosticsScanner";
+import { isAuthorizationFailure, useDiagnostics } from "./systemQueries";
 
-const dependencyLabels: Record<string, [string, string]> = {
-  postgresql: ["PostgreSQL", "PostgreSQL"],
-  "object-storage": ["对象存储", "Object storage"],
-  runtime: ["运行依赖", "Runtime dependencies"],
-};
-
-const scannerStatusLabels: Record<
-  DiagnosticScanner["status"],
-  [string, string]
-> = {
-  healthy: ["健康", "Healthy"],
-  degraded: ["需关注", "Degraded"],
-  unhealthy: ["异常", "Unhealthy"],
-  unreachable: ["不可达", "Unreachable"],
-  unknown: ["未知", "Unknown"],
-  not_configured: ["未配置", "Not configured"],
-};
-
-const scannerStatusTone: Record<DiagnosticScanner["status"], string> = {
-  healthy: "text-[var(--ag-status-success)]",
-  degraded: "text-[var(--ag-status-warning)]",
-  unhealthy: "text-[var(--ag-status-danger)]",
-  unreachable: "text-[var(--ag-status-danger)]",
-  unknown: "text-[var(--ag-status-warning)]",
-  not_configured: "text-fg-tertiary",
-};
-
-type Localize = (chinese: string, english: string) => string;
-
-function DiagnosticIdentityItem({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: ReactNode;
-  mono?: boolean;
-}) {
-  return (
-    <div className="ag-diagnostic-identity-row">
-      <dt>{label}</dt>
-      <dd className={mono ? "font-mono" : undefined}>{value}</dd>
-    </div>
-  );
-}
-
-function scannerOperationalDetail(
-  scanner: DiagnosticScanner,
-  text: Localize,
-  locale: string,
-): string {
-  if (scanner.status === "not_configured") {
-    return text("未启用外部扫描器", "External scanner is not configured");
-  }
-  if (scanner.status === "unknown") {
-    return text(
-      "健康探针未配置或不可用 · 漏洞库新鲜度未知",
-      "Health reporting unavailable · Database freshness unknown",
-    );
-  }
-  const databaseDetail =
-    scanner.databaseFreshness === "unknown"
-      ? text(
-          "漏洞库未报告更新时间",
-          "Vulnerability database update time unavailable",
-        )
-      : text(
-          `漏洞库${scanner.databaseFreshness === "fresh" ? "新鲜" : "已过期"} · ${formatDate(scanner.databaseUpdatedAt, locale)}`,
-          `Vulnerability database ${scanner.databaseFreshness} · ${formatDate(scanner.databaseUpdatedAt, locale)}`,
-        );
-  if (scanner.status === "unreachable") {
-    return text(
-      `健康检查失败 · ${databaseDetail}`,
-      `Health check failed · ${databaseDetail}`,
-    );
-  }
-  if (scanner.status === "unhealthy") {
-    return text(
-      `扫描器报告异常 · ${databaseDetail}`,
-      `Scanner reports unhealthy · ${databaseDetail}`,
-    );
-  }
-  if (scanner.status === "degraded" && scanner.databaseFreshness !== "stale") {
-    return text(
-      `扫描器报告降级 · ${databaseDetail}`,
-      `Scanner reports degraded · ${databaseDetail}`,
-    );
-  }
-  return databaseDetail;
-}
-
+/** The Gateway's diagnostic snapshot: health summary, then detail cards. */
 export function SystemDiagnosticsPanel() {
   const { locale, text } = usePreferences();
   const consoleVersion = getConsoleBuildVersion();
-  const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(false);
-  const requestPending = useRef(false);
+  const diagnosticsQuery = useDiagnostics();
+  const error = diagnosticsQuery.error;
+  // An authorization refusal must not leave a previous principal's snapshot
+  // on screen; any other refresh failure keeps it under a warning.
+  const diagnostics = isAuthorizationFailure(error)
+    ? null
+    : (diagnosticsQuery.data ?? null);
+  const loading = diagnosticsQuery.isFetching;
+  const load = () => void diagnosticsQuery.refetch();
   const { copiedValue, copy } = useClipboardAction();
   const copied = copiedValue === "diagnostics";
-
-  const load = useCallback(async () => {
-    if (requestPending.current) return;
-    requestPending.current = true;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await getDiagnostics();
-      const status = result.response?.status;
-      if (status === 401 || status === 403) {
-        setDiagnostics(null);
-        throw (
-          result.error || {
-            status,
-            code: status === 401 ? "unauthorized" : "forbidden",
-          }
-        );
-      }
-      if (result.error) throw result.error;
-      setDiagnostics(result.data ?? null);
-    } catch (nextError) {
-      const problem = nextError as Problem | undefined;
-      if (
-        problem?.status === 401 ||
-        problem?.status === 403 ||
-        ["unauthorized", "forbidden", "password_change_required"].includes(
-          problem?.code ?? "",
-        )
-      )
-        setDiagnostics(null);
-      setError(nextError);
-    } finally {
-      requestPending.current = false;
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const queueTotal = useMemo(
     () =>
@@ -190,55 +55,7 @@ export function SystemDiagnosticsPanel() {
     (dependency) => dependency.status !== "reachable",
   ).length;
   const scannerNeedsAttention =
-    diagnostics?.scanner !== undefined &&
-    diagnostics.scanner.status !== "healthy" &&
-    diagnostics.scanner.status !== "not_configured";
-
-  const queueColumns: ColumnsType<DiagnosticQueueStat> = [
-    {
-      title: text("任务类型", "Job type"),
-      dataIndex: "kind",
-      key: "kind",
-      width: 150,
-      render: (kind: string) => (
-        <span className="font-mono text-xs">{kind}</span>
-      ),
-    },
-    {
-      title: text("格式", "Format"),
-      dataIndex: "format",
-      key: "format",
-      width: 110,
-      responsive: ["sm"],
-      render: (format: string) => <FormatBadge format={format} />,
-    },
-    {
-      title: text("状态", "Status"),
-      dataIndex: "state",
-      key: "state",
-      width: 120,
-      render: (state: string) => <StateBadge state={state} />,
-    },
-    {
-      title: text("数量", "Count"),
-      dataIndex: "count",
-      key: "count",
-      width: 80,
-      align: "right",
-    },
-    {
-      title: text("最早入队", "Oldest queued"),
-      dataIndex: "oldestCreatedAt",
-      key: "oldestCreatedAt",
-      width: 190,
-      responsive: ["lg"],
-      render: (value?: string) => (
-        <span className="whitespace-nowrap text-xs text-fg-tertiary">
-          {value ? formatDate(value, locale) : "—"}
-        </span>
-      ),
-    },
-  ];
+    diagnostics !== null && scannerNeedsAttentionFor(diagnostics);
 
   if (error && !diagnostics)
     return <ErrorBanner error={error} onRetry={load} />;
@@ -249,32 +66,6 @@ export function SystemDiagnosticsPanel() {
   const scannerCritical =
     scanner !== undefined &&
     ["unhealthy", "unreachable"].includes(scanner.status);
-  const scannerStatusLabel = scanner
-    ? scannerStatusLabels[scanner.status]
-    : null;
-  const scannerDetail = scanner
-    ? scannerOperationalDetail(scanner, text, locale)
-    : "";
-  const unavailableDependencies = diagnostics.dependencies.filter(
-    (dependency) => dependency.status !== "reachable",
-  );
-  const failedQueueEntries = diagnostics.queues.filter(
-    (queue) => queue.state === "failed",
-  );
-  const nodeIssues = diagnostics.nodes.issues ?? [];
-  const nodeStatusNeedsAttention = diagnostics.nodes.status !== "healthy";
-  const needsAttention =
-    unavailableDependencies.length > 0 ||
-    failedQueueEntries.length > 0 ||
-    scannerNeedsAttention ||
-    nodeStatusNeedsAttention;
-  const attentionCount =
-    unavailableDependencies.length +
-    failedQueueEntries.length +
-    nodeIssues.length +
-    (scannerNeedsAttention ? 1 : 0) +
-    (nodeStatusNeedsAttention && nodeIssues.length === 0 ? 1 : 0);
-
   return (
     <div className="ag-page-stack ag-system-diagnostics">
       {error != null && (
@@ -392,296 +183,17 @@ export function SystemDiagnosticsPanel() {
         ]}
       />
 
-      {needsAttention && (
-        <Card>
-          <CardHeader
-            title={text("需要处理", "Needs attention")}
-            extra={
-              <span className="text-xs text-fg-tertiary">
-                {text(`${attentionCount} 项`, `${attentionCount} items`)}
-              </span>
-            }
-          />
-          <div className="divide-y divide-line">
-            {unavailableDependencies.map((dependency) => (
-              <div key={dependency.name} className="ag-diagnostic-issue-row">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-fg">
-                    {text("依赖不可用", "Dependency unavailable")} ·{" "}
-                    {dependency.name}
-                  </div>
-                  <div className="mt-1 break-words text-xs leading-5 text-fg-tertiary">
-                    {dependency.detail}
-                  </div>
-                </div>
-                <StateBadge state={dependency.status} />
-              </div>
-            ))}
-            {scannerNeedsAttention && scanner && scannerStatusLabel && (
-              <div className="ag-diagnostic-issue-row">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-fg">
-                    {text("扫描器可信度", "Scanner trust")} · {scanner.name}
-                  </div>
-                  <div className="mt-1 break-words text-xs leading-5 text-fg-tertiary">
-                    {scannerDetail}
-                  </div>
-                </div>
-                <span
-                  className={`shrink-0 text-xs ${scannerStatusTone[scanner.status]}`}
-                >
-                  {text(scannerStatusLabel[0], scannerStatusLabel[1])}
-                </span>
-              </div>
-            )}
-            {nodeIssues.map((issue) => (
-              <div key={issue.code} className="ag-diagnostic-issue-row">
-                <div className="min-w-0">
-                  <div className="font-mono text-xs text-[var(--ag-status-warning)]">
-                    {issue.code}
-                  </div>
-                  <div className="mt-1 break-words text-xs leading-5 text-fg-secondary">
-                    {issue.message}
-                  </div>
-                </div>
-                <StateBadge state={diagnostics.nodes.status} />
-              </div>
-            ))}
-            {nodeStatusNeedsAttention && nodeIssues.length === 0 && (
-              <div className="ag-diagnostic-issue-row">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-fg">
-                    {text("运行节点状态异常", "Runtime node health degraded")}
-                  </div>
-                  <div className="mt-1 text-xs leading-5 text-fg-tertiary">
-                    {text(
-                      `${diagnostics.nodes.stale} 个陈旧，${diagnostics.nodes.offline} 个离线`,
-                      `${diagnostics.nodes.stale} stale and ${diagnostics.nodes.offline} offline`,
-                    )}
-                  </div>
-                </div>
-                <StateBadge state={diagnostics.nodes.status} />
-              </div>
-            )}
-            {failedQueueEntries.map((queue) => (
-              <div
-                key={`${queue.kind}-${queue.format}-${queue.state}`}
-                className="ag-diagnostic-issue-row"
-              >
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-fg">
-                    {text("失败队列", "Failed queue")} · {queue.kind}
-                  </div>
-                  <div className="mt-1 text-xs leading-5 text-fg-tertiary">
-                    {queue.format} ·{" "}
-                    {text(`${queue.count} 个任务`, `${queue.count} jobs`)}
-                  </div>
-                </div>
-                <StateBadge state={queue.state} />
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+      <DiagnosticsAttentionCard diagnostics={diagnostics} />
 
       <LocalCapacityPanel capacity={diagnostics.localCapacity} />
       <HTTPErrorRatePanel rate={diagnostics.httpErrorRate} />
       <div className="ag-diagnostics-detail-grid">
-        <Card className="ag-diagnostics-identity-card">
-          <CardHeader
-            title={text("构建与运行身份", "Build and runtime identity")}
-          />
-          <div className="ag-diagnostic-identity-groups">
-            <section className="ag-diagnostic-identity-group">
-              <h3>{text("构建信息", "Build information")}</h3>
-              <div className="grid gap-4">
-                <dl>
-                  <DiagnosticIdentityItem
-                    label={text("Console 版本", "Console version")}
-                    value={consoleVersion}
-                  />
-                  <DiagnosticIdentityItem
-                    label={text("Gateway 版本", "Gateway version")}
-                    value={diagnostics.build.version}
-                  />
-                  <DiagnosticIdentityItem
-                    label={text("Gateway 修订", "Gateway revision")}
-                    value={diagnostics.build.revision}
-                    mono
-                  />
-                  <DiagnosticIdentityItem
-                    label="Go"
-                    value={diagnostics.build.goVersion}
-                    mono
-                  />
-                  <DiagnosticIdentityItem
-                    label={text("工作区", "Workspace")}
-                    value={
-                      diagnostics.build.modified
-                        ? text("有未提交修改", "Modified")
-                        : text("干净", "Clean")
-                    }
-                  />
-                </dl>
-                {buildVersionsMismatch(
-                  consoleVersion,
-                  diagnostics.build.version,
-                ) && (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    title={text(
-                      "前后端版本不一致",
-                      "Console and Gateway versions differ",
-                    )}
-                    description={text(
-                      "可能是镜像 tag 不一致或浏览器缓存了旧 bundle。请核对部署版本并刷新页面。",
-                      "Image tags may differ, or the browser may have cached an older bundle. Check the deployed versions and refresh the page.",
-                    )}
-                  />
-                )}
-              </div>
-            </section>
-            <section className="ag-diagnostic-identity-group">
-              <h3>{text("运行身份", "Runtime identity")}</h3>
-              <dl>
-                <DiagnosticIdentityItem
-                  label={text("实例", "Instance")}
-                  value={diagnostics.runtime.instanceId || "—"}
-                  mono
-                />
-                <DiagnosticIdentityItem
-                  label={text("角色", "Roles")}
-                  value={diagnostics.runtime.roles.join(" · ") || "—"}
-                />
-                <DiagnosticIdentityItem
-                  label={text("Worker 格式", "Worker formats")}
-                  value={diagnostics.runtime.workerFormats.join(" · ") || "—"}
-                />
-                <DiagnosticIdentityItem
-                  label={text("Worker 任务", "Worker jobs")}
-                  value={diagnostics.runtime.workerKinds.join(" · ") || "—"}
-                />
-              </dl>
-            </section>
-          </div>
-        </Card>
-        <Card className="ag-diagnostics-dependencies-card">
-          <CardHeader
-            title={text("依赖与扫描器", "Dependencies and scanner")}
-          />
-          <div className="divide-y divide-line">
-            {diagnostics.dependencies.map(
-              (dependency: DiagnosticDependency) => {
-                const labels = dependencyLabels[dependency.name];
-                const reachable = dependency.status === "reachable";
-                return (
-                  <div
-                    key={dependency.name}
-                    className="ag-diagnostic-status-row"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-sm text-fg">
-                        {labels ? text(labels[0], labels[1]) : dependency.name}
-                      </div>
-                      <div className="mt-1 break-words text-xs leading-5 text-fg-tertiary">
-                        {dependency.detail}
-                      </div>
-                    </div>
-                    <span
-                      className={`shrink-0 text-xs ${
-                        reachable
-                          ? "text-[var(--ag-status-success)]"
-                          : "text-[var(--ag-status-warning)]"
-                      }`}
-                    >
-                      {reachable ? (
-                        <CheckCircleOutlined />
-                      ) : (
-                        <WarningOutlined />
-                      )}
-                      <span className="ml-2">
-                        {reachable
-                          ? text("可用", "Reachable")
-                          : dependency.status === "not_configured"
-                            ? text("未配置", "Not configured")
-                            : text("不可用", "Unreachable")}
-                      </span>
-                    </span>
-                  </div>
-                );
-              },
-            )}
-            {diagnostics.dependencies.length === 0 && (
-              <div className="px-5 py-5 text-sm text-fg-tertiary">
-                {text("没有依赖检查结果", "No dependency checks reported")}
-              </div>
-            )}
-            {scanner && scannerStatusLabel && (
-              <div className="ag-diagnostic-status-row">
-                <div className="min-w-0">
-                  <div className="flex min-w-0 flex-wrap items-baseline gap-2 text-sm text-fg">
-                    <span>
-                      {text("制品扫描器", "Artifact scanner")} · {scanner.name}
-                    </span>
-                    {scanner.version && (
-                      <span className="font-mono text-xs text-fg-tertiary">
-                        {scanner.version}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-1 break-words text-xs leading-5 text-fg-tertiary">
-                    {scannerDetail}
-                  </div>
-                  {scanner.formats.length > 0 && (
-                    <Tooltip title={scanner.formats.join(" · ")}>
-                      <div className="mt-1 break-words font-mono text-xs leading-5 text-fg-disabled">
-                        {text("覆盖格式", "Formats")}:{" "}
-                        {scanner.formats.join(" · ")}
-                      </div>
-                    </Tooltip>
-                  )}
-                </div>
-                <span
-                  className={`shrink-0 text-xs ${scannerStatusTone[scanner.status]}`}
-                >
-                  {scanner.status === "healthy" ? (
-                    <CheckCircleOutlined />
-                  ) : (
-                    <WarningOutlined />
-                  )}
-                  <span className="ml-2">
-                    {text(scannerStatusLabel[0], scannerStatusLabel[1])}
-                  </span>
-                </span>
-              </div>
-            )}
-          </div>
-        </Card>
-        <Card className="ag-diagnostics-queue-card">
-          <CardHeader title={text("后台队列", "Background queues")} />
-          <ConsoleTable<DiagnosticQueueStat>
-            rowKey={(queue) => `${queue.kind}-${queue.format}-${queue.state}`}
-            dataSource={diagnostics.queues}
-            columns={queueColumns}
-            locale={{
-              emptyText: (
-                <EmptyState
-                  compact
-                  title={text("当前没有活跃队列", "No active queue entries")}
-                  hint={text(
-                    "后台任务启动后会占用队列，这里会实时显示。",
-                    "Background jobs appear here as soon as they occupy a queue.",
-                  )}
-                />
-              ),
-            }}
-            pagination={false}
-            scroll={
-              diagnostics.queues.length > 8 ? { x: 500, y: 320 } : { x: 500 }
-            }
-          />
-        </Card>
+        <DiagnosticsIdentityCard
+          diagnostics={diagnostics}
+          consoleVersion={consoleVersion}
+        />
+        <DiagnosticsDependenciesCard diagnostics={diagnostics} />
+        <DiagnosticsQueueCard diagnostics={diagnostics} />
       </div>
     </div>
   );

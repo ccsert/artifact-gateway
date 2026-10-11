@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import { ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { listRuntimeNodes } from "../../client";
-import type { RuntimeNode, RuntimeNodeList } from "../../client";
+import type { RuntimeNode } from "../../client";
 import { formatDate } from "../../lib/format";
 import { FormatBadge, StateBadge } from "../../components/ui/Badge";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { Card, CardHeader } from "../../components/ui/Layout";
 import { usePreferences } from "../../lib/preferences";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
+import { useRuntimeNodes } from "./systemQueries";
 
 function runtimeNodeColumns(
   locale: string,
@@ -132,78 +131,23 @@ function runtimeNodeColumns(
 // Older persisted node rows may contain NULL for fields introduced after the
 // initial runtime inventory schema. Normalize those responses before they
 // reach table renderers so a single legacy row cannot take down Operations.
-function normalizeRuntimeNode(node: RuntimeNode): RuntimeNode {
-  const raw = node as RuntimeNode & {
-    instanceId?: string | null;
-    sessionId?: string | null;
-    roles?: string[] | null;
-    workerFormats?: string[] | null;
-    workerKinds?: string[] | null;
-  };
-  return {
-    ...node,
-    instanceId: raw.instanceId ?? "unknown",
-    sessionId: raw.sessionId ?? raw.instanceId ?? "unknown",
-    roles: raw.roles ?? [],
-    workerFormats: raw.workerFormats ?? [],
-    workerKinds: raw.workerKinds ?? [],
-  };
-}
-
 export function RuntimeNodesPanel({
   pollIntervalMs = 15_000,
 }: {
   pollIntervalMs?: number;
 }) {
   const { locale, text } = usePreferences();
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const nodeColumns = runtimeNodeColumns(locale, text, currentSessionId);
-  const [nodes, setNodes] = useState<RuntimeNode[] | null>(null);
-  const [health, setHealth] = useState<RuntimeNodeList["health"] | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const mounted = useRef(false);
-  const inFlight = useRef(false);
-
-  const load = useCallback(async () => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    if (mounted.current) setRefreshing(true);
-    try {
-      const result = await listRuntimeNodes();
-      if (!mounted.current) return;
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setError(null);
-      setNodes((result.data?.items ?? []).map(normalizeRuntimeNode));
-      setCurrentSessionId(result.data?.currentSessionId ?? null);
-      setHealth(
-        result.data?.health
-          ? {
-              ...result.data.health,
-              issues: result.data.health.issues ?? [],
-            }
-          : null,
-      );
-    } catch (nextError) {
-      if (mounted.current) setError(nextError);
-    } finally {
-      inFlight.current = false;
-      if (mounted.current) setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    mounted.current = true;
-    void load();
-    const timer = window.setInterval(() => void load(), pollIntervalMs);
-    return () => {
-      mounted.current = false;
-      window.clearInterval(timer);
-    };
-  }, [load, pollIntervalMs]);
+  const nodesQuery = useRuntimeNodes(pollIntervalMs);
+  const nodes = nodesQuery.data?.nodes ?? null;
+  const health = nodesQuery.data?.health ?? null;
+  const nodeColumns = runtimeNodeColumns(
+    locale,
+    text,
+    nodesQuery.data?.currentSessionId ?? null,
+  );
+  const error = nodesQuery.error;
+  const refreshing = nodesQuery.isFetching && nodes !== null;
+  const load = () => void nodesQuery.refetch();
 
   return (
     <Card className="ag-runtime-nodes-card">

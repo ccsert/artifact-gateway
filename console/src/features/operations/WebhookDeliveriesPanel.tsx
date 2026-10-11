@@ -1,174 +1,63 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  EditOutlined,
-  PlusOutlined,
-  RedoOutlined,
-  ReloadOutlined,
-} from "@ant-design/icons";
-import { Button, Input, Select, Space, Switch, Tooltip } from "antd";
+import { useState } from "react";
+import { EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Button, Space, Switch, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-  createWebhookSubscription,
-  listWebhookDeliveries,
-  listWebhookSubscriptions,
-  replayWebhookDelivery,
-  updateWebhookSubscription,
-} from "../../client";
-import type {
-  CreateWebhookSubscriptionWritable,
-  UpdateWebhookSubscriptionWritable,
-  WebhookDelivery,
-  WebhookDeliveryState,
-  WebhookEventType,
-  WebhookSubscription,
-} from "../../client";
+import { updateWebhookSubscription } from "../../client";
+import type { WebhookEventType, WebhookSubscription } from "../../client";
 import { usePreferences } from "../../lib/preferences";
-import { formatDate } from "../../lib/format";
-import { Badge, StateBadge } from "../../components/ui/Badge";
+import { Badge } from "../../components/ui/Badge";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
-import { Card, CardHeader, Field } from "../../components/ui/Layout";
-import { Modal, useDisclosure } from "../../components/ui/Modal";
+import { Card, CardHeader } from "../../components/ui/Layout";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
+import {
+  useInvalidateWebhooks,
+  useWebhookSubscriptions,
+} from "./webhookQueries";
+import { SubscriptionEditorDialog } from "./SubscriptionEditorDialog";
+import { WebhookDeliveryLog } from "./WebhookDeliveryLog";
 
-type SubscriptionForm = {
-  name: string;
-  endpointUrl: string;
-  secret: string;
-  eventTypes: WebhookEventType[];
-  enabled: boolean;
-};
-
-const DEFAULT_FORM: SubscriptionForm = {
-  name: "",
-  endpointUrl: "",
-  secret: "",
-  eventTypes: ["artifact.quarantined", "artifact.released"],
-  enabled: true,
-};
-
-const DELIVERY_STATES: WebhookDeliveryState[] = [
-  "pending",
-  "delivering",
-  "retrying",
-  "succeeded",
-  "dead",
-];
-
+/** Webhook subscriptions and their recent deliveries. */
 export function WebhookDeliveriesPanel() {
-  const { locale, text } = usePreferences();
-  const dialog = useDisclosure();
-  const [subscriptions, setSubscriptions] = useState<
-    WebhookSubscription[] | null
-  >(null);
-  const [deliveries, setDeliveries] = useState<WebhookDelivery[] | null>(null);
-  const [stateFilter, setStateFilter] = useState<WebhookDeliveryState | "all">(
-    "all",
-  );
-  const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(false);
+  const { text } = usePreferences();
+  const subscriptionsQuery = useWebhookSubscriptions();
+  const subscriptions = subscriptionsQuery.data ?? null;
+  const loading = subscriptionsQuery.isFetching;
+  const invalidate = useInvalidateWebhooks();
+  const [actionError, setActionError] = useState<unknown>(null);
+  const error = actionError ?? subscriptionsQuery.error;
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<WebhookSubscription | null>(null);
-  const [form, setForm] = useState<SubscriptionForm>(DEFAULT_FORM);
+  // Each opening gets a new session so the dialog starts from its
+  // subscription while a closing dialog keeps its content through the exit
+  // animation.
+  const [editor, setEditor] = useState<{
+    session: number;
+    open: boolean;
+    subscription: WebhookSubscription | null;
+  } | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [subscriptionResult, deliveryResult] = await Promise.all([
-        listWebhookSubscriptions(),
-        listWebhookDeliveries({
-          query: {
-            state: stateFilter === "all" ? undefined : stateFilter,
-            limit: 200,
-          },
-        }),
-      ]);
-      if (subscriptionResult.error) throw subscriptionResult.error;
-      if (deliveryResult.error) throw deliveryResult.error;
-      setSubscriptions(subscriptionResult.data ?? []);
-      setDeliveries(deliveryResult.data ?? []);
-    } catch (nextError) {
-      setError(nextError);
-    } finally {
-      setLoading(false);
-    }
-  }, [stateFilter]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const subscriptionById = useMemo(
-    () => new Map((subscriptions ?? []).map((item) => [item.id, item])),
-    [subscriptions],
-  );
-
-  const openCreate = () => {
-    setEditing(null);
-    setForm(DEFAULT_FORM);
-    setError(null);
-    dialog.show();
+  const load = () => {
+    setActionError(null);
+    return invalidate();
   };
 
-  const openEdit = (subscription: WebhookSubscription) => {
-    setEditing(subscription);
-    setForm({
-      name: subscription.name,
-      endpointUrl: subscription.endpointUrl,
-      secret: "",
-      eventTypes: subscription.eventTypes,
-      enabled: subscription.enabled,
-    });
-    setError(null);
-    dialog.show();
+  const openEditor = (subscription: WebhookSubscription | null) => {
+    setActionError(null);
+    setEditor((current) => ({
+      session: (current?.session ?? 0) + 1,
+      open: true,
+      subscription,
+    }));
   };
-
-  const save = async () => {
-    setBusyId(editing?.id ?? "create");
-    setError(null);
-    const base = {
-      name: form.name.trim(),
-      endpointUrl: form.endpointUrl.trim(),
-      eventTypes: form.eventTypes,
-      enabled: form.enabled,
-    };
-    try {
-      const result = editing
-        ? await updateWebhookSubscription({
-            path: { subscriptionId: editing.id },
-            headers: { "If-Match": editing.version },
-            body: {
-              ...base,
-              secret: form.secret || undefined,
-            } satisfies UpdateWebhookSubscriptionWritable,
-          })
-        : await createWebhookSubscription({
-            body: {
-              ...base,
-              secret: form.secret,
-            } satisfies CreateWebhookSubscriptionWritable,
-          });
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      dialog.hide();
-      setEditing(null);
-      setForm(DEFAULT_FORM);
-      await load();
-    } catch (nextError) {
-      setError(nextError);
-    } finally {
-      setBusyId(null);
-    }
-  };
+  const openCreate = () => openEditor(null);
+  const openEdit = (subscription: WebhookSubscription) =>
+    openEditor(subscription);
 
   const setEnabled = async (
     subscription: WebhookSubscription,
     enabled: boolean,
   ) => {
     setBusyId(subscription.id);
-    setError(null);
+    setActionError(null);
     const result = await updateWebhookSubscription({
       path: { subscriptionId: subscription.id },
       headers: { "If-Match": subscription.version },
@@ -181,29 +70,10 @@ export function WebhookDeliveriesPanel() {
     });
     setBusyId(null);
     if (result.error) {
-      setError(result.error);
+      setActionError(result.error);
       return;
     }
-    await load();
-  };
-
-  const replay = async (delivery: WebhookDelivery) => {
-    setBusyId(delivery.id);
-    setError(null);
-    try {
-      const result = await replayWebhookDelivery({
-        path: { deliveryId: delivery.id },
-      });
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      await load();
-    } catch (nextError) {
-      setError(nextError);
-    } finally {
-      setBusyId(null);
-    }
+    await invalidate();
   };
 
   const subscriptionColumns: ColumnsType<WebhookSubscription> = [
@@ -293,103 +163,6 @@ export function WebhookDeliveriesPanel() {
     },
   ];
 
-  const deliveryColumns: ColumnsType<WebhookDelivery> = [
-    {
-      title: text("订阅", "Subscription"),
-      dataIndex: "subscriptionId",
-      key: "subscription",
-      width: 190,
-      render: (subscriptionId: string) => (
-        <span className="text-xs text-fg-secondary">
-          {subscriptionById.get(subscriptionId)?.name ?? subscriptionId}
-        </span>
-      ),
-    },
-    {
-      title: text("事件", "Event"),
-      dataIndex: "eventType",
-      key: "eventType",
-      width: 190,
-      render: (eventType: WebhookEventType) => (
-        <span className="font-mono text-xs text-fg-secondary">{eventType}</span>
-      ),
-    },
-    {
-      title: text("状态", "State"),
-      dataIndex: "state",
-      key: "state",
-      width: 110,
-      render: (state: WebhookDeliveryState) => <StateBadge state={state} />,
-    },
-    {
-      title: text("尝试", "Attempts"),
-      dataIndex: "attempts",
-      key: "attempts",
-      width: 90,
-      render: (attempts: number) => (
-        <span className="font-mono text-xs text-fg-secondary">
-          {attempts}/8
-        </span>
-      ),
-    },
-    {
-      title: text("最近结果", "Last result"),
-      key: "result",
-      width: 280,
-      render: (_, delivery) => (
-        <div className="min-w-0 text-xs text-fg-secondary">
-          <div>{delivery.lastStatus ? `HTTP ${delivery.lastStatus}` : "—"}</div>
-          {delivery.lastError ? (
-            <div
-              className="mt-1 truncate text-[var(--ag-status-danger)]"
-              title={delivery.lastError}
-            >
-              {delivery.lastError}
-            </div>
-          ) : null}
-        </div>
-      ),
-    },
-    {
-      title: text("更新时间", "Updated"),
-      dataIndex: "updatedAt",
-      key: "updatedAt",
-      width: 180,
-      render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-fg-tertiary">
-          {formatDate(value, locale)}
-        </span>
-      ),
-    },
-    {
-      title: text("操作", "Actions"),
-      key: "actions",
-      fixed: "right",
-      width: 90,
-      render: (_, delivery) =>
-        delivery.state === "dead" ? (
-          <Tooltip title={text("重放投递", "Replay delivery")}>
-            <Button
-              size="small"
-              icon={<RedoOutlined />}
-              aria-label={text("重放投递", "Replay delivery")}
-              loading={busyId === delivery.id}
-              onClick={() => void replay(delivery)}
-            />
-          </Tooltip>
-        ) : (
-          <span className="text-xs text-fg-disabled">—</span>
-        ),
-    },
-  ];
-
-  const valid =
-    form.name.trim().length > 0 &&
-    form.endpointUrl.trim().startsWith("https://") &&
-    form.eventTypes.length > 0 &&
-    (Boolean(editing) || form.secret.length >= 32) &&
-    (!form.secret || form.secret.length >= 32);
-
   return (
     <div className="ag-page-stack">
       {error ? <ErrorBanner error={error} onRetry={load} /> : null}
@@ -441,195 +214,17 @@ export function WebhookDeliveriesPanel() {
         )}
       </Card>
 
-      <Card>
-        <CardHeader
-          title={text("最近投递", "Recent deliveries")}
-          extra={
-            <Select<WebhookDeliveryState | "all">
-              aria-label={text("投递状态", "Delivery state")}
-              value={stateFilter}
-              className="w-40"
-              options={[
-                { value: "all", label: text("全部状态", "All states") },
-                ...DELIVERY_STATES.map((state) => ({
-                  value: state,
-                  label: state,
-                })),
-              ]}
-              onChange={setStateFilter}
-            />
+      <WebhookDeliveryLog subscriptions={subscriptions} />
+      {editor && (
+        <SubscriptionEditorDialog
+          key={editor.session}
+          open={editor.open}
+          subscription={editor.subscription}
+          onClose={() =>
+            setEditor((current) => current && { ...current, open: false })
           }
         />
-        {!deliveries ? (
-          <Loading label={text("加载投递记录…", "Loading deliveries…")} />
-        ) : deliveries.length === 0 ? (
-          <EmptyState
-            compact
-            title={text("暂无投递记录", "No deliveries yet")}
-            hint={text(
-              "订阅匹配到制品隔离或解除隔离事件后，记录会显示在这里。",
-              "Matching artifact quarantine events appear here after delivery is scheduled.",
-            )}
-          />
-        ) : (
-          <ConsoleTable<WebhookDelivery>
-            rowKey="id"
-            dataSource={deliveries}
-            columns={deliveryColumns}
-            pagination={false}
-            scroll={{ x: 1140, y: 480 }}
-          />
-        )}
-      </Card>
-
-      <Modal
-        open={dialog.open}
-        title={
-          editing
-            ? text("编辑 Webhook 订阅", "Edit webhook subscription")
-            : text("新建 Webhook 订阅", "New webhook subscription")
-        }
-        onClose={() => {
-          dialog.hide();
-          setEditing(null);
-        }}
-        busy={busyId === (editing?.id ?? "create")}
-        footer={
-          <Space>
-            <Button
-              aria-label={text("取消", "Cancel")}
-              onClick={dialog.hide}
-              disabled={busyId !== null}
-            >
-              {text("取消", "Cancel")}
-            </Button>
-            <Button
-              type="primary"
-              aria-label={
-                editing ? text("保存", "Save") : text("创建", "Create")
-              }
-              disabled={!valid}
-              loading={busyId === (editing?.id ?? "create")}
-              onClick={() => void save()}
-            >
-              {editing ? text("保存", "Save") : text("创建", "Create")}
-            </Button>
-          </Space>
-        }
-      >
-        <div className="space-y-4">
-          {error ? <ErrorBanner error={error} /> : null}
-          <Field label={text("订阅名称", "Subscription name")}>
-            <Input
-              value={form.name}
-              maxLength={100}
-              placeholder={text("例如：安全自动化", "e.g. Security automation")}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, name: event.target.value }))
-              }
-            />
-          </Field>
-          <Field
-            label={text("HTTPS 接收地址", "HTTPS endpoint")}
-            hint={text(
-              "生产投递会拒绝私网、环回和重定向目标。",
-              "Production delivery rejects private, loopback, and redirect targets.",
-            )}
-          >
-            <Input
-              value={form.endpointUrl}
-              placeholder="https://hooks.example.com/artifacts"
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  endpointUrl: event.target.value,
-                }))
-              }
-            />
-          </Field>
-          <Field
-            group
-            label={text("订阅事件", "Events")}
-            hint={text(
-              "支持制品隔离、解除隔离，以及 Cargo 晋级和复制的最终结果。",
-              "Supports artifact quarantine and release, plus final Cargo promotion and replication outcomes.",
-            )}
-          >
-            <Select<WebhookEventType[]>
-              mode="multiple"
-              className="w-full"
-              value={form.eventTypes}
-              options={[
-                {
-                  value: "artifact.quarantined",
-                  label: "artifact.quarantined",
-                },
-                { value: "artifact.released", label: "artifact.released" },
-                {
-                  value: "cargo.promotion.completed",
-                  label: "cargo.promotion.completed",
-                },
-                {
-                  value: "cargo.promotion.failed",
-                  label: "cargo.promotion.failed",
-                },
-                {
-                  value: "cargo.replication.completed",
-                  label: "cargo.replication.completed",
-                },
-                {
-                  value: "cargo.replication.failed",
-                  label: "cargo.replication.failed",
-                },
-              ]}
-              onChange={(eventTypes) =>
-                setForm((current) => ({ ...current, eventTypes }))
-              }
-            />
-          </Field>
-          <Field
-            label={text("HMAC 签名密钥", "HMAC signing secret")}
-            hint={
-              editing
-                ? text(
-                    "留空则保留现有密钥；填写会立即轮换。",
-                    "Leave blank to keep the current secret; entering one rotates it immediately.",
-                  )
-                : text(
-                    "至少 32 个字符；保存后不会再次显示。",
-                    "At least 32 characters; it is never shown again after saving.",
-                  )
-            }
-          >
-            <Input.Password
-              value={form.secret}
-              autoComplete="new-password"
-              placeholder={text("至少 32 个字符", "At least 32 characters")}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  secret: event.target.value,
-                }))
-              }
-            />
-          </Field>
-          <Field label={text("状态", "Status")}>
-            <div className="flex h-8 items-center gap-2">
-              <Switch
-                value={form.enabled}
-                onChange={(enabled) =>
-                  setForm((current) => ({ ...current, enabled }))
-                }
-              />
-              <span className="text-xs text-fg-secondary">
-                {form.enabled
-                  ? text("接收新事件", "Receive new events")
-                  : text("暂停生成新投递", "Pause new deliveries")}
-              </span>
-            </div>
-          </Field>
-        </div>
-      </Modal>
+      )}
     </div>
   );
 }

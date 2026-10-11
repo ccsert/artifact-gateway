@@ -48,6 +48,26 @@ export const accessKeys = {
     [...accessKeys.all, "directory", source] as const,
 };
 
+export const operationKeys = {
+  all: ["operations"] as const,
+  jobs: () => [...operationKeys.all, "jobs"] as const,
+  scheduledTasks: () => [...operationKeys.all, "scheduled-tasks"] as const,
+  taskRuns: (taskId: string) =>
+    [...operationKeys.scheduledTasks(), taskId, "runs"] as const,
+  retentionRepositories: () =>
+    [...operationKeys.all, "retention-repositories"] as const,
+  webhookSubscriptions: () =>
+    [...operationKeys.all, "webhook-subscriptions"] as const,
+  webhookDeliveries: (state: string) =>
+    [...operationKeys.all, "webhook-deliveries", state] as const,
+};
+
+export const systemKeys = {
+  all: ["system"] as const,
+  diagnostics: () => [...systemKeys.all, "diagnostics"] as const,
+  runtimeNodes: () => [...systemKeys.all, "runtime-nodes"] as const,
+};
+
 export const formatKeys = {
   profiles: ["formats", "profiles"] as const,
 };
