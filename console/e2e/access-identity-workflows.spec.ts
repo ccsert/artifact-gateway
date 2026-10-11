@@ -22,6 +22,7 @@ const repositoryName = `e2e-access-${suffix}`;
 const grantAccountName = `e2e-grant-${suffix}`;
 let repositoryId = "";
 let grantAccountId = "";
+let drawerUserId = "";
 
 const admin = () => ({ Authorization: `Bearer ${token!}` });
 
@@ -85,6 +86,11 @@ test.beforeAll(async ({ request }) => {
 test.afterAll(async ({ request }) => {
   if (repositoryId) {
     await request.delete(`/api/v2/repositories/${repositoryId}`, {
+      headers: admin(),
+    });
+  }
+  if (drawerUserId) {
+    await request.delete(`/api/v2/users/${drawerUserId}`, {
       headers: admin(),
     });
   }
@@ -279,6 +285,9 @@ test("a custom role feeds a template that is applied to a repository", async ({
     .locator(".ant-select-item-option")
     .filter({ hasText: "写入" })
     .click();
+  // A multiple select keeps its list open over the footer; close it first.
+  await roleDialog.getByLabel("角色名称").click();
+  await expect(page.locator(".ant-select-dropdown:visible")).toHaveCount(0);
   await roleDialog.getByRole("button", { name: /^保\s*存$/ }).click();
   await expect(roleDialog).toBeHidden();
   await expect
@@ -351,4 +360,78 @@ test("a custom role feeds a template that is applied to a repository", async ({
     0,
   );
   expect(await named("/api/v2/authorization-roles", roleName)).toHaveLength(0);
+});
+
+test("a user's repository grant is added, narrowed, and removed from the user drawer", async ({
+  page,
+  request,
+}) => {
+  await authenticate(page);
+  const username = `e2e-drawer-${suffix}`;
+  const principal = `user:${username}`;
+  const created = await request.post("/api/v2/users", {
+    headers: admin(),
+    data: {
+      name: username,
+      displayName: "Drawer grant E2E",
+      email: `${username}@example.test`,
+      password: `Drawer-${suffix}`,
+      role: "member",
+    },
+  });
+  await expectOK(created, "create user");
+  drawerUserId = ((await created.json()) as { id: string }).id;
+
+  await page.goto("/users");
+  await page.getByText(username, { exact: true }).click();
+  const drawer = page.getByRole("dialog").filter({ hasText: "仓库授权" });
+  await drawer.getByRole("button", { name: /添加授权/ }).click();
+
+  const editor = page.getByRole("dialog", { name: "添加仓库授权" });
+  await waitForModalOpen(editor);
+  await editor.getByRole("combobox").first().click();
+  await page.keyboard.type(repositoryName);
+  await page
+    .locator(".ant-select-item-option")
+    .filter({ hasText: repositoryName })
+    .click();
+  await expect(
+    editor.getByRole("combobox", { name: "权限级别" }),
+  ).toBeVisible();
+  await editor.getByRole("button", { name: /^保\s*存$/ }).click();
+  await expect(editor).toBeHidden();
+  await expect
+    .poll(async () => (await grantsFor(request, principal)).length)
+    .toBe(1);
+  const row = drawer.getByRole("listitem").filter({ hasText: repositoryName });
+  await expect(row).toContainText("整个仓库");
+
+  // Narrowing the scope moves the entry: the repository-wide row goes and
+  // exactly one prefixed row remains.
+  await row.getByRole("button", { name: "编辑该条授权" }).click();
+  const edit = page.getByRole("dialog", { name: "编辑仓库授权" });
+  await waitForModalOpen(edit);
+  await edit.getByText("限定范围", { exact: true }).click();
+  // The prefix field is the dialog's last combobox (an AutoComplete).
+  await edit.getByRole("combobox").last().fill("releases/");
+  await edit.getByRole("button", { name: /^保\s*存$/ }).click();
+  await expect(edit).toBeHidden();
+  await expect
+    .poll(async () =>
+      (await grantsFor(request, principal)).map(
+        (grant) => (grant as { resourcePrefix?: string }).resourcePrefix,
+      ),
+    )
+    .toEqual(["releases/"]);
+  await expect(row).toContainText("releases/");
+
+  await row.getByRole("button", { name: "移除仓库授权" }).click();
+  await page
+    .getByRole("button", { name: /^移\s*除$/ })
+    .last()
+    .click();
+  await expect
+    .poll(async () => (await grantsFor(request, principal)).length)
+    .toBe(0);
+  await expect(row).toHaveCount(0);
 });

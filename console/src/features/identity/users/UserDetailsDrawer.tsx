@@ -425,7 +425,7 @@ export function UserDetailsDrawer({
 
         <Divider />
 
-        <UserRepositoryAccessPanel userId={user.id} username={user.name} />
+        <UserRepositoryAccessPanel username={user.name} />
 
         <Divider />
 

@@ -1,16 +1,25 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useCallback } from "react";
 import {
   getAnonymousAccessPolicy,
   listAuthorizationRoles,
   listAuthorizationTemplates,
+  listGrants,
   listRepositories,
   listRepositoryGrants,
   listServiceAccounts,
   listUsers,
   replaceAnonymousAccessPolicy,
 } from "../../client";
-import type { AnonymousAccessPolicy } from "../../client";
+import type {
+  AnonymousAccessPolicy,
+  RepositoryGrantRecord,
+} from "../../client";
 import { unwrap } from "../../lib/query/client";
 import { accessKeys } from "../../lib/query/keys";
 import { useApiKeys } from "../identity/apiKeyQueries";
@@ -23,26 +32,56 @@ import type { GrantRow } from "./accessModel";
  */
 const ALWAYS_REVALIDATE = 0;
 
+function toGrantRows(records: RepositoryGrantRecord[]): GrantRow[] {
+  return records
+    .map((record) => ({
+      repositoryId: record.repositoryId,
+      repositoryName: record.repositoryName,
+      format: record.format,
+      principal: record.principal,
+      scopes: record.scopes,
+      resourcePrefix: record.resourcePrefix ?? "",
+    }))
+    .sort(
+      (a, b) =>
+        a.principal.localeCompare(b.principal) ||
+        a.repositoryName.localeCompare(b.repositoryName),
+    );
+}
+
+const grantRecordsQuery = queryOptions({
+  queryKey: accessKeys.grants(),
+  queryFn: ({ signal }) => unwrap(listRepositoryGrants({ signal })),
+  staleTime: ALWAYS_REVALIDATE,
+});
+
+/** Every repository grant across repositories, as the API returns them. */
+export function useRepositoryGrantRecords() {
+  return useQuery(grantRecordsQuery);
+}
+
+/** The same grants, flattened and sorted for the access control list. */
 export function useGrantRows() {
+  return useQuery({ ...grantRecordsQuery, select: toGrantRows });
+}
+
+/** One repository's grant list, read fresh whenever an editor opens on it. */
+export function useRepositoryGrants(repositoryId: string) {
   return useQuery({
-    queryKey: accessKeys.grants(),
-    queryFn: async ({ signal }): Promise<GrantRow[]> => {
-      const data = await unwrap(listRepositoryGrants({ signal }));
-      return data
-        .map((record) => ({
-          repositoryId: record.repositoryId,
-          repositoryName: record.repositoryName,
-          format: record.format,
-          principal: record.principal,
-          scopes: record.scopes,
-          resourcePrefix: record.resourcePrefix ?? "",
-        }))
-        .sort(
-          (a, b) =>
-            a.principal.localeCompare(b.principal) ||
-            a.repositoryName.localeCompare(b.repositoryName),
-        );
-    },
+    queryKey: accessKeys.repositoryGrants(repositoryId),
+    queryFn: ({ signal }) =>
+      unwrap(listGrants({ path: { repositoryId }, signal })),
+    enabled: Boolean(repositoryId),
+    staleTime: ALWAYS_REVALIDATE,
+  });
+}
+
+/** Repositories a grant can name, in every state; callers filter. */
+export function useAccessRepositories() {
+  return useQuery({
+    queryKey: accessKeys.directory("repositories"),
+    queryFn: ({ signal }) =>
+      unwrap(listRepositories({ query: { pageSize: 200 }, signal })),
     staleTime: ALWAYS_REVALIDATE,
   });
 }
@@ -87,12 +126,7 @@ export function useAccessDirectory() {
       unwrap(listServiceAccounts({ query: { pageSize: 200 }, signal })),
     staleTime: ALWAYS_REVALIDATE,
   });
-  const repositories = useQuery({
-    queryKey: accessKeys.directory("repositories"),
-    queryFn: ({ signal }) =>
-      unwrap(listRepositories({ query: { pageSize: 200 }, signal })),
-    staleTime: ALWAYS_REVALIDATE,
-  });
+  const repositories = useAccessRepositories();
 
   const required = [users, apiKeys, repositories];
   return {

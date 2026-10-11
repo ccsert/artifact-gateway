@@ -36,7 +36,6 @@ const mockListGrants = vi.mocked(listGrants);
 const mockUpsertGrant = vi.mocked(upsertGrant);
 const mockDeleteGrant = vi.mocked(deleteGrant);
 
-const userId = "00000000-0000-0000-0000-000000000001";
 const username = "alice";
 const principal = `user:${username}`;
 const artifactsId = "00000000-0000-0000-0000-0000000000a1";
@@ -89,7 +88,7 @@ function renderPanel() {
     <TestQueryProvider>
       <PreferencesProvider>
         <AntdProvider>
-          <UserRepositoryAccessPanel userId={userId} username={username} />
+          <UserRepositoryAccessPanel username={username} />
         </AntdProvider>
       </PreferencesProvider>
     </TestQueryProvider>,

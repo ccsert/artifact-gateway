@@ -1,34 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import {
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
-import {
-  Alert,
-  App,
-  Button,
-  Popconfirm,
-  Select,
-  Space,
-  Tooltip,
-  Typography,
-} from "antd";
-import {
-  deleteGrant,
-  listAuthorizationRoles,
-  listGrants,
-  listRepositories,
-  listRepositoryGrants,
-  upsertGrant,
-} from "../../../client";
-import type {
-  AuthorizationRole,
-  Grant,
-  Repository,
-  RepositoryGrantRecord,
-} from "../../../client";
+import { Alert, App, Button, Popconfirm, Space, Tooltip } from "antd";
+import { deleteGrant, listGrants } from "../../../client";
+import type { RepositoryGrantRecord } from "../../../client";
 import { Badge, FormatBadge } from "../../../components/ui/Badge";
 import {
   EmptyState,
@@ -36,41 +15,30 @@ import {
   Loading,
   isNotFound,
 } from "../../../components/ui/Feedback";
-import { Modal, useDisclosure } from "../../../components/ui/Modal";
 import { usePreferences } from "../../../lib/preferences";
-import { GrantForm } from "../../access-control/GrantForm";
+import { accessKeys } from "../../../lib/query/keys";
+import { unwrap } from "../../../lib/query/client";
 import {
-  emptyGrant,
+  useAccessRepositories,
+  useAuthorizationRoles,
+  useInvalidateAccess,
+  useRepositoryGrantRecords,
+} from "../../access-control/accessQueries";
+import {
   grantedCapabilitiesLabel,
   grantLevel,
   grantRowKey,
   grantTone,
-  type DraftGrant,
-  type PrincipalOption,
 } from "../../access-control/grantDraft";
-
-/** A blank prefix means repository-wide access, submitted as `undefined`. */
-function normalizePrefix(prefix: string | undefined): string | undefined {
-  return prefix?.trim() || undefined;
-}
+import {
+  UserGrantEditorDialog,
+  normalizePrefix,
+  type GrantTarget,
+} from "./UserGrantEditorDialog";
 
 interface UserRepositoryAccessPanelProps {
-  userId: string;
   username: string;
-  refreshKey?: number;
 }
-
-/** Grants loaded for one account, so a switch cannot show another user's rows. */
-type GrantSnapshot = {
-  userId: string;
-  items: RepositoryGrantRecord[];
-};
-
-/** The repository grant list the open editor was prefilled from. */
-type ComposeBase = {
-  repositoryId: string;
-  grants: Grant[];
-};
 
 function recordKey(record: RepositoryGrantRecord): string {
   return grantRowKey(record.repositoryId, record.resourcePrefix);
@@ -92,270 +60,49 @@ function recordKey(record: RepositoryGrantRecord): string {
  * edited or removed on its own.
  */
 export function UserRepositoryAccessPanel({
-  userId,
   username,
-  refreshKey = 0,
 }: UserRepositoryAccessPanelProps) {
   const { message } = App.useApp();
   const { text } = usePreferences();
-  const editor = useDisclosure();
   const principal = `user:${username}`;
-  const [snapshot, setSnapshot] = useState<GrantSnapshot | null>(null);
-  const [repositories, setRepositories] = useState<Repository[]>([]);
-  const [authorizationRoles, setAuthorizationRoles] = useState<
-    AuthorizationRole[]
-  >([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<unknown>(null);
-  const [repositoriesError, setRepositoriesError] = useState<unknown>(null);
-  const [rolesError, setRolesError] = useState<unknown>(null);
+  const invalidate = useInvalidateAccess();
+  const grantsQuery = useRepositoryGrantRecords();
+  const repositoriesQuery = useAccessRepositories();
+  const rolesQuery = useAuthorizationRoles();
+  const loading = grantsQuery.isFetching;
+  const error = grantsQuery.error;
+  const repositoriesError = repositoriesQuery.error;
+  const repositories = [...(repositoriesQuery.data?.items ?? [])].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
   const [removing, setRemoving] = useState("");
   const [removeError, setRemoveError] = useState<unknown>(null);
-  const [composeRepositoryId, setComposeRepositoryId] = useState("");
-  /**
-   * The normalized prefix of the entry the open editor acts on, or `null` when
-   * composing a brand-new grant. `""` means the repository-wide entry, so the
-   * target is a plain string and cannot be confused with "no target".
-   */
-  const [composeTargetPrefix, setComposeTargetPrefix] = useState<string | null>(
-    null,
-  );
-  const [composeBase, setComposeBase] = useState<ComposeBase | null>(null);
-  const [composeLoading, setComposeLoading] = useState(false);
-  const [composeError, setComposeError] = useState<unknown>(null);
-  const [draft, setDraft] = useState<DraftGrant | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<unknown>(null);
-  const composeRequest = useRef(0);
+  // Each opening gets a new session so the dialog starts from its target
+  // while a closing dialog keeps its content through the exit animation.
+  const [editor, setEditor] = useState<{
+    session: number;
+    open: boolean;
+    target: GrantTarget | null;
+  } | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [grantsResult, repositoriesResult, rolesResult] = await Promise.all(
-        [
-          listRepositoryGrants(),
-          listRepositories({ query: { pageSize: 100 } }),
-          listAuthorizationRoles(),
-        ],
-      );
-      if (grantsResult.error || !grantsResult.data) {
-        throw (
-          grantsResult.error ??
-          new Error(
-            text("加载仓库授权失败", "Failed to load repository grants"),
-          )
-        );
-      }
-      setSnapshot({ userId, items: grantsResult.data });
-      if (repositoriesResult.error || !repositoriesResult.data) {
-        setRepositories([]);
-        setRepositoriesError(
-          repositoriesResult.error ??
-            new Error(text("加载仓库列表失败", "Failed to load repositories")),
-        );
-      } else {
-        setRepositories(
-          [...repositoriesResult.data.items].sort((a, b) =>
-            a.name.localeCompare(b.name),
-          ),
-        );
-        setRepositoriesError(null);
-      }
-      if (rolesResult.error || !rolesResult.data) {
-        setAuthorizationRoles([]);
-        setRolesError(
-          rolesResult.error ??
-            new Error(
-              text("加载自定义角色失败", "Failed to load custom roles"),
-            ),
-        );
-      } else {
-        setAuthorizationRoles(rolesResult.data);
-        setRolesError(null);
-      }
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setLoading(false);
-    }
-  }, [text, userId]);
+  const openEditor = (target: GrantTarget | null) =>
+    setEditor((current) => ({
+      session: (current?.session ?? 0) + 1,
+      open: true,
+      target,
+    }));
 
-  useEffect(() => {
-    void load();
-  }, [load, refreshKey]);
-
-  /** Read one repository's current grants to prefill or target the editor. */
-  const readRepository = useCallback(
-    async (repositoryId: string): Promise<Grant[]> => {
-      const { data, error: requestError } = await listGrants({
-        path: { repositoryId },
-      });
-      if (requestError || !data) {
-        throw (
-          requestError ??
-          new Error(
-            text("加载仓库授权失败", "Failed to load repository grants"),
-          )
-        );
-      }
-      return data;
-    },
-    [text],
-  );
-
-  /**
-   * Read the repository's grants and prefill the editor. `targetPrefix` is the
-   * normalized prefix of the entry the user acted on (the empty string means
-   * repository-wide), or `null` to compose a new grant. The target is
-   * remembered, so an edit keeps pointing at that one entry even while the
-   * draft is edited.
-   */
-  const loadCompose = async (
-    repositoryId: string,
-    targetPrefix: string | null,
-  ) => {
-    const requestId = composeRequest.current + 1;
-    composeRequest.current = requestId;
-    setComposeLoading(true);
-    setComposeError(null);
-    try {
-      const grants = await readRepository(repositoryId);
-      if (requestId !== composeRequest.current) return;
-      setComposeBase({ repositoryId, grants });
-      const existing =
-        targetPrefix === null
-          ? undefined
-          : grants.find(
-              (grant) =>
-                grant.principal.trim() === principal &&
-                (normalizePrefix(grant.resourcePrefix) ?? "") === targetPrefix,
-            );
-      // Editing keys on the entry the user acted on, but only while that
-      // entry still exists; a row that vanished meanwhile composes a new
-      // grant instead of targeting a different entry.
-      setComposeTargetPrefix(existing ? targetPrefix : null);
-      setDraft(
-        existing
-          ? { ...existing, scopes: [...existing.scopes] }
-          : { ...emptyGrant(), principal },
-      );
-    } catch (caught) {
-      if (requestId !== composeRequest.current) return;
-      setComposeBase(null);
-      setDraft(null);
-      setComposeError(caught);
-    } finally {
-      if (requestId === composeRequest.current) setComposeLoading(false);
-    }
+  const load = async () => {
+    await Promise.all([
+      invalidate(accessKeys.grants()),
+      invalidate(accessKeys.directory("repositories")),
+      invalidate(accessKeys.roles()),
+    ]);
   };
 
-  const resetCompose = () => {
-    composeRequest.current += 1;
-    setComposeRepositoryId("");
-    setComposeTargetPrefix(null);
-    setComposeBase(null);
-    setDraft(null);
-    setComposeError(null);
-    setSaveError(null);
-  };
-
-  const openCompose = () => {
-    resetCompose();
-    editor.show();
-  };
-
-  /** Edit one existing entry; that row's prefix becomes the edit target. */
-  const openEdit = (record: RepositoryGrantRecord) => {
-    const targetPrefix = normalizePrefix(record.resourcePrefix) ?? "";
-    resetCompose();
-    setComposeTargetPrefix(targetPrefix);
-    setComposeRepositoryId(record.repositoryId);
-    editor.show();
-    void loadCompose(record.repositoryId, targetPrefix);
-  };
-
-  const closeCompose = () => {
-    resetCompose();
-    editor.hide();
-  };
-
-  const chooseRepository = (repositoryId: string) => {
-    resetCompose();
-    setComposeRepositoryId(repositoryId);
-    void loadCompose(repositoryId, null);
-  };
-
-  const save = async () => {
-    if (
-      !draft ||
-      !composeBase ||
-      composeBase.repositoryId !== composeRepositoryId
-    ) {
-      setSaveError(
-        new Error(
-          text(
-            "请先选择仓库并等待其授权加载完成",
-            "Select a repository and wait for its grants to load",
-          ),
-        ),
-      );
-      return;
-    }
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const prefix = normalizePrefix(draft.resourcePrefix);
-      // An edit that changed the prefix moved the entry: the old prefix is a
-      // different row and must go, or the edit would fork one grant into two.
-      // It goes first, so a failure here leaves the grant narrower rather than
-      // wider than the administrator asked for.
-      const moved =
-        composeTargetPrefix !== null && composeTargetPrefix !== (prefix ?? "");
-      if (moved) {
-        const { error: deleteError } = await deleteGrant({
-          path: { repositoryId: composeRepositoryId },
-          query: {
-            principal,
-            resourcePrefix: composeTargetPrefix || undefined,
-          },
-        });
-        if (deleteError && !isNotFound(deleteError)) {
-          setSaveError(
-            new Error(
-              text(
-                "原资源范围的授权删除失败，新授权未保存，请重试。",
-                "The previous resource scope could not be removed, so the new grant was not saved. Please retry.",
-              ),
-            ),
-          );
-          return;
-        }
-      }
-      const { error: requestError } = await upsertGrant({
-        path: { repositoryId: composeRepositoryId },
-        body: { principal, scopes: [...draft.scopes], resourcePrefix: prefix },
-      });
-      if (requestError) {
-        setSaveError(
-          moved
-            ? new Error(
-                text(
-                  "旧行已移除，但新授权保存失败，请再次保存以写入新授权。",
-                  "The previous row was removed, but saving the new grant failed. Save again to write it.",
-                ),
-              )
-            : requestError,
-        );
-        return;
-      }
-      void message.success(text("仓库授权已保存", "Repository grant saved"));
-      closeCompose();
-      await load();
-    } finally {
-      setSaving(false);
-    }
-  };
+  /** Read one repository's current grants right before acting on them. */
+  const readRepository = (repositoryId: string) =>
+    unwrap(listGrants({ path: { repositoryId } }));
 
   const remove = async (record: RepositoryGrantRecord) => {
     // Deliberately bulk: this action is "remove this user's access to this
@@ -388,49 +135,8 @@ export function UserRepositoryAccessPanel({
     }
   };
 
-  const items = snapshot && snapshot.userId === userId ? snapshot.items : null;
+  const items = grantsQuery.data ?? null;
   const rows = (items ?? []).filter((record) => record.principal === principal);
-  const picks = useMemo(
-    () =>
-      repositories
-        .filter((repository) => repository.state === "active")
-        .map((repository) => ({
-          value: repository.id,
-          label: `${repository.name} · ${repository.format}`,
-        })),
-    [repositories],
-  );
-  const principalChoices = useMemo<PrincipalOption[]>(
-    () => [
-      {
-        value: principal,
-        label: `${text("用户", "User")} · ${username}`,
-        detail: text(
-          "本面板只管理该用户的仓库授权",
-          "This panel only manages grants for this user",
-        ),
-      },
-    ],
-    [principal, text, username],
-  );
-  // Writing a (principal, resource scope) pair that another existing row holds
-  // replaces that row, so the dialog warns before the save instead of after.
-  const conflictExists =
-    draft !== null &&
-    (composeBase?.grants ?? []).some(
-      (grant) =>
-        grant.principal.trim() === principal &&
-        (normalizePrefix(grant.resourcePrefix) ?? "") ===
-          (normalizePrefix(draft.resourcePrefix) ?? "") &&
-        (composeTargetPrefix === null ||
-          (normalizePrefix(grant.resourcePrefix) ?? "") !==
-            composeTargetPrefix),
-    );
-  const selectedRepository = repositories.find(
-    (repository) => repository.id === composeRepositoryId,
-  );
-  const baseReady =
-    composeBase !== null && composeBase.repositoryId === composeRepositoryId;
 
   return (
     <section className="space-y-3">
@@ -461,7 +167,7 @@ export function UserRepositoryAccessPanel({
             type="primary"
             icon={<PlusOutlined />}
             disabled={repositoriesError !== null}
-            onClick={openCompose}
+            onClick={() => openEditor(null)}
           >
             {text("添加授权", "Add grant")}
           </Button>
@@ -530,7 +236,12 @@ export function UserRepositoryAccessPanel({
                     size="small"
                     icon={<EditOutlined />}
                     aria-label={text("编辑该条授权", "Edit this grant")}
-                    onClick={() => openEdit(record)}
+                    onClick={() =>
+                      openEditor({
+                        repositoryId: record.repositoryId,
+                        prefix: normalizePrefix(record.resourcePrefix) ?? "",
+                      })
+                    }
                   />
                 </Tooltip>
                 <Popconfirm
@@ -569,112 +280,20 @@ export function UserRepositoryAccessPanel({
         </div>
       ) : null}
 
-      <Modal
-        open={editor.open}
-        title={
-          composeTargetPrefix === null
-            ? text("添加仓库授权", "Add repository grant")
-            : text("编辑仓库授权", "Edit repository grant")
-        }
-        onClose={closeCompose}
-        width={680}
-        busy={saving}
-        footer={
-          <Space>
-            <Button onClick={closeCompose} disabled={saving}>
-              {text("取消", "Cancel")}
-            </Button>
-            <Button
-              type="primary"
-              loading={saving}
-              disabled={!baseReady || draft === null}
-              onClick={() => void save()}
-            >
-              {text("保存", "Save")}
-            </Button>
-          </Space>
-        }
-      >
-        <div className="space-y-3">
-          {composeError !== null ? (
-            <ErrorBanner
-              error={composeError}
-              onRetry={() =>
-                void loadCompose(composeRepositoryId, composeTargetPrefix)
-              }
-            />
-          ) : null}
-          {saveError !== null ? <ErrorBanner error={saveError} /> : null}
-          <div>
-            <div className="mb-1 text-xs font-medium text-fg-tertiary">
-              {text("仓库", "Repository")}
-            </div>
-            <Select
-              className="w-full"
-              showSearch={{ optionFilterProp: "label" }}
-              placeholder={text(
-                "选择要授权的仓库",
-                "Select a repository to grant",
-              )}
-              value={composeRepositoryId || undefined}
-              loading={composeLoading}
-              options={picks}
-              onChange={(value: string) => chooseRepository(value)}
-            />
-          </div>
-          {rolesError !== null ? (
-            <Alert
-              type="warning"
-              showIcon
-              title={text(
-                "自定义角色暂时不可用，仍可使用内置权限。",
-                "Custom roles are unavailable; built-in permissions still work.",
-              )}
-            />
-          ) : null}
-          {composeLoading ? <Loading /> : null}
-          {!composeLoading && baseReady && draft !== null ? (
-            <div>
-              <Alert
-                className="mb-3"
-                type="info"
-                showIcon
-                title={text(
-                  "仓库规则只会追加权限，不能撤销用户已有的全局角色。该用户在其他资源范围的授权与其他主体的授权不受影响。",
-                  "Repository rules add permissions; they cannot revoke the user's existing global role. The user's other resource scopes and other principals keep theirs.",
-                )}
-              />
-              {conflictExists && (
-                <Alert
-                  className="mb-3"
-                  type="warning"
-                  showIcon
-                  title={text(
-                    "该用户在此资源范围已有授权，保存将替换原有规则。",
-                    "This user already holds a grant at this resource scope; saving replaces it.",
-                  )}
-                />
-              )}
-              <GrantForm
-                grant={draft}
-                principalOptions={principalChoices}
-                authorizationRoles={authorizationRoles}
-                format={selectedRepository?.format ?? "raw"}
-                onChange={(next) => setDraft({ ...next, principal })}
-                lockPrincipal
-              />
-            </div>
-          ) : null}
-          {!composeLoading && composeRepositoryId === "" ? (
-            <Typography.Text type="secondary" className="block text-xs">
-              {text(
-                "选择仓库后配置该用户的权限级别与资源范围。",
-                "Pick a repository, then configure this user's permission level and resource scope.",
-              )}
-            </Typography.Text>
-          ) : null}
-        </div>
-      </Modal>
+      {editor && (
+        <UserGrantEditorDialog
+          key={editor.session}
+          open={editor.open}
+          username={username}
+          target={editor.target}
+          repositories={repositories}
+          authorizationRoles={rolesQuery.data ?? []}
+          rolesUnavailable={rolesQuery.error !== null}
+          onClose={() =>
+            setEditor((current) => current && { ...current, open: false })
+          }
+        />
+      )}
     </section>
   );
 }
