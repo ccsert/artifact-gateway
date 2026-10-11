@@ -48,6 +48,11 @@ export const accessKeys = {
     [...accessKeys.all, "directory", source] as const,
 };
 
+export const operationKeys = {
+  all: ["operations"] as const,
+  jobs: () => [...operationKeys.all, "jobs"] as const,
+};
+
 export const formatKeys = {
   profiles: ["formats", "profiles"] as const,
 };
