@@ -36,6 +36,9 @@ export const accessKeys = {
   anonymousPolicy: () => [...accessKeys.all, "anonymous-policy"] as const,
   templates: () => [...accessKeys.all, "templates"] as const,
   roles: () => [...accessKeys.all, "roles"] as const,
+  /** Single 200-item pages used to choose principals and repositories. */
+  directory: (source: "users" | "service-accounts" | "repositories") =>
+    [...accessKeys.all, "directory", source] as const,
 };
 
 export const formatKeys = {

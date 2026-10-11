@@ -384,7 +384,7 @@ describe("AccessControlPage", () => {
         ),
       ).toBeInTheDocument();
       expect(screen.queryByText("分组双重同意")).not.toBeInTheDocument();
-      expect(screen.getByText("1 / 2 个仓库公开")).toBeInTheDocument();
+      expect(await screen.findByText("1 / 2 个仓库公开")).toBeInTheDocument();
       if (outcome === "load-error") {
         expect(
           await screen.findByText("synthetic policy unavailable"),
