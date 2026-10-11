@@ -5,12 +5,15 @@ import { listRuntimeNodes } from "../../client";
 import type { RuntimeNode } from "../../client";
 import { RuntimeNodesPanel } from "./RuntimeNodesPanel";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 
 const renderPanel = () =>
   render(
-    <PreferencesProvider>
-      <RuntimeNodesPanel />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RuntimeNodesPanel />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 
 vi.mock("../../client", () => ({
@@ -100,13 +103,18 @@ describe("RuntimeNodesPanel", () => {
       } as never);
 
     renderPanel();
+    // Query results are delivered on a scheduler tick, which fake timers hold.
     await act(async () => {
-      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(0);
     });
     expect(screen.getByText("在线")).toBeInTheDocument();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(15_000);
+    });
+    // The polled answer resolves and is delivered over a few more ticks.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
     });
     expect(mockListRuntimeNodes).toHaveBeenCalledTimes(2);
     expect(screen.getByText("陈旧")).toBeInTheDocument();

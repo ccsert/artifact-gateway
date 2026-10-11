@@ -1,36 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   CopyOutlined,
   InfoCircleOutlined,
-  FilterOutlined,
-  DownOutlined,
-  UpOutlined,
-  ReloadOutlined,
-  SearchOutlined,
   PauseOutlined,
   CaretRightOutlined,
   DownloadOutlined,
 } from "@ant-design/icons";
-import {
-  Alert,
-  AutoComplete,
-  Button,
-  DatePicker,
-  Input,
-  Select,
-  Space,
-  Switch,
-} from "antd";
-import type { Dayjs } from "dayjs";
+import { Alert, Button, Space, Switch } from "antd";
 import { useSearchParams } from "react-router-dom";
-import type { RuntimeLogEntry } from "../../client";
 import { Card, CardHeader, Pagination } from "../../components/ui/Layout";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
-import {
-  FilterField,
-  useClipboardAction,
-} from "../../components/ui/ConsolePrimitives";
-import { formatDate } from "../../lib/format";
+import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 import { useRuntimeLogStream } from "./useRuntimeLogStream";
 import type { LogQuery } from "./useRuntimeLogStream";
@@ -40,37 +20,17 @@ import {
   MAX_DISPLAY_CHARS,
   MAX_LOG_BYTES,
   MAX_LOG_RECORDS,
-  projectLog,
 } from "./runtimeLogView";
-import {
-  customRuntimeLogWindow,
-  type RuntimeLogRangeError,
-  type RuntimeLogTimeRange,
-} from "./runtimeLogWindow";
+import { RuntimeLogFilters } from "./RuntimeLogFilters";
+import { logCopy, RuntimeLogRow } from "./RuntimeLogRow";
+import { runtimeLogError } from "./runtimeLogErrors";
 import "./RuntimeLogsPanel.css";
-
-function logCopy(entry: RuntimeLogEntry) {
-  return JSON.stringify(projectLog(entry), null, 2);
-}
 
 export function RuntimeLogsPanel() {
   const { locale, text } = usePreferences();
   const [searchParams] = useSearchParams();
   const auditRequestId = searchParams.get("requestId") ?? "";
   const auditTraceId = searchParams.get("traceId") ?? "";
-  const lastAuditLink = useRef(`${auditRequestId}\n${auditTraceId}`);
-  const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
-  const [timeRange, setTimeRange] = useState<RuntimeLogTimeRange>(3600);
-  const [windowError, setWindowError] = useState<RuntimeLogRangeError | null>(
-    null,
-  );
-  const [moreFilters, setMoreFilters] = useState(Boolean(auditTraceId));
-  const [instanceId, setInstanceId] = useState("");
-  const [level, setLevel] = useState("");
-  const [component, setComponent] = useState("");
-  const [requestId, setRequestId] = useState(auditRequestId);
-  const [traceId, setTraceId] = useState(auditTraceId);
-  const [keyword, setKeyword] = useState("");
   const [query, setQuery] = useState<LogQuery>(() => ({
     requestId: auditRequestId || undefined,
     traceId: auditTraceId || undefined,
@@ -103,19 +63,6 @@ export function RuntimeLogsPanel() {
   const [selectionTooLarge, setSelectionTooLarge] = useState(false);
   const [selectionVersion, setSelectionVersion] = useState(-1);
   const { copiedValue, copy } = useClipboardAction();
-
-  useEffect(() => {
-    const link = `${auditRequestId}\n${auditTraceId}`;
-    if (lastAuditLink.current === link) return;
-    lastAuditLink.current = link;
-    setRequestId(auditRequestId);
-    setTraceId(auditTraceId);
-    setQuery((current) => ({
-      ...current,
-      requestId: auditRequestId || undefined,
-      traceId: auditTraceId || undefined,
-    }));
-  }, [auditRequestId, auditTraceId]);
 
   const changedSelection = useCallback(() => {
     const selection = window.getSelection();
@@ -161,19 +108,6 @@ export function RuntimeLogsPanel() {
     changedSelection();
   }, [entries, changedSelection]);
 
-  const clearFilters = () => {
-    setRange(null);
-    setTimeRange(3600);
-    setWindowError(null);
-    setInstanceId("");
-    setLevel("");
-    setComponent("");
-    setRequestId("");
-    setTraceId("");
-    setKeyword("");
-    setQuery({ limit: 50 });
-  };
-
   const download = () => {
     const url = URL.createObjectURL(
       new Blob([logNDJSON(entries)], {
@@ -185,27 +119,6 @@ export function RuntimeLogsPanel() {
     link.download = "runtime-logs.ndjson";
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
-  };
-
-  const search = () => {
-    const window = timeRange === "custom" ? customRuntimeLogWindow(range) : {};
-    if (window.error) {
-      setWindowError(window.error);
-      return;
-    }
-    setWindowError(null);
-    setQuery({
-      ...window.bounds,
-      windowSeconds:
-        timeRange !== "custom" && timeRange !== 3600 ? timeRange : undefined,
-      instanceId: instanceId.trim() || undefined,
-      level: level || undefined,
-      component: component.trim() || undefined,
-      requestId: requestId.trim() || undefined,
-      traceId: traceId.trim() || undefined,
-      keyword: keyword.trim() || undefined,
-      limit: 50,
-    });
   };
 
   return (
@@ -220,204 +133,14 @@ export function RuntimeLogsPanel() {
           )}
         </span>
       </div>
-      <div
-        className="ag-runtime-log-filters"
-        role="search"
-        aria-label={text("日志筛选", "Log filters")}
-      >
-        <div className="ag-runtime-log-filter-main">
-          <FilterField
-            label={text("关键词", "Keyword")}
-            className="ag-runtime-log-keyword"
-          >
-            <Input
-              prefix={<SearchOutlined />}
-              value={keyword}
-              allowClear
-              placeholder={text("搜索日志内容", "Search log content")}
-              onChange={(event) => setKeyword(event.target.value)}
-              onPressEnter={search}
-            />
-          </FilterField>
-          <FilterField label={text("时间范围", "Time range")}>
-            <Select
-              virtual={false}
-              className="w-full"
-              aria-label={text("时间范围", "Time range")}
-              value={timeRange}
-              onChange={(value) => {
-                setTimeRange(value);
-                setWindowError(null);
-              }}
-              options={[
-                { value: 900, label: text("最近 15 分钟", "Last 15 minutes") },
-                { value: 3600, label: text("最近 1 小时", "Last hour") },
-                { value: 86400, label: text("最近 24 小时", "Last 24 hours") },
-                { value: "custom", label: text("自定义", "Custom") },
-              ]}
-            />
-          </FilterField>
-          <FilterField label={text("级别", "Level")}>
-            <Select
-              virtual={false}
-              className="w-full"
-              aria-label={text("级别", "Level")}
-              value={level}
-              onChange={setLevel}
-              options={[
-                { value: "", label: text("全部级别", "All levels") },
-                ...["ERROR", "WARN", "INFO", "DEBUG"].map((value) => ({
-                  value,
-                  label: value,
-                })),
-              ]}
-            />
-          </FilterField>
-        </div>
-        {timeRange === "custom" ? (
-          <div className="ag-runtime-log-custom-range">
-            <FilterField
-              label={text("起止时间（本地时区）", "Start and end (local time)")}
-            >
-              <DatePicker.RangePicker
-                className="w-full"
-                showTime
-                format="YYYY-MM-DD HH:mm:ss"
-                classNames={{ popup: { root: "ag-runtime-log-calendar" } }}
-                value={range}
-                status={windowError ? "error" : undefined}
-                placeholder={[
-                  text("开始日期", "Start date"),
-                  text("结束日期", "End date"),
-                ]}
-                onChange={(value) => {
-                  setRange(value as [Dayjs, Dayjs] | null);
-                  setWindowError(null);
-                }}
-                allowClear
-              />
-            </FilterField>
-            <span className="ag-runtime-log-hint">
-              {text(
-                "最多 24 小时，结束时间不能超过当前时间 5 分钟。",
-                "At most 24 hours; end no later than 5 minutes from now.",
-              )}
-            </span>
-          </div>
-        ) : null}
-        <div className="ag-runtime-log-filter-secondary">
-          <FilterField label={text("组件", "Component")}>
-            <AutoComplete
-              value={component}
-              onChange={setComponent}
-              options={
-                page?.source?.components.map((value) => ({ value })) ?? []
-              }
-              placeholder={text(
-                "全部组件，可输入精确名称",
-                "All components; enter exact name",
-              )}
-              className="w-full"
-            />
-          </FilterField>
-          <FilterField label="Request ID">
-            <Input
-              value={requestId}
-              allowClear
-              placeholder={text("按请求定位", "Find a request")}
-              onChange={(event) => setRequestId(event.target.value)}
-              onPressEnter={search}
-            />
-          </FilterField>
-          <Button
-            className="ag-runtime-log-more"
-            icon={<FilterOutlined />}
-            aria-expanded={moreFilters}
-            aria-controls="runtime-log-more-filters"
-            onClick={() => setMoreFilters(!moreFilters)}
-          >
-            {text("更多筛选", "More filters")}
-            {instanceId || traceId
-              ? " · " + (Number(Boolean(instanceId)) + Number(Boolean(traceId)))
-              : ""}
-            {moreFilters ? <UpOutlined /> : <DownOutlined />}
-          </Button>
-        </div>
-        {moreFilters ? (
-          <div
-            id="runtime-log-more-filters"
-            className="ag-runtime-log-filter-more"
-          >
-            <FilterField label={text("节点", "Instance")}>
-              <Input
-                value={instanceId}
-                allowClear
-                placeholder={text("当前进程", "Current process")}
-                onChange={(event) => setInstanceId(event.target.value)}
-                onPressEnter={search}
-              />
-            </FilterField>
-            <FilterField label="Trace ID">
-              <Input
-                value={traceId}
-                allowClear
-                placeholder={text("按链路关联", "Correlate a trace")}
-                onChange={(event) => setTraceId(event.target.value)}
-                onPressEnter={search}
-              />
-            </FilterField>
-          </div>
-        ) : null}
-        {windowError ? (
-          <Alert
-            type="warning"
-            showIcon
-            title={text("请调整时间范围", "Adjust the time range")}
-            description={text(
-              {
-                required: "请选择完整的开始和结束时间。",
-                order: "开始时间不能晚于结束时间。",
-                duration: "时间范围不能超过 24 小时。",
-                future: "结束时间不能超过当前时间 5 分钟。",
-              }[windowError],
-              {
-                required: "Choose both start and end times.",
-                order: "Start must not be after end.",
-                duration: "Time range cannot exceed 24 hours.",
-                future: "End cannot be more than 5 minutes from now.",
-              }[windowError],
-            )}
-          />
-        ) : null}
-        <div className="ag-runtime-log-filter-actions">
-          <span className="ag-runtime-log-hint">
-            {timeRange === "custom"
-              ? text(
-                  "固定时间快照；选择最近范围可跟随新日志。",
-                  "Fixed snapshot; choose a recent range to follow new logs.",
-                )
-              : text(
-                  "最近范围随每次查询和跟随自动更新。",
-                  "Recent ranges update on every query and follow read.",
-                )}
-          </span>
-          <Space wrap>
-            <Button onClick={clearFilters}>
-              {text("清除筛选", "Clear filters")}
-            </Button>
-            <Button
-              icon={<ReloadOutlined />}
-              loading={loading}
-              onClick={refresh}
-            >
-              {text("刷新快照", "Refresh snapshot")}
-            </Button>
-            <Button icon={<SearchOutlined />} type="primary" onClick={search}>
-              {text("查询", "Search")}
-            </Button>
-          </Space>
-        </div>
-      </div>
+      <RuntimeLogFilters
+        auditRequestId={auditRequestId}
+        auditTraceId={auditTraceId}
+        components={page?.source?.components ?? []}
+        loading={loading}
+        onRefresh={refresh}
+        setQuery={setQuery}
+      />
       {error ? (
         <div className="p-4">
           <ErrorBanner
@@ -621,73 +344,20 @@ export function RuntimeLogsPanel() {
               className={`ag-runtime-log-stream${wrap ? "" : " ag-runtime-log-nowrap"}`}
             >
               {entries.map((entry) => (
-                <div
+                <RuntimeLogRow
                   key={`${entry.instanceId}-${entry.sessionId}-${entry.sequence}`}
-                  className="ag-runtime-log-row"
-                  data-sequence={entry.sequence}
-                >
-                  <span className="ag-runtime-log-time">
-                    {logText(formatDate(entry.time, locale), MAX_DISPLAY_CHARS)}
-                  </span>
-                  <span
-                    className={`ag-runtime-log-level ag-runtime-log-level-${entry.level.toLowerCase()}`}
-                  >
-                    {logText(entry.level, MAX_DISPLAY_CHARS)}
-                  </span>
-                  <span className="ag-runtime-log-scope">
-                    {logText(entry.instanceId, MAX_DISPLAY_CHARS)} /{" "}
-                    {logText(entry.sessionId, MAX_DISPLAY_CHARS)}
-                  </span>
-                  <span className="ag-runtime-log-component">
-                    {logText(entry.component || "—", MAX_DISPLAY_CHARS)} ·{" "}
-                    {logText(entry.operation, MAX_DISPLAY_CHARS)}
-                  </span>
-                  <span className="ag-runtime-log-message">
-                    {logText(entry.message, MAX_DISPLAY_CHARS)}
-                  </span>
-                  <Button
-                    className="ag-runtime-log-copy"
-                    size="small"
-                    type="text"
-                    icon={<CopyOutlined />}
-                    onClick={() =>
-                      void copy(
-                        logCopy(entry),
-                        `${entry.sessionId}-${entry.sequence}`,
-                      )
-                    }
-                  >
-                    {copiedValue === `${entry.sessionId}-${entry.sequence}`
-                      ? text("已复制", "Copied")
-                      : text("复制", "Copy")}
-                  </Button>
-                  <div className="ag-runtime-log-detail">
-                    {logText(
-                      [
-                        entry.method,
-                        entry.route,
-                        entry.requestClass,
-                        entry.status === undefined
-                          ? ""
-                          : `status=${entry.status}`,
-                        entry.durationMs === undefined
-                          ? ""
-                          : `${entry.durationMs}ms`,
-                        entry.errorCode ? `errorCode=${entry.errorCode}` : "",
-                        entry.phase ? `phase=${entry.phase}` : "",
-                        entry.jobId ? `job=${entry.jobId}` : "",
-                        entry.attempt === undefined
-                          ? ""
-                          : `attempt=${entry.attempt}`,
-                        `Request ${entry.requestId || "—"}`,
-                        `Trace ${entry.traceId || "—"}`,
-                      ]
-                        .filter(Boolean)
-                        .join(" · "),
-                      MAX_DISPLAY_CHARS,
-                    )}
-                  </div>
-                </div>
+                  entry={entry}
+                  locale={locale}
+                  copied={
+                    copiedValue === `${entry.sessionId}-${entry.sequence}`
+                  }
+                  onCopy={() =>
+                    void copy(
+                      logCopy(entry),
+                      `${entry.sessionId}-${entry.sequence}`,
+                    )
+                  }
+                />
               ))}
             </div>
           )}
@@ -705,79 +375,4 @@ export function RuntimeLogsPanel() {
       ) : null}
     </Card>
   );
-}
-
-function runtimeLogError(
-  error: unknown,
-  text: (zh: string, en: string) => string,
-): unknown {
-  // Let the shared banner retain its endpoint/version mismatch guidance.
-  if (
-    typeof error === "string" &&
-    /(?:^|\b)404(?:\b|$).*not found/i.test(error.trim())
-  )
-    return error;
-  const problem =
-    error && typeof error === "object"
-      ? (error as { code?: string; message?: string })
-      : {};
-  const messages: Record<string, [string, string]> = {
-    invalid_time_window: [
-      "时间范围无效：最多 24 小时，结束时间不能超过当前时间 5 分钟。请调整范围后查询。",
-      "Invalid time range: at most 24 hours, ending no later than 5 minutes from now. Adjust the range and search again.",
-    ],
-    log_buffer_unavailable: [
-      "当前节点未启用内存日志查询，请检查日志缓冲配置。",
-      "Memory log queries are disabled on this node. Check the buffer configuration.",
-    ],
-    log_source_identity_unavailable: [
-      "当前日志来源信息不可用，请检查节点配置后重试。",
-      "Log source identity is unavailable. Check the node configuration and retry.",
-    ],
-    remote_log_query_unavailable: [
-      "当前入口只能查询所连接进程，请清除节点筛选后重试。",
-      "This endpoint queries the connected process only. Clear the instance filter and retry.",
-    ],
-    log_cursor_scope_changed: [
-      "进程或会话已变化，请刷新新快照。",
-      "Process or session changed; refresh the snapshot.",
-    ],
-    invalid_cursor: [
-      "查询游标已失效或筛选发生变化，请刷新快照。",
-      "The cursor is invalid or filters changed. Refresh the snapshot.",
-    ],
-    log_query_timeout: [
-      "日志查询超时，请稍后重试。",
-      "Log query timed out. Retry shortly.",
-    ],
-    access_denied: [
-      "当前身份没有查询运行日志的权限。",
-      "This identity cannot query runtime logs.",
-    ],
-    password_change_required: [
-      "需要先更新密码，之后再查询运行日志。",
-      "Update your password before querying runtime logs.",
-    ],
-    invalid_filter: [
-      "筛选内容过长或包含控制字符，请调整后查询。",
-      "A filter is too long or contains control characters. Adjust it and search again.",
-    ],
-  };
-  const translation = problem.code ? messages[problem.code] : undefined;
-  if (translation) return { ...problem, message: text(...translation) };
-  if (problem.code)
-    return {
-      ...problem,
-      message: text(
-        "日志查询失败，请检查连接或访问权限后重试。",
-        "Log query failed. Check the connection or permissions and retry.",
-      ),
-    };
-  return {
-    ...problem,
-    message: text(
-      "日志查询失败，请检查连接后重试。",
-      "Log query failed. Check the connection and retry.",
-    ),
-  };
 }

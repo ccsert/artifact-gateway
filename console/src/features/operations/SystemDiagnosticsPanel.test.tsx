@@ -5,6 +5,7 @@ import { getDiagnostics } from "../../client";
 import type { Diagnostics } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { SystemDiagnosticsPanel } from "./SystemDiagnosticsPanel";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", () => ({ getDiagnostics: vi.fn() }));
 const mockGetDiagnostics = vi.mocked(getDiagnostics);
@@ -57,9 +58,11 @@ const diagnostics: Diagnostics = {
 
 const renderPanel = () =>
   render(
-    <PreferencesProvider>
-      <SystemDiagnosticsPanel />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <SystemDiagnosticsPanel />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 
 afterEach(() => {

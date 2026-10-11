@@ -62,6 +62,12 @@ export const operationKeys = {
     [...operationKeys.all, "webhook-deliveries", state] as const,
 };
 
+export const systemKeys = {
+  all: ["system"] as const,
+  diagnostics: () => [...systemKeys.all, "diagnostics"] as const,
+  runtimeNodes: () => [...systemKeys.all, "runtime-nodes"] as const,
+};
+
 export const formatKeys = {
   profiles: ["formats", "profiles"] as const,
 };
