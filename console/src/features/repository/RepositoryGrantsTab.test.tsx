@@ -19,6 +19,7 @@ import {
 import type { Grant, Repository } from "../../client";
 import { AntdProvider } from "../../app/AntdProvider";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { RepositoryGrantsTab } from "./RepositoryGrantsTab";
 
 vi.mock("../../client", () => ({
@@ -29,6 +30,17 @@ vi.mock("../../client", () => ({
   listServiceAccounts: vi.fn(),
   listUsers: vi.fn(),
   upsertGrant: vi.fn(),
+}));
+
+const auth = vi.hoisted(() => ({
+  identity: { administrator: true, role: "admin" } as {
+    administrator: boolean;
+    role: string;
+  },
+}));
+
+vi.mock("../../lib/auth", () => ({
+  useAuth: () => auth,
 }));
 
 const mockDeleteGrant = vi.mocked(deleteGrant);
@@ -103,20 +115,41 @@ function mockPrincipalSources() {
 
 function renderTab() {
   return render(
-    <PreferencesProvider>
-      <AntdProvider>
-        <RepositoryGrantsTab repo={repository} />
-      </AntdProvider>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <AntdProvider>
+          <RepositoryGrantsTab repo={repository} />
+        </AntdProvider>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  auth.identity = { administrator: true, role: "admin" };
 });
 
 describe("RepositoryGrantsTab", () => {
+  it("never lists platform principals for a repository administrator", async () => {
+    auth.identity = { administrator: false, role: "member" };
+    mockListGrants.mockResolvedValue({ data: [] } as never);
+    mockPrincipalSources();
+
+    renderTab();
+
+    expect(await screen.findByText("暂无授权规则")).toBeInTheDocument();
+    // Listing users or keys would be refused, and a refusal ends the session.
+    expect(mockListUsers).not.toHaveBeenCalled();
+    expect(mockListApiKeys).not.toHaveBeenCalled();
+    expect(mockListServiceAccounts).not.toHaveBeenCalled();
+    expect(mockListAuthorizationRoles).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText(/无法加载用户、API Key、服务账号或自定义角色/),
+    ).not.toBeInTheDocument();
+  });
+
   it("offers only active users and usable API keys when adding a grant", async () => {
     mockListGrants.mockResolvedValue({ data: [] } as never);
     mockPrincipalSources();

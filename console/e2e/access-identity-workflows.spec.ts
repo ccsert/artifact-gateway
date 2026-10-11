@@ -441,10 +441,14 @@ test("the user drawer saves a profile and adds, narrows, and removes a repositor
   await expect(row).toContainText("releases/");
 
   await row.getByRole("button", { name: "移除仓库授权" }).click();
-  await page
-    .getByRole("button", { name: /^移\s*除$/ })
-    .last()
-    .click();
+  // Move onto the open confirmation the way a pointer would, so the trigger's
+  // tooltip closes instead of covering the confirm button.
+  const confirmation = page.locator(".ant-popconfirm:visible");
+  await confirmation.getByText("移除该用户的仓库授权？").hover();
+  await expect(
+    page.getByRole("tooltip", { name: "移除仓库授权" }),
+  ).toBeHidden();
+  await confirmation.getByRole("button", { name: /^移\s*除$/ }).click();
   await expect
     .poll(async () => (await grantsFor(request, principal)).length)
     .toBe(0);

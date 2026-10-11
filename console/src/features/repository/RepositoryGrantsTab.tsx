@@ -1,17 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Alert, App, Button, Popconfirm, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined } from "@ant-design/icons";
-import {
-  deleteGrant,
-  listAuthorizationRoles,
-  listApiKeys,
-  listGrants,
-  listServiceAccounts,
-  listUsers,
-  upsertGrant,
-} from "../../client";
-import type { AuthorizationRole, Grant, Repository } from "../../client";
+import { deleteGrant, upsertGrant } from "../../client";
+import type { Grant, Repository } from "../../client";
 import { Badge } from "../../components/ui/Badge";
 import {
   EmptyState,
@@ -21,7 +14,15 @@ import {
   isNotFound,
 } from "../../components/ui/Feedback";
 import { Modal, useDisclosure } from "../../components/ui/Modal";
+import { useAuth } from "../../lib/auth";
+import { platformCapabilities } from "../../lib/authorization";
 import { usePreferences } from "../../lib/preferences";
+import { accessKeys } from "../../lib/query/keys";
+import {
+  useAuthorizationRoles,
+  usePrincipalDirectory,
+  useRepositoryGrants,
+} from "../access-control/accessQueries";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 import { GrantForm } from "../access-control/GrantForm";
 import {
@@ -33,7 +34,6 @@ import {
   grantTone,
   principalOptions,
   type DraftGrant,
-  type PrincipalOption,
 } from "../access-control/grantDraft";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
@@ -53,17 +53,52 @@ function grantKey(grant: Pick<Grant, "principal" | "resourcePrefix">): string {
 export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
   const { message } = App.useApp();
   const { text } = usePreferences();
-  const [grants, setGrants] = useState<Grant[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const queryClient = useQueryClient();
+  const grantsQuery = useRepositoryGrants(repo.id);
+  const grants = grantsQuery.data ?? null;
+  const error = grantsQuery.error;
   const [mutationError, setMutationError] = useState<unknown>(null);
-  const [principalChoices, setPrincipalChoices] = useState<PrincipalOption[]>(
-    [],
+  // Only a platform administrator can list principals and custom roles; a
+  // repository administrator composes grants from a typed identity instead.
+  const { identity } = useAuth();
+  const canListPrincipals = platformCapabilities(identity).platformAdmin;
+  const directory = usePrincipalDirectory({ enabled: canListPrincipals });
+  const rolesQuery = useAuthorizationRoles({ enabled: canListPrincipals });
+  const directoryUsers = directory.users.data?.items;
+  const directoryApiKeys = directory.apiKeys.data?.items;
+  const directoryServiceAccounts = directory.serviceAccounts.data?.items;
+  const principalChoices = useMemo(
+    () =>
+      principalOptions(
+        directoryUsers ?? [],
+        directoryApiKeys ?? [],
+        directoryServiceAccounts ?? [],
+        text,
+      ),
+    [directoryApiKeys, directoryServiceAccounts, directoryUsers, text],
   );
-  const [authorizationRoles, setAuthorizationRoles] = useState<
-    AuthorizationRole[]
-  >([]);
-  const [principalChoicesError, setPrincipalChoicesError] =
-    useState<unknown>(null);
+  const authorizationRoles = rolesQuery.data ?? [];
+  const principalChoicesError =
+    directory.users.error ||
+    directory.apiKeys.error ||
+    directory.serviceAccounts.error ||
+    rolesQuery.error
+      ? new Error(
+          text(
+            "无法加载用户、API Key、服务账号或自定义角色，可继续使用自定义身份和内置权限。",
+            "Could not load users, API keys, service accounts, or custom roles. You can still use a custom identity and built-in permissions.",
+          ),
+        )
+      : null;
+  /** Show a repository's new grant set here and re-read the cross-repository list. */
+  const setGrants = (next: (current: Grant[]) => Grant[]) => {
+    queryClient.setQueryData<Grant[]>(
+      accessKeys.repositoryGrants(repo.id),
+      (current) => next(current ?? []),
+    );
+    void queryClient.invalidateQueries({ queryKey: accessKeys.grants() });
+  };
+  const load = () => grantsQuery.refetch();
   const editor = useDisclosure();
   const [draft, setDraft] = useState<DraftGrant | null>(null);
   /**
@@ -78,63 +113,6 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [removing, setRemoving] = useState("");
-
-  const load = useCallback(async () => {
-    setError(null);
-    const { data, error: err } = await listGrants({
-      path: { repositoryId: repo.id },
-    });
-    if (err) {
-      setError(err);
-      return;
-    }
-    setGrants(data ?? []);
-  }, [repo.id]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const [usersResult, apiKeysResult, serviceAccountsResult, rolesResult] =
-        await Promise.all([
-          listUsers(),
-          listApiKeys(),
-          listServiceAccounts({ query: { pageSize: 200 } }),
-          listAuthorizationRoles(),
-        ]);
-      if (cancelled) return;
-      if (
-        usersResult.error ||
-        apiKeysResult.error ||
-        serviceAccountsResult.error ||
-        rolesResult.error
-      ) {
-        setPrincipalChoicesError(
-          new Error(
-            text(
-              "无法加载用户、API Key、服务账号或自定义角色，可继续使用自定义身份和内置权限。",
-              "Could not load users, API keys, service accounts, or custom roles. You can still use a custom identity and built-in permissions.",
-            ),
-          ),
-        );
-      }
-      setPrincipalChoices(
-        principalOptions(
-          usersResult.data?.items ?? [],
-          apiKeysResult.data?.items ?? [],
-          serviceAccountsResult.data?.items ?? [],
-          text,
-        ),
-      );
-      setAuthorizationRoles(rolesResult.data ?? []);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [text]);
 
   const openAdd = () => {
     setDraft(emptyGrant());
@@ -222,9 +200,9 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
       }
       // The upsert answers with the repository's whole grant set, so the list
       // takes it directly; a second read would flicker over the result.
-      if (data) setGrants(data);
+      if (data) setGrants(() => data);
+      else void load();
       editor.hide();
-      if (!data) void load();
     } finally {
       setSaving(false);
     }
@@ -246,9 +224,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
         setMutationError(err);
         return;
       }
-      setGrants((current) =>
-        current ? current.filter((item) => grantKey(item) !== key) : current,
-      );
+      setGrants((current) => current.filter((item) => grantKey(item) !== key));
       message.success(text("授权已移除", "Grant removed"));
     } finally {
       setRemoving("");

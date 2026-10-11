@@ -110,22 +110,34 @@ export function useReplaceAnonymousPolicy() {
 }
 
 /**
- * Who and what the evaluator and templates can name. Users, API keys and
- * repositories are required; service accounts degrade to a notice.
+ * Everyone a grant can name: users, API keys and service accounts. Only a
+ * platform administrator can list them, so other callers pass `enabled: false`
+ * instead of collecting refusals that would end the session.
  */
-export function useAccessDirectory() {
+export function usePrincipalDirectory({ enabled = true } = {}) {
   const users = useQuery({
     queryKey: accessKeys.directory("users"),
     queryFn: ({ signal }) => unwrap(listUsers({ signal })),
     staleTime: ALWAYS_REVALIDATE,
+    enabled,
   });
-  const apiKeys = useApiKeys();
+  const apiKeys = useApiKeys({ enabled });
   const serviceAccounts = useQuery({
     queryKey: accessKeys.directory("service-accounts"),
     queryFn: ({ signal }) =>
       unwrap(listServiceAccounts({ query: { pageSize: 200 }, signal })),
     staleTime: ALWAYS_REVALIDATE,
+    enabled,
   });
+  return { users, apiKeys, serviceAccounts };
+}
+
+/**
+ * Who and what the evaluator and templates can name. Users, API keys and
+ * repositories are required; service accounts degrade to a notice.
+ */
+export function useAccessDirectory() {
+  const { users, apiKeys, serviceAccounts } = usePrincipalDirectory();
   const repositories = useAccessRepositories();
 
   const required = [users, apiKeys, repositories];
@@ -146,10 +158,11 @@ export function useAccessDirectory() {
 }
 
 /** Custom roles. The roles panel is their only writer and invalidates them. */
-export function useAuthorizationRoles() {
+export function useAuthorizationRoles({ enabled = true } = {}) {
   return useQuery({
     queryKey: accessKeys.roles(),
     queryFn: ({ signal }) => unwrap(listAuthorizationRoles({ signal })),
+    enabled,
   });
 }
 

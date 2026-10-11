@@ -4,10 +4,11 @@ import { listApiKeys } from "../../client";
 import { unwrap } from "../../lib/query/client";
 import { identityKeys } from "../../lib/query/keys";
 
-export function useApiKeys() {
+export function useApiKeys({ enabled = true } = {}) {
   return useQuery({
     queryKey: identityKeys.apiKeys(),
     queryFn: ({ signal }) => unwrap(listApiKeys({ signal })),
+    enabled,
   });
 }
 
