@@ -220,7 +220,7 @@ for (const width of [1440, 390]) {
           items: [
             {
               ...repository,
-              format: broken ? "future-format" : "raw",
+              type: broken ? { broken: true } : "hosted",
             },
           ],
         },
@@ -240,9 +240,7 @@ for (const width of [1440, 390]) {
     expect(errors.consoleErrors.length).toBeGreaterThan(0);
     expect(
       errors.consoleErrors.every((message) =>
-        /reading 'icon'|above error occurred|Console section failed/.test(
-          message,
-        ),
+        /toUpperCase|above error occurred|Console section failed/.test(message),
       ),
     ).toBe(true);
     await geometry(page);
