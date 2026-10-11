@@ -18,6 +18,8 @@ This directory owns the shared pieces; feature folders own their query hooks
   or delete, invalidate the narrowest key that covers every read it can have
   changed (`useInvalidateRepositories()` for catalog changes). Keep showing the
   previous data while the refetch runs.
+- **Public, anonymous reads** set `meta: { authFailure: "ignore" }`: a 401/403
+  is reported on the page and never ends a session.
 - **Retries** happen once, and only for a network failure or a 5xx answer.
   Authorization, validation and not-found answers are final.
 - **Authorization failures** go through `lib/auth`: 401 ends the expired
@@ -83,7 +85,9 @@ entries only use effects for non-data work and leave the list once checked.
 - [ ] `features/operations/ScheduledTasksPanel.tsx`
 - [ ] `features/operations/SystemDiagnosticsPanel.tsx`
 - [ ] `features/operations/WebhookDeliveriesPanel.tsx`
-- [ ] `features/public-browse/PublicBrowsePage.tsx`
+- [x] `features/public-browse/PublicBrowsePage.tsx`
+- [ ] `features/public-browse/usePublicVersionPages.ts` — OCI/Conan incremental
+      state was extracted unchanged under issue 275; migrate its reads separately.
 - [ ] `features/repository/APTOperationsTab.tsx`
 - [ ] `features/repository/ProxyMavenCacheSection.tsx`
 - [ ] `features/repository/RepositoryArtifactSelect.tsx`

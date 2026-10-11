@@ -1,6 +1,15 @@
 import { QueryCache, QueryClient } from "@tanstack/react-query";
 import type { Problem } from "../../client";
 
+declare module "@tanstack/react-query" {
+  interface Register {
+    queryMeta: {
+      /** "ignore": a 401/403 is shown on the page and never ends the session. */
+      authFailure?: "ignore";
+    };
+  }
+}
+
 /**
  * The Console's server-state layer (issue 271).
  *
@@ -36,7 +45,10 @@ export function shouldRetry(failureCount: number, error: unknown): boolean {
 export function createQueryClient(onAuthFailure?: (status: 401 | 403) => void) {
   return new QueryClient({
     queryCache: new QueryCache({
-      onError: (error) => {
+      onError: (error, query) => {
+        // Public, anonymous reads report a refusal on the page; they never
+        // end a session (`meta: { authFailure: "ignore" }`).
+        if (query.meta?.authFailure === "ignore") return;
         const status = statusOf(error);
         if (status === 401 || status === 403) onAuthFailure?.(status);
       },
