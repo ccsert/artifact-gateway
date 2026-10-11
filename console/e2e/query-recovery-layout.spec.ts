@@ -172,6 +172,66 @@ for (const width of [1440, 390]) {
     await capture(page, info, "overview-recovered");
   });
 
+  test(`summary Retry refreshes malformed groups and statistics at ${width}px`, async ({
+    page,
+  }, info) => {
+    const errors = await setup(page, width);
+    let groupsReads = 0;
+    let statisticsReads = 0;
+    let auditsReads = 0;
+    await page.route("**/api/v2/groups**", (route) =>
+      route.fulfill({
+        json: { items: ++groupsReads === 1 ? { length: 1 } : [] },
+      }),
+    );
+    await page.route("**/api/v2/audits**", (route) => {
+      auditsReads++;
+      return route.fulfill({ json: [] });
+    });
+    await page.route("**/api/v2/overview-statistics", (route) => {
+      statisticsReads++;
+      return route.fulfill({ json: statistics });
+    });
+    await page.goto("/");
+    const summary = page.getByRole("alert").filter({
+      hasText: en ? "Runtime summary is unavailable" : "运行统计暂时无法显示",
+    });
+    await expect(summary).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: repository.name, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(en ? "No audit records" : "暂无审计记录", { exact: true }),
+    ).toBeVisible();
+    await geometry(page);
+    await capture(page, info, "groups-malformed");
+    expect(errors.pageErrors).toEqual([]);
+    expect(errors.consoleErrors.length).toBeGreaterThan(0);
+    for (const message of errors.consoleErrors) {
+      expect(message).toMatch(
+        /groups.reduce is not a function|above error occurred in the|Console section failed/,
+      );
+    }
+    errors.consoleErrors.length = 0;
+    await summary.getByRole("button", { name: en ? "Retry" : "重试" }).click();
+    await expect(
+      page.getByText(en ? "0 member references" : "共 0 个成员引用", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("group", { name: en ? "Page summary" : "页面摘要" }),
+    ).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect(groupsReads).toBe(2);
+    expect(statisticsReads).toBe(2);
+    expect(auditsReads).toBe(1);
+    await geometry(page);
+    expect(errors.pageErrors).toEqual([]);
+    expect(errors.consoleErrors).toEqual([]);
+    await capture(page, info, "groups-recovered");
+  });
+
   test(`cached detail shows a failed refresh and recovers in place at ${width}px`, async ({
     page,
   }, info) => {
@@ -314,6 +374,78 @@ for (const width of [1440, 390]) {
     expect(errors.pageErrors).toEqual([]);
     expectOnlyMockHttpErrors(errors.consoleErrors, [503]);
     await capture(page, info, "delete-recovered");
+  });
+
+  test(`401 stays signed out while cookie logout is delayed at ${width}px`, async ({
+    page,
+  }, info) => {
+    const errors = await setup(page, width);
+    let reads = 0;
+    let logoutStarted = false;
+    let releaseLogout!: () => void;
+    let completeLogout!: () => void;
+    const pendingLogout = new Promise<void>((resolve) => {
+      releaseLogout = resolve;
+    });
+    const logoutCompleted = new Promise<void>((resolve) => {
+      completeLogout = resolve;
+    });
+    await page.route("**/auth/session", (route) =>
+      route.fulfill({
+        json: {
+          authenticated: true,
+          identity: {
+            actor: "user:cookie-session",
+            kind: "local_session",
+            role: "admin",
+            administrator: true,
+          },
+        },
+      }),
+    );
+    await page.route("**/auth/logout", async (route) => {
+      logoutStarted = true;
+      await pendingLogout;
+      await route.fulfill({ status: 204 });
+      completeLogout();
+    });
+    await page.route("**/auth/oidc/config", (route) =>
+      route.fulfill({ json: { enabled: false } }),
+    );
+    await page.route("**/api/v2/formats", (route) =>
+      route.fulfill({ json: { items: [] } }),
+    );
+    await page.route("**/api/v2/repository-capacities", (route) =>
+      route.fulfill({ json: [] }),
+    );
+    await page.route("**/api/v2/repositories?**", (route) =>
+      ++reads === 1
+        ? route.fulfill({
+            status: 401,
+            json: { status: 401, message: "Session expired" },
+          })
+        : route.fulfill({ json: { items: [repository] } }),
+    );
+    await page.goto("/repositories");
+    await expect.poll(() => logoutStarted).toBe(true);
+    await expect(page).toHaveURL(/\/login\?redirect=%2Frepositories$/);
+    await expect(
+      page.getByRole("button", { name: /user:cookie-session/ }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: repository.name, exact: true }),
+    ).toHaveCount(0);
+    expect(reads).toBe(1);
+    releaseLogout();
+    await logoutCompleted;
+    await expect(page).toHaveURL(/\/login\?redirect=%2Frepositories$/);
+    expect(
+      await page.evaluate(() => localStorage.getItem("ag.console.token")),
+    ).toBeNull();
+    expect(reads).toBe(1);
+    expect(errors.pageErrors).toEqual([]);
+    expectOnlyMockHttpErrors(errors.consoleErrors, [401]);
+    await capture(page, info, "delayed-cookie-logout");
   });
 
   for (const status of [401, 403]) {

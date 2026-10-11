@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useQuery } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -25,9 +25,15 @@ function ProtectedRead() {
 }
 
 function SessionPage() {
-  const { identityLoading, authenticated, identity } = useAuth();
+  const { identityLoading, authenticated, identity, setToken } = useAuth();
   if (identityLoading) return <p>Loading session</p>;
-  if (!authenticated) return <p>Signed out</p>;
+  if (!authenticated)
+    return (
+      <>
+        <p>Signed out</p>
+        <button onClick={() => setToken("new-login-token")}>New login</button>
+      </>
+    );
   return (
     <>
       <h1>{identity?.actor}</h1>
@@ -94,6 +100,66 @@ describe("query failures and the authenticated session", () => {
     );
     expect(read).toHaveBeenCalledTimes(2);
   });
+  it("does not restore a cookie session while logout is still pending", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("ag.console.token", "expired-token");
+    read
+      .mockResolvedValueOnce({ data: "Alice's protected data" })
+      .mockResolvedValueOnce({
+        error: { status: 401, message: "Session expired" },
+      })
+      .mockResolvedValue({ data: "Cookie protected data" });
+    let finishLogout!: (response: Response) => void;
+    const logout = new Promise<Response>((resolve) => {
+      finishLogout = resolve;
+    });
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/auth/logout") return logout;
+      return new Response(
+        JSON.stringify({
+          authenticated: true,
+          identity: {
+            actor: "user:cookie-session",
+            kind: "local_session",
+            role: "member",
+            administrator: false,
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <AuthProvider>
+        <ConsoleQueryProvider>
+          <SessionPage />
+        </ConsoleQueryProvider>
+      </AuthProvider>,
+    );
+    expect(await screen.findByText("Alice's protected data")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByText("Signed out")).toBeVisible();
+    expect(
+      screen.queryByText("Alice's protected data"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+    expect(localStorage.getItem("ag.console.token")).toBeNull();
+    await act(async () => {
+      finishLogout(new Response(null, { status: 204 }));
+    });
+    expect(screen.getByText("Signed out")).toBeVisible();
+    expect(read).toHaveBeenCalledTimes(2);
+    await user.click(screen.getByRole("button", { name: "New login" }));
+    expect(await screen.findByText("Cookie protected data")).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "user:cookie-session" }),
+    ).toBeVisible();
+    expect(localStorage.getItem("ag.console.token")).toBe("new-login-token");
+  });
+
   it.each([true, false])(
     "ends an expired session and hides protected data (token=%s)",
     async (token) => {

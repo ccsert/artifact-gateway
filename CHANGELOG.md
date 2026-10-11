@@ -11,8 +11,6 @@ their meaning.
 
 ## Unreleased
 
-- Console reads repository data through a shared query layer: cancelled superseded requests, de-duplicated reads, precise invalidation after create/update/delete, one retry for network or server failures only, and a cache cleared whenever the signed-in principal changes. Failed detail refreshes retain previous data with a warning and Retry; 401 ends an expired session while 403 stays a permission error. Overview calculations and repository tasks fail inside their own section boundaries, and Retry awaits refreshed data while ignoring completions from a previous section. A successful deletion retry clears its earlier failure.
-
 - Console markup names semantic colour roles (`text-fg-tertiary`, `border-line`, `bg-surface-translucent`, ...) instead of Zinc palette steps; the `!important` compatibility layer that remapped 35 palette classes is removed and a unit test rejects new raw palette utilities. Dividers, the pending-approval card and the public-browse summary grid now follow the light theme instead of staying dark.
 
 - Recent activity on the overview reads as events (operation, object, actor, time, outcome) through the same labels as the audit log, which now also shows outcomes as status text and localizes the actor column. Previously the overview printed raw operation and outcome codes.
@@ -24,6 +22,8 @@ their meaning.
 - Console design language v2 foundation: the built-in Gateway Dark and Light themes move to neutral hairline layering with a solid foreground primary action, reserving signal cyan for links, focus and current location. Geist and Geist Mono are self-hosted with the Console bundle. Formats and states render as a swatch or dot beside readable text, and Hosted/Proxy as neutral text. Extension Theme Packages and the package schema are unchanged.
 
 - Console changes are gated by a fully mocked visual baseline of the main surfaces in Gateway Dark and Light, rendered in the pinned Playwright container (`make console-visual`). Fixtures are type-checked against the generated client, end-to-end specs join the TypeScript build, and Console coverage floors rise to the current baseline with two stale per-file thresholds restored.
+
+- Console reads repository data through a shared query layer: cancelled superseded requests, de-duplicated reads, precise invalidation after create/update/delete, one retry for network or server failures only, and a cache cleared whenever the signed-in principal changes. Failed detail refreshes retain previous data with a warning and Retry; 401 ends an expired session and prevents old cookie probes from restoring it while 403 stays a permission error. Overview calculations and repository tasks fail inside their own section boundaries, and Retry awaits all data sources used by the section while ignoring completions from a previous section. A successful deletion retry clears its earlier failure.
 
 ## 0.8.1 - 2026-10-10
 

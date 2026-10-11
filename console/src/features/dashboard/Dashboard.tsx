@@ -419,7 +419,9 @@ export function DashboardPage() {
       <SectionBoundary
         title={text("运行统计暂时无法显示", "Runtime summary is unavailable")}
         resetKeys={[statisticsResource.data, groupsResource.data]}
-        onReset={statisticsResource.reload}
+        onReset={() =>
+          Promise.all([statisticsResource.reload(), groupsResource.reload()])
+        }
       >
         <DashboardMetrics
           statisticsResource={statisticsResource}
