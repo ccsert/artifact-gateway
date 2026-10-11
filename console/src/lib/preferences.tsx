@@ -526,6 +526,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const t = useCallback(
     (key: MessageKey, variables?: Record<string, string | number>) => {
       const message: string = (locale === "zh-CN" ? zhCN : enUS)[key];
+      if (!variables) return message;
       // Match the original template once; inserted names stay literal.
       return message.replace(/\{([^{}]+)\}/g, (placeholder, name: string) =>
         variables && Object.hasOwn(variables, name)
