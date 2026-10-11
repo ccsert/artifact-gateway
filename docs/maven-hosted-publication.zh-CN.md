@@ -64,6 +64,18 @@ HTTP 层的 Maven 仓库协议不存在通用的“整个 GAV 已上传完毕”
 
 这与普通 Nexus Repository 3 Maven Hosted 属于同一兼容性类型：标准客户端不需要 finalize 调用，文件级发布中断由运维恢复流程处理。
 
+## POM 身份兼容边界
+
+标准 PUT 和严格提交均校验 UTF-8 POM（含 XML 默认编码）及声明 ISO-8859-1 的
+POM。解码只用于校验；下载的 POM 字节及既有 MD5、SHA-1、SHA-256 Release
+校验侧车始终来自原始上传。
+
+缺失的 project group/version 从 parent 对应字面值继承；project version 精确为
+`${project.parent.version}` 时，也先使用本 POM 内的字面父版本，再与上传坐标比较。
+校验不加载远程父模型，不求值任意 property、profile、settings、系统或环境表达式。
+未解析的身份表达式、不支持的编码声明、无效 XML、尾随文档及真实坐标不匹配均拒绝。
+独立的历史 SNAPSHOT 导入准入规则保持不变。
+
 ## 严格发布
 
 只有在单坐标原子可见性值得额外集成成本时才开启严格发布。标准 PUT 此时创建开放的暂存 Session 并返回 `201`，但在坐标提交成功前读取返回 `404`。

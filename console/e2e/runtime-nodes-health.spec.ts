@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { authenticateAsAdmin } from "./support/auth";
 import { expectTabGutter } from "./support/tabs";
+import { defaultSiteSettings } from "../src/lib/siteSettings";
 
 test("operations survives legacy runtime node null arrays", async ({
   page,
@@ -150,8 +151,30 @@ test("connected version links to diagnostics and reports a rolling upgrade", asy
   page,
 }, testInfo) => {
   const pageErrors: string[] = [];
+  const unmockedRequests: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
+  // Match the live E2E gateway: synthetic identity tokens cannot authorize
+  // an API request accidentally left outside this mocked scenario.
+  await page.route("**/api/v2/**", (route) => {
+    unmockedRequests.push(new URL(route.request().url()).pathname);
+    return route.fulfill({
+      status: 401,
+      json: { status: 401, message: "Unmocked synthetic-token request" },
+    });
+  });
+  await page.route("**/api/v2/site-settings", (route) =>
+    route.fulfill({ json: defaultSiteSettings }),
+  );
   await authenticateAsAdmin(page);
+  await page.route("**/api/v2/repositories?**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/v2/repository-capacities", (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.route("**/api/v2/formats", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
   await page.route("**/api/v2/diagnostics", (route) =>
     route.fulfill({
       json: {
@@ -279,6 +302,7 @@ test("connected version links to diagnostics and reports a rolling upgrade", asy
       .getByRole("link", { name: /当前节点 · v0.4.3 · def456/ }),
   ).toBeVisible();
   expect(pageErrors).toEqual([]);
+  expect(unmockedRequests).toEqual([]);
 });
 
 test("job history uses one compact and consistent detail path", async ({
