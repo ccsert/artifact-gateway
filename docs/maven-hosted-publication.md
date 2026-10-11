@@ -64,6 +64,22 @@ No HTTP-level Maven repository protocol provides a portable “the whole GAV is 
 
 This is the same compatibility class as an ordinary Nexus Repository 3 Maven Hosted repository: standard clients work without a finalize call, and operational recovery handles interrupted file-by-file deployment.
 
+## POM identity compatibility
+
+Both standard PUT and strict commit validate UTF-8 POMs (including the default
+XML encoding) and declared ISO-8859-1 POMs. Decoding is only for validation:
+downloaded POM bytes and their existing MD5, SHA-1 and SHA-256 release sidecars
+remain derived from the original upload.
+
+Missing project group/version inherit the corresponding literal parent value.
+An exact project version of `${project.parent.version}` also uses that POM's
+literal parent version before comparison with the upload coordinate. Validation
+does not load remote parent models or evaluate arbitrary properties, profiles,
+settings, system or environment expressions. Unresolved identity expressions,
+unsupported encoding declarations, malformed XML, trailing documents and actual
+coordinate mismatches fail closed. This does not change the separate historical
+SNAPSHOT import admission rules.
+
 ## Strict publication
 
 Enable strict publication only when its atomic visibility is worth the integration cost. Standard PUTs then create an open staging session and return `201`, but reads return `404` until the coordinate commit succeeds.

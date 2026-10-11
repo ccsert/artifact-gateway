@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Maven Hosted 的标准 PUT 和严格坐标提交支持原始 ISO-8859-1 POM，并将精确的 `${project.parent.version}` 身份表达式按 POM 内字面父版本解析。保留原字节及 Release 校验侧车；无效 XML、不支持的编码、未解析身份及坐标不匹配仍被拒绝。协议门禁新增真实 Maven 空缓存父 POM 与依赖树消费。
+
 - Console 标记改用语义颜色类（`text-fg-tertiary`、`border-line`、`bg-surface-translucent` 等），不再使用 Zinc 色阶；移除以 `!important` 重映射 35 个色板类的兼容层，单元测试拒绝新增原始色板类。分隔线、待授权卡片和公开浏览摘要网格在浅色主题下不再保持暗色。
 
 - 总览的最近活动改为可读事件（操作、对象、主体、时间、结果），与审计日志共用同一套标签；审计日志的结果改为状态文字，访问主体列已本地化。此前总览直接显示原始操作码与结果码。

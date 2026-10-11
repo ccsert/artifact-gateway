@@ -11,8 +11,8 @@ for binary in curl mvn gradle go python3; do
   }
 done
 
-# Mandatory real client: synthetic history, explicit takeover, deploy and retry.
-go test -v -count=1 -tags=mavenclient ./internal/app -run '^TestMavenClientSnapshotHistoryTakeoverAndDeploy$'
+# Mandatory real clients: snapshot history/takeover and unchanged Hosted POMs from an empty cache.
+go test -v -count=1 -tags=mavenclient ./internal/app -run '^TestMavenClient(SnapshotHistoryTakeoverAndDeploy|HostedPOMCompatibilityColdCache)$'
 
 port=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
 gateway_url="http://127.0.0.1:${port}"
