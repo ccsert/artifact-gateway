@@ -29,7 +29,7 @@ export function OciVersionPanel({
   onCopyPageLink: (href: string) => unknown;
   onCopyUsage: (snippet: UsageSnippet) => unknown;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const loadOciTags = onLoadOciTags;
   const loadOciManifest = onLoadOciManifest;
   const copyPageLink = onCopyPageLink;
@@ -39,10 +39,10 @@ export function OciVersionPanel({
       <div>
         <div className="flex items-center justify-between gap-3">
           <span className="block text-xs font-medium text-fg-tertiary">
-            {text("选择镜像版本", "Select image version")}
+            {t("publicBrowse.selectImageVersion")}
           </span>
           <span className="text-xs text-fg-disabled">
-            {text("已加载", "Loaded")} {row.protocolVersions.length}
+            {t("publicBrowse.loaded")} {row.protocolVersions.length}
           </span>
         </div>
         {row.protocolVersionsError && (
@@ -54,7 +54,7 @@ export function OciVersionPanel({
               icon={<ReloadOutlined />}
               onClick={() => void loadOciTags(row.item.coordinate)}
             >
-              {text("重试", "Retry")}
+              {t("publicBrowse.retry")}
             </Button>
           </div>
         )}
@@ -68,10 +68,10 @@ export function OciVersionPanel({
           loading={row.protocolVersionsLoading}
           notFoundContent={
             row.protocolVersionsLoading && row.protocolVersions.length === 0
-              ? text("正在读取版本…", "Loading versions…")
-              : text("没有匹配版本", "No matching versions")
+              ? t("publicBrowse.loadingVersions")
+              : t("publicBrowse.noMatchingVersions")
           }
-          placeholder={text("搜索并选择镜像版本", "Search image versions")}
+          placeholder={t("publicBrowse.searchImageVersions")}
           onChange={onSelectVersion}
         />
         {row.nextProtocolPage && (
@@ -85,18 +85,14 @@ export function OciVersionPanel({
             className="mt-2"
           >
             {row.protocolVersionsLoading
-              ? text("加载中…", "Loading…")
-              : text(
-                  `再加载 ${VERSION_PAGE_SIZE} 个版本`,
-                  `Load ${VERSION_PAGE_SIZE} more versions`,
-                )}
+              ? t("publicBrowse.loadingVersionPage")
+              : t("publicBrowse.loadMoreVersions", {
+                  pageSize: VERSION_PAGE_SIZE,
+                })}
           </Button>
         )}
         <p className="mt-2 text-xs leading-5 text-fg-disabled">
-          {text(
-            `每次最多读取 ${VERSION_PAGE_SIZE} 个版本；选择后可查看详情与使用方式。`,
-            `Up to ${VERSION_PAGE_SIZE} versions are loaded at a time; select one to view details and usage.`,
-          )}
+          {t("publicBrowse.versionPageHint", { pageSize: VERSION_PAGE_SIZE })}
         </p>
       </div>
       <div className="min-w-0">
@@ -115,7 +111,7 @@ export function OciVersionPanel({
                 icon={<LinkOutlined />}
                 href={row.selectedProtocolHref}
               >
-                {text("打开版本页", "Open version")}
+                {t("publicBrowse.openVersionPage")}
               </Button>
               <Button
                 type="link"
@@ -123,26 +119,26 @@ export function OciVersionPanel({
                 onClick={() => void copyPageLink(row.selectedProtocolHref)}
               >
                 {copiedCoordinate === row.selectedProtocolHref
-                  ? text("链接已复制", "Link copied")
-                  : text("复制链接", "Copy link")}
+                  ? t("publicBrowse.linkCopied")
+                  : t("publicBrowse.copyLink")}
               </Button>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-line py-3 text-xs sm:grid-cols-4">
               <MetadataItem
-                label={text("镜像", "Image")}
+                label={t("publicBrowse.image")}
                 value={row.item.coordinate}
                 mono
               />
               <MetadataItem
-                label={text("版本", "Version")}
+                label={t("publicBrowse.version")}
                 value={row.selectedProtocolVersionItem.value}
                 mono
               />
               <MetadataItem
-                label={text("发布时间", "Published")}
+                label={t("publicBrowse.published")}
                 value={
                   row.ociDetail?.loading
-                    ? text("读取中…", "Loading…")
+                    ? t("publicBrowse.loading")
                     : formatDate(
                         row.ociDetail?.createdAt ?? row.item.createdAt,
                         locale,
@@ -150,31 +146,31 @@ export function OciVersionPanel({
                 }
               />
               <MetadataItem
-                label={text("发布者", "Publisher")}
+                label={t("publicBrowse.publisher")}
                 value={
                   row.ociDetail?.publisher ??
                   row.item.publisher ??
-                  text("未记录", "Not recorded")
+                  t("publicBrowse.notRecorded")
                 }
                 mono
               />
               <MetadataItem
-                label={text("校验摘要", "Digest")}
+                label={t("publicBrowse.checksum")}
                 value={
                   row.ociDetail?.loading
-                    ? text("读取中…", "Loading…")
+                    ? t("publicBrowse.loading")
                     : (row.ociDetail?.digest ??
                       row.selectedProtocolVersionItem.digest ??
                       row.item.digest ??
-                      text("未记录", "Not recorded"))
+                      t("publicBrowse.notRecorded"))
                 }
                 mono
               />
               <MetadataItem
-                label={text("镜像大小", "Image size")}
+                label={t("publicBrowse.imageSize")}
                 value={
                   row.ociDetail?.loading
-                    ? text("读取中…", "Loading…")
+                    ? t("publicBrowse.loading")
                     : formatBytes(row.ociDetail?.size ?? row.item.size)
                 }
               />
@@ -191,7 +187,7 @@ export function OciVersionPanel({
                     void loadOciManifest(row.item.coordinate, row.selectedTag)
                   }
                 >
-                  {text("重试", "Retry")}
+                  {t("publicBrowse.retry")}
                 </Button>
               </div>
             )}
@@ -208,10 +204,7 @@ export function OciVersionPanel({
           </>
         ) : (
           <div className="rounded-md border border-dashed border-line px-4 py-6 text-sm text-fg-disabled">
-            {text(
-              "版本加载完成后，可在左侧搜索并选择一个版本。",
-              "Once versions load, search and select one on the left.",
-            )}
+            {t("publicBrowse.selectLoadedVersionHint")}
           </div>
         )}
       </div>

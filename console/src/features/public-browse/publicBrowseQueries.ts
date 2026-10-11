@@ -15,6 +15,13 @@ interface PublicRepositoryCatalogResponse {
 /** Anonymous reads report a refusal on the page and never touch the session. */
 const publicMeta = { authFailure: "ignore" } as const;
 
+function publicArtifactAnswer<T extends { items: ArtifactSummary[] }>(data: T) {
+  if (!data || !Array.isArray(data.items)) {
+    throw new Error("Invalid public artifact search response");
+  }
+  return data;
+}
+
 /** The anonymous catalog; not part of the management SDK. */
 export function usePublicCatalog() {
   return useQuery({
@@ -22,11 +29,27 @@ export function usePublicCatalog() {
     queryFn: async ({ signal }) => {
       const response = await fetch("/api/v2/public/repositories", { signal });
       if (!response.ok)
-        throw new Error(`读取公开仓库失败 (${response.status})`);
+        throw Object.assign(
+          new Error(`读取公开仓库失败 (${response.status})`),
+          { status: response.status },
+        );
       const data = (await response.json()) as PublicRepositoryCatalogResponse;
+      const repositories = data.items ?? [];
+      if (
+        !Array.isArray(repositories) ||
+        repositories.some(
+          (repository) =>
+            !repository ||
+            typeof repository.id !== "string" ||
+            typeof repository.name !== "string" ||
+            typeof repository.format !== "string",
+        )
+      ) {
+        throw new Error("Invalid public repository catalog response");
+      }
       return {
         anonymousEnabled: data.enabled !== false,
-        repositories: data.items ?? [],
+        repositories,
       };
     },
     meta: publicMeta,
@@ -59,12 +82,14 @@ export function usePublicArtifacts(
           },
           signal,
         }),
-      ),
+      ).then(publicArtifactAnswer),
     enabled: Boolean(repository),
     meta: publicMeta,
   });
   const found = search.data?.items;
-  const missing = found
+  const missing = found?.every(
+    (item) => item && typeof item.coordinate === "string",
+  )
     ? missingDeepLinkedArtifact(found, artifactParam)
     : null;
   const lookup = useQuery({
@@ -76,7 +101,7 @@ export function usePublicArtifacts(
           query: { q: missing ?? "", pageSize: 100 },
           signal,
         }),
-      ),
+      ).then(publicArtifactAnswer),
     enabled: Boolean(repository && missing),
     meta: publicMeta,
   });
@@ -85,7 +110,7 @@ export function usePublicArtifacts(
   if (items && missing && lookup.data) {
     const current = items;
     const matches = (lookup.data.items ?? []).filter(
-      (item) => item.coordinate === missing,
+      (item) => item?.coordinate === missing,
     );
     items = [
       ...current,
@@ -99,5 +124,16 @@ export function usePublicArtifacts(
       ),
     ];
   }
-  return { items, error: search.error ?? lookup.error ?? null };
+  return {
+    items,
+    error: search.error ?? lookup.error ?? null,
+    recoveryKeys: [search.data, lookup.data],
+    refetch: () =>
+      Promise.all([
+        ...(repository ? [search.refetch({ throwOnError: true })] : []),
+        ...(repository && missing
+          ? [lookup.refetch({ throwOnError: true })]
+          : []),
+      ]),
+  };
 }

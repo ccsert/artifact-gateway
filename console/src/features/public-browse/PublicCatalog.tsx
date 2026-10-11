@@ -33,17 +33,14 @@ export function PublicCatalog({
   onCatalogFormatChange: (format: PublicRepositoryFormat | "all") => void;
   onClearFilters: () => void;
 }) {
-  const { t, text } = usePreferences();
+  const { t } = usePreferences();
   return repositories.length === 0 ? (
     <PublicBrowseStateSurface className="ag-public-catalog-empty-surface">
       <EmptyState
         className="ag-public-catalog-empty"
         icon={<DatabaseOutlined />}
-        title={text("暂无公开仓库", "No public repositories")}
-        hint={text(
-          "管理员需先启用全局匿名访问，并在仓库上允许匿名读取。公开仓库出现后，这里会直接展示可匿名使用的来源与格式。",
-          "An administrator must enable global anonymous access and allow reads on a repository. Public sources and formats will appear here as soon as they are available.",
-        )}
+        title={t("publicBrowse.noPublicRepositories")}
+        hint={t("publicBrowse.emptyCatalogHint")}
         action={
           <Button type="primary" href={authenticated ? "/" : "/login"}>
             {t(
@@ -60,18 +57,18 @@ export function PublicCatalog({
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-fg-strong">
-            {text("选择制品来源", "Choose an artifact source")}
+            {t("publicBrowse.chooseAnArtifactSource")}
           </h2>
           <p className="mt-1 text-sm text-fg-tertiary">
-            {text(
-              `${repositories.length} 个公开来源 · ${publicFormats.length} 种制品格式`,
-              `${repositories.length} public sources · ${publicFormats.length} artifact formats`,
-            )}
+            {t("publicBrowse.publicSourcesArtifactFormats", {
+              sourceCount: repositories.length,
+              formatCount: publicFormats.length,
+            })}
           </p>
         </div>
         <div
           className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-line bg-surface-translucent p-1"
-          aria-label={text("按制品格式筛选", "Filter by artifact format")}
+          aria-label={t("publicBrowse.filterByArtifactFormat")}
         >
           <Button
             size="small"
@@ -79,7 +76,7 @@ export function PublicCatalog({
             aria-pressed={catalogFormat === "all"}
             onClick={() => onCatalogFormatChange("all")}
           >
-            {text("全部", "All")}
+            {t("publicBrowse.all")}
           </Button>
           {publicFormats.map((format) => (
             <Button
@@ -98,14 +95,11 @@ export function PublicCatalog({
         <EmptyState
           compact
           icon={<SearchOutlined />}
-          title={text("没有匹配的公开仓库", "No matching public repositories")}
-          hint={text(
-            "调整搜索词或格式筛选后重试。",
-            "Adjust the search term or format filter and try again.",
-          )}
+          title={t("publicBrowse.noMatchingPublicRepositories")}
+          hint={t("publicBrowse.catalogFilterHint")}
           action={
             <Button onClick={onClearFilters}>
-              {text("清除筛选", "Clear filters")}
+              {t("publicBrowse.clearFilters")}
             </Button>
           }
         />
@@ -147,26 +141,17 @@ export function PublicCatalog({
                 </div>
                 <p className="mt-2 text-sm leading-5 text-fg-tertiary">
                   {repository.type === "proxy"
-                    ? text(
-                        "缓存并加速经过管理员信任的上游制品。",
-                        "Caches and accelerates artifacts from an administrator-trusted upstream.",
-                      )
+                    ? t("publicBrowse.proxyDescription")
                     : repository.type === "group"
-                      ? text(
-                          "通过一个稳定入口聚合多个公开仓库。",
-                          "Aggregates multiple public repositories behind one stable endpoint.",
-                        )
-                      : text(
-                          "由团队直接发布和维护的公开制品。",
-                          "Public artifacts published and maintained directly by the team.",
-                        )}
+                      ? t("publicBrowse.groupDescription")
+                      : t("publicBrowse.hostedDescription")}
                 </p>
                 <div className="mt-auto flex items-center justify-between pt-5 text-xs">
                   <span className="text-fg-disabled">
-                    {text("无需登录即可读取", "No sign-in to read")}
+                    {t("publicBrowse.noSignInToRead")}
                   </span>
                   <span className="flex items-center gap-1 font-medium text-[var(--ag-link)] transition-colors group-hover:text-[var(--ag-link-hover)]">
-                    {text("进入仓库", "Open repository")}
+                    {t("publicBrowse.openRepository")}
                     <ArrowRightOutlined />
                   </span>
                 </div>

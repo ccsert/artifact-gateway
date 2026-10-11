@@ -1,3 +1,5 @@
+import { publicBrowseZhCN } from "../messages/public-browse.zh-CN";
+import { publicBrowseEnUS } from "../messages/public-browse.en-US";
 import {
   createContext,
   useCallback,
@@ -45,6 +47,7 @@ const THEME_ID_KEY = "ag.console.theme.id";
 const LOCALE_KEY = "ag.console.locale";
 
 const zhCN = {
+  ...publicBrowseZhCN,
   "common.cancel": "取消",
   "common.save": "保存",
   "common.loading": "正在加载…",
@@ -142,17 +145,12 @@ const zhCN = {
   "auth.clearToken": "清除令牌",
   "auth.tokenDialogHint": "管理 API 使用 Bearer 认证，令牌仅保存在浏览器中。",
   "auth.saveToken": "保存",
-  "public.browseTitle": "公开制品浏览",
-  "public.catalogTitle": "公开制品",
-  "public.description":
-    "仅显示已启用匿名读取的仓库内容；写入与管理操作仍需登录。",
-  "public.managementLogin": "管理登录",
-  "public.managementConsole": "进入管理端",
 } as const;
 
 type MessageKey = keyof typeof zhCN;
 
 const enUS: Record<MessageKey, string> = {
+  ...publicBrowseEnUS,
   "common.cancel": "Cancel",
   "common.save": "Save",
   "common.loading": "Loading…",
@@ -256,12 +254,6 @@ const enUS: Record<MessageKey, string> = {
   "auth.tokenDialogHint":
     "Management APIs use Bearer authentication. The token is stored only in this browser.",
   "auth.saveToken": "Save",
-  "public.browseTitle": "Public Artifact Browser",
-  "public.catalogTitle": "Public artifacts",
-  "public.description":
-    "Only repositories with anonymous reads enabled are shown. Writes and management still require sign-in.",
-  "public.managementLogin": "Management sign in",
-  "public.managementConsole": "Open management console",
 };
 
 interface PreferencesContextValue {

@@ -47,7 +47,7 @@ export function PublicArtifactDetail({
   onCopyPageLink: (href: string) => unknown;
   onCopyUsage: (snippet: UsageSnippet) => unknown;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const selectedRepository: PublicRepository | undefined = repository;
   const openArtifact = onOpenArtifact;
   const copyUsage = onCopyUsage;
@@ -166,12 +166,12 @@ export function PublicArtifactDetail({
       <div className="px-2 py-1">
         <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3 border-b border-line pb-4 text-xs sm:grid-cols-4">
           <MetadataItem
-            label={text("仓库", "Repository")}
+            label={t("publicBrowse.repository")}
             value={selectedRepository?.name ?? "—"}
             mono
           />
           <MetadataItem
-            label={text("制品坐标", "Artifact coordinate")}
+            label={t("publicBrowse.artifactCoordinate")}
             value={artifactCoordinateForDisplay(
               selectedRepository?.format ?? "",
               row.item.coordinate,
@@ -179,12 +179,12 @@ export function PublicArtifactDetail({
             mono
           />
           <MetadataItem
-            label={text("发布时间", "Published")}
+            label={t("publicBrowse.published")}
             value={formatDate(row.item.createdAt, locale)}
           />
           <MetadataItem
-            label={text("发布者", "Publisher")}
-            value={row.item.publisher ?? text("未记录", "Not recorded")}
+            label={t("publicBrowse.publisher")}
+            value={row.item.publisher ?? t("publicBrowse.notRecorded")}
             mono
           />
         </div>

@@ -20,7 +20,7 @@ export function PublicRepositoryBar({
   onSubmit: (event: FormEvent) => void;
   onBack: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <Card bodyClassName="p-5 sm:p-6">
       <div className="flex flex-wrap items-center gap-2 text-sm text-fg-secondary">
@@ -30,11 +30,11 @@ export function PublicRepositoryBar({
           icon={<ArrowLeftOutlined />}
           onClick={onBack}
         >
-          {text("公开仓库", "Public repositories")}
+          {t("publicBrowse.publicRepositories")}
         </Button>
         <span className="text-fg-disabled">/</span>
         <span className="font-medium text-fg-strong">
-          {selectedRepository?.name ?? text("未知仓库", "Unknown repository")}
+          {selectedRepository?.name ?? t("publicBrowse.unknownRepository")}
         </span>
         {selectedRepository && (
           <FormatBadge format={selectedRepository.format} />
@@ -43,10 +43,7 @@ export function PublicRepositoryBar({
       <form onSubmit={onSubmit} className="mt-5 flex items-center gap-2">
         <Input
           className="min-w-0 flex-1 font-mono text-xs"
-          placeholder={text(
-            "坐标、路径或名称前缀（可选）",
-            "Coordinate, path, or name prefix (optional)",
-          )}
+          placeholder={t("publicBrowse.coordinatePathOrNamePrefixOptional")}
           value={queryDraft}
           onChange={(event) => onQueryDraftChange(event.target.value)}
         />
@@ -55,7 +52,7 @@ export function PublicRepositoryBar({
           htmlType="submit"
           className="shrink-0 whitespace-nowrap"
         >
-          {text("搜索", "Search")}
+          {t("publicBrowse.search")}
         </Button>
       </form>
     </Card>

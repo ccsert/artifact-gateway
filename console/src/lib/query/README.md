@@ -86,6 +86,8 @@ entries only use effects for non-data work and leave the list once checked.
 - [ ] `features/operations/SystemDiagnosticsPanel.tsx`
 - [ ] `features/operations/WebhookDeliveriesPanel.tsx`
 - [x] `features/public-browse/PublicBrowsePage.tsx`
+- [ ] `features/public-browse/usePublicVersionPages.ts` — OCI/Conan incremental
+      state was extracted unchanged under issue 275; migrate its reads separately.
 - [ ] `features/repository/APTOperationsTab.tsx`
 - [ ] `features/repository/ProxyMavenCacheSection.tsx`
 - [ ] `features/repository/RepositoryArtifactSelect.tsx`

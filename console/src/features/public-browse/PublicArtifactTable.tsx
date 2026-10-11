@@ -67,7 +67,7 @@ export function PublicArtifactTable({
   onCopyPageLink: (href: string) => unknown;
   onCopyUsage: (snippet: UsageSnippet) => unknown;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const selectedRepository: PublicRepository | undefined = repository;
   const toggleArtifactRow = onToggleRow;
   const copyCoordinate = onCopyCoordinate;
@@ -76,10 +76,10 @@ export function PublicArtifactTable({
     {
       title:
         selectedRepository?.format === "oci"
-          ? text("镜像", "Image")
+          ? t("publicBrowse.image")
           : selectedRepository?.format === "apt"
-            ? text("APT 路径", "APT path")
-            : text("制品坐标", "Artifact coordinate"),
+            ? t("publicBrowse.aptPath")
+            : t("publicBrowse.artifactCoordinate"),
       key: "coordinate",
       width: 320,
       render: (_, row) => {
@@ -101,32 +101,32 @@ export function PublicArtifactTable({
     ...(selectedRepository?.format === "oci"
       ? [
           {
-            title: text("已加载版本", "Loaded versions"),
+            title: t("publicBrowse.loadedVersions"),
             key: "loadedVersions",
             width: 130,
             render: (_: unknown, row: PublicArtifactTableRow) => (
               <span className="whitespace-nowrap text-xs text-fg-tertiary">
                 {row.protocolVersionsLoading && !row.protocolVersionsLoaded
-                  ? text("读取中…", "Loading…")
+                  ? t("publicBrowse.loading")
                   : !row.protocolVersionsLoaded
-                    ? text("展开后加载", "Load when expanded")
+                    ? t("publicBrowse.loadWhenExpanded")
                     : row.protocolVersions.length > 0
-                      ? text(
-                          `${row.protocolVersions.length}${row.nextProtocolPage ? "+" : ""} 个`,
-                          `${row.protocolVersions.length}${row.nextProtocolPage ? "+" : ""}`,
-                        )
+                      ? t("publicBrowse.versionCount", {
+                          versionCount: row.protocolVersions.length,
+                          more: row.nextProtocolPage ? "+" : "",
+                        })
                       : "—"}
               </span>
             ),
           },
           {
-            title: text("当前版本", "Selected version"),
+            title: t("publicBrowse.selectedVersion"),
             key: "selectedVersion",
             width: 190,
             render: (_: unknown, row: PublicArtifactTableRow) => (
               <span className="block max-w-[180px] truncate font-mono text-xs text-fg-tertiary">
                 {row.protocolVersionsLoading && !row.protocolVersionsLoaded
-                  ? text("读取中…", "Loading…")
+                  ? t("publicBrowse.loading")
                   : !row.protocolVersionsLoaded
                     ? "—"
                     : (row.selectedProtocolVersionItem?.label ?? "—")}
@@ -134,7 +134,7 @@ export function PublicArtifactTable({
             ),
           },
           {
-            title: text("镜像摘要", "Image digest"),
+            title: t("publicBrowse.imageDigest"),
             key: "digest",
             width: 160,
             render: (_: unknown, row: PublicArtifactTableRow) => (
@@ -150,7 +150,7 @@ export function PublicArtifactTable({
         ]
       : [
           {
-            title: text("摘要", "Digest"),
+            title: t("publicBrowse.digest"),
             key: "digest",
             width: 180,
             render: (_: unknown, row: PublicArtifactTableRow) => (
@@ -160,7 +160,7 @@ export function PublicArtifactTable({
             ),
           },
           {
-            title: text("大小", "Size"),
+            title: t("publicBrowse.size"),
             key: "size",
             width: 120,
             render: (_: unknown, row: PublicArtifactTableRow) => (
@@ -172,7 +172,7 @@ export function PublicArtifactTable({
           ...(selectedRepository?.format === "apt"
             ? [
                 {
-                  title: text("内容类型", "Content type"),
+                  title: t("publicBrowse.contentType"),
                   key: "contentType",
                   width: 220,
                   render: (_: unknown, row: PublicArtifactTableRow) => (
@@ -186,8 +186,8 @@ export function PublicArtifactTable({
           {
             title:
               selectedRepository?.format === "apt"
-                ? text("首次缓存", "First cached")
-                : text("创建时间", "Created"),
+                ? t("publicBrowse.firstCached")
+                : t("publicBrowse.created"),
             key: "createdAt",
             width: 180,
             render: (_: unknown, row: PublicArtifactTableRow) => (
@@ -198,7 +198,7 @@ export function PublicArtifactTable({
           },
         ]),
     {
-      title: text("操作", "Actions"),
+      title: t("publicBrowse.actions"),
       key: "actions",
       fixed: "right",
       width: 230,
@@ -211,10 +211,10 @@ export function PublicArtifactTable({
             onClick={() => toggleArtifactRow(row)}
           >
             {row.expanded
-              ? text("收起", "Collapse")
+              ? t("publicBrowse.collapse")
               : row.isOci
-                ? text("选择版本", "Select version")
-                : text("使用方式", "Usage")}
+                ? t("publicBrowse.selectVersion")
+                : t("publicBrowse.usage")}
           </Button>
           <Button
             type="link"
@@ -238,23 +238,25 @@ export function PublicArtifactTable({
             }
           >
             {row.isOci && row.selectedProtocolVersionItem
-              ? text("打开版本", "Open version")
-              : text("打开", "Open")}
+              ? t("publicBrowse.openVersion")
+              : t("publicBrowse.open")}
           </Button>
           <Tooltip
             title={
               copiedCoordinate === row.item.coordinate
-                ? text("已复制", "Copied")
-                : text("复制制品坐标", "Copy coordinate")
+                ? t("publicBrowse.copied")
+                : t("publicBrowse.copyCoordinate")
             }
           >
             <Button
               type="text"
               size="small"
-              aria-label={text(
-                `复制 ${artifactCoordinateForDisplay(selectedRepository?.format ?? "", row.item.coordinate)}`,
-                `Copy ${artifactCoordinateForDisplay(selectedRepository?.format ?? "", row.item.coordinate)}`,
-              )}
+              aria-label={t("publicBrowse.copy", {
+                coordinate: artifactCoordinateForDisplay(
+                  selectedRepository?.format ?? "",
+                  row.item.coordinate,
+                ),
+              })}
               onClick={() => void copyCoordinate(row.item.coordinate)}
               icon={
                 copiedCoordinate === row.item.coordinate ? (

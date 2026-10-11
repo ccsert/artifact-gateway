@@ -12,10 +12,7 @@ import {
   artifactBrowsePath,
   clearArtifactBrowseParams,
 } from "../../lib/publicBrowseModel";
-import {
-  publicRepositoryUsage,
-  type PublicRepositoryFormat,
-} from "../../lib/publicRepositoryUsage";
+import type { PublicRepositoryFormat } from "../../lib/publicRepositoryUsage";
 import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 import { useAuth } from "../../lib/auth";
 import { PublicArtifactResults } from "./PublicArtifactResults";
@@ -27,12 +24,9 @@ import { PublicCatalog } from "./PublicCatalog";
 import { PublicCatalogHero } from "./PublicCatalogHero";
 import { PublicRepositoryBar } from "./PublicRepositoryBar";
 import { PublicUsageAside } from "./PublicUsageAside";
-import {
-  buildPublicArtifactRows,
-  type PublicArtifactTableRow,
-} from "./publicArtifactRows";
+import type { PublicArtifactTableRow } from "./publicArtifactRows";
 import { usePublicArtifacts, usePublicCatalog } from "./publicBrowseQueries";
-import { PUBLIC_FORMAT_ORDER, publicUsageLabel } from "./publicFormats";
+import { PUBLIC_FORMAT_ORDER } from "./publicFormats";
 import { usePublicVersionPages } from "./usePublicVersionPages";
 
 /**
@@ -42,7 +36,7 @@ import { usePublicVersionPages } from "./usePublicVersionPages";
  */
 export function PublicBrowsePage() {
   const { authenticated } = useAuth();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [params, setParams] = useSearchParams();
   const repositoryId = params.get("repository") ?? "";
   const query = params.get("q") ?? "";
@@ -71,7 +65,12 @@ export function PublicBrowsePage() {
   const selectedRepository = repositories?.find(
     (repository) => repository.id === repositoryId,
   );
-  const { items, error } = usePublicArtifacts(
+  const {
+    items,
+    error,
+    recoveryKeys: artifactRecoveryKeys,
+    refetch: refetchArtifacts,
+  } = usePublicArtifacts(
     repositoryId ? selectedRepository : undefined,
     query,
     artifactParam,
@@ -113,7 +112,7 @@ export function PublicBrowsePage() {
   useEffect(() => {
     if (
       !artifactParam ||
-      !items?.some((item) => item.coordinate === artifactParam)
+      !items?.some((item) => item?.coordinate === artifactParam)
     )
       return;
     if (selectedRepository?.format === "oci" && !ociTagPages[artifactParam]) {
@@ -145,16 +144,6 @@ export function PublicBrowsePage() {
       ...(queryDraft.trim() ? { q: queryDraft.trim() } : {}),
     });
   };
-
-  const globalUsage = selectedRepository
-    ? publicRepositoryUsage({
-        format: selectedRepository.format,
-        repositoryName: selectedRepository.name,
-        origin: window.location.origin,
-        host: window.location.host,
-        text,
-      })
-    : [];
 
   const copyCoordinate = (coordinate: string) => copy(coordinate);
 
@@ -201,19 +190,14 @@ export function PublicBrowsePage() {
   const copyPageLink = (href: string) =>
     copy(new URL(href, window.location.origin).toString(), href);
 
-  const usageLabel = publicUsageLabel(selectedRepository?.format, text);
-
-  const artifactTableRows = buildPublicArtifactRows({
-    items: items ?? [],
-    selectedRepository,
-    expandedCoordinate,
-    artifactParam,
-    tagParam,
-    ociTagPages,
-    ociManifestDetails,
-    selectedProtocolVersions,
-    artifactHref,
-  });
+  const resetWorkspace = () =>
+    Promise.all([catalog.refetch({ throwOnError: true }), refetchArtifacts()]);
+  const retryCatalog = () => {
+    void catalog.refetch({ throwOnError: true }).catch(() => {});
+  };
+  const retryArtifacts = () => {
+    void refetchArtifacts().catch(() => {});
+  };
 
   const toggleArtifactRow = (row: PublicArtifactTableRow) => {
     if (row.expanded) {
@@ -270,114 +254,126 @@ export function PublicBrowsePage() {
           }
         >
           <section>
-            <SectionBoundary resetKeys={[repositoryId, query]}>
-              {catalogError ? (
-                <PublicBrowseStateSurface>
-                  <ErrorBanner error={catalogError} />
-                </PublicBrowseStateSurface>
-              ) : !repositories ? (
-                <PublicBrowseStateSurface>
-                  <Loading
-                    label={text(
-                      "正在读取公开仓库…",
-                      "Loading public repositories…",
-                    )}
+            <SectionBoundary
+              resetKeys={[repositoryId, query]}
+              recoveryKeys={[catalog.data, ...artifactRecoveryKeys]}
+              onReset={resetWorkspace}
+            >
+              <div className="grid gap-4">
+                {catalogError && repositories && (
+                  <PublicBrowseStateSurface>
+                    <ErrorBanner
+                      error={catalogError}
+                      tone="warning"
+                      onRetry={retryCatalog}
+                    />
+                  </PublicBrowseStateSurface>
+                )}
+                {catalogError && !repositories ? (
+                  <PublicBrowseStateSurface>
+                    <ErrorBanner error={catalogError} onRetry={retryCatalog} />
+                  </PublicBrowseStateSurface>
+                ) : !repositories ? (
+                  <PublicBrowseStateSurface>
+                    <Loading
+                      label={t("publicBrowse.loadingPublicRepositories")}
+                    />
+                  </PublicBrowseStateSurface>
+                ) : anonymousEnabled === false ? (
+                  <PublicBrowseStateSurface>
+                    <EmptyState
+                      icon={<SafetyCertificateOutlined />}
+                      title={t("publicBrowse.globalAnonymousReadsAreDisabled")}
+                      hint={t("publicBrowse.anonymousDisabledHint")}
+                      action={
+                        <Link
+                          to="/access"
+                          className="text-sm text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
+                        >
+                          {t("publicBrowse.openAccessControl")}
+                        </Link>
+                      }
+                    />
+                  </PublicBrowseStateSurface>
+                ) : repositoryId && !selectedRepository ? (
+                  <PublicBrowseStateSurface>
+                    <EmptyState
+                      icon={<SearchOutlined />}
+                      title={t(
+                        "publicBrowse.publicRepositoryNotFoundOrVisible",
+                      )}
+                      hint={t("publicBrowse.repositoryMissingHint")}
+                      action={
+                        <Button type="primary" onClick={() => setParams({})}>
+                          {t("publicBrowse.backToCatalog")}
+                        </Button>
+                      }
+                    />
+                  </PublicBrowseStateSurface>
+                ) : !repositoryId ? (
+                  <PublicCatalog
+                    authenticated={authenticated}
+                    repositories={repositories}
+                    publicFormats={publicFormats}
+                    visibleRepositories={visibleRepositories}
+                    catalogFormat={catalogFormat}
+                    onCatalogFormatChange={setCatalogFormat}
+                    onClearFilters={() => {
+                      setCatalogQuery("");
+                      setCatalogFormat("all");
+                    }}
                   />
-                </PublicBrowseStateSurface>
-              ) : anonymousEnabled === false ? (
-                <PublicBrowseStateSurface>
-                  <EmptyState
-                    icon={<SafetyCertificateOutlined />}
-                    title={text(
-                      "全局匿名读取未启用",
-                      "Global anonymous reads are disabled",
-                    )}
-                    hint={text(
-                      "请管理员在访问控制中启用全局匿名读取，仓库的匿名读取设置才会生效。",
-                      "An administrator must enable global anonymous reads before repository settings take effect.",
-                    )}
-                    action={
-                      <Link
-                        to="/access"
-                        className="text-sm text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
-                      >
-                        {text("前往访问控制", "Open access control")}
-                      </Link>
-                    }
+                ) : (
+                  <PublicArtifactResults
+                    selectedRepository={selectedRepository}
+                    items={items}
+                    error={error}
+                    artifactRowOptions={{
+                      expandedCoordinate,
+                      artifactParam,
+                      tagParam,
+                      ociTagPages,
+                      ociManifestDetails,
+                      selectedProtocolVersions,
+                    }}
+                    onRetry={retryArtifacts}
+                    artifactParam={artifactParam}
+                    buildParam={buildParam}
+                    revisionParam={revisionParam}
+                    versionParam={versionParam}
+                    copiedCoordinate={copiedCoordinate}
+                    conanRevisionPages={conanRevisionPages}
+                    selectedProtocolVersions={selectedProtocolVersions}
+                    protocolVersionFilter={protocolVersionFilter}
+                    actions={{
+                      artifactHref,
+                      openArtifact,
+                      clearArtifactParams,
+                      copyCoordinate,
+                      copyPageLink,
+                      copyUsage,
+                      toggleArtifactRow,
+                      selectOciVersion,
+                      loadOciTags,
+                      loadOciManifest,
+                      loadConanRevisions,
+                      setSelectedProtocolVersions,
+                      setProtocolVersionFilter,
+                    }}
                   />
-                </PublicBrowseStateSurface>
-              ) : repositoryId && !selectedRepository ? (
-                <PublicBrowseStateSurface>
-                  <EmptyState
-                    icon={<SearchOutlined />}
-                    title={text(
-                      "公开仓库不存在或不可见",
-                      "Public repository not found or visible",
-                    )}
-                    hint={text(
-                      "返回公开仓库目录，选择一个已启用匿名读取的仓库。",
-                      "Return to the catalog and choose a repository with anonymous reads enabled.",
-                    )}
-                    action={
-                      <Button type="primary" onClick={() => setParams({})}>
-                        {text("返回目录", "Back to catalog")}
-                      </Button>
-                    }
-                  />
-                </PublicBrowseStateSurface>
-              ) : !repositoryId ? (
-                <PublicCatalog
-                  authenticated={authenticated}
-                  repositories={repositories}
-                  publicFormats={publicFormats}
-                  visibleRepositories={visibleRepositories}
-                  catalogFormat={catalogFormat}
-                  onCatalogFormatChange={setCatalogFormat}
-                  onClearFilters={() => {
-                    setCatalogQuery("");
-                    setCatalogFormat("all");
-                  }}
-                />
-              ) : (
-                <PublicArtifactResults
-                  selectedRepository={selectedRepository}
-                  items={items}
-                  error={error}
-                  artifactTableRows={artifactTableRows}
-                  artifactParam={artifactParam}
-                  buildParam={buildParam}
-                  revisionParam={revisionParam}
-                  versionParam={versionParam}
-                  copiedCoordinate={copiedCoordinate}
-                  conanRevisionPages={conanRevisionPages}
-                  selectedProtocolVersions={selectedProtocolVersions}
-                  protocolVersionFilter={protocolVersionFilter}
-                  actions={{
-                    artifactHref,
-                    openArtifact,
-                    clearArtifactParams,
-                    copyCoordinate,
-                    copyPageLink,
-                    copyUsage,
-                    toggleArtifactRow,
-                    selectOciVersion,
-                    loadOciTags,
-                    loadOciManifest,
-                    loadConanRevisions,
-                    setSelectedProtocolVersions,
-                    setProtocolVersionFilter,
-                  }}
-                />
-              )}
+                )}
+              </div>
             </SectionBoundary>
           </section>
           {selectedRepository && (
             <aside className="lg:sticky lg:top-24">
-              <SectionBoundary resetKeys={[repositoryId]}>
+              <SectionBoundary
+                resetKeys={[repositoryId]}
+                recoveryKeys={[catalog.data]}
+                onReset={() => catalog.refetch({ throwOnError: true })}
+              >
                 <PublicUsageAside
                   selectedRepository={selectedRepository}
-                  usageLabel={usageLabel}
-                  globalUsage={globalUsage}
                   copiedCoordinate={copiedCoordinate}
                   onCopyUsage={copyUsage}
                 />
