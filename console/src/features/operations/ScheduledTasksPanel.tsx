@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   DeleteOutlined,
   EditOutlined,
@@ -7,176 +7,77 @@ import {
   ReloadOutlined,
   RocketOutlined,
 } from "@ant-design/icons";
-import {
-  Button,
-  Input,
-  InputNumber,
-  Popconfirm,
-  Select,
-  Space,
-  Switch,
-  Tooltip,
-} from "antd";
+import { Button, Popconfirm, Space, Switch, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
-  createScheduledTask,
   deleteScheduledTask,
-  listRepositories,
-  listScheduledTaskRuns,
-  listScheduledTasks,
   runScheduledTask,
   updateScheduledTask,
 } from "../../client";
-import type {
-  CreateScheduledTask,
-  Repository,
-  ScheduledTask,
-  ScheduledTaskRun,
-} from "../../client";
+import type { ScheduledTask } from "../../client";
 import { Badge, StateBadge } from "../../components/ui/Badge";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
-import { Card, CardHeader, Field } from "../../components/ui/Layout";
-import { Modal, useDisclosure } from "../../components/ui/Modal";
+import { Card, CardHeader } from "../../components/ui/Layout";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
+import { formatTaskInterval } from "./scheduledTaskModel";
+import {
+  useInvalidateScheduledTasks,
+  useRetentionRepositories,
+  useScheduledTasks,
+} from "./scheduledTaskQueries";
+import { TaskEditorDialog } from "./TaskEditorDialog";
+import { TaskRunHistory } from "./TaskRunHistory";
 
-type TaskForm = CreateScheduledTask;
-
-const DEFAULT_FORM: TaskForm = {
-  name: "",
-  description: "",
-  kind: "repository-retention",
-  intervalMinutes: 1440,
-  enabled: true,
-};
-
-const RETENTION_FORMATS = new Set([
-  "maven",
-  "oci",
-  "conan",
-  "raw",
-  "npm",
-  "pypi",
-  "go",
-]);
-
+/** Recurring retention dispatches, with each task's dispatch history. */
 export function ScheduledTasksPanel() {
   const { locale, text } = usePreferences();
-  const dialog = useDisclosure();
-  const [tasks, setTasks] = useState<ScheduledTask[] | null>(null);
-  const [repositories, setRepositories] = useState<Repository[]>([]);
-  const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(false);
+  const tasksQuery = useScheduledTasks();
+  const repositoriesQuery = useRetentionRepositories();
+  const tasks = tasksQuery.data ?? null;
+  const repositories = useMemo(
+    () => repositoriesQuery.data ?? [],
+    [repositoriesQuery.data],
+  );
+  const loading = tasksQuery.isFetching || repositoriesQuery.isFetching;
+  const invalidate = useInvalidateScheduledTasks();
+  const [actionError, setActionError] = useState<unknown>(null);
+  const error = actionError ?? tasksQuery.error ?? repositoriesQuery.error;
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<ScheduledTask | null>(null);
-  const [form, setForm] = useState<TaskForm>(DEFAULT_FORM);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
-  const [runs, setRuns] = useState<Record<string, ScheduledTaskRun[]>>({});
-  const [runsLoading, setRunsLoading] = useState<string | null>(null);
+  // Each opening gets a new session so the dialog starts from its task while
+  // a closing dialog keeps its content through the exit animation.
+  const [editor, setEditor] = useState<{
+    session: number;
+    open: boolean;
+    task: ScheduledTask | null;
+  } | null>(null);
 
-  const loadRepositories = useCallback(async () => {
-    const items: Repository[] = [];
-    let pageToken: string | undefined;
-    do {
-      const result = await listRepositories({
-        query: { pageSize: 200, pageToken },
-      });
-      if (result.error) throw result.error;
-      items.push(...(result.data?.items ?? []));
-      pageToken = result.data?.nextPageToken;
-    } while (pageToken);
-    setRepositories(
-      items.filter(
-        (repo) =>
-          repo.state === "active" &&
-          (repo.type ?? "hosted") === "hosted" &&
-          RETENTION_FORMATS.has(repo.format),
-      ),
-    );
-  }, []);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await listScheduledTasks();
-      if (result.error) throw result.error;
-      setTasks(result.data ?? []);
-      await loadRepositories();
-    } catch (nextError) {
-      setError(nextError);
-    } finally {
-      setLoading(false);
-    }
-  }, [loadRepositories]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const load = () => {
+    setActionError(null);
+    return Promise.all([tasksQuery.refetch(), repositoriesQuery.refetch()]);
+  };
 
   const repositoryById = useMemo(
     () => new Map(repositories.map((repo) => [repo.id, repo])),
     [repositories],
   );
 
-  const openCreate = () => {
-    setEditing(null);
-    setForm(DEFAULT_FORM);
-    setError(null);
-    dialog.show();
+  const openEditor = (task: ScheduledTask | null) => {
+    setActionError(null);
+    setEditor((current) => ({
+      session: (current?.session ?? 0) + 1,
+      open: true,
+      task,
+    }));
   };
-
-  const openEdit = (task: ScheduledTask) => {
-    setEditing(task);
-    setForm({
-      name: task.name,
-      description: task.description,
-      kind: task.kind,
-      repositoryId: task.repositoryId,
-      intervalMinutes: task.intervalMinutes,
-      enabled: task.enabled,
-    });
-    setError(null);
-    dialog.show();
-  };
-
-  const save = async () => {
-    setBusyId(editing?.id ?? "create");
-    setError(null);
-    const body: CreateScheduledTask = {
-      ...form,
-      name: form.name.trim(),
-      description: form.description?.trim(),
-      repositoryId:
-        form.kind === "repository-retention" ? form.repositoryId : undefined,
-    };
-    try {
-      const result = editing
-        ? await updateScheduledTask({
-            path: { taskId: editing.id },
-            headers: { "If-Match": editing.version },
-            body,
-          })
-        : await createScheduledTask({ body });
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      dialog.hide();
-      setEditing(null);
-      setForm(DEFAULT_FORM);
-      await load();
-    } catch (nextError) {
-      setError(nextError);
-    } finally {
-      setBusyId(null);
-    }
-  };
+  const openCreate = () => openEditor(null);
+  const openEdit = (task: ScheduledTask) => openEditor(task);
 
   const updateEnabled = async (task: ScheduledTask, enabled: boolean) => {
     setBusyId(task.id);
-    setError(null);
+    setActionError(null);
     try {
       const result = await updateScheduledTask({
         path: { taskId: task.id },
@@ -191,12 +92,12 @@ export function ScheduledTasksPanel() {
         },
       });
       if (result.error) {
-        setError(result.error);
+        setActionError(result.error);
         return;
       }
-      await load();
+      await invalidate();
     } catch (nextError) {
-      setError(nextError);
+      setActionError(nextError);
     } finally {
       setBusyId(null);
     }
@@ -204,15 +105,14 @@ export function ScheduledTasksPanel() {
 
   const runNow = async (task: ScheduledTask) => {
     setBusyId(task.id);
-    setError(null);
+    setActionError(null);
     try {
       const result = await runScheduledTask({ path: { taskId: task.id } });
       const dispatchError = result.error;
-      await load();
-      if (expandedTask === task.id) await loadRuns(task.id);
-      if (dispatchError) setError(dispatchError);
+      await invalidate(task.id);
+      if (dispatchError) setActionError(dispatchError);
     } catch (nextError) {
-      setError(nextError);
+      setActionError(nextError);
     } finally {
       setBusyId(null);
     }
@@ -220,44 +120,24 @@ export function ScheduledTasksPanel() {
 
   const remove = async (task: ScheduledTask) => {
     setBusyId(task.id);
-    setError(null);
+    setActionError(null);
     try {
       const result = await deleteScheduledTask({ path: { taskId: task.id } });
       if (result.error) {
-        setError(result.error);
+        setActionError(result.error);
         return;
       }
       if (expandedTask === task.id) setExpandedTask(null);
-      await load();
+      await invalidate();
     } catch (nextError) {
-      setError(nextError);
+      setActionError(nextError);
     } finally {
       setBusyId(null);
     }
   };
 
-  const loadRuns = async (taskId: string) => {
-    setRunsLoading(taskId);
-    const result = await listScheduledTaskRuns({
-      path: { taskId },
-      query: { limit: 100 },
-    });
-    setRunsLoading(null);
-    if (result.error) {
-      setError(result.error);
-      return;
-    }
-    setRuns((current) => ({ ...current, [taskId]: result.data ?? [] }));
-  };
-
-  const toggleHistory = async (task: ScheduledTask) => {
-    if (expandedTask === task.id) {
-      setExpandedTask(null);
-      return;
-    }
-    setExpandedTask(task.id);
-    await loadRuns(task.id);
-  };
+  const toggleHistory = (task: ScheduledTask) =>
+    setExpandedTask((current) => (current === task.id ? null : task.id));
 
   const columns: ColumnsType<ScheduledTask> = [
     {
@@ -393,7 +273,7 @@ export function ScheduledTasksPanel() {
               type={expandedTask === task.id ? "primary" : "default"}
               icon={<HistoryOutlined />}
               aria-label={text("投递历史", "Dispatch history")}
-              onClick={() => void toggleHistory(task)}
+              onClick={() => toggleHistory(task)}
             />
           </Tooltip>
           <Tooltip title={text("编辑", "Edit")}>
@@ -429,11 +309,6 @@ export function ScheduledTasksPanel() {
       ),
     },
   ];
-
-  const valid =
-    form.name.trim().length > 0 &&
-    form.intervalMinutes >= 15 &&
-    (form.kind === "audit-retention" || Boolean(form.repositoryId));
 
   return (
     <div>
@@ -484,293 +359,22 @@ export function ScheduledTasksPanel() {
             expandable={{
               showExpandColumn: false,
               expandedRowKeys: expandedTask ? [expandedTask] : [],
-              expandedRowRender: (task) => (
-                <TaskRunHistory
-                  task={task}
-                  runs={runs[task.id] ?? []}
-                  loading={runsLoading === task.id}
-                  locale={locale}
-                  text={text}
-                />
-              ),
+              expandedRowRender: (task) => <TaskRunHistory task={task} />,
             }}
           />
         )}
       </Card>
-      <Modal
-        open={dialog.open}
-        title={
-          editing
-            ? text("编辑计划任务", "Edit scheduled task")
-            : text("新建计划任务", "New scheduled task")
-        }
-        onClose={() => {
-          dialog.hide();
-          setEditing(null);
-        }}
-        busy={busyId === (editing?.id ?? "create")}
-        footer={
-          <Space>
-            <Button onClick={dialog.hide} disabled={busyId !== null}>
-              {text("取消", "Cancel")}
-            </Button>
-            <Button
-              type="primary"
-              disabled={!valid}
-              loading={busyId === (editing?.id ?? "create")}
-              onClick={() => void save()}
-            >
-              {editing ? text("保存", "Save") : text("创建", "Create")}
-            </Button>
-          </Space>
-        }
-      >
-        <div className="space-y-4">
-          {error ? <ErrorBanner error={error} /> : null}
-          <Field label={text("任务名称", "Task name")}>
-            <Input
-              maxLength={100}
-              value={form.name}
-              placeholder={text(
-                "例如：每日清理快照",
-                "e.g. Daily snapshot cleanup",
-              )}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
-              }
-            />
-          </Field>
-          <Field label={text("任务动作", "Task action")}>
-            <Select<TaskForm["kind"]>
-              className="w-full"
-              value={form.kind}
-              options={[
-                {
-                  value: "repository-retention",
-                  label: text("执行仓库保留策略", "Run repository retention"),
-                },
-                {
-                  value: "audit-retention",
-                  label: text("执行审计保留策略", "Run audit retention"),
-                },
-              ]}
-              onChange={(kind) =>
-                setForm((current) => ({
-                  ...current,
-                  kind,
-                  repositoryId:
-                    kind === "audit-retention"
-                      ? undefined
-                      : current.repositoryId,
-                }))
-              }
-            />
-          </Field>
-          {form.kind === "repository-retention" && (
-            <Field
-              label={text("目标仓库", "Target repository")}
-              hint={text(
-                "只列出支持保留策略的运行中 Hosted 仓库。",
-                "Only active hosted repositories with retention support are listed.",
-              )}
-            >
-              <Select
-                className="w-full"
-                value={form.repositoryId}
-                placeholder={text("选择仓库", "Select a repository")}
-                showSearch={{ optionFilterProp: ["label", "format"] }}
-                options={repositories.map((repo) => ({
-                  value: repo.id,
-                  label: repo.name,
-                  format: repo.format,
-                }))}
-                onChange={(repositoryId) =>
-                  setForm((current) => ({ ...current, repositoryId }))
-                }
-              />
-            </Field>
-          )}
-          <div className="grid grid-cols-[minmax(0,1fr)_160px] items-end gap-4">
-            <Field
-              label={text("执行间隔", "Run interval")}
-              hint={text(
-                "最短 15 分钟；服务停机恢复后只补投一次。",
-                "Minimum 15 minutes; only one dispatch is recovered after downtime.",
-              )}
-            >
-              <Space.Compact block>
-                <InputNumber
-                  className="w-full"
-                  min={15}
-                  max={525600}
-                  step={15}
-                  value={form.intervalMinutes}
-                  onChange={(value) =>
-                    setForm((current) => ({
-                      ...current,
-                      intervalMinutes: Number(value ?? 15),
-                    }))
-                  }
-                />
-                <Space.Addon>{text("分钟", "minutes")}</Space.Addon>
-              </Space.Compact>
-            </Field>
-            <Field label={text("状态", "Status")}>
-              <div className="flex h-8 items-center gap-2">
-                <Switch
-                  value={form.enabled}
-                  onChange={(enabled) =>
-                    setForm((current) => ({ ...current, enabled }))
-                  }
-                />
-                <span className="text-xs text-fg-secondary">
-                  {form.enabled
-                    ? text("创建后启用", "Enabled")
-                    : text("保持停用", "Disabled")}
-                </span>
-              </div>
-            </Field>
-          </div>
-          <Field label={text("备注", "Description")}>
-            <Input.TextArea
-              rows={3}
-              maxLength={500}
-              showCount
-              value={form.description}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  description: event.target.value,
-                }))
-              }
-            />
-          </Field>
-        </div>
-      </Modal>
+      {editor && (
+        <TaskEditorDialog
+          key={editor.session}
+          open={editor.open}
+          task={editor.task}
+          repositories={repositories}
+          onClose={() =>
+            setEditor((current) => current && { ...current, open: false })
+          }
+        />
+      )}
     </div>
   );
-}
-
-function TaskRunHistory({
-  task,
-  runs,
-  loading,
-  locale,
-  text,
-}: {
-  task: ScheduledTask;
-  runs: ScheduledTaskRun[];
-  loading: boolean;
-  locale: string;
-  text: (zh: string, en: string) => string;
-}) {
-  const columns: ColumnsType<ScheduledTaskRun> = [
-    {
-      title: text("触发方式", "Trigger"),
-      dataIndex: "trigger",
-      width: 120,
-      render: (value: ScheduledTaskRun["trigger"]) => (
-        <span className="text-xs text-fg-secondary">
-          {value === "manual"
-            ? text("手动", "Manual")
-            : text("计划", "Scheduled")}
-        </span>
-      ),
-    },
-    {
-      title: text("投递状态", "Dispatch status"),
-      dataIndex: "state",
-      width: 130,
-      render: (value: string) => <StateBadge state={value} />,
-    },
-    {
-      title: text("触发时间", "Triggered"),
-      dataIndex: "scheduledAt",
-      width: 180,
-      render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-fg-secondary">
-          {formatDate(value, locale)}
-        </span>
-      ),
-    },
-    {
-      title: text("下游任务", "Downstream job"),
-      key: "target",
-      width: 300,
-      render: (_, run) => (
-        <div className="min-w-0 font-mono text-xs text-fg-tertiary">
-          <div>{run.targetKind ?? "—"}</div>
-          {run.targetId && (
-            <div className="mt-1 truncate" title={run.targetId}>
-              {run.targetId}
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: text("失败原因", "Failure reason"),
-      dataIndex: "lastError",
-      render: (value?: string) => (
-        <span
-          className="block truncate text-xs text-[var(--ag-status-danger)]"
-          title={value}
-        >
-          {value ?? "—"}
-        </span>
-      ),
-    },
-  ];
-  return (
-    <div className="px-4 py-3">
-      <div className="mb-3 flex items-center gap-2">
-        <HistoryOutlined className="text-fg-tertiary!" />
-        <span className="text-xs font-medium text-fg-secondary">
-          {text("投递历史", "Dispatch history")} · {task.name}
-        </span>
-      </div>
-      <ConsoleTable<ScheduledTaskRun>
-        rowKey="id"
-        size="small"
-        loading={loading}
-        dataSource={runs}
-        columns={columns}
-        pagination={false}
-        locale={{
-          emptyText: (
-            <EmptyState
-              compact
-              title={text("尚无投递记录", "No dispatch history")}
-              hint={text(
-                "计划触发后，每次投递的结果都会记录在这里。",
-                "Each dispatch is recorded here once the schedule fires.",
-              )}
-            />
-          ),
-        }}
-        scroll={{ x: 980, y: 280 }}
-      />
-    </div>
-  );
-}
-
-function formatTaskInterval(
-  minutes: number,
-  text: (zh: string, en: string) => string,
-) {
-  if (minutes % (24 * 60) === 0) {
-    const days = minutes / (24 * 60);
-    return text(`每 ${days} 天`, `Every ${days} day${days === 1 ? "" : "s"}`);
-  }
-  if (minutes % 60 === 0) {
-    const hours = minutes / 60;
-    return text(
-      `每 ${hours} 小时`,
-      `Every ${hours} hour${hours === 1 ? "" : "s"}`,
-    );
-  }
-  return text(`每 ${minutes} 分钟`, `Every ${minutes} minutes`);
 }

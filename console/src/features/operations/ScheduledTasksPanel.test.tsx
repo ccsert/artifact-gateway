@@ -17,6 +17,7 @@ import {
 } from "../../client";
 import type { ScheduledTask } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { ScheduledTasksPanel } from "./ScheduledTasksPanel";
 
 vi.mock("../../client", () => ({
@@ -50,9 +51,11 @@ function task(id: string, name: string): ScheduledTask {
 
 const renderPanel = () =>
   render(
-    <PreferencesProvider>
-      <ScheduledTasksPanel />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <ScheduledTasksPanel />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 
 // Escape is not a usable dismissal probe here: once an antd Select has been

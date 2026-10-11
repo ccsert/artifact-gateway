@@ -51,6 +51,15 @@ export const accessKeys = {
 export const operationKeys = {
   all: ["operations"] as const,
   jobs: () => [...operationKeys.all, "jobs"] as const,
+  scheduledTasks: () => [...operationKeys.all, "scheduled-tasks"] as const,
+  taskRuns: (taskId: string) =>
+    [...operationKeys.scheduledTasks(), taskId, "runs"] as const,
+  retentionRepositories: () =>
+    [...operationKeys.all, "retention-repositories"] as const,
+  webhookSubscriptions: () =>
+    [...operationKeys.all, "webhook-subscriptions"] as const,
+  webhookDeliveries: (state: string) =>
+    [...operationKeys.all, "webhook-deliveries", state] as const,
 };
 
 export const formatKeys = {

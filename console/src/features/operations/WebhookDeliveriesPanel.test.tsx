@@ -16,6 +16,7 @@ import {
 } from "../../client";
 import type { WebhookDelivery, WebhookSubscription } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { WebhookDeliveriesPanel } from "./WebhookDeliveriesPanel";
 
 vi.mock("../../client", () => ({
@@ -58,9 +59,11 @@ const deadDelivery: WebhookDelivery = {
 
 const renderPanel = () =>
   render(
-    <PreferencesProvider>
-      <WebhookDeliveriesPanel />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <WebhookDeliveriesPanel />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 
 // The mask is the dismissal route this dialog's `busy` flag controls, and it
