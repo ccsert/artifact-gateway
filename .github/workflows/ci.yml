@@ -69,7 +69,16 @@ jobs:
       - name: Run Native Raw E2E
         run: make native-raw-e2e
       - name: Run Native Maven E2E
-        run: make native-maven-e2e
+        env:
+          MAVEN_POM_COMPAT_UPSTREAM: https://maven-central.storage-download.googleapis.com/maven2
+        run: |
+          # Mirror public dependencies only; owned Gateway repositories remain local.
+          settings="${RUNNER_TEMP}/native-maven-central-settings.xml"
+          cat > "$settings" <<'EOF'
+          <settings><mirrors><mirror><id>public-central-fixture</id><mirrorOf>central</mirrorOf><url>https://maven-central.storage-download.googleapis.com/maven2</url></mirror></mirrors></settings>
+          EOF
+          export MAVEN_ARGS="--global-settings ${settings}"
+          make native-maven-e2e
       - name: Run Native npm E2E
         run: make native-npm-e2e
       - name: Run Native PyPI E2E
