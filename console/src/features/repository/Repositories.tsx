@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ClearOutlined,
   DatabaseOutlined,
@@ -9,12 +9,7 @@ import {
 import { Button, Input, Segmented, Select, Space, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link } from "react-router-dom";
-import {
-  listRepositories,
-  createRepository,
-  deleteRepository,
-  listRepositoryCapacities,
-} from "../../client";
+import { createRepository, deleteRepository } from "../../client";
 import type { Repository, Format, FormatProfile } from "../../client";
 import {
   PageHeader,
@@ -41,11 +36,13 @@ import {
 import { usePreferences } from "../../lib/preferences";
 import { useAuth } from "../../lib/auth";
 import { platformCapabilities } from "../../lib/authorization";
+import { repositoryFormats, repositoryTypes } from "../../lib/formatProfiles";
 import {
-  loadFormatProfiles,
-  repositoryFormats,
-  repositoryTypes,
-} from "../../lib/formatProfiles";
+  useFormatProfiles,
+  useInvalidateRepositories,
+  useRepositoryCapacities,
+  useRepositoryPages,
+} from "./repositoryQueries";
 
 function CreateRepositoryDialog({
   profiles,
@@ -305,82 +302,45 @@ export function RepositoriesPage() {
   const { locale, text } = usePreferences();
   const { identity } = useAuth();
   const isAdmin = platformCapabilities(identity).platformAdmin;
-  const [items, setItems] = useState<Repository[]>([]);
-  const [formatProfiles, setFormatProfiles] = useState<FormatProfile[]>([]);
-  const [nextToken, setNextToken] = useState<string | undefined>();
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<unknown>(null);
+  const repositoryPages = useRepositoryPages();
+  const capacityQuery = useRepositoryCapacities(isAdmin);
+  const profilesQuery = useFormatProfiles(isAdmin);
+  const invalidateRepositories = useInvalidateRepositories();
+  const [mutationError, setError] = useState<unknown>(null);
   const [filter, setFilter] = useState("");
   const [formatFilter, setFormatFilter] = useState<Format | "all">("all");
   type RepositoryStateFilter = Repository["state"] | "all" | "operational";
   const [stateFilter, setStateFilter] =
     useState<RepositoryStateFilter>("operational");
-  const [capacities, setCapacities] = useState<
-    Record<
-      string,
-      { usedBytes: number; objectCount: number; quotaBytes: number }
-    >
-  >({});
   const [toDelete, setToDelete] = useState<Repository | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const items: Repository[] =
+    repositoryPages.data?.pages.flatMap((page) => page.items) ?? [];
+  const formatProfiles: FormatProfile[] = profilesQuery.data ?? [];
+  // Capacity is decoration on the catalog; its failure never blocks the list.
+  const capacities = Object.fromEntries(
+    (capacityQuery.data ?? []).map((capacity) => [
+      capacity.repositoryId,
+      capacity,
+    ]),
+  );
+  const loading =
+    repositoryPages.isPending ||
+    (isAdmin && (capacityQuery.isPending || profilesQuery.isPending));
+  const loadingMore = repositoryPages.isFetchingNextPage;
+  const nextToken = repositoryPages.hasNextPage ? "more" : undefined;
+  const error =
+    mutationError ??
+    repositoryPages.error ??
+    (isAdmin ? profilesQuery.error : null) ??
+    null;
+  const load = () => {
     setError(null);
-    try {
-      const [repositoryResult, capacityResult, profiles] = await Promise.all([
-        listRepositories({ query: { pageSize: 100 } }),
-        isAdmin ? listRepositoryCapacities() : Promise.resolve({ data: [] }),
-        isAdmin ? loadFormatProfiles() : Promise.resolve([]),
-      ]);
-      const { data, error: err } = repositoryResult;
-      if (err) {
-        setError(err);
-        return;
-      }
-      const nextItems = data?.items ?? [];
-      setItems(nextItems);
-      setNextToken(data?.nextPageToken);
-      setFormatProfiles(profiles);
-      setCapacities(
-        Object.fromEntries(
-          (capacityResult.data ?? []).map((capacity) => [
-            capacity.repositoryId,
-            capacity,
-          ]),
-        ),
-      );
-    } catch (loadError) {
-      setError(loadError);
-    } finally {
-      setLoading(false);
-    }
-  }, [isAdmin]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const loadMore = async () => {
-    if (!nextToken) return;
-    setLoadingMore(true);
-    try {
-      const { data, error: err } = await listRepositories({
-        query: { pageSize: 100, pageToken: nextToken },
-      });
-      if (err) {
-        setError(err);
-        return;
-      }
-      setItems((prev) => [...prev, ...(data?.items ?? [])]);
-      setNextToken(data?.nextPageToken);
-    } catch (nextError) {
-      setError(nextError);
-    } finally {
-      setLoadingMore(false);
-    }
+    void invalidateRepositories();
+    if (profilesQuery.error) void profilesQuery.refetch();
   };
+  const loadMore = () => void repositoryPages.fetchNextPage();
 
   const confirmDelete = async () => {
     if (!toDelete) return;
@@ -389,13 +349,14 @@ export function RepositoriesPage() {
       return;
     }
     setDeleting(true);
+    setError(null);
     try {
       const { error: err } = await deleteRepository({
         path: { repositoryId: toDelete.id },
       });
       if (!err) {
         setToDelete(null);
-        void load();
+        void invalidateRepositories();
       } else {
         setError(err);
       }

@@ -1,20 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Tabs } from "antd";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import {
-  getRepository,
-  getRepositoryCapabilities,
-  getRepositoryCapacity,
-  getRepositoryEffectiveAccess,
-} from "../../client";
-import type {
-  Repository,
-  RepositoryCapabilities,
-  RepositoryCapacity,
-  RepositoryEffectiveAccess,
-} from "../../client";
 import { ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { PageHeader } from "../../components/ui/Layout";
+import { SectionBoundary } from "../../components/ui/SectionBoundary";
 import { MavenPublishWizard } from "./MavenPublishWizard";
 import { usePreferences } from "../../lib/preferences";
 import { useAuth } from "../../lib/auth";
@@ -77,6 +66,11 @@ import {
   EffectiveAccessPanel,
 } from "./RepositoryDetailHeader";
 import { RepositorySettingsTab } from "./RepositorySettingsTab";
+import {
+  useInvalidateRepositories,
+  useRepository,
+  useRepositorySupport,
+} from "./repositoryQueries";
 
 export function RepositoryDetailPage() {
   const { text } = usePreferences();
@@ -94,14 +88,18 @@ export function RepositoryDetailPage() {
     Number.isInteger(parsedBuildTarget) && parsedBuildTarget > 0
       ? parsedBuildTarget
       : undefined;
-  const [repo, setRepo] = useState<Repository | null>(null);
-  const [caps, setCaps] = useState<RepositoryCapabilities | null>(null);
-  const [capsLoading, setCapsLoading] = useState(true);
-  const [capsError, setCapsError] = useState<unknown>(null);
-  const [capacity, setCapacity] = useState<RepositoryCapacity | null>(null);
-  const [effectiveAccess, setEffectiveAccess] =
-    useState<RepositoryEffectiveAccess | null>(null);
-  const [accessResolved, setAccessResolved] = useState(false);
+  const repositoryQuery = useRepository(repositoryId);
+  const repo = repositoryQuery.data ?? null;
+  const support = useRepositorySupport(repositoryId, repositoryQuery.isSuccess);
+  const caps = support.capabilities.data ?? null;
+  const capsLoading = support.capabilities.isPending;
+  const capsError = support.capabilities.error ?? null;
+  // Capacity and the access answer degrade quietly, as they always have: an
+  // error leaves the summary without capacity and the tabs on platform rules.
+  const capacity = support.capacity.data ?? null;
+  const effectiveAccess = support.effectiveAccess.data ?? null;
+  const accessResolved = !support.effectiveAccess.isPending;
+  const invalidateRepositories = useInvalidateRepositories();
   const permissions = repositoryPermissions(effectiveAccess);
   const canWrite = permissions.write;
   // A tab is offered when the repository's own access answer grants the
@@ -113,7 +111,7 @@ export function RepositoryDetailPage() {
       isAdmin || permissions[item.authority] === true,
     [isAdmin, permissions],
   );
-  const [error, setError] = useState<unknown>(null);
+  const error = repositoryQuery.error ?? null;
   const [tab, setTab] = useState<Tab>(() =>
     repositoryTabFromQuery(requestedTab),
   );
@@ -134,36 +132,10 @@ export function RepositoryDetailPage() {
     [setSearchParams],
   );
 
-  const load = useCallback(async () => {
-    setError(null);
-    setCapsLoading(true);
-    setCapsError(null);
-    setAccessResolved(false);
-    const { data, error: err } = await getRepository({
-      path: { repositoryId },
-    });
-    if (err) {
-      setCapsLoading(false);
-      setError(err);
-      return;
-    }
-    setRepo(data ?? null);
-    const [capsRes, accessRes, capacityRes] = await Promise.all([
-      getRepositoryCapabilities({ path: { repositoryId } }),
-      getRepositoryEffectiveAccess({ path: { repositoryId } }),
-      getRepositoryCapacity({ path: { repositoryId } }),
-    ]);
-    if (capsRes.error) setCapsError(capsRes.error);
-    else setCaps(capsRes.data ?? null);
-    setCapsLoading(false);
-    if (!accessRes.error) setEffectiveAccess(accessRes.data ?? null);
-    setAccessResolved(true);
-    if (!capacityRes.error) setCapacity(capacityRes.data ?? null);
-  }, [repositoryId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const load = useCallback(
+    () => invalidateRepositories(),
+    [invalidateRepositories],
+  );
 
   useEffect(() => {
     setTab(repositoryTabFromQuery(requestedTab));
@@ -180,7 +152,7 @@ export function RepositoryDetailPage() {
     if (!available) selectTab("artifacts");
   }, [repo, selectTab, tab, tabAllowed, isAdmin, accessResolved]);
 
-  if (error !== null) {
+  if (error !== null && !repo) {
     return (
       <div className="ag-page-stack">
         <PageHeader title={text("仓库详情", "Repository details")} />
@@ -207,6 +179,9 @@ export function RepositoryDetailPage() {
 
   return (
     <div className="ag-page-stack">
+      {error !== null && (
+        <ErrorBanner error={error} onRetry={load} tone="warning" />
+      )}
       <div>
         <div className="mb-1 text-xs text-fg-tertiary">
           <Link
@@ -263,125 +238,133 @@ export function RepositoryDetailPage() {
       <RepositoryTabSurface
         standalone={activeTab === "scanning" || activeTab === "security"}
       >
-        <Suspense fallback={<Loading />}>
-          {activeTab === "artifacts" && (
-            <RepositoryArtifactsTab
-              repo={repo}
-              canWrite={canWrite}
-              canQuarantine={permissions.administer}
-              artifactTarget={artifactTarget}
-              buildTarget={buildTarget}
-              assetTarget={assetTarget}
-              onBrowseArtifact={(node) =>
-                setSearchParams((current) => {
-                  const next = new URLSearchParams(current);
-                  const cargoCoordinate =
-                    String(repo.format) === "cargo" &&
-                    (node.kind === "version" || node.kind === "asset")
-                      ? node.coordinate
-                      : undefined;
-                  if (cargoCoordinate?.includes("@")) {
-                    const separator = cargoCoordinate.lastIndexOf("@");
-                    next.set("artifact", cargoCoordinate.slice(0, separator));
-                    next.set("version", cargoCoordinate.slice(separator + 1));
-                  } else {
-                    next.set("artifact", node.coordinate ?? node.path ?? "");
-                    next.delete("version");
-                  }
-                  if (node.buildNumber)
-                    next.set("build", String(node.buildNumber));
-                  else next.delete("build");
-                  if (repo.type === "proxy" && node.path)
-                    next.set("asset", node.path);
-                  else next.delete("asset");
-                  next.delete("reference");
-                  return next;
-                })
-              }
-              referenceTarget={referenceTarget}
-              versionTarget={versionTarget}
-              onVersionChange={(coordinate, version) =>
-                setSearchParams(
-                  (current) => {
+        <SectionBoundary resetKeys={[repo.id, activeTab]} onReset={load}>
+          <Suspense fallback={<Loading />}>
+            {activeTab === "artifacts" && (
+              <RepositoryArtifactsTab
+                repo={repo}
+                canWrite={canWrite}
+                canQuarantine={permissions.administer}
+                artifactTarget={artifactTarget}
+                buildTarget={buildTarget}
+                assetTarget={assetTarget}
+                onBrowseArtifact={(node) =>
+                  setSearchParams((current) => {
                     const next = new URLSearchParams(current);
-                    next.set("artifact", coordinate);
-                    next.set("version", version);
+                    const cargoCoordinate =
+                      String(repo.format) === "cargo" &&
+                      (node.kind === "version" || node.kind === "asset")
+                        ? node.coordinate
+                        : undefined;
+                    if (cargoCoordinate?.includes("@")) {
+                      const separator = cargoCoordinate.lastIndexOf("@");
+                      next.set("artifact", cargoCoordinate.slice(0, separator));
+                      next.set("version", cargoCoordinate.slice(separator + 1));
+                    } else {
+                      next.set("artifact", node.coordinate ?? node.path ?? "");
+                      next.delete("version");
+                    }
+                    if (node.buildNumber)
+                      next.set("build", String(node.buildNumber));
+                    else next.delete("build");
+                    if (repo.type === "proxy" && node.path)
+                      next.set("asset", node.path);
+                    else next.delete("asset");
+                    next.delete("reference");
                     return next;
-                  },
-                  { replace: true },
-                )
-              }
-            />
-          )}
-          {activeTab === "publish" &&
-            repo.format === "maven" &&
-            repo.type !== "proxy" && (
-              <MavenPublishWizard
-                repositoryId={repo.id}
-                onPublished={() => selectTab("artifacts")}
+                  })
+                }
+                referenceTarget={referenceTarget}
+                versionTarget={versionTarget}
+                onVersionChange={(coordinate, version) =>
+                  setSearchParams(
+                    (current) => {
+                      const next = new URLSearchParams(current);
+                      next.set("artifact", coordinate);
+                      next.set("version", version);
+                      return next;
+                    },
+                    { replace: true },
+                  )
+                }
               />
             )}
-          {activeTab === "publish" &&
-            repo.format === "npm" &&
-            repo.type !== "proxy" && <NpmPublishGuide repoName={repo.name} />}
-          {activeTab === "publish" &&
-            repo.format === "oci" &&
-            repo.type !== "proxy" && <OCIPublishGuide repoName={repo.name} />}
-          {activeTab === "publish" &&
-            repo.format === "pypi" &&
-            repo.type !== "proxy" && <PyPIPublishGuide repoName={repo.name} />}
-          {activeTab === "publish" &&
-            repo.format === "cargo" &&
-            repo.type !== "proxy" && <CargoPublishGuide repoName={repo.name} />}
-          {activeTab === "grants" && (
-            <>
-              {effectiveAccess && (
-                <EffectiveAccessPanel effectiveAccess={effectiveAccess} />
+            {activeTab === "publish" &&
+              repo.format === "maven" &&
+              repo.type !== "proxy" && (
+                <MavenPublishWizard
+                  repositoryId={repo.id}
+                  onPublished={() => selectTab("artifacts")}
+                />
               )}
-              <RepositoryGrantsTab repo={repo} />
-            </>
-          )}
-          {activeTab === "apt-snapshots" && (
-            <APTOperationsTab
-              key={repo.id}
-              repo={repo}
-              canAdmin={permissions.administer}
-            />
-          )}
-          {activeTab === "retention" && <RepositoryRetentionTab repo={repo} />}
-          {activeTab === "scanning" && (
-            <RepositoryScanningTab
-              repo={repo}
-              capabilities={caps}
-              capabilitiesLoading={capsLoading}
-              capabilitiesError={capsError}
-              canManage={permissions.intelligence}
-              canViewJobs={permissions.administer}
-            />
-          )}
-          {activeTab === "security" && (
-            <RepositorySecurityTab
-              repo={repo}
-              publicationScanning={caps?.publicationScanning ?? false}
-            />
-          )}
-          {activeTab === "capacity" && <RepositoryCapacityTab repo={repo} />}
-          {activeTab === "usage" && <RepositoryUsageTab repo={repo} />}
-          {activeTab === "distribute" && (
-            <RepositoryDistributionTab repo={repo} />
-          )}
-          {activeTab === "jobs" && <RepositoryJobsTab repo={repo} />}
-          {activeTab === "tombstones" && (
-            <RepositoryTombstonesTab repo={repo} />
-          )}
-          {activeTab === "settings" && (
-            <RepositorySettingsTab
-              repo={repo}
-              capabilities={caps}
-              onUpdated={load}
-            />
-          )}
-        </Suspense>
+            {activeTab === "publish" &&
+              repo.format === "npm" &&
+              repo.type !== "proxy" && <NpmPublishGuide repoName={repo.name} />}
+            {activeTab === "publish" &&
+              repo.format === "oci" &&
+              repo.type !== "proxy" && <OCIPublishGuide repoName={repo.name} />}
+            {activeTab === "publish" &&
+              repo.format === "pypi" &&
+              repo.type !== "proxy" && (
+                <PyPIPublishGuide repoName={repo.name} />
+              )}
+            {activeTab === "publish" &&
+              repo.format === "cargo" &&
+              repo.type !== "proxy" && (
+                <CargoPublishGuide repoName={repo.name} />
+              )}
+            {activeTab === "grants" && (
+              <>
+                {effectiveAccess && (
+                  <EffectiveAccessPanel effectiveAccess={effectiveAccess} />
+                )}
+                <RepositoryGrantsTab repo={repo} />
+              </>
+            )}
+            {activeTab === "apt-snapshots" && (
+              <APTOperationsTab
+                key={repo.id}
+                repo={repo}
+                canAdmin={permissions.administer}
+              />
+            )}
+            {activeTab === "retention" && (
+              <RepositoryRetentionTab repo={repo} />
+            )}
+            {activeTab === "scanning" && (
+              <RepositoryScanningTab
+                repo={repo}
+                capabilities={caps}
+                capabilitiesLoading={capsLoading}
+                capabilitiesError={capsError}
+                canManage={permissions.intelligence}
+                canViewJobs={permissions.administer}
+              />
+            )}
+            {activeTab === "security" && (
+              <RepositorySecurityTab
+                repo={repo}
+                publicationScanning={caps?.publicationScanning ?? false}
+              />
+            )}
+            {activeTab === "capacity" && <RepositoryCapacityTab repo={repo} />}
+            {activeTab === "usage" && <RepositoryUsageTab repo={repo} />}
+            {activeTab === "distribute" && (
+              <RepositoryDistributionTab repo={repo} />
+            )}
+            {activeTab === "jobs" && <RepositoryJobsTab repo={repo} />}
+            {activeTab === "tombstones" && (
+              <RepositoryTombstonesTab repo={repo} />
+            )}
+            {activeTab === "settings" && (
+              <RepositorySettingsTab
+                repo={repo}
+                capabilities={caps}
+                onUpdated={load}
+              />
+            )}
+          </Suspense>
+        </SectionBoundary>
       </RepositoryTabSurface>
     </div>
   );

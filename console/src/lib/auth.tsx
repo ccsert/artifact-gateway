@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import type { ReactNode } from "react";
@@ -20,6 +21,7 @@ interface AuthContextValue {
   identityLoading: boolean;
   setToken: (token: string, role?: string) => void;
   clearToken: () => void;
+  handleAuthFailure: (status: 401 | 403) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -44,6 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(Boolean(token));
   const [identity, setIdentity] = useState<CurrentIdentity | null>(null);
   const [identityLoading, setIdentityLoading] = useState(true);
+  const [sessionInvalidated, setSessionInvalidated] = useState(false);
+  const sessionGeneration = useRef(0);
 
   useEffect(() => {
     applyToken(token);
@@ -51,6 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setToken = useCallback((next: string, nextRole = "") => {
     const trimmed = next.trim();
+    ++sessionGeneration.current;
+    setSessionInvalidated(false);
     localStorage.setItem(TOKEN_KEY, trimmed);
     setTokenState(trimmed);
     setAuthenticated(Boolean(trimmed));
@@ -61,6 +67,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearToken = useCallback(() => {
+    // Invalidate current probes synchronously and suppress cookie discovery
+    // until an explicit new login. Logout may still be pending on the server.
+    ++sessionGeneration.current;
+    setSessionInvalidated(true);
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(ROLE_KEY);
     setTokenState("");
@@ -71,20 +81,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void fetch("/auth/logout", { method: "POST", credentials: "include" });
   }, []);
 
+  const handleAuthFailure = useCallback(
+    (status: 401 | 403) => {
+      // Forbidden is a resource decision, not an expired session. Its caller
+      // keeps the identity and shows the permission error instead of logging out.
+      if (status === 401) clearToken();
+    },
+    [clearToken],
+  );
+
   useEffect(() => {
+    if (sessionInvalidated) return;
     let cancelled = false;
+    const generation = sessionGeneration.current;
+    const isCurrent = () =>
+      !cancelled && generation === sessionGeneration.current;
     setIdentityLoading(true);
     void fetch("/auth/session", {
       credentials: "include",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
       .then(async (response) => {
-        if (cancelled) return;
+        if (!isCurrent()) return;
         if (!response.ok) return;
         const session = (await response.json()) as {
           authenticated?: boolean;
           identity?: CurrentIdentity;
         };
+        if (!isCurrent()) return;
         if (!session.authenticated || !session.identity) {
           localStorage.removeItem(TOKEN_KEY);
           localStorage.removeItem(ROLE_KEY);
@@ -95,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         const current = session.identity;
-        if (cancelled) return;
+        if (!isCurrent()) return;
         setAuthenticated(true);
         setIdentity(current);
         const resolvedRole = current.role ?? "";
@@ -107,12 +131,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // A temporary network failure should not log the operator out.
       })
       .finally(() => {
-        if (!cancelled) setIdentityLoading(false);
+        if (isCurrent()) setIdentityLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, sessionInvalidated]);
 
   return (
     <AuthContext.Provider
@@ -124,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         identityLoading,
         setToken,
         clearToken,
+        handleAuthFailure,
       }}
     >
       {children}

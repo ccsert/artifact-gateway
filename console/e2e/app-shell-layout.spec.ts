@@ -101,6 +101,22 @@ test("desktop navigation collapses within one aligned and stable rail", async ({
   await expect
     .poll(async () => (await shellGeometry(page)).siderWidth)
     .toBe(80);
+  // The menu padding has a longer transition than the outer rail width.
+  // Measure the final alignment only once its contents have settled too.
+  await expect
+    .poll(async () => {
+      const layout = await shellGeometry(page);
+      const center = layout.siderLeft + layout.siderWidth / 2;
+      return Math.max(
+        ...[
+          layout.selectedCenter,
+          layout.iconCenter,
+          layout.brandCenter,
+          layout.toggleCenter,
+        ].map((value) => Math.abs(value - center)),
+      );
+    })
+    .toBeLessThanOrEqual(1);
   const collapsed = await shellGeometry(page);
   const railCenter = collapsed.siderLeft + collapsed.siderWidth / 2;
   expect(collapsed.mainLeft).toBe(80);

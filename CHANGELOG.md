@@ -25,6 +25,8 @@ their meaning.
 
 - Console changes are gated by a fully mocked visual baseline of the main surfaces in Gateway Dark and Light, rendered in the pinned Playwright container (`make console-visual`). Fixtures are type-checked against the generated client, end-to-end specs join the TypeScript build, and Console coverage floors rise to the current baseline with two stale per-file thresholds restored.
 
+- Console reads repository data through a shared query layer: cancelled superseded requests, de-duplicated reads, precise invalidation after create/update/delete, one retry for network or server failures only, and a cache cleared whenever the signed-in principal changes. Failed detail refreshes retain previous data with a warning and Retry; 401 ends an expired session and prevents old cookie probes from restoring it while 403 stays a permission error. Overview calculations and repository tasks fail inside their own section boundaries, and Retry awaits all data sources used by the section while ignoring completions from a previous section. A successful deletion retry clears its earlier failure.
+
 ## 0.8.1 - 2026-10-10
 
 - OCI upload and object-publication locks use the bounded artifact-lock pool instead of holding metadata-pool connections during object I/O. Upload completion carries one lock session into nested object locking, including with a one-connection lock pool. Cancelled acquisitions and failed unlocks discard their physical session; unlock cleanup has a bounded timeout. Existing advisory keys, schema and object bytes are unchanged.

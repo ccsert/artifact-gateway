@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -71,6 +72,90 @@ describe("independent dashboard requests", () => {
     api.getOverviewStatistics.mockResolvedValue({ data: snapshot });
   });
   afterEach(cleanup);
+
+  it("recovers all sections sharing a malformed answer after one Retry", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    api.getOverviewStatistics.mockResolvedValueOnce({
+      data: { ...snapshot, repositories: null },
+    });
+    try {
+      renderDashboard();
+      const title = await screen.findByText("仓库活动暂时无法显示");
+      const section = title.closest('[role="alert"]') as HTMLElement;
+      fireEvent.click(within(section).getByRole("button", { name: /重试/ }));
+      expect(await screen.findByText("synthetic-raw")).toBeVisible();
+      expect(await screen.findByTestId("storage-chart")).toBeVisible();
+      expect(screen.getByText("总请求量")).toBeVisible();
+      expect(screen.getByText("暂无审计记录")).toBeVisible();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(api.getOverviewStatistics).toHaveBeenCalledTimes(2);
+      expect(api.listAudits).toHaveBeenCalledTimes(1);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it("refreshes both summary sources after malformed groups and waits for recovery", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const groups = deferred<{ data: { items: never[] } }>();
+    api.listGroups
+      .mockResolvedValueOnce({ data: { items: { length: 1 } } })
+      .mockReturnValueOnce(groups.promise);
+    try {
+      renderDashboard();
+      const title = await screen.findByText("运行统计暂时无法显示");
+      const section = title.closest('[role="alert"]') as HTMLElement;
+      expect(screen.getByText("synthetic-raw")).toBeVisible();
+      expect(screen.getByText("暂无审计记录")).toBeVisible();
+      fireEvent.click(within(section).getByRole("button", { name: /重试/ }));
+      expect(api.listGroups).toHaveBeenCalledTimes(2);
+      expect(api.getOverviewStatistics).toHaveBeenCalledTimes(2);
+      expect(screen.getByText("运行统计暂时无法显示")).toBeVisible();
+      await act(async () => {
+        groups.resolve({ data: { items: [] } });
+      });
+      expect(await screen.findByText("共 0 个成员引用")).toBeVisible();
+      expect(screen.getByText("总请求量")).toBeVisible();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(api.listAudits).toHaveBeenCalledTimes(1);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it.each([
+    ["repository collection", { ...snapshot, repositories: null }],
+    [
+      "repository requests",
+      {
+        ...snapshot,
+        repositories: [
+          { ...snapshot.repositories[0], requests: undefined },
+          { ...snapshot.repositories[0], repositoryId: "second" },
+        ],
+      },
+    ],
+    [
+      "total requests",
+      { ...snapshot, totals: { ...snapshot.totals, requests: undefined } },
+    ],
+  ])("contains malformed %s inside its section", async (_, malformed) => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    api.getOverviewStatistics.mockResolvedValue({ data: malformed });
+    try {
+      renderDashboard();
+      expect(await screen.findByText("暂无审计记录")).toBeVisible();
+      expect(screen.getByRole("heading", { name: "总览" })).toBeVisible();
+      expect(screen.getAllByRole("alert").length).toBeGreaterThan(0);
+      expect(
+        screen
+          .getAllByRole("link", { name: "查看全部 →" })
+          .map((link) => link.getAttribute("href")),
+      ).toContain("/audits");
+    } finally {
+      error.mockRestore();
+    }
+  });
 
   it("shows storage while both optional requests are still pending", async () => {
     api.listGroups.mockReturnValue(new Promise(() => {}));

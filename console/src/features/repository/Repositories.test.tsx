@@ -18,6 +18,7 @@ import {
 } from "../../client";
 import type { FormatProfile } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { RepositoriesPage } from "./Repositories";
 
 const auth = vi.hoisted(() => ({
@@ -64,6 +65,59 @@ afterEach(() => {
 });
 
 describe("RepositoriesPage role-scoped catalog", () => {
+  it("clears a failed deletion after retrying the same confirmation successfully", async () => {
+    const user = userEvent.setup();
+    auth.identity = { administrator: true, role: "admin" };
+    const repository = {
+      id: "11111111-1111-4111-8111-111111111111",
+      name: "retry-delete",
+      format: "raw",
+      type: "hosted",
+      state: "active",
+      version: "1",
+    };
+    vi.mocked(listRepositories)
+      .mockResolvedValueOnce({ data: { items: [repository] } } as never)
+      .mockResolvedValue({ data: { items: [] } } as never);
+    vi.mocked(listRepositoryCapacities).mockResolvedValue({
+      data: [],
+    } as never);
+    vi.mocked(listFormatProfiles).mockResolvedValue({
+      data: { items: profiles },
+    } as never);
+    vi.mocked(deleteRepository)
+      .mockResolvedValueOnce({
+        error: { status: 503, message: "Deletion unavailable" },
+      } as never)
+      .mockResolvedValue({ data: undefined } as never);
+    render(
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter>
+            <RepositoriesPage />
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "删除 retry-delete" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: /^删\s*除$/ }));
+    expect(await screen.findByText("Deletion unavailable")).toBeVisible();
+    const retry = within(dialog).getByRole("button", { name: /^删\s*除$/ });
+    await waitFor(() => {
+      expect(retry).toBeEnabled();
+      expect(retry).not.toHaveClass("ant-btn-loading");
+    });
+    await user.click(retry);
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(await screen.findByText("暂无仓库")).toBeVisible();
+    expect(screen.queryByText("Deletion unavailable")).not.toBeInTheDocument();
+    expect(vi.mocked(deleteRepository)).toHaveBeenCalledTimes(2);
+  });
   it("shows a member readable repositories without administrator controls", async () => {
     vi.mocked(listRepositories).mockResolvedValue({
       data: {
@@ -81,11 +135,13 @@ describe("RepositoriesPage role-scoped catalog", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <MemoryRouter>
-          <RepositoriesPage />
-        </MemoryRouter>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter>
+            <RepositoriesPage />
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -110,11 +166,13 @@ describe("RepositoriesPage role-scoped catalog", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <MemoryRouter>
-          <RepositoriesPage />
-        </MemoryRouter>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter>
+            <RepositoriesPage />
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -153,11 +211,13 @@ describe("RepositoriesPage role-scoped catalog", () => {
     );
 
     render(
-      <PreferencesProvider>
-        <MemoryRouter>
-          <RepositoriesPage />
-        </MemoryRouter>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter>
+            <RepositoriesPage />
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await user.click(await screen.findByRole("button", { name: /新建仓库/ }));
@@ -209,11 +269,13 @@ describe("RepositoriesPage role-scoped catalog", () => {
     );
 
     render(
-      <PreferencesProvider>
-        <MemoryRouter>
-          <RepositoriesPage />
-        </MemoryRouter>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter>
+            <RepositoriesPage />
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await user.click(
