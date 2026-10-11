@@ -1,5 +1,8 @@
 import type { Repository } from "../../client";
-import { formatDescriptor } from "../../formats";
+import {
+  supportsRepositoryFeature,
+  type RepositoryFormatFeature,
+} from "../../formats";
 
 /**
  * The authority a tab's data and actions need on the repository. The server
@@ -50,21 +53,8 @@ export type RepositoryTabDefinition = {
   label: string;
   labelEn: string;
   authority: RepositoryTabAuthority;
-  formats?: string[];
-  hostedOnly?: boolean;
+  feature?: RepositoryFormatFeature;
 };
-
-const LIFECYCLE_FORMATS = [
-  "maven",
-  "oci",
-  "conan",
-  "raw",
-  "npm",
-  "pypi",
-  "go",
-  "cargo",
-];
-const LIFECYCLE_AND_APT_FORMATS = [...LIFECYCLE_FORMATS, "apt"];
 
 export const TABS: RepositoryTabDefinition[] = [
   {
@@ -87,7 +77,7 @@ export const TABS: RepositoryTabDefinition[] = [
     label: "发布",
     labelEn: "Publish",
     authority: "write",
-    formats: ["maven", "npm", "pypi", "oci", "cargo"],
+    feature: "publish",
   },
   {
     key: "grants",
@@ -102,8 +92,7 @@ export const TABS: RepositoryTabDefinition[] = [
     label: "保留策略",
     labelEn: "Retention",
     authority: "administer",
-    formats: LIFECYCLE_FORMATS,
-    hostedOnly: true,
+    feature: "retention",
   },
   {
     key: "scanning",
@@ -118,8 +107,7 @@ export const TABS: RepositoryTabDefinition[] = [
     label: "安全准入",
     labelEn: "Security admission",
     authority: "administer",
-    formats: LIFECYCLE_AND_APT_FORMATS,
-    hostedOnly: true,
+    feature: "security",
   },
   {
     key: "tombstones",
@@ -127,7 +115,7 @@ export const TABS: RepositoryTabDefinition[] = [
     label: "墓碑",
     labelEn: "Tombstones",
     authority: "administer",
-    formats: LIFECYCLE_FORMATS,
+    feature: "tombstones",
   },
   {
     key: "distribute",
@@ -135,7 +123,7 @@ export const TABS: RepositoryTabDefinition[] = [
     label: "晋升 / 复制",
     labelEn: "Promote / replicate",
     authority: "administer",
-    formats: LIFECYCLE_FORMATS,
+    feature: "distribute",
   },
   {
     key: "apt-snapshots",
@@ -143,8 +131,7 @@ export const TABS: RepositoryTabDefinition[] = [
     label: "签名快照",
     labelEn: "Signed snapshots",
     authority: "administer",
-    formats: ["apt"],
-    hostedOnly: true,
+    feature: "apt-snapshots",
   },
   {
     key: "settings",
@@ -166,7 +153,7 @@ export const TABS: RepositoryTabDefinition[] = [
     label: "生命周期任务",
     labelEn: "Lifecycle jobs",
     authority: "administer",
-    formats: LIFECYCLE_AND_APT_FORMATS,
+    feature: "jobs",
   },
 ];
 
@@ -179,13 +166,7 @@ export function repositoryTabAvailable(
   repo: Repository,
 ) {
   return (
-    (!item.formats || item.formats.includes(repo.format)) &&
-    (!item.hostedOnly || repo.type === "hosted") &&
-    !(item.key === "publish" && repo.type === "proxy") &&
-    !(
-      item.key === "jobs" &&
-      formatDescriptor(repo.format)?.hostedOnlyJobs &&
-      repo.type !== "hosted"
-    )
+    !item.feature ||
+    supportsRepositoryFeature(repo.format, repo.type, item.feature)
   );
 }

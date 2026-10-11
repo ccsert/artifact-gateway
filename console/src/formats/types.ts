@@ -2,6 +2,15 @@ import type { Format, Repository } from "../client";
 
 type Localized = readonly [chinese: string, english: string];
 
+export type RepositoryFormatFeature =
+  | "publish"
+  | "retention"
+  | "security"
+  | "tombstones"
+  | "distribute"
+  | "jobs"
+  | "apt-snapshots";
+
 /** A copyable client endpoint for a group of this format. */
 export interface GroupEndpoint {
   value: string;
@@ -16,6 +25,13 @@ export interface GroupEndpoint {
  */
 export interface FormatDescriptor {
   format: Format;
+  /** Format-specific task entrypoints, keyed by the repository types that offer them. */
+  repositoryFeatures: Partial<
+    Record<
+      Exclude<RepositoryFormatFeature, "publish">,
+      readonly Repository["type"][]
+    >
+  >;
   /** Title of the artifact column in a repository's artifact table. */
   artifactColumn: Localized;
   /** Hint for the repository artifact search box. */

@@ -19,7 +19,14 @@ Console presents a format and where its features appear.
 adds a format to the API, the generated `Format` type grows and this table
 stops compiling until the format is described. A format string the Console
 does not know (a newer server) gets `undefined`, and pages fall back to
-their generic presentation.
+the unified `RepositoryFeatureUnavailable` state, with a Console-format
+support message rather than a misleading empty repository or endpoint 404.
+Public browse does not request artifact data for an unregistered format.
+
+`supportsRepositoryFeature(format, repoType, feature)` resolves repository
+task entrypoints from the descriptor's `repositoryFeatures` and publish-guide
+flag. The matrix includes hosted/proxy differences; operation permissions
+remain governed by the server's capabilities and effective access.
 
 ## Adding a format
 

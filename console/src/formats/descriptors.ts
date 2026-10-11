@@ -8,6 +8,13 @@ import {
 import type { FormatDescriptor } from "./types";
 
 const base = {
+  repositoryFeatures: {
+    retention: ["hosted"],
+    security: ["hosted"],
+    tombstones: ["hosted", "proxy"],
+    distribute: ["hosted", "proxy"],
+    jobs: ["hosted", "proxy"],
+  },
   packageVersions: false,
   versionColumns: false,
   pathAddressed: false,
@@ -175,6 +182,11 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
   apt: {
     ...base,
     format: "apt",
+    repositoryFeatures: {
+      security: ["hosted"],
+      jobs: ["hosted"],
+      "apt-snapshots": ["hosted"],
+    },
     artifactColumn: ["APT 路径", "APT path"],
     searchPlaceholder: [
       "按 dists/ 或 pool/ 路径过滤…",

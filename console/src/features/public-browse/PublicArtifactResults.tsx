@@ -20,6 +20,7 @@ import {
 } from "./publicArtifactRows";
 import type { PublicRepository } from "./types";
 import { formatDescriptor } from "../../formats";
+import { RepositoryFeatureUnavailable } from "../repository/RepositoryFeatureUnavailable";
 
 export interface PublicBrowseActions {
   artifactHref: (
@@ -91,7 +92,7 @@ export function PublicArtifactResults({
   protocolVersionFilter: string;
   actions: PublicBrowseActions;
 }) {
-  const { t } = usePreferences();
+  const { t, text } = usePreferences();
   const {
     artifactHref,
     openArtifact,
@@ -125,7 +126,8 @@ export function PublicArtifactResults({
     setSelectedConanReferences({});
   }, [selectedRepository?.id]);
 
-  const grouping = formatDescriptor(selectedRepository?.format)?.publicGrouping;
+  const descriptor = formatDescriptor(selectedRepository?.format);
+  const grouping = descriptor?.publicGrouping;
   const groupedItems =
     grouping === "mavenBuilds" ? mavenArtifactGroups(items ?? []) : null;
   const groupedConanItems =
@@ -136,6 +138,17 @@ export function PublicArtifactResults({
     selectedRepository,
     artifactHref,
   });
+
+  if (selectedRepository && !descriptor) {
+    return (
+      <PublicBrowseStateSurface>
+        <RepositoryFeatureUnavailable
+          feature={text("制品浏览", "Artifact browser")}
+          unsupportedFormat={selectedRepository.format}
+        />
+      </PublicBrowseStateSurface>
+    );
+  }
 
   return (
     <div className="grid gap-4">

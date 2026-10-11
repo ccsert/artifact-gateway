@@ -114,9 +114,8 @@ export function PublicBrowsePage() {
     });
   }, [catalogFormat, catalogQuery, repositories]);
 
-  const versionSource = formatDescriptor(
-    selectedRepository?.format,
-  )?.publicVersionSource;
+  const descriptor = formatDescriptor(selectedRepository?.format);
+  const versionSource = descriptor?.publicVersionSource;
   useEffect(() => {
     if (
       !artifactParam ||
@@ -259,7 +258,7 @@ export function PublicBrowsePage() {
         <div
           data-public-browse-workspace
           className={
-            selectedRepository
+            selectedRepository && descriptor
               ? "grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start"
               : ""
           }
@@ -376,7 +375,7 @@ export function PublicBrowsePage() {
               </div>
             </SectionBoundary>
           </section>
-          {selectedRepository && (
+          {selectedRepository && descriptor && (
             <aside className="lg:sticky lg:top-24">
               <SectionBoundary
                 resetKeys={[repositoryId]}

@@ -26,7 +26,7 @@ const LISTERS: Partial<Record<Format, ListArtifacts>> = {
 
 /**
  * The artifact list for a format: its own lister, or the shared package or
- * path listing its descriptor places it in. Unknown formats list nothing.
+ * path listing its descriptor places it in. Unknown formats have no lister.
  */
 export function artifactLister(
   format: string | undefined,
@@ -39,7 +39,7 @@ export function artifactLister(
   return undefined;
 }
 
-/** One page of a repository's artifacts; an unknown format lists nothing. */
+/** One page of a repository's artifacts; an unknown format reports unavailable. */
 export function listArtifactPage(
   format: string | undefined,
   request: ArtifactPageRequest,
@@ -47,5 +47,8 @@ export function listArtifactPage(
   const list = artifactLister(format);
   return list
     ? list(request)
-    : Promise.resolve({ items: [], nextPageToken: undefined, error: null });
+    : Promise.resolve({
+        items: [],
+        error: new Error(`Unsupported artifact format: ${format}`),
+      });
 }

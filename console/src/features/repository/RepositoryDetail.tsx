@@ -11,6 +11,8 @@ import {
   repositoryPermissions,
 } from "../../lib/authorization";
 import { formatViews } from "../../formats/views";
+import { formatDescriptor } from "../../formats";
+import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 const RepositoryArtifactsTab = lazy(async () => ({
   default: (await import("./RepositoryArtifactsTab")).RepositoryArtifactsTab,
 }));
@@ -155,6 +157,17 @@ export function RepositoryDetailPage() {
     );
   }
   if (!repo) return <Loading />;
+  if (!formatDescriptor(repo.format)) {
+    return (
+      <div className="ag-page-stack">
+        <PageHeader title={text("仓库详情", "Repository details")} />
+        <RepositoryFeatureUnavailable
+          feature={text("制品浏览", "Artifact browser")}
+          unsupportedFormat={repo.format}
+        />
+      </div>
+    );
+  }
   const PublishGuide = formatViews(repo.format).PublishGuide;
 
   const availableTabs = TABS.filter(

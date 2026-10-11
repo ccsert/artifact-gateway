@@ -24,6 +24,7 @@ import {
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
+import { RepositoryFeatureUnavailable } from "../repository/RepositoryFeatureUnavailable";
 
 const SEARCH_PAGE_SIZE = 100;
 
@@ -382,6 +383,14 @@ export function SearchPage() {
 
   const expandedRowRender = (tableRow: SearchTableRow) => {
     const row = tableRow.row;
+    if (!formatDescriptor(row.format)) {
+      return (
+        <RepositoryFeatureUnavailable
+          feature={text("制品详情", "Artifact detail")}
+          unsupportedFormat={row.format}
+        />
+      );
+    }
     if (isMavenGroup(row)) {
       const hit =
         row.hits.find(

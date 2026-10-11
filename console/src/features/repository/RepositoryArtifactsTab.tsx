@@ -510,6 +510,15 @@ export function RepositoryArtifactsTab({
     );
   };
 
+  if (!descriptor) {
+    return (
+      <RepositoryFeatureUnavailable
+        feature={text("制品浏览", "Artifact browser")}
+        unsupportedFormat={format}
+      />
+    );
+  }
+
   if (view === "directory" && supportsDirectory) {
     return (
       <div className="ag-artifact-browser">

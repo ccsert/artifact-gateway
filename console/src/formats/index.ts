@@ -4,13 +4,13 @@ import {
   decodeRawPathForDisplay,
 } from "../lib/rawPath";
 import { FORMAT_DESCRIPTORS } from "./descriptors";
-import type { FormatDescriptor } from "./types";
+import type { FormatDescriptor, RepositoryFormatFeature } from "./types";
 
-export type { FormatDescriptor } from "./types";
+export type { FormatDescriptor, RepositoryFormatFeature } from "./types";
 
 /**
  * The descriptor for a format, or `undefined` for one this Console does not
- * know (a newer server); callers show their generic presentation then.
+ * know (a newer server); callers show RepositoryFeatureUnavailable then.
  */
 export function formatDescriptor(
   format: string | undefined,
@@ -18,6 +18,21 @@ export function formatDescriptor(
   return format && Object.hasOwn(FORMAT_DESCRIPTORS, format)
     ? FORMAT_DESCRIPTORS[format as Format]
     : undefined;
+}
+
+/** Format-specific tasks; the server still gates each task's operations. */
+export function supportsRepositoryFeature(
+  format: string | undefined,
+  repositoryType: "hosted" | "proxy" | undefined,
+  feature: RepositoryFormatFeature,
+): boolean {
+  const descriptor = formatDescriptor(format);
+  if (!descriptor) return false;
+  if (feature === "publish")
+    return repositoryType === "hosted" && descriptor.publishGuide;
+  return (descriptor.repositoryFeatures[feature] ?? []).some(
+    (type) => type === repositoryType,
+  );
 }
 
 /** Packages listed one row per package with version pages. */

@@ -5,7 +5,9 @@ import {
   formatDescriptor,
   hasPackageVersions,
   supportsDirectoryBrowse,
+  supportsRepositoryFeature,
 } from "./index";
+import { listArtifactPage } from "./listers";
 
 const FORMATS = Object.keys(FORMAT_DESCRIPTORS) as Format[];
 const pick = (predicate: (format: Format) => boolean) =>
@@ -18,12 +20,60 @@ describe("format registry", () => {
     }
   });
 
-  it("leaves formats this Console does not know to the generic presentation", () => {
+  it("declares formats this Console does not know unavailable", () => {
     expect(formatDescriptor("nuget")).toBeUndefined();
     expect(formatDescriptor("toString")).toBeUndefined();
     expect(formatDescriptor(undefined)).toBeUndefined();
     expect(hasPackageVersions("nuget")).toBe(false);
     expect(supportsDirectoryBrowse("nuget", "hosted")).toBe(false);
+    expect(supportsRepositoryFeature("nuget", "hosted", "publish")).toBe(false);
+  });
+
+  it("does not report an unknown format as an empty successful listing", async () => {
+    const page = await listArtifactPage("nuget", {
+      repositoryId: "future",
+      query: "",
+      pageSize: 50,
+    });
+    expect(page.error).toBeInstanceOf(Error);
+  });
+
+  it("preserves repository task entrypoints for each repository type", () => {
+    const offered = (
+      type: "hosted" | "proxy",
+      feature: Parameters<typeof supportsRepositoryFeature>[2],
+    ) => pick((format) => supportsRepositoryFeature(format, type, feature));
+    const lifecycle = [
+      "cargo",
+      "conan",
+      "go",
+      "maven",
+      "npm",
+      "oci",
+      "pypi",
+      "raw",
+    ];
+    expect(offered("hosted", "retention")).toEqual(lifecycle);
+    expect(offered("proxy", "retention")).toEqual([]);
+    expect(offered("hosted", "security")).toEqual(["apt", ...lifecycle]);
+    expect(offered("proxy", "security")).toEqual([]);
+    for (const type of ["hosted", "proxy"] as const) {
+      expect(offered(type, "tombstones")).toEqual(lifecycle);
+      expect(offered(type, "distribute")).toEqual(lifecycle);
+      expect(offered(type, "jobs")).toEqual(
+        type === "hosted" ? ["apt", ...lifecycle] : lifecycle,
+      );
+    }
+    expect(offered("hosted", "apt-snapshots")).toEqual(["apt"]);
+    expect(offered("proxy", "apt-snapshots")).toEqual([]);
+    expect(offered("hosted", "publish")).toEqual([
+      "cargo",
+      "maven",
+      "npm",
+      "oci",
+      "pypi",
+    ]);
+    expect(offered("proxy", "publish")).toEqual([]);
   });
 
   // The traits replace inline format checks; these pin them to the sets those
