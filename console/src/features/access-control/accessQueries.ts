@@ -19,6 +19,7 @@ import {
 import type {
   AnonymousAccessPolicy,
   RepositoryGrantRecord,
+  RepositoryPage,
 } from "../../client";
 import { unwrap } from "../../lib/query/client";
 import { accessKeys } from "../../lib/query/keys";
@@ -77,12 +78,28 @@ export function useRepositoryGrants(repositoryId: string) {
 }
 
 /** Repositories a grant can name, in every state; callers filter. */
-export function useAccessRepositories() {
+function activeRepositories(data: RepositoryPage): RepositoryPage {
+  return {
+    ...data,
+    items: data.items.filter((repository) => repository.state === "active"),
+  };
+}
+
+export async function refetchAccessSources(
+  requests: readonly Promise<unknown>[],
+) {
+  const results = await Promise.allSettled(requests);
+  for (const result of results)
+    if (result.status === "rejected") throw result.reason;
+}
+
+export function useAccessRepositories({ activeOnly = false } = {}) {
   return useQuery({
     queryKey: accessKeys.directory("repositories"),
     queryFn: ({ signal }) =>
       unwrap(listRepositories({ query: { pageSize: 200 }, signal })),
     staleTime: ALWAYS_REVALIDATE,
+    select: activeOnly ? activeRepositories : undefined,
   });
 }
 
@@ -138,22 +155,30 @@ export function usePrincipalDirectory({ enabled = true } = {}) {
  */
 export function useAccessDirectory() {
   const { users, apiKeys, serviceAccounts } = usePrincipalDirectory();
-  const repositories = useAccessRepositories();
+  const repositories = useAccessRepositories({ activeOnly: true });
 
   const required = [users, apiKeys, repositories];
   return {
     users: users.data?.items ?? [],
     apiKeys: apiKeys.data?.items ?? [],
     serviceAccounts: serviceAccounts.data?.items ?? [],
-    repositories: (repositories.data?.items ?? []).filter(
-      (repository) => repository.state === "active",
-    ),
+    repositories: repositories.data?.items ?? [],
+    repositoryError: repositories.error,
+    recoveryKeys: [
+      users.data,
+      apiKeys.data,
+      serviceAccounts.data,
+      repositories.data,
+    ],
     loading: required.some((query) => query.isPending),
     error: required.find((query) => query.error)?.error ?? null,
     serviceAccountsError: serviceAccounts.error ?? null,
-    retry: () => {
-      for (const query of [...required, serviceAccounts]) void query.refetch();
-    },
+    retry: () =>
+      refetchAccessSources(
+        [...required, serviceAccounts].map((query) =>
+          query.refetch({ throwOnError: true }),
+        ),
+      ),
   };
 }
 

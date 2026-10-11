@@ -1,27 +1,20 @@
-import { useMemo } from "react";
 import { Tabs } from "antd";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "../../components/ui/Layout";
-import { MetricStrip } from "../../components/ui/ConsolePrimitives";
 import { SectionBoundary } from "../../components/ui/SectionBoundary";
 import { useAuth } from "../../lib/auth";
 import { platformCapabilities } from "../../lib/authorization";
-import {
-  isActiveApiKeyPrincipal,
-  isActiveUserPrincipal,
-} from "../../lib/accessPrincipals";
 import { usePreferences } from "../../lib/preferences";
 import { AccessEvaluator } from "./AccessEvaluator";
-import { accessControlTabFromQuery, scopeLabel } from "./accessModel";
+import { accessControlTabFromQuery } from "./accessModel";
 import {
   useAccessDirectory,
   useAnonymousPolicy,
   useGrantRows,
+  refetchAccessSources,
 } from "./accessQueries";
-import {
-  AuthorizationTemplatesPanel,
-  type PrincipalOption,
-} from "./AuthorizationTemplatesPanel";
+import { AccessTemplates } from "./AccessTemplates";
+import { AccessGrantMetrics } from "./AccessGrantMetrics";
 import { AuthorizationRolesPanel } from "./AuthorizationRolesPanel";
 import { GrantsPanel } from "./GrantsPanel";
 import { PublicAccessCard } from "./PublicAccessCard";
@@ -38,102 +31,34 @@ export {
  */
 export function AccessControlPage() {
   const { identity } = useAuth();
-  const { locale, text } = usePreferences();
+  const { t } = usePreferences();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = accessControlTabFromQuery(searchParams.get("tab"));
-  const english = locale === "en-US";
   const canManageAnonymousPolicy = platformCapabilities(identity).platformAdmin;
   const grantsQuery = useGrantRows();
   const rows = grantsQuery.data ?? null;
   const anonymousPolicyQuery = useAnonymousPolicy();
   const directory = useAccessDirectory();
   const { users, apiKeys, serviceAccounts } = directory;
-  const publicRepositoryCount = directory.repositories.filter(
-    (repository) => repository.anonymousRead,
-  ).length;
-
-  const principalOptions = useMemo<PrincipalOption[]>(() => {
-    const options: PrincipalOption[] = [];
-    const seen = new Set<string>();
-    const add = (value: string, label: string) => {
-      const normalized = value.trim();
-      if (!normalized || seen.has(normalized)) return;
-      seen.add(normalized);
-      options.push({ value: normalized, label });
-    };
-
-    if (identity?.actor) {
-      add(
-        identity.actor,
-        `${text("当前身份", "Current identity")} · ${identity.actor}`,
-      );
-    }
-    users
-      .filter(isActiveUserPrincipal)
-      .forEach((user) =>
-        add(
-          `user:${user.name}`,
-          `${text("用户", "User")} · ${user.name}${
-            user.displayName ? ` · ${user.displayName}` : ""
-          }`,
-        ),
-      );
-    apiKeys
-      .filter((key) => isActiveApiKeyPrincipal(key))
-      .forEach((key) => add(`api-key:${key.id}`, `API Key · ${key.name}`));
-    serviceAccounts
-      .filter((account) => account.state === "active")
-      .forEach((account) =>
-        add(
-          `service-account:${account.id}`,
-          `${text("服务账号", "Service account")} · ${account.name}`,
-        ),
-      );
-    return options;
-  }, [apiKeys, identity, serviceAccounts, text, users]);
-
+  const retryGrants = () => grantsQuery.refetch({ throwOnError: true });
+  const retryPolicies = () =>
+    refetchAccessSources([
+      anonymousPolicyQuery.refetch({ throwOnError: true }),
+      directory.retry(),
+    ]);
   const grants = rows ?? [];
-  const principalCount = new Set(grants.map((grant) => grant.principal)).size;
-  const adminCount = grants.filter(
-    (grant) => scopeLabel(grant.scopes, english).key === "admin",
-  ).length;
-  const writeCount = grants.filter(
-    (grant) => scopeLabel(grant.scopes, english).key === "write",
-  ).length;
 
   return (
     <div className="ag-page-stack">
       <PageHeader
-        title={text("访问控制", "Access control")}
-        description={text(
-          "检查主体的最终权限，集中查看匿名策略与逐仓库授权",
-          "Evaluate effective permissions and review anonymous and repository access rules",
+        title={t("access.accessControl")}
+        description={t(
+          "access.evaluateEffectivePermissionsAndReviewAnonymousAndRepositoryAccess",
         )}
       />
-      <MetricStrip
-        items={[
-          {
-            label: text("授权主体", "Principals"),
-            value: principalCount,
-            hint: text(
-              "用户、API Key 或其他主体",
-              "Users, API keys, or other principals",
-            ),
-          },
-          {
-            label: text("写入授权", "Write grants"),
-            value: writeCount,
-            hint: text("可发布或编辑制品", "Can publish or edit artifacts"),
-            tone: writeCount ? "warning" : "default",
-          },
-          {
-            label: text("管理员授权", "Admin grants"),
-            value: adminCount,
-            hint: text("具备授权与删除能力", "Can manage grants and delete"),
-            tone: adminCount ? "danger" : "success",
-          },
-        ]}
-      />
+      <SectionBoundary recoveryKeys={[rows]} onReset={retryGrants}>
+        <AccessGrantMetrics rows={grants} />
+      </SectionBoundary>
       <Tabs
         className="ag-access-tabs"
         size="small"
@@ -154,21 +79,32 @@ export function AccessControlPage() {
         items={[
           {
             key: "grants",
-            label: text(
-              `授权记录（${grants.length}）`,
-              `Grants (${grants.length})`,
-            ),
+            label: t("access.grants", { grants: String(grants.length) }),
             children: (
-              <SectionBoundary resetKeys={[activeTab]}>
-                <GrantsPanel rows={rows} error={grantsQuery.error} />
+              <SectionBoundary
+                resetKeys={[activeTab]}
+                recoveryKeys={[rows]}
+                onReset={retryGrants}
+              >
+                <GrantsPanel
+                  rows={rows}
+                  error={grantsQuery.error}
+                  onRetry={() => {
+                    void retryGrants().catch(() => undefined);
+                  }}
+                />
               </SectionBoundary>
             ),
           },
           {
             key: "evaluate",
-            label: text("权限检查", "Access evaluation"),
+            label: t("access.accessEvaluation"),
             children: (
-              <SectionBoundary resetKeys={[activeTab]}>
+              <SectionBoundary
+                resetKeys={[activeTab]}
+                recoveryKeys={directory.recoveryKeys}
+                onReset={directory.retry}
+              >
                 <AccessEvaluator
                   users={users}
                   apiKeys={apiKeys}
@@ -177,30 +113,54 @@ export function AccessControlPage() {
                   evaluatorOptionsLoading={directory.loading}
                   evaluatorOptionsError={directory.error}
                   serviceAccountsError={directory.serviceAccountsError}
-                  onRetryDirectory={directory.retry}
+                  onRetryDirectory={() => {
+                    void directory.retry().catch(() => undefined);
+                  }}
                 />
               </SectionBoundary>
             ),
           },
           {
             key: "policies",
-            label: text("策略与模板", "Policies & templates"),
+            label: t("access.policiesTemplates"),
             children: (
               <div className="ag-page-stack">
-                <SectionBoundary resetKeys={[activeTab]}>
+                <SectionBoundary
+                  resetKeys={[activeTab]}
+                  recoveryKeys={[
+                    anonymousPolicyQuery.data,
+                    ...directory.recoveryKeys,
+                  ]}
+                  onReset={retryPolicies}
+                >
                   <PublicAccessCard
                     anonymousPolicy={anonymousPolicyQuery.data ?? null}
                     loadError={anonymousPolicyQuery.error}
                     canManageAnonymousPolicy={canManageAnonymousPolicy}
-                    publicRepositoryCount={publicRepositoryCount}
-                    repositoryCount={directory.repositories.length}
+                    repositories={directory.repositories}
+                    directoryError={directory.repositoryError}
+                    onRetry={() => {
+                      void retryPolicies().catch(() => undefined);
+                    }}
                   />
                 </SectionBoundary>
                 <AuthorizationRolesPanel />
-                <AuthorizationTemplatesPanel
-                  repositories={directory.repositories}
-                  principalOptions={principalOptions}
-                />
+                <SectionBoundary
+                  resetKeys={[activeTab]}
+                  recoveryKeys={directory.recoveryKeys}
+                  onReset={directory.retry}
+                >
+                  <AccessTemplates
+                    users={users}
+                    apiKeys={apiKeys}
+                    serviceAccounts={serviceAccounts}
+                    repositories={directory.repositories}
+                    directoryError={directory.error}
+                    onRetry={() => {
+                      void directory.retry().catch(() => undefined);
+                    }}
+                  />
+                </SectionBoundary>
               </div>
             ),
           },

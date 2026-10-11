@@ -1,3 +1,9 @@
+import { repositoryGrantsZhCN } from "../messages/repository-grants.zh-CN";
+import { repositoryGrantsEnUS } from "../messages/repository-grants.en-US";
+import { accessZhCN } from "../messages/access.zh-CN";
+import { accessEnUS } from "../messages/access.en-US";
+import { identityZhCN } from "../messages/identity.zh-CN";
+import { identityEnUS } from "../messages/identity.en-US";
 import { publicBrowseZhCN } from "../messages/public-browse.zh-CN";
 import { publicBrowseEnUS } from "../messages/public-browse.en-US";
 import {
@@ -48,6 +54,9 @@ const LOCALE_KEY = "ag.console.locale";
 
 const zhCN = {
   ...publicBrowseZhCN,
+  ...repositoryGrantsZhCN,
+  ...accessZhCN,
+  ...identityZhCN,
   "common.cancel": "取消",
   "common.save": "保存",
   "common.loading": "正在加载…",
@@ -151,6 +160,9 @@ type MessageKey = keyof typeof zhCN;
 
 const enUS: Record<MessageKey, string> = {
   ...publicBrowseEnUS,
+  ...repositoryGrantsEnUS,
+  ...accessEnUS,
+  ...identityEnUS,
   "common.cancel": "Cancel",
   "common.save": "Save",
   "common.loading": "Loading…",

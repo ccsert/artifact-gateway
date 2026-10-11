@@ -63,7 +63,7 @@ export function UserRepositoryAccessPanel({
   username,
 }: UserRepositoryAccessPanelProps) {
   const { message } = App.useApp();
-  const { text } = usePreferences();
+  const { t, text } = usePreferences();
   const principal = `user:${username}`;
   const invalidate = useInvalidateAccess();
   const grantsQuery = useRepositoryGrantRecords();
@@ -125,7 +125,7 @@ export function UserRepositoryAccessPanel({
         });
         if (requestError && !isNotFound(requestError)) throw requestError;
       }
-      void message.success(text("仓库授权已移除", "Repository grant removed"));
+      void message.success(t("identity.repositoryGrantRemoved"));
       await load();
     } catch (caught) {
       setRemoveError(caught);
@@ -143,22 +143,19 @@ export function UserRepositoryAccessPanel({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-fg-strong">
-            {text("仓库授权", "Repository access")}
+            {t("identity.repositoryAccess")}
           </h2>
           <p className="mt-1 text-xs text-fg-tertiary">
-            {text(
-              "单独授予该用户仓库的读取、写入、管理或制品情报权限，可限定资源范围；全局角色不受影响。",
-              "Grant this user read, write, admin, or artifact intelligence access to individual repositories, optionally limited to a resource scope. Global roles are unaffected.",
-            )}
+            {t("identity.grantThisUserReadWriteAdminOrArtifactIntelligence")}
           </p>
         </div>
         <Space size={6}>
-          <Tooltip title={text("刷新仓库授权", "Refresh repository grants")}>
+          <Tooltip title={t("identity.refreshRepositoryGrants")}>
             <Button
               size="small"
               icon={<ReloadOutlined />}
               loading={loading}
-              aria-label={text("刷新仓库授权", "Refresh repository grants")}
+              aria-label={t("identity.refreshRepositoryGrants")}
               onClick={() => void load()}
             />
           </Tooltip>
@@ -169,7 +166,7 @@ export function UserRepositoryAccessPanel({
             disabled={repositoriesError !== null}
             onClick={() => openEditor(null)}
           >
-            {text("添加授权", "Add grant")}
+            {t("identity.addGrant")}
           </Button>
         </Space>
       </div>
@@ -181,10 +178,7 @@ export function UserRepositoryAccessPanel({
         <Alert
           type="warning"
           showIcon
-          title={text(
-            "仓库列表暂时不可用，无法新增授权；已有授权仍可查看和移除。",
-            "The repository list is unavailable, so new grants cannot be added. Existing grants can still be viewed and removed.",
-          )}
+          title={t("identity.theRepositoryListIsUnavailableSoNewGrantsCannot")}
         />
       ) : null}
       {removeError !== null ? <ErrorBanner error={removeError} /> : null}
@@ -192,14 +186,8 @@ export function UserRepositoryAccessPanel({
       {error === null && items === null ? <Loading /> : null}
       {error === null && items !== null && rows.length === 0 ? (
         <EmptyState
-          title={text(
-            "该用户暂无仓库授权",
-            "This user has no repository grants",
-          )}
-          hint={text(
-            "点击「添加授权」选择一个仓库并配置权限；授权会立即生效。",
-            "Use Add grant to pick a repository and configure permissions. The grant takes effect immediately.",
-          )}
+          title={t("identity.thisUserHasNoRepositoryGrants")}
+          hint={t("identity.useAddGrantToPickARepositoryAndConfigure")}
         />
       ) : null}
       {rows.length > 0 ? (
@@ -225,17 +213,16 @@ export function UserRepositoryAccessPanel({
                   </Badge>
                 </div>
                 <div className="mt-1 font-mono text-xs text-fg-tertiary">
-                  {record.resourcePrefix ||
-                    text("整个仓库", "Entire repository")}
+                  {record.resourcePrefix || t("identity.entireRepository")}
                 </div>
               </div>
               <Space size={0}>
-                <Tooltip title={text("编辑该条授权", "Edit this grant")}>
+                <Tooltip title={t("identity.editThisGrant")}>
                   <Button
                     type="text"
                     size="small"
                     icon={<EditOutlined />}
-                    aria-label={text("编辑该条授权", "Edit this grant")}
+                    aria-label={t("identity.editThisGrant")}
                     onClick={() =>
                       openEditor({
                         repositoryId: record.repositoryId,
@@ -245,32 +232,27 @@ export function UserRepositoryAccessPanel({
                   />
                 </Tooltip>
                 <Popconfirm
-                  title={text(
-                    "移除该用户的仓库授权？",
-                    "Remove this user's grant?",
+                  title={t("identity.removeThisUserSGrant")}
+                  description={t(
+                    "identity.afterRemovalEveryRepositoryGrantForOnIsDeleted",
+                    {
+                      username: String(username),
+                      repositoryName: String(record.repositoryName),
+                    },
                   )}
-                  description={text(
-                    `移除后，${username} 在「${record.repositoryName}」上的全部仓库授权都会被删除，其他用户不受影响。`,
-                    `After removal, every repository grant for ${username} on "${record.repositoryName}" is deleted. Other users are unaffected.`,
-                  )}
-                  okText={text("移除", "Remove")}
-                  cancelText={text("取消", "Cancel")}
+                  okText={t("identity.remove")}
+                  cancelText={t("identity.cancel")}
                   okButtonProps={{ danger: true }}
                   onConfirm={() => void remove(record)}
                 >
-                  <Tooltip
-                    title={text("移除仓库授权", "Remove repository grant")}
-                  >
+                  <Tooltip title={t("identity.removeRepositoryGrant")}>
                     <Button
                       danger
                       type="text"
                       size="small"
                       icon={<DeleteOutlined />}
                       loading={removing === recordKey(record)}
-                      aria-label={text(
-                        "移除仓库授权",
-                        "Remove repository grant",
-                      )}
+                      aria-label={t("identity.removeRepositoryGrant")}
                     />
                   </Tooltip>
                 </Popconfirm>

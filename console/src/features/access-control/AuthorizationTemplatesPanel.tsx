@@ -1,3 +1,4 @@
+import type { AccessMessageKey } from "../../messages/access.zh-CN";
 import { useMemo, useState } from "react";
 import { Button, Dropdown, Popconfirm, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -39,47 +40,44 @@ export type { PrincipalOption } from "./TemplateEditorDialog";
 
 type TemplatePreset = {
   key: string;
-  name: string;
-  nameEn: string;
-  description: string;
-  descriptionEn: string;
+  name: AccessMessageKey;
+  description: AccessMessageKey;
   grants: Array<Pick<DraftGrant, "principal" | "scopes" | "resourcePrefix">>;
 };
 
 export const AUTHORIZATION_TEMPLATE_PRESETS: TemplatePreset[] = [
   {
     key: "read-only-consumer",
-    name: "团队只读",
-    nameEn: "Team read-only",
-    description: "适合下载、搜索和浏览制品的主体。",
-    descriptionEn:
-      "For principals that only download, search, and browse artifacts.",
+    name: "access.teamReadOnly",
+
+    description: "access.forPrincipalsThatOnlyDownloadSearchAndBrowseArtifacts",
+
     grants: [{ principal: "", scopes: ["repositories:read"] }],
   },
   {
     key: "release-publisher",
-    name: "发布机器人",
-    nameEn: "Release publisher",
-    description: "适合 CI 发布和编辑制品的主体。",
-    descriptionEn: "For CI principals that publish and edit artifacts.",
+    name: "access.releasePublisher",
+
+    description: "access.forCiPrincipalsThatPublishAndEditArtifacts",
+
     grants: [{ principal: "", scopes: ["repositories:write"] }],
   },
   {
     key: "security-bot",
-    name: "制品情报机器人",
-    nameEn: "Artifact intelligence bot",
-    description: "只允许写入安全与制品情报元数据。",
-    descriptionEn:
-      "Only allows security and artifact-intelligence metadata writes.",
+    name: "access.artifactIntelligenceBot",
+
+    description:
+      "access.onlyAllowsSecurityAndArtifactIntelligenceMetadataWrites",
+
     grants: [{ principal: "", scopes: ["repositories:intelligence"] }],
   },
   {
     key: "repository-owner",
-    name: "仓库管理员",
-    nameEn: "Repository owner",
-    description: "适合负责仓库配置、授权和制品生命周期的主体。",
-    descriptionEn:
-      "For principals responsible for repository configuration, grants, and lifecycle.",
+    name: "access.repositoryOwner",
+
+    description:
+      "access.forPrincipalsResponsibleForRepositoryConfigurationGrantsAndLifecycle",
+
     grants: [{ principal: "", scopes: ["repositories:admin"] }],
   },
 ];
@@ -107,7 +105,7 @@ export function AuthorizationTemplatesPanel({
   repositories,
   principalOptions = [],
 }: Props) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const templatesQuery = useAuthorizationTemplates();
   const rolesQuery = useAuthorizationRoles();
   const templates = templatesQuery.data ?? null;
@@ -164,8 +162,8 @@ export function AuthorizationTemplatesPanel({
     if (!preset) return;
     openEditor({
       template: null,
-      name: text(preset.name, preset.nameEn),
-      description: text(preset.description, preset.descriptionEn),
+      name: t(preset.name),
+      description: t(preset.description),
       grants: preset.grants.map((grant) => ({
         ...grant,
         key: `${Date.now()}-${Math.random()}`,
@@ -177,12 +175,8 @@ export function AuthorizationTemplatesPanel({
     key: preset.key,
     label: (
       <div className="min-w-[220px]">
-        <div className="text-xs font-medium">
-          {text(preset.name, preset.nameEn)}
-        </div>
-        <div className="text-xs text-fg-tertiary">
-          {text(preset.description, preset.descriptionEn)}
-        </div>
+        <div className="text-xs font-medium">{t(preset.name)}</div>
+        <div className="text-xs text-fg-tertiary">{t(preset.description)}</div>
       </div>
     ),
   }));
@@ -197,19 +191,19 @@ export function AuthorizationTemplatesPanel({
 
   const columns: ColumnsType<AuthorizationTemplate> = [
     {
-      title: text("模板", "Template"),
+      title: t("access.template"),
       key: "template",
       render: (_, template) => (
         <div>
           <Typography.Text strong>{template.name}</Typography.Text>
           <div className="text-xs text-fg-tertiary">
-            {template.description || text("无描述", "No description")}
+            {template.description || t("access.noDescription")}
           </div>
         </div>
       ),
     },
     {
-      title: text("规则", "Rules"),
+      title: t("access.rules"),
       dataIndex: "grants",
       width: 100,
       render: (grants: AuthorizationTemplateGrant[]) => (
@@ -217,13 +211,13 @@ export function AuthorizationTemplatesPanel({
       ),
     },
     {
-      title: text("更新时间", "Updated"),
+      title: t("access.updated"),
       dataIndex: "updatedAt",
       width: 190,
       render: (value: string) => new Date(value).toLocaleString(),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("access.actions"),
       key: "actions",
       width: 230,
       render: (_, template) => (
@@ -233,7 +227,7 @@ export function AuthorizationTemplatesPanel({
             icon={<EditOutlined />}
             onClick={() => openEdit(template)}
           >
-            {text("编辑", "Edit")}
+            {t("access.edit")}
           </Button>
           <Button
             size="small"
@@ -248,10 +242,10 @@ export function AuthorizationTemplatesPanel({
               }))
             }
           >
-            {text("应用", "Apply")}
+            {t("access.apply")}
           </Button>
           <Popconfirm
-            title={text("删除此模板？", "Delete this template?")}
+            title={t("access.deleteThisTemplate")}
             onConfirm={async () => {
               const result = await deleteAuthorizationTemplate({
                 path: { templateId: template.id },
@@ -259,14 +253,14 @@ export function AuthorizationTemplatesPanel({
               if (result.error) setActionError(result.error);
               else await load();
             }}
-            okText={text("删除", "Delete")}
-            cancelText={text("取消", "Cancel")}
+            okText={t("access.delete")}
+            cancelText={t("access.cancel")}
           >
             <Button
               danger
               size="small"
               icon={<DeleteOutlined />}
-              aria-label={text("删除模板", "Delete template")}
+              aria-label={t("access.deleteTemplate")}
             />
           </Popconfirm>
         </Space>
@@ -277,7 +271,7 @@ export function AuthorizationTemplatesPanel({
   return (
     <Card bodyClassName="p-0">
       <CardHeader
-        title={text("授权模板", "Authorization templates")}
+        title={t("access.authorizationTemplates")}
         extra={
           <Space>
             <Dropdown
@@ -288,21 +282,18 @@ export function AuthorizationTemplatesPanel({
               }}
             >
               <Button icon={<AppstoreOutlined />}>
-                {text("内置模板", "Built-in templates")} <DownOutlined />
+                {t("access.builtInTemplates")} <DownOutlined />
               </Button>
             </Dropdown>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              {text("新建模板", "New template")}
+              {t("access.newTemplate")}
             </Button>
           </Space>
         }
       />
       <div className="px-5 py-3 text-xs text-fg-tertiary">
         <SafetyCertificateOutlined className="mr-2 text-[var(--ag-content-tertiary)]" />
-        {text(
-          "模板只保存可复用规则，不会自动修改仓库；应用时会检查仓库当前版本。",
-          "Templates store reusable rules only. Applying one updates a repository with optimistic version checks.",
-        )}
+        {t("access.templatesStoreReusableRulesOnlyApplyingOneUpdatesA")}
       </div>
       {error ? (
         <div className="px-5 pb-4">
@@ -313,11 +304,8 @@ export function AuthorizationTemplatesPanel({
       ) : templates.length === 0 ? (
         <EmptyState
           compact
-          title={text("尚未创建授权模板", "No authorization templates yet")}
-          hint={text(
-            "模板适合复用一组主体、权限和资源前缀规则。",
-            "Templates reuse a set of principal, scope, and resource-prefix rules.",
-          )}
+          title={t("access.noAuthorizationTemplatesYet")}
+          hint={t("access.templatesReuseASetOfPrincipalScopeAndResource")}
         />
       ) : (
         <ConsoleTable<AuthorizationTemplate>

@@ -38,7 +38,7 @@ interface UserSessionsPanelProps {
 export function UserSessionsPanel({ userId }: UserSessionsPanelProps) {
   const { message } = App.useApp();
   const { token } = theme.useToken();
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const queryClient = useQueryClient();
   const [includeInactive, setIncludeInactive] = useState(false);
   const sessionsQuery = useUserSessions(userId, includeInactive);
@@ -62,8 +62,7 @@ export function UserSessionsPanel({ userId }: UserSessionsPanelProps) {
       });
       if (requestError || !data) {
         setActionError(
-          requestError ??
-            new Error(text("撤销会话失败", "Failed to revoke session")),
+          requestError ?? new Error(t("identity.failedToRevokeSession")),
         );
         return;
       }
@@ -77,7 +76,7 @@ export function UserSessionsPanel({ userId }: UserSessionsPanelProps) {
               : current.items.filter((item) => item.id !== data.id),
           },
       );
-      void message.success(text("会话已撤销", "Session revoked"));
+      void message.success(t("identity.sessionRevoked"));
     } catch (nextError) {
       setActionError(nextError);
     } finally {
@@ -90,32 +89,29 @@ export function UserSessionsPanel({ userId }: UserSessionsPanelProps) {
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">
-            {text("活动会话", "User sessions")}
+            {t("identity.userSessions")}
           </h2>
           <Typography.Text type="secondary" className="text-xs">
-            {text(
-              "单独撤销异常客户端；历史记录会在到期后保留 30 天。",
-              "Revoke an individual client. Expired history is retained for 30 days.",
-            )}
+            {t("identity.revokeAnIndividualClientExpiredHistoryIsRetainedFor")}
           </Typography.Text>
         </div>
         <Space size={8} wrap>
           <Space size={6}>
             <Typography.Text type="secondary" className="text-xs">
-              {text("显示历史", "Show history")}
+              {t("identity.showHistory")}
             </Typography.Text>
             <Switch
               size="small"
               checked={includeInactive}
               onChange={setIncludeInactive}
-              aria-label={text("显示失效会话", "Show inactive sessions")}
+              aria-label={t("identity.showInactiveSessions")}
             />
           </Space>
-          <Tooltip title={text("刷新会话", "Refresh sessions")}>
+          <Tooltip title={t("identity.refreshSessions")}>
             <Button
               size="small"
               icon={<ReloadOutlined />}
-              aria-label={text("刷新会话", "Refresh sessions")}
+              aria-label={t("identity.refreshSessions")}
               onClick={() => void load()}
             />
           </Tooltip>
@@ -138,10 +134,11 @@ export function UserSessionsPanel({ userId }: UserSessionsPanelProps) {
         ) : items.length === 0 ? (
           <EmptyState
             compact
-            title={text(
-              includeInactive ? "没有会话记录" : "当前没有活动会话",
-              includeInactive ? "No session history" : "No active sessions",
-            )}
+            title={
+              includeInactive
+                ? t("identity.noSessionHistory")
+                : t("identity.noActiveSessions")
+            }
           />
         ) : (
           items.map((session, index) => {
@@ -172,56 +169,55 @@ export function UserSessionsPanel({ userId }: UserSessionsPanelProps) {
                     >
                       {session.kind === "oidc"
                         ? "OIDC"
-                        : text("本地登录", "Local sign-in")}
+                        : t("identity.localSignIn")}
                     </Badge>
                     {session.current ? (
-                      <Tag color="success">{text("当前", "Current")}</Tag>
+                      <Tag color="success">{t("identity.current")}</Tag>
                     ) : null}
                     {session.revokedAt ? (
-                      <Tag>{text("已撤销", "Revoked")}</Tag>
+                      <Tag>{t("identity.revoked2")}</Tag>
                     ) : expired ? (
-                      <Tag>{text("已过期", "Expired")}</Tag>
+                      <Tag>{t("identity.expired")}</Tag>
                     ) : null}
                   </div>
                   <Typography.Text
                     className="block max-w-[520px]"
                     ellipsis={{ tooltip: session.userAgent || undefined }}
                   >
-                    {session.userAgent || text("未知客户端", "Unknown client")}
+                    {session.userAgent || t("identity.unknownClient")}
                   </Typography.Text>
                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
                     <Typography.Text type="secondary">
-                      {text("地址", "Address")}：
-                      {session.ipAddress || text("未知", "Unknown")}
+                      {t("identity.address")}：
+                      {session.ipAddress || t("identity.unknown")}
                     </Typography.Text>
                     <Typography.Text type="secondary">
-                      {text("创建", "Created")}：
+                      {t("identity.created2")}：
                       {formatDate(session.createdAt, locale)}
                     </Typography.Text>
                     <Typography.Text type="secondary">
-                      {text("到期", "Expires")}：
+                      {t("identity.expires2")}：
                       {formatDate(session.expiresAt, locale)}
                     </Typography.Text>
                   </div>
                 </div>
                 <div className="shrink-0">
                   <Popconfirm
-                    title={text("撤销这个会话？", "Revoke this session?")}
-                    description={text(
+                    title={t("identity.revokeThisSession")}
+                    description={
                       session.current
-                        ? "这是当前会话，撤销后需要重新登录。"
-                        : "对应客户端的登录状态将立即失效。",
-                      session.current
-                        ? "This is the current session. You will need to sign in again."
-                        : "The corresponding client will be signed out immediately.",
-                    )}
-                    okText={text("撤销", "Revoke")}
-                    cancelText={text("取消", "Cancel")}
+                        ? t("identity.thisIsTheCurrentSessionYouWillNeedTo")
+                        : t(
+                            "identity.theCorrespondingClientWillBeSignedOutImmediately",
+                          )
+                    }
+                    okText={t("identity.revoke4")}
+                    cancelText={t("identity.cancel")}
                     okButtonProps={{ danger: true }}
                     disabled={inactive}
                     onConfirm={() => revoke(session)}
                   >
-                    <Tooltip title={text("撤销会话", "Revoke session")}>
+                    <Tooltip title={t("identity.revokeSession")}>
                       <Button
                         danger
                         type="text"
@@ -229,7 +225,7 @@ export function UserSessionsPanel({ userId }: UserSessionsPanelProps) {
                         icon={<StopOutlined />}
                         loading={revoking === session.id}
                         disabled={inactive}
-                        aria-label={text("撤销会话", "Revoke session")}
+                        aria-label={t("identity.revokeSession")}
                       />
                     </Tooltip>
                   </Popconfirm>

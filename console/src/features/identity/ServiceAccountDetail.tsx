@@ -53,10 +53,10 @@ export function ServiceAccountDetail({
   onRevoke: (credential: ServiceAccountCredential) => void;
   onToggleState: () => void;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const columns: ColumnsType<ServiceAccountCredential> = [
     {
-      title: text("凭据", "Credential"),
+      title: t("identity.credential"),
       dataIndex: "name",
       key: "name",
       render: (name: string) => (
@@ -67,7 +67,7 @@ export function ServiceAccountDetail({
       ),
     },
     {
-      title: text("状态", "State"),
+      title: t("identity.state"),
       key: "state",
       width: 120,
       render: (_value, credential) => (
@@ -75,7 +75,7 @@ export function ServiceAccountDetail({
       ),
     },
     {
-      title: text("到期时间", "Expires"),
+      title: t("identity.expires"),
       dataIndex: "expiresAt",
       key: "expiresAt",
       width: 180,
@@ -86,7 +86,7 @@ export function ServiceAccountDetail({
       ),
     },
     {
-      title: text("最后使用", "Last used"),
+      title: t("identity.lastUsed"),
       dataIndex: "lastUsedAt",
       key: "lastUsedAt",
       width: 180,
@@ -97,7 +97,7 @@ export function ServiceAccountDetail({
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("identity.actions"),
       key: "actions",
       align: "right",
       width: 92,
@@ -107,13 +107,12 @@ export function ServiceAccountDetail({
             danger
             type="text"
             size="small"
-            aria-label={text(
-              `吊销 ${credential.name}`,
-              `Revoke ${credential.name}`,
-            )}
+            aria-label={t("identity.revoke2", {
+              credential: String(credential.name),
+            })}
             onClick={() => onRevoke(credential)}
           >
-            {text("吊销", "Revoke")}
+            {t("identity.revoke")}
           </Button>
         ) : null,
     },
@@ -139,14 +138,13 @@ export function ServiceAccountDetail({
                 </Badge>
               </div>
               <p className="mt-1 text-xs text-fg-tertiary">
-                {account.description ||
-                  text("未填写用途", "No purpose documented")}
+                {account.description || t("identity.noPurposeDocumented")}
               </p>
             </div>
           </div>
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={onRefresh}>
-              {text("刷新", "Refresh")}
+              {t("identity.refresh")}
             </Button>
             <Button
               danger={account.state === "active"}
@@ -160,14 +158,14 @@ export function ServiceAccountDetail({
               onClick={onToggleState}
             >
               {account.state === "active"
-                ? text("禁用账号", "Disable account")
-                : text("重新启用", "Enable account")}
+                ? t("identity.disableAccount")
+                : t("identity.enableAccount")}
             </Button>
           </Space>
         </div>
         <div className="mt-4 rounded-lg border border-line bg-surface-translucent px-3 py-2.5">
           <div className="text-xs font-medium uppercase tracking-wider text-fg-disabled">
-            {text("稳定授权主体", "Stable grant principal")}
+            {t("identity.stableGrantPrincipal")}
           </div>
           <CopyableValue
             value={`service-account:${account.id}`}
@@ -176,7 +174,7 @@ export function ServiceAccountDetail({
         </div>
       </div>
       <CardHeader
-        title={text("可轮换凭据", "Rotating credentials")}
+        title={t("identity.rotatingCredentials")}
         extra={
           <Button
             type="primary"
@@ -184,7 +182,7 @@ export function ServiceAccountDetail({
             disabled={account.state !== "active"}
             onClick={onIssue}
           >
-            {text("签发新凭据", "Issue credential")}
+            {t("identity.issueCredential")}
           </Button>
         }
       />
@@ -195,16 +193,13 @@ export function ServiceAccountDetail({
       )}
       {credentials === null ? (
         <div className="p-8">
-          <Loading label={text("加载凭据…", "Loading credentials…")} />
+          <Loading label={t("identity.loadingCredentials")} />
         </div>
       ) : credentials.length === 0 ? (
         <div className="p-8">
           <EmptyState
-            title={text("暂无凭据", "No credentials")}
-            hint={text(
-              "签发第一枚短期凭据，并保存到 CI Secret。",
-              "Issue the first short-lived credential and store it in a CI secret.",
-            )}
+            title={t("identity.noCredentials")}
+            hint={t("identity.issueTheFirstShortLivedCredentialAndStoreIt")}
           />
         </div>
       ) : (
@@ -221,7 +216,7 @@ export function ServiceAccountDetail({
             hasMore={!!nextCredentialsPageToken}
             loading={loadingMoreCredentials}
             onMore={onMoreCredentials}
-            label={text("加载更多凭据", "Load more credentials")}
+            label={t("identity.loadMoreCredentials")}
           />
         </>
       )}

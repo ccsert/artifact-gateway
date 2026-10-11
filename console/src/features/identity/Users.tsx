@@ -28,7 +28,7 @@ type Role = User["role"];
 type UserState = User["state"];
 
 export function UsersPage() {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [role, setRole] = useState<Role | undefined>();
@@ -83,7 +83,7 @@ export function UsersPage() {
 
   const columns: ColumnsType<User> = [
     {
-      title: text("用户", "User"),
+      title: t("identity.user"),
       key: "identity",
       width: 270,
       render: (_value, user) => (
@@ -99,25 +99,25 @@ export function UsersPage() {
       ),
     },
     {
-      title: text("角色", "Role"),
+      title: t("identity.role"),
       dataIndex: "role",
       key: "role",
       width: 110,
       render: (value: Role) => (
         <Badge tone={roleTone(value)}>
-          {value === "none" ? text("待授权", "Pending") : value}
+          {value === "none" ? t("identity.pending") : value}
         </Badge>
       ),
     },
     {
-      title: text("访问状态", "Access"),
+      title: t("identity.access"),
       key: "access",
       width: 150,
       render: (_value, user) =>
         isUserLocked(user) ? (
           <Space size={6}>
             <Badge tone="warning">
-              <LockOutlined /> {text("已锁定", "Locked")}
+              <LockOutlined /> {t("identity.locked")}
             </Badge>
           </Space>
         ) : (
@@ -125,34 +125,32 @@ export function UsersPage() {
         ),
     },
     {
-      title: text("最后登录", "Last sign-in"),
+      title: t("identity.lastSignIn"),
       dataIndex: "lastLoginAt",
       key: "lastLoginAt",
       width: 190,
       render: (value?: string) => (
         <span className="whitespace-nowrap text-xs text-fg-tertiary">
-          {value
-            ? formatDate(value, locale)
-            : text("从未登录", "Never signed in")}
+          {value ? formatDate(value, locale) : t("identity.neverSignedIn")}
         </span>
       ),
     },
     {
-      title: text("密码状态", "Password"),
+      title: t("identity.password"),
       key: "password",
       width: 180,
       render: (_value, user) => (
         <div className="text-xs">
           <div className="text-fg-secondary">
             {!user.localPasswordEnabled
-              ? text("仅 SSO", "SSO only")
+              ? t("identity.ssoOnly")
               : user.mustChangePassword
-                ? text("等待用户修改", "Change required")
-                : text("可正常使用", "Ready")}
+                ? t("identity.changeRequired")
+                : t("identity.ready")}
           </div>
           {user.localPasswordEnabled && user.passwordChangedAt ? (
             <div className="mt-0.5 text-fg-disabled">
-              {text("更新于", "Changed")}{" "}
+              {t("identity.changed")}{" "}
               {formatDate(user.passwordChangedAt, locale)}
             </div>
           ) : null}
@@ -160,7 +158,7 @@ export function UsersPage() {
       ),
     },
     {
-      title: text("创建时间", "Created"),
+      title: t("identity.created"),
       dataIndex: "createdAt",
       key: "createdAt",
       width: 190,
@@ -171,7 +169,7 @@ export function UsersPage() {
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("identity.actions"),
       key: "actions",
       width: 76,
       align: "right",
@@ -183,21 +181,18 @@ export function UsersPage() {
             items: [
               {
                 key: "manage",
-                label: text("查看与管理", "View and manage"),
+                label: t("identity.viewAndManage"),
               },
             ],
             onClick: () => setSelectedUser(user),
           }}
         >
-          <Tooltip title={text("用户操作", "User actions")}>
+          <Tooltip title={t("identity.userActions")}>
             <Button
               type="text"
               size="small"
               icon={<MoreOutlined />}
-              aria-label={text(
-                `管理用户 ${user.name}`,
-                `Manage user ${user.name}`,
-              )}
+              aria-label={t("identity.manageUser", { user: String(user.name) })}
               onClick={(event) => event.stopPropagation()}
             />
           </Tooltip>
@@ -221,18 +216,15 @@ export function UsersPage() {
   return (
     <div className="ag-page-stack">
       <PageHeader
-        title={text("用户", "Users")}
-        description={text(
-          "管理本地及 SSO 账户、登录状态、角色和有效会话。",
-          "Manage local and SSO accounts, sign-in status, roles, and active sessions.",
-        )}
+        title={t("identity.users")}
+        description={t("identity.manageLocalAndSsoAccountsSignInStatusRoles")}
         actions={
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => setCreateOpen(true)}
           >
-            {text("新建用户", "New user")}
+            {t("identity.newUser")}
           </Button>
         }
       />
@@ -245,56 +237,50 @@ export function UsersPage() {
           actions={
             filtersActive ? (
               <Button type="text" onClick={clearFilters}>
-                {text("清除筛选", "Clear filters")}
+                {t("identity.clearFilters")}
               </Button>
             ) : undefined
           }
         >
-          <FilterField label={text("搜索", "Search")} className="w-[320px]">
+          <FilterField label={t("identity.search")} className="w-[320px]">
             <Input
               allowClear
               prefix={<SearchOutlined />}
-              placeholder={text(
-                "搜索用户名、显示名或邮箱…",
-                "Search username, display name, or email…",
-              )}
+              placeholder={t("identity.searchUsernameDisplayNameOrEmail")}
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
             />
           </FilterField>
-          <FilterField label={text("角色", "Role")} className="w-[160px]">
+          <FilterField label={t("identity.role")} className="w-[160px]">
             <Select<Role>
               allowClear
               className="w-full"
-              placeholder={text("全部角色", "All roles")}
+              placeholder={t("identity.allRoles")}
               value={role}
               onChange={(value) => {
                 setRole(value);
                 setPage(1);
               }}
               options={[
-                { value: "none", label: text("待授权", "Awaiting approval") },
+                { value: "none", label: t("identity.awaitingApproval") },
                 { value: "member", label: "member" },
                 { value: "admin", label: "admin" },
               ]}
             />
           </FilterField>
-          <FilterField
-            label={text("账户状态", "Account state")}
-            className="w-[170px]"
-          >
+          <FilterField label={t("identity.accountState")} className="w-[170px]">
             <Select<UserState>
               allowClear
               className="w-full"
-              placeholder={text("全部状态", "All states")}
+              placeholder={t("identity.allStates")}
               value={state}
               onChange={(value) => {
                 setState(value);
                 setPage(1);
               }}
               options={[
-                { value: "active", label: text("有效", "Active") },
-                { value: "disabled", label: text("已停用", "Disabled") },
+                { value: "active", label: t("identity.active") },
+                { value: "disabled", label: t("identity.disabled") },
               ]}
             />
           </FilterField>
@@ -312,19 +298,13 @@ export function UsersPage() {
               <EmptyState
                 title={
                   filtersActive
-                    ? text("没有匹配的用户", "No matching users")
-                    : text("暂无用户", "No users")
+                    ? t("identity.noMatchingUsers")
+                    : t("identity.noUsers")
                 }
                 hint={
                   filtersActive
-                    ? text(
-                        "调整筛选条件后重试",
-                        "Adjust the filters and try again",
-                      )
-                    : text(
-                        "创建第一个本地账户",
-                        "Create the first local account",
-                      )
+                    ? t("identity.adjustTheFiltersAndTryAgain")
+                    : t("identity.createTheFirstLocalAccount")
                 }
               />
             ),

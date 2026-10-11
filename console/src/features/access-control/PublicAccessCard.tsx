@@ -1,5 +1,5 @@
 import { Popconfirm, Switch } from "antd";
-import type { AnonymousAccessPolicy } from "../../client";
+import type { AnonymousAccessPolicy, Repository } from "../../client";
 import { Badge } from "../../components/ui/Badge";
 import { ErrorBanner, Notice } from "../../components/ui/Feedback";
 import { Card } from "../../components/ui/Layout";
@@ -11,16 +11,22 @@ export function PublicAccessCard({
   anonymousPolicy,
   loadError,
   canManageAnonymousPolicy,
-  publicRepositoryCount,
-  repositoryCount,
+  repositories,
+  directoryError,
+  onRetry,
 }: {
   anonymousPolicy: AnonymousAccessPolicy | null;
   loadError: unknown;
   canManageAnonymousPolicy: boolean;
-  publicRepositoryCount: number;
-  repositoryCount: number;
+  repositories: Repository[];
+  directoryError: unknown;
+  onRetry: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
+  const repositoryCount = repositories.length;
+  const publicRepositoryCount = repositories.filter(
+    (repository) => repository.anonymousRead,
+  ).length;
   const replacePolicy = useReplaceAnonymousPolicy();
   const savingAnonymousPolicy = replacePolicy.isPending;
   const anonymousPolicyError = replacePolicy.error ?? loadError ?? null;
@@ -35,41 +41,31 @@ export function PublicAccessCard({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
             <h2 className="text-sm font-semibold text-fg-strong">
-              {text("公开访问边界", "Public access boundary")}
+              {t("access.publicAccessBoundary")}
             </h2>
             <span className="text-xs text-fg-tertiary">
-              {text(
-                `${publicRepositoryCount} / ${repositoryCount} 个仓库公开`,
-                `${publicRepositoryCount} / ${repositoryCount} repositories public`,
-              )}
+              {t("access.repositoriesPublic", {
+                publicRepositoryCount: String(publicRepositoryCount),
+                repositoryCount: String(repositoryCount),
+              })}
             </span>
           </div>
           {anonymousPolicy && canManageAnonymousPolicy ? (
             <Popconfirm
               title={
                 anonymousPolicy.enabled
-                  ? text(
-                      "确认停用全局匿名读取？",
-                      "Disable global anonymous reads?",
-                    )
-                  : text(
-                      "确认启用全局匿名读取？",
-                      "Enable global anonymous reads?",
-                    )
+                  ? t("access.disableGlobalAnonymousReads")
+                  : t("access.enableGlobalAnonymousReads")
               }
               description={
                 anonymousPolicy.enabled
-                  ? text(
-                      "停用后所有未认证协议读取都会被拒绝。",
-                      "All unauthenticated protocol reads will be rejected.",
-                    )
-                  : text(
-                      "启用后满足仓库或组策略的制品可被未认证客户端读取。",
-                      "Artifacts allowed by repository or group policy become readable without authentication.",
+                  ? t("access.allUnauthenticatedProtocolReadsWillBeRejected")
+                  : t(
+                      "access.artifactsAllowedByRepositoryOrGroupPolicyBecomeReadable",
                     )
               }
-              okText={text("继续", "Continue")}
-              cancelText={text("取消", "Cancel")}
+              okText={t("access.continue")}
+              cancelText={t("access.cancel")}
               okButtonProps={{
                 danger: anonymousPolicy.enabled,
                 loading: savingAnonymousPolicy,
@@ -79,38 +75,44 @@ export function PublicAccessCard({
               <Switch
                 checked={anonymousPolicy.enabled}
                 loading={savingAnonymousPolicy}
-                aria-label={text(
-                  "切换全局匿名读取",
-                  "Toggle global anonymous reads",
-                )}
+                aria-label={t("access.toggleGlobalAnonymousReads")}
                 onChange={() => undefined}
               />
             </Popconfirm>
           ) : canManageAnonymousPolicy ? (
             anonymousPolicyError === null ? (
               <span className="text-xs text-fg-tertiary">
-                {text("加载中…", "Loading…")}
+                {t("access.loading")}
               </span>
             ) : null
           ) : (
             <Badge tone="neutral">
               {anonymousPolicy
                 ? anonymousPolicy.enabled
-                  ? text("总闸已开启 · 只读", "Global gate on · Read-only")
-                  : text("总闸已关闭 · 只读", "Global gate off · Read-only")
-                : text("只读", "Read-only")}
+                  ? t("access.globalGateOnReadOnly")
+                  : t("access.globalGateOffReadOnly")
+                : t("access.readOnly")}
             </Badge>
           )}
         </div>
         <Notice
           tone="info"
-          title={text(
-            "匿名读取须全局、仓库及适用的分组同时允许，写入、删除和管理仍需认证。",
-            "Anonymous reads require global, repository, and applicable group opt-in; writes, deletes, and management still require authentication.",
+          title={t(
+            "access.anonymousReadsRequireGlobalRepositoryAndApplicableGroupOpt",
           )}
         />
+        {directoryError !== null && (
+          <ErrorBanner error={directoryError} onRetry={onRetry} />
+        )}
         {anonymousPolicyError !== null && (
-          <ErrorBanner error={anonymousPolicyError} />
+          <ErrorBanner
+            error={anonymousPolicyError}
+            onRetry={() => {
+              replacePolicy.reset();
+              onRetry();
+            }}
+            tone={anonymousPolicy ? "warning" : "error"}
+          />
         )}
       </div>
     </Card>

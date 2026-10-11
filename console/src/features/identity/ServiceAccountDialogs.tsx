@@ -26,7 +26,7 @@ export function CreateServiceAccountDialog({
   onClose: () => void;
   onCreated: (account: ServiceAccount) => Promise<void> | void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [busy, setBusy] = useState(false);
   const [createError, setCreateError] = useState<unknown>(null);
   const [accountName, setAccountName] = useState("");
@@ -43,9 +43,7 @@ export function CreateServiceAccountDialog({
         },
       });
       if (createError || !data) {
-        setCreateError(
-          createError ?? new Error(text("创建失败", "Creation failed")),
-        );
+        setCreateError(createError ?? new Error(t("identity.creationFailed")));
         return;
       }
       setAccountName("");
@@ -61,13 +59,13 @@ export function CreateServiceAccountDialog({
   return (
     <Modal
       open={open}
-      title={text("新建服务账号", "New service account")}
+      title={t("identity.newServiceAccount")}
       onClose={onClose}
       busy={busy}
       footer={
         <Space>
           <Button onClick={onClose} disabled={busy}>
-            {text("取消", "Cancel")}
+            {t("identity.cancel")}
           </Button>
           <Button
             type="primary"
@@ -75,7 +73,7 @@ export function CreateServiceAccountDialog({
             disabled={!accountName.trim()}
             onClick={() => void submitAccount()}
           >
-            {text("创建", "Create")}
+            {t("identity.create")}
           </Button>
         </Space>
       }
@@ -83,11 +81,8 @@ export function CreateServiceAccountDialog({
       <div className="space-y-4">
         {createError !== null && <ErrorBanner error={createError} />}
         <Field
-          label={text("账号名称", "Account name")}
-          hint={text(
-            "例如 pipeone-ci 或 release-bot",
-            "For example pipeone-ci or release-bot",
-          )}
+          label={t("identity.accountName")}
+          hint={t("identity.forExamplePipeoneCiOrReleaseBot")}
         >
           <Input
             value={accountName}
@@ -95,7 +90,7 @@ export function CreateServiceAccountDialog({
             onChange={(event) => setAccountName(event.target.value)}
           />
         </Field>
-        <Field label={text("用途说明", "Purpose")}>
+        <Field label={t("identity.purpose")}>
           <Input.TextArea
             value={accountDescription}
             maxLength={1024}
@@ -121,7 +116,7 @@ export function IssueCredentialDialog({
     credential: CreatedServiceAccountCredential,
   ) => Promise<void> | void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [busy, setBusy] = useState(false);
   const [issueError, setIssueError] = useState<unknown>(null);
   const [credentialName, setCredentialName] = useState("");
@@ -143,9 +138,7 @@ export function IssueCredentialDialog({
         },
       );
       if (createError || !data) {
-        setIssueError(
-          createError ?? new Error(text("签发失败", "Issuance failed")),
-        );
+        setIssueError(createError ?? new Error(t("identity.issuanceFailed")));
         return;
       }
       setCredentialName("");
@@ -161,13 +154,13 @@ export function IssueCredentialDialog({
   return (
     <Modal
       open={open}
-      title={text("签发新凭据", "Issue credential")}
+      title={t("identity.issueCredential")}
       onClose={onClose}
       busy={busy}
       footer={
         <Space>
           <Button onClick={onClose} disabled={busy}>
-            {text("取消", "Cancel")}
+            {t("identity.cancel")}
           </Button>
           <Button
             type="primary"
@@ -175,7 +168,7 @@ export function IssueCredentialDialog({
             disabled={!credentialName.trim()}
             onClick={() => void submitCredential()}
           >
-            {text("签发", "Issue")}
+            {t("identity.issue")}
           </Button>
         </Space>
       }
@@ -183,11 +176,8 @@ export function IssueCredentialDialog({
       <div className="space-y-4">
         {issueError !== null && <ErrorBanner error={issueError} />}
         <Field
-          label={text("凭据名称", "Credential name")}
-          hint={text(
-            "建议包含使用方和轮换批次",
-            "Include the consumer and rotation batch",
-          )}
+          label={t("identity.credentialName")}
+          hint={t("identity.includeTheConsumerAndRotationBatch")}
         >
           <Input
             value={credentialName}
@@ -196,27 +186,24 @@ export function IssueCredentialDialog({
             onChange={(event) => setCredentialName(event.target.value)}
           />
         </Field>
-        <Field label={text("有效期", "Validity")}>
+        <Field label={t("identity.validity")}>
           <Select<typeof validDays>
             className="w-full"
             value={validDays}
             onChange={setValidDays}
             options={[
-              { value: 30, label: text("30 天", "30 days") },
+              { value: 30, label: t("identity.30Days") },
               {
                 value: 90,
-                label: text("90 天（推荐）", "90 days (recommended)"),
+                label: t("identity.90DaysRecommended"),
               },
-              { value: 180, label: text("180 天", "180 days") },
-              { value: 365, label: text("365 天", "365 days") },
+              { value: 180, label: t("identity.180Days") },
+              { value: 365, label: t("identity.365Days") },
             ]}
           />
         </Field>
         <p className="text-xs leading-5 text-fg-tertiary">
-          {text(
-            "新旧凭据可以短暂并存：先部署新 Token、验证成功，再吊销旧 Token，实现零停机轮换。",
-            "Old and new credentials may overlap briefly: deploy the new token, verify it, then revoke the old token for zero-downtime rotation.",
-          )}
+          {t("identity.oldAndNewCredentialsMayOverlapBrieflyDeployThe")}
         </p>
       </div>
     </Modal>

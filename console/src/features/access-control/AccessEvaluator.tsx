@@ -52,8 +52,7 @@ export function AccessEvaluator({
   onRetryDirectory: () => void;
 }) {
   const { identity, identityLoading } = useAuth();
-  const { locale, text } = usePreferences();
-  const english = locale === "en-US";
+  const { t } = usePreferences();
   const [selectedPrincipal, setSelectedPrincipal] = useState(CURRENT_PRINCIPAL);
   const [customActor, setCustomActor] = useState("");
   const [customRole, setCustomRole] = useState<EvaluatorRole>("none");
@@ -76,8 +75,8 @@ export function AccessEvaluator({
       choices.push({
         value: CURRENT_PRINCIPAL,
         actor: identity.actor,
-        label: text("当前登录身份", "Current identity"),
-        detail: `${identity.actor} · ${identity.role ?? text("无全局角色", "no global role")}`,
+        label: t("access.currentIdentity"),
+        detail: `${identity.actor} · ${identity.role ?? t("access.noGlobalRole")}`,
         role: identity.role ?? "none",
         current: true,
       });
@@ -86,8 +85,8 @@ export function AccessEvaluator({
       ...users.filter(isActiveUserPrincipal).map((user) => ({
         value: `user:${user.name}`,
         actor: `user:${user.name}`,
-        label: `${text("用户", "User")} · ${user.name}`,
-        detail: `${text("全局角色", "Global role")} ${user.role}`,
+        label: `${t("access.user")} · ${user.name}`,
+        detail: `${t("access.globalRole")} ${user.role}`,
         role: user.role,
       })),
       ...apiKeys
@@ -98,8 +97,8 @@ export function AccessEvaluator({
             value: `api-key:${key.id}`,
             actor: `api-key:${key.id}`,
             label: `API Key · ${key.name}`,
-            detail: `${text("全局角色", "Global role")} ${
-              role === "none" ? text("无", "none") : role
+            detail: `${t("access.globalRole")} ${
+              role === "none" ? t("access.none") : role
             }`,
             role,
           };
@@ -109,34 +108,22 @@ export function AccessEvaluator({
         .map((account) => ({
           value: `service-account:${account.id}`,
           actor: `service-account:${account.id}`,
-          label: `${text("服务账号", "Service account")} · ${account.name}`,
-          detail: text(
-            "无全局角色，由仓库授权决定",
-            "No global role; repository grants decide",
-          ),
+          label: `${t("access.serviceAccount")} · ${account.name}`,
+          detail: t("access.noGlobalRoleRepositoryGrantsDecide"),
           role: "none" as const,
         })),
       {
         value: CUSTOM_PRINCIPAL,
         actor: customActor.trim(),
-        label: text("OIDC / 自定义 actor", "OIDC / custom actor"),
-        detail: text(
-          "输入认证后产生的完整 actor，并选择其全局角色",
-          "Enter the complete authenticated actor and select its global role",
+        label: t("access.oidcCustomActor"),
+        detail: t(
+          "access.enterTheCompleteAuthenticatedActorAndSelectItsGlobal",
         ),
         role: customRole,
       },
     );
     return choices;
-  }, [
-    apiKeys,
-    customActor,
-    customRole,
-    identity,
-    serviceAccounts,
-    text,
-    users,
-  ]);
+  }, [apiKeys, customActor, customRole, identity, serviceAccounts, t, users]);
 
   const selectedPrincipalChoice = evaluatorPrincipals.find(
     (choice) => choice.value === selectedPrincipal,
@@ -152,11 +139,7 @@ export function AccessEvaluator({
   const runEvaluation = async () => {
     const choice = selectedPrincipalChoice;
     if (!choice || !selectedRepository) {
-      setEvaluationError(
-        new Error(
-          text("请选择主体和仓库", "Select a principal and repository"),
-        ),
-      );
+      setEvaluationError(new Error(t("access.selectAPrincipalAndRepository")));
       return;
     }
     const actor =
@@ -166,10 +149,7 @@ export function AccessEvaluator({
     if (!choice.current && !actor) {
       setEvaluationError(
         new Error(
-          text(
-            "请输入认证系统产生的完整 actor",
-            "Enter the complete actor produced by the authentication system",
-          ),
+          t("access.enterTheCompleteActorProducedByTheAuthenticationSystem"),
         ),
       );
       return;
@@ -191,9 +171,7 @@ export function AccessEvaluator({
     });
     setEvaluating(false);
     if (err || !data) {
-      setEvaluationError(
-        err ?? new Error(text("权限检查失败", "Access evaluation failed")),
-      );
+      setEvaluationError(err ?? new Error(t("access.accessEvaluationFailed")));
       return;
     }
     setEvaluation(data);
@@ -206,12 +184,11 @@ export function AccessEvaluator({
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-fg-strong">
               <ExperimentOutlined className="text-[var(--ag-content-tertiary)]" />
-              {text("权限检查", "Access evaluation")}
+              {t("access.accessEvaluation")}
             </div>
             <p className="mt-1 text-xs text-fg-tertiary">
-              {text(
-                "使用网关真实判定链检查全局角色、仓库授权和资源前缀叠加后的结果。",
-                "Run the Gateway decision chain across global roles, repository grants, and resource prefixes.",
+              {t(
+                "access.runTheGatewayDecisionChainAcrossGlobalRolesRepository",
               )}
             </p>
           </div>
@@ -219,19 +196,18 @@ export function AccessEvaluator({
         </div>
         <div className="space-y-4 px-5 py-4">
           {evaluatorOptionsError !== null && (
-            <ErrorBanner error={evaluatorOptionsError} />
+            <ErrorBanner
+              error={evaluatorOptionsError}
+              onRetry={onRetryDirectory}
+            />
           )}
           {serviceAccountsError !== null && (
             <Notice
               tone="warning"
               closable={false}
-              title={text(
-                "部分身份来源不可用",
-                "Some identity sources are unavailable",
-              )}
-              description={text(
-                "服务账号暂时不可用，仍可检查当前身份、用户、API Key 和自定义 actor。",
-                "Service accounts are temporarily unavailable. You can still evaluate the current identity, users, API keys, and custom actors.",
+              title={t("access.someIdentitySourcesAreUnavailable")}
+              description={t(
+                "access.serviceAccountsAreTemporarilyUnavailableYouCanStillEvaluate",
               )}
               action={
                 <Button
@@ -239,16 +215,16 @@ export function AccessEvaluator({
                   icon={<ReloadOutlined />}
                   onClick={onRetryDirectory}
                 >
-                  {text("重试", "Retry")}
+                  {t("access.retry")}
                 </Button>
               }
             />
           )}
           <div className="grid grid-cols-[minmax(210px,1.25fr)_124px_minmax(160px,1fr)_minmax(170px,1fr)_auto] items-end gap-3">
-            <FilterField label={text("授权主体", "Principal")}>
+            <FilterField label={t("access.principal")}>
               <Select
                 className="w-full"
-                aria-label={text("授权主体", "Principal")}
+                aria-label={t("access.principal")}
                 showSearch={{ optionFilterProp: "label" }}
                 loading={evaluatorOptionsLoading || identityLoading}
                 value={selectedPrincipal}
@@ -263,13 +239,13 @@ export function AccessEvaluator({
                 }}
               />
             </FilterField>
-            <FilterField label={text("全局角色", "Global role")}>
+            <FilterField label={t("access.globalRole")}>
               <Select
                 className="w-full"
                 value={effectiveEvaluatorRole}
                 disabled={selectedPrincipal !== CUSTOM_PRINCIPAL}
                 options={[
-                  { value: "none", label: text("无", "None") },
+                  { value: "none", label: t("access.none2") },
                   { value: "member", label: "member" },
                   { value: "admin", label: "admin" },
                 ]}
@@ -279,13 +255,13 @@ export function AccessEvaluator({
                 }}
               />
             </FilterField>
-            <FilterField label={text("仓库", "Repository")}>
+            <FilterField label={t("access.repository")}>
               <Select
                 className="w-full"
                 showSearch={{ optionFilterProp: "label" }}
                 loading={evaluatorOptionsLoading}
                 value={selectedRepository || undefined}
-                placeholder={text("选择仓库", "Select repository")}
+                placeholder={t("access.selectRepository")}
                 options={repositories.map((repository) => ({
                   value: repository.id,
                   label: `${repository.name} · ${repository.format}`,
@@ -298,18 +274,13 @@ export function AccessEvaluator({
                 }}
               />
             </FilterField>
-            <FilterField
-              label={text("具体资源（可选）", "Resource (optional)")}
-            >
+            <FilterField label={t("access.resourceOptional")}>
               <Input
                 className="font-mono"
                 allowClear
                 placeholder={
                   resourcePlaceholder(selectedRepositoryChoice?.format) ||
-                  text(
-                    "留空检查整个仓库",
-                    "Blank evaluates repository-wide access",
-                  )
+                  t("access.blankEvaluatesRepositoryWideAccess")
                 }
                 value={resource}
                 onChange={(event) => {
@@ -327,20 +298,19 @@ export function AccessEvaluator({
               disabled={evaluatorOptionsLoading || !selectedRepository}
               onClick={() => void runEvaluation()}
             >
-              {text("检查", "Evaluate")}
+              {t("access.evaluate")}
             </Button>
           </div>
           {selectedPrincipal === CUSTOM_PRINCIPAL && (
             <div className="mt-3 grid grid-cols-[minmax(210px,1.25fr)_124px_minmax(160px,1fr)_minmax(170px,1fr)_auto] gap-3">
               <FilterField
-                label={text("完整 actor 标识", "Complete actor identifier")}
+                label={t("access.completeActorIdentifier")}
                 className="col-span-2"
               >
                 <Input
                   className="font-mono"
-                  placeholder={text(
-                    "例如 oidc:gitlab:team/release 或 ci-bot",
-                    "For example: oidc:gitlab:team/release or ci-bot",
+                  placeholder={t(
+                    "access.forExampleOidcGitlabTeamReleaseOrCiBot",
                   )}
                   value={customActor}
                   onChange={(event) => {
@@ -352,10 +322,7 @@ export function AccessEvaluator({
                 />
               </FilterField>
               <div className="col-span-3 flex items-end pb-2 text-xs text-fg-disabled">
-                {text(
-                  "该值必须与认证完成后产生的 actor 完全一致；OIDC 角色需按实际映射结果选择。",
-                  "This must exactly match the authenticated actor; choose the global role produced by the OIDC mapping.",
-                )}
+                {t("access.thisMustExactlyMatchTheAuthenticatedActorChooseThe")}
               </div>
             </div>
           )}
@@ -369,8 +336,8 @@ export function AccessEvaluator({
               <div className="mb-3 flex min-w-0 items-center gap-2 text-xs text-fg-tertiary">
                 <Badge tone={evaluation.simulated ? "info" : "success"}>
                   {evaluation.simulated
-                    ? text("模拟结果", "Simulated")
-                    : text("当前身份", "Current identity")}
+                    ? t("access.simulated")
+                    : t("access.currentIdentity2")}
                 </Badge>
                 <span className="font-mono text-fg-secondary">
                   {evaluation.actor}
@@ -379,7 +346,7 @@ export function AccessEvaluator({
                 <span>{evaluation.repository.name}</span>
                 <span>·</span>
                 <span className="min-w-0 truncate font-mono">
-                  {evaluation.resource || text("整个仓库", "Entire repository")}
+                  {evaluation.resource || t("access.entireRepository")}
                 </span>
               </div>
               <AccessDecisionSummary access={evaluation} />
@@ -394,31 +361,27 @@ export function AccessEvaluator({
             key: "authorization",
             label: (
               <span className="text-xs text-fg-secondary">
-                {text(
-                  "权限判定顺序与角色能力",
-                  "Authorization order and roles",
-                )}{" "}
+                {t("access.authorizationOrderAndRoles")}{" "}
                 <span className="ml-2 text-fg-disabled">
-                  {text("了解规则如何叠加", "How rules combine")}
+                  {t("access.howRulesCombine")}
                 </span>
               </span>
             ),
             children: (
               <div>
                 <p className="mb-4 text-xs leading-5 text-fg-tertiary">
-                  {text(
-                    "仓库规则只追加权限，不能撤销全局角色。",
-                    "Repository rules add permissions; they cannot revoke a global role.",
+                  {t(
+                    "access.repositoryRulesAddPermissionsTheyCannotRevokeAGlobal",
                   )}
                 </p>
                 <div className="grid grid-cols-4 gap-5">
                   {AUTHORIZATION_STEPS.map((step, index) => (
                     <div key={step.title} className="border-l border-line pl-3">
                       <div className="text-xs font-medium text-fg-secondary">
-                        {index + 1}. {english ? step.titleEn : step.title}
+                        {index + 1}. {t(step.title)}
                       </div>
                       <p className="mt-1 text-xs leading-5 text-fg-tertiary">
-                        {english ? step.textEn : step.text}
+                        {t(step.text)}
                       </p>
                     </div>
                   ))}
@@ -430,7 +393,7 @@ export function AccessEvaluator({
                       className="flex items-start gap-2 text-xs text-fg-secondary"
                     >
                       <Badge tone={item.tone}>{item.role}</Badge>
-                      <span>{english ? item.descEn : item.desc}</span>
+                      <span>{t(item.desc)}</span>
                     </div>
                   ))}
                 </div>

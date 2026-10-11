@@ -50,7 +50,7 @@ export function TemplateEditorDialog({
   availableFormats: Repository["format"][];
   onClose: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const invalidate = useInvalidateAccess();
   const editing = draft.template;
   const [draftName, setDraftName] = useState(draft.name);
@@ -77,12 +77,7 @@ export function TemplateEditorDialog({
       normalizedGrants.some((grant) => !grant.principal)
     ) {
       setSaveError(
-        new Error(
-          text(
-            "模板名称和每条规则的主体不能为空",
-            "Template name and every grant principal are required",
-          ),
-        ),
+        new Error(t("access.templateNameAndEveryGrantPrincipalAreRequired")),
       );
       return;
     }
@@ -93,12 +88,7 @@ export function TemplateEditorDialog({
     );
     if (keys.size !== normalizedGrants.length) {
       setSaveError(
-        new Error(
-          text(
-            "主体和资源前缀不能重复",
-            "Principal and resource prefix pairs must be unique",
-          ),
-        ),
+        new Error(t("access.principalAndResourcePrefixPairsMustBeUnique")),
       );
       return;
     }
@@ -120,9 +110,7 @@ export function TemplateEditorDialog({
       if (result.error || !result.data) {
         setSaveError(
           result.error ??
-            new Error(
-              text("保存授权模板失败", "Failed to save authorization template"),
-            ),
+            new Error(t("access.failedToSaveAuthorizationTemplate")),
         );
         return;
       }
@@ -140,8 +128,8 @@ export function TemplateEditorDialog({
       open={open}
       title={
         editing
-          ? text("编辑授权模板", "Edit authorization template")
-          : text("新建授权模板", "New authorization template")
+          ? t("access.editAuthorizationTemplate")
+          : t("access.newAuthorizationTemplate")
       }
       onClose={() => onClose()}
       wide
@@ -149,10 +137,10 @@ export function TemplateEditorDialog({
       footer={
         <Space>
           <Button onClick={() => onClose()} disabled={saving}>
-            {text("取消", "Cancel")}
+            {t("access.cancel")}
           </Button>
           <Button type="primary" loading={saving} onClick={() => void save()}>
-            {text("保存", "Save")}
+            {t("access.save")}
           </Button>
         </Space>
       }
@@ -164,21 +152,18 @@ export function TemplateEditorDialog({
       )}
       <div className="grid grid-cols-[minmax(220px,1fr)_minmax(320px,2fr)] gap-3">
         <Input
-          placeholder={text("模板名称", "Template name")}
+          placeholder={t("access.templateName")}
           value={draftName}
           onChange={(event) => setDraftName(event.target.value)}
         />
         <Input
-          placeholder={text("用途描述（可选）", "Description (optional)")}
+          placeholder={t("access.descriptionOptional")}
           value={draftDescription}
           onChange={(event) => setDraftDescription(event.target.value)}
         />
       </div>
       <div className="mt-3 text-xs leading-5 text-fg-tertiary">
-        {text(
-          "主体支持选择已知用户或 API Key，也可以直接填写 OIDC / CI actor。资源前缀留空表示整个仓库；下拉建议按仓库格式提供常见写法。",
-          "Choose a known user or API key, or enter an OIDC / CI actor directly. Leave the resource prefix blank for the entire repository; suggestions follow the repository format.",
-        )}
+        {t("access.chooseAKnownUserOrApiKeyOrEnter")}
       </div>
       <ConsoleTable<DraftGrant>
         rowKey="key"
@@ -188,7 +173,7 @@ export function TemplateEditorDialog({
         scroll={{ x: 760 }}
         columns={[
           {
-            title: text("主体", "Principal"),
+            title: t("access.principal2"),
             key: "principal",
             render: (_, grant) => (
               <AutoComplete
@@ -196,10 +181,7 @@ export function TemplateEditorDialog({
                 allowClear
                 options={principalOptions}
                 value={grant.principal}
-                placeholder={text(
-                  "选择或输入 actor，例如 user:release",
-                  "Choose or enter an actor, e.g. user:release",
-                )}
+                placeholder={t("access.chooseOrEnterAnActorEGUserRelease")}
                 onChange={(value) =>
                   setDraftGrants((current) =>
                     current.map((item) =>
@@ -213,7 +195,7 @@ export function TemplateEditorDialog({
             ),
           },
           {
-            title: text("权限", "Scopes"),
+            title: t("access.scopes"),
             key: "scopes",
             width: 280,
             render: (_, grant) => {
@@ -227,7 +209,7 @@ export function TemplateEditorDialog({
                     options={[
                       {
                         value: CUSTOM_ROLE,
-                        label: text("自定义权限", "Custom permissions"),
+                        label: t("access.customPermissions"),
                       },
                       ...roles.map((item) => ({
                         value: item.id,
@@ -271,19 +253,19 @@ export function TemplateEditorDialog({
                       options={[
                         {
                           value: "repositories:read",
-                          label: text("读取", "Read"),
+                          label: t("access.read"),
                         },
                         {
                           value: "repositories:write",
-                          label: text("写入", "Write"),
+                          label: t("access.write"),
                         },
                         {
                           value: "repositories:admin",
-                          label: text("管理员", "Admin"),
+                          label: t("access.admin2"),
                         },
                         {
                           value: "repositories:intelligence",
-                          label: text("制品情报", "Artifact intelligence"),
+                          label: t("access.artifactIntelligence"),
                         },
                       ]}
                       onChange={(value) =>
@@ -302,7 +284,7 @@ export function TemplateEditorDialog({
             },
           },
           {
-            title: text("资源前缀", "Resource prefix"),
+            title: t("access.resourcePrefix"),
             key: "prefix",
             width: 420,
             render: (_, grant) => (
@@ -332,7 +314,7 @@ export function TemplateEditorDialog({
             ),
           },
           {
-            title: text("操作", "Actions"),
+            title: t("access.actions"),
             key: "actions",
             width: 70,
             render: (_, grant) => (
@@ -340,7 +322,7 @@ export function TemplateEditorDialog({
                 danger
                 type="text"
                 icon={<DeleteOutlined />}
-                aria-label={text("移除规则", "Remove rule")}
+                aria-label={t("access.removeRule")}
                 onClick={() =>
                   setDraftGrants((current) =>
                     current.filter((item) => item.key !== grant.key),
@@ -355,7 +337,7 @@ export function TemplateEditorDialog({
         icon={<PlusOutlined />}
         onClick={() => setDraftGrants((current) => [...current, emptyGrant()])}
       >
-        {text("添加规则", "Add rule")}
+        {t("access.addRule")}
       </Button>
     </Modal>
   );

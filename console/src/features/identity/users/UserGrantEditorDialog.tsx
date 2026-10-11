@@ -61,7 +61,7 @@ export function UserGrantEditorDialog({
   onClose: () => void;
 }) {
   const { message } = App.useApp();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const invalidate = useInvalidateAccess();
   const principal = `user:${username}`;
   const [composeRepositoryId, setComposeRepositoryId] = useState(
@@ -120,14 +120,11 @@ export function UserGrantEditorDialog({
     () => [
       {
         value: principal,
-        label: `${text("用户", "User")} · ${username}`,
-        detail: text(
-          "本面板只管理该用户的仓库授权",
-          "This panel only manages grants for this user",
-        ),
+        label: `${t("identity.user")} · ${username}`,
+        detail: t("identity.thisPanelOnlyManagesGrantsForThisUser"),
       },
     ],
-    [principal, text, username],
+    [principal, t, username],
   );
   // Writing a (principal, resource scope) pair that another existing row holds
   // replaces that row, so the dialog warns before the save instead of after.
@@ -156,12 +153,7 @@ export function UserGrantEditorDialog({
   const save = async () => {
     if (!draft || !baseReady) {
       setSaveError(
-        new Error(
-          text(
-            "请先选择仓库并等待其授权加载完成",
-            "Select a repository and wait for its grants to load",
-          ),
-        ),
+        new Error(t("identity.selectARepositoryAndWaitForItsGrantsTo")),
       );
       return;
     }
@@ -186,10 +178,7 @@ export function UserGrantEditorDialog({
         if (deleteError && !isNotFound(deleteError)) {
           setSaveError(
             new Error(
-              text(
-                "原资源范围的授权删除失败，新授权未保存，请重试。",
-                "The previous resource scope could not be removed, so the new grant was not saved. Please retry.",
-              ),
+              t("identity.thePreviousResourceScopeCouldNotBeRemovedSo"),
             ),
           );
           return;
@@ -202,17 +191,12 @@ export function UserGrantEditorDialog({
       if (requestError) {
         setSaveError(
           moved
-            ? new Error(
-                text(
-                  "旧行已移除，但新授权保存失败，请再次保存以写入新授权。",
-                  "The previous row was removed, but saving the new grant failed. Save again to write it.",
-                ),
-              )
+            ? new Error(t("identity.thePreviousRowWasRemovedButSavingTheNew"))
             : requestError,
         );
         return;
       }
-      void message.success(text("仓库授权已保存", "Repository grant saved"));
+      void message.success(t("identity.repositoryGrantSaved"));
       onClose();
       await invalidate(accessKeys.grants());
     } finally {
@@ -225,8 +209,8 @@ export function UserGrantEditorDialog({
       open={open}
       title={
         (baseReady ? composeTargetPrefix : requestedPrefix) === null
-          ? text("添加仓库授权", "Add repository grant")
-          : text("编辑仓库授权", "Edit repository grant")
+          ? t("identity.addRepositoryGrant")
+          : t("identity.editRepositoryGrant")
       }
       onClose={onClose}
       width={680}
@@ -234,7 +218,7 @@ export function UserGrantEditorDialog({
       footer={
         <Space>
           <Button onClick={onClose} disabled={saving}>
-            {text("取消", "Cancel")}
+            {t("identity.cancel")}
           </Button>
           <Button
             type="primary"
@@ -242,7 +226,7 @@ export function UserGrantEditorDialog({
             disabled={!baseReady || draft === null}
             onClick={() => void save()}
           >
-            {text("保存", "Save")}
+            {t("identity.save")}
           </Button>
         </Space>
       }
@@ -254,15 +238,12 @@ export function UserGrantEditorDialog({
         {saveError !== null ? <ErrorBanner error={saveError} /> : null}
         <div>
           <div className="mb-1 text-xs font-medium text-fg-tertiary">
-            {text("仓库", "Repository")}
+            {t("identity.repository")}
           </div>
           <Select
             className="w-full"
             showSearch={{ optionFilterProp: "label" }}
-            placeholder={text(
-              "选择要授权的仓库",
-              "Select a repository to grant",
-            )}
+            placeholder={t("identity.selectARepositoryToGrant")}
             value={composeRepositoryId || undefined}
             loading={composeLoading}
             options={picks}
@@ -273,9 +254,8 @@ export function UserGrantEditorDialog({
           <Alert
             type="warning"
             showIcon
-            title={text(
-              "自定义角色暂时不可用，仍可使用内置权限。",
-              "Custom roles are unavailable; built-in permissions still work.",
+            title={t(
+              "identity.customRolesAreUnavailableBuiltInPermissionsStillWork",
             )}
           />
         ) : null}
@@ -286,9 +266,8 @@ export function UserGrantEditorDialog({
               className="mb-3"
               type="info"
               showIcon
-              title={text(
-                "仓库规则只会追加权限，不能撤销用户已有的全局角色。该用户在其他资源范围的授权与其他主体的授权不受影响。",
-                "Repository rules add permissions; they cannot revoke the user's existing global role. The user's other resource scopes and other principals keep theirs.",
+              title={t(
+                "identity.repositoryRulesAddPermissionsTheyCannotRevokeTheUser",
               )}
             />
             {conflictExists && (
@@ -296,10 +275,7 @@ export function UserGrantEditorDialog({
                 className="mb-3"
                 type="warning"
                 showIcon
-                title={text(
-                  "该用户在此资源范围已有授权，保存将替换原有规则。",
-                  "This user already holds a grant at this resource scope; saving replaces it.",
-                )}
+                title={t("identity.thisUserAlreadyHoldsAGrantAtThisResource")}
               />
             )}
             <GrantForm
@@ -314,10 +290,7 @@ export function UserGrantEditorDialog({
         ) : null}
         {!composeLoading && composeRepositoryId === "" ? (
           <Typography.Text type="secondary" className="block text-xs">
-            {text(
-              "选择仓库后配置该用户的权限级别与资源范围。",
-              "Pick a repository, then configure this user's permission level and resource scope.",
-            )}
+            {t("identity.pickARepositoryThenConfigureThisUserSPermission")}
           </Typography.Text>
         ) : null}
       </div>

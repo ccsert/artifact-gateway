@@ -14,7 +14,7 @@ export function ApiKeyCreateDialog({
 }: {
   onCreated: (key: CreatedApiKey) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const dialog = useDisclosure();
   const [name, setName] = useState("");
   const [role, setRole] = useState<"member" | "admin">("member");
@@ -63,17 +63,17 @@ export function ApiKeyCreateDialog({
           dialog.show();
         }}
       >
-        {text("新建密钥", "New key")}
+        {t("identity.newKey")}
       </Button>
       <Modal
         open={dialog.open}
-        title={text("新建 API 密钥", "New API key")}
+        title={t("identity.newApiKey")}
         onClose={dialog.hide}
         busy={busy}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
-              {text("取消", "Cancel")}
+              {t("identity.cancel")}
             </Button>
             <Button
               type="primary"
@@ -81,7 +81,7 @@ export function ApiKeyCreateDialog({
               loading={busy}
               disabled={!name.trim()}
             >
-              {text("创建", "Create")}
+              {t("identity.create")}
             </Button>
           </Space>
         }
@@ -89,11 +89,8 @@ export function ApiKeyCreateDialog({
         <div className="space-y-4">
           {error !== null && <ErrorBanner error={error} />}
           <Field
-            label={text("密钥名称", "Key name")}
-            hint={text(
-              "用于标识用途，例如 ci-deploy",
-              "Describe its purpose, for example ci-deploy",
-            )}
+            label={t("identity.keyName")}
+            hint={t("identity.describeItsPurposeForExampleCiDeploy")}
           >
             <Input
               className="font-mono"
@@ -103,10 +100,9 @@ export function ApiKeyCreateDialog({
             />
           </Field>
           <Field
-            label={text("角色", "Role")}
-            hint={text(
-              "按最小权限选择。角色在全仓库范围内生效，优先于逐仓库授权。",
-              "Choose the least privilege. This global role applies across repositories before repository grants.",
+            label={t("identity.role")}
+            hint={t(
+              "identity.chooseTheLeastPrivilegeThisGlobalRoleAppliesAcross",
             )}
           >
             <Select<typeof role>
@@ -116,26 +112,19 @@ export function ApiKeyCreateDialog({
               options={[
                 {
                   value: "member",
-                  label: text(
-                    "member · 成员（无全局权限，按仓库授权）",
-                    "member · no global access, repository grants only",
-                  ),
+                  label: t("identity.memberNoGlobalAccessRepositoryGrantsOnly"),
                 },
                 {
                   value: "admin",
-                  label: text(
-                    "admin · 管理员（全部权限）",
-                    "admin · all permissions",
-                  ),
+                  label: t("identity.adminAllPermissions"),
                 },
               ]}
             />
           </Field>
           <Field
-            label={text("有效期", "Validity")}
-            hint={text(
-              "到期后密钥会自动拒绝认证，无需手动吊销。",
-              "Authentication is rejected automatically after expiry.",
+            label={t("identity.validity")}
+            hint={t(
+              "identity.authenticationIsRejectedAutomaticallyAfterExpiry",
             )}
           >
             <Select<typeof validDays>
@@ -143,21 +132,18 @@ export function ApiKeyCreateDialog({
               value={validDays}
               onChange={setValidDays}
               options={[
-                { value: 30, label: text("30 天", "30 days") },
+                { value: 30, label: t("identity.30Days") },
                 {
                   value: 90,
-                  label: text("90 天（推荐）", "90 days (recommended)"),
+                  label: t("identity.90DaysRecommended"),
                 },
-                { value: 180, label: text("180 天", "180 days") },
-                { value: 365, label: text("365 天", "365 days") },
+                { value: 180, label: t("identity.180Days") },
+                { value: 365, label: t("identity.365Days") },
               ]}
             />
           </Field>
           <p className="text-xs text-fg-tertiary">
-            {text(
-              "创建后只会显示一次明文 Token，请立即保存。",
-              "The plaintext token is shown once. Save it immediately.",
-            )}
+            {t("identity.thePlaintextTokenIsShownOnceSaveItImmediately")}
           </p>
         </div>
       </Modal>

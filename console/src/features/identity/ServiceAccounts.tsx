@@ -38,7 +38,7 @@ import {
 } from "./serviceAccountQueries";
 
 export function ServiceAccountsPage() {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const createDialog = useDisclosure();
   const credentialDialog = useDisclosure();
   const accountsQuery = useServiceAccountPages();
@@ -141,10 +141,9 @@ export function ServiceAccountsPage() {
   return (
     <div className="ag-page-stack">
       <PageHeader
-        title={text("服务账号", "Service accounts")}
-        description={text(
-          "为 Jenkins、CI 机器人和第三方应用提供稳定身份；凭据可以独立签发、轮换和吊销。",
-          "Give Jenkins, CI robots, and third-party applications a stable identity while credentials rotate independently.",
+        title={t("identity.serviceAccounts")}
+        description={t(
+          "identity.giveJenkinsCiRobotsAndThirdPartyApplicationsA",
         )}
         actions={
           <Button
@@ -152,7 +151,7 @@ export function ServiceAccountsPage() {
             icon={<PlusOutlined />}
             onClick={createDialog.show}
           >
-            {text("新建服务账号", "New service account")}
+            {t("identity.newServiceAccount")}
           </Button>
         }
       />
@@ -160,36 +159,32 @@ export function ServiceAccountsPage() {
       <Notice
         tone="info"
         closable={false}
-        title={text(
-          "机器身份与凭据分离",
-          "Machine identity is separate from credentials",
-        )}
-        description={text(
-          "Repository Grant 绑定稳定的 service-account:<id> 主体。轮换 Token 时无需修改仓库授权；禁用账号会一次性拒绝它的全部凭据。",
-          "Repository grants bind to the stable service-account:<id> principal. Token rotation does not change grants, and disabling the account rejects every credential at once.",
+        title={t("identity.machineIdentityIsSeparateFromCredentials")}
+        description={t(
+          "identity.repositoryGrantsBindToTheStableServiceAccountId",
         )}
       />
 
       <MetricStrip
         items={[
           {
-            label: text("服务账号", "Service accounts"),
+            label: t("identity.serviceAccounts"),
             value:
               accounts === null
                 ? "—"
                 : `${accounts.length}${nextAccountsPageToken ? "+" : ""}`,
-            hint: text("稳定机器主体", "Stable machine principals"),
+            hint: t("identity.stableMachinePrincipals"),
           },
           {
-            label: text("启用", "Active"),
+            label: t("identity.active2"),
             value: `${activeAccounts.length}${nextAccountsPageToken ? "+" : ""}`,
-            hint: text("可接受凭据认证", "May accept credential auth"),
+            hint: t("identity.mayAcceptCredentialAuth"),
             tone: "success",
           },
           {
-            label: text("当前账号有效凭据", "Active credentials"),
+            label: t("identity.activeCredentials"),
             value: `${activeCredentials.length}${nextCredentialsPageToken ? "+" : ""}`,
-            hint: text("支持零停机轮换", "Supports zero-downtime rotation"),
+            hint: t("identity.supportsZeroDowntimeRotation"),
           },
         ]}
       />
@@ -202,26 +197,21 @@ export function ServiceAccountsPage() {
           <ErrorBanner error={error} onRetry={loadAccounts} />
         ) : (
           <Card bodyClassName="p-8">
-            <Loading
-              label={text("加载服务账号…", "Loading service accounts…")}
-            />
+            <Loading label={t("identity.loadingServiceAccounts")} />
           </Card>
         )
       ) : accounts.length === 0 ? (
         <Card bodyClassName="p-8">
           <EmptyState
-            title={text("暂无服务账号", "No service accounts")}
-            hint={text(
-              "为第一个 CI 机器人创建稳定身份。",
-              "Create a stable identity for your first CI robot.",
-            )}
+            title={t("identity.noServiceAccounts")}
+            hint={t("identity.createAStableIdentityForYourFirstCiRobot")}
           />
         </Card>
       ) : (
         <div className="ag-page-primary ag-service-account-workspace grid items-start gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
           <Card bodyClassName="p-2">
             <div className="px-2 pb-2 pt-1 text-xs font-medium uppercase tracking-wider text-fg-disabled">
-              {text("机器主体", "Machine principals")}
+              {t("identity.machinePrincipals")}
             </div>
             <div className="space-y-1">
               {accounts.map((account) => (
@@ -246,8 +236,7 @@ export function ServiceAccountsPage() {
                     </Badge>
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-disabled">
-                    {account.description ||
-                      text("未填写用途", "No purpose documented")}
+                    {account.description || t("identity.noPurposeDocumented")}
                   </p>
                 </button>
               ))}
@@ -256,12 +245,16 @@ export function ServiceAccountsPage() {
               hasMore={!!nextAccountsPageToken}
               loading={loadingMoreAccounts}
               onMore={() => void accountsQuery.fetchNextPage()}
-              label={text("加载更多账号", "Load more accounts")}
+              label={t("identity.loadMoreAccounts")}
             />
           </Card>
 
           {selectedAccount && (
-            <SectionBoundary resetKeys={[selectedAccount.id]}>
+            <SectionBoundary
+              resetKeys={[selectedAccount.id]}
+              recoveryKeys={[selectedAccount, credentialsQuery.data]}
+              onReset={() => credentialsQuery.refetch({ throwOnError: true })}
+            >
               <ServiceAccountDetail
                 account={selectedAccount}
                 credentials={credentials}
@@ -303,34 +296,28 @@ export function ServiceAccountsPage() {
 
       {reveal && (
         <OneTimeTokenDialog
-          title={text(
-            "凭据已签发：立即保存 Token",
-            "Credential issued: save the token",
-          )}
-          warningTitle={text("明文只显示一次", "Plaintext is shown once")}
-          warningDescription={text(
-            "关闭后无法重新查看。请把 Token 写入 CI Secret 或外部密钥管理系统，不要提交到仓库。",
-            "It cannot be viewed again. Put the token in a CI secret or external secret manager, never in source control.",
-          )}
+          title={t("identity.credentialIssuedSaveTheToken")}
+          warningTitle={t("identity.plaintextIsShownOnce")}
+          warningDescription={t("identity.itCannotBeViewedAgainPutTheTokenIn")}
           token={reveal.token}
           details={
             <>
-              {text("凭据名称", "Credential name")}: {reveal.name} ·{" "}
-              {text("到期", "Expires")}: {formatDate(reveal.expiresAt)}
+              {t("identity.credentialName")}: {reveal.name} ·{" "}
+              {t("identity.expires2")}: {formatDate(reveal.expiresAt)}
             </>
           }
-          doneLabel={text("我已安全保存", "I stored it securely")}
+          doneLabel={t("identity.iStoredItSecurely")}
           onDone={() => setReveal(null)}
         />
       )}
       <ConfirmDialog
         open={credentialToRevoke !== null}
-        title={text("吊销凭据", "Revoke credential")}
-        message={text(
-          `吊销 ${credentialToRevoke?.name ?? ""} 后，使用该 Token 的任务会立即认证失败；同一服务账号的其他凭据不受影响。`,
-          `After revoking ${credentialToRevoke?.name ?? ""}, jobs using that token fail authentication immediately. Other credentials remain valid.`,
+        title={t("identity.revokeCredential")}
+        message={t(
+          "identity.afterRevokingJobsUsingThatTokenFailAuthenticationImmediately",
+          { credentialToRevoke: String(credentialToRevoke?.name ?? "") },
         )}
-        confirmLabel={text("确认吊销", "Revoke")}
+        confirmLabel={t("identity.revoke3")}
         danger
         busy={busy}
         onClose={() => setCredentialToRevoke(null)}
@@ -340,24 +327,20 @@ export function ServiceAccountsPage() {
         open={accountStateChange !== null}
         title={
           accountStateChange?.state === "active"
-            ? text("禁用服务账号", "Disable service account")
-            : text("重新启用服务账号", "Enable service account")
+            ? t("identity.disableServiceAccount")
+            : t("identity.enableServiceAccount")
         }
         message={
           accountStateChange?.state === "active"
-            ? text(
-                "该账号的全部现有凭据会立即停止认证。仓库授权与审计主体会保留，重新启用后未过期且未吊销的凭据可再次使用。",
-                "Every existing credential stops authenticating immediately. Grants and audit identity remain, and non-expired credentials work again after re-enabling.",
+            ? t(
+                "identity.everyExistingCredentialStopsAuthenticatingImmediatelyGrantsAndAudit",
               )
-            : text(
-                "未过期且未吊销的凭据将重新具备认证能力。",
-                "Non-expired, non-revoked credentials will authenticate again.",
-              )
+            : t("identity.nonExpiredNonRevokedCredentialsWillAuthenticateAgain")
         }
         confirmLabel={
           accountStateChange?.state === "active"
-            ? text("确认禁用", "Disable")
-            : text("确认启用", "Enable")
+            ? t("identity.disable")
+            : t("identity.enable")
         }
         danger={accountStateChange?.state === "active"}
         busy={busy}

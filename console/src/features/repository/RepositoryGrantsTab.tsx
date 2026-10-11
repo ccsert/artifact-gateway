@@ -52,7 +52,7 @@ function grantKey(grant: Pick<Grant, "principal" | "resourcePrefix">): string {
  */
 export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
   const { message } = App.useApp();
-  const { text } = usePreferences();
+  const { t, text } = usePreferences();
   const queryClient = useQueryClient();
   const grantsQuery = useRepositoryGrants(repo.id);
   const grants = grantsQuery.data ?? null;
@@ -84,10 +84,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
     directory.serviceAccounts.error ||
     rolesQuery.error
       ? new Error(
-          text(
-            "无法加载用户、API Key、服务账号或自定义角色，可继续使用自定义身份和内置权限。",
-            "Could not load users, API keys, service accounts, or custom roles. You can still use a custom identity and built-in permissions.",
-          ),
+          t("repositoryGrants.couldNotLoadUsersApiKeysServiceAccountsOr"),
         )
       : null;
   /** Show a repository's new grant set here and re-read the cross-repository list. */
@@ -135,12 +132,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
     if (!draft) return;
     if (!draft.principal.trim() || draft.principal === CUSTOM_PRINCIPAL) {
       setSaveError(
-        new Error(
-          text(
-            "请选择或填写授权主体。",
-            "Select or enter a principal for the grant.",
-          ),
-        ),
+        new Error(t("repositoryGrants.selectOrEnterAPrincipalForTheGrant")),
       );
       return;
     }
@@ -172,10 +164,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
         if (deleteError && !isNotFound(deleteError)) {
           setSaveError(
             new Error(
-              text(
-                "旧授权删除失败，新授权未保存，请重试。",
-                "The previous row could not be removed, so the new grant was not saved. Please retry.",
-              ),
+              t("repositoryGrants.thePreviousRowCouldNotBeRemovedSoThe"),
             ),
           );
           return;
@@ -189,10 +178,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
         setSaveError(
           keyChanged
             ? new Error(
-                text(
-                  "旧行已移除，但新授权保存失败，请再次保存以写入新授权。",
-                  "The previous row was removed, but saving the new grant failed. Save again to write it.",
-                ),
+                t("repositoryGrants.thePreviousRowWasRemovedButSavingTheNew"),
               )
             : err,
         );
@@ -225,7 +211,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
         return;
       }
       setGrants((current) => current.filter((item) => grantKey(item) !== key));
-      message.success(text("授权已移除", "Grant removed"));
+      message.success(t("repositoryGrants.grantRemoved"));
     } finally {
       setRemoving("");
     }
@@ -234,7 +220,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
   if (error !== null)
     return isNotFound(error) ? (
       <RepositoryFeatureUnavailable
-        feature={text("访问授权", "Access grants")}
+        feature={t("repositoryGrants.accessGrants")}
       />
     ) : (
       <ErrorBanner error={error} onRetry={load} />
@@ -263,7 +249,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
 
   const grantColumns: ColumnsType<Grant> = [
     {
-      title: text("授权主体", "Principal"),
+      title: t("repositoryGrants.principal"),
       dataIndex: "principal",
       key: "principal",
       width: 320,
@@ -280,7 +266,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: text("授予能力", "Granted capabilities"),
+      title: t("repositoryGrants.grantedCapabilities"),
       key: "level",
       width: 260,
       render: (_, grant) => (
@@ -290,34 +276,33 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: text("资源范围", "Resource scope"),
+      title: t("repositoryGrants.resourceScope"),
       dataIndex: "resourcePrefix",
       key: "resourcePrefix",
       width: 240,
       render: (value?: string) => (
         <span className="font-mono text-xs text-fg-tertiary">
-          {value || text("整个仓库", "Entire repository")}
+          {value || t("repositoryGrants.entireRepository")}
         </span>
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("repositoryGrants.actions"),
       key: "actions",
       fixed: "right",
       width: 130,
       render: (_, grant) => (
         <Space size="small">
           <Button type="link" size="small" onClick={() => openEdit(grant)}>
-            {text("编辑", "Edit")}
+            {t("repositoryGrants.edit")}
           </Button>
           <Popconfirm
-            title={text("移除这条授权？", "Remove this grant?")}
-            description={text(
-              "只移除当前行，其他主体的授权不受影响。",
-              "Only this row is removed; every other principal keeps its grants.",
+            title={t("repositoryGrants.removeThisGrant")}
+            description={t(
+              "repositoryGrants.onlyThisRowIsRemovedEveryOtherPrincipalKeeps",
             )}
-            okText={text("移除", "Remove")}
-            cancelText={text("取消", "Cancel")}
+            okText={t("repositoryGrants.remove")}
+            cancelText={t("repositoryGrants.cancel")}
             okButtonProps={{
               danger: true,
               loading: removing === grantKey(grant),
@@ -329,9 +314,9 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
               size="small"
               danger
               loading={removing === grantKey(grant)}
-              aria-label={text("移除该行授权", "Remove this grant row")}
+              aria-label={t("repositoryGrants.removeThisGrantRow")}
             >
-              {text("移除", "Remove")}
+              {t("repositoryGrants.remove")}
             </Button>
           </Popconfirm>
         </Space>
@@ -343,17 +328,14 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
     <div className="space-y-4">
       <div className="flex justify-end">
         <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
-          {text("添加授权", "Add grant")}
+          {t("repositoryGrants.addGrant")}
         </Button>
       </div>
       {mutationError !== null && <ErrorBanner error={mutationError} />}
       {grants.length === 0 ? (
         <EmptyState
-          title={text("暂无授权规则", "No access grants")}
-          hint={text(
-            "点击「添加授权」选择用户、API Key、服务账号，或填写 OIDC subject / 自定义 actor。",
-            "Choose a user, API key, or service account via Add grant, or enter an OIDC subject/custom actor.",
-          )}
+          title={t("repositoryGrants.noAccessGrants")}
+          hint={t("repositoryGrants.chooseAUserApiKeyOrServiceAccountVia")}
         />
       ) : (
         <ConsoleTable<Grant>
@@ -368,8 +350,8 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
         open={editor.open}
         title={
           editingKey
-            ? text("编辑授权", "Edit grant")
-            : text("添加授权", "Add grant")
+            ? t("repositoryGrants.editGrant")
+            : t("repositoryGrants.addGrant")
         }
         onClose={editor.hide}
         width={680}
@@ -377,7 +359,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
         footer={
           <Space>
             <Button onClick={editor.hide} disabled={saving}>
-              {text("取消", "Cancel")}
+              {t("repositoryGrants.cancel")}
             </Button>
             <Button
               type="primary"
@@ -385,7 +367,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
               loading={saving}
               disabled={principalMissing}
             >
-              {text("保存", "Save")}
+              {t("repositoryGrants.save")}
             </Button>
           </Space>
         }
@@ -396,27 +378,24 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
             <Alert
               type="warning"
               showIcon
-              title={text(
-                "该主体在此资源范围已有授权，保存将替换原有规则。",
-                "This principal already holds a grant at this resource scope; saving replaces it.",
+              title={t(
+                "repositoryGrants.thisPrincipalAlreadyHoldsAGrantAtThisResource",
               )}
             />
           )}
           <Notice
             tone="info"
             closable={false}
-            title={text(
-              "仓库规则只会追加权限，不能撤销用户或 API Key 已有的全局角色；服务账号没有全局角色。",
-              "Repository rules add permissions; they cannot revoke an existing global user or API key role. Service accounts have no global role.",
+            title={t(
+              "repositoryGrants.repositoryRulesAddPermissionsTheyCannotRevokeAnExisting",
             )}
           />
           {principalChoicesError !== null && (
             <Alert
               type="warning"
               showIcon
-              title={text(
-                "用户、API Key 或服务账号列表暂时不可用；仍可选择“OIDC / 自定义 actor”并填写主体标识。",
-                "Users, API keys, or service accounts are temporarily unavailable. You can still choose OIDC/custom actor and enter its identifier.",
+              title={t(
+                "repositoryGrants.usersApiKeysOrServiceAccountsAreTemporarilyUnavailable",
               )}
             />
           )}

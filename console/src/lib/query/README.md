@@ -64,6 +64,13 @@ These data changes cannot clear a failure while Retry is waiting for its
 refetch promises; all sources must finish first. Navigation `resetKeys` still
 clear the failure immediately and invalidate a previous section's Retry.
 
+Access Control keeps grant metrics and principal projections inside their
+boundaries. Its directory uses a query selector for active repositories so a
+bad directory answer becomes a query error, and Retry waits for every directory
+source with `Promise.allSettled`. Grant refresh errors retain cached rows under
+a warning with Retry. Service Account details refetch their credentials before
+clearing a failed section.
+
 ## Migration checklist
 
 Components that still read in `useEffect` and import the SDK. Migrate a page

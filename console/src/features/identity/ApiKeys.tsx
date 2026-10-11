@@ -22,7 +22,7 @@ import { ApiKeyCreateDialog } from "./ApiKeyCreateDialog";
 import { useApiKeys, useInvalidateApiKeys } from "./apiKeyQueries";
 
 export function ApiKeysPage() {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const keysQuery = useApiKeys();
   const invalidateKeys = useInvalidateApiKeys();
   const keys: ApiKey[] | null = keysQuery.data?.items ?? null;
@@ -76,7 +76,7 @@ export function ApiKeysPage() {
   const adminKeys = activeKeys.filter((key) => key.roles.includes("admin"));
   const columns: ColumnsType<ApiKey> = [
     {
-      title: text("名称", "Name"),
+      title: t("identity.name"),
       dataIndex: "name",
       key: "name",
       width: 210,
@@ -85,7 +85,7 @@ export function ApiKeysPage() {
       ),
     },
     {
-      title: text("角色", "Roles"),
+      title: t("identity.roles"),
       dataIndex: "roles",
       key: "roles",
       width: 210,
@@ -103,13 +103,13 @@ export function ApiKeysPage() {
       ),
     },
     {
-      title: text("状态", "Status"),
+      title: t("identity.status"),
       key: "state",
       width: 130,
       render: (_value, key) => <StateBadge state={keyState(key)} />,
     },
     {
-      title: text("创建时间", "Created"),
+      title: t("identity.created"),
       dataIndex: "createdAt",
       key: "createdAt",
       width: 170,
@@ -120,7 +120,7 @@ export function ApiKeysPage() {
       ),
     },
     {
-      title: text("到期时间", "Expires"),
+      title: t("identity.expires"),
       dataIndex: "expiresAt",
       key: "expiresAt",
       width: 170,
@@ -131,7 +131,7 @@ export function ApiKeysPage() {
       ),
     },
     {
-      title: text("最后使用", "Last used"),
+      title: t("identity.lastUsed"),
       dataIndex: "lastUsedAt",
       key: "lastUsedAt",
       width: 170,
@@ -155,7 +155,7 @@ export function ApiKeysPage() {
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("identity.actions"),
       key: "actions",
       width: 82,
       align: "right",
@@ -166,7 +166,7 @@ export function ApiKeysPage() {
             size="small"
             danger
             icon={<StopOutlined />}
-            aria-label={text(`吊销密钥 ${key.name}`, `Revoke key ${key.name}`)}
+            aria-label={t("identity.revokeKey", { key: String(key.name) })}
             onClick={() => setToRevoke(key)}
           />
         ) : null,
@@ -176,10 +176,9 @@ export function ApiKeysPage() {
   return (
     <div className="ag-page-stack">
       <PageHeader
-        title={text("API 密钥", "API keys")}
-        description={text(
-          "管理可调用管理 API 的访问密钥（member / admin）",
-          "Manage member and admin credentials for management APIs",
+        title={t("identity.apiKeys")}
+        description={t(
+          "identity.manageMemberAndAdminCredentialsForManagementApis",
         )}
         actions={<ApiKeyCreateDialog onCreated={setReveal} />}
       />
@@ -190,11 +189,8 @@ export function ApiKeysPage() {
       ) : keys.length === 0 ? (
         <Card>
           <EmptyState
-            title={text("暂无 API 密钥", "No API keys")}
-            hint={text(
-              "创建密钥以通过脚本/CI 调用管理 API",
-              "Create a key for scripts and CI to call management APIs",
-            )}
+            title={t("identity.noApiKeys")}
+            hint={t("identity.createAKeyForScriptsAndCiToCall")}
           />
         </Card>
       ) : (
@@ -203,23 +199,23 @@ export function ApiKeysPage() {
           <MetricStrip
             items={[
               {
-                label: text("有效密钥", "Active keys"),
+                label: t("identity.activeKeys"),
                 value: activeKeys.length,
-                hint: text("可调用管理 API", "Can call management APIs"),
+                hint: t("identity.canCallManagementApis"),
                 tone: "success",
               },
               {
-                label: text("管理员密钥", "Admin keys"),
+                label: t("identity.adminKeys"),
                 value: adminKeys.length,
                 hint: adminKeys.length
-                  ? text("建议定期轮换与审阅", "Rotate and review regularly")
-                  : text("暂无高权限密钥", "No elevated keys"),
+                  ? t("identity.rotateAndReviewRegularly")
+                  : t("identity.noElevatedKeys"),
                 tone: adminKeys.length ? "danger" : "default",
               },
               {
-                label: text("已吊销 / 过期", "Revoked / expired"),
+                label: t("identity.revokedExpired"),
                 value: keys.length - activeKeys.length,
-                hint: text("保留历史审计记录", "Retained for audit history"),
+                hint: t("identity.retainedForAuditHistory"),
               },
             ]}
           />
@@ -235,28 +231,25 @@ export function ApiKeysPage() {
                       setStateFilter("active");
                     }}
                   >
-                    {text("清除筛选", "Clear filters")}
+                    {t("identity.clearFilters")}
                   </Button>
                 ) : undefined
               }
             >
               <FilterField
-                label={text("搜索", "Search")}
+                label={t("identity.search")}
                 className="min-w-[280px]"
               >
                 <Input
                   allowClear
                   prefix={<SearchOutlined />}
-                  placeholder={text(
-                    "搜索名称或角色…",
-                    "Search names or roles…",
-                  )}
+                  placeholder={t("identity.searchNamesOrRoles")}
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                 />
               </FilterField>
               <FilterField
-                label={text("状态", "Status")}
+                label={t("identity.status")}
                 className="min-w-[160px]"
               >
                 <Select<typeof stateFilter>
@@ -264,21 +257,18 @@ export function ApiKeysPage() {
                   value={stateFilter}
                   onChange={setStateFilter}
                   options={[
-                    { value: "all", label: text("全部状态", "All statuses") },
-                    { value: "active", label: text("有效", "Active") },
-                    { value: "expired", label: text("已过期", "Expired") },
-                    { value: "revoked", label: text("已吊销", "Revoked") },
+                    { value: "all", label: t("identity.allStatuses") },
+                    { value: "active", label: t("identity.active") },
+                    { value: "expired", label: t("identity.expired") },
+                    { value: "revoked", label: t("identity.revoked") },
                   ]}
                 />
               </FilterField>
             </FilterBar>
             {visibleKeys.length === 0 ? (
               <EmptyState
-                title={text("没有匹配的密钥", "No matching keys")}
-                hint={text(
-                  "调整筛选条件后重试",
-                  "Adjust the filters and try again",
-                )}
+                title={t("identity.noMatchingKeys")}
+                hint={t("identity.adjustTheFiltersAndTryAgain")}
               />
             ) : (
               <ConsoleTable<ApiKey>
@@ -294,20 +284,13 @@ export function ApiKeysPage() {
       )}
       {reveal && (
         <OneTimeTokenDialog
-          title={text(
-            "密钥已创建：请立即保存 Token",
-            "API key created: save the token now",
-          )}
-          warningTitle={text(
-            "这是唯一一次显示明文 Token",
-            "This is the only plaintext token display",
-          )}
-          warningDescription={text(
-            "关闭弹窗后将无法再次查看，请立即复制并保存到安全位置。",
-            "It cannot be viewed again after closing. Store it securely now.",
+          title={t("identity.apiKeyCreatedSaveTheTokenNow")}
+          warningTitle={t("identity.thisIsTheOnlyPlaintextTokenDisplay")}
+          warningDescription={t(
+            "identity.itCannotBeViewedAgainAfterClosingStoreIt",
           )}
           token={reveal.token}
-          doneLabel={text("我已保存", "I saved it")}
+          doneLabel={t("identity.iSavedIt")}
           onDone={() => {
             setReveal(null);
             load();
@@ -316,18 +299,15 @@ export function ApiKeysPage() {
       )}
       <ConfirmDialog
         open={!!toRevoke}
-        title={text("吊销 API 密钥", "Revoke API key")}
+        title={t("identity.revokeApiKey")}
         message={
           <>
-            {text("确定吊销密钥", "Revoke key")}{" "}
+            {t("identity.revokeKey2")}{" "}
             <span className="font-mono text-fg-strong">{toRevoke?.name}</span>{" "}
-            {text(
-              "吗？ 吊销后该 Token 立即失效。",
-              "? Its token becomes invalid immediately.",
-            )}
+            {t("identity.itsTokenBecomesInvalidImmediately")}
           </>
         }
-        confirmLabel={text("吊销", "Revoke")}
+        confirmLabel={t("identity.revoke")}
         danger
         busy={revoking}
         onConfirm={confirmRevoke}

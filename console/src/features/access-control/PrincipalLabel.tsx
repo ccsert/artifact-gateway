@@ -3,12 +3,12 @@ import { usePreferences } from "../../lib/preferences";
 
 /** A grant principal as people read it: kind, name, and the exact actor. */
 export function Principal({ value }: { value: string }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   if (value.startsWith("user:")) {
     return (
       <div>
         <div className="text-xs font-medium text-fg">
-          {text("用户", "User")} · {value.slice("user:".length)}
+          {t("access.user")} · {value.slice("user:".length)}
         </div>
         <div className="mt-0.5 font-mono text-xs text-fg-disabled">{value}</div>
       </div>
@@ -19,7 +19,7 @@ export function Principal({ value }: { value: string }) {
     return (
       <CopyableValue
         value={value}
-        label={`${text("服务账号", "Service account")} · ${id.slice(0, 8)}${id.length > 8 ? "…" : ""}`}
+        label={`${t("access.serviceAccount")} · ${id.slice(0, 8)}${id.length > 8 ? "…" : ""}`}
         className="text-xs text-fg"
       />
     );
@@ -28,7 +28,7 @@ export function Principal({ value }: { value: string }) {
     return (
       <div>
         <div className="text-xs font-medium text-fg">
-          {text("OIDC / 自定义", "OIDC / custom")}
+          {t("access.oidcCustom")}
         </div>
         <div className="mt-0.5 font-mono text-xs text-fg-tertiary">{value}</div>
       </div>

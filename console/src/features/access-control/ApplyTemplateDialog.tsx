@@ -23,7 +23,7 @@ export function ApplyTemplateDialog({
   repositories: Repository[];
   onClose: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const invalidate = useInvalidateAccess();
   const [applyRepository, setApplyRepository] = useState("");
   const [applying, setApplying] = useState(false);
@@ -40,12 +40,7 @@ export function ApplyTemplateDialog({
       setApplying(false);
       setApplyError(
         current.error ??
-          new Error(
-            text(
-              "加载仓库授权版本失败",
-              "Failed to load repository grant version",
-            ),
-          ),
+          new Error(t("access.failedToLoadRepositoryGrantVersion")),
       );
       return;
     }
@@ -68,13 +63,13 @@ export function ApplyTemplateDialog({
   return (
     <Modal
       open={open}
-      title={text("应用授权模板", "Apply authorization template")}
+      title={t("access.applyAuthorizationTemplate")}
       onClose={() => onClose()}
       busy={applying}
       footer={
         <Space>
           <Button onClick={() => onClose()} disabled={applying}>
-            {text("取消", "Cancel")}
+            {t("access.cancel")}
           </Button>
           <Button
             type="primary"
@@ -82,7 +77,7 @@ export function ApplyTemplateDialog({
             disabled={!applyRepository}
             onClick={() => void apply()}
           >
-            {text("应用", "Apply")}
+            {t("access.apply")}
           </Button>
         </Space>
       }
@@ -93,15 +88,12 @@ export function ApplyTemplateDialog({
         </div>
       )}
       <p className="mb-3 text-sm text-fg-tertiary">
-        {text(
-          "选择目标仓库。应用会替换该仓库现有授权规则，并保留并发版本保护。",
-          "Choose a target repository. Applying replaces its current grants with optimistic concurrency protection.",
-        )}
+        {t("access.chooseATargetRepositoryApplyingReplacesItsCurrentGrants")}
       </p>
       <Select
         className="w-full"
         showSearch={{ optionFilterProp: "label" }}
-        placeholder={text("选择仓库", "Select repository")}
+        placeholder={t("access.selectRepository")}
         value={applyRepository || undefined}
         onChange={setApplyRepository}
         options={repositories

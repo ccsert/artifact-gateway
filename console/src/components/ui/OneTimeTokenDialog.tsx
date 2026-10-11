@@ -24,7 +24,7 @@ export function OneTimeTokenDialog({
   doneLabel: string;
   onDone: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <Modal open onClose={onDone} title={title}>
       <div className="space-y-4">
@@ -39,10 +39,7 @@ export function OneTimeTokenDialog({
             className="block break-all font-mono text-xs"
             copyable={{
               text: token,
-              tooltips: [
-                text("复制 Token", "Copy token"),
-                text("已复制", "Copied"),
-              ],
+              tooltips: [t("identity.copyToken"), t("identity.copied")],
             }}
           >
             {token}

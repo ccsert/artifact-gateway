@@ -21,12 +21,13 @@ import { Principal } from "./PrincipalLabel";
 export function GrantsPanel({
   rows,
   error,
+  onRetry,
 }: {
   rows: GrantRow[] | null;
   error: unknown;
+  onRetry: () => void;
 }) {
-  const { locale, text } = usePreferences();
-  const english = locale === "en-US";
+  const { t } = usePreferences();
   const [principalFilter, setPrincipalFilter] = useState("");
   const [repoFilter, setRepoFilter] = useState("");
   const [scopeFilter, setScopeFilter] = useState<
@@ -45,22 +46,21 @@ export function GrantsPanel({
     )
     .filter(
       (row) =>
-        scopeFilter === "all" ||
-        scopeLabel(row.scopes, english).key === scopeFilter,
+        scopeFilter === "all" || scopeLabel(row.scopes, t).key === scopeFilter,
     );
   const hasFilters = Boolean(
     principalFilter || repoFilter || scopeFilter !== "all",
   );
   const columns: ColumnsType<GrantRow> = [
     {
-      title: text("主体", "Principal"),
+      title: t("access.principal2"),
       dataIndex: "principal",
       key: "principal",
       width: 250,
       render: (value: string) => <Principal value={value} />,
     },
     {
-      title: text("仓库", "Repository"),
+      title: t("access.repository"),
       dataIndex: "repositoryName",
       key: "repositoryName",
       width: 220,
@@ -74,24 +74,24 @@ export function GrantsPanel({
       ),
     },
     {
-      title: text("格式", "Format"),
+      title: t("access.format"),
       dataIndex: "format",
       key: "format",
       width: 120,
       render: (value: Repository["format"]) => <FormatBadge format={value} />,
     },
     {
-      title: text("权限", "Permission"),
+      title: t("access.permission"),
       key: "scope",
       width: 190,
       render: (_, row) => {
-        const scope = scopeLabel(row.scopes, english);
+        const scope = scopeLabel(row.scopes, t);
         return (
           <span>
             <Badge tone={scope.tone}>{scope.label}</Badge>
             {scope.key === "admin" && (
               <span className="ml-2 text-xs text-[var(--ag-status-danger)]">
-                {text("高权限", "Elevated")}
+                {t("access.elevated")}
               </span>
             )}
           </span>
@@ -99,18 +99,18 @@ export function GrantsPanel({
       },
     },
     {
-      title: text("资源前缀", "Resource prefix"),
+      title: t("access.resourcePrefix"),
       dataIndex: "resourcePrefix",
       key: "resourcePrefix",
       width: 240,
       render: (value: string) => (
         <span className="font-mono text-xs text-fg-tertiary">
-          {value || text("整个仓库", "Entire repository")}
+          {value || t("access.entireRepository")}
         </span>
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("access.actions"),
       key: "actions",
       fixed: "right",
       width: 90,
@@ -119,7 +119,7 @@ export function GrantsPanel({
           to={`/repositories/${row.repositoryId}?tab=grants`}
           className="text-xs text-[var(--ag-content-tertiary)] hover:text-[var(--ag-link-hover)]"
         >
-          {text("编辑 →", "Edit →")}
+          {t("access.edit2")}
         </Link>
       ),
     },
@@ -128,10 +128,9 @@ export function GrantsPanel({
   return (
     <Card bodyClassName="p-0">
       <CardHeader
-        title={text(
-          `逐仓库授权（${filtered.length}）`,
-          `${filtered.length} repository grants`,
-        )}
+        title={t("access.repositoryGrants", {
+          filtered: String(filtered.length),
+        })}
       />
       <FilterBar
         embedded
@@ -145,37 +144,28 @@ export function GrantsPanel({
               setScopeFilter("all");
             }}
           >
-            {text("清除", "Clear")}
+            {t("access.clear")}
           </Button>
         }
       >
-        <FilterField
-          label={text("授权主体", "Principal")}
-          className="min-w-[260px]"
-        >
+        <FilterField label={t("access.principal")} className="min-w-[260px]">
           <Input
             allowClear
-            placeholder={text(
-              "用户名、API Key 或 actor",
-              "Username, API key, or actor",
-            )}
+            placeholder={t("access.usernameApiKeyOrActor")}
             value={principalFilter}
             onChange={(event) => setPrincipalFilter(event.target.value)}
           />
         </FilterField>
-        <FilterField
-          label={text("仓库", "Repository")}
-          className="min-w-[220px]"
-        >
+        <FilterField label={t("access.repository")} className="min-w-[220px]">
           <Input
             allowClear
-            placeholder={text("仓库名称", "Repository name")}
+            placeholder={t("access.repositoryName")}
             value={repoFilter}
             onChange={(event) => setRepoFilter(event.target.value)}
           />
         </FilterField>
         <FilterField
-          label={text("权限级别", "Permission level")}
+          label={t("access.permissionLevel")}
           className="min-w-[190px]"
         >
           <Select
@@ -184,28 +174,33 @@ export function GrantsPanel({
             options={[
               {
                 value: "all",
-                label: text("全部权限", "All permissions"),
+                label: t("access.allPermissions"),
               },
               {
                 value: "read",
-                label: text("读取 · 浏览 / 拉取", "Read · browse / pull"),
+                label: t("access.readBrowsePull"),
               },
               {
                 value: "write",
-                label: text("写入 · 发布 / 编辑", "Write · publish / edit"),
+                label: t("access.writePublishEdit"),
               },
               {
                 value: "admin",
-                label: text("管理员 · 授权 / 删除", "Admin · grant / delete"),
+                label: t("access.adminGrantDelete"),
               },
             ]}
             onChange={(value: typeof scopeFilter) => setScopeFilter(value)}
           />
         </FilterField>
       </FilterBar>
-      {error ? (
+      {error && rows ? (
         <div className="px-4 py-4">
-          <ErrorBanner error={error} />
+          <ErrorBanner tone="warning" error={error} onRetry={onRetry} />
+        </div>
+      ) : null}
+      {error && !rows ? (
+        <div className="px-4 py-4">
+          <ErrorBanner error={error} onRetry={onRetry} />
         </div>
       ) : !rows ? (
         <Loading />
@@ -213,16 +208,13 @@ export function GrantsPanel({
         <EmptyState
           title={
             rows.length === 0
-              ? text("暂无逐仓库授权", "No repository grants")
-              : text("没有匹配的授权记录", "No matching grants")
+              ? t("access.noRepositoryGrants")
+              : t("access.noMatchingGrants")
           }
           hint={
             rows.length === 0
-              ? text(
-                  "在各仓库的「访问授权」Tab 添加主体即可在此汇总",
-                  "Add a principal from a repository's Access grants tab to see it here",
-                )
-              : text("换个过滤条件试试", "Try another filter")
+              ? t("access.addAPrincipalFromARepositorySAccessGrants")
+              : t("access.tryAnotherFilter")
           }
         />
       ) : (
