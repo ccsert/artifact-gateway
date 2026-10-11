@@ -257,6 +257,8 @@ describe("PreferenceControls", () => {
 
   it("settles a rejected reveal without losing the selected theme", async () => {
     const user = userEvent.setup();
+    let rejectReady!: (reason: Error) => void;
+    let rejectUpdate!: (reason: Error) => void;
     let rejectFinished!: (reason: Error) => void;
     const original = (document as Document & { startViewTransition?: unknown })
       .startViewTransition;
@@ -265,6 +267,12 @@ describe("PreferenceControls", () => {
       value: (update: () => void | Promise<void>) => {
         void update();
         return {
+          ready: new Promise<void>((_, reject) => {
+            rejectReady = reject;
+          }),
+          updateCallbackDone: new Promise<void>((_, reject) => {
+            rejectUpdate = reject;
+          }),
           finished: new Promise<void>((_, reject) => {
             rejectFinished = reject;
           }),
@@ -282,7 +290,10 @@ describe("PreferenceControls", () => {
       await user.click(
         await screen.findByRole("menuitem", { name: /Gateway Light/ }),
       );
-      rejectFinished(new Error("Snapshot skipped"));
+      const failure = new Error("Snapshot update failed");
+      rejectReady(failure);
+      rejectUpdate(failure);
+      rejectFinished(failure);
       await waitFor(() =>
         expect(document.documentElement).not.toHaveAttribute(
           "data-theme-transition",
