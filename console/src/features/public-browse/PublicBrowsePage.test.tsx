@@ -36,6 +36,38 @@ afterEach(() => {
 });
 
 describe("PublicBrowsePage APT browse", () => {
+  it("can open an unknown-format repository from the public catalog", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          enabled: true,
+          items: [
+            {
+              id: "future",
+              name: "nuget-public",
+              format: "nuget",
+              type: "proxy",
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    render(
+      <MemoryRouter initialEntries={["/browse"]}>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <PublicBrowsePage />
+          </PreferencesProvider>
+        </TestQueryProvider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole("link", { name: /nuget-public/ }));
+    expect(
+      await screen.findByText("当前 Console 尚未支持 nuget 格式"),
+    ).toBeInTheDocument();
+    expect(mockSearchRepositoryArtifacts).not.toHaveBeenCalled();
+  });
   it("shows the unified unavailable state for a newer server format", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(

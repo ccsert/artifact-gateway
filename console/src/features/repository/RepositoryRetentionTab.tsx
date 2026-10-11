@@ -38,7 +38,11 @@ import { useAuth } from "../../lib/auth";
 import { downloadCsv } from "../../lib/csv";
 import { formatDate, shortDigest } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-import { artifactCoordinateForDisplay, formatDescriptor } from "../../formats";
+import {
+  artifactCoordinateForDisplay,
+  formatDescriptor,
+  supportsRepositoryFeature,
+} from "../../formats";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
@@ -645,10 +649,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
     );
   if (!policy) return <Loading />;
 
-  if (
-    repo.type !== "hosted" ||
-    !["maven", "oci", "conan", "raw", "npm", "pypi", "go"].includes(repo.format)
-  ) {
+  if (!supportsRepositoryFeature(repo.format, repo.type, "retention")) {
     return (
       <RepositoryFeatureUnavailable
         feature={text("Hosted 仓库保留策略", "Hosted repository retention")}

@@ -11,6 +11,9 @@ for (const width of [1440, 375]) {
       await page.setViewportSize({ width, height: 900 });
       const errors: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
+      page.on("console", (message) => {
+        if (message.type() === "error") errors.push(message.text());
+      });
       const mock = await mockGateway(page, {
         authenticated: surface === "repository",
       });
@@ -37,7 +40,8 @@ for (const width of [1440, 375]) {
             },
           }),
         );
-        await page.goto("/browse?repository=future");
+        await page.goto("/browse");
+        await page.getByRole("link", { name: /nuget-public/ }).click();
       }
       const unavailable = page.getByText("当前 Console 尚未支持 nuget 格式", {
         exact: true,
