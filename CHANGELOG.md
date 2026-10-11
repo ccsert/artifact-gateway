@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Maven Hosted accepts unchanged ISO-8859-1 POMs and resolves an exact `${project.parent.version}` identity from the POM's literal parent version in standard PUT and strict coordinate commit. Original bytes and release checksum sidecars are preserved; malformed XML, unsupported encodings, unresolved identities and coordinate mismatches still fail validation. Real Maven cold-cache parent and dependency-tree consumption is part of the protocol gate.
+
 - Console markup names semantic colour roles (`text-fg-tertiary`, `border-line`, `bg-surface-translucent`, ...) instead of Zinc palette steps; the `!important` compatibility layer that remapped 35 palette classes is removed and a unit test rejects new raw palette utilities. Dividers, the pending-approval card and the public-browse summary grid now follow the light theme instead of staying dark.
 
 - Recent activity on the overview reads as events (operation, object, actor, time, outcome) through the same labels as the audit log, which now also shows outcomes as status text and localizes the actor column. Previously the overview printed raw operation and outcome codes.

@@ -19,6 +19,7 @@ import (
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
+	"golang.org/x/text/encoding/charmap"
 )
 
 // nativeMavenHandler implements the V3 Maven session API. Its metadata store
@@ -1018,6 +1019,14 @@ func (h nativeMavenHandler) validatePOM(ctx context.Context, s repository.MavenP
 		} `xml:"parent"`
 	}
 	decoder := xml.NewDecoder(reader)
+	// Convert only the validation reader. Published objects and their digests
+	// continue to describe the original bytes supplied by the Maven client.
+	decoder.CharsetReader = func(charset string, input io.Reader) (io.Reader, error) {
+		if !strings.EqualFold(charset, "ISO-8859-1") {
+			return nil, errors.New("unsupported POM XML encoding")
+		}
+		return charmap.ISO8859_1.NewDecoder().Reader(input), nil
+	}
 	if err := decoder.Decode(&project); err != nil {
 		return errors.New("staged POM is invalid XML")
 	}
@@ -1028,8 +1037,15 @@ func (h nativeMavenHandler) validatePOM(ctx context.Context, s repository.MavenP
 	if project.GroupID == "" {
 		project.GroupID = project.Parent.GroupID
 	}
-	if project.Version == "" {
+	if project.Version == "" || project.Version == "${project.parent.version}" {
 		project.Version = project.Parent.Version
+	}
+	// A matching literal request path cannot make an unresolved expression a
+	// valid identity. Do not evaluate user, environment or remote-parent values.
+	for _, value := range []string{project.GroupID, project.ArtifactID, project.Version} {
+		if strings.Contains(value, "${") {
+			return errors.New("staged POM identity contains an unresolved expression")
+		}
 	}
 	if project.GroupID != parts[0] || project.ArtifactID != parts[1] || project.Version != parts[2] {
 		return errors.New("staged POM identity does not match Maven coordinate")

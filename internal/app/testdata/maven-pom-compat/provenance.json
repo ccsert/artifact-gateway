@@ -1,0 +1,42 @@
+[
+  {
+    "path": "org/apache/commons/commons-parent/39/commons-parent-39.pom",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/39/commons-parent-39.pom",
+    "retrievedFrom": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/39/commons-parent-39.pom",
+    "size": 61975,
+    "sha1": "4bc32d3cda9f07814c548492af7bf19b21798d46",
+    "sha256": "87cd27e1a02a5c3eb6d85059ce98696bb1b44c2b8b650f0567c86df60fa61da7"
+  },
+  {
+    "path": "org/apache/commons/commons-parent/48/commons-parent-48.pom",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/48/commons-parent-48.pom",
+    "retrievedFrom": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/48/commons-parent-48.pom",
+    "size": 72034,
+    "sha1": "1cdeb626cf4f0cec0f171ec838a69922efc6ef95",
+    "sha256": "1e1f7de9370a7b7901f128f1dacd1422be74e3f47f9558b0f79e04c0637ca0b4"
+  },
+  {
+    "path": "org/apache/commons/commons-parent/64/commons-parent-64.pom",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/64/commons-parent-64.pom",
+    "retrievedFrom": "https://maven-central.storage-download.googleapis.com/maven2/org/apache/commons/commons-parent/64/commons-parent-64.pom",
+    "size": 77957,
+    "sha1": "aec2c7e06fc7ab9271cd4d076e8251df6a0d55da",
+    "sha256": "6f19638994e8357b4ed734696f992057efaafa1235673998133299798e2ccddb"
+  },
+  {
+    "path": "org/objenesis/objenesis/3.3/objenesis-3.3.pom",
+    "url": "https://repo.maven.apache.org/maven2/org/objenesis/objenesis/3.3/objenesis-3.3.pom",
+    "retrievedFrom": "https://maven-central.storage-download.googleapis.com/maven2/org/objenesis/objenesis/3.3/objenesis-3.3.pom",
+    "size": 3007,
+    "sha1": "8da1208285232e541d0bbb869bbe66af6ec6abb4",
+    "sha256": "ba0c40da2669a048b6e24ef7066a471f0fbcbfcc509e6a3e856ca4ddfa614ad3"
+  },
+  {
+    "path": "org/flywaydb/flyway-database-postgresql/11.7.2/flyway-database-postgresql-11.7.2.pom",
+    "url": "https://repo.maven.apache.org/maven2/org/flywaydb/flyway-database-postgresql/11.7.2/flyway-database-postgresql-11.7.2.pom",
+    "retrievedFrom": "https://maven-central.storage-download.googleapis.com/maven2/org/flywaydb/flyway-database-postgresql/11.7.2/flyway-database-postgresql-11.7.2.pom",
+    "size": 2731,
+    "sha1": "86a37db860a5902913a275ee1077da1f9c0c9d51",
+    "sha256": "1daf89be859c8f8a66661d88aff79da76382aa104e50b9071f37bc74d78d8b29"
+  }
+]
