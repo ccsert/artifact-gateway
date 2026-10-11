@@ -16,6 +16,7 @@ import {
 import type { UserIdentity } from "../../../client";
 import { AntdProvider } from "../../../app/AntdProvider";
 import { PreferencesProvider } from "../../../lib/preferences";
+import { TestQueryProvider } from "../../../test/queryClient";
 import { UserIdentitiesPanel } from "./UserIdentitiesPanel";
 
 vi.mock("../../../client", () => ({
@@ -45,11 +46,13 @@ const identity: UserIdentity = {
 
 function renderPanel() {
   return render(
-    <PreferencesProvider>
-      <AntdProvider>
-        <UserIdentitiesPanel userId={identity.userId} />
-      </AntdProvider>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <AntdProvider>
+          <UserIdentitiesPanel userId={identity.userId} />
+        </AntdProvider>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 
@@ -81,6 +84,7 @@ describe("UserIdentitiesPanel", () => {
     expect(await screen.findByText("provider-subject")).toBeInTheDocument();
     expect(mockListIdentities).toHaveBeenCalledWith({
       path: { userId: identity.userId },
+      signal: expect.any(AbortSignal),
     });
 
     await user.click(screen.getByText("绑定身份", { selector: "span" }));
@@ -146,11 +150,13 @@ describe("UserIdentitiesPanel", () => {
     mockGetOidcSettings.mockReturnValue(new Promise(() => {}) as never);
 
     render(
-      <PreferencesProvider>
-        <AntdProvider>
-          <UserIdentitiesPanel userId="00000000-0000-0000-0000-000000000001" />
-        </AntdProvider>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            <UserIdentitiesPanel userId="00000000-0000-0000-0000-000000000001" />
+          </AntdProvider>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByRole("status")).toBeInTheDocument();
@@ -163,11 +169,13 @@ describe("UserIdentitiesPanel", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <AntdProvider>
-          <UserIdentitiesPanel userId="00000000-0000-0000-0000-000000000001" />
-        </AntdProvider>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            <UserIdentitiesPanel userId="00000000-0000-0000-0000-000000000001" />
+          </AntdProvider>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     const empty = await screen.findByText("尚未绑定外部身份");

@@ -28,6 +28,11 @@ export const identityKeys = {
       "credentials",
     ] as const,
   users: () => [...identityKeys.all, "users"] as const,
+  userSessions: (userId: string) =>
+    [...identityKeys.all, "user-sessions", userId] as const,
+  userIdentities: (userId: string) =>
+    [...identityKeys.all, "user-identities", userId] as const,
+  oidcIssuer: () => [...identityKeys.all, "oidc-issuer"] as const,
 };
 
 export const accessKeys = {

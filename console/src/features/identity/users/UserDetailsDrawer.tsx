@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   DeleteOutlined,
   KeyOutlined,
@@ -33,6 +34,7 @@ import { ErrorBanner } from "../../../components/ui/Feedback";
 import { ConfirmDialog, Modal } from "../../../components/ui/Modal";
 import { formatDate } from "../../../lib/format";
 import { usePreferences } from "../../../lib/preferences";
+import { identityKeys } from "../../../lib/query/keys";
 import {
   localPasswordFitsBcrypt,
   localPasswordMeetsMinimum,
@@ -68,7 +70,11 @@ export function UserDetailsDrawer({
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(
     null,
   );
-  const [sessionsRefreshKey, setSessionsRefreshKey] = useState(0);
+  const queryClient = useQueryClient();
+  const refreshSessions = (userId: string) =>
+    void queryClient.invalidateQueries({
+      queryKey: identityKeys.userSessions(userId),
+    });
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
@@ -137,7 +143,7 @@ export function UserDetailsDrawer({
         "Password reset and existing sessions revoked",
       ),
     );
-    setSessionsRefreshKey((current) => current + 1);
+    refreshSessions(user.id);
     onChanged(data);
   };
 
@@ -175,7 +181,7 @@ export function UserDetailsDrawer({
     }
     setPendingAction(null);
     void message.success(text("全部会话已撤销", "All sessions revoked"));
-    setSessionsRefreshKey((current) => current + 1);
+    refreshSessions(user.id);
     onChanged(data);
   };
 
@@ -417,7 +423,7 @@ export function UserDetailsDrawer({
 
         <Divider />
 
-        <UserSessionsPanel userId={user.id} refreshKey={sessionsRefreshKey} />
+        <UserSessionsPanel userId={user.id} />
 
         <Divider />
 

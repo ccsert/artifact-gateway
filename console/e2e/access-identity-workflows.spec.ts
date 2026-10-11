@@ -362,7 +362,7 @@ test("a custom role feeds a template that is applied to a repository", async ({
   expect(await named("/api/v2/authorization-roles", roleName)).toHaveLength(0);
 });
 
-test("a user's repository grant is added, narrowed, and removed from the user drawer", async ({
+test("the user drawer saves a profile and adds, narrows, and removes a repository grant", async ({
   page,
   request,
 }) => {
@@ -385,6 +385,21 @@ test("a user's repository grant is added, narrowed, and removed from the user dr
   await page.goto("/users");
   await page.getByText(username, { exact: true }).click();
   const drawer = page.getByRole("dialog").filter({ hasText: "仓库授权" });
+
+  // A profile save shows in the list behind the drawer without a reload.
+  const renamed = `Drawer renamed ${suffix}`;
+  await drawer.getByLabel("显示名").fill(renamed);
+  await drawer.getByRole("button", { name: /保存更改/ }).click();
+  await expect(
+    page.getByRole("row").filter({ hasText: username }),
+  ).toContainText(renamed);
+  const profile = await request.get(`/api/v2/users/${drawerUserId}`, {
+    headers: admin(),
+  });
+  await expectOK(profile, "read user");
+  expect(((await profile.json()) as { displayName: string }).displayName).toBe(
+    renamed,
+  );
   await drawer.getByRole("button", { name: /添加授权/ }).click();
 
   const editor = page.getByRole("dialog", { name: "添加仓库授权" });

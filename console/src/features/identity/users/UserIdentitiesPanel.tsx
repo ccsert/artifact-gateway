@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   DeleteOutlined,
   LinkOutlined,
@@ -6,13 +7,12 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import { Alert, App, Button, Form, Input, Popconfirm, Space, Tag } from "antd";
-import {
-  createUserIdentity,
-  deleteUserIdentity,
-  getOidcSettings,
-  listUserIdentities,
+import { createUserIdentity, deleteUserIdentity } from "../../../client";
+import type {
+  CreateUserIdentity,
+  ListUserIdentitiesResponse,
+  UserIdentity,
 } from "../../../client";
-import type { CreateUserIdentity, UserIdentity } from "../../../client";
 import { Badge } from "../../../components/ui/Badge";
 import {
   EmptyState,
@@ -22,6 +22,8 @@ import {
 import { Modal } from "../../../components/ui/Modal";
 import { formatDate } from "../../../lib/format";
 import { usePreferences } from "../../../lib/preferences";
+import { identityKeys } from "../../../lib/query/keys";
+import { useOidcIssuer, useUserIdentities } from "../userQueries";
 
 interface UserIdentitiesPanelProps {
   userId: string;
@@ -30,39 +32,30 @@ interface UserIdentitiesPanelProps {
 export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
   const { message } = App.useApp();
   const { locale, text } = usePreferences();
-  const [items, setItems] = useState<UserIdentity[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<unknown>(null);
+  const queryClient = useQueryClient();
+  const identitiesQuery = useUserIdentities(userId);
+  const issuerQuery = useOidcIssuer();
+  const issuer = issuerQuery.data ?? "";
+  const items = identitiesQuery.data?.items ?? [];
+  const loading = identitiesQuery.isFetching;
+  const [actionError, setActionError] = useState<unknown>(null);
+  const error = actionError ?? identitiesQuery.error;
   // A failed link belongs to the dialog that started it; the panel banner
   // stays reserved for loading the identity list.
   const [linkError, setLinkError] = useState<unknown>(null);
   const [open, setOpen] = useState(false);
-  const [issuer, setIssuer] = useState("");
   const [subject, setSubject] = useState("");
   const [busy, setBusy] = useState(false);
+  const updateItems = (change: (items: UserIdentity[]) => UserIdentity[]) =>
+    queryClient.setQueryData<ListUserIdentitiesResponse>(
+      identityKeys.userIdentities(userId),
+      (current) => current && { ...current, items: change(current.items) },
+    );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const [identitiesResult, settingsResult] = await Promise.all([
-      listUserIdentities({ path: { userId } }),
-      getOidcSettings(),
-    ]);
-    setLoading(false);
-    if (identitiesResult.error || !identitiesResult.data) {
-      setError(
-        identitiesResult.error ??
-          new Error(text("加载身份失败", "Failed to load identities")),
-      );
-      return;
-    }
-    setItems(identitiesResult.data.items);
-    setIssuer(settingsResult.data?.issuer ?? "");
-  }, [text, userId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const load = () => {
+    setActionError(null);
+    return Promise.all([identitiesQuery.refetch(), issuerQuery.refetch()]);
+  };
 
   const link = async () => {
     const body: CreateUserIdentity = {
@@ -84,7 +77,7 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
         );
         return;
       }
-      setItems((current) => [...current, data]);
+      updateItems((current) => [...current, data]);
       setSubject("");
       setOpen(false);
       void message.success(text("身份已绑定", "Identity linked"));
@@ -96,15 +89,15 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
   };
 
   const unlink = async (identity: UserIdentity) => {
-    setError(null);
+    setActionError(null);
     const { error: requestError } = await deleteUserIdentity({
       path: { userId, identityId: identity.id },
     });
     if (requestError) {
-      setError(requestError);
+      setActionError(requestError);
       return;
     }
-    setItems((current) => current.filter((item) => item.id !== identity.id));
+    updateItems((current) => current.filter((item) => item.id !== identity.id));
     void message.success(text("身份已解绑", "Identity unlinked"));
   };
 
@@ -134,7 +127,7 @@ export function UserIdentitiesPanel({ userId }: UserIdentitiesPanelProps) {
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => {
-              setError(null);
+              setActionError(null);
               setLinkError(null);
               setSubject("");
               setOpen(true);

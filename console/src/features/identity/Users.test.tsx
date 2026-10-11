@@ -129,6 +129,7 @@ describe("UsersPage", () => {
         limit: 20,
         offset: 0,
       },
+      signal: expect.any(AbortSignal),
     });
 
     await user.click(screen.getByText("Alice Chen"));
@@ -162,6 +163,7 @@ describe("UsersPage", () => {
           limit: 20,
           offset: 0,
         },
+        signal: expect.any(AbortSignal),
       });
     });
   });

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   CloudOutlined,
   LaptopOutlined,
@@ -16,8 +17,8 @@ import {
   Typography,
   theme,
 } from "antd";
-import { listUserSessions, revokeUserSession } from "../../../client";
-import type { UserSession } from "../../../client";
+import { revokeUserSession } from "../../../client";
+import type { ListUserSessionsResponse, UserSession } from "../../../client";
 import { Badge } from "../../../components/ui/Badge";
 import {
   EmptyState,
@@ -26,69 +27,59 @@ import {
 } from "../../../components/ui/Feedback";
 import { formatDate } from "../../../lib/format";
 import { usePreferences } from "../../../lib/preferences";
+import { identityKeys } from "../../../lib/query/keys";
+import { useUserSessions } from "../userQueries";
 
 interface UserSessionsPanelProps {
   userId: string;
-  refreshKey?: number;
 }
 
-export function UserSessionsPanel({
-  userId,
-  refreshKey = 0,
-}: UserSessionsPanelProps) {
+/** One user's sessions; the drawer invalidates them after account-wide revokes. */
+export function UserSessionsPanel({ userId }: UserSessionsPanelProps) {
   const { message } = App.useApp();
   const { token } = theme.useToken();
   const { locale, text } = usePreferences();
-  const [items, setItems] = useState<UserSession[]>([]);
+  const queryClient = useQueryClient();
   const [includeInactive, setIncludeInactive] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const sessionsQuery = useUserSessions(userId, includeInactive);
+  const items = sessionsQuery.data?.items ?? [];
+  const loading = sessionsQuery.isFetching;
   const [revoking, setRevoking] = useState("");
-  const [error, setError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
+  const error = actionError ?? sessionsQuery.error;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const { data, error: requestError } = await listUserSessions({
-      path: { userId },
-      query: { includeInactive },
-    });
-    setLoading(false);
-    if (requestError || !data) {
-      setError(
-        requestError ??
-          new Error(text("加载会话失败", "Failed to load sessions")),
-      );
-      return;
-    }
-    setItems(data.items);
-  }, [includeInactive, text, userId]);
-
-  useEffect(() => {
-    void load();
-  }, [load, refreshKey]);
+  const load = () => {
+    setActionError(null);
+    return sessionsQuery.refetch();
+  };
 
   const revoke = async (session: UserSession) => {
     setRevoking(session.id);
-    setError(null);
+    setActionError(null);
     try {
       const { data, error: requestError } = await revokeUserSession({
         path: { userId, sessionId: session.id },
       });
       if (requestError || !data) {
-        setError(
+        setActionError(
           requestError ??
             new Error(text("撤销会话失败", "Failed to revoke session")),
         );
         return;
       }
-      setItems((current) =>
-        includeInactive
-          ? current.map((item) => (item.id === data.id ? data : item))
-          : current.filter((item) => item.id !== data.id),
+      queryClient.setQueryData<ListUserSessionsResponse>(
+        [...identityKeys.userSessions(userId), includeInactive],
+        (current) =>
+          current && {
+            ...current,
+            items: includeInactive
+              ? current.items.map((item) => (item.id === data.id ? data : item))
+              : current.items.filter((item) => item.id !== data.id),
+          },
       );
       void message.success(text("会话已撤销", "Session revoked"));
     } catch (nextError) {
-      setError(nextError);
+      setActionError(nextError);
     } finally {
       setRevoking("");
     }

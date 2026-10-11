@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LockOutlined,
   MoreOutlined,
@@ -7,7 +7,6 @@ import {
 } from "@ant-design/icons";
 import { Button, Dropdown, Input, Select, Space, Tooltip } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
-import { listUsers } from "../../client";
 import type { User } from "../../client";
 import { Badge, StateBadge } from "../../components/ui/Badge";
 import { EmptyState, ErrorBanner } from "../../components/ui/Feedback";
@@ -23,17 +22,13 @@ import { UserCreateDialog } from "./users/UserCreateDialog";
 import { UserDetailsDrawer } from "./users/UserDetailsDrawer";
 import { isUserLocked, roleTone } from "./users/userPresentation";
 import { CONSOLE_PAGE_SIZE } from "../../components/ui/useConsolePagination";
+import { useUserChanged, useUserPage } from "./userQueries";
 
 type Role = User["role"];
 type UserState = User["state"];
 
 export function UsersPage() {
   const { locale, text } = usePreferences();
-  const requestSequence = useRef(0);
-  const [users, setUsers] = useState<User[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<unknown>(null);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [role, setRole] = useState<Role | undefined>();
@@ -51,48 +46,31 @@ export function UsersPage() {
     return () => window.clearTimeout(timer);
   }, [searchInput]);
 
-  const load = useCallback(async () => {
-    const sequence = ++requestSequence.current;
-    setLoading(true);
-    setError(null);
-    const { data, error: requestError } = await listUsers({
-      query: {
-        search: search || undefined,
-        role,
-        state,
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
-      },
-    });
-    if (sequence !== requestSequence.current) return;
-    setLoading(false);
-    if (requestError) {
-      setError(requestError);
-      return;
-    }
-    setUsers(data?.items ?? []);
-    setTotal(data?.total ?? 0);
-  }, [page, pageSize, role, search, state]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const usersQuery = useUserPage({
+    search: search || undefined,
+    role,
+    state,
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+  });
+  const users = usersQuery.data?.items ?? [];
+  const total = usersQuery.data?.total ?? 0;
+  const loading = usersQuery.isFetching;
+  const error = usersQuery.error;
+  const userChanged = useUserChanged();
+  const load = () => void usersQuery.refetch();
 
   const updateVisibleUser = (updated: User) => {
-    setUsers((current) =>
-      current.map((user) => (user.id === updated.id ? updated : user)),
-    );
     setSelectedUser(updated);
-    void load();
+    void userChanged(updated);
   };
 
   const handleDeleted = () => {
     setSelectedUser(null);
     if (users.length === 1 && page > 1) {
       setPage((current) => current - 1);
-      return;
     }
-    void load();
+    void userChanged();
   };
 
   const clearFilters = () => {
@@ -364,7 +342,7 @@ export function UsersPage() {
         onCreated={() => {
           setCreateOpen(false);
           setPage(1);
-          void load();
+          void userChanged();
         }}
       />
       <UserDetailsDrawer

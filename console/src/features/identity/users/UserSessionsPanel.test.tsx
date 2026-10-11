@@ -5,6 +5,7 @@ import { listUserSessions, revokeUserSession } from "../../../client";
 import type { UserSession } from "../../../client";
 import { AntdProvider } from "../../../app/AntdProvider";
 import { PreferencesProvider } from "../../../lib/preferences";
+import { TestQueryProvider } from "../../../test/queryClient";
 import { UserSessionsPanel } from "./UserSessionsPanel";
 
 vi.mock("../../../client", () => ({
@@ -28,11 +29,13 @@ const active: UserSession = {
 
 function renderPanel() {
   return render(
-    <PreferencesProvider>
-      <AntdProvider>
-        <UserSessionsPanel userId={userId} />
-      </AntdProvider>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <AntdProvider>
+          <UserSessionsPanel userId={userId} />
+        </AntdProvider>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 
@@ -70,6 +73,7 @@ describe("UserSessionsPanel", () => {
     expect(mockListSessions).toHaveBeenCalledWith({
       path: { userId },
       query: { includeInactive: false },
+      signal: expect.any(AbortSignal),
     });
 
     await user.click(screen.getByRole("switch", { name: "显示失效会话" }));
@@ -78,6 +82,7 @@ describe("UserSessionsPanel", () => {
       expect(mockListSessions).toHaveBeenLastCalledWith({
         path: { userId },
         query: { includeInactive: true },
+        signal: expect.any(AbortSignal),
       });
     });
 
