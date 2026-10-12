@@ -7,6 +7,7 @@ import { useCallback } from "react";
 import {
   getAptLifecycleState,
   getAptRepositorySigningState,
+  getProxyHealth,
   getQuarantineReadPolicy,
   getSecurityPolicy,
   getRepository,
@@ -228,4 +229,25 @@ export function useAptSigningState(repositoryId: string, enabled: boolean) {
     enabled,
     staleTime: 0,
   });
+}
+
+/** A proxy's upstream health; it changes as the upstream answers, so re-read. */
+export function useProxyHealth(repositoryId: string) {
+  return useQuery({
+    queryKey: repositoryKeys.proxyHealth(repositoryId),
+    queryFn: ({ signal }) =>
+      unwrap(getProxyHealth({ path: { repositoryId }, signal })),
+    staleTime: 0,
+  });
+}
+
+export function useInvalidateProxyHealth(repositoryId: string) {
+  const queryClient = useQueryClient();
+  return useCallback(
+    () =>
+      queryClient.invalidateQueries({
+        queryKey: repositoryKeys.proxyHealth(repositoryId),
+      }),
+    [queryClient, repositoryId],
+  );
 }

@@ -23,6 +23,8 @@ export const repositoryKeys = {
     [...repositoryKeys.detail(id), "quarantine-read-policy"] as const,
   aptSigningState: (id: string) =>
     [...repositoryKeys.detail(id), "apt-signing-state"] as const,
+  proxyHealth: (id: string) =>
+    [...repositoryKeys.detail(id), "proxy-health"] as const,
   replicationPlans: (id: string) =>
     [...repositoryKeys.detail(id), "replication-plans"] as const,
   aptLifecycle: (id: string, suite: string) =>
