@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { searchRepositoryArtifacts } from "../../client";
-import type { ArtifactSummary } from "../../client";
+import type { ArtifactSearchMatch, ArtifactSummary } from "../../client";
 import { missingDeepLinkedArtifact } from "../../lib/publicBrowseModel";
 import { unwrap } from "../../lib/query/client";
 import { publicKeys } from "../../lib/query/keys";
@@ -75,12 +75,14 @@ export function usePublicArtifacts(
   repository: PublicRepository | undefined,
   query: string,
   artifactParam: string,
+  match: ArtifactSearchMatch = "contains",
 ) {
   const repositoryId = repository?.id ?? "";
   const supported = Boolean(formatDescriptor(repository?.format));
-  const search = useQuery({
-    queryKey: publicKeys.artifacts(repositoryId, query),
-    queryFn: ({ signal }) =>
+  const search = useInfiniteQuery({
+    queryKey: publicKeys.artifacts(repositoryId, query, match),
+    initialPageParam: "",
+    queryFn: ({ signal, pageParam }) =>
       unwrap(
         searchRepositoryArtifacts({
           path: { repositoryId },
@@ -89,14 +91,17 @@ export function usePublicArtifacts(
               artifactSearchPrefix(repository?.format ?? "", query) ||
               undefined,
             pageSize: 100,
+            match,
+            ...(pageParam ? { pageToken: pageParam } : {}),
           },
           signal,
         }),
       ).then(publicArtifactAnswer),
+    getNextPageParam: (lastPage) => lastPage.nextPageToken,
     enabled: Boolean(repository) && supported,
     meta: publicMeta,
   });
-  const found = search.data?.items;
+  const found = search.data?.pages.flatMap((page) => page.items);
   const missing = found?.every(
     (item) => item && typeof item.coordinate === "string",
   )
@@ -108,7 +113,7 @@ export function usePublicArtifacts(
       unwrap(
         searchRepositoryArtifacts({
           path: { repositoryId },
-          query: { q: missing ?? "", pageSize: 100 },
+          query: { q: missing ?? "", pageSize: 100, match: "prefix" },
           signal,
         }),
       ).then(publicArtifactAnswer),
@@ -138,6 +143,9 @@ export function usePublicArtifacts(
     items,
     error: search.error ?? lookup.error ?? null,
     recoveryKeys: [search.data, lookup.data],
+    hasMore: search.hasNextPage,
+    loadingMore: search.isFetchingNextPage,
+    loadMore: () => search.fetchNextPage({ cancelRefetch: false }),
     refetch: () =>
       refetchPublicSources([
         ...(repository && supported

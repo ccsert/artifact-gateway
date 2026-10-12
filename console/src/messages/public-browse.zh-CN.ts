@@ -43,6 +43,8 @@ export const publicBrowseZhCN = {
   "publicBrowse.unknownRepository": "未知仓库",
   "publicBrowse.coordinatePathOrNamePrefixOptional":
     "坐标、路径或名称前缀（可选）",
+  "publicBrowse.coordinatePathOrNameKeywordOptional":
+    "坐标、包名或路径关键词（可选）",
   "publicBrowse.search": "搜索",
   "publicBrowse.loadingPublicArtifacts": "正在读取公开制品…",
   "publicBrowse.noMatchingPublicArtifacts": "没有匹配的公开制品",

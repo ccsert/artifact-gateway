@@ -90,6 +90,12 @@ type Authenticator struct {
 }
 
 func (a Authenticator) Authenticate(header string) (Principal, bool) {
+	return a.AuthenticateContext(context.Background(), header)
+}
+
+// AuthenticateContext includes credential, account and OIDC lookups in the
+// caller's cancellation budget. Existing protocol callers keep Authenticate.
+func (a Authenticator) AuthenticateContext(ctx context.Context, header string) (Principal, bool) {
 	const bearer = "Bearer "
 	if !strings.HasPrefix(header, bearer) {
 		return Principal{}, false
@@ -103,23 +109,23 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 		principal.AuthenticationKind = AuthenticationStaticResolver
 		return principal, true
 	}
-	if principal, ok := a.principalToken(token); ok {
+	if principal, ok := a.principalToken(ctx, token); ok {
 		return principal, true
 	}
-	if principal, ok := a.webSessionPrincipal(token); ok {
+	if principal, ok := a.webSessionPrincipal(ctx, token); ok {
 		return principal, true
 	}
 	if actor, ok := a.tokenActor(token); ok {
-		principal, active := a.principalForTokenActor(actor)
+		principal, active := a.principalForTokenActor(ctx, actor)
 		return principal, active
 	}
-	if principal, ok := a.apiKeyPrincipal(token); ok {
+	if principal, ok := a.apiKeyPrincipal(ctx, token); ok {
 		return principal, true
 	}
 	if userID, sessionID, sessionVersion, ok := a.userSessionClaims(token); ok && a.Users != nil {
-		user, err := a.Users.GetUser(context.Background(), userID)
+		user, err := a.Users.GetUser(ctx, userID)
 		versionMatches := sessionVersion == user.SessionVersion || sessionVersion == 0 && user.SessionVersion == 1
-		if err == nil && user.State == repository.UserActive && versionMatches && a.userSessionIsActive(userID, sessionID) {
+		if err == nil && user.State == repository.UserActive && versionMatches && a.userSessionIsActive(ctx, userID, sessionID) {
 			role := Role(user.Role)
 			if user.MustChangePassword {
 				return Principal{Actor: "user:" + user.Name, AuthenticationKind: AuthenticationLocalSession, MustChangePassword: true, UserID: user.ID, SessionID: sessionID}, true
@@ -129,14 +135,14 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 	}
 	oidcValidator := a.OIDC
 	if a.OIDCSource != nil {
-		if resolved, err := a.OIDCSource.OIDCValidator(context.Background()); err == nil {
+		if resolved, err := a.OIDCSource.OIDCValidator(ctx); err == nil {
 			oidcValidator = resolved
 		}
 	}
 	if oidcValidator != nil {
-		if identity, ok := oidcValidator.Validate(context.Background(), token); ok {
+		if identity, ok := oidcValidator.Validate(ctx, token); ok {
 			if a.UserIdentities != nil {
-				user, _, err := a.UserIdentities.GetUserByOIDCIdentity(context.Background(), identity.Issuer, identity.Subject)
+				user, _, err := a.UserIdentities.GetUserByOIDCIdentity(ctx, identity.Issuer, identity.Subject)
 				if err == nil {
 					if user.State != repository.UserActive {
 						return Principal{}, false
@@ -170,12 +176,12 @@ func (a Authenticator) Authenticate(header string) (Principal, bool) {
 	return Principal{}, false
 }
 
-func (a Authenticator) principalForTokenActor(actor string) (Principal, bool) {
+func (a Authenticator) principalForTokenActor(ctx context.Context, actor string) (Principal, bool) {
 	if !strings.HasPrefix(actor, "user:") || a.Users == nil {
 		return a.PrincipalForActor(actor), true
 	}
 	name := strings.TrimPrefix(actor, "user:")
-	user, err := a.Users.GetUserByName(context.Background(), name)
+	user, err := a.Users.GetUserByName(ctx, name)
 	if err != nil || user.State != repository.UserActive {
 		return Principal{}, false
 	}
@@ -197,18 +203,18 @@ func (a Authenticator) AuthenticateBasic(username, password string) (Principal, 
 		principal.AuthenticationKind = AuthenticationStaticResolver
 		return principal, true
 	}
-	principal, ok := a.apiKeyPrincipal(password)
+	principal, ok := a.apiKeyPrincipal(context.Background(), password)
 	if !ok || principal.AuthenticationKind != AuthenticationServiceAccountCredential {
 		return Principal{}, false
 	}
 	return principal, true
 }
 
-func (a Authenticator) apiKeyPrincipal(token string) (Principal, bool) {
+func (a Authenticator) apiKeyPrincipal(ctx context.Context, token string) (Principal, bool) {
 	if a.APIKeys == nil || token == "" {
 		return Principal{}, false
 	}
-	key, err := a.APIKeys.FindActiveAPIKeyByHash(context.Background(), HashAPIKey(token))
+	key, err := a.APIKeys.FindActiveAPIKeyByHash(ctx, HashAPIKey(token))
 	if err != nil {
 		return Principal{}, false
 	}
@@ -216,7 +222,7 @@ func (a Authenticator) apiKeyPrincipal(token string) (Principal, bool) {
 		if a.ServiceAccounts == nil {
 			return Principal{}, false
 		}
-		account, accountErr := a.ServiceAccounts.GetServiceAccount(context.Background(), key.ServiceAccountID)
+		account, accountErr := a.ServiceAccounts.GetServiceAccount(ctx, key.ServiceAccountID)
 		if accountErr != nil || account.State != repository.ServiceAccountActive {
 			return Principal{}, false
 		}
@@ -429,7 +435,7 @@ func (a Authenticator) issueWebSession(principal Principal, sessionID string, se
 	return payload + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-func (a Authenticator) webSessionPrincipal(token string) (Principal, bool) {
+func (a Authenticator) webSessionPrincipal(ctx context.Context, token string) (Principal, bool) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 4 || parts[0] != "ws" || a.AdminToken == "" {
 		return Principal{}, false
@@ -468,9 +474,9 @@ func (a Authenticator) webSessionPrincipal(token string) (Principal, bool) {
 		if a.Users == nil {
 			return Principal{}, false
 		}
-		user, err := a.Users.GetUserByName(context.Background(), strings.TrimPrefix(claims.Actor, "user:"))
+		user, err := a.Users.GetUserByName(ctx, strings.TrimPrefix(claims.Actor, "user:"))
 		versionMatches := claims.SessionVersion == user.SessionVersion || claims.SessionVersion == 0 && user.SessionVersion == 1
-		if err != nil || user.State != repository.UserActive || !versionMatches || !a.userSessionIsActive(user.ID, claims.SessionID) {
+		if err != nil || user.State != repository.UserActive || !versionMatches || !a.userSessionIsActive(ctx, user.ID, claims.SessionID) {
 			return Principal{}, false
 		}
 		role := Role(user.Role)
@@ -534,11 +540,11 @@ func (a Authenticator) userSessionClaims(token string) (string, string, int64, b
 	return string(raw), "", 0, true
 }
 
-func (a Authenticator) userSessionIsActive(userID, sessionID string) bool {
+func (a Authenticator) userSessionIsActive(ctx context.Context, userID, sessionID string) bool {
 	if sessionID == "" || a.UserSessions == nil {
 		return true
 	}
-	session, err := a.UserSessions.GetUserSession(context.Background(), userID, sessionID)
+	session, err := a.UserSessions.GetUserSession(ctx, userID, sessionID)
 	return err == nil && session.RevokedAt == nil && session.ExpiresAt.After(time.Now().UTC())
 }
 
@@ -567,7 +573,7 @@ func (a Authenticator) tokenActor(token string) (string, bool) {
 	return string(actor), true
 }
 
-func (a Authenticator) principalToken(token string) (Principal, bool) {
+func (a Authenticator) principalToken(ctx context.Context, token string) (Principal, bool) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 4 || parts[0] != "v2" || a.ResolverToken == "" {
 		return Principal{}, false
@@ -601,7 +607,7 @@ func (a Authenticator) principalToken(token string) (Principal, bool) {
 		return Principal{}, false
 	}
 	if strings.HasPrefix(claims.Actor, "user:") {
-		return a.principalForTokenActor(claims.Actor)
+		return a.principalForTokenActor(ctx, claims.Actor)
 	}
 	if claims.Role != "" && !validGatewayRole(claims.Role) {
 		return Principal{}, false
@@ -618,7 +624,7 @@ func (a Authenticator) principalToken(token string) (Principal, bool) {
 			return Principal{}, false
 		}
 		accountID := strings.TrimPrefix(claims.Actor, prefix)
-		account, err := a.ServiceAccounts.GetServiceAccount(context.Background(), accountID)
+		account, err := a.ServiceAccounts.GetServiceAccount(ctx, accountID)
 		if err != nil || account.State != repository.ServiceAccountActive {
 			return Principal{}, false
 		}

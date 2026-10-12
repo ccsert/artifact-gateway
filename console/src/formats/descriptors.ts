@@ -15,6 +15,7 @@ const base = {
     distribute: ["hosted", "proxy"],
     jobs: ["hosted", "proxy"],
   },
+  serverKeywordSearch: true,
   packageVersions: false,
   versionColumns: false,
   pathAddressed: false,
@@ -168,6 +169,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
   conan: {
     ...base,
     format: "conan",
+    serverKeywordSearch: false,
     artifactColumn: ["名称", "Name"],
     searchPlaceholder: ["按引用名过滤…", "Filter by reference…"],
     nameListing: true,

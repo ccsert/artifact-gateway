@@ -36,6 +36,8 @@ export interface FormatDescriptor {
   artifactColumn: Localized;
   /** Hint for the repository artifact search box. */
   searchPlaceholder: Localized;
+  /** The ordinary list has service-side prefix/contains filtering. */
+  serverKeywordSearch: boolean;
   /**
    * Packages are listed one row per package and open on a version page
    * (npm, PyPI, Go, Cargo); links carry the selected version.

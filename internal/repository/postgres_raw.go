@@ -195,11 +195,11 @@ func (s *PostgresStore) GetRawAsset(ctx context.Context, repositoryID, path stri
 	}
 	return v, err
 }
-func (s *PostgresStore) ListRawAssets(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]RawAsset, error) {
+func (s *PostgresStore) ListRawAssets(ctx context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]RawAsset, error) {
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT a.repository_id::text,a.path,a.digest,o.object_key,o.size,a.content_type,a.updated_at FROM native_raw_assets a JOIN native_raw_objects o ON o.digest=a.digest WHERE a.repository_id::text=$1 AND ($2='' OR a.path LIKE $2 || '%' ESCAPE '\') AND a.path>$3 ORDER BY a.path LIMIT $4`, repositoryID, escapeLikePrefix(prefix), after, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT a.repository_id::text,a.path,a.digest,o.object_key,o.size,a.content_type,a.updated_at FROM native_raw_assets a JOIN native_raw_objects o ON o.digest=a.digest WHERE a.repository_id=$1::uuid AND ($2='' OR `+searchTextSQL("a.path", "$2", matches)+`) AND a.path>$3 ORDER BY a.path LIMIT $4`, repositoryID, searchTextPattern(prefix, matches), after, limit)
 	if err != nil {
 		return nil, err
 	}

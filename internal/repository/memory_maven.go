@@ -434,13 +434,13 @@ func (s *MemoryStore) ListMavenArtifacts(_ context.Context, repositoryID string)
 	return out, nil
 }
 
-func (s *MemoryStore) SearchMavenArtifacts(_ context.Context, repositoryID, prefix string, limit int, after MavenArtifactCursor) ([]MavenArtifact, error) {
+func (s *MemoryStore) SearchMavenArtifacts(_ context.Context, repositoryID, prefix string, limit int, after MavenArtifactCursor, matches ...ArtifactSearchMatch) ([]MavenArtifact, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := []MavenArtifact{}
 	for _, artifact := range s.mavenArtifacts {
 		afterCursor := artifact.Coordinate > after.Coordinate || artifact.Coordinate == after.Coordinate && artifact.BuildNumber > after.BuildNumber
-		if artifact.RepositoryID == repositoryID && artifact.State == "visible" && strings.HasPrefix(artifact.Coordinate, prefix) && afterCursor {
+		if artifact.RepositoryID == repositoryID && artifact.State == "visible" && searchTextMatches(artifact.Coordinate, prefix, matches) && afterCursor {
 			artifact.Publisher = s.latestCommittedMavenPublisherLocked(repositoryID, artifact.Coordinate)
 			out = append(out, artifact)
 		}

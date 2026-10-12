@@ -4,7 +4,6 @@ import (
 	"context"
 	"slices"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -208,13 +207,13 @@ func (s *MemoryStore) ListPyPIProjectFiles(_ context.Context, repositoryID, proj
 	return files, nil
 }
 
-func (s *MemoryStore) ListPyPIProjects(_ context.Context, repositoryID, prefix string, limit int, after string) ([]PyPIProjectSummary, error) {
+func (s *MemoryStore) ListPyPIProjects(_ context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]PyPIProjectSummary, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	projects := make(map[string]*PyPIProjectSummary)
 	versions := make(map[string]map[string]struct{})
 	for _, file := range s.pypiFiles {
-		if file.RepositoryID != repositoryID || file.State != "visible" || !strings.HasPrefix(file.Project, prefix) || file.Project <= after {
+		if file.RepositoryID != repositoryID || file.State != "visible" || !searchTextMatches(file.Project, prefix, matches) || file.Project <= after {
 			continue
 		}
 		summary := projects[file.Project]

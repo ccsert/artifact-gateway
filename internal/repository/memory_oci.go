@@ -335,15 +335,15 @@ func (s *MemoryStore) ListOCIManifests(_ context.Context, repositoryID, name str
 func (s *MemoryStore) ListOCIManifestNames(_ context.Context, repositoryID string, limit int, after string) ([]string, error) {
 	return s.searchOCIManifestNames(repositoryID, "", limit, after)
 }
-func (s *MemoryStore) SearchOCIManifestNames(_ context.Context, repositoryID, prefix string, limit int, after string) ([]string, error) {
-	return s.searchOCIManifestNames(repositoryID, prefix, limit, after)
+func (s *MemoryStore) SearchOCIManifestNames(_ context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]string, error) {
+	return s.searchOCIManifestNames(repositoryID, prefix, limit, after, matches...)
 }
-func (s *MemoryStore) searchOCIManifestNames(repositoryID, prefix string, limit int, after string) ([]string, error) {
+func (s *MemoryStore) searchOCIManifestNames(repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	names := make(map[string]struct{})
 	for _, item := range s.ociManifests {
-		if item.RepositoryID == repositoryID && strings.HasPrefix(item.Name, prefix) && item.Name > after {
+		if item.RepositoryID == repositoryID && searchTextMatches(item.Name, prefix, matches) && item.Name > after {
 			names[item.Name] = struct{}{}
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
@@ -18,6 +19,7 @@ type globalArtifactSearchCursor struct {
 	Endpoint, Query, Mode, Format, RepositoryID, Coordinate, Digest string
 	BuildNumber                                                     int
 	ExpiresAt                                                       int64
+	Match                                                           string `json:",omitempty"`
 }
 
 func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r *http.Request, params adminopenapi.SearchArtifactsParams) {
@@ -29,12 +31,28 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 		writeHostedProblem(w, http.StatusForbidden, code, message)
 		return
 	}
+	match, valid := artifactSearchMatch(params.Match)
+	if !valid {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "match must be prefix or contains")
+		return
+	}
+	r, cancel := artifactSearchRequest(r, match)
+	defer cancel()
 	query := strings.TrimSpace(params.Q)
-	if query == "" || len(query) > 255 || strings.ContainsRune(query, '\x00') {
+	if query == "" || !utf8.ValidString(query) || utf8.RuneCountInString(query) > 255 || strings.ContainsRune(query, '\x00') {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q must contain between 1 and 255 characters")
 		return
 	}
 	searchQuery := parseGlobalArtifactSearchQuery(query)
+	searchQuery.Match = match
+	if match == repository.ArtifactSearchContains {
+		for _, character := range params.Q {
+			if invalidRawSearchRune(character) {
+				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q must not contain control characters")
+				return
+			}
+		}
+	}
 	format := repository.Format("")
 	if params.Format != nil {
 		format = repository.Format(*params.Format)
@@ -100,7 +118,7 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 			summaries = summaries[:remaining]
 		}
 		for _, summary := range summaries {
-			items = append(items, globalArtifactSearchHit(repo, summary, searchQuery.Mode))
+			items = append(items, globalArtifactSearchHit(repo, summary, searchQuery))
 		}
 		if len(items) == pageSize {
 			last := items[len(items)-1]
@@ -135,7 +153,7 @@ func (h generatedRepositoryAPIAdapter) readableSearchRepositories(ctx context.Co
 			return nil, err
 		}
 		for _, repo := range page {
-			if repo.State != repository.RepositoryActive || format != "" && repo.Format != format || query.Mode == repository.ArtifactSearchByCoordinate && !validArtifactSearchQuery(repo.Format, query.Value) {
+			if repo.State != repository.RepositoryActive || format != "" && repo.Format != format || query.Mode == repository.ArtifactSearchByCoordinate && !validArtifactKeyword(repo.Format, query.Value, query.Match) {
 				continue
 			}
 			if h.authorizer.Authorize(ctx, principal, repo, RepositoryRead).Allowed {
@@ -168,10 +186,23 @@ func (h generatedRepositoryAPIAdapter) hasSearchResultsAfter(r *http.Request, re
 	return false, nil
 }
 
-func globalArtifactSearchHit(repo repository.HostedRepository, summary adminopenapi.ArtifactSummary, mode repository.ArtifactSearchMode) adminopenapi.GlobalArtifactSearchHit {
+func globalArtifactSearchHit(repo repository.HostedRepository, summary adminopenapi.ArtifactSummary, query repository.ArtifactSearchQuery) adminopenapi.GlobalArtifactSearchHit {
+	var match *adminopenapi.GlobalArtifactSearchHitMatch
+	if query.Mode == repository.ArtifactSearchByCoordinate {
+		actual := query.Match
+		if actual == "" {
+			actual = repository.ArtifactSearchPrefix
+			if repo.Format == repository.FormatCargo {
+				actual = repository.ArtifactSearchContains
+			}
+		}
+		value := adminopenapi.GlobalArtifactSearchHitMatch(actual)
+		match = &value
+	}
 	return adminopenapi.GlobalArtifactSearchHit{
+		Match:        match,
 		RepositoryId: uuid.MustParse(repo.ID), RepositoryName: repo.Name, Format: adminopenapi.Format(repo.Format),
-		MatchKind:  adminopenapi.GlobalArtifactSearchHitMatchKind(mode),
+		MatchKind:  adminopenapi.GlobalArtifactSearchHitMatchKind(query.Mode),
 		Coordinate: summary.Coordinate, Digest: summary.Digest, Size: summary.Size, ContentType: summary.ContentType,
 		CreatedAt: summary.CreatedAt, BuildNumber: summary.BuildNumber, Publisher: summary.Publisher, Intelligence: summary.Intelligence,
 		Version: summary.Version, VersionCount: summary.VersionCount,
@@ -204,7 +235,7 @@ func optionalArtifactVulnerabilityStatus(value string) *adminopenapi.ArtifactInt
 
 func (h hostedRepositoryAPIHandler) encodeGlobalArtifactSearchCursor(query repository.ArtifactSearchQuery, format repository.Format, repositoryID, coordinate string, buildNumber int, digest string) string {
 	return encodeSignedCursor(h.authenticator.AdminToken, globalArtifactSearchCursor{
-		Endpoint: "global-artifact-search", Query: query.Value, Mode: string(query.Mode), Format: string(format), RepositoryID: repositoryID,
+		Endpoint: "global-artifact-search", Query: query.Value, Mode: string(query.Mode), Match: string(query.Match), Format: string(format), RepositoryID: repositoryID,
 		Coordinate: coordinate, BuildNumber: buildNumber, Digest: digest, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix(),
 	})
 }
@@ -214,7 +245,7 @@ func (h hostedRepositoryAPIHandler) decodeGlobalArtifactSearchCursor(token strin
 		return globalArtifactSearchCursor{}, nil
 	}
 	var cursor globalArtifactSearchCursor
-	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "global-artifact-search" || cursor.Query != query.Value || cursor.Mode != string(query.Mode) || cursor.Format != string(format) || cursor.RepositoryID == "" || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "global-artifact-search" || cursor.Query != query.Value || cursor.Mode != string(query.Mode) || cursor.Match != string(query.Match) || cursor.Format != string(format) || cursor.RepositoryID == "" || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return globalArtifactSearchCursor{}, errors.New("invalid cursor")
 	}
 	return cursor, nil

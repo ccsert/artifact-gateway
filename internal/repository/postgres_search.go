@@ -31,6 +31,7 @@ const (
 type ArtifactSearchQuery struct {
 	Mode  ArtifactSearchMode
 	Value string
+	Match ArtifactSearchMatch
 }
 
 type ArtifactSearchItem struct {
@@ -62,7 +63,7 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 	}
 	value := query.Value
 	if query.Mode == ArtifactSearchByCoordinate {
-		value = escapeLikePrefix(value)
+		value = searchTextPattern(value, []ArtifactSearchMatch{query.Match})
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		WITH ranked AS (
@@ -70,13 +71,13 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 			       row_number() OVER (PARTITION BY coordinate ORDER BY created_at DESC NULLS LAST,digest DESC) AS coordinate_rank,
 			       row_number() OVER (PARTITION BY coordinate,digest ORDER BY created_at DESC NULLS LAST) AS digest_rank
 			FROM artifact_search_projection
-			WHERE repository_id::text=$1 AND format=$2
+			WHERE repository_id=$1::uuid AND format=$2
 			  AND ($2<>'go' OR NOT EXISTS (
 			    SELECT 1 FROM artifact_tombstones t
 			    WHERE t.repository_id=artifact_search_projection.repository_id AND t.format='go'
 			      AND t.coordinate=artifact_search_projection.coordinate || '@' || COALESCE(artifact_search_projection.version,'')
 			  ))
-			  AND (($3='coordinate' AND ($4='' OR coordinate LIKE $4 || '%' ESCAPE '\'))
+			  AND (($3='coordinate' AND ($4='' OR `+searchTextSQL("coordinate", "$4", []ArtifactSearchMatch{query.Match})+`))
 			       OR ($3='digest' AND digest=$4))
 		)
 		SELECT ranked.coordinate,COALESCE(ranked.digest,''),ranked.created_at,ranked.size,COALESCE(ranked.publisher,''),ranked.build_number,COALESCE(ranked.content_type,''),ranked.version,
@@ -92,9 +93,9 @@ func (s *PostgresStore) SearchArtifactProjection(ctx context.Context, repository
 		         'unknown', COALESCE((ai.vulnerability->>'unknown')::int, 0)
 		       ) END AS intelligence,COALESCE(ma.source_timestamp,''),COALESCE(ma.source_build_number,0)
 		FROM ranked
- LEFT JOIN native_maven_artifacts ma ON $2='maven' AND ma.repository_id::text=$1 AND ma.coordinate=ranked.coordinate AND ma.build_number=ranked.build_number
+ LEFT JOIN native_maven_artifacts ma ON $2='maven' AND ma.repository_id=$1::uuid AND ma.coordinate=ranked.coordinate AND ma.build_number=ranked.build_number
 		LEFT JOIN artifact_intelligence ai
-		  ON ai.repository_id::text=$1 AND ai.format=$2 AND ai.coordinate=ranked.coordinate AND ai.digest=ranked.digest
+		  ON ai.repository_id=$1::uuid AND ai.format=$2 AND ai.coordinate=ranked.coordinate AND ai.digest=ranked.digest
 		WHERE (($3='coordinate' AND ($2='maven' OR ranked.coordinate_rank=1))
 		       OR ($3='digest' AND ($2='maven' OR ranked.digest_rank=1)))
 		  AND (ranked.coordinate>$5

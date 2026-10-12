@@ -15,11 +15,13 @@ export async function listProxyMavenPage(
   query: string,
   assetFilter: ProxyMavenAssetFilter | "all",
   pageToken?: string,
+  signal?: AbortSignal,
 ): Promise<ArtifactPage & { totalEstimate?: number }> {
   try {
     const { data: pageData, error: requestError } = await listProxyCacheEntries(
       {
         path: { repositoryId },
+        signal,
         query: {
           groupBy: "version",
           assetFilter,

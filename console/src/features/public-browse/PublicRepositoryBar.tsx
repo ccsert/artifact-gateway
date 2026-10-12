@@ -1,5 +1,7 @@
 import type { FormEvent } from "react";
 import { ArrowLeftOutlined } from "@ant-design/icons";
+import type { ArtifactSearchMatch } from "../../client";
+import { ArtifactSearchMatchControl } from "../../components/ui/ArtifactSearchMatchControl";
 import { Button, Input } from "antd";
 import { FormatBadge } from "../../components/ui/Badge";
 import { Card } from "../../components/ui/Layout";
@@ -11,12 +13,16 @@ import { formatDescriptor } from "../../formats";
 export function PublicRepositoryBar({
   selectedRepository,
   queryDraft,
+  match,
+  onMatchChange,
   onQueryDraftChange,
   onSubmit,
   onBack,
 }: {
   selectedRepository: PublicRepository | undefined;
   queryDraft: string;
+  match: ArtifactSearchMatch;
+  onMatchChange: (value: ArtifactSearchMatch) => void;
   onQueryDraftChange: (value: string) => void;
   onSubmit: (event: FormEvent) => void;
   onBack: () => void;
@@ -42,10 +48,18 @@ export function PublicRepositoryBar({
         )}
       </div>
       {formatDescriptor(selectedRepository?.format) && (
-        <form onSubmit={onSubmit} className="mt-5 flex items-center gap-2">
+        <form
+          onSubmit={onSubmit}
+          className="mt-5 flex flex-wrap items-center gap-2"
+        >
+          <ArtifactSearchMatchControl value={match} onChange={onMatchChange} />
           <Input
             className="min-w-0 flex-1 font-mono text-xs"
-            placeholder={t("publicBrowse.coordinatePathOrNamePrefixOptional")}
+            placeholder={t(
+              match === "contains"
+                ? "publicBrowse.coordinatePathOrNameKeywordOptional"
+                : "publicBrowse.coordinatePathOrNamePrefixOptional",
+            )}
             value={queryDraft}
             onChange={(event) => onQueryDraftChange(event.target.value)}
           />

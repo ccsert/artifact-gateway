@@ -1,3 +1,4 @@
+import type { ArtifactSearchMatch } from "../client";
 import { searchRepositoryArtifacts } from "../client";
 import type { ArtifactRow } from "../features/repository/artifactRow";
 import { artifactSearchPrefix } from "./index";
@@ -8,6 +9,8 @@ export interface ArtifactPageRequest {
   query: string;
   pageToken?: string;
   pageSize: number;
+  match?: ArtifactSearchMatch;
+  signal?: AbortSignal;
   /** A deep-linked artifact the first page should contain. */
   artifactTarget?: string;
   buildTarget?: number;
@@ -30,10 +33,18 @@ export const listPackageArtifacts: ListArtifacts = async ({
   query,
   pageToken,
   pageSize,
+  match,
+  signal,
 }) => {
   const response = await searchRepositoryArtifacts({
     path: { repositoryId },
-    query: { q: query || undefined, pageSize, pageToken },
+    query: {
+      q: query || undefined,
+      pageSize,
+      pageToken,
+      ...(query && match ? { match } : {}),
+    },
+    signal,
   });
   return {
     items: (response.data?.items ?? []).map((item) => ({
@@ -66,6 +77,8 @@ export function pathArtifactLister(format: string): ListArtifacts {
     query,
     pageToken,
     pageSize,
+    match,
+    signal,
   }) => {
     const response = await searchRepositoryArtifacts({
       path: { repositoryId },
@@ -73,7 +86,9 @@ export function pathArtifactLister(format: string): ListArtifacts {
         q: artifactSearchPrefix(format, query) || undefined,
         pageSize,
         pageToken,
+        ...(query && match ? { match } : {}),
       },
+      signal,
     });
     return {
       items: (response.data?.items ?? []).map((item, index) => ({

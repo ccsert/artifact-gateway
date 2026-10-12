@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import type { Repository } from "../../client";
+import type { ArtifactSearchMatch, Repository } from "../../client";
 import { listArtifactPage, type ArtifactPage } from "../../formats/listers";
 import {
   listProxyMavenPage,
@@ -21,6 +21,7 @@ export function useArtifactPages({
   repo,
   proxyMaven,
   query,
+  match,
   assetFilter,
   artifactTarget,
   buildTarget,
@@ -29,6 +30,8 @@ export function useArtifactPages({
   repo: Repository;
   proxyMaven: boolean;
   query: string;
+  /** Prefix or literal contains, for formats with server keyword search. */
+  match: ArtifactSearchMatch;
   assetFilter: ProxyMavenAssetFilter | "all";
   artifactTarget?: string;
   buildTarget?: number;
@@ -43,6 +46,7 @@ export function useArtifactPages({
       format: repo.format,
       proxyMaven,
       query,
+      match: proxyMaven ? undefined : match,
       assetFilter: proxyMaven ? assetFilter : undefined,
       artifactTarget,
       buildTarget,
@@ -52,14 +56,23 @@ export function useArtifactPages({
     queryKey,
     queryFn: async ({
       pageParam,
+      signal,
     }): Promise<ArtifactPage & { totalEstimate?: number }> => {
       const page = proxyMaven
-        ? await listProxyMavenPage(repo.id, query, assetFilter, pageParam)
+        ? await listProxyMavenPage(
+            repo.id,
+            query,
+            assetFilter,
+            pageParam,
+            signal,
+          )
         : await listArtifactPage(repo.format, {
             repositoryId: repo.id,
             query,
             pageToken: pageParam,
             pageSize: PAGE_SIZE,
+            match,
+            signal,
             artifactTarget,
             buildTarget,
           });
@@ -71,6 +84,10 @@ export function useArtifactPages({
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextPageToken || undefined,
+    // A new search in the same repository keeps the previous rows on screen
+    // while it loads; another repository never shows this one's rows.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === repo.id ? previous : undefined,
     staleTime: 0,
   });
   return {

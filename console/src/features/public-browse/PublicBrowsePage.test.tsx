@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { searchRepositoryArtifacts } from "../../client";
@@ -33,6 +39,47 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   vi.restoreAllMocks();
+});
+
+it("uses contains for public artifact keywords", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        enabled: true,
+        items: [
+          {
+            id: "public-contains",
+            name: "releases",
+            format: "raw",
+            type: "hosted",
+          },
+        ],
+      }),
+      { status: 200 },
+    ),
+  );
+  mockSearchRepositoryArtifacts.mockResolvedValue({
+    data: { items: [] },
+  } as never);
+  render(
+    <MemoryRouter
+      initialEntries={["/browse?repository=public-contains&q=alpha"]}
+    >
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <PublicBrowsePage />
+        </PreferencesProvider>
+      </TestQueryProvider>
+    </MemoryRouter>,
+  );
+  await waitFor(() =>
+    expect(mockSearchRepositoryArtifacts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { repositoryId: "public-contains" },
+        query: { q: "alpha", match: "contains", pageSize: 100 },
+      }),
+    ),
+  );
 });
 
 describe("PublicBrowsePage APT browse", () => {
@@ -225,7 +272,7 @@ describe("PublicBrowsePage APT browse", () => {
     expect(screen.getByText("注册 APT 软件源")).toBeInTheDocument();
     expect(mockSearchRepositoryArtifacts).toHaveBeenCalledWith({
       path: { repositoryId },
-      query: { q: undefined, pageSize: 100 },
+      query: { q: undefined, pageSize: 100, match: "contains" },
       signal: expect.any(AbortSignal),
     });
   });
@@ -348,7 +395,7 @@ describe("PublicBrowsePage APT browse", () => {
     expect(screen.queryByText(canonical)).not.toBeInTheDocument();
     expect(mockSearchRepositoryArtifacts).toHaveBeenLastCalledWith({
       path: { repositoryId },
-      query: { q: canonical, pageSize: 100 },
+      query: { q: canonical, pageSize: 100, match: "contains" },
       signal: expect.any(AbortSignal),
     });
   });

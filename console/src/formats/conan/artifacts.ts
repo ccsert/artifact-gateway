@@ -10,10 +10,12 @@ export const listConanArtifacts: ListArtifacts = async ({
   query,
   pageToken,
   pageSize,
+  signal,
 }) => {
   const response = await listConanReferences({
     path: { repositoryId },
     query: { pageSize, pageToken },
+    signal,
   });
   return {
     items: (response.data?.items ?? [])

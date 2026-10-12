@@ -27,7 +27,7 @@ func cargoProxyCrateSummary(index CargoProxyIndex) (CargoCrateSummary, error) {
 	return summary, nil
 }
 
-func (s *MemoryStore) SearchCargoProxyCrates(ctx context.Context, repositoryID, query string, limit int, after string) ([]CargoCrateSummary, error) {
+func (s *MemoryStore) SearchCargoProxyCrates(ctx context.Context, repositoryID, query string, limit int, after string, matches ...ArtifactSearchMatch) ([]CargoCrateSummary, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -38,12 +38,13 @@ func (s *MemoryStore) SearchCargoProxyCrates(ctx context.Context, repositoryID, 
 	if err != nil {
 		return nil, err
 	}
-	needle := strings.ToLower(strings.TrimSpace(query))
+	needle := strings.TrimSpace(query)
+	matches = []ArtifactSearchMatch{searchMatch(matches, ArtifactSearchContains)}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	byName := make(map[string]CargoCrateSummary)
 	for key, index := range s.cargoProxyIndexes {
-		if !strings.HasPrefix(key, repositoryID+"\x00") || index.Status != 200 || !strings.Contains(strings.ToLower(index.Name), needle) {
+		if !strings.HasPrefix(key, repositoryID+"\x00") || index.Status != 200 || !searchTextMatches(index.Name, needle, matches) {
 			continue
 		}
 		summary, err := cargoProxyCrateSummary(index)
@@ -56,7 +57,7 @@ func (s *MemoryStore) SearchCargoProxyCrates(ctx context.Context, repositoryID, 
 	return items, nil
 }
 
-func (s *PostgresStore) SearchCargoProxyCrates(ctx context.Context, repositoryID, query string, limit int, after string) ([]CargoCrateSummary, error) {
+func (s *PostgresStore) SearchCargoProxyCrates(ctx context.Context, repositoryID, query string, limit int, after string, matches ...ArtifactSearchMatch) ([]CargoCrateSummary, error) {
 	if limit <= 0 || limit > 201 {
 		limit = 10
 	}
@@ -65,8 +66,8 @@ func (s *PostgresStore) SearchCargoProxyCrates(ctx context.Context, repositoryID
 		return nil, err
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT name,body FROM native_cargo_proxy_indexes
-		WHERE repository_id::text=$1 AND status=200 AND position(lower($2) in lower(name))>0
-		AND collision_key>$3 ORDER BY collision_key LIMIT $4`, repositoryID, strings.TrimSpace(query), afterKey, limit)
+		WHERE repository_id=$1::uuid AND status=200 AND `+searchTextSQL("name", "$2", []ArtifactSearchMatch{searchMatch(matches, ArtifactSearchContains)})+`
+		AND collision_key>$3 ORDER BY collision_key LIMIT $4`, repositoryID, searchTextPattern(strings.TrimSpace(query), []ArtifactSearchMatch{searchMatch(matches, ArtifactSearchContains)}), afterKey, limit)
 	if err != nil {
 		return nil, err
 	}

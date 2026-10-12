@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { FolderOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import { Button, Input, Segmented, Select } from "antd";
-import type { BrowseNode, Repository } from "../../client";
+import type { ArtifactSearchMatch, BrowseNode, Repository } from "../../client";
 import { ErrorBanner, Loading, isNotFound } from "../../components/ui/Feedback";
 import { Pagination } from "../../components/ui/Layout";
 import { RawUploadDialog } from "./RawUploadDialog";
@@ -27,6 +27,7 @@ import { artifactColumns } from "./artifactColumns";
 import { useArtifactPages } from "./artifactPages";
 import { ArtifactsEmptyState } from "./ArtifactsEmptyState";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
+import { ArtifactSearchMatchControl } from "../../components/ui/ArtifactSearchMatchControl";
 
 export function RepositoryArtifactsTab({
   repo,
@@ -62,6 +63,10 @@ export function RepositoryArtifactsTab({
     useState<ProxyMavenAssetFilter>("primary");
   // The search that is loaded; `q` is what the search box holds.
   const [query, setQuery] = useState(q);
+  // A deep link names an exact artifact, so it searches by prefix.
+  const [match, setMatch] = useState<ArtifactSearchMatch>(
+    artifactTarget ? "prefix" : "contains",
+  );
   // Which row is open: the reader's choice for the current answer, otherwise
   // the deep-linked artifact.
   const [expandedChoice, setExpandedChoice] = useState<{
@@ -83,6 +88,7 @@ export function RepositoryArtifactsTab({
     repo,
     proxyMaven,
     query,
+    match,
     assetFilter: assetTarget ? "all" : proxyAssetFilter,
     artifactTarget,
     buildTarget,
@@ -98,6 +104,7 @@ export function RepositoryArtifactsTab({
   const proxyTotal = pages?.at(-1)?.totalEstimate ?? 0;
   const proxyPage = pages?.length ?? 1;
   const loading = artifacts.isPending;
+  const refreshing = artifacts.isFetching && !artifacts.isFetchingNextPage;
   const error = artifacts.error;
   const targetKey =
     artifactTarget && firstPage
@@ -130,6 +137,7 @@ export function RepositoryArtifactsTab({
       : artifactCoordinateForDisplay(format, artifactTarget);
     setQ(targetQuery);
     setQuery(targetQuery);
+    setMatch(artifactTarget ? "prefix" : "contains");
   }, [artifactTarget, assetTarget, format, proxyMaven]);
 
   const searchPlaceholder = descriptor
@@ -254,10 +262,29 @@ export function RepositoryArtifactsTab({
             onChange={setView}
           />
         )}
+        {!proxyMaven && descriptor?.serverKeywordSearch && (
+          <ArtifactSearchMatchControl
+            value={match}
+            onChange={(value) => {
+              setMatch(value);
+              // Changing the match runs the search box's current text.
+              setQuery(q);
+            }}
+          />
+        )}
         <Input.Search
+          loading={refreshing}
           allowClear
           className="ag-artifact-view-search"
-          placeholder={searchPlaceholder ?? text("搜索…", "Search…")}
+          placeholder={
+            descriptor?.serverKeywordSearch &&
+            match === "contains" &&
+            !proxyMaven
+              ? searchPlaceholder
+                  ?.replace("前缀", "关键词")
+                  .replace("prefix", "keyword")
+              : (searchPlaceholder ?? text("搜索…", "Search…"))
+          }
           value={q}
           onChange={(e) => {
             const value = e.target.value;
@@ -315,7 +342,10 @@ export function RepositoryArtifactsTab({
           </Button>
         )}
       </div>
-      {error !== null ? (
+      {error !== null && rows.length > 0 && (
+        <ErrorBanner error={error} onRetry={() => load(q)} />
+      )}
+      {error !== null && rows.length === 0 ? (
         isNotFound(error) ? (
           <RepositoryFeatureUnavailable
             feature={text("制品浏览", "Artifact browser")}
@@ -323,7 +353,7 @@ export function RepositoryArtifactsTab({
         ) : (
           <ErrorBanner error={error} onRetry={() => load(q)} />
         )
-      ) : loading ? (
+      ) : loading && rows.length === 0 ? (
         <Loading />
       ) : rows.length === 0 ? (
         <>
@@ -366,7 +396,10 @@ export function RepositoryArtifactsTab({
           />
           <Pagination
             hasMore={!!nextToken}
-            onMore={() => void artifacts.fetchNextPage()}
+            loading={artifacts.isFetchingNextPage}
+            onMore={() => {
+              if (!artifacts.isFetchingNextPage) void artifacts.fetchNextPage();
+            }}
           />
           {proxyMaven && proxyTotal > 0 && (
             <div className="border-t border-line px-4 py-2 text-center text-xs text-fg-tertiary">

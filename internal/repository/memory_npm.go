@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 )
@@ -382,7 +381,7 @@ func (s *MemoryStore) GetNPMVersionByTarball(_ context.Context, repositoryID, na
 	return NPMVersion{}, ErrNotFound
 }
 
-func (s *MemoryStore) SearchNPMPackages(_ context.Context, repositoryID, prefix string, limit int, after string) ([]NPMPackageSummary, error) {
+func (s *MemoryStore) SearchNPMPackages(_ context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]NPMPackageSummary, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -390,7 +389,7 @@ func (s *MemoryStore) SearchNPMPackages(_ context.Context, repositoryID, prefix 
 	defer s.mu.RUnlock()
 	summaries := make([]NPMPackageSummary, 0)
 	for _, pkg := range s.npmPackages {
-		if pkg.RepositoryID != repositoryID || pkg.Negative || !strings.HasPrefix(pkg.Name, prefix) || pkg.Name <= after {
+		if pkg.RepositoryID != repositoryID || pkg.Negative || !searchTextMatches(pkg.Name, prefix, matches) || pkg.Name <= after {
 			continue
 		}
 		summary := NPMPackageSummary{

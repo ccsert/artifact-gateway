@@ -259,15 +259,15 @@ func (s *PostgresStore) GetConanPackageRevision(ctx context.Context, repositoryI
 	return item, err
 }
 
-func (s *PostgresStore) SearchConanReferences(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]ConanReference, error) {
+func (s *PostgresStore) SearchConanReferences(ctx context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]ConanReference, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT r.reference, COALESCE(p.publisher,'')
-		FROM (SELECT DISTINCT reference FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND state='visible' AND reference LIKE $2 || '%' ESCAPE '\' AND reference > $3 ORDER BY reference LIMIT $4) r
+		FROM (SELECT DISTINCT reference FROM native_conan_recipe_revisions WHERE repository_id=$1::uuid AND state='visible' AND `+searchTextSQL("reference", "$2", matches)+` AND reference > $3 ORDER BY reference LIMIT $4) r
 		LEFT JOIN LATERAL (
 			SELECT s.publisher FROM native_conan_publish_sessions s
-			WHERE s.repository_id::text=$1 AND s.reference=r.reference AND s.state='committed'
+			WHERE s.repository_id=$1::uuid AND s.reference=r.reference AND s.state='committed'
 			ORDER BY s.expires_at DESC LIMIT 1
 		) p ON true
-		ORDER BY r.reference`, repositoryID, escapeLikePrefix(prefix), after, limit)
+		ORDER BY r.reference`, repositoryID, searchTextPattern(prefix, matches), after, limit)
 	if err != nil {
 		return nil, err
 	}

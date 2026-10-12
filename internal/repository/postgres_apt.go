@@ -49,11 +49,11 @@ func (s *PostgresStore) CacheAPTAsset(ctx context.Context, incoming APTAsset) (A
 	return stored, nil
 }
 
-func (s *PostgresStore) ListAPTAssets(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]APTAsset, error) {
+func (s *PostgresStore) ListAPTAssets(ctx context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]APTAsset, error) {
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT `+aptAssetColumns+` FROM native_apt_assets WHERE repository_id::text=$1 AND path LIKE $2 || '%' ESCAPE '\' AND path>$3 ORDER BY path LIMIT $4`, repositoryID, escapeLikePrefix(prefix), after, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+aptAssetColumns+` FROM native_apt_assets WHERE repository_id=$1::uuid AND `+searchTextSQL("path", "$2", matches)+` AND path>$3 ORDER BY path LIMIT $4`, repositoryID, searchTextPattern(prefix, matches), after, limit)
 	if err != nil {
 		return nil, err
 	}
