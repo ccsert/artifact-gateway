@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Alert, App, Button, Popconfirm, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -14,15 +14,9 @@ import {
   isNotFound,
 } from "../../components/ui/Feedback";
 import { Modal, useDisclosure } from "../../components/ui/Modal";
-import { useAuth } from "../../lib/auth";
-import { platformCapabilities } from "../../lib/authorization";
 import { usePreferences } from "../../lib/preferences";
 import { accessKeys } from "../../lib/query/keys";
-import {
-  useAuthorizationRoles,
-  usePrincipalDirectory,
-  useRepositoryGrants,
-} from "../access-control/accessQueries";
+import { useRepositoryGrants } from "../access-control/accessQueries";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 import { GrantForm } from "../access-control/GrantForm";
 import {
@@ -32,10 +26,10 @@ import {
   grantLevel,
   grantRowKey,
   grantTone,
-  principalOptions,
   type DraftGrant,
 } from "../access-control/grantDraft";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
+import { useGrantPrincipalChoices } from "./useGrantPrincipalChoices";
 
 function grantKey(grant: Pick<Grant, "principal" | "resourcePrefix">): string {
   return grantRowKey(grant.principal, grant.resourcePrefix);
@@ -58,35 +52,8 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
   const grants = grantsQuery.data ?? null;
   const error = grantsQuery.error;
   const [mutationError, setMutationError] = useState<unknown>(null);
-  // Only a platform administrator can list principals and custom roles; a
-  // repository administrator composes grants from a typed identity instead.
-  const { identity } = useAuth();
-  const canListPrincipals = platformCapabilities(identity).platformAdmin;
-  const directory = usePrincipalDirectory({ enabled: canListPrincipals });
-  const rolesQuery = useAuthorizationRoles({ enabled: canListPrincipals });
-  const directoryUsers = directory.users.data?.items;
-  const directoryApiKeys = directory.apiKeys.data?.items;
-  const directoryServiceAccounts = directory.serviceAccounts.data?.items;
-  const principalChoices = useMemo(
-    () =>
-      principalOptions(
-        directoryUsers ?? [],
-        directoryApiKeys ?? [],
-        directoryServiceAccounts ?? [],
-        text,
-      ),
-    [directoryApiKeys, directoryServiceAccounts, directoryUsers, text],
-  );
-  const authorizationRoles = rolesQuery.data ?? [];
-  const principalChoicesError =
-    directory.users.error ||
-    directory.apiKeys.error ||
-    directory.serviceAccounts.error ||
-    rolesQuery.error
-      ? new Error(
-          t("repositoryGrants.couldNotLoadUsersApiKeysServiceAccountsOr"),
-        )
-      : null;
+  const { principalChoices, authorizationRoles, principalChoicesError } =
+    useGrantPrincipalChoices();
   /** Show a repository's new grant set here and re-read the cross-repository list. */
   const setGrants = (next: (current: Grant[]) => Grant[]) => {
     queryClient.setQueryData<Grant[]>(
