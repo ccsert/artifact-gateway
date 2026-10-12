@@ -26,6 +26,8 @@ vi.mock("../../lib/auth", () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  // Queued answers a failed test did not consume must not reach the next one.
+  vi.mocked(searchArtifacts).mockReset();
 });
 
 it("cancels an old query, ignores its late answer, and retries an identical query", async () => {
@@ -72,6 +74,8 @@ it("cancels an old query, ignores its late answer, and retries an identical quer
     } as never),
   );
   expect(screen.queryByText("old-alpha.bin")).not.toBeInTheDocument();
+  // The search box ignores Enter while a search is loading.
+  expect(await screen.findByText("没有匹配的制品")).toBeInTheDocument();
   fireEvent.keyDown(screen.getByRole("searchbox"), {
     key: "Enter",
     code: "Enter",
