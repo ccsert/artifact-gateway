@@ -1,4 +1,9 @@
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQueryClient,
+  type InfiniteData,
+} from "@tanstack/react-query";
+import { useState } from "react";
 import type { ArtifactSearchMatch, Repository } from "../../client";
 import { listArtifactPage, type ArtifactPage } from "../../formats/listers";
 import {
@@ -84,14 +89,47 @@ export function useArtifactPages({
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextPageToken || undefined,
-    // A new search in the same repository keeps the previous rows on screen
-    // while it loads; another repository never shows this one's rows.
-    placeholderData: (previous, previousQuery) =>
-      previousQuery?.queryKey[2] === repo.id ? previous : undefined,
     staleTime: 0,
   });
+  const cache = queryClient.getQueryCache();
+  const currentQuery = cache.find({ queryKey, exact: true });
+  const currentData =
+    queryClient.getQueryData<
+      InfiniteData<ArtifactPage & { totalEstimate?: number }>
+    >(queryKey);
+  const [displayed, setDisplayed] = useState({
+    repositoryId: repo.id,
+    queryClient,
+    query: currentQuery,
+    data: currentData,
+  });
+  // Keep the last successful answer through failed searches and first-page
+  // reloads. Binding it to a live cache entry also drops it when the identity
+  // cache is cleared; another repository or query client never inherits rows.
+  const sameScope =
+    displayed.repositoryId === repo.id &&
+    displayed.queryClient === queryClient &&
+    displayed.query !== undefined &&
+    cache.get(displayed.query.queryHash) === displayed.query;
+  const data = currentData ?? (sameScope ? displayed.data : undefined);
+  if (
+    displayed.repositoryId !== repo.id ||
+    displayed.queryClient !== queryClient ||
+    displayed.query !== currentQuery ||
+    displayed.data !== data
+  ) {
+    setDisplayed({
+      repositoryId: repo.id,
+      queryClient,
+      query: currentQuery,
+      data,
+    });
+  }
   return {
     ...pages,
+    data,
+    // A previous answer's cursor cannot page the newly submitted search.
+    hasNextPage: currentData !== undefined && pages.hasNextPage,
     /** Start the current search again from its first page. */
     reload: () => queryClient.resetQueries({ queryKey, exact: true }),
   };

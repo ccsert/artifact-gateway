@@ -38,6 +38,21 @@ export function AdmissionPolicyCard({
   const [saveError, setSaveError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
+  const [draftSource, setDraftSource] = useState({
+    repositoryId: repo.id,
+    version: policy.version,
+  });
+  // A cached policy can render before its background read finishes. Keep the
+  // editable values and the version used by If-Match from the same answer.
+  if (
+    draftSource.repositoryId !== repo.id ||
+    draftSource.version !== policy.version
+  ) {
+    if (draftSource.repositoryId !== repo.id) setNotice("");
+    setDraftSource({ repositoryId: repo.id, version: policy.version });
+    setDraft(draftFromPolicy(policy));
+    setSaveError(null);
+  }
   const update = <K extends keyof SecurityPolicyDraft>(
     key: K,
     value: SecurityPolicyDraft[K],

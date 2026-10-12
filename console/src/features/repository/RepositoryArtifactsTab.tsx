@@ -100,7 +100,9 @@ export function RepositoryArtifactsTab({
   const pages = artifacts.data?.pages;
   const rows = pages?.flatMap((page) => page.items) ?? [];
   const firstPage = pages?.[0];
-  const nextToken = pages?.at(-1)?.nextPageToken;
+  const nextToken = artifacts.hasNextPage
+    ? pages?.at(-1)?.nextPageToken
+    : undefined;
   const proxyTotal = pages?.at(-1)?.totalEstimate ?? 0;
   const proxyPage = pages?.length ?? 1;
   const loading = artifacts.isPending;

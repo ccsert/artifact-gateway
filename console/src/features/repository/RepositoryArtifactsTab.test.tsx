@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { browseRepository, searchRepositoryArtifacts } from "../../client";
 import type { Repository } from "../../client";
@@ -100,6 +101,37 @@ it("does not retain another repository's rows while its next scope is loading", 
   expect(await screen.findByText("暂无制品")).toBeInTheDocument();
 });
 
+it("drops retained rows when the identity cache is cleared", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 0 } },
+  });
+  let answer!: (value: never) => void;
+  mockSearchRepositoryArtifacts
+    .mockResolvedValueOnce({
+      data: { items: [{ coordinate: "private/alpha.deb" }] },
+    } as never)
+    .mockImplementationOnce(
+      () => new Promise<never>((resolve) => (answer = resolve)),
+    );
+  const content = () => (
+    <QueryClientProvider client={client}>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={{ ...repository }} canWrite={false} />
+      </PreferencesProvider>
+    </QueryClientProvider>
+  );
+  const view = render(content());
+  await screen.findByText("private/alpha.deb");
+  act(() => client.clear());
+  view.rerender(content());
+  await waitFor(() =>
+    expect(mockSearchRepositoryArtifacts).toHaveBeenCalledTimes(2),
+  );
+  expect(screen.queryByText("private/alpha.deb")).not.toBeInTheDocument();
+  await act(async () => answer({ data: { items: [] } } as never));
+  await screen.findByText("暂无制品");
+});
+
 it("searches repository path fragments with contains", async () => {
   const user = userEvent.setup();
   mockSearchRepositoryArtifacts.mockResolvedValue({
@@ -127,6 +159,98 @@ it("searches repository path fragments with contains", async () => {
       }),
     ),
   );
+});
+
+it("keeps the last successful rows and retry after a same-repository search fails", async () => {
+  mockSearchRepositoryArtifacts
+    .mockResolvedValueOnce({
+      data: {
+        items: [{ coordinate: "pool/alpha.deb" }],
+        nextPageToken: "old-next",
+      },
+    } as never)
+    .mockResolvedValueOnce({
+      error: { status: 500, message: "search failed" },
+    } as never)
+    .mockResolvedValueOnce({
+      data: { items: [{ coordinate: "pool/beta.deb" }] },
+    } as never);
+  render(
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={repository} canWrite={false} />
+      </PreferencesProvider>
+    </TestQueryProvider>,
+  );
+  await screen.findByText("pool/alpha.deb");
+  fireEvent.change(screen.getByRole("searchbox"), {
+    target: { value: "beta" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /^搜\s*索$/ }));
+  await screen.findByText("search failed");
+  expect(screen.getByText("pool/alpha.deb")).toBeInTheDocument();
+  expect(screen.queryByText("暂无制品")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "加载更多" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /重试/ }));
+  await screen.findByText("pool/beta.deb");
+  expect(screen.queryByText("pool/alpha.deb")).not.toBeInTheDocument();
+  expect(mockSearchRepositoryArtifacts.mock.calls[2][0]?.query).toEqual({
+    q: "beta",
+    pageSize: 50,
+    pageToken: undefined,
+    match: "contains",
+  });
+});
+
+it("retains every visible page through a failed first-page refresh and recovers on retry", async () => {
+  let answer!: (value: never) => void;
+  mockSearchRepositoryArtifacts
+    .mockResolvedValueOnce({
+      data: {
+        items: [{ coordinate: "pool/alpha.deb" }],
+        nextPageToken: "next-alpha",
+      },
+    } as never)
+    .mockResolvedValueOnce({
+      data: { items: [{ coordinate: "pool/alpha-2.deb" }] },
+    } as never)
+    .mockImplementationOnce(
+      () => new Promise<never>((resolve) => (answer = resolve)),
+    )
+    .mockResolvedValueOnce({
+      data: { items: [{ coordinate: "pool/reloaded.deb" }] },
+    } as never);
+  render(
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={repository} canWrite={false} />
+      </PreferencesProvider>
+    </TestQueryProvider>,
+  );
+  await screen.findByText("pool/alpha.deb");
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }));
+  await screen.findByText("pool/alpha-2.deb");
+  fireEvent.click(screen.getByRole("button", { name: /^搜\s*索$/ }));
+  await waitFor(() =>
+    expect(mockSearchRepositoryArtifacts).toHaveBeenCalledTimes(3),
+  );
+  expect(screen.getByText("pool/alpha.deb")).toBeInTheDocument();
+  expect(screen.getByText("pool/alpha-2.deb")).toBeInTheDocument();
+  await act(async () =>
+    answer({ error: { status: 500, message: "refresh failed" } } as never),
+  );
+  await screen.findByText("refresh failed");
+  expect(screen.getByText("pool/alpha.deb")).toBeInTheDocument();
+  expect(screen.getByText("pool/alpha-2.deb")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /重试/ }));
+  await screen.findByText("pool/reloaded.deb");
+  expect(screen.queryByText("pool/alpha.deb")).not.toBeInTheDocument();
+  expect(screen.queryByText("pool/alpha-2.deb")).not.toBeInTheDocument();
+  expect(
+    mockSearchRepositoryArtifacts.mock.calls[3][0]?.query?.pageToken,
+  ).toBeUndefined();
 });
 
 it("continues the submitted query even while a different keyword is only a draft", async () => {

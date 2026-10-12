@@ -29,6 +29,19 @@ export function QuarantineReadPolicyCard({
   const readError = saveError ?? loadError;
   const [readSaving, setReadSaving] = useState(false);
   const [readNotice, setReadNotice] = useState("");
+  const [draftSource, setDraftSource] = useState({
+    repositoryId: repo.id,
+    version: readPolicy?.version,
+  });
+  if (
+    draftSource.repositoryId !== repo.id ||
+    draftSource.version !== readPolicy?.version
+  ) {
+    if (draftSource.repositoryId !== repo.id) setReadNotice("");
+    setDraftSource({ repositoryId: repo.id, version: readPolicy?.version });
+    setReadEnabled(readPolicy?.enabled ?? false);
+    setReadError(null);
+  }
   const updateReadEnabled = (enabled: boolean) => {
     setReadNotice("");
     setReadError(null);

@@ -1,4 +1,5 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -8,10 +9,15 @@ import {
   replaceQuarantineReadPolicy,
   replaceSecurityPolicy,
 } from "../../client";
-import type { Repository } from "../../client";
+import type {
+  QuarantineReadPolicy,
+  Repository,
+  SecurityPolicy,
+} from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RepositorySecurityTab } from "./RepositorySecurityTab";
 import { TestQueryProvider } from "../../test/queryClient";
+import { repositoryKeys } from "../../lib/query/keys";
 
 vi.mock("../../client", () => ({
   getAptRepositorySigningState: vi.fn(),
@@ -39,6 +45,15 @@ const repo: Repository = {
   version: "1",
 };
 
+type PolicyAnswer<T> = { data: T; request: Request; response: Response };
+function policyAnswer<T>(data: T): PolicyAnswer<T> {
+  return {
+    data,
+    request: new Request("https://gateway.example.test/policy"),
+    response: new Response(),
+  };
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -51,6 +66,122 @@ beforeEach(() => {
 });
 
 describe("RepositorySecurityTab", () => {
+  it("updates a cached admission draft before saving a newer policy version", async () => {
+    const user = userEvent.setup();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 0 } },
+    });
+    client.setQueryData(repositoryKeys.securityPolicy(repo.id), {
+      version: "1",
+      enabled: false,
+      requireSignature: false,
+    });
+    client.setQueryData(repositoryKeys.quarantineReadPolicy(repo.id), {
+      version: "1",
+      enabled: false,
+    });
+    let answer!: (value: PolicyAnswer<SecurityPolicy>) => void;
+    mockGetSecurityPolicy.mockImplementationOnce(
+      () =>
+        new Promise<PolicyAnswer<SecurityPolicy>>(
+          (resolve) => (answer = resolve),
+        ),
+    );
+    mockReplaceSecurityPolicy.mockResolvedValue(
+      policyAnswer({
+        version: "3",
+        enabled: true,
+        requireSignature: true,
+        autoScanOnPublish: true,
+      }),
+    );
+    render(
+      <QueryClientProvider client={client}>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repo} publicationScanning />
+        </PreferencesProvider>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("当前版本 1")).toBeInTheDocument();
+    await act(async () =>
+      answer(
+        policyAnswer({ version: "2", enabled: true, requireSignature: true }),
+      ),
+    );
+    await screen.findByText("当前版本 2");
+    expect(screen.getByRole("switch", { name: "启用准入检查" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "要求签名" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "保存策略" })).toBeDisabled();
+    await user.click(screen.getByRole("switch", { name: "发布后自动扫描" }));
+    await user.click(screen.getByRole("button", { name: "保存策略" }));
+    await waitFor(() =>
+      expect(mockReplaceSecurityPolicy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          headers: { "If-Match": "2" },
+          body: expect.objectContaining({
+            version: "2",
+            enabled: true,
+            requireSignature: true,
+            autoScanOnPublish: true,
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("updates a cached quarantine draft before saving a newer policy version", async () => {
+    const user = userEvent.setup();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 0 } },
+    });
+    client.setQueryData(repositoryKeys.securityPolicy(repo.id), {
+      version: "1",
+      enabled: false,
+    });
+    client.setQueryData(repositoryKeys.quarantineReadPolicy(repo.id), {
+      version: "1",
+      enabled: false,
+    });
+    mockGetSecurityPolicy.mockResolvedValue({
+      data: { version: "1", enabled: false },
+    } as never);
+    let answer!: (value: PolicyAnswer<QuarantineReadPolicy>) => void;
+    mockGetQuarantineReadPolicy.mockImplementationOnce(
+      () =>
+        new Promise<PolicyAnswer<QuarantineReadPolicy>>(
+          (resolve) => (answer = resolve),
+        ),
+    );
+    mockReplaceQuarantineReadPolicy.mockResolvedValue({
+      data: { version: "3", enabled: false },
+    } as never);
+    render(
+      <QueryClientProvider client={client}>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repo} publicationScanning />
+        </PreferencesProvider>
+      </QueryClientProvider>,
+    );
+    await screen.findByText("读取策略当前版本 1");
+    await act(async () =>
+      answer(policyAnswer({ version: "2", enabled: true })),
+    );
+    await screen.findByText("读取策略当前版本 2");
+    expect(
+      screen.getByRole("switch", { name: "阻断隔离制品读取" }),
+    ).toBeChecked();
+    expect(screen.getByRole("button", { name: "保存读取策略" })).toBeDisabled();
+    await user.click(screen.getByRole("switch", { name: "阻断隔离制品读取" }));
+    await user.click(screen.getByRole("button", { name: "保存读取策略" }));
+    await waitFor(() =>
+      expect(mockReplaceQuarantineReadPolicy).toHaveBeenCalledWith({
+        path: { repositoryId: repo.id },
+        headers: { "If-Match": "2" },
+        body: { version: "2", enabled: false },
+      }),
+    );
+  });
+
   it("shows APT trust rotation and immutable snapshot evidence without loading unsupported policies", async () => {
     mockGetAptRepositorySigningState.mockResolvedValue({
       data: {
