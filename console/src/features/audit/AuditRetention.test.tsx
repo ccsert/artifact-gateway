@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getAuditRetentionPolicy, listAuditRetentionJobs } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { AuditRetentionPage } from "./AuditRetention";
 
 vi.mock("../../client", () => ({
@@ -23,9 +24,11 @@ afterEach(() => {
 
 function renderPage() {
   return render(
-    <PreferencesProvider>
-      <AuditRetentionPage />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <AuditRetentionPage />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 

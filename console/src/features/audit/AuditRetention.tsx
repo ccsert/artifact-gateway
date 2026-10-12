@@ -1,54 +1,41 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Button, Form, InputNumber, Popconfirm, Space, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ReloadOutlined } from "@ant-design/icons";
 import {
-  getAuditRetentionPolicy,
   replaceAuditRetentionPolicy,
   executeAuditRetention,
-  listAuditRetentionJobs,
 } from "../../client";
-import type { AuditRetentionPolicy, AuditCleanupJob } from "../../client";
+import type { AuditCleanupJob } from "../../client";
 import { PageHeader, Card, CardHeader } from "../../components/ui/Layout";
 import { ErrorBanner, Loading, Notice } from "../../components/ui/Feedback";
 import { StateBadge } from "../../components/ui/Badge";
 import { formatDate, formatNumber } from "../../lib/format";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
+import { useQueryClient } from "@tanstack/react-query";
+import { auditKeys } from "../../lib/query/keys";
+import { useAuditRetentionJobs, useAuditRetentionPolicy } from "./auditQueries";
 
 export function AuditRetentionPage() {
   const { locale, text } = usePreferences();
-  const [policy, setPolicy] = useState<AuditRetentionPolicy | null>(null);
-  const [jobs, setJobs] = useState<AuditCleanupJob[]>([]);
-  const [error, setError] = useState<unknown>(null);
-  const [enabled, setEnabled] = useState(false);
-  const [keepDays, setKeepDays] = useState(90);
+  const queryClient = useQueryClient();
+  const policyQuery = useAuditRetentionPolicy();
+  const jobsQuery = useAuditRetentionJobs();
+  const policy = policyQuery.data ?? null;
+  const jobs = jobsQuery.data ?? [];
+  const error = policyQuery.error;
+  // The form edits drafts over the saved policy.
+  const [enabledDraft, setEnabled] = useState<boolean | null>(null);
+  const [keepDaysDraft, setKeepDays] = useState<number | null>(null);
+  const enabled = enabledDraft ?? policy?.enabled ?? false;
+  const keepDays = keepDaysDraft ?? policy?.keepDays ?? 90;
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
   const [executing, setExecuting] = useState(false);
-
-  const load = useCallback(async () => {
-    setError(null);
-    const [p, j] = await Promise.all([
-      getAuditRetentionPolicy(),
-      listAuditRetentionJobs(),
-    ]);
-    if (p.error) {
-      setError(p.error);
-      return;
-    }
-    if (p.data) {
-      setPolicy(p.data);
-      setEnabled(p.data.enabled ?? false);
-      setKeepDays(p.data.keepDays ?? 90);
-    }
-    setJobs(j.data ?? []);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const load = () =>
+    Promise.allSettled([policyQuery.refetch(), jobsQuery.refetch()]);
 
   const save = async () => {
     if (!policy) return;
@@ -65,7 +52,11 @@ export function AuditRetentionPage() {
         return;
       }
       setNotice(text("策略已保存", "Policy saved"));
-      void load();
+      setEnabled(null);
+      setKeepDays(null);
+      void queryClient.invalidateQueries({
+        queryKey: auditKeys.retentionPolicy(),
+      });
     } catch (nextError) {
       setSaveError(nextError);
     } finally {
@@ -86,7 +77,9 @@ export function AuditRetentionPage() {
         return;
       }
       setNotice(text("清理任务已提交", "Cleanup job submitted"));
-      setTimeout(() => void load(), 1000);
+      void queryClient.invalidateQueries({
+        queryKey: auditKeys.retentionJobs(),
+      });
     } catch (nextError) {
       setSaveError(nextError);
     } finally {

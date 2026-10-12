@@ -99,6 +99,8 @@ export const groupKeys = {
 export const auditKeys = {
   all: ["audits"] as const,
   pages: (filters: object) => [...auditKeys.all, "pages", filters] as const,
+  retentionPolicy: () => [...auditKeys.all, "retention-policy"] as const,
+  retentionJobs: () => [...auditKeys.all, "retention-jobs"] as const,
 };
 
 export const searchKeys = {

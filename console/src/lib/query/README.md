@@ -94,7 +94,7 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/artifact-detail/MavenArtifactDetail.tsx`
 - [x] `features/artifact-detail/ArtifactScanStatus.tsx`
 - [x] `features/artifact-detail/OciImageDetail.tsx`
-- [ ] `features/audit/AuditRetention.tsx`
+- [x] `features/audit/AuditRetention.tsx`
 - [x] `features/audit/Audits.tsx`
 - [ ] `features/auth/Login.tsx`
 - [ ] `features/dashboard/Dashboard.tsx`

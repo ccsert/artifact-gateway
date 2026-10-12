@@ -1,6 +1,10 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type { Dayjs } from "dayjs";
-import { listAuditPage } from "../../client";
+import {
+  getAuditRetentionPolicy,
+  listAuditPage,
+  listAuditRetentionJobs,
+} from "../../client";
 import { unwrap } from "../../lib/query/client";
 import { auditKeys } from "../../lib/query/keys";
 
@@ -61,5 +65,28 @@ export function useAuditPages(filters: AuditFilters) {
     staleTime: 0,
     // A new filter set keeps the previous records on screen until it answers.
     placeholderData: (previous) => previous,
+  });
+}
+
+export function useAuditRetentionPolicy() {
+  return useQuery({
+    queryKey: auditKeys.retentionPolicy(),
+    queryFn: ({ signal }) => unwrap(getAuditRetentionPolicy({ signal })),
+  });
+}
+
+const activeCleanupStates = new Set(["pending", "running"]);
+
+/** Cleanup jobs, polled while one is pending or running. */
+export function useAuditRetentionJobs() {
+  return useQuery({
+    queryKey: auditKeys.retentionJobs(),
+    queryFn: async ({ signal }) =>
+      (await unwrap(listAuditRetentionJobs({ signal }))) ?? [],
+    staleTime: 0,
+    refetchInterval: (query) =>
+      query.state.data?.some((job) => activeCleanupStates.has(job.state))
+        ? 2000
+        : false,
   });
 }
