@@ -7,8 +7,7 @@ import { useAuth } from "../../lib/auth";
 import { usePreferences } from "../../lib/preferences";
 import { rawResourceURL } from "../../lib/rawPath";
 
-// Maven 制品详情：使用方法 + 按发布版本、快照构建分开的版本列表。
-// meta.coordinate 可以是完整 GAV（com.example:hello:1.0.0）或 GA（com.example:hello）。
+// Raw 制品详情：使用方法 + 元信息
 export function RawArtifactDetail({
   repositoryId,
   repoName,

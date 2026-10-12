@@ -207,5 +207,3 @@ export function MavenArtifactDetail({
     />
   );
 }
-
-// Conan 制品详情：使用方法 + revisions 列表

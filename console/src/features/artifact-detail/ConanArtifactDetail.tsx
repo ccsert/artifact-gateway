@@ -14,8 +14,7 @@ import {
   useConanRecipeRevisions,
 } from "./artifactDetailQueries";
 
-// Maven 制品详情：使用方法 + 按发布版本、快照构建分开的版本列表。
-// meta.coordinate 可以是完整 GAV（com.example:hello:1.0.0）或 GA（com.example:hello）。
+// Conan 制品详情：使用方法 + revisions 列表
 export function ConanArtifactDetail({
   repoId,
   repoName,
@@ -153,7 +152,7 @@ export function ConanArtifactDetail({
       );
     else {
       queryClient.setQueryData<typeof packageRevisions>(
-        conanPackageRevisionsKey(repoId, reference, selectedRecipe),
+        conanPackageRevisionsKey(repoId, reference, item.recipeRevision),
         (items) =>
           (items ?? []).filter(
             (candidate) =>
@@ -272,5 +271,3 @@ export function ConanArtifactDetail({
     />
   );
 }
-
-// Raw 制品详情：使用方法 + 元信息
