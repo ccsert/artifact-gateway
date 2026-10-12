@@ -16,6 +16,7 @@ import {
   getRepositoryEffectiveAccess,
   getRetentionPolicy,
   listRepositories,
+  listRepositoryLifecycleJobs,
   listRepositoryReplications,
   listRepositoryCapacities,
 } from "../../client";
@@ -250,4 +251,20 @@ export function useInvalidateProxyHealth(repositoryId: string) {
       }),
     [queryClient, repositoryId],
   );
+}
+
+/** The repository's scan jobs, polled every 10 seconds while shown. */
+export function useScanJobs(repositoryId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: repositoryKeys.scanJobs(repositoryId),
+    queryFn: async ({ signal }) =>
+      (
+        await unwrap(
+          listRepositoryLifecycleJobs({ path: { repositoryId }, signal }),
+        )
+      ).filter((job) => job.kind === "scan"),
+    enabled,
+    refetchInterval: 10_000,
+    staleTime: 0,
+  });
 }

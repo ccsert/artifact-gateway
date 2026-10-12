@@ -25,6 +25,8 @@ export const repositoryKeys = {
     [...repositoryKeys.detail(id), "apt-signing-state"] as const,
   proxyHealth: (id: string) =>
     [...repositoryKeys.detail(id), "proxy-health"] as const,
+  scanJobs: (id: string) =>
+    [...repositoryKeys.detail(id), "scan-jobs"] as const,
   replicationPlans: (id: string) =>
     [...repositoryKeys.detail(id), "replication-plans"] as const,
   aptLifecycle: (id: string, suite: string) =>
