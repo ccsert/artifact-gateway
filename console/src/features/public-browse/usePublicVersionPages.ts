@@ -5,7 +5,7 @@ import {
   readPublicOciManifestDetail,
   type PublicOciManifestDetail,
 } from "../../lib/publicOci";
-import type { ConanRevisionPage } from "./ConanGroupTable";
+import type { ConanRevisionPage } from "./conanGroupTypes";
 import { VERSION_PAGE_SIZE } from "./constants";
 import type { PublicRepository } from "./types";
 import { formatDescriptor } from "../../formats";
