@@ -478,7 +478,7 @@ func (h generatedRepositoryAPIAdapter) withRepositoryScope(w http.ResponseWriter
 }
 
 func (h generatedRepositoryAPIAdapter) withRepositoryBrowseScope(w http.ResponseWriter, r *http.Request, repositoryID string, handler func(Principal, repository.HostedRepository)) {
-	principal, authenticated := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	principal, authenticated := h.authenticator.AuthenticateContext(r.Context(), r.Header.Get("Authorization"))
 	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID)
 	if errors.Is(err, repository.ErrNotFound) {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")

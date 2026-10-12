@@ -70,7 +70,7 @@ it("does not retain another repository's rows while its next scope is loading", 
     } as never)
     .mockImplementationOnce(
       () =>
-        new Promise((resolve) => {
+        new Promise<never>((resolve) => {
           answer = resolve;
         }),
     );

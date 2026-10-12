@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -332,5 +333,26 @@ func TestContainsSearchBudgetIncludesCredentialReads(t *testing.T) {
 	handler.ServeHTTP(res, req)
 	if res.Code != 401 || len(store.deadlines) == 0 || store.deadlines[0].IsZero() {
 		t.Fatalf("credential budget status=%d deadlines=%v", res.Code, store.deadlines)
+	}
+	token := "valid-budget-fixture"
+	if _, err := store.CreateAPIKey(context.Background(), repository.APIKey{ID: uuid.NewString(), Name: "budget-fixture", SecretHash: authorization.HashAPIKey(token), Roles: []string{"admin"}}); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "valid-budget", Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.deadlines = nil
+	req = httptest.NewRequest("GET", "/api/v2/repositories/"+repo.ID+"/artifact-search?q=alpha&match=contains", nil)
+	authorize(req, token)
+	res = httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	if res.Code != 200 || len(store.deadlines) < 3 {
+		t.Fatalf("valid credential status=%d deadlines=%v body=%s", res.Code, store.deadlines, res.Body.String())
+	}
+	for _, deadline := range store.deadlines {
+		if deadline.IsZero() {
+			t.Fatalf("valid credential revalidation escaped budget: %v", store.deadlines)
+		}
 	}
 }
