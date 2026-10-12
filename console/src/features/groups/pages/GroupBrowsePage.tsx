@@ -1,43 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeftOutlined } from "@ant-design/icons";
-import { browseGroup } from "../../../client";
-import type { GroupBrowsePage as GroupBrowseResponse } from "../../../client";
 import { PageHeader } from "../../../components/ui/Layout";
 import { Badge, FormatBadge } from "../../../components/ui/Badge";
 import { ErrorBanner, Loading } from "../../../components/ui/Feedback";
 import { usePreferences } from "../../../lib/preferences";
 import { RepositoryBrowseTree } from "../../repository/RepositoryBrowseTree";
+import { useGroupBrowseRoot, useSetGroupBrowseRoot } from "../groupQueries";
 
 export function GroupBrowsePage() {
   const { groupId = "" } = useParams();
   const { text } = usePreferences();
-  const [page, setPage] = useState<GroupBrowseResponse | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const requestVersion = useRef(0);
-  const load = useCallback(async () => {
-    const version = ++requestVersion.current;
-    setError(null);
-    try {
-      const response = await browseGroup({
-        path: { groupId },
-        query: { pageSize: 50 },
-      });
-      if (version !== requestVersion.current) return;
-      if (response.error || !response.data)
-        throw response.error ?? new Error("Empty Group directory response");
-      setPage(response.data);
-    } catch (failure) {
-      if (version === requestVersion.current) setError(failure);
-    }
-  }, [groupId]);
-  useEffect(() => {
-    setPage(null);
-    void load();
-    return () => {
-      requestVersion.current += 1;
-    };
-  }, [load]);
+  const rootQuery = useGroupBrowseRoot(groupId);
+  const page = rootQuery.data ?? null;
+  const error = rootQuery.error;
+  const load = () => rootQuery.refetch();
+  const setPage = useSetGroupBrowseRoot(groupId);
   return (
     <div className="ag-page-stack ag-group-browse-page">
       <Link to="/groups" className="ag-group-browse-back">

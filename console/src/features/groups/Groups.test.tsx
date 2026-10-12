@@ -25,6 +25,7 @@ import { AntdProvider } from "../../app/AntdProvider";
 import { PreferencesProvider } from "../../lib/preferences";
 import { resetFormatProfilesCacheForTests } from "../../lib/formatProfiles";
 import { GroupsPage } from "./Groups";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", () => ({
   createGroup: vi.fn(),
@@ -92,11 +93,13 @@ function renderPage() {
   vi.mocked(getGroupCapacity).mockResolvedValue({ data: {} } as never);
 
   return render(
-    <PreferencesProvider>
-      <AntdProvider>
-        <GroupsPage />
-      </AntdProvider>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <AntdProvider>
+          <GroupsPage />
+        </AntdProvider>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 
@@ -118,6 +121,27 @@ afterEach(() => {
 });
 
 describe("GroupsPage dialogs", () => {
+  it("recovers format profiles on retry after the service recovers", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listFormatProfiles).mockResolvedValueOnce({
+      error: {
+        status: 503,
+        message: "format profiles temporarily unavailable",
+      },
+    } as never);
+    renderPage();
+    await screen.findByText("format profiles temporarily unavailable");
+    expect(screen.getByRole("button", { name: /新建分组/ })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /重试/ }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /新建分组/ })).toBeEnabled(),
+    );
+    expect(
+      screen.queryByText("format profiles temporarily unavailable"),
+    ).not.toBeInTheDocument();
+  });
+
   it("holds the create dialog shut while saving and frees it after a failure", async () => {
     const user = userEvent.setup();
     const fail = pendingSave(vi.mocked(createGroup));

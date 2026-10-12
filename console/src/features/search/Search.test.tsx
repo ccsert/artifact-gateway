@@ -12,6 +12,7 @@ import { searchArtifacts } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { SearchPage } from "./Search";
 import userEvent from "@testing-library/user-event";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../client")>()),
@@ -25,6 +26,8 @@ vi.mock("../../lib/auth", () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  // Queued answers a failed test did not consume must not reach the next one.
+  vi.mocked(searchArtifacts).mockReset();
 });
 
 it("cancels an old query, ignores its late answer, and retries an identical query", async () => {
@@ -42,9 +45,11 @@ it("cancels an old query, ignores its late answer, and retries an identical quer
     .mockRejectedValueOnce(new Error("fixture unavailable"));
   render(
     <MemoryRouter initialEntries={["/search?q=alpha"]}>
-      <PreferencesProvider>
-        <SearchPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <SearchPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
   await waitFor(() => expect(searchArtifacts).toHaveBeenCalledTimes(1));
@@ -69,6 +74,8 @@ it("cancels an old query, ignores its late answer, and retries an identical quer
     } as never),
   );
   expect(screen.queryByText("old-alpha.bin")).not.toBeInTheDocument();
+  // The search box ignores Enter while a search is loading.
+  expect(await screen.findByText("没有匹配的制品")).toBeInTheDocument();
   fireEvent.keyDown(screen.getByRole("searchbox"), {
     key: "Enter",
     code: "Enter",
@@ -103,9 +110,11 @@ it("retains the first page after a rejected continuation and releases its loadin
     } as never);
   render(
     <MemoryRouter initialEntries={["/search?q=alpha"]}>
-      <PreferencesProvider>
-        <SearchPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <SearchPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
   await screen.findByText("alpha.bin");
@@ -144,9 +153,11 @@ it("retains existing results and cursor after an identical search refresh reject
     .mockRejectedValueOnce(new Error("refresh unavailable"));
   render(
     <MemoryRouter initialEntries={["/search?q=alpha"]}>
-      <PreferencesProvider>
-        <SearchPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <SearchPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
   await screen.findByText("alpha.bin");
@@ -165,9 +176,11 @@ it("requests literal contains matching by default", async () => {
   } as never);
   render(
     <MemoryRouter initialEntries={["/search?q=alpha"]}>
-      <PreferencesProvider>
-        <SearchPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <SearchPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
   await waitFor(() =>
@@ -196,9 +209,11 @@ it("shows unavailable detail for a search hit from a newer server format", async
   } as never);
   render(
     <MemoryRouter initialEntries={["/search?q=Widget"]}>
-      <PreferencesProvider>
-        <SearchPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <SearchPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
   await userEvent.setup().click(await screen.findByText("Widget:1.0"));
@@ -227,9 +242,11 @@ it("presents Raw global-search hits with a readable file path", async () => {
 
   render(
     <MemoryRouter initialEntries={["/search?q=ChatGPT%20Image"]}>
-      <PreferencesProvider>
-        <SearchPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <SearchPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
 

@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { listRepositoryArtifactIdentities } from "../../client";
 import type { Repository } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { RepositoryArtifactSelect } from "./RepositoryArtifactSelect";
 
 vi.mock("../../client", async (importOriginal) => ({
@@ -41,15 +42,17 @@ it("shows readable Raw identities and canonicalizes literal percent signs in sea
   const user = userEvent.setup();
 
   render(
-    <PreferencesProvider>
-      <RepositoryArtifactSelect
-        repo={repository}
-        purpose="distribution"
-        value={null}
-        onChange={vi.fn()}
-        ariaLabel="选择 Raw 制品"
-      />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryArtifactSelect
+          repo={repository}
+          purpose="distribution"
+          value={null}
+          onChange={vi.fn()}
+          ariaLabel="选择 Raw 制品"
+        />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 
   const input = screen.getByRole("combobox", { name: "选择 Raw 制品" });
@@ -66,6 +69,7 @@ it("shows readable Raw identities and canonicalizes literal percent signs in sea
           q: "report%2520final.txt",
           pageSize: 50,
         },
+        signal: expect.any(AbortSignal),
       }),
     { timeout: 1500 },
   );

@@ -88,18 +88,19 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/access-control/AccessControl.tsx`
 - [x] `features/access-control/AuthorizationRolesPanel.tsx`
 - [x] `features/access-control/AuthorizationTemplatesPanel.tsx`
-- [ ] `features/artifact-detail/ArtifactIntelligencePanel.tsx`
-- [ ] `features/artifact-detail/ArtifactQuarantinePanel.tsx`
-- [ ] `features/artifact-detail/ArtifactRowDetail.tsx`
-- [ ] `features/artifact-detail/ArtifactScanStatus.tsx`
-- [ ] `features/artifact-detail/OciImageDetail.tsx`
+- [x] `features/artifact-detail/ArtifactIntelligencePanel.tsx`
+- [x] `features/artifact-detail/ArtifactQuarantinePanel.tsx`
+- [x] `features/artifact-detail/ConanArtifactDetail.tsx`
+- [x] `features/artifact-detail/MavenArtifactDetail.tsx`
+- [x] `features/artifact-detail/ArtifactScanStatus.tsx`
+- [x] `features/artifact-detail/OciImageDetail.tsx`
 - [ ] `features/audit/AuditRetention.tsx`
 - [ ] `features/audit/Audits.tsx`
 - [ ] `features/auth/Login.tsx`
 - [ ] `features/dashboard/Dashboard.tsx`
-- [ ] `features/groups/Groups.tsx`
-- [ ] `features/groups/pages/GroupBrowsePage.tsx`
-- [ ] `features/groups/pages/GroupResolutionDialog.tsx`
+- [x] `features/groups/Groups.tsx`
+- [x] `features/groups/pages/GroupBrowsePage.tsx`
+- [x] `features/groups/pages/GroupResolutionDialog.tsx`
 - [x] `features/identity/ApiKeys.tsx`
 - [x] `features/identity/ServiceAccounts.tsx`
 - [x] `features/identity/Users.tsx`
@@ -123,11 +124,11 @@ entries only use effects for non-data work and leave the list once checked.
       state was extracted unchanged under issue 275; migrate its reads separately.
 - [x] `features/repository/APTOperationsTab.tsx`
 - [x] `features/repository/ProxyMavenCacheSection.tsx`
-- [ ] `features/repository/RepositoryArtifactSelect.tsx`
+- [x] `features/repository/RepositoryArtifactSelect.tsx`
 - [x] `features/repository/RepositoryArtifactsTab.tsx`
 - [x] `features/repository/RepositoryBrowseTree.tsx` — the tree loads one node
       page at a time with retry and de-duplication; it is not a cached read.
-- [ ] `features/repository/RepositoryCapacityTab.tsx`
+- [x] `features/repository/RepositoryCapacityTab.tsx`
 - [x] `features/repository/RepositoryDistributionTab.tsx`
 - [x] `features/repository/RepositoryGrantsTab.tsx`
 - [x] `features/repository/RepositoryJobsTab.tsx`
@@ -135,8 +136,8 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/repository/RepositoryRetentionTab.tsx`
 - [x] `features/repository/RepositoryScanningTab.tsx`
 - [x] `features/repository/RepositorySecurityTab.tsx`
-- [ ] `features/repository/RepositoryUsageTab.tsx`
-- [ ] `features/search/Search.tsx`
+- [x] `features/repository/RepositoryUsageTab.tsx`
+- [x] `features/search/Search.tsx`
 - [ ] `features/settings/Authentication.tsx`
 - [ ] `features/settings/SiteSettings.tsx`
 - [ ] `lib/preferences.tsx`

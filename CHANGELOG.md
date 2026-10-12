@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Groups, global search and artifact detail read through the shared query layer and are split into focused files; the Groups, Search, artifact row detail, OCI image detail and public Conan package table files are now each at most 400 lines. Reopening a group's resolution check or retrying an identical search starts a fresh request instead of joining a stale one. Artifact scan status polls only while a scan is queued or running, quarantine and scan drafts reset when another artifact is opened, and an OCI deep link still wins over an earlier version choice. Repository capacity, download statistics and the artifact picker also use the query layer. Behaviour and layout are otherwise unchanged.
+
 - Repository security and quarantine-read editors synchronize their drafts with refreshed policy versions before saving. Failed artifact searches and first-page refreshes retain the last successful rows in the same repository, with Retry; retained rows never supply a cursor for a new search or survive an identity cache reset.
 
 - Repository detail tabs (artifacts, retention, APT operations, distribution, security, scanning, settings, lifecycle jobs and tombstones) and the repository list read through the shared query layer and are split into focused sections; every repository Console file is now at most 400 lines. Artifact lists keep the current search when an older answer arrives late, polled job lists stop when the tab is closed, and saved policies stay on screen with their confirmation. Behaviour and layout are otherwise unchanged.

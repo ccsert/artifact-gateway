@@ -12,6 +12,7 @@ import { getGroupResolution } from "../../../client";
 import type { Group, GroupResolution } from "../../../client";
 import { PreferencesProvider } from "../../../lib/preferences";
 import { GroupResolutionDialog } from "./GroupResolutionDialog";
+import { TestQueryProvider } from "../../../test/queryClient";
 
 vi.mock("../../../client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../client")>()),
@@ -52,9 +53,11 @@ const plan: GroupResolution = {
 function showDialog() {
   render(
     <MemoryRouter>
-      <PreferencesProvider>
-        <GroupResolutionDialog group={group} />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <GroupResolutionDialog group={group} />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
 }
@@ -79,7 +82,10 @@ describe("GroupResolutionDialog", () => {
       screen.getByText("1 个配置成员当前未参与解析。"),
     ).toBeInTheDocument();
     expect(screen.getByText(/这里展示候选顺序/)).toBeInTheDocument();
-    expect(getResolution).toHaveBeenCalledWith({ path: { groupId: group.id } });
+    expect(getResolution).toHaveBeenCalledWith({
+      path: { groupId: group.id },
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it("retries an initial rejected request without leaving loading below the error", async () => {

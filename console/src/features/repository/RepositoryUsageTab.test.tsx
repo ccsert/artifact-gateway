@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { listRepositoryArtifactUsage } from "../../client";
 import type { Repository } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { RepositoryUsageTab } from "./RepositoryUsageTab";
 
 vi.mock("../../client", async (importOriginal) => ({
@@ -54,9 +55,11 @@ describe("RepositoryUsageTab", () => {
       .mockResolvedValueOnce(data(0) as never)
       .mockResolvedValueOnce(data(0) as never);
     render(
-      <PreferencesProvider>
-        <RepositoryUsageTab repo={repository} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryUsageTab repo={repository} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     await screen.findByText("第 1-20 项，共 21 项");
     await user.click(screen.getByTitle("2"));
@@ -89,9 +92,11 @@ describe("RepositoryUsageTab", () => {
         },
       } as never);
     render(
-      <PreferencesProvider>
-        <RepositoryUsageTab repo={repository} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryUsageTab repo={repository} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     await screen.findByText("initial read failed");
     expect(screen.queryByText("正在加载…")).not.toBeInTheDocument();
@@ -129,9 +134,11 @@ describe("RepositoryUsageTab", () => {
       )
       .mockResolvedValueOnce(response("new-search") as never);
     render(
-      <PreferencesProvider>
-        <RepositoryUsageTab repo={repository} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryUsageTab repo={repository} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     await screen.findByText("initial");
     await user.click(screen.getByRole("button", { name: /刷\s*新/ }));
@@ -157,9 +164,11 @@ describe("RepositoryUsageTab", () => {
       },
     } as never);
     render(
-      <PreferencesProvider>
-        <RepositoryUsageTab repo={repository} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryUsageTab repo={repository} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     await screen.findByText("暂无下载记录");
     expect(mockListRepositoryArtifactUsage).toHaveBeenCalledTimes(1);
@@ -217,9 +226,11 @@ describe("RepositoryUsageTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryUsageTab repo={repository} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryUsageTab repo={repository} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("@scope/widget@1.2.3")).toBeInTheDocument();
@@ -241,9 +252,11 @@ describe("RepositoryUsageTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryUsageTab repo={repository} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryUsageTab repo={repository} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("暂无下载记录")).toBeInTheDocument();
@@ -263,9 +276,11 @@ describe("RepositoryUsageTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryUsageTab repo={repository} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryUsageTab repo={repository} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     await screen.findByText("暂无下载记录");
     await user.click(screen.getByRole("button", { name: /刷\s*新/ }));
@@ -297,9 +312,11 @@ describe("RepositoryUsageTab", () => {
       } as never)
       .mockRejectedValueOnce(new Error("temporary failure"));
     render(
-      <PreferencesProvider>
-        <RepositoryUsageTab repo={repository} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryUsageTab repo={repository} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     await screen.findByText("widget@1.0.0");
     await user.click(screen.getByRole("button", { name: /刷\s*新/ }));

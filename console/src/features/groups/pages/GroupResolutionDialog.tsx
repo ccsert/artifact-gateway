@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { OrderedListOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Space } from "antd";
-import { getGroupResolution } from "../../../client";
-import type { Group, GroupResolution } from "../../../client";
+import type { Group } from "../../../client";
 import { Badge } from "../../../components/ui/Badge";
 import {
   EmptyState,
@@ -12,40 +11,27 @@ import {
 } from "../../../components/ui/Feedback";
 import { Modal } from "../../../components/ui/Modal";
 import { usePreferences } from "../../../lib/preferences";
+import { useGroupResolution } from "../groupQueries";
+import { useQueryClient } from "@tanstack/react-query";
+import { groupKeys } from "../../../lib/query/keys";
 
 export function GroupResolutionDialog({ group }: { group: Group }) {
   const { text } = usePreferences();
   const [open, setOpen] = useState(false);
-  const [plan, setPlan] = useState<GroupResolution | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-  const requestVersion = useRef(0);
-
-  const load = useCallback(async () => {
-    const version = ++requestVersion.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await getGroupResolution({
-        path: { groupId: group.id },
-      });
-      if (version !== requestVersion.current) return;
-      if (response.error || !response.data)
-        throw response.error ?? new Error("Empty resolution response");
-      setPlan(response.data);
-    } catch (requestError) {
-      if (version === requestVersion.current) setError(requestError);
-    } finally {
-      if (version === requestVersion.current) setLoading(false);
-    }
-  }, [group.id]);
-
-  useEffect(() => {
-    if (open) void load();
-    return () => {
-      requestVersion.current += 1;
-    };
-  }, [load, open]);
+  const planQuery = useGroupResolution(group.id, open);
+  const plan = planQuery.data ?? null;
+  const loading = planQuery.isFetching;
+  const error = planQuery.error;
+  const load = () => planQuery.refetch();
+  const queryClient = useQueryClient();
+  // Closing abandons a read in flight, so the next opening asks again
+  // instead of showing an answer requested by an earlier opening.
+  const close = () => {
+    setOpen(false);
+    void queryClient.cancelQueries({
+      queryKey: groupKeys.resolution(group.id),
+    });
+  };
 
   return (
     <>
@@ -58,7 +44,7 @@ export function GroupResolutionDialog({ group }: { group: Group }) {
       </Button>
       <Modal
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => close()}
         title={text(
           `解析顺序：${group.name}`,
           `Resolution order: ${group.name}`,
@@ -73,10 +59,7 @@ export function GroupResolutionDialog({ group }: { group: Group }) {
             >
               {text("刷新", "Refresh")}
             </Button>
-            <Button
-              aria-label={text("关闭", "Close")}
-              onClick={() => setOpen(false)}
-            >
+            <Button aria-label={text("关闭", "Close")} onClick={() => close()}>
               {text("关闭", "Close")}
             </Button>
           </Space>

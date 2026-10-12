@@ -1,4 +1,4 @@
-import { RawArtifactDetail } from "../../features/artifact-detail/ArtifactRowDetail";
+import { RawArtifactDetail } from "../../features/artifact-detail/RawArtifactDetail";
 import type { FormatViews } from "../viewTypes";
 
 export const rawViews: FormatViews = {

@@ -1,149 +1,24 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { DeleteOutlined } from "@ant-design/icons";
 import { Button, Popconfirm, Select } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { listOciManifests } from "../../client";
-import type { OciManifestSummary } from "../../client";
 import { useAuth } from "../../lib/auth";
 import { Loading, ErrorBanner } from "../../components/ui/Feedback";
 import { Badge } from "../../components/ui/Badge";
-import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { UsageSnippetBlock } from "../../components/ui/PublicBrowsePrimitives";
 import { ociUsage, type UsageSnippet } from "../../lib/usage";
 import { usePreferences } from "../../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
+import { useQueryClient } from "@tanstack/react-query";
 import {
-  ConsoleTable,
-  useClipboardAction,
-} from "../../components/ui/ConsolePrimitives";
-
-interface OciDescriptor {
-  mediaType: string;
-  size?: number;
-  digest: string;
-}
-
-interface OciManifest {
-  schemaVersion: number;
-  mediaType?: string;
-  config?: OciDescriptor;
-  layers?: OciDescriptor[];
-}
-
-interface OciConfig {
-  architecture?: string;
-  os?: string;
-  created?: string;
-  config?: {
-    Entrypoint?: string[];
-    Cmd?: string[];
-    Env?: string[];
-    User?: string;
-    WorkingDir?: string;
-  };
-}
-
-interface OciVersionOption {
-  value: string;
-  label: string;
-  searchText: string;
-  digest: string;
-  size: number;
-  kind: "tag" | "digest";
-}
-
-const MANIFEST_ACCEPT =
-  "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json";
-
-async function ociRegistryToken(token: string): Promise<string> {
-  const response = await fetch("/auth/token", {
-    credentials: "include",
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  });
-  if (!response.ok) {
-    throw new Error(
-      `${response.status}: ${(await response.text()).slice(0, 120)}`,
-    );
-  }
-  const body = (await response.json()) as {
-    token?: string;
-    access_token?: string;
-  };
-  const registryToken = body.token ?? body.access_token;
-  if (!registryToken) throw new Error("Registry token missing");
-  return registryToken;
-}
-
-async function ociFetch(
-  token: string,
-  path: string,
-  accept?: string,
-): Promise<Response> {
-  const registryToken = await ociRegistryToken(token);
-  const res = await fetch(`/v2/${path}`, {
-    headers: {
-      Authorization: `Bearer ${registryToken}`,
-      ...(accept ? { Accept: accept } : {}),
-    },
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`${res.status}: ${text.slice(0, 120)}`);
-  }
-  return res;
-}
-
-async function fetchOciManifests(
-  repositoryId: string,
-  image: string,
-): Promise<OciManifestSummary[]> {
-  const items: OciManifestSummary[] = [];
-  const seenTokens = new Set<string>();
-  let pageToken: string | undefined;
-  do {
-    const response = await listOciManifests({
-      path: { repositoryId },
-      query: { name: image, pageSize: 200, pageToken },
-    });
-    if (response.error || !response.data)
-      throw new Error("读取 OCI Manifest 列表失败");
-    items.push(...response.data.items);
-    pageToken = response.data.nextPageToken;
-    if (pageToken && seenTokens.has(pageToken))
-      throw new Error("OCI Manifest 分页游标重复");
-    if (pageToken) seenTokens.add(pageToken);
-  } while (pageToken);
-  return items;
-}
-
-function ociVersionOptions(
-  manifests: OciManifestSummary[],
-): OciVersionOption[] {
-  return manifests.flatMap<OciVersionOption>((manifest) => {
-    if (manifest.tags.length === 0) {
-      return [
-        {
-          value: manifest.digest,
-          label: `无标签 · ${shortDigest(manifest.digest)}`,
-          searchText: `无标签 ${manifest.digest}`,
-          digest: manifest.digest,
-          size: manifest.size,
-          kind: "digest" as const,
-        },
-      ];
-    }
-    return manifest.tags.map((tag) => ({
-      value: tag,
-      label: `${tag} · ${shortDigest(manifest.digest)}`,
-      searchText: `${tag} ${manifest.digest}`,
-      digest: manifest.digest,
-      size: manifest.size,
-      kind: "tag" as const,
-    }));
-  });
-}
+  ociManifestKey,
+  useOciManifest,
+  useOciManifests,
+} from "./artifactDetailQueries";
+import { ociRegistryToken, ociVersionOptions } from "./ociImageModel";
+import { OciManifestView } from "./OciManifestView";
+import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 
 export function OciImageDetail({
   repositoryId,
@@ -161,109 +36,48 @@ export function OciImageDetail({
   canQuarantine?: boolean;
 }) {
   const { token } = useAuth();
-  const { locale, text } = usePreferences();
-  const [manifests, setManifests] = useState<OciManifestSummary[] | null>(null);
-  const [selectedReference, setSelectedReference] = useState<string | null>(
-    null,
+  const { text } = usePreferences();
+  const queryClient = useQueryClient();
+  const manifestsQuery = useOciManifests(repositoryId, image);
+  const manifests = manifestsQuery.data ?? null;
+  const name = `${repository}/${image}`;
+  const versions = ociVersionOptions(manifests ?? []);
+  // A deep link wins over an earlier manual choice; otherwise the choice
+  // stands while that version still exists.
+  const [choice, setChoice] = useState<{
+    value: string;
+    link: string | undefined;
+  } | null>(null);
+  const linked = versions.find(
+    (version) =>
+      version.value === initialReference || version.digest === initialReference,
   );
-  const [manifest, setManifest] = useState<OciManifest | null>(null);
-  const [config, setConfig] = useState<OciConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [manifestLoading, setManifestLoading] = useState(false);
-  const [error, setError] = useState<unknown>(null);
+  const chosen =
+    choice && choice.link === initialReference
+      ? versions.find((version) => version.value === choice.value)
+      : undefined;
+  const selectedReference = (chosen ?? linked ?? versions[0])?.value ?? null;
+  const setSelectedReference = (value: string) =>
+    setChoice({ value, link: initialReference });
+  const manifestQuery = useOciManifest(
+    repositoryId,
+    token,
+    name,
+    selectedReference,
+  );
+  const manifest = manifestQuery.data?.manifest ?? null;
+  const config = manifestQuery.data?.config ?? null;
+  const manifestLoading = manifestQuery.isFetching && !manifestQuery.data;
+  const [actionError, setError] = useState<unknown>(null);
+  const error = actionError ?? manifestsQuery.error ?? manifestQuery.error;
   const [deleting, setDeleting] = useState(false);
   const { copiedValue, copy } = useClipboardAction(1400);
 
-  const name = `${repository}/${image}`;
-  const versions = ociVersionOptions(manifests ?? []);
   const selectedVersion = versions.find(
     (version) => version.value === selectedReference,
   );
 
-  const loadVersions = useCallback(async (): Promise<
-    OciManifestSummary[] | null
-  > => {
-    setLoading(true);
-    setError(null);
-    try {
-      const nextManifests = await fetchOciManifests(repositoryId, image);
-      const nextVersions = ociVersionOptions(nextManifests);
-      const initialVersion = nextVersions.find(
-        (version) =>
-          version.value === initialReference ||
-          version.digest === initialReference,
-      );
-      setManifests(nextManifests);
-      setSelectedReference((current) =>
-        current && nextVersions.some((version) => version.value === current)
-          ? current
-          : (initialVersion?.value ?? nextVersions[0]?.value ?? null),
-      );
-      return nextManifests;
-    } catch (requestError) {
-      setError(requestError);
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, [image, initialReference, repositoryId]);
-
-  useEffect(() => {
-    void loadVersions();
-  }, [loadVersions]);
-
-  // A deep link may change while the expanded row stays mounted. Apply the
-  // requested digest/tag without resetting later manual version selections.
-  useEffect(() => {
-    if (!initialReference || !manifests) return;
-    const target = ociVersionOptions(manifests).find(
-      (version) =>
-        version.value === initialReference ||
-        version.digest === initialReference,
-    );
-    if (target) setSelectedReference(target.value);
-  }, [initialReference, manifests]);
-
-  // 加载选中标签的 manifest + config
-  const loadManifest = useCallback(
-    async (reference: string) => {
-      setManifestLoading(true);
-      setError(null);
-      setManifest(null);
-      setConfig(null);
-      try {
-        const res = await ociFetch(
-          token,
-          `${name}/manifests/${reference}`,
-          MANIFEST_ACCEPT,
-        );
-        const m = (await res.json()) as OciManifest;
-        setManifest(m);
-        if (m.config?.digest) {
-          try {
-            const cfgRes = await ociFetch(
-              token,
-              `${name}/blobs/${m.config.digest}`,
-            );
-            setConfig((await cfgRes.json()) as OciConfig);
-          } catch {
-            setConfig(null);
-          }
-        }
-      } catch (e) {
-        setError(e);
-      } finally {
-        setManifestLoading(false);
-      }
-    },
-    [token, name],
-  );
-
-  useEffect(() => {
-    if (selectedReference) void loadManifest(selectedReference);
-  }, [selectedReference, loadManifest]);
-
-  if (loading)
+  if (manifestsQuery.isPending)
     return <Loading label={text("加载镜像详情…", "Loading image details…")} />;
   if (!manifests)
     return (
@@ -276,15 +90,10 @@ export function OciImageDetail({
       </p>
     );
 
-  const totalSize =
-    (manifest?.layers ?? []).reduce((n, l) => n + (l.size ?? 0), 0) +
-    (manifest?.config?.size ?? 0);
-  const hasImageDescriptors =
-    manifest?.config !== undefined || manifest?.layers !== undefined;
-
   const deleteReference = async () => {
     if (!selectedVersion) return;
     setDeleting(true);
+    setError(null);
     try {
       const registryToken = await ociRegistryToken(token);
       const res = await fetch(
@@ -296,10 +105,11 @@ export function OciImageDetail({
       );
       if (!res.ok)
         throw new Error(`${res.status}: ${(await res.text()).slice(0, 120)}`);
-      setManifest(null);
-      setConfig(null);
-      const remaining = await loadVersions();
-      if (remaining?.length === 0) onDeleted?.();
+      queryClient.removeQueries({
+        queryKey: ociManifestKey(repositoryId, name, selectedVersion.value),
+      });
+      const remaining = await manifestsQuery.refetch();
+      if (remaining.data?.length === 0) onDeleted?.();
     } catch (e) {
       setError(e);
     } finally {
@@ -313,8 +123,10 @@ export function OciImageDetail({
         <ErrorBanner
           error={error}
           onRetry={() => {
-            if (selectedReference) void loadManifest(selectedReference);
-            else void loadVersions();
+            setError(null);
+            if (manifestsQuery.error || !selectedReference)
+              void manifestsQuery.refetch();
+            else void manifestQuery.refetch();
           }}
         />
       )}
@@ -451,168 +263,14 @@ export function OciImageDetail({
 
       {manifestLoading ? (
         <Loading label={text("加载清单…", "Loading manifest…")} />
-      ) : !manifest ? null : (
-        <>
-          {/* 概要 */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-lg border border-line px-3 py-2">
-              <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-                {text("镜像大小", "Image size")}
-              </div>
-              <div className="mt-0.5 text-sm font-semibold text-fg-strong">
-                {hasImageDescriptors
-                  ? formatBytes(totalSize)
-                  : text("无层数据", "No layer data")}
-              </div>
-              {!hasImageDescriptors && (
-                <div className="mt-1 text-xs leading-4 text-fg-disabled">
-                  {text("仅包含 Manifest 元数据", "Manifest metadata only")}
-                </div>
-              )}
-              <div className="mt-1 text-xs leading-4 text-fg-disabled">
-                Manifest JSON {formatBytes(selectedVersion?.size)}
-              </div>
-            </div>
-            <div className="rounded-lg border border-line px-3 py-2">
-              <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-                {text("层数", "Layers")}
-              </div>
-              <div className="mt-0.5 text-sm font-semibold text-fg-strong">
-                {manifest.layers?.length ?? 0}
-              </div>
-            </div>
-            <div className="rounded-lg border border-line px-3 py-2">
-              <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-                {text("架构 / 系统", "Architecture / OS")}
-              </div>
-              <div className="mt-0.5 text-sm font-semibold text-fg-strong">
-                {config?.architecture ?? "—"} / {config?.os ?? "—"}
-              </div>
-            </div>
-            <div className="rounded-lg border border-line px-3 py-2">
-              <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-                {text("创建时间", "Created")}
-              </div>
-              <div className="mt-0.5 text-sm font-semibold text-fg-strong">
-                {config?.created ? formatDate(config.created, locale) : "—"}
-              </div>
-            </div>
-          </div>
-
-          {/* 启动配置 */}
-          {config?.config && (
-            <div className="rounded-lg border border-line px-3 py-2.5 text-xs">
-              <div className="mb-1.5 text-xs uppercase tracking-wider text-fg-tertiary">
-                {text("启动配置", "Runtime configuration")}
-              </div>
-              <div className="space-y-1 font-mono">
-                {config.config.Entrypoint && (
-                  <div className="flex gap-2">
-                    <span className="w-20 shrink-0 text-fg-disabled">
-                      Entrypoint
-                    </span>
-                    <span className="text-fg-secondary">
-                      {config.config.Entrypoint.join(" ")}
-                    </span>
-                  </div>
-                )}
-                {config.config.Cmd && (
-                  <div className="flex gap-2">
-                    <span className="w-20 shrink-0 text-fg-disabled">Cmd</span>
-                    <span className="text-fg-secondary">
-                      {config.config.Cmd.join(" ")}
-                    </span>
-                  </div>
-                )}
-                {config.config.User && (
-                  <div className="flex gap-2">
-                    <span className="w-20 shrink-0 text-fg-disabled">User</span>
-                    <span className="text-fg-secondary">
-                      {config.config.User}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* 层列表 */}
-          <div>
-            <div className="mb-1.5 flex items-center gap-2 text-xs uppercase tracking-wider text-fg-tertiary">
-              {text("文件层", "Layers")} ({manifest.layers?.length ?? 0})
-              {manifest.mediaType && (
-                <Badge tone="neutral">
-                  {manifest.mediaType.split(".").pop()}
-                </Badge>
-              )}
-            </div>
-            <ConsoleTable<OciDescriptor>
-              rowKey="digest"
-              size="small"
-              pagination={false}
-              scroll={{ x: 620 }}
-              dataSource={manifest.layers ?? []}
-              columns={
-                [
-                  {
-                    title: "#",
-                    key: "index",
-                    width: 64,
-                    render: (_, __, index) => (
-                      <span className="font-mono text-xs text-fg-tertiary">
-                        #{index + 1}
-                      </span>
-                    ),
-                  },
-                  {
-                    title: "Digest",
-                    dataIndex: "digest",
-                    key: "digest",
-                    ellipsis: true,
-                    render: (value: string) => (
-                      <span
-                        className="font-mono text-xs text-fg-secondary"
-                        title={value}
-                      >
-                        {shortDigest(value)}
-                      </span>
-                    ),
-                  },
-                  {
-                    title: text("类型", "Type"),
-                    dataIndex: "mediaType",
-                    key: "mediaType",
-                    width: 160,
-                    render: (value: string) => {
-                      const kind = value.includes("gzip")
-                        ? "tar+gzip"
-                        : value.includes("tar")
-                          ? "tar"
-                          : (value.split(".").pop() ?? value);
-                      return (
-                        <span className="text-xs text-fg-secondary">
-                          {kind}
-                        </span>
-                      );
-                    },
-                  },
-                  {
-                    title: text("大小", "Size"),
-                    dataIndex: "size",
-                    key: "size",
-                    width: 120,
-                    align: "right",
-                    render: (value: number) => (
-                      <span className="text-xs text-fg-secondary">
-                        {formatBytes(value)}
-                      </span>
-                    ),
-                  },
-                ] satisfies ColumnsType<OciDescriptor>
-              }
-            />
-          </div>
-        </>
+      ) : (
+        manifest && (
+          <OciManifestView
+            manifest={manifest}
+            config={config}
+            manifestSize={selectedVersion?.size}
+          />
+        )
       )}
     </div>
   );

@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Select, Tag } from "antd";
+import { useQuery } from "@tanstack/react-query";
 import { listRepositoryArtifactIdentities } from "../../client";
+import { unwrap } from "../../lib/query/client";
+import { repositoryKeys } from "../../lib/query/keys";
 import type {
   ArtifactIdentity,
   ArtifactIdentityPurpose,
@@ -65,73 +68,56 @@ export function RepositoryArtifactSelect({
 }) {
   const { text } = usePreferences();
   const [query, setQuery] = useState("");
-  const [options, setOptions] = useState<RepositoryArtifactIdentity[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState<unknown>(null);
-  const requestRef = useRef(0);
-
-  useEffect(() => {
-    if (!value) setQuery("");
-  }, [value]);
-
-  useEffect(() => {
-    const request = ++requestRef.current;
-    let active = true;
-    if (!enabled) {
-      setSearching(false);
-      setOptions([]);
-      setSearchError(null);
-      return;
-    }
-
-    const trimmedQuery = query.trim();
-    const timer = window.setTimeout(
-      () => {
-        setSearching(true);
-        setSearchError(null);
-        void (async () => {
-          try {
-            const { data, error } = await listRepositoryArtifactIdentities({
-              path: { repositoryId: repo.id },
-              query: {
-                purpose,
-                ...(trimmedQuery
-                  ? {
-                      q: artifactSearchPrefix(repo.format, trimmedQuery),
-                    }
-                  : {}),
-                pageSize: 50,
-              },
-            });
-            if (!active || request !== requestRef.current) return;
-            setSearching(false);
-            if (error) {
-              setOptions([]);
-              setSearchError(error);
-              return;
-            }
-            const unique = new Map<string, RepositoryArtifactIdentity>();
-            for (const artifact of data?.items ?? []) {
-              const option = artifactIdentity(artifact);
-              unique.set(option.key, option);
-            }
-            setOptions([...unique.values()]);
-          } catch (error) {
-            if (!active || request !== requestRef.current) return;
-            setSearching(false);
-            setOptions([]);
-            setSearchError(error);
-          }
-        })();
-      },
-      trimmedQuery ? 250 : 0,
+  const searchTimer = useRef<number | undefined>(undefined);
+  // Typing settles for a moment before it searches; clearing searches at once.
+  const search = (next: string) => {
+    window.clearTimeout(searchTimer.current);
+    searchTimer.current = window.setTimeout(
+      () => setQuery(next.trim()),
+      next.trim() ? 250 : 0,
     );
-
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [enabled, purpose, query, repo.format, repo.id]);
+  };
+  // A selection cleared by the parent also clears the search.
+  const [seenValue, setSeenValue] = useState(value);
+  if (seenValue !== value) {
+    setSeenValue(value);
+    if (!value) setQuery("");
+  }
+  const identities = useQuery({
+    queryKey: [
+      ...repositoryKeys.detail(repo.id),
+      "artifact-identities",
+      purpose,
+      query,
+    ] as const,
+    queryFn: async ({ signal }) => {
+      const page = await unwrap(
+        listRepositoryArtifactIdentities({
+          path: { repositoryId: repo.id },
+          query: {
+            purpose,
+            ...(query ? { q: artifactSearchPrefix(repo.format, query) } : {}),
+            pageSize: 50,
+          },
+          signal,
+        }),
+      );
+      const unique = new Map<string, RepositoryArtifactIdentity>();
+      for (const artifact of page?.items ?? []) {
+        const option = artifactIdentity(artifact);
+        unique.set(option.key, option);
+      }
+      return [...unique.values()];
+    },
+    enabled,
+    staleTime: 0,
+  });
+  const options = useMemo(
+    () => (enabled ? (identities.data ?? []) : []),
+    [enabled, identities.data],
+  );
+  const searching = enabled && identities.isFetching;
+  const searchError = enabled ? identities.error : null;
 
   const selectableOptions = useMemo(() => {
     if (value && !options.some((option) => option.key === value.key)) {
@@ -155,7 +141,7 @@ export function RepositoryArtifactSelect({
             "Search by package, path, or coordinate",
           )
         }
-        showSearch={{ filterOption: false, onSearch: setQuery }}
+        showSearch={{ filterOption: false, onSearch: search }}
         options={selectableOptions.map((option) => ({
           value: option.key,
           label: artifactCoordinateForDisplay(repo.format, option.coordinate),
@@ -204,6 +190,7 @@ export function RepositoryArtifactSelect({
         }}
         allowClear
         onClear={() => {
+          window.clearTimeout(searchTimer.current);
           setQuery("");
           onChange(null);
         }}

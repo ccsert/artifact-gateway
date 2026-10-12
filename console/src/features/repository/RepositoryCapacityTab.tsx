@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Button, InputNumber, Progress, Space } from "antd";
-import { getRepositoryCapacity, replaceRepositoryCapacity } from "../../client";
-import type { Repository, RepositoryCapacity } from "../../client";
+import { replaceRepositoryCapacity } from "../../client";
+import type { Repository } from "../../client";
 import {
   ErrorBanner,
   Loading,
@@ -13,35 +13,28 @@ import { formatBytes, formatNumber } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 import { MetricStrip } from "../../components/ui/ConsolePrimitives";
+import { useQueryClient } from "@tanstack/react-query";
+import { repositoryKeys } from "../../lib/query/keys";
+import { useRepositoryCapacity } from "./repositoryQueries";
 
 export function RepositoryCapacityTab({ repo }: { repo: Repository }) {
+  return <RepositoryCapacityContent key={repo.id} repo={repo} />;
+}
+
+function RepositoryCapacityContent({ repo }: { repo: Repository }) {
   const { resolvedTheme, text } = usePreferences();
-  const [capacity, setCapacity] = useState<RepositoryCapacity | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [quotaGiB, setQuotaGiB] = useState(0);
+  const queryClient = useQueryClient();
+  const capacityQuery = useRepositoryCapacity(repo.id);
+  const capacity = capacityQuery.data ?? null;
+  const error = capacityQuery.error;
+  // The quota field edits a draft; without one it shows the saved quota.
+  const [quotaDraft, setQuotaGiB] = useState<number | null>(null);
+  const quotaGiB =
+    quotaDraft ?? Math.round((capacity?.quotaBytes ?? 0) / 2 ** 30);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const { data, error: err } = await getRepositoryCapacity({
-        path: { repositoryId: repo.id },
-      });
-      if (err) throw err;
-      if (data) {
-        setCapacity(data);
-        setQuotaGiB(Math.round(data.quotaBytes / 2 ** 30));
-      }
-    } catch (nextError) {
-      setError(nextError);
-    }
-  }, [repo.id]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const load = () => capacityQuery.refetch();
 
   const save = async () => {
     setSaving(true);
@@ -57,7 +50,10 @@ export function RepositoryCapacityTab({ repo }: { repo: Repository }) {
         return;
       }
       setNotice(text("配额已更新", "Quota updated"));
-      void load();
+      setQuotaGiB(null);
+      void queryClient.invalidateQueries({
+        queryKey: repositoryKeys.capacity(repo.id),
+      });
     } catch (nextError) {
       setSaveError(nextError);
     } finally {

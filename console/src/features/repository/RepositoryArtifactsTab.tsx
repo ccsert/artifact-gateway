@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { FolderOutlined, UnorderedListOutlined } from "@ant-design/icons";
-import { Button, Input, Segmented, Select } from "antd";
+import { Button, Input, Select } from "antd";
 import type { ArtifactSearchMatch, BrowseNode, Repository } from "../../client";
 import { ErrorBanner, Loading, isNotFound } from "../../components/ui/Feedback";
 import { Pagination } from "../../components/ui/Layout";
@@ -14,6 +13,7 @@ import { formatViews } from "../../formats/views";
 import { useAuth } from "../../lib/auth";
 import { formatNumber } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
+import { ArtifactViewSwitch } from "./ArtifactViewSwitch";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 import { RepositoryBrowseTree } from "./RepositoryBrowseTree";
 import {
@@ -199,23 +199,7 @@ export function RepositoryArtifactsTab({
     return (
       <div className="ag-artifact-browser">
         <div className="ag-artifact-view-toolbar">
-          <Segmented<"directory" | "list">
-            aria-label={text("制品浏览视图", "Artifact browse view")}
-            options={[
-              {
-                value: "directory",
-                label: text("目录", "Directory"),
-                icon: <FolderOutlined />,
-              },
-              {
-                value: "list",
-                label: text("列表", "List"),
-                icon: <UnorderedListOutlined />,
-              },
-            ]}
-            value={view}
-            onChange={setView}
-          />
+          <ArtifactViewSwitch value={view} onChange={setView} />
           {canUploadRaw && (
             <RawUploadDialog repo={repo} onUploaded={() => void load(q)} />
           )}
@@ -246,23 +230,7 @@ export function RepositoryArtifactsTab({
     <div className="ag-artifact-browser">
       <div className="ag-artifact-view-toolbar">
         {supportsDirectory && (
-          <Segmented<"directory" | "list">
-            aria-label={text("制品浏览视图", "Artifact browse view")}
-            options={[
-              {
-                value: "directory",
-                label: text("目录", "Directory"),
-                icon: <FolderOutlined />,
-              },
-              {
-                value: "list",
-                label: text("列表", "List"),
-                icon: <UnorderedListOutlined />,
-              },
-            ]}
-            value={view}
-            onChange={setView}
-          />
+          <ArtifactViewSwitch value={view} onChange={setView} />
         )}
         {!proxyMaven && descriptor?.serverKeywordSearch && (
           <ArtifactSearchMatchControl

@@ -6,6 +6,7 @@ import {
   getRepositoryArtifactScanStatus,
 } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 
 vi.mock("../../client", () => ({
@@ -19,14 +20,16 @@ const digest = `sha256:${"a".repeat(64)}`;
 
 const renderStatus = () =>
   render(
-    <PreferencesProvider>
-      <ArtifactScanStatus
-        repositoryId="repo-1"
-        format="raw"
-        coordinate="releases/widget.bin"
-        digest={digest}
-      />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <ArtifactScanStatus
+          repositoryId="repo-1"
+          format="raw"
+          coordinate="releases/widget.bin"
+          digest={digest}
+        />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 
 afterEach(() => {

@@ -20,6 +20,7 @@ import {
   listRepositoryTombstones,
   listRepositoryReplications,
   listRepositoryCapacities,
+  listRepositoryArtifactUsage,
 } from "../../client";
 import type { QuarantineReadPolicy, SecurityPolicy } from "../../client";
 import { isNotFound } from "../../components/ui/Feedback";
@@ -95,6 +96,48 @@ export function useRepositorySupport(repositoryId: string, enabled: boolean) {
     enabled,
   });
   return { capabilities, effectiveAccess, capacity };
+}
+
+/** One repository's capacity and quota; shared with the support probe. */
+export function useRepositoryCapacity(repositoryId: string) {
+  return useQuery({
+    queryKey: repositoryKeys.capacity(repositoryId),
+    queryFn: ({ signal }) =>
+      unwrap(getRepositoryCapacity({ path: { repositoryId }, signal })),
+    staleTime: 0,
+  });
+}
+
+/** One page of a repository's download statistics. */
+export function useArtifactUsage(
+  repositoryId: string,
+  page: number,
+  pageSize: number,
+  q: string,
+) {
+  return useQuery({
+    queryKey: [
+      ...repositoryKeys.detail(repositoryId),
+      "usage",
+      { page, pageSize, q },
+    ] as const,
+    queryFn: ({ signal }) =>
+      unwrap(
+        listRepositoryArtifactUsage({
+          path: { repositoryId },
+          query: {
+            limit: pageSize,
+            offset: (page - 1) * pageSize,
+            q: q || undefined,
+          },
+          signal,
+        }),
+      ),
+    // Keep the previous page on screen while the next one loads; the tab is
+    // mounted per repository, so it never shows another repository's rows.
+    placeholderData: (previous) => previous,
+    staleTime: 0,
+  });
 }
 
 /** Re-read everything about the catalog after a create, update or delete. */

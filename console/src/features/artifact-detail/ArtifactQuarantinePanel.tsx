@@ -1,80 +1,56 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { SafetyCertificateOutlined, UnlockOutlined } from "@ant-design/icons";
 import { Alert, Button, Input, Space } from "antd";
-import { getArtifactQuarantine, replaceArtifactQuarantine } from "../../client";
+import { replaceArtifactQuarantine } from "../../client";
 import type { ArtifactQuarantine } from "../../client";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-import { ErrorBanner, isNotFound } from "../../components/ui/Feedback";
+import { ErrorBanner } from "../../components/ui/Feedback";
 import { Modal } from "../../components/ui/Modal";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  artifactQuarantineKey,
+  useArtifactQuarantine,
+} from "./artifactDetailQueries";
 
 type QuarantineState = ArtifactQuarantine["state"];
 
-export function ArtifactQuarantinePanel({
-  repositoryId,
-  coordinate,
-  digest,
-  canManage = false,
-  label,
-}: {
+type QuarantinePanelProps = {
   repositoryId?: string;
   coordinate: string;
   digest?: string;
   canManage?: boolean;
   label?: string;
-}) {
+};
+
+export function ArtifactQuarantinePanel(props: QuarantinePanelProps) {
+  // A transition draft belongs to one artifact; another one starts afresh.
+  return (
+    <QuarantinePanel
+      key={`${props.repositoryId}:${props.coordinate}:${props.digest}`}
+      {...props}
+    />
+  );
+}
+
+function QuarantinePanel({
+  repositoryId,
+  coordinate,
+  digest,
+  canManage = false,
+  label,
+}: QuarantinePanelProps) {
   const { locale, text } = usePreferences();
-  const [record, setRecord] = useState<ArtifactQuarantine | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState<unknown>(null);
+  const queryClient = useQueryClient();
+  const quarantine = useArtifactQuarantine(repositoryId, coordinate, digest);
+  const record = quarantine.data ?? null;
+  const loading = quarantine.isFetching;
+  const loadError = quarantine.error;
   const [nextState, setNextState] = useState<QuarantineState | null>(null);
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
-  const requestSequence = useRef(0);
-
-  const load = useCallback(async () => {
-    if (!repositoryId || !coordinate || !digest) return;
-    const requestID = ++requestSequence.current;
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const response = await getArtifactQuarantine({
-        path: { repositoryId },
-        query: { coordinate, digest },
-      });
-      if (requestID !== requestSequence.current) return;
-      if (response.error) {
-        if (response.response?.status === 404 || isNotFound(response.error)) {
-          setRecord(null);
-          return;
-        }
-        setLoadError(response.error);
-        return;
-      }
-      setRecord(response.data ?? null);
-    } catch (error) {
-      if (requestID === requestSequence.current) setLoadError(error);
-    } finally {
-      if (requestID === requestSequence.current) setLoading(false);
-    }
-  }, [coordinate, digest, repositoryId]);
-
-  useEffect(() => {
-    requestSequence.current++;
-    setRecord(null);
-    setLoadError(null);
-    setNextState(null);
-    setReason("");
-    setSaveError(null);
-    void load();
-    return () => {
-      // This monotonic generation ref invalidates any response that resolves
-      // after an identity change or unmount; it is not a rendered-node ref.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      requestSequence.current++;
-    };
-  }, [load]);
+  const load = () => quarantine.refetch();
 
   if (!repositoryId || !coordinate || !digest) return null;
 
@@ -107,7 +83,11 @@ export function ArtifactQuarantinePanel({
         setSaveError(response.error);
         return;
       }
-      if (response.data) setRecord(response.data);
+      if (response.data)
+        queryClient.setQueryData(
+          artifactQuarantineKey(repositoryId, coordinate, digest),
+          response.data,
+        );
       setNextState(null);
       setReason("");
       await load();
