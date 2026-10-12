@@ -93,7 +93,7 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/artifact-detail/ConanArtifactDetail.tsx`
 - [x] `features/artifact-detail/MavenArtifactDetail.tsx`
 - [x] `features/artifact-detail/ArtifactScanStatus.tsx`
-- [ ] `features/artifact-detail/OciImageDetail.tsx`
+- [x] `features/artifact-detail/OciImageDetail.tsx`
 - [ ] `features/audit/AuditRetention.tsx`
 - [ ] `features/audit/Audits.tsx`
 - [ ] `features/auth/Login.tsx`

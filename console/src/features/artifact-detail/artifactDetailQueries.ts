@@ -10,6 +10,7 @@ import {
 } from "../../client";
 import type { MavenCoordinate } from "../../client";
 import { isNotFound } from "../../components/ui/Feedback";
+import { fetchOciManifest, fetchOciManifests } from "./ociImageModel";
 import { unwrap } from "../../lib/query/client";
 import { repositoryKeys } from "../../lib/query/keys";
 
@@ -232,5 +233,42 @@ export function useArtifactScanStatus(
       query.state.data && activeScanStates.has(query.state.data.state)
         ? 2500
         : false,
+  });
+}
+
+/** Every manifest of one OCI image, across all pages. */
+export function useOciManifests(repositoryId: string, image: string) {
+  return useQuery({
+    queryKey: [...repositoryKeys.detail(repositoryId), "oci-manifests", image],
+    queryFn: ({ signal }) => fetchOciManifests(repositoryId, image, signal),
+    staleTime: 0,
+  });
+}
+
+export const ociManifestKey = (
+  repositoryId: string,
+  name: string,
+  reference: string,
+) =>
+  [
+    ...repositoryKeys.detail(repositoryId),
+    "oci-manifest",
+    name,
+    reference,
+  ] as const;
+
+/** One manifest and its config, read through the registry API. */
+export function useOciManifest(
+  repositoryId: string,
+  token: string,
+  name: string,
+  reference: string | null,
+) {
+  return useQuery({
+    queryKey: ociManifestKey(repositoryId, name, reference ?? ""),
+    queryFn: ({ signal }) =>
+      fetchOciManifest(token, name, reference ?? "", signal),
+    enabled: Boolean(reference),
+    staleTime: 0,
   });
 }
