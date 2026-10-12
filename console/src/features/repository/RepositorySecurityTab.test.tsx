@@ -66,6 +66,113 @@ beforeEach(() => {
 });
 
 describe("RepositorySecurityTab", () => {
+  it("ignores completed saves from the previous repository in cached policy editors", async () => {
+    const user = userEvent.setup();
+    const nextRepo = { ...repo, id: "22222222-2222-4222-8222-222222222222" };
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    client.setQueryData(repositoryKeys.securityPolicy(repo.id), {
+      version: "1",
+      enabled: false,
+      requireSignature: false,
+    });
+    client.setQueryData(repositoryKeys.quarantineReadPolicy(repo.id), {
+      version: "1",
+      enabled: true,
+    });
+    client.setQueryData(repositoryKeys.securityPolicy(nextRepo.id), {
+      version: "2",
+      enabled: true,
+      requireSignature: true,
+    });
+    client.setQueryData(repositoryKeys.quarantineReadPolicy(nextRepo.id), {
+      version: "2",
+      enabled: true,
+    });
+    let admissionAnswer!: (value: PolicyAnswer<SecurityPolicy>) => void;
+    let quarantineAnswer!: (value: PolicyAnswer<QuarantineReadPolicy>) => void;
+    mockReplaceSecurityPolicy
+      .mockImplementationOnce(
+        () =>
+          new Promise<PolicyAnswer<SecurityPolicy>>(
+            (resolve) => (admissionAnswer = resolve),
+          ),
+      )
+      .mockResolvedValueOnce(
+        policyAnswer({
+          version: "3",
+          enabled: true,
+          requireSignature: true,
+          autoScanOnPublish: true,
+        }),
+      );
+    mockReplaceQuarantineReadPolicy
+      .mockImplementationOnce(
+        () =>
+          new Promise<PolicyAnswer<QuarantineReadPolicy>>(
+            (resolve) => (quarantineAnswer = resolve),
+          ),
+      )
+      .mockResolvedValueOnce(policyAnswer({ version: "3", enabled: false }));
+    const content = (repository: Repository) => (
+      <QueryClientProvider client={client}>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repository} publicationScanning />
+        </PreferencesProvider>
+      </QueryClientProvider>
+    );
+    const view = render(content(repo));
+    await screen.findByText("当前版本 1");
+    await user.click(screen.getByRole("switch", { name: "发布后自动扫描" }));
+    await user.click(screen.getByRole("button", { name: "保存策略" }));
+    await user.click(screen.getByRole("switch", { name: "阻断隔离制品读取" }));
+    await user.click(screen.getByRole("button", { name: "保存读取策略" }));
+    view.rerender(content(nextRepo));
+    await screen.findByText("当前版本 2");
+    await act(async () => {
+      admissionAnswer(
+        policyAnswer({
+          version: "2",
+          enabled: false,
+          requireSignature: false,
+          autoScanOnPublish: true,
+        }),
+      );
+      quarantineAnswer(policyAnswer({ version: "2", enabled: false }));
+    });
+    expect(screen.getByRole("switch", { name: "启用准入检查" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "要求签名" })).toBeChecked();
+    expect(
+      screen.getByRole("switch", { name: "阻断隔离制品读取" }),
+    ).toBeChecked();
+    expect(screen.getByRole("button", { name: "保存策略" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "保存读取策略" })).toBeDisabled();
+    expect(screen.queryByText("仓库安全策略已保存")).not.toBeInTheDocument();
+    expect(screen.queryByText("隔离读取策略已保存")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("switch", { name: "发布后自动扫描" }));
+    await user.click(screen.getByRole("button", { name: "保存策略" }));
+    await user.click(screen.getByRole("switch", { name: "阻断隔离制品读取" }));
+    await user.click(screen.getByRole("button", { name: "保存读取策略" }));
+    expect(mockReplaceSecurityPolicy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        path: { repositoryId: nextRepo.id },
+        headers: { "If-Match": "2" },
+        body: expect.objectContaining({
+          version: "2",
+          enabled: true,
+          requireSignature: true,
+          autoScanOnPublish: true,
+        }),
+      }),
+    );
+    expect(mockReplaceQuarantineReadPolicy).toHaveBeenLastCalledWith({
+      path: { repositoryId: nextRepo.id },
+      headers: { "If-Match": "2" },
+      body: { version: "2", enabled: false },
+    });
+  });
+
   it("updates a cached admission draft before saving a newer policy version", async () => {
     const user = userEvent.setup();
     const client = new QueryClient({

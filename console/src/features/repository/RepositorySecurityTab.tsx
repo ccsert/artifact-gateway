@@ -83,7 +83,7 @@ export function RepositorySecurityTab({
 
       <QuarantineReadPolicyCard
         // Remount when the policy first arrives, so the draft starts from it.
-        key={readPolicy ? "loaded" : "missing"}
+        key={`${repo.id}:${readPolicy ? "loaded" : "missing"}`}
         repo={repo}
         readPolicy={readPolicy}
         loadError={readError}
@@ -91,6 +91,7 @@ export function RepositorySecurityTab({
       />
 
       <AdmissionPolicyCard
+        key={repo.id}
         repo={repo}
         policy={policy}
         publicationScanning={publicationScanning}
