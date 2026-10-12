@@ -17,6 +17,7 @@ import {
   getRetentionPolicy,
   listRepositories,
   listRepositoryLifecycleJobs,
+  listRepositoryTombstones,
   listRepositoryReplications,
   listRepositoryCapacities,
 } from "../../client";
@@ -267,4 +268,40 @@ export function useScanJobs(repositoryId: string, enabled: boolean) {
     refetchInterval: 10_000,
     staleTime: 0,
   });
+}
+
+/** Every lifecycle job of a repository, polled every 10 seconds while shown. */
+export function useLifecycleJobs(repositoryId: string) {
+  return useQuery({
+    queryKey: repositoryKeys.lifecycleJobs(repositoryId),
+    queryFn: ({ signal }) =>
+      unwrap(listRepositoryLifecycleJobs({ path: { repositoryId }, signal })),
+    refetchInterval: 10_000,
+    staleTime: 0,
+  });
+}
+
+/** Deleted artifacts, one cursor page at a time. */
+export function useTombstonePages(repositoryId: string) {
+  const queryClient = useQueryClient();
+  const queryKey = repositoryKeys.tombstones(repositoryId);
+  const pages = useInfiniteQuery({
+    queryKey,
+    queryFn: ({ pageParam, signal }) =>
+      unwrap(
+        listRepositoryTombstones({
+          path: { repositoryId },
+          query: { pageSize: 50, pageToken: pageParam },
+          signal,
+        }),
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.nextPageToken || undefined,
+    staleTime: 0,
+  });
+  return {
+    ...pages,
+    /** Start again from the first page, after a restore. */
+    reload: () => queryClient.resetQueries({ queryKey, exact: true }),
+  };
 }
