@@ -5,6 +5,7 @@ import { browseRepository, searchRepositoryArtifacts } from "../../client";
 import type { Repository } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RepositoryArtifactsTab } from "./RepositoryArtifactsTab";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../client")>()),
@@ -37,9 +38,11 @@ it("shows an unavailable format instead of an empty repository", async () => {
     JSON.stringify({ ...repository, format: "nuget" }),
   );
   render(
-    <PreferencesProvider>
-      <RepositoryArtifactsTab repo={newerRepository} canWrite />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={newerRepository} canWrite />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
   expect(await screen.findByText("制品浏览功能未启用")).toBeInTheDocument();
   expect(
@@ -77,9 +80,11 @@ describe("RepositoryArtifactsTab APT browse", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab repo={repository} canWrite />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab repo={repository} canWrite />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText(path)).toBeInTheDocument();
@@ -124,9 +129,11 @@ describe("RepositoryArtifactsTab APT browse", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab repo={hostedRepository} canWrite />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab repo={hostedRepository} canWrite />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText(path)).toBeInTheDocument();
@@ -146,15 +153,17 @@ describe("RepositoryArtifactsTab Raw browse", () => {
       data: { items: [] },
     } as never);
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab
-          repo={{ ...repository, format: "maven", type: "hosted" }}
-          canWrite
-          artifactTarget={coordinate}
-          buildTarget={2}
-          assetTarget="com/acme/widget/2.0-SNAPSHOT/widget-2.0-20260907.010203-2.jar"
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab
+            repo={{ ...repository, format: "maven", type: "hosted" }}
+            canWrite
+            artifactTarget={coordinate}
+            buildTarget={2}
+            assetTarget="com/acme/widget/2.0-SNAPSHOT/widget-2.0-20260907.010203-2.jar"
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     await waitFor(() =>
       expect(mockSearchRepositoryArtifacts).toHaveBeenCalledWith({
@@ -196,9 +205,11 @@ describe("RepositoryArtifactsTab Raw browse", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab repo={rawRepository} canWrite />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab repo={rawRepository} canWrite />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await user.click(screen.getByText("目录"));
@@ -225,9 +236,11 @@ describe("RepositoryArtifactsTab Raw browse", () => {
       data: { items: [] },
     } as never);
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab repo={rawRepository} canWrite={false} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab repo={rawRepository} canWrite={false} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     expect(await screen.findByPlaceholderText("搜索路径…")).toBeInTheDocument();
     expect(
@@ -265,9 +278,11 @@ describe("RepositoryArtifactsTab Raw browse", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab repo={rawRepository} canWrite />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab repo={rawRepository} canWrite />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText(readablePath)).toBeInTheDocument();
@@ -315,13 +330,15 @@ describe("RepositoryArtifactsTab Raw browse", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab
-          repo={rawRepository}
-          canWrite
-          artifactTarget={canonical}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab
+            repo={rawRepository}
+            canWrite
+            artifactTarget={canonical}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -363,13 +380,15 @@ it("opens the directory for Raw Proxy and keeps cached assets read-only", async 
     },
   } as never);
   render(
-    <PreferencesProvider>
-      <RepositoryArtifactsTab
-        repo={proxy}
-        canWrite
-        artifactTarget={asset.coordinate}
-      />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab
+          repo={proxy}
+          canWrite
+          artifactTarget={asset.coordinate}
+        />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
   await screen.findByDisplayValue(asset.coordinate);
   expect(

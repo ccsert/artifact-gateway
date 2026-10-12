@@ -4,6 +4,7 @@ import { searchRepositoryArtifacts } from "../../client";
 import type { Repository } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RepositoryArtifactsTab } from "./RepositoryArtifactsTab";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../client")>()),
@@ -50,14 +51,16 @@ describe("Cargo Hosted artifact view", () => {
       version: "1",
     };
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab
-          repo={repository}
-          canWrite={false}
-          artifactTarget="demo-crate"
-          versionTarget="1.2.3"
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab
+            repo={repository}
+            canWrite={false}
+            artifactTarget="demo-crate"
+            versionTarget="1.2.3"
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("demo-crate")).toBeInTheDocument();
