@@ -155,7 +155,11 @@ export function RepositoryArtifactsTab({
 
   useEffect(() => {
     setView("list");
-  }, [repo.id]);
+    setRows([]);
+    setNextToken(undefined);
+    setError(null);
+    setExpandedImage(null);
+  }, [repo.id, format]);
 
   const load = useCallback(
     async (query: string, pageToken?: string) => {

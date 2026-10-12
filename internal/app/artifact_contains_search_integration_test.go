@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -38,7 +39,7 @@ func TestPostgresContainsArtifactSearchHTTP(t *testing.T) {
 	if _, err := store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{{Principal: actor, Scopes: []string{"repositories:read"}}}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	digest := "sha256:" + strings.Repeat("a", 64)
+	digest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("contains-http-"+repo.ID)))
 	for _, path := range []string{"a/alpha.bin", "b/Alpha_100%25.bin", "c/%E4%B8%AD%E6%96%87.txt"} {
 		if _, err := store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: "contains/" + repo.ID, Size: 7}); err != nil {
 			t.Fatal(err)
@@ -118,7 +119,7 @@ func TestPostgresContainsGlobalSearchProbeBudget(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		digest := "sha256:" + strings.Repeat("f", 64)
+		digest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("contains-probe-"+actor)))
 		if _, err = store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: repo.ID, Path: "needle/alpha.bin", Digest: digest, ObjectKey: "probe/" + repo.ID, Size: 7}); err != nil {
 			t.Fatal(err)
 		}
@@ -169,7 +170,7 @@ func TestPostgresContainsSearchAcrossFormats(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	ctx := context.Background()
 	actor := "contains-cross-" + uuid.NewString()
-	digest := "sha256:" + strings.Repeat("a", 64)
+	digest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("contains-cross-"+actor)))
 	for _, format := range []repository.Format{repository.FormatMaven, repository.FormatOCI, repository.FormatConan, repository.FormatNPM, repository.FormatPyPI, repository.FormatGo, repository.FormatAPT, repository.FormatCargo} {
 		t.Run(string(format), func(t *testing.T) {
 			repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "contains-" + string(format) + "-" + uuid.NewString(), Format: format})
@@ -256,4 +257,107 @@ func TestPostgresContainsSearchLiteralPermissionAndLegacyCursorBoundaries(t *tes
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	verifyContainsSearchBoundaries(t, store)
+}
+
+func TestPostgresContainsSearchMetadataLockBudget(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	ctx := context.Background()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "metadata-budget-" + uuid.NewString(), Format: repository.FormatRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Lock private table copies through search_path so other integration packages
+	// can use their public metadata concurrently without acquiring this fixture's lock.
+	schema := "contains_budget_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if _, err = db.ExecContext(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := db.ExecContext(context.Background(), "DROP SCHEMA "+schema+" CASCADE"); err != nil {
+			t.Errorf("remove budget fixture schema: %v", err)
+		}
+	})
+	for _, table := range []string{"hosted_repositories", "api_keys"} {
+		if _, err = db.ExecContext(ctx, "CREATE TABLE "+schema+"."+table+" (LIKE public."+table+" INCLUDING ALL)"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = db.ExecContext(ctx, "INSERT INTO "+schema+".hosted_repositories SELECT * FROM public.hosted_repositories WHERE id=$1", repo.ID); err != nil {
+		t.Fatal(err)
+	}
+	scopedURL, err := url.Parse(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := scopedURL.Query()
+	values.Set("search_path", schema+",public")
+	scopedURL.RawQuery = values.Encode()
+	scopedStore, err := repository.NewPostgresStore(scopedURL.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = scopedStore.Close() })
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.ExecContext(ctx, "LOCK TABLE "+schema+".hosted_repositories IN ACCESS EXCLUSIVE MODE"); err != nil {
+		t.Fatal(err)
+	}
+	auth := testAuthenticator()
+	auth.APIKeys = scopedStore
+	handler := NewGatewayHandler(Dependencies{}, scopedStore, TestAdapter{}, auth)
+	for _, anonymous := range []bool{false, true} {
+		requestCtx, cancel := context.WithTimeout(ctx, 7*time.Second)
+		req := httptest.NewRequest("GET", "/api/v2/repositories/"+repo.ID+"/artifact-search?q=alpha&match=contains", nil).WithContext(requestCtx)
+		if !anonymous {
+			authorize(req, "admin-secret")
+		}
+		res := httptest.NewRecorder()
+		started := time.Now()
+		handler.ServeHTTP(res, req)
+		elapsed := time.Since(started)
+		cancel()
+		if res.Code == 200 || elapsed < 4500*time.Millisecond || elapsed > 6500*time.Millisecond || strings.Contains(res.Body.String(), `"items"`) {
+			t.Fatalf("anonymous=%t metadata lock elapsed=%s status=%d body=%s", anonymous, elapsed, res.Code, res.Body.String())
+		}
+		t.Logf("anonymous=%t complete blocked request=%s status=%d", anonymous, elapsed, res.Code)
+	}
+	if err = tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	tx, err = db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.ExecContext(ctx, "LOCK TABLE "+schema+".api_keys IN ACCESS EXCLUSIVE MODE"); err != nil {
+		t.Fatal(err)
+	}
+	requestCtx, cancel := context.WithTimeout(ctx, 7*time.Second)
+	defer cancel()
+	req := httptest.NewRequest("GET", "/api/v2/artifact-search?q=alpha&match=contains", nil).WithContext(requestCtx)
+	authorize(req, "blocked-credential-fixture")
+	res := httptest.NewRecorder()
+	started := time.Now()
+	handler.ServeHTTP(res, req)
+	elapsed := time.Since(started)
+	if res.Code != 401 || elapsed < 4500*time.Millisecond || elapsed > 6500*time.Millisecond {
+		t.Fatalf("credential lock elapsed=%s status=%d", elapsed, res.Code)
+	}
+	t.Logf("credential read complete blocked request=%s status=%d", elapsed, res.Code)
 }

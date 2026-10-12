@@ -195,7 +195,7 @@ func (h hostedRepositoryAPIHandler) authorizePlatformAdministrator(w http.Respon
 }
 
 func (h hostedRepositoryAPIHandler) authenticate(w http.ResponseWriter, r *http.Request) (Principal, bool) {
-	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	principal, ok := h.authenticator.AuthenticateContext(r.Context(), r.Header.Get("Authorization"))
 	if !ok {
 		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "authentication is required")
 		return Principal{}, false
@@ -204,7 +204,7 @@ func (h hostedRepositoryAPIHandler) authenticate(w http.ResponseWriter, r *http.
 }
 
 func (h hostedRepositoryAPIHandler) authenticateManagementRequest(w http.ResponseWriter, r *http.Request) (Principal, bool) {
-	if principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization")); ok {
+	if principal, ok := h.authenticator.AuthenticateContext(r.Context(), r.Header.Get("Authorization")); ok {
 		return principal, true
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {

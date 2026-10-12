@@ -14,6 +14,13 @@ import (
 )
 
 func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.SearchRepositoryArtifactsParams) {
+	match, valid := artifactSearchMatch(params.Match)
+	if !valid {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "match must be prefix or contains")
+		return
+	}
+	r, cancel := artifactSearchRequest(r, match)
+	defer cancel()
 	if _, err := h.store.GetHostedRepository(r.Context(), repositoryID.String()); errors.Is(err, repository.ErrNotFound) {
 		group, groupErr := h.groups.GetHostedGroup(r.Context(), repositoryID.String())
 		if groupErr == nil {
@@ -25,13 +32,6 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 			return
 		}
 	}
-	match, valid := artifactSearchMatch(params.Match)
-	if !valid {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "match must be prefix or contains")
-		return
-	}
-	r, cancel := artifactSearchRequest(r, match)
-	defer cancel()
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		query := ""
 		if params.Q != nil {

@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -59,6 +60,37 @@ it("shows an unavailable format instead of an empty repository", async () => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+it("does not retain another repository's rows while its next scope is loading", async () => {
+  let answer!: (value: never) => void;
+  mockSearchRepositoryArtifacts
+    .mockResolvedValueOnce({
+      data: { items: [{ coordinate: "private/alpha.deb" }] },
+    } as never)
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+  const view = render(
+    <PreferencesProvider>
+      <RepositoryArtifactsTab repo={repository} canWrite={false} />
+    </PreferencesProvider>,
+  );
+  await screen.findByText("private/alpha.deb");
+  view.rerender(
+    <PreferencesProvider>
+      <RepositoryArtifactsTab
+        repo={{ ...repository, id: "22222222-2222-4222-8222-222222222222" }}
+        canWrite={false}
+      />
+    </PreferencesProvider>,
+  );
+  expect(screen.queryByText("private/alpha.deb")).not.toBeInTheDocument();
+  await act(async () => answer({ data: { items: [] } } as never));
+  expect(await screen.findByText("暂无制品")).toBeInTheDocument();
 });
 
 it("searches repository path fragments with contains", async () => {

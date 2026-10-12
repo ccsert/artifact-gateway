@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -58,7 +60,7 @@ func verifyContainsSearchBoundaries(t *testing.T, store GatewayStore) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	digest := "sha256:" + strings.Repeat("b", 64)
+	digest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("contains-boundary-"+repo.ID)))
 	paths := []string{"releases/alpha-a.bin", "releases/alpha-b_100%25.bin", "releases/other.bin", "releases/%E4%B8%AD%E6%96%87.txt"}
 	for _, path := range paths {
 		if _, err = store.PutRawAsset(ctx, repository.RawAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: "boundary/" + repo.ID, Size: 7}); err != nil {
@@ -274,4 +276,61 @@ func verifyContainsSearchBoundaries(t *testing.T, store GatewayStore) {
 
 func TestContainsSearchLiteralPermissionAndLegacyCursorBoundaries(t *testing.T) {
 	verifyContainsSearchBoundaries(t, repository.NewMemoryStore())
+}
+
+type searchDeadlineStore struct {
+	GatewayStore
+	deadlines []time.Time
+}
+
+func (s *searchDeadlineStore) GetHostedRepository(ctx context.Context, id string) (repository.HostedRepository, error) {
+	deadline, _ := ctx.Deadline()
+	s.deadlines = append(s.deadlines, deadline)
+	return s.GatewayStore.GetHostedRepository(ctx, id)
+}
+
+func (s *searchDeadlineStore) FindActiveAPIKeyByHash(ctx context.Context, hash string) (repository.APIKey, error) {
+	deadline, _ := ctx.Deadline()
+	s.deadlines = append(s.deadlines, deadline)
+	return s.GatewayStore.FindActiveAPIKeyByHash(ctx, hash)
+}
+
+func TestContainsSearchBudgetPrecedesRepositoryAndAnonymousReads(t *testing.T) {
+	store := &searchDeadlineStore{GatewayStore: repository.NewMemoryStore()}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	for _, anonymous := range []bool{false, true} {
+		for _, match := range []string{"prefix", "contains"} {
+			store.deadlines = nil
+			req := httptest.NewRequest("GET", "/api/v2/repositories/"+uuid.NewString()+"/artifact-search?q=alpha&match="+match, nil)
+			if !anonymous {
+				authorize(req, "admin-secret")
+			}
+			started := time.Now()
+			handler.ServeHTTP(httptest.NewRecorder(), req)
+			if len(store.deadlines) == 0 {
+				t.Fatal("missing metadata read")
+			}
+			deadline := store.deadlines[0]
+			if match == "contains" && (deadline.IsZero() || deadline.Sub(started) > 5100*time.Millisecond || deadline.Sub(started) < 4*time.Second) {
+				t.Fatalf("anonymous=%t first metadata deadline=%v", anonymous, deadline)
+			}
+			if match == "prefix" && !deadline.IsZero() {
+				t.Fatalf("legacy prefix acquired new deadline: %v", deadline)
+			}
+		}
+	}
+}
+
+func TestContainsSearchBudgetIncludesCredentialReads(t *testing.T) {
+	store := &searchDeadlineStore{GatewayStore: repository.NewMemoryStore()}
+	auth := testAuthenticator()
+	auth.APIKeys = store
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, auth)
+	req := httptest.NewRequest("GET", "/api/v2/artifact-search?q=alpha&match=contains", nil)
+	authorize(req, "unknown-api-key")
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	if res.Code != 401 || len(store.deadlines) == 0 || store.deadlines[0].IsZero() {
+		t.Fatalf("credential budget status=%d deadlines=%v", res.Code, store.deadlines)
+	}
 }

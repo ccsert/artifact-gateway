@@ -80,6 +80,7 @@ agree with executable tests and the
 ## Quality, performance, and release
 
 - [Performance baseline](performance-baseline.md) — binary/image size, quiet memory, concurrency, and large-object evidence.
+- [Artifact contains search evidence](reports/artifact-contains-search-2026-10-12.md) — isolated PostgreSQL query plans, short-fragment cost and pagination budgets.
 - [Project quality assessment](project-quality-assessment.md) — strengths, risks, and improvement priorities.
 - [Backend completion checklist](backend-completion-checklist.md) — V1 implementation status and next slices.
 - [Release readiness](release-readiness.md) — executable protocol, integration, upgrade, and recovery gates.

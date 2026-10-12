@@ -124,6 +124,41 @@ it("retains the first page after a rejected continuation and releases its loadin
   });
 });
 
+it("retains existing results and cursor after an identical search refresh rejects", async () => {
+  vi.mocked(searchArtifacts)
+    .mockResolvedValueOnce({
+      data: {
+        searchedRepositories: 1,
+        items: [
+          {
+            repositoryId: "first",
+            repositoryName: "raw",
+            format: "raw",
+            matchKind: "coordinate",
+            coordinate: "alpha.bin",
+          },
+        ],
+        nextPageToken: "next",
+      },
+    } as never)
+    .mockRejectedValueOnce(new Error("refresh unavailable"));
+  render(
+    <MemoryRouter initialEntries={["/search?q=alpha"]}>
+      <PreferencesProvider>
+        <SearchPage />
+      </PreferencesProvider>
+    </MemoryRouter>,
+  );
+  await screen.findByText("alpha.bin");
+  fireEvent.keyDown(screen.getByRole("searchbox"), {
+    key: "Enter",
+    code: "Enter",
+  });
+  expect(await screen.findByText("refresh unavailable")).toBeInTheDocument();
+  expect(screen.getByText("alpha.bin")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "加载更多" })).toBeEnabled();
+});
+
 it("requests literal contains matching by default", async () => {
   vi.mocked(searchArtifacts).mockResolvedValue({
     data: { searchedRepositories: 1, items: [] },

@@ -134,6 +134,7 @@ export function SearchPage() {
     params.get("match") === "prefix" ? "prefix" : "contains";
   const [revision, setRevision] = useState(0);
   const request = useRef<AbortController | null>(null);
+  const scope = useRef<string | null>(null);
   const moreInFlight = useRef(false);
   const [query, setQuery] = useState(q);
   const [hits, setHits] = useState<GlobalArtifactSearchHit[]>([]);
@@ -150,12 +151,16 @@ export function SearchPage() {
     request.current = controller;
     moreInFlight.current = false;
     setQuery(q);
-    setHits([]);
     setError(null);
-    setSearchedRepos(0);
-    setNextPageToken(undefined);
-    setExpandedRow(null);
-    setSelectedVersion(null);
+    const nextScope = `${match}:${q}`;
+    if (scope.current !== nextScope) {
+      setHits([]);
+      setSearchedRepos(0);
+      setNextPageToken(undefined);
+      setExpandedRow(null);
+      setSelectedVersion(null);
+      scope.current = nextScope;
+    }
     setLoadingMore(false);
     setLoading(Boolean(q));
     if (q) {
@@ -191,6 +196,7 @@ export function SearchPage() {
     const controller = request.current;
     if (
       !nextPageToken ||
+      loading ||
       moreInFlight.current ||
       !controller ||
       controller.signal.aborted
@@ -718,7 +724,7 @@ export function SearchPage() {
         />
       ) : error && hits.length === 0 ? (
         <ErrorBanner error={error} />
-      ) : loading ? (
+      ) : loading && hits.length === 0 ? (
         <Loading
           label={
             searchedRepos
@@ -816,6 +822,7 @@ export function SearchPage() {
           <Pagination
             hasMore={!!nextPageToken}
             loading={loadingMore}
+            disabled={loading}
             onMore={() => void loadMore()}
           />
         </>

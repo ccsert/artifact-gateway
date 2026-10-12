@@ -55,3 +55,5 @@ A table lock regression confirms that incoming cancellation interrupts the block
 The GIN migration is append-only. No production migration was applied. Review index-build locks, disk and write cost separately before deployment; no `tsvector`, similarity scoring, external search service or index-on-view architecture was introduced.
 
 The 24 complete HTTP fixture requests measured 23.5–52.2 ms and 2–3 projection probes; every response succeeded within the fixed five-second budget. These are observed single-run minima/maxima, not p95/p99.
+
+Review regressions additionally lock private schema copies of repository metadata and API keys. Authenticated, anonymous and credential reads each terminate near the shared five-second deadline, without locking other integration packages. Credential/account/OIDC validation receives the request context; existing protocol authentication entrypoints retain their default behaviour.

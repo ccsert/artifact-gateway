@@ -4,10 +4,11 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -46,7 +47,7 @@ func TestPostgresContainsSearchPlansAndCancellation(t *testing.T) {
 		return r
 	}
 	raw, maven := create(FormatRaw), create(FormatMaven)
-	digest := "sha256:" + strings.Repeat("e", 64)
+	digest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("contains-plan-"+raw.ID)))
 	if _, err := store.PutRawAsset(ctx, RawAsset{RepositoryID: raw.ID, Path: "needle/alpha.bin", Digest: digest, ObjectKey: "plan/" + raw.ID, Size: 7}); err != nil {
 		t.Fatal(err)
 	}

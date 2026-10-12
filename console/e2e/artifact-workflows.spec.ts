@@ -124,6 +124,24 @@ test.afterAll(async ({ request }) => {
 test("anonymous browsing and global-search deep links reach the exact artifact", async ({
   page,
 }) => {
+  const publicRequest = page.waitForRequest((request) =>
+    request.url().includes(`/repositories/${repositoryId}/artifact-search`),
+  );
+  await page.goto(`/browse?repository=${repositoryId}&q=DEMO.TXT`);
+  await expect(
+    page.getByRole("row").filter({ hasText: artifactPath }).first(),
+  ).toBeVisible();
+  expect(new URL((await publicRequest).url()).searchParams.get("match")).toBe(
+    "contains",
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await expect(page.getByText("包含", { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto(
     `/browse?repository=${repositoryId}&artifact=${encodeURIComponent(artifactPath)}`,
   );
@@ -133,7 +151,11 @@ test("anonymous browsing and global-search deep links reach the exact artifact",
   ).toBeVisible();
 
   await authenticate(page);
-  await page.goto(`/search?q=${encodeURIComponent(`packages/${suffix}`)}`);
+  await page.goto(`/search?q=${encodeURIComponent(suffix.toUpperCase())}`);
+  await expect(page.getByText(artifactPath, { exact: true })).toBeVisible();
+  await page.getByText("前缀", { exact: true }).click();
+  await expect(page.getByText("没有匹配的制品", { exact: true })).toBeVisible();
+  await page.getByText("包含", { exact: true }).click();
   await expect(page.getByText(artifactPath, { exact: true })).toBeVisible();
   await page.getByRole("link", { name: repositoryName, exact: true }).click();
   await expect(page).toHaveURL(

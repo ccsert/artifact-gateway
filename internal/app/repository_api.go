@@ -29,6 +29,11 @@ const managementJSONBodyLimit = 1 << 20
 
 func (m openAPIServeMux) guarded(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Query().Get("match") == "contains" && (r.URL.Path == "/api/v2/artifact-search" || strings.HasPrefix(r.URL.Path, "/api/v2/repositories/") && strings.HasSuffix(r.URL.Path, "/artifact-search")) {
+			bounded, cancel := artifactSearchRequest(r, repository.ArtifactSearchContains)
+			defer cancel()
+			r = bounded
+		}
 		if strings.HasPrefix(r.URL.Path, "/api/v2/email-") || strings.HasPrefix(r.URL.Path, "/api/v2/repository-quota-alert-") {
 			w.Header().Set("Cache-Control", "no-store")
 		}
