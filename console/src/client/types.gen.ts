@@ -1347,9 +1347,13 @@ export type GlobalArtifactSearchHit = ArtifactSummary & {
   repositoryName: string;
   format: Format;
   /**
-   * Whether this result matched a coordinate prefix or an exact digest.
+   * Whether this result matched a coordinate or an exact digest.
    */
   matchKind: "coordinate" | "digest";
+  /**
+   * Actual coordinate match mode for this hit; omitted for exact digests. Cargo legacy coordinate hits use contains.
+   */
+  match?: "prefix" | "contains";
 };
 
 export type GlobalArtifactSearchPage = {
@@ -2730,6 +2734,11 @@ export type IdempotencyKey = string;
 
 export type IfMatch = string;
 
+/**
+ * Explicit coordinate matching. contains is a case-insensitive literal substring; prefix is a case-sensitive literal prefix. Omitting match preserves the legacy behavior of each format (Cargo name substring; other formats prefix). Complete SHA-256 queries in global search remain exact digest matches. Contains requests have a five-second server budget; narrow the query if it expires.
+ */
+export type ArtifactSearchMatch = "prefix" | "contains";
+
 export type AuthorizationTemplateId = string;
 
 export type AuthorizationRoleId = string;
@@ -3632,10 +3641,14 @@ export type SearchArtifactsData = {
   path?: never;
   query: {
     /**
-     * Coordinate prefix, or an exact SHA-256 digest with or without the sha256 prefix.
+     * Coordinate keyword using the selected match mode, or an exact SHA-256 digest with or without the sha256 prefix. Omitting match preserves legacy matching.
      */
     q: string;
     format?: Format;
+    /**
+     * Explicit coordinate matching. contains is a case-insensitive literal substring; prefix is a case-sensitive literal prefix. Omitting match preserves the legacy behavior of each format (Cargo name substring; other formats prefix). Complete SHA-256 queries in global search remain exact digest matches. Contains requests have a five-second server budget; narrow the query if it expires.
+     */
+    match?: "prefix" | "contains";
     pageSize?: number;
     pageToken?: string;
   };
@@ -7910,9 +7923,13 @@ export type SearchRepositoryArtifactsData = {
   };
   query?: {
     /**
-     * Format-aware coordinate prefix. Raw repositories accept a canonical percent-encoded path of up to 4096 characters; other formats apply their own stricter coordinate grammar.
+     * Coordinate keyword using the selected match mode. Raw accepts a canonical percent-encoded path or path fragment of up to 4096 characters. Contains keywords for other formats accept up to 255 characters. Legacy prefix matching retains the format-specific coordinate grammar.
      */
     q?: string;
+    /**
+     * Explicit coordinate matching. contains is a case-insensitive literal substring; prefix is a case-sensitive literal prefix. Omitting match preserves the legacy behavior of each format (Cargo name substring; other formats prefix). Complete SHA-256 queries in global search remain exact digest matches. Contains requests have a five-second server budget; narrow the query if it expires.
+     */
+    match?: "prefix" | "contains";
     pageSize?: number;
     pageToken?: string;
   };

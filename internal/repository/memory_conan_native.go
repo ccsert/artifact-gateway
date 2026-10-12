@@ -245,12 +245,12 @@ func (s *MemoryStore) GetConanPackageRevision(_ context.Context, repositoryID, r
 	return item, nil
 }
 
-func (s *MemoryStore) SearchConanReferences(_ context.Context, repositoryID, prefix string, limit int, after string) ([]ConanReference, error) {
+func (s *MemoryStore) SearchConanReferences(_ context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]ConanReference, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	seen := make(map[string]struct{})
 	for _, item := range s.conanRecipes {
-		if item.RepositoryID == repositoryID && item.State == "visible" && strings.HasPrefix(item.Reference, prefix) && item.Reference > after {
+		if item.RepositoryID == repositoryID && item.State == "visible" && searchTextMatches(item.Reference, prefix, matches) && item.Reference > after {
 			seen[item.Reference] = struct{}{}
 		}
 	}

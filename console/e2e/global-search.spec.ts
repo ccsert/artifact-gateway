@@ -1,6 +1,117 @@
 import { expect, test } from "@playwright/test";
 import { authenticateAsAdmin } from "./support/auth";
 
+test("contains search resets cursors on mode changes and clear, including a shared URL", async ({
+  page,
+}) => {
+  await authenticateAsAdmin(page);
+  await page.route("**/api/v2/repositories**", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  const requests: URLSearchParams[] = [];
+  await page.route("**/api/v2/artifact-search**", (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    requests.push(params);
+    return route.fulfill({
+      json: {
+        searchedRepositories: 1,
+        items: [
+          {
+            repositoryId: "20000000-0000-0000-0000-000000000001",
+            repositoryName: "raw-releases",
+            format: "raw",
+            matchKind: "coordinate",
+            match: params.get("match"),
+            coordinate: params.has("pageToken")
+              ? "releases/alpha-2.bin"
+              : "releases/alpha.bin",
+          },
+        ],
+        ...(params.has("pageToken")
+          ? {}
+          : { nextPageToken: "contains-page-2" }),
+      },
+    });
+  });
+  await page.goto("/search?q=alpha&match=contains");
+  await expect(
+    page.getByText("releases/alpha.bin", { exact: true }),
+  ).toBeVisible();
+  expect(requests[0].get("match")).toBe("contains");
+  await page.getByRole("button", { name: "加载更多", exact: true }).click();
+  await expect(
+    page.getByText("releases/alpha-2.bin", { exact: true }),
+  ).toBeVisible();
+  expect(requests[1].get("pageToken")).toBe("contains-page-2");
+  await page.getByText("前缀", { exact: true }).click();
+  await expect.poll(() => requests.length).toBe(3);
+  expect(requests[2].get("match")).toBe("prefix");
+  expect(requests[2].has("pageToken")).toBe(false);
+  await expect(
+    page.getByText("releases/alpha-2.bin", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page).toHaveURL(/match=prefix/);
+  await page.getByRole("searchbox").fill("");
+  await expect(
+    page.getByText("输入关键词开始搜索", { exact: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/match=prefix/);
+  expect(requests).toHaveLength(3);
+});
+
+test("public contains search appends server pages and isolates mode query keys", async ({
+  page,
+}) => {
+  await page.route("**/auth/session", (route) =>
+    route.fulfill({ json: { authenticated: false } }),
+  );
+  await page.route("**/api/v2/public/repositories", (route) =>
+    route.fulfill({
+      json: {
+        enabled: true,
+        items: [
+          {
+            id: "public-contains",
+            name: "raw-public",
+            format: "raw",
+            type: "hosted",
+            anonymousRead: true,
+          },
+        ],
+      },
+    }),
+  );
+  const requests: URLSearchParams[] = [];
+  await page.route(
+    "**/api/v2/repositories/public-contains/artifact-search**",
+    (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      requests.push(params);
+      return route.fulfill({
+        json: {
+          items: [
+            {
+              coordinate: params.has("pageToken") ? "alpha-2.bin" : "alpha.bin",
+            },
+          ],
+          ...(params.has("pageToken") ? {} : { nextPageToken: "public-next" }),
+        },
+      });
+    },
+  );
+  await page.goto("/browse?repository=public-contains&q=alpha&match=contains");
+  await expect(page.getByText("alpha.bin", { exact: true })).toBeVisible();
+  expect(requests[0].get("match")).toBe("contains");
+  await page.getByRole("button", { name: "加载更多", exact: true }).click();
+  await expect(page.getByText("alpha-2.bin", { exact: true })).toBeVisible();
+  expect(requests[1].get("pageToken")).toBe("public-next");
+  await page.getByText("前缀", { exact: true }).click();
+  await expect.poll(() => requests.length).toBe(3);
+  expect(requests[2].get("match")).toBe("prefix");
+  expect(requests[2].has("pageToken")).toBe(false);
+  await expect(page.getByText("alpha-2.bin", { exact: true })).toHaveCount(0);
+});
+
 const repositoryId = "20000000-0000-0000-0000-000000000001";
 
 test("global Maven search groups versions and preserves an exact deep link", async ({

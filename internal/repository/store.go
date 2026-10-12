@@ -328,7 +328,7 @@ type NativeMavenStore interface {
 	GetMavenAsset(context.Context, string, string) (MavenAsset, error)
 	ListMavenAssets(context.Context, string, string) ([]MavenAsset, error)
 	ListMavenArtifacts(context.Context, string) ([]MavenArtifact, error)
-	SearchMavenArtifacts(context.Context, string, string, int, MavenArtifactCursor) ([]MavenArtifact, error)
+	SearchMavenArtifacts(context.Context, string, string, int, MavenArtifactCursor, ...ArtifactSearchMatch) ([]MavenArtifact, error)
 	GetMavenArtifact(context.Context, string, string) (MavenArtifact, error)
 	GetMavenArtifactByCoordinate(context.Context, string, string) (MavenArtifact, error)
 	TombstoneMavenArtifact(context.Context, string, string) (MavenArtifact, error)
@@ -370,7 +370,7 @@ type NativeOCIStore interface {
 	ListOCIReferrers(context.Context, string, string, string, int, string) ([]OCIManifest, error)
 	ListOCIManifests(context.Context, string, string, int, string) ([]OCIManifest, error)
 	ListOCIManifestNames(context.Context, string, int, string) ([]string, error)
-	SearchOCIManifestNames(context.Context, string, string, int, string) ([]string, error)
+	SearchOCIManifestNames(context.Context, string, string, int, string, ...ArtifactSearchMatch) ([]string, error)
 	ListOCITags(context.Context, string, string, int, string) ([]string, error)
 	DeleteOCITag(context.Context, string, string, string) error
 	DeleteOCIManifest(context.Context, string, string, string) error
@@ -391,7 +391,7 @@ type NativeRawStore interface {
 	StageRawObject(context.Context, RawObject) error
 	PutRawAsset(context.Context, RawAsset) (RawAsset, error)
 	GetRawAsset(context.Context, string, string) (RawAsset, error)
-	ListRawAssets(context.Context, string, string, int, string) ([]RawAsset, error)
+	ListRawAssets(context.Context, string, string, int, string, ...ArtifactSearchMatch) ([]RawAsset, error)
 	DeleteRawAsset(context.Context, string, string) error
 	RestoreRawAsset(context.Context, string, string) (RawAsset, error)
 	ListUnreferencedRawObjects(context.Context, time.Time, int) ([]RawObject, error)
@@ -415,7 +415,7 @@ type NativeNPMStore interface {
 	NPMObjectHasVisibleReference(context.Context, string) (bool, error)
 	MarkNPMObjectCollected(context.Context, string) error
 	GetNPMVersionByTarball(context.Context, string, string, string) (NPMVersion, error)
-	SearchNPMPackages(context.Context, string, string, int, string) ([]NPMPackageSummary, error)
+	SearchNPMPackages(context.Context, string, string, int, string, ...ArtifactSearchMatch) ([]NPMPackageSummary, error)
 }
 
 type NativePyPIStore interface {
@@ -426,7 +426,7 @@ type NativePyPIStore interface {
 	LockPyPIObject(context.Context, string) (func(), error)
 	GetPyPIFile(context.Context, string, string) (PyPIFile, error)
 	ListPyPIProjectFiles(context.Context, string, string) ([]PyPIFile, error)
-	ListPyPIProjects(context.Context, string, string, int, string) ([]PyPIProjectSummary, error)
+	ListPyPIProjects(context.Context, string, string, int, string, ...ArtifactSearchMatch) ([]PyPIProjectSummary, error)
 	TombstonePyPIVersion(context.Context, string, string, string) ([]PyPIFile, error)
 	RestorePyPIVersion(context.Context, string, string, string) ([]PyPIFile, error)
 	ListReclaimablePyPIObjects(context.Context, time.Time, int) ([]PyPIObject, error)
@@ -461,7 +461,7 @@ type NativeAPTStore interface {
 	GetAPTAsset(context.Context, string, string) (APTAsset, error)
 	CacheAPTAsset(context.Context, APTAsset) (APTAsset, error)
 	LockAPTObject(context.Context, string) (func(), error)
-	ListAPTAssets(context.Context, string, string, int, string) ([]APTAsset, error)
+	ListAPTAssets(context.Context, string, string, int, string, ...ArtifactSearchMatch) ([]APTAsset, error)
 }
 
 // NativeAPTPublicationStore persists APT Hosted staging and immutable signed
@@ -579,7 +579,7 @@ type NativeConanStore interface {
 	PublishReplicatedConanRevision(context.Context, ConanReplicationPublication) (ConanRecipeRevision, error)
 	GetConanRecipeRevision(context.Context, string, string, string) (ConanRecipeRevision, error)
 	GetConanPackageRevision(context.Context, string, string, string, string, string) (ConanPackageRevision, error)
-	SearchConanReferences(context.Context, string, string, int, string) ([]ConanReference, error)
+	SearchConanReferences(context.Context, string, string, int, string, ...ArtifactSearchMatch) ([]ConanReference, error)
 	ListConanRecipeRevisions(context.Context, string, string) ([]ConanRecipeRevision, error)
 	SearchConanRecipeRevisions(context.Context, string, string, string, int, string) ([]ConanRecipeRevision, error)
 	ListConanPackageRevisions(context.Context, string, string, string, string) ([]ConanPackageRevision, error)

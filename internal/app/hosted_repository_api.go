@@ -97,6 +97,7 @@ type artifactSearchPageCursor struct {
 	Endpoint, RepositoryID, Format, Query, Coordinate string
 	BuildNumber                                       int
 	ExpiresAt                                         int64
+	Match                                             string `json:",omitempty"`
 }
 
 type repositoryBrowseNodeCursor struct {

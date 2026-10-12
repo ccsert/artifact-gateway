@@ -1405,6 +1405,24 @@ func (e FormatProfileRepositoryTypes) Valid() bool {
 	}
 }
 
+// Defines values for GlobalArtifactSearchHitMatch.
+const (
+	GlobalArtifactSearchHitMatchContains GlobalArtifactSearchHitMatch = "contains"
+	GlobalArtifactSearchHitMatchPrefix   GlobalArtifactSearchHitMatch = "prefix"
+)
+
+// Valid indicates whether the value is a known member of the GlobalArtifactSearchHitMatch enum.
+func (e GlobalArtifactSearchHitMatch) Valid() bool {
+	switch e {
+	case GlobalArtifactSearchHitMatchContains:
+		return true
+	case GlobalArtifactSearchHitMatchPrefix:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GlobalArtifactSearchHitMatchKind.
 const (
 	Coordinate GlobalArtifactSearchHitMatchKind = "coordinate"
@@ -3103,6 +3121,60 @@ func (e WebhookEventType) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactSearchMatch.
+const (
+	ArtifactSearchMatchContains ArtifactSearchMatch = "contains"
+	ArtifactSearchMatchPrefix   ArtifactSearchMatch = "prefix"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactSearchMatch enum.
+func (e ArtifactSearchMatch) Valid() bool {
+	switch e {
+	case ArtifactSearchMatchContains:
+		return true
+	case ArtifactSearchMatchPrefix:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchArtifactsParamsMatch.
+const (
+	SearchArtifactsParamsMatchContains SearchArtifactsParamsMatch = "contains"
+	SearchArtifactsParamsMatchPrefix   SearchArtifactsParamsMatch = "prefix"
+)
+
+// Valid indicates whether the value is a known member of the SearchArtifactsParamsMatch enum.
+func (e SearchArtifactsParamsMatch) Valid() bool {
+	switch e {
+	case SearchArtifactsParamsMatchContains:
+		return true
+	case SearchArtifactsParamsMatchPrefix:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchRepositoryArtifactsParamsMatch.
+const (
+	SearchRepositoryArtifactsParamsMatchContains SearchRepositoryArtifactsParamsMatch = "contains"
+	SearchRepositoryArtifactsParamsMatchPrefix   SearchRepositoryArtifactsParamsMatch = "prefix"
+)
+
+// Valid indicates whether the value is a known member of the SearchRepositoryArtifactsParamsMatch enum.
+func (e SearchRepositoryArtifactsParamsMatch) Valid() bool {
+	switch e {
+	case SearchRepositoryArtifactsParamsMatchContains:
+		return true
+	case SearchRepositoryArtifactsParamsMatchPrefix:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListProxyCacheEntriesParamsGroupBy.
 const (
 	ListProxyCacheEntriesParamsGroupByAsset     ListProxyCacheEntriesParamsGroupBy = "asset"
@@ -4583,7 +4655,10 @@ type GlobalArtifactSearchHit struct {
 	Format       Format                       `json:"format"`
 	Intelligence *ArtifactIntelligenceSummary `json:"intelligence,omitempty"`
 
-	// MatchKind Whether this result matched a coordinate prefix or an exact digest.
+	// Match Actual coordinate match mode for this hit; omitted for exact digests. Cargo legacy coordinate hits use contains.
+	Match *GlobalArtifactSearchHitMatch `json:"match,omitempty"`
+
+	// MatchKind Whether this result matched a coordinate or an exact digest.
 	MatchKind GlobalArtifactSearchHitMatchKind `json:"matchKind"`
 
 	// Publisher Publisher actor when the format records it.
@@ -4608,7 +4683,10 @@ type GlobalArtifactSearchHit struct {
 	VersionCount *int32 `json:"versionCount,omitempty"`
 }
 
-// GlobalArtifactSearchHitMatchKind Whether this result matched a coordinate prefix or an exact digest.
+// GlobalArtifactSearchHitMatch Actual coordinate match mode for this hit; omitted for exact digests. Cargo legacy coordinate hits use contains.
+type GlobalArtifactSearchHitMatch string
+
+// GlobalArtifactSearchHitMatchKind Whether this result matched a coordinate or an exact digest.
 type GlobalArtifactSearchHitMatchKind string
 
 // GlobalArtifactSearchPage defines model for GlobalArtifactSearchPage.
@@ -6029,6 +6107,9 @@ type WebhookSubscription struct {
 // WebhookSubscriptionList defines model for WebhookSubscriptionList.
 type WebhookSubscriptionList = []WebhookSubscription
 
+// ArtifactSearchMatch defines model for ArtifactSearchMatch.
+type ArtifactSearchMatch string
+
 // AuthorizationRoleId defines model for AuthorizationRoleId.
 type AuthorizationRoleId = openapi_types.UUID
 
@@ -6126,12 +6207,18 @@ type ReplaceAnonymousAccessPolicyParams struct {
 
 // SearchArtifactsParams defines parameters for SearchArtifacts.
 type SearchArtifactsParams struct {
-	// Q Coordinate prefix, or an exact SHA-256 digest with or without the sha256 prefix.
-	Q         string     `form:"q" json:"q"`
-	Format    *Format    `form:"format,omitempty" json:"format,omitempty"`
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	// Q Coordinate keyword using the selected match mode, or an exact SHA-256 digest with or without the sha256 prefix. Omitting match preserves legacy matching.
+	Q      string  `form:"q" json:"q"`
+	Format *Format `form:"format,omitempty" json:"format,omitempty"`
+
+	// Match Explicit coordinate matching. contains is a case-insensitive literal substring; prefix is a case-sensitive literal prefix. Omitting match preserves the legacy behavior of each format (Cargo name substring; other formats prefix). Complete SHA-256 queries in global search remain exact digest matches. Contains requests have a five-second server budget; narrow the query if it expires.
+	Match     *SearchArtifactsParamsMatch `form:"match,omitempty" json:"match,omitempty"`
+	PageSize  *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
+
+// SearchArtifactsParamsMatch defines parameters for SearchArtifacts.
+type SearchArtifactsParamsMatch string
 
 // ReplaceAuditRetentionPolicyParams defines parameters for ReplaceAuditRetentionPolicy.
 type ReplaceAuditRetentionPolicyParams struct {
@@ -6388,11 +6475,17 @@ type ReconcileRepositoryArtifactScansParams struct {
 
 // SearchRepositoryArtifactsParams defines parameters for SearchRepositoryArtifacts.
 type SearchRepositoryArtifactsParams struct {
-	// Q Format-aware coordinate prefix. Raw repositories accept a canonical percent-encoded path of up to 4096 characters; other formats apply their own stricter coordinate grammar.
-	Q         *string    `form:"q,omitempty" json:"q,omitempty"`
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	// Q Coordinate keyword using the selected match mode. Raw accepts a canonical percent-encoded path or path fragment of up to 4096 characters. Contains keywords for other formats accept up to 255 characters. Legacy prefix matching retains the format-specific coordinate grammar.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Match Explicit coordinate matching. contains is a case-insensitive literal substring; prefix is a case-sensitive literal prefix. Omitting match preserves the legacy behavior of each format (Cargo name substring; other formats prefix). Complete SHA-256 queries in global search remain exact digest matches. Contains requests have a five-second server budget; narrow the query if it expires.
+	Match     *SearchRepositoryArtifactsParamsMatch `form:"match,omitempty" json:"match,omitempty"`
+	PageSize  *PageSize                             `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken                            `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
+
+// SearchRepositoryArtifactsParamsMatch defines parameters for SearchRepositoryArtifacts.
+type SearchRepositoryArtifactsParamsMatch string
 
 // ListRepositoryArtifactUsageParams defines parameters for ListRepositoryArtifactUsage.
 type ListRepositoryArtifactUsageParams struct {
@@ -7577,6 +7670,19 @@ func (siw *ServerInterfaceWrapper) SearchArtifacts(w http.ResponseWriter, r *htt
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "format"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "format", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "match" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "match", r.URL.Query(), &params.Match, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "match"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "match", Err: err})
 		}
 		return
 	}
@@ -10568,6 +10674,19 @@ func (siw *ServerInterfaceWrapper) SearchRepositoryArtifacts(w http.ResponseWrit
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "match" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "match", r.URL.Query(), &params.Match, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "match"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "match", Err: err})
 		}
 		return
 	}

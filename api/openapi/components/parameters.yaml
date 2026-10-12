@@ -1,4 +1,16 @@
 ---
+ArtifactSearchMatch:
+  name: match
+  in: query
+  description: >-
+    Explicit coordinate matching. contains is a case-insensitive literal substring;
+    prefix is a case-sensitive literal prefix. Omitting match preserves the legacy
+    behavior of each format (Cargo name substring; other formats prefix).
+    Complete SHA-256 queries in global search remain exact digest matches.
+    Contains requests have a five-second server budget; narrow the query if it expires.
+  schema:
+    type: string
+    enum: [prefix, contains]
 RepositoryId:
   name: repositoryId
   in: path

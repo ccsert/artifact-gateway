@@ -28,7 +28,7 @@ semantics.
 | PL/pgSQL triggers | Emits `pg_notify` when work becomes runnable and enforces selected capacity boundaries | State changes and wake hints share the database transaction boundary |
 | `ON CONFLICT`, unique constraints, and `RETURNING` | Idempotent publication, task deduplication, object references, node heartbeats, singleton settings, and tag movement | Existence checks, writes, and state readback remain one concurrency-safe statement |
 | JSONB and JSONB operators | npm manifests/tags, OIDC roles, scanner intelligence, webhook payloads, dynamic policy, runtime roles | Keeps relational identity while representing format-specific data with JSON type checks |
-| `pg_trgm` and partial GIN indexes | Fuzzy Maven coordinate, OCI name, Conan reference, and Raw path search | Indexes only relevant visible states and avoids full scans |
+| `pg_trgm` and partial GIN indexes | Literal contains search of coordinates, package names and paths | Selective fragments can use GIN; short/common fragments can still scan many rows |
 | `text_pattern_ops` B-tree indexes | Literal prefix paging across Maven, OCI, Raw, Conan, npm, PyPI, Go, and APT | Preserves indexed `LIKE 'prefix%'` behavior outside the `C` locale |
 | BRIN indexes | Audit, lifecycle, replication-checkpoint, OCI, and Conan timelines | Keeps append-heavy time indexes compact |
 | `DISTINCT ON`, `LATERAL`, and views | Builds the format-neutral `artifact_search_projection` and selects latest visible records | Performs format projection and version folding in PostgreSQL while authorization remains in the application |
@@ -67,12 +67,58 @@ sequenceDiagram
 ## Search and index composition
 
 1. Literal prefixes use `text_pattern_ops` B-tree indexes and ordered cursors.
-2. Contains/fragment matching uses `pg_trgm` GIN indexes.
+2. `match=contains` uses escaped `ILIKE '%keyword%'` and base-table `pg_trgm` GIN indexes. `%`, `_` and backslash are literal input, not wildcards.
 3. Partial indexes exclude states that are not protocol-visible.
 4. Append-heavy timelines use BRIN instead of ever-growing B-tree indexes.
 5. `artifact_search_projection` uses `UNION ALL`, `DISTINCT ON`, and `LATERAL`
    to normalize format metadata; application code still authorizes results.
 6. SHA-256 lookup uses repository-and-digest composite indexes, not fuzzy search.
+
+The main global and repository artifact-search endpoints accept optional
+`match=prefix|contains`. Omission preserves the old per-format behaviour (Cargo
+name substring; other formats literal prefix). Contains is case insensitive;
+explicit Prefix is case sensitive. Existing signed tokens without a mode remain
+valid with omitted `match`; a token cannot be reused with a changed query, mode,
+format or repository. Complete global SHA-256 queries retain exact digest
+semantics and the existing supported-format boundary.
+
+Console global search, ordinary repository lists and selected public-repository
+search default to Contains. Public results load the next cursor on demand.
+Maven Proxy's management list still searches known cache metadata; it does not
+discover the upstream inventory. Conan's management list still has its separate
+current-page filter limitation; global and direct API Conan search use the new
+mode. Directory navigation, identity selectors and resource-prefix authorization
+keep their existing contracts.
+
+Search fields are Maven GAV, OCI name, Conan reference, npm/PyPI/Cargo package
+name, Go module path and Raw/APT canonical path. For example `alpha` finds
+`org.example:alpha:1.0`, `team/alpha` and `releases/alpha.bin`. Maven asset file
+names, README text, publisher and binary contents are not indexed. Raw searches
+canonicalize readable input without changing the identity used by an exact deep
+link or artifact operation. Contains is neither spelling correction nor natural
+language full-text search: `tsvector` matches lexemes, not arbitrary substrings.
+
+One/two-character, punctuation-only and common fragments are accepted without
+silently falling back to Prefix. A Contains request has a **five-second shared
+budget**, including metadata/authorization reads and later repository probes;
+incoming cancellation propagates to SQL. Timeout returns a failed request;
+add a longer keyword or choose Prefix. Page sizes stay 1–200 (default 50).
+Coordinate/build/digest keyset order and visible-state/version folding remain.
+Each page rechecks authorization; pagination is not a persistent inventory
+snapshot and has no total count. Inserts before a cursor are absent from later
+pages; deletions may reduce a page; revocation prevents further reads.
+
+The ordinary projection view cannot own a persistent GIN index. Migration 145
+adds indexes to the remaining native search tables and reuses migration 64's
+Maven/OCI/Conan/Raw indexes. Index build time, disk and write amplification need
+capacity planning; the migration runner does not use `CREATE INDEX CONCURRENTLY`.
+Do not infer production latency or index usage from index existence. The real
+PostgreSQL regression `TestPostgresContainsSearchPlansAndCancellation` captures
+pgx's actual complete prepared SQL and runs `EXPLAIN (ANALYZE, BUFFERS, VERBOSE)`
+against fixed synthetic Raw inventory and Maven build history. Set
+`GATEWAY_SEARCH_PLAN_OUTPUT` to save every JSON plan; it never forces an index.
+The companion HTTP probe-budget test includes global lookahead across three
+readable repositories. [Measured fixture report](reports/artifact-contains-search-2026-10-12.md).
 
 ## Operational queries
 

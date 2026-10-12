@@ -2948,7 +2948,11 @@ GlobalArtifactSearchHit:
         enum:
         - coordinate
         - digest
-        description: Whether this result matched a coordinate prefix or an exact digest.
+        description: Whether this result matched a coordinate or an exact digest.
+      match:
+        type: string
+        enum: [prefix, contains]
+        description: Actual coordinate match mode for this hit; omitted for exact digests. Cargo legacy coordinate hits use contains.
 GlobalArtifactSearchPage:
   type: object
   required:

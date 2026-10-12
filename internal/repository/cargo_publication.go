@@ -42,7 +42,7 @@ type NativeCargoStore interface {
 	CargoObjectMatchesTombstone(context.Context, string, time.Time) (bool, error)
 	MarkCargoObjectCollecting(context.Context, string) error
 	MarkCargoObjectCollected(context.Context, string) error
-	SearchCargoCrates(context.Context, string, string, int, string, bool) ([]CargoCrateSummary, int, error)
+	SearchCargoCrates(context.Context, string, string, int, string, bool, ...ArtifactSearchMatch) ([]CargoCrateSummary, int, error)
 	CargoObjectHasReference(context.Context, string) (bool, error)
 	LockCargoObject(context.Context, string) (func(), error)
 }

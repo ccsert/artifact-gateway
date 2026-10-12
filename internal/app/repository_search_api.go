@@ -25,13 +25,20 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 			return
 		}
 	}
+	match, valid := artifactSearchMatch(params.Match)
+	if !valid {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "match must be prefix or contains")
+		return
+	}
+	r, cancel := artifactSearchRequest(r, match)
+	defer cancel()
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		query := ""
 		if params.Q != nil {
 			query = *params.Q
 		}
-		if !validArtifactSearchQuery(repo.Format, query) {
-			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q is not a valid artifact prefix for this repository format")
+		if !validArtifactKeyword(repo.Format, query, match) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q is not a valid artifact keyword for this repository format")
 			return
 		}
 		pageSize := 50
@@ -46,7 +53,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 		if params.PageToken != nil {
 			pageToken = string(*params.PageToken)
 		}
-		after, err := h.decodeArtifactSearchCursor(pageToken, repo.ID, repo.Format, query)
+		after, err := h.decodeArtifactSearchCursor(pageToken, repo.ID, repo.Format, query, match)
 		if err != nil {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
 			return
@@ -56,7 +63,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 		hasMore := false
 		switch repo.Format {
 		case repository.FormatOCI:
-			names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
+			names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search OCI artifacts failed")
 				return
@@ -70,7 +77,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = name
 			}
 		case repository.FormatMaven:
-			artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, query, pageSize+1, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber})
+			artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, query, pageSize+1, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber}, match)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search Maven artifacts failed")
 				return
@@ -87,7 +94,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = a.Coordinate
 			}
 		case repository.FormatConan:
-			references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
+			references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search Conan artifacts failed")
 				return
@@ -101,7 +108,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = reference.Reference
 			}
 		case repository.FormatRaw:
-			assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
+			assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search Raw artifacts failed")
 				return
@@ -118,7 +125,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = a.Path
 			}
 		case repository.FormatNPM:
-			packages, err := h.sessions.store.SearchNPMPackages(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
+			packages, err := h.sessions.store.SearchNPMPackages(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search npm packages failed")
 				return
@@ -137,7 +144,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = pkg.Name
 			}
 		case repository.FormatPyPI:
-			projects, err := h.sessions.store.ListPyPIProjects(r.Context(), repo.ID, normalizePyPIProject(query), pageSize+1, after.Coordinate)
+			projects, err := h.sessions.store.ListPyPIProjects(r.Context(), repo.ID, pypiSearchKeyword(query, match), pageSize+1, after.Coordinate, match)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search PyPI projects failed")
 				return
@@ -156,7 +163,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = project.Project
 			}
 		case repository.FormatGo:
-			projected, err := h.searchGroupMemberArtifacts(r, repo, query, pageSize+1, after)
+			projected, err := h.searchGroupMemberArtifactsByQuery(r, repo, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: query, Match: match}, pageSize+1, after)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search Go modules failed")
 				return
@@ -173,9 +180,9 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 			var crates []repository.CargoCrateSummary
 			var err error
 			if repo.Type == repository.RepositoryTypeProxy {
-				crates, err = h.cargoProxy.SearchCargoProxyCrates(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
+				crates, err = h.cargoProxy.SearchCargoProxyCrates(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
 			} else {
-				crates, _, err = h.cargo.SearchCargoCrates(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, true)
+				crates, _, err = h.cargo.SearchCargoCrates(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, true, match)
 			}
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search Cargo crates failed")
@@ -193,7 +200,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 			}
 		case repository.FormatAPT:
 			if repo.Type == repository.RepositoryTypeProxy {
-				assets, err := h.sessions.store.ListAPTAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate)
+				assets, err := h.sessions.store.ListAPTAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
 				if err != nil {
 					writeHostedProblem(w, 500, "internal_error", "search APT assets failed")
 					return
@@ -209,7 +216,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				}
 				break
 			}
-			projected, err := h.searchGroupMemberArtifacts(r, repo, query, pageSize+1, after)
+			projected, err := h.searchGroupMemberArtifactsByQuery(r, repo, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: query, Match: match}, pageSize+1, after)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search APT assets failed")
 				return
@@ -229,7 +236,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 			if last := items[len(items)-1].BuildNumber; last != nil {
 				buildNumber = int(*last)
 			}
-			token := h.encodeArtifactSearchCursor(repo.ID, repo.Format, query, lastCoordinate, buildNumber)
+			token := h.encodeArtifactSearchCursor(repo.ID, repo.Format, query, lastCoordinate, buildNumber, match)
 			next = &token
 		}
 		writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ArtifactSummaryPage{Items: items, NextPageToken: next})
@@ -511,16 +518,24 @@ func (h hostedRepositoryAPIHandler) decodeConanRevisionCursor(token, repositoryI
 	return cursor.Revision, nil
 }
 
-func (h hostedRepositoryAPIHandler) encodeArtifactSearchCursor(repositoryID string, format repository.Format, query, coordinate string, buildNumber int) string {
-	return encodeSignedCursor(h.authenticator.AdminToken, artifactSearchPageCursor{Endpoint: "artifact-search", RepositoryID: repositoryID, Format: string(format), Query: query, Coordinate: coordinate, BuildNumber: buildNumber, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
+func (h hostedRepositoryAPIHandler) encodeArtifactSearchCursor(repositoryID string, format repository.Format, query, coordinate string, buildNumber int, match ...repository.ArtifactSearchMatch) string {
+	matching := ""
+	if len(match) > 0 {
+		matching = string(match[0])
+	}
+	return encodeSignedCursor(h.authenticator.AdminToken, artifactSearchPageCursor{Match: matching, Endpoint: "artifact-search", RepositoryID: repositoryID, Format: string(format), Query: query, Coordinate: coordinate, BuildNumber: buildNumber, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
-func (h hostedRepositoryAPIHandler) decodeArtifactSearchCursor(token, repositoryID string, format repository.Format, query string) (artifactSearchPosition, error) {
+func (h hostedRepositoryAPIHandler) decodeArtifactSearchCursor(token, repositoryID string, format repository.Format, query string, match ...repository.ArtifactSearchMatch) (artifactSearchPosition, error) {
+	matching := ""
+	if len(match) > 0 {
+		matching = string(match[0])
+	}
 	if token == "" {
 		return artifactSearchPosition{}, nil
 	}
 	var cursor artifactSearchPageCursor
-	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "artifact-search" || cursor.RepositoryID != repositoryID || cursor.Format != string(format) || cursor.Query != query || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
+	if decodeSignedCursor(h.authenticator.AdminToken, token, &cursor) != nil || cursor.Endpoint != "artifact-search" || cursor.RepositoryID != repositoryID || cursor.Format != string(format) || cursor.Query != query || cursor.Match != matching || cursor.Coordinate == "" || time.Now().UTC().Unix() >= cursor.ExpiresAt {
 		return artifactSearchPosition{}, errors.New("invalid cursor")
 	}
 	return artifactSearchPosition{Coordinate: cursor.Coordinate, BuildNumber: cursor.BuildNumber}, nil

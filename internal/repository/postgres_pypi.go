@@ -256,7 +256,7 @@ func (s *PostgresStore) ListPyPIProjectFiles(ctx context.Context, repositoryID, 
 	return files, nil
 }
 
-func (s *PostgresStore) ListPyPIProjects(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]PyPIProjectSummary, error) {
+func (s *PostgresStore) ListPyPIProjects(ctx context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]PyPIProjectSummary, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -276,8 +276,8 @@ func (s *PostgresStore) ListPyPIProjects(ctx context.Context, repositoryID, pref
 		       (array_agg(cached_at ORDER BY created_at DESC,filename))[1],
 		       (array_agg(created_at ORDER BY created_at DESC,filename))[1]
 		FROM native_pypi_files
-		WHERE repository_id::text=$1 AND project LIKE $2 || '%' AND project>$3 AND state='visible'
-		GROUP BY project ORDER BY project LIMIT $4`, repositoryID, prefix, after, limit)
+		WHERE repository_id=$1::uuid AND `+searchTextSQL("project", "$2", matches)+` AND project>$3 AND state='visible'
+		GROUP BY project ORDER BY project LIMIT $4`, repositoryID, searchTextPattern(prefix, matches), after, limit)
 	if err != nil {
 		return nil, err
 	}

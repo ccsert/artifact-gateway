@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 )
@@ -172,12 +171,12 @@ func (s *MemoryStore) GetRawAsset(_ context.Context, repositoryID, path string) 
 	}
 	return asset, nil
 }
-func (s *MemoryStore) ListRawAssets(_ context.Context, repositoryID, prefix string, limit int, after string) ([]RawAsset, error) {
+func (s *MemoryStore) ListRawAssets(_ context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]RawAsset, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	assets := make([]RawAsset, 0)
 	for _, asset := range s.rawAssets {
-		if asset.RepositoryID == repositoryID && strings.HasPrefix(asset.Path, prefix) && asset.Path > after {
+		if asset.RepositoryID == repositoryID && searchTextMatches(asset.Path, prefix, matches) && asset.Path > after {
 			assets = append(assets, asset)
 		}
 	}

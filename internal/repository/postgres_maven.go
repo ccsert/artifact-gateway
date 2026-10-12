@@ -669,7 +669,7 @@ func (s *PostgresStore) ListMavenArtifacts(ctx context.Context, repoID string) (
 
 // SearchMavenArtifacts pages visible artifacts in (coordinate, build_number)
 // order so every SNAPSHOT build appears as its own row.
-func (s *PostgresStore) SearchMavenArtifacts(ctx context.Context, repoID, prefix string, limit int, after MavenArtifactCursor) ([]MavenArtifact, error) {
+func (s *PostgresStore) SearchMavenArtifacts(ctx context.Context, repoID, prefix string, limit int, after MavenArtifactCursor, matches ...ArtifactSearchMatch) ([]MavenArtifact, error) {
 	if limit <= 0 {
 		limit = 100
 	} else if limit > 2_147_483_647 {
@@ -687,9 +687,9 @@ func (s *PostgresStore) SearchMavenArtifacts(ctx context.Context, repoID, prefix
 			WHERE s.repository_id=a.repository_id AND s.coordinate=a.coordinate AND s.state='committed'
 			ORDER BY s.expires_at DESC LIMIT 1
 		) p ON true
-		WHERE a.repository_id=$1::uuid AND a.state='visible' AND a.coordinate LIKE $2 || '%' ESCAPE '\'
+		WHERE a.repository_id=$1::uuid AND a.state='visible' AND `+searchTextSQL("a.coordinate", "$2", matches)+`
 			AND (a.coordinate>$3 OR (a.coordinate=$3 AND a.build_number>$4))
-		ORDER BY a.coordinate ASC, a.build_number ASC LIMIT $5`, repoID, escapeLikePrefix(prefix), after.Coordinate, after.BuildNumber, limit)
+		ORDER BY a.coordinate ASC, a.build_number ASC LIMIT $5`, repoID, searchTextPattern(prefix, matches), after.Coordinate, after.BuildNumber, limit)
 	if err != nil {
 		return nil, err
 	}

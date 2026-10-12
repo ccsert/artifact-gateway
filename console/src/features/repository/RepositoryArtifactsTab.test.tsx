@@ -1,4 +1,10 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { browseRepository, searchRepositoryArtifacts } from "../../client";
@@ -55,6 +61,67 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+it("searches repository path fragments with contains", async () => {
+  const user = userEvent.setup();
+  mockSearchRepositoryArtifacts.mockResolvedValue({
+    data: { items: [] },
+  } as never);
+  render(
+    <PreferencesProvider>
+      <RepositoryArtifactsTab repo={repository} canWrite={false} />
+    </PreferencesProvider>,
+  );
+  await screen.findByText("暂无制品");
+  await user.type(screen.getByRole("searchbox"), "hello");
+  await user.click(screen.getByRole("button", { name: /^搜\s*索$/ }));
+  await waitFor(() =>
+    expect(mockSearchRepositoryArtifacts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: {
+          q: "hello",
+          pageSize: 50,
+          pageToken: undefined,
+          match: "contains",
+        },
+      }),
+    ),
+  );
+});
+
+it("continues the submitted query even while a different keyword is only a draft", async () => {
+  mockSearchRepositoryArtifacts
+    .mockResolvedValueOnce({
+      data: {
+        items: [{ coordinate: "pool/alpha.deb" }],
+        nextPageToken: "next-alpha",
+      },
+    } as never)
+    .mockResolvedValueOnce({
+      data: { items: [{ coordinate: "pool/alpha-2.deb" }] },
+    } as never);
+  render(
+    <PreferencesProvider>
+      <RepositoryArtifactsTab
+        repo={repository}
+        canWrite={false}
+        artifactTarget="pool/alpha"
+      />
+    </PreferencesProvider>,
+  );
+  await screen.findByText("pool/alpha.deb");
+  fireEvent.change(screen.getByRole("searchbox"), {
+    target: { value: "beta" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }));
+  await screen.findByText("pool/alpha-2.deb");
+  expect(mockSearchRepositoryArtifacts.mock.calls[1][0]?.query).toEqual({
+    q: "pool/alpha",
+    pageSize: 50,
+    pageToken: "next-alpha",
+    match: "prefix",
+  });
+});
+
 describe("RepositoryArtifactsTab APT browse", () => {
   it("loads path projections and opens a read-only cache detail", async () => {
     const user = userEvent.setup();
@@ -87,6 +154,7 @@ describe("RepositoryArtifactsTab APT browse", () => {
       screen.getByPlaceholderText("按 dists/ 或 pool/ 路径过滤…"),
     ).toBeInTheDocument();
     expect(mockSearchRepositoryArtifacts).toHaveBeenCalledWith({
+      signal: expect.any(AbortSignal),
       path: { repositoryId: repository.id },
       query: { q: undefined, pageSize: 50, pageToken: undefined },
     });
@@ -158,8 +226,14 @@ describe("RepositoryArtifactsTab Raw browse", () => {
     );
     await waitFor(() =>
       expect(mockSearchRepositoryArtifacts).toHaveBeenCalledWith({
+        signal: expect.any(AbortSignal),
         path: { repositoryId: repository.id },
-        query: { q: coordinate, pageSize: 50, pageToken: undefined },
+        query: {
+          q: coordinate,
+          pageSize: 50,
+          pageToken: undefined,
+          match: "prefix",
+        },
       }),
     );
     expect(screen.getByPlaceholderText("搜索 GAV 坐标…")).toHaveValue(
@@ -280,9 +354,11 @@ describe("RepositoryArtifactsTab Raw browse", () => {
     await user.click(screen.getByRole("button", { name: /搜\s*索/ }));
     await waitFor(() =>
       expect(mockSearchRepositoryArtifacts).toHaveBeenLastCalledWith({
+        signal: expect.any(AbortSignal),
         path: { repositoryId: rawRepository.id },
         query: {
           q: encodedPath,
+          match: "contains",
           pageSize: 50,
           pageToken: undefined,
         },
@@ -328,9 +404,11 @@ describe("RepositoryArtifactsTab Raw browse", () => {
       await screen.findByDisplayValue("report%20final.txt"),
     ).toBeInTheDocument();
     expect(mockSearchRepositoryArtifacts).toHaveBeenCalledWith({
+      signal: expect.any(AbortSignal),
       path: { repositoryId: rawRepository.id },
       query: {
         q: canonical,
+        match: "prefix",
         pageSize: 50,
         pageToken: undefined,
       },

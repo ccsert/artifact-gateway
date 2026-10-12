@@ -24,7 +24,7 @@ PostgreSQL 语法与行为的能力。
 | PL/pgSQL trigger | 在任务进入可执行状态时调用 `pg_notify`；执行容量约束等数据库边界逻辑 | 状态变更与唤醒提示在同一数据库事务边界内发生 |
 | `ON CONFLICT` + unique constraint + `RETURNING` | 幂等发布、任务去重、对象引用、运行节点心跳、配置单例和标签更新 | 将“判断是否存在”和“写入/回读”压缩到一个并发安全语句 |
 | JSONB 与 JSONB 运算符 | npm manifest/dist-tag、OIDC 角色、扫描情报、Webhook payload、动态策略和运行角色 | 保留强关系主键的同时容纳格式特定结构，并用 `CHECK` 约束 JSON 类型 |
-| `pg_trgm` + partial GIN index | Maven 坐标、OCI 名称、Conan reference、Raw 路径的模糊检索 | 对可见制品建立有针对性的倒排索引，避免全表扫描和无效状态索引膨胀 |
+| `pg_trgm` + partial GIN index | 坐标、包名和路径的字面包含匹配 | 高选择性片段可用 GIN；短词或热门片段仍可能扫描大量行 |
 | `text_pattern_ops` B-tree index | Maven/OCI/Raw/Conan/npm/PyPI/Go/APT 的字面前缀分页 | 在非 `C` locale 下仍为转义后的 `LIKE 'prefix%'` 提供稳定索引路径 |
 | BRIN index | 审计、生命周期、复制检查点、OCI/Conan 创建时间线 | 追加型大表以较小索引体积支持时间范围扫描 |
 | `DISTINCT ON`, `LATERAL`, view | `artifact_search_projection` 跨格式统一搜索，并选择每个坐标的最新可见记录 | 在数据库内完成格式投影与版本折叠，应用层继续负责授权 |
@@ -65,12 +65,42 @@ sequenceDiagram
 搜索不是“给所有列加一个 GIN”：
 
 1. 字面前缀使用 `text_pattern_ops` B-tree，保持有序游标分页。
-2. 包含匹配和长坐标片段使用 `pg_trgm` GIN。
+2. `match=contains` 使用转义后的 `ILIKE '%keyword%'` 与 base table 的 `pg_trgm` GIN；`%`、`_` 和反斜线均为字面输入，不是通配符。
 3. `state = 'visible'` 等 partial index 只覆盖协议可见数据。
 4. 追加型时间线使用 BRIN，避免 B-tree 随历史记录线性膨胀。
 5. `artifact_search_projection` 使用 `UNION ALL`、`DISTINCT ON` 与 `LATERAL` 将多个格式
    投影到统一元数据结构；仓库授权仍在应用层执行。
 6. SHA-256 查询走 repository + digest 复合索引，不使用模糊搜索。
+
+主全局和仓库 artifact-search 接受可选 `match=prefix|contains`。省略时保持旧格式行为
+（Cargo 名称子串，其余格式字面前缀）。包含忽略大小写，显式前缀区分大小写。
+不含匹配模式的旧签名游标仍可配合省略参数使用；换关键词、模式、格式或仓库不能
+复用游标。全局完整 SHA-256 仍是精确摘要查询，保留既有格式支持范围。
+
+Console 全局搜索、普通仓库列表和选中公开仓库后的搜索默认使用包含；公开结果按需
+加载续游标。Maven Proxy 管理列表仍搜索已有缓存，不发现上游库存。Conan 管理列表
+仍有独立的当前页过滤限制；全局和直接 API Conan 查询接入本模式。目录树、身份选择器
+与授权资源前缀保留原契约。
+
+检索字段是 Maven GAV、OCI 名称、Conan reference、npm/PyPI/Cargo 包名、Go 模块路径
+和 Raw/APT canonical path。例如 `alpha` 可以找到 `org.example:alpha:1.0`、`team/alpha`
+与 `releases/alpha.bin`。Maven 资产文件名、README、publisher 和字节内容未加入索引。
+Raw 可读输入会规范化，精确深链和制品操作仍使用原身份。包含不提供拼写容错或自然
+语言全文；`tsvector` 匹配词项，不能替代任意字符子串。
+
+1/2 字符、纯标点和热门片段仍可搜索，不会暗中退回前缀。包含请求共用 **5 秒预算**，
+涵盖元数据/授权读取和后续仓库探测；客户端取消会传至 SQL。超时返回失败，可增加
+关键词或选前缀。pageSize 为 1–200，默认 50。保留 coordinate/build/digest keyset 顺序、
+可见状态和版本折叠。每页重新授权，分页不是持久库存快照，也没有总数；游标前新增项
+不会出现在后续页，删除可能使结果减少，撤权后不能续读。
+
+普通 projection view 不能建持久 GIN。迁移 145 为其余实际 native 搜索表补索引，复用
+迁移 64 的 Maven/OCI/Conan/Raw 索引。建索引时间、空间与写放大需要容量规划；迁移
+runner 没有使用 `CREATE INDEX CONCURRENTLY`。索引存在不证明生产延迟或实际索引路径。
+PG 回归 `TestPostgresContainsSearchPlansAndCancellation` 捕获 pgx 的真实完整 prepared SQL，
+对固定 Raw 库存和 Maven build 历史执行 `EXPLAIN (ANALYZE, BUFFERS, VERBOSE)`；设置
+`GATEWAY_SEARCH_PLAN_OUTPUT` 可保存每个 JSON 计划，不强制索引。配套 HTTP 预算测试
+包含三个可读仓库的后续探测。[合成实测记录](reports/artifact-contains-search-2026-10-12.zh-CN.md)。
 
 ## 运维查询
 
