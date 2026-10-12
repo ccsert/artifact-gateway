@@ -11,6 +11,10 @@ their meaning.
 
 ## Unreleased
 
+- Repository security and quarantine-read editors synchronize their drafts with refreshed policy versions before saving. Failed artifact searches and first-page refreshes retain the last successful rows in the same repository, with Retry; retained rows never supply a cursor for a new search or survive an identity cache reset.
+
+- Repository detail tabs (artifacts, retention, APT operations, distribution, security, scanning, settings, lifecycle jobs and tombstones) and the repository list read through the shared query layer and are split into focused sections; every repository Console file is now at most 400 lines. Artifact lists keep the current search when an older answer arrives late, polled job lists stop when the tab is closed, and saved policies stay on screen with their confirmation. Behaviour and layout are otherwise unchanged.
+
 - Main artifact search supports explicit case-insensitive literal Contains matching while preserving omitted-parameter behaviour and exact SHA-256 lookup. Console search defaults to Contains with a Prefix option; public results support cursor continuation. PostgreSQL reuses and extends trigram indexes, bounds Contains requests to five seconds, and preserves permissions and artifact identities.
 
 - Unknown artifact formats now show the unified unavailable state in repository detail, public browse, and search detail. Format-specific task entrypoints are resolved from the registry for each repository type.

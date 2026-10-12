@@ -24,6 +24,7 @@ import type {
 } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { APTOperationsTab } from "./APTOperationsTab";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", () => ({
   applyAptLifecycle: vi.fn(),
@@ -118,9 +119,11 @@ const plan = {
 };
 function mount(canAdmin = true) {
   return render(
-    <PreferencesProvider>
-      <APTOperationsTab repo={repo} canAdmin={canAdmin} />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <APTOperationsTab repo={repo} canAdmin={canAdmin} />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 beforeEach(() => {
@@ -329,9 +332,11 @@ it("does not accept a retired StrictMode mount request after a later refresh", a
   const user = userEvent.setup();
   render(
     <StrictMode>
-      <PreferencesProvider>
-        <APTOperationsTab repo={repo} canAdmin />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <APTOperationsTab repo={repo} canAdmin />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </StrictMode>,
   );
   await screen.findByText("当前快照 #2");

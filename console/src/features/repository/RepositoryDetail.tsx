@@ -30,10 +30,10 @@ const RepositoryGrantsTab = lazy(async () => ({
   default: (await import("./RepositoryGrantsTab")).RepositoryGrantsTab,
 }));
 const RepositoryJobsTab = lazy(async () => ({
-  default: (await import("./RepositoryLifecycleTabs")).RepositoryJobsTab,
+  default: (await import("./RepositoryJobsTab")).RepositoryJobsTab,
 }));
 const RepositoryTombstonesTab = lazy(async () => ({
-  default: (await import("./RepositoryLifecycleTabs")).RepositoryTombstonesTab,
+  default: (await import("./RepositoryTombstonesTab")).RepositoryTombstonesTab,
 }));
 const RepositoryRetentionTab = lazy(async () => ({
   default: (await import("./RepositoryRetentionTab")).RepositoryRetentionTab,

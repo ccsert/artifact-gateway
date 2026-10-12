@@ -7,11 +7,13 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { browseRepository, searchRepositoryArtifacts } from "../../client";
 import type { Repository } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RepositoryArtifactsTab } from "./RepositoryArtifactsTab";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../client")>()),
@@ -44,9 +46,11 @@ it("shows an unavailable format instead of an empty repository", async () => {
     JSON.stringify({ ...repository, format: "nuget" }),
   );
   render(
-    <PreferencesProvider>
-      <RepositoryArtifactsTab repo={newerRepository} canWrite />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={newerRepository} canWrite />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
   expect(await screen.findByText("制品浏览功能未启用")).toBeInTheDocument();
   expect(
@@ -75,22 +79,57 @@ it("does not retain another repository's rows while its next scope is loading", 
         }),
     );
   const view = render(
-    <PreferencesProvider>
-      <RepositoryArtifactsTab repo={repository} canWrite={false} />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={repository} canWrite={false} />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
   await screen.findByText("private/alpha.deb");
   view.rerender(
-    <PreferencesProvider>
-      <RepositoryArtifactsTab
-        repo={{ ...repository, id: "22222222-2222-4222-8222-222222222222" }}
-        canWrite={false}
-      />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab
+          repo={{ ...repository, id: "22222222-2222-4222-8222-222222222222" }}
+          canWrite={false}
+        />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
   expect(screen.queryByText("private/alpha.deb")).not.toBeInTheDocument();
   await act(async () => answer({ data: { items: [] } } as never));
   expect(await screen.findByText("暂无制品")).toBeInTheDocument();
+});
+
+it("drops retained rows when the identity cache is cleared", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 0 } },
+  });
+  let answer!: (value: never) => void;
+  mockSearchRepositoryArtifacts
+    .mockResolvedValueOnce({
+      data: { items: [{ coordinate: "private/alpha.deb" }] },
+    } as never)
+    .mockImplementationOnce(
+      () => new Promise<never>((resolve) => (answer = resolve)),
+    );
+  const content = () => (
+    <QueryClientProvider client={client}>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={{ ...repository }} canWrite={false} />
+      </PreferencesProvider>
+    </QueryClientProvider>
+  );
+  const view = render(content());
+  await screen.findByText("private/alpha.deb");
+  act(() => client.clear());
+  view.rerender(content());
+  await waitFor(() =>
+    expect(mockSearchRepositoryArtifacts).toHaveBeenCalledTimes(2),
+  );
+  expect(screen.queryByText("private/alpha.deb")).not.toBeInTheDocument();
+  await act(async () => answer({ data: { items: [] } } as never));
+  await screen.findByText("暂无制品");
 });
 
 it("searches repository path fragments with contains", async () => {
@@ -99,9 +138,11 @@ it("searches repository path fragments with contains", async () => {
     data: { items: [] },
   } as never);
   render(
-    <PreferencesProvider>
-      <RepositoryArtifactsTab repo={repository} canWrite={false} />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={repository} canWrite={false} />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
   await screen.findByText("暂无制品");
   await user.type(screen.getByRole("searchbox"), "hello");
@@ -120,6 +161,98 @@ it("searches repository path fragments with contains", async () => {
   );
 });
 
+it("keeps the last successful rows and retry after a same-repository search fails", async () => {
+  mockSearchRepositoryArtifacts
+    .mockResolvedValueOnce({
+      data: {
+        items: [{ coordinate: "pool/alpha.deb" }],
+        nextPageToken: "old-next",
+      },
+    } as never)
+    .mockResolvedValueOnce({
+      error: { status: 500, message: "search failed" },
+    } as never)
+    .mockResolvedValueOnce({
+      data: { items: [{ coordinate: "pool/beta.deb" }] },
+    } as never);
+  render(
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={repository} canWrite={false} />
+      </PreferencesProvider>
+    </TestQueryProvider>,
+  );
+  await screen.findByText("pool/alpha.deb");
+  fireEvent.change(screen.getByRole("searchbox"), {
+    target: { value: "beta" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /^搜\s*索$/ }));
+  await screen.findByText("search failed");
+  expect(screen.getByText("pool/alpha.deb")).toBeInTheDocument();
+  expect(screen.queryByText("暂无制品")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "加载更多" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /重试/ }));
+  await screen.findByText("pool/beta.deb");
+  expect(screen.queryByText("pool/alpha.deb")).not.toBeInTheDocument();
+  expect(mockSearchRepositoryArtifacts.mock.calls[2][0]?.query).toEqual({
+    q: "beta",
+    pageSize: 50,
+    pageToken: undefined,
+    match: "contains",
+  });
+});
+
+it("retains every visible page through a failed first-page refresh and recovers on retry", async () => {
+  let answer!: (value: never) => void;
+  mockSearchRepositoryArtifacts
+    .mockResolvedValueOnce({
+      data: {
+        items: [{ coordinate: "pool/alpha.deb" }],
+        nextPageToken: "next-alpha",
+      },
+    } as never)
+    .mockResolvedValueOnce({
+      data: { items: [{ coordinate: "pool/alpha-2.deb" }] },
+    } as never)
+    .mockImplementationOnce(
+      () => new Promise<never>((resolve) => (answer = resolve)),
+    )
+    .mockResolvedValueOnce({
+      data: { items: [{ coordinate: "pool/reloaded.deb" }] },
+    } as never);
+  render(
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab repo={repository} canWrite={false} />
+      </PreferencesProvider>
+    </TestQueryProvider>,
+  );
+  await screen.findByText("pool/alpha.deb");
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }));
+  await screen.findByText("pool/alpha-2.deb");
+  fireEvent.click(screen.getByRole("button", { name: /^搜\s*索$/ }));
+  await waitFor(() =>
+    expect(mockSearchRepositoryArtifacts).toHaveBeenCalledTimes(3),
+  );
+  expect(screen.getByText("pool/alpha.deb")).toBeInTheDocument();
+  expect(screen.getByText("pool/alpha-2.deb")).toBeInTheDocument();
+  await act(async () =>
+    answer({ error: { status: 500, message: "refresh failed" } } as never),
+  );
+  await screen.findByText("refresh failed");
+  expect(screen.getByText("pool/alpha.deb")).toBeInTheDocument();
+  expect(screen.getByText("pool/alpha-2.deb")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /重试/ }));
+  await screen.findByText("pool/reloaded.deb");
+  expect(screen.queryByText("pool/alpha.deb")).not.toBeInTheDocument();
+  expect(screen.queryByText("pool/alpha-2.deb")).not.toBeInTheDocument();
+  expect(
+    mockSearchRepositoryArtifacts.mock.calls[3][0]?.query?.pageToken,
+  ).toBeUndefined();
+});
+
 it("continues the submitted query even while a different keyword is only a draft", async () => {
   mockSearchRepositoryArtifacts
     .mockResolvedValueOnce({
@@ -132,13 +265,15 @@ it("continues the submitted query even while a different keyword is only a draft
       data: { items: [{ coordinate: "pool/alpha-2.deb" }] },
     } as never);
   render(
-    <PreferencesProvider>
-      <RepositoryArtifactsTab
-        repo={repository}
-        canWrite={false}
-        artifactTarget="pool/alpha"
-      />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab
+          repo={repository}
+          canWrite={false}
+          artifactTarget="pool/alpha"
+        />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
   await screen.findByText("pool/alpha.deb");
   fireEvent.change(screen.getByRole("searchbox"), {
@@ -176,9 +311,11 @@ describe("RepositoryArtifactsTab APT browse", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab repo={repository} canWrite />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab repo={repository} canWrite />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText(path)).toBeInTheDocument();
@@ -224,9 +361,11 @@ describe("RepositoryArtifactsTab APT browse", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab repo={hostedRepository} canWrite />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab repo={hostedRepository} canWrite />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText(path)).toBeInTheDocument();
@@ -246,15 +385,17 @@ describe("RepositoryArtifactsTab Raw browse", () => {
       data: { items: [] },
     } as never);
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab
-          repo={{ ...repository, format: "maven", type: "hosted" }}
-          canWrite
-          artifactTarget={coordinate}
-          buildTarget={2}
-          assetTarget="com/acme/widget/2.0-SNAPSHOT/widget-2.0-20260907.010203-2.jar"
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab
+            repo={{ ...repository, format: "maven", type: "hosted" }}
+            canWrite
+            artifactTarget={coordinate}
+            buildTarget={2}
+            assetTarget="com/acme/widget/2.0-SNAPSHOT/widget-2.0-20260907.010203-2.jar"
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     await waitFor(() =>
       expect(mockSearchRepositoryArtifacts).toHaveBeenCalledWith({
@@ -302,9 +443,11 @@ describe("RepositoryArtifactsTab Raw browse", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab repo={rawRepository} canWrite />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab repo={rawRepository} canWrite />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await user.click(screen.getByText("目录"));
@@ -331,9 +474,11 @@ describe("RepositoryArtifactsTab Raw browse", () => {
       data: { items: [] },
     } as never);
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab repo={rawRepository} canWrite={false} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab repo={rawRepository} canWrite={false} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     expect(await screen.findByPlaceholderText("搜索路径…")).toBeInTheDocument();
     expect(
@@ -371,9 +516,11 @@ describe("RepositoryArtifactsTab Raw browse", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab repo={rawRepository} canWrite />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab repo={rawRepository} canWrite />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText(readablePath)).toBeInTheDocument();
@@ -423,13 +570,15 @@ describe("RepositoryArtifactsTab Raw browse", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryArtifactsTab
-          repo={rawRepository}
-          canWrite
-          artifactTarget={canonical}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryArtifactsTab
+            repo={rawRepository}
+            canWrite
+            artifactTarget={canonical}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -473,13 +622,15 @@ it("opens the directory for Raw Proxy and keeps cached assets read-only", async 
     },
   } as never);
   render(
-    <PreferencesProvider>
-      <RepositoryArtifactsTab
-        repo={proxy}
-        canWrite
-        artifactTarget={asset.coordinate}
-      />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryArtifactsTab
+          repo={proxy}
+          canWrite
+          artifactTarget={asset.coordinate}
+        />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
   await screen.findByDisplayValue(asset.coordinate);
   expect(

@@ -39,6 +39,7 @@ const base = {
   distributionSuite: false,
   digestReferences: false,
   publicArtifactColumn: "coordinate",
+  scannerSupport: true,
 } as const satisfies Partial<FormatDescriptor>;
 
 /**
@@ -57,6 +58,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     digestReferences: true,
     publicArtifactColumn: "image",
     publicVersionSource: "ociTags",
+    coordinateExample: "library/nginx",
   },
   maven: {
     ...base,
@@ -80,6 +82,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     separateAssetPath: true,
     groupKey: mavenGA,
     publicGrouping: "mavenBuilds",
+    coordinateExample: "org.example:gateway-widget:1.2.3",
   },
   npm: {
     ...base,
@@ -101,6 +104,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
         "Upstream metadata and cache status appear after npm install retrieves a package.",
       ],
     },
+    coordinateExample: "@company/gateway-widget@1.2.3",
   },
   pypi: {
     ...base,
@@ -122,6 +126,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
         "Upstream files and cache status appear after pip install retrieves a project.",
       ],
     },
+    coordinateExample: "gateway-widget@1.2.3",
   },
   go: {
     ...base,
@@ -143,6 +148,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
       ],
     },
     upstreamAuthentication: true,
+    coordinateExample: "example.com/team/gateway-widget@v1.2.3",
   },
   cargo: {
     ...base,
@@ -158,6 +164,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
       label: `/cargo/${name}/`,
     }),
     publishGuide: true,
+    scannerSupport: false,
   },
   conan: {
     ...base,
@@ -168,6 +175,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     nameListing: true,
     publicVersionSource: "conanRevisions",
     publicGrouping: "conanRevisions",
+    coordinateExample: "zlib/1.3.1@company/stable#recipe-revision",
   },
   raw: {
     ...base,
@@ -180,6 +188,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     securityColumn: "always",
     consoleUpload: true,
     retentionModel: "paths",
+    coordinateExample: "releases/gateway-widget-1.2.3.zip",
   },
   apt: {
     ...base,
@@ -212,5 +221,8 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     hostedOnlyJobs: true,
     distributionSuite: true,
     publicArtifactColumn: "aptPath",
+    coordinateExample:
+      "pool/main/g/gateway-widget/gateway-widget_1.2.3_amd64.deb",
+    scannerSupport: false,
   },
 };

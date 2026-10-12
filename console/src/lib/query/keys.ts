@@ -15,6 +15,26 @@ export const repositoryKeys = {
   effectiveAccess: (id: string) =>
     [...repositoryKeys.detail(id), "effective-access"] as const,
   capacity: (id: string) => [...repositoryKeys.detail(id), "capacity"] as const,
+  retentionPolicy: (id: string) =>
+    [...repositoryKeys.detail(id), "retention-policy"] as const,
+  securityPolicy: (id: string) =>
+    [...repositoryKeys.detail(id), "security-policy"] as const,
+  quarantineReadPolicy: (id: string) =>
+    [...repositoryKeys.detail(id), "quarantine-read-policy"] as const,
+  aptSigningState: (id: string) =>
+    [...repositoryKeys.detail(id), "apt-signing-state"] as const,
+  proxyHealth: (id: string) =>
+    [...repositoryKeys.detail(id), "proxy-health"] as const,
+  lifecycleJobs: (id: string) =>
+    [...repositoryKeys.detail(id), "lifecycle-jobs"] as const,
+  tombstones: (id: string) =>
+    [...repositoryKeys.detail(id), "tombstones"] as const,
+  scanJobs: (id: string) =>
+    [...repositoryKeys.detail(id), "scan-jobs"] as const,
+  replicationPlans: (id: string) =>
+    [...repositoryKeys.detail(id), "replication-plans"] as const,
+  aptLifecycle: (id: string, suite: string) =>
+    [...repositoryKeys.detail(id), "apt-lifecycle", suite] as const,
 };
 
 export const identityKeys = {

@@ -16,6 +16,7 @@ import {
 import type { Repository, RepositoryCapabilities } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RepositoryScanningTab } from "./RepositoryScanningTab";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", () => ({
   createRepositoryArtifactScan: vi.fn(),
@@ -74,16 +75,18 @@ describe("RepositoryScanningTab", () => {
       })),
     } as never);
     const { container } = render(
-      <PreferencesProvider>
-        <RepositoryScanningTab
-          repo={repository}
-          capabilities={capabilities}
-          capabilitiesLoading={false}
-          capabilitiesError={null}
-          canManage
-          canViewJobs
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryScanningTab
+            repo={repository}
+            capabilities={capabilities}
+            capabilitiesLoading={false}
+            capabilitiesError={null}
+            canManage
+            canViewJobs
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     expect(
       await screen.findByText(
@@ -133,16 +136,18 @@ describe("RepositoryScanningTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryScanningTab
-          repo={repository}
-          capabilities={capabilities}
-          capabilitiesLoading={false}
-          capabilitiesError={null}
-          canManage
-          canViewJobs
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryScanningTab
+            repo={repository}
+            capabilities={capabilities}
+            capabilitiesLoading={false}
+            capabilitiesError={null}
+            canManage
+            canViewJobs
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("选择并扫描不可变制品")).toBeInTheDocument();
@@ -184,16 +189,18 @@ describe("RepositoryScanningTab", () => {
     mockListJobs.mockResolvedValue({ data: [] } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryScanningTab
-          repo={repository}
-          capabilities={capabilities}
-          capabilitiesLoading={false}
-          capabilitiesError={null}
-          canManage
-          canViewJobs
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryScanningTab
+            repo={repository}
+            capabilities={capabilities}
+            capabilitiesLoading={false}
+            capabilitiesError={null}
+            canManage
+            canViewJobs
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     const artifactPicker = await screen.findByRole("combobox", {
@@ -232,16 +239,18 @@ describe("RepositoryScanningTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryScanningTab
-          repo={repository}
-          capabilities={capabilities}
-          capabilitiesLoading={false}
-          capabilitiesError={null}
-          canManage
-          canViewJobs
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryScanningTab
+            repo={repository}
+            capabilities={capabilities}
+            capabilitiesLoading={false}
+            capabilitiesError={null}
+            canManage
+            canViewJobs
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await user.click(
@@ -267,20 +276,22 @@ describe("RepositoryScanningTab", () => {
     mockListJobs.mockResolvedValue({ data: [] } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryScanningTab
-          repo={repository}
-          capabilities={{
-            ...capabilities,
-            artifactScanning: false,
-            publicationScanning: false,
-          }}
-          capabilitiesLoading={false}
-          capabilitiesError={null}
-          canManage
-          canViewJobs
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryScanningTab
+            repo={repository}
+            capabilities={{
+              ...capabilities,
+              artifactScanning: false,
+              publicationScanning: false,
+            }}
+            capabilitiesLoading={false}
+            capabilitiesError={null}
+            canManage
+            canViewJobs
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -307,16 +318,18 @@ describe("RepositoryScanningTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryScanningTab
-          repo={repository}
-          capabilities={capabilities}
-          capabilitiesLoading={false}
-          capabilitiesError={null}
-          canManage
-          canViewJobs
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryScanningTab
+            repo={repository}
+            capabilities={capabilities}
+            capabilitiesLoading={false}
+            capabilitiesError={null}
+            canManage
+            canViewJobs
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await user.click(
@@ -335,16 +348,18 @@ describe("RepositoryScanningTab", () => {
 
   it("does not turn capability failures into scanner configuration advice", async () => {
     render(
-      <PreferencesProvider>
-        <RepositoryScanningTab
-          repo={repository}
-          capabilities={null}
-          capabilitiesLoading={false}
-          capabilitiesError={new Error("capability request failed")}
-          canManage={false}
-          canViewJobs={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryScanningTab
+            repo={repository}
+            capabilities={null}
+            capabilitiesLoading={false}
+            capabilitiesError={new Error("capability request failed")}
+            canManage={false}
+            canViewJobs={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("请求出错")).toBeInTheDocument();
@@ -356,16 +371,18 @@ describe("RepositoryScanningTab", () => {
 
   it("keeps intelligence mutations disabled for a read-only identity", async () => {
     render(
-      <PreferencesProvider>
-        <RepositoryScanningTab
-          repo={repository}
-          capabilities={capabilities}
-          capabilitiesLoading={false}
-          capabilitiesError={null}
-          canManage={false}
-          canViewJobs={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryScanningTab
+            repo={repository}
+            capabilities={capabilities}
+            capabilitiesLoading={false}
+            capabilitiesError={null}
+            canManage={false}
+            canViewJobs={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -380,16 +397,18 @@ describe("RepositoryScanningTab", () => {
   it("asks OCI users for an image name while keeping the digest separate", async () => {
     const user = userEvent.setup();
     render(
-      <PreferencesProvider>
-        <RepositoryScanningTab
-          repo={{ ...repository, format: "oci", name: "oci-hosted" }}
-          capabilities={{ ...capabilities, format: "oci" }}
-          capabilitiesLoading={false}
-          capabilitiesError={null}
-          canManage
-          canViewJobs={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryScanningTab
+            repo={{ ...repository, format: "oci", name: "oci-hosted" }}
+            capabilities={{ ...capabilities, format: "oci" }}
+            capabilitiesLoading={false}
+            capabilitiesError={null}
+            canManage
+            canViewJobs={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await user.click(
@@ -412,16 +431,18 @@ describe("RepositoryScanningTab", () => {
     mockListJobs.mockResolvedValue({ data: [] } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryScanningTab
-          repo={{ ...repository, format: "apt", name: "apt-hosted" }}
-          capabilities={{ ...capabilities, format: "apt" }}
-          capabilitiesLoading={false}
-          capabilitiesError={null}
-          canManage
-          canViewJobs={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryScanningTab
+            repo={{ ...repository, format: "apt", name: "apt-hosted" }}
+            capabilities={{ ...capabilities, format: "apt" }}
+            capabilitiesLoading={false}
+            capabilitiesError={null}
+            canManage
+            canViewJobs={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await user.click(

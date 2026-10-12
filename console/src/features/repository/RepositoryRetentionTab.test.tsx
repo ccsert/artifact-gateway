@@ -5,6 +5,7 @@ import { dryRunRepositoryRetention, getRetentionPolicy } from "../../client";
 import type { Repository } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RepositoryRetentionTab } from "./RepositoryRetentionTab";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", () => ({
   dryRunRepositoryRetention: vi.fn(),
@@ -50,9 +51,11 @@ describe("RepositoryRetentionTab", () => {
       },
     } as never);
     render(
-      <PreferencesProvider>
-        <RepositoryRetentionTab repo={{ ...repository, format: "cargo" }} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryRetentionTab repo={{ ...repository, format: "cargo" }} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     expect(
       await screen.findByRole("button", { name: "保存策略" }),
@@ -107,11 +110,13 @@ describe("RepositoryRetentionTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryRetentionTab
-          repo={{ ...repository, format: expected.format }}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryRetentionTab
+            repo={{ ...repository, format: expected.format }}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText(expected.age)).toBeInTheDocument();
@@ -134,9 +139,11 @@ describe("RepositoryRetentionTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryRetentionTab repo={repository} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryRetentionTab repo={repository} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("npm 包版本保留天数")).toBeInTheDocument();
@@ -162,9 +169,11 @@ describe("RepositoryRetentionTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryRetentionTab repo={{ ...repository, format: "pypi" }} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryRetentionTab repo={{ ...repository, format: "pypi" }} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -219,9 +228,11 @@ describe("RepositoryRetentionTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryRetentionTab repo={repository} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryRetentionTab repo={repository} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await user.click(await screen.findByRole("button", { name: "试运行" }));
@@ -273,9 +284,11 @@ describe("RepositoryRetentionTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryRetentionTab repo={{ ...repository, format: "raw" }} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryRetentionTab repo={{ ...repository, format: "raw" }} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await user.click(await screen.findByRole("button", { name: "试运行" }));

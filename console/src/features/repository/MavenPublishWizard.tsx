@@ -1,11 +1,6 @@
 import { useState } from "react";
-import {
-  DeleteOutlined,
-  SendOutlined,
-  UploadOutlined,
-} from "@ant-design/icons";
+import { SendOutlined, UploadOutlined } from "@ant-design/icons";
 import { Button, Input, Popconfirm, Result, Select, Steps, Upload } from "antd";
-import type { ColumnsType } from "antd/es/table";
 import type { UploadProps } from "antd";
 import {
   createPublishSession,
@@ -16,10 +11,11 @@ import type { PublishSession, DeclaredObject } from "../../client";
 import { useAuth } from "../../lib/auth";
 import { Card, Field } from "../../components/ui/Layout";
 import { ErrorBanner } from "../../components/ui/Feedback";
-import { StateBadge, Badge } from "../../components/ui/Badge";
-import { formatBytes, formatDate, shortDigest } from "../../lib/format";
+import { StateBadge } from "../../components/ui/Badge";
+import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
+import { stagedFileColumns, type StagedFile } from "./mavenPublishColumns";
 
 async function sha256Hex(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
@@ -27,14 +23,6 @@ async function sha256Hex(file: File): Promise<string> {
   return Array.from(new Uint8Array(hash))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-}
-
-interface StagedFile {
-  name: string;
-  digest: string;
-  size: number;
-  file: File;
-  uploaded: boolean;
 }
 
 type Step = "declare" | "upload" | "done";
@@ -198,83 +186,7 @@ export function MavenPublishWizard({
     return Upload.LIST_IGNORE;
   };
   const currentStep = step === "declare" ? 0 : step === "upload" ? 1 : 2;
-  const stagedColumns: ColumnsType<StagedFile> = [
-    {
-      title: text("文件名", "File name"),
-      dataIndex: "name",
-      key: "name",
-      render: (value: string) => (
-        <span className="font-mono text-xs text-fg">{value}</span>
-      ),
-    },
-    {
-      title: "sha256",
-      dataIndex: "digest",
-      key: "digest",
-      width: 180,
-      render: (value: string) => (
-        <span className="font-mono text-xs text-fg-tertiary" title={value}>
-          {shortDigest(value)}
-        </span>
-      ),
-    },
-    {
-      title: text("大小", "Size"),
-      dataIndex: "size",
-      key: "size",
-      width: 110,
-      render: (value: number) => (
-        <span className="text-xs text-fg-secondary">{formatBytes(value)}</span>
-      ),
-    },
-    {
-      title: text("操作", "Actions"),
-      key: "actions",
-      width: 90,
-      render: (_, file) => (
-        <Button
-          type="text"
-          size="small"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => removeFile(file.name)}
-        >
-          {text("移除", "Remove")}
-        </Button>
-      ),
-    },
-  ];
-  const uploadColumns: ColumnsType<StagedFile> = [
-    {
-      title: text("文件名", "File name"),
-      dataIndex: "name",
-      key: "name",
-      render: (value: string) => (
-        <span className="font-mono text-xs text-fg">{value}</span>
-      ),
-    },
-    {
-      title: text("大小", "Size"),
-      dataIndex: "size",
-      key: "size",
-      width: 120,
-      render: (value: number) => (
-        <span className="text-xs text-fg-secondary">{formatBytes(value)}</span>
-      ),
-    },
-    {
-      title: text("状态", "Status"),
-      dataIndex: "uploaded",
-      key: "uploaded",
-      width: 120,
-      render: (value: boolean) =>
-        value ? (
-          <Badge tone="success">{text("已上传", "Uploaded")}</Badge>
-        ) : (
-          <Badge tone="neutral">{text("待上传", "Pending")}</Badge>
-        ),
-    },
-  ];
+  const { stagedColumns, uploadColumns } = stagedFileColumns(text, removeFile);
 
   return (
     <div className="space-y-5">

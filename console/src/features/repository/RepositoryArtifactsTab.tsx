@@ -1,17 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { FolderOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import { Button, Input, Segmented, Select } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { listProxyCacheEntries } from "../../client";
 import type { ArtifactSearchMatch, BrowseNode, Repository } from "../../client";
-import { Badge } from "../../components/ui/Badge";
-import { ArtifactSecurityBadge } from "../artifact-detail/ArtifactSecurityBadge";
-import {
-  EmptyState,
-  ErrorBanner,
-  Loading,
-  isNotFound,
-} from "../../components/ui/Feedback";
+import { ErrorBanner, Loading, isNotFound } from "../../components/ui/Feedback";
 import { Pagination } from "../../components/ui/Layout";
 import { RawUploadDialog } from "./RawUploadDialog";
 import {
@@ -19,17 +10,10 @@ import {
   formatDescriptor,
   supportsDirectoryBrowse,
 } from "../../formats";
-import { listArtifactPage, type ArtifactPage } from "../../formats/listers";
 import { formatViews } from "../../formats/views";
 import { useAuth } from "../../lib/auth";
-import {
-  formatBytes,
-  formatDate,
-  formatNumber,
-  shortDigest,
-} from "../../lib/format";
+import { formatNumber } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-import { decodeRawPathForDisplay } from "../../lib/rawPath";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 import { RepositoryBrowseTree } from "./RepositoryBrowseTree";
 import {
@@ -39,61 +23,11 @@ import {
   type ProxyMavenAssetFilter,
 } from "./ProxyMavenCacheSection";
 import type { ArtifactRow } from "./artifactRow";
+import { artifactColumns } from "./artifactColumns";
+import { useArtifactPages } from "./artifactPages";
+import { ArtifactsEmptyState } from "./ArtifactsEmptyState";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
-
 import { ArtifactSearchMatchControl } from "../../components/ui/ArtifactSearchMatchControl";
-
-/** The proxy cache answered without a page; shown as its own message. */
-const PROXY_CACHE_UNAVAILABLE = Symbol("proxy-cache-unavailable");
-
-/** One page of a Maven proxy's cache, grouped by version. */
-async function listProxyMavenPage(
-  repositoryId: string,
-  query: string,
-  assetFilter: ProxyMavenAssetFilter | "all",
-  pageToken?: string,
-  signal?: AbortSignal,
-): Promise<ArtifactPage & { totalEstimate?: number }> {
-  try {
-    const { data: pageData, error: requestError } = await listProxyCacheEntries(
-      {
-        path: { repositoryId },
-        signal,
-        query: {
-          groupBy: "version",
-          assetFilter,
-          q: query || undefined,
-          pageSize: PROXY_MAVEN_PAGE_SIZE,
-          pageToken,
-        },
-      },
-    );
-    if (requestError || !pageData) {
-      return { items: [], error: PROXY_CACHE_UNAVAILABLE };
-    }
-    return {
-      items: pageData.items.map((item) => {
-        const primary = item.assets?.filter((asset) => !asset.sidecar) ?? [];
-        return {
-          key: item.key,
-          coordinate: item.coordinate,
-          latestVersion: item.version,
-          size: item.size,
-          contentType: item.extensions?.join(", ") || item.contentType,
-          publisher: item.member,
-          fileCount: item.assetCount,
-          primaryFiles: primary.map((asset) => asset.name),
-          files: item.assets,
-        } satisfies ArtifactRow;
-      }),
-      nextPageToken: pageData.nextPageToken,
-      totalEstimate: pageData.totalEstimate,
-      error: null,
-    };
-  } catch (error) {
-    return { items: [], error };
-  }
-}
 
 export function RepositoryArtifactsTab({
   repo,
@@ -124,143 +58,89 @@ export function RepositoryArtifactsTab({
   const [q, setQ] = useState(
     artifactCoordinateForDisplay(repo.format, artifactTarget),
   );
+  const [view, setView] = useState<"directory" | "list">("list");
+  const [proxyAssetFilter, setProxyAssetFilter] =
+    useState<ProxyMavenAssetFilter>("primary");
+  // The search that is loaded; `q` is what the search box holds.
+  const [query, setQuery] = useState(q);
+  // A deep link names an exact artifact, so it searches by prefix.
   const [match, setMatch] = useState<ArtifactSearchMatch>(
     artifactTarget ? "prefix" : "contains",
   );
-  const matchRef = useRef(match);
-  const submittedQuery = useRef(q);
-  const requestRef = useRef<AbortController | null>(null);
-  const moreInFlight = useRef(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [view, setView] = useState<"directory" | "list">("list");
-  const [rows, setRows] = useState<ArtifactRow[]>([]);
-  const [nextToken, setNextToken] = useState<string | undefined>();
-  const [proxyPage, setProxyPage] = useState(1);
-  const [proxyTotal, setProxyTotal] = useState(0);
-  const [proxyAssetFilter, setProxyAssetFilter] =
-    useState<ProxyMavenAssetFilter>("primary");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<unknown>(null);
-  const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  // Which row is open: the reader's choice for the current answer, otherwise
+  // the deep-linked artifact.
+  const [expandedChoice, setExpandedChoice] = useState<{
+    key: string | null;
+    page: unknown;
+  } | null>(null);
 
   const format = repo.format;
   const proxyMaven = format === "maven" && repo.type === "proxy";
   const canUploadRaw =
     canWrite && Boolean(descriptor?.consoleUpload) && repo.type !== "proxy";
-  const emptyHint =
-    repo.type === "hosted" || repo.type === "proxy"
-      ? descriptor?.emptyHint[repo.type]
-      : undefined;
   const supportsDirectory = supportsDirectoryBrowse(format, repo.type);
 
   useEffect(() => {
     setView("list");
-    setRows([]);
-    setNextToken(undefined);
-    setError(null);
-    setExpandedImage(null);
-  }, [repo.id, format]);
+  }, [repo.id]);
 
-  const load = useCallback(
-    async (query: string, pageToken?: string) => {
-      if (pageToken && moreInFlight.current) return;
-      requestRef.current?.abort();
-      const controller = new AbortController();
-      requestRef.current = controller;
-      moreInFlight.current = Boolean(pageToken);
-      setLoadingMore(Boolean(pageToken));
-      try {
-        if (!pageToken) {
-          submittedQuery.current = query;
-          setNextToken(undefined);
-          setLoading(true);
-          setError(null);
-        }
-        // One await for either source: the proxy cache or the format's list.
-        const result: ArtifactPage & { totalEstimate?: number } =
-          await (proxyMaven
-            ? listProxyMavenPage(
-                repo.id,
-                query,
-                assetTarget ? "all" : proxyAssetFilter,
-                pageToken,
-                controller.signal,
-              )
-            : listArtifactPage(format, {
-                repositoryId: repo.id,
-                query,
-                pageToken,
-                pageSize: 50,
-                match: matchRef.current,
-                signal: controller.signal,
-                artifactTarget,
-                buildTarget,
-              }));
-        if (controller.signal.aborted) return;
-        const err =
-          result.error === PROXY_CACHE_UNAVAILABLE
-            ? new Error(
-                text("读取 Proxy 缓存失败", "Failed to load proxy cache"),
-              )
-            : result.error;
-        const items = result.items;
-        const next = result.nextPageToken;
-        if (proxyMaven && !err) {
-          setProxyTotal(result.totalEstimate ?? 0);
-          setProxyPage((current) => (pageToken ? current + 1 : 1));
-        }
+  const artifacts = useArtifactPages({
+    repo,
+    proxyMaven,
+    query,
+    match,
+    assetFilter: assetTarget ? "all" : proxyAssetFilter,
+    artifactTarget,
+    buildTarget,
+    unavailableMessage: text(
+      "读取 Proxy 缓存失败",
+      "Failed to load proxy cache",
+    ),
+  });
+  const pages = artifacts.data?.pages;
+  const rows = pages?.flatMap((page) => page.items) ?? [];
+  const firstPage = pages?.[0];
+  const nextToken = artifacts.hasNextPage
+    ? pages?.at(-1)?.nextPageToken
+    : undefined;
+  const proxyTotal = pages?.at(-1)?.totalEstimate ?? 0;
+  const proxyPage = pages?.length ?? 1;
+  const loading = artifacts.isPending;
+  const refreshing = artifacts.isFetching && !artifacts.isFetchingNextPage;
+  const error = artifacts.error;
+  const targetKey =
+    artifactTarget && firstPage
+      ? (firstPage.items.find(
+          (item) =>
+            item.coordinate === artifactTarget &&
+            (proxyMaven || !buildTarget || item.buildNumber === buildTarget),
+        )?.key ?? null)
+      : null;
+  const expandedImage =
+    expandedChoice && expandedChoice.page === firstPage
+      ? expandedChoice.key
+      : targetKey;
+  const setExpandedImage = (key: string | null) =>
+    setExpandedChoice({ key, page: firstPage });
 
-        setLoading(false);
-        if (err) {
-          setError(err);
-          return;
-        }
-        setRows((prev) => (pageToken ? [...prev, ...items] : items));
-        setNextToken(next);
-        if (!pageToken && artifactTarget) {
-          const target = items.find(
-            (item) =>
-              item.coordinate === artifactTarget &&
-              (proxyMaven || !buildTarget || item.buildNumber === buildTarget),
-          );
-          setExpandedImage(target?.key ?? null);
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) setError(error);
-      } finally {
-        if (!controller.signal.aborted) {
-          moreInFlight.current = false;
-          setLoading(false);
-          setLoadingMore(false);
-        }
-      }
-    },
-    [
-      repo.id,
-      format,
-      proxyMaven,
-      proxyAssetFilter,
-      artifactTarget,
-      buildTarget,
-      assetTarget,
-      text,
-      // A state setter never changes; the React Compiler infers it as a
-      // dependency of this callback, and listing it keeps the memoization.
-      setExpandedImage,
-    ],
-  );
+  /** Load `value` from its first page, or reload it when it is the loaded search. */
+  const load = (value: string) => {
+    if (value !== query) {
+      setQuery(value);
+      return;
+    }
+    void artifacts.reload();
+  };
 
+  // A new deep link replaces both the search box and the loaded search.
   useEffect(() => {
     const targetQuery = proxyMaven
       ? (assetTarget ?? artifactTarget)
       : artifactCoordinateForDisplay(format, artifactTarget);
-    const matching = artifactTarget ? "prefix" : "contains";
-    matchRef.current = matching;
-    setMatch(matching);
     setQ(targetQuery);
-    void load(targetQuery);
-    return () => requestRef.current?.abort();
-  }, [artifactTarget, assetTarget, format, proxyMaven, load]);
+    setQuery(targetQuery);
+    setMatch(artifactTarget ? "prefix" : "contains");
+  }, [artifactTarget, assetTarget, format, proxyMaven]);
 
   const searchPlaceholder = descriptor
     ? text(...descriptor.searchPlaceholder)
@@ -272,261 +152,13 @@ export function RepositoryArtifactsTab({
     (descriptor?.securityColumn === "versionSearch" &&
       Boolean(q) &&
       !proxyMaven);
-  const securityColumn: ColumnsType<ArtifactRow>[number] = {
-    title: text("安全", "Security"),
-    key: "intelligence",
-    width: 150,
-    render: (_, record) => (
-      <ArtifactSecurityBadge summary={record.intelligence} text={text} />
-    ),
-  };
-
-  const columns: ColumnsType<ArtifactRow> = descriptor?.nameListing
-    ? [
-        {
-          title: text("名称", "Name"),
-          dataIndex: "coordinate",
-          key: "coordinate",
-          ellipsis: true,
-          render: (value: string, record) => (
-            <span
-              className="font-mono text-xs text-fg"
-              title={record.coordinate}
-            >
-              {value}
-            </span>
-          ),
-        },
-      ]
-    : proxyMaven
-      ? [
-          {
-            title: text("Maven 坐标", "Maven coordinate"),
-            dataIndex: "coordinate",
-            key: "coordinate",
-            ellipsis: true,
-            render: (value: string, record) => (
-              <span
-                className="font-mono text-xs text-fg"
-                title={record.coordinate}
-              >
-                {value}
-              </span>
-            ),
-          },
-          {
-            title: text("文件", "Files"),
-            key: "fileCount",
-            width: 120,
-            render: (_, record) => (
-              <Badge tone="neutral">
-                {text(
-                  `${record.fileCount ?? record.files?.length ?? 0} 个文件`,
-                  `${record.fileCount ?? record.files?.length ?? 0} files`,
-                )}
-              </Badge>
-            ),
-          },
-          {
-            title: text("主文件大小", "Primary size"),
-            key: "size",
-            width: 140,
-            render: (_, record) => (
-              <span className="text-xs text-fg-secondary">
-                {formatBytes(record.size)}
-              </span>
-            ),
-          },
-          {
-            title: text("类型", "Type"),
-            dataIndex: "contentType",
-            key: "contentType",
-            width: 180,
-            ellipsis: true,
-            render: (value: string | undefined) => (
-              <span className="text-xs text-fg-tertiary">{value ?? "—"}</span>
-            ),
-          },
-        ]
-      : descriptor?.assetColumns
-        ? [
-            {
-              title: text("APT 路径", "APT path"),
-              dataIndex: "coordinate",
-              key: "coordinate",
-              ellipsis: true,
-              render: (value: string, record: ArtifactRow) => (
-                <span
-                  className="font-mono text-xs text-fg"
-                  title={record.coordinate}
-                >
-                  {value}
-                </span>
-              ),
-            },
-            {
-              title: text("内容类型", "Content type"),
-              dataIndex: "contentType",
-              key: "contentType",
-              width: 220,
-              ellipsis: true,
-              render: (value: string | undefined) => (
-                <span className="text-xs text-fg-tertiary">{value ?? "—"}</span>
-              ),
-            },
-            {
-              title: text("大小", "Size"),
-              dataIndex: "size",
-              key: "size",
-              width: 120,
-              render: (value: number | undefined) => (
-                <span className="text-xs text-fg-secondary">
-                  {formatBytes(value)}
-                </span>
-              ),
-            },
-            {
-              title: text("摘要", "Digest"),
-              dataIndex: "digest",
-              key: "digest",
-              width: 180,
-              ellipsis: true,
-              render: (value: string | undefined) => (
-                <span
-                  className="font-mono text-xs text-fg-tertiary"
-                  title={value}
-                >
-                  {shortDigest(value)}
-                </span>
-              ),
-            },
-            {
-              title:
-                repo.type === "proxy"
-                  ? text("首次缓存", "First cached")
-                  : text("已发布", "Published"),
-              dataIndex: "createdAt",
-              key: "createdAt",
-              width: 180,
-              render: (value: string | undefined) => (
-                <span className="whitespace-nowrap text-xs text-fg-tertiary">
-                  {formatDate(value)}
-                </span>
-              ),
-            },
-          ]
-        : descriptor?.versionColumns
-          ? [
-              {
-                title: text(...descriptor.artifactColumn),
-                dataIndex: "coordinate",
-                key: "coordinate",
-                ellipsis: true,
-                render: (value: string, record) => (
-                  <span
-                    className="font-mono text-xs text-fg"
-                    title={record.coordinate}
-                  >
-                    {value}
-                  </span>
-                ),
-              },
-              {
-                title: text("版本", "Versions"),
-                key: "versionCount",
-                width: 120,
-                render: (_, record) => (
-                  <Badge tone="neutral">
-                    {record.versionCount !== undefined
-                      ? text(
-                          `${record.versionCount} 个版本`,
-                          `${record.versionCount} versions`,
-                        )
-                      : text("展开查看", "Open to inspect")}
-                  </Badge>
-                ),
-              },
-              {
-                title: text("最新版本", "Latest version"),
-                dataIndex: "latestVersion",
-                key: "latestVersion",
-                width: 160,
-                render: (value: string | undefined) => (
-                  <span className="font-mono text-xs text-[var(--ag-content-secondary)]">
-                    {value ?? "—"}
-                  </span>
-                ),
-              },
-              {
-                title: text("更新时间", "Updated"),
-                dataIndex: "createdAt",
-                key: "createdAt",
-                width: 180,
-                render: (value: string | undefined) => (
-                  <span className="whitespace-nowrap text-xs text-fg-tertiary">
-                    {formatDate(value)}
-                  </span>
-                ),
-              },
-              ...(showSecurityColumn ? [securityColumn] : []),
-            ]
-          : [
-              {
-                title: text("文件路径", "File path"),
-                dataIndex: "coordinate",
-                key: "coordinate",
-                ellipsis: true,
-                render: (value: string) => {
-                  const displayPath = decodeRawPathForDisplay(value);
-                  return (
-                    <span
-                      className="font-mono text-xs text-fg"
-                      title={displayPath}
-                    >
-                      {displayPath}
-                    </span>
-                  );
-                },
-              },
-              {
-                title: text("摘要", "Digest"),
-                dataIndex: "digest",
-                key: "digest",
-                width: 180,
-                ellipsis: true,
-                render: (value: string | undefined) => (
-                  <span
-                    className="font-mono text-xs text-fg-tertiary"
-                    title={value}
-                  >
-                    {shortDigest(value)}
-                  </span>
-                ),
-              },
-              {
-                title: text("大小", "Size"),
-                dataIndex: "size",
-                key: "size",
-                width: 120,
-                render: (value: number | undefined) => (
-                  <span className="text-xs text-fg-secondary">
-                    {formatBytes(value)}
-                  </span>
-                ),
-              },
-              {
-                title: text("最后更新时间", "Last updated"),
-                dataIndex: "createdAt",
-                key: "createdAt",
-                width: 180,
-                render: (value: string | undefined) => (
-                  <span className="whitespace-nowrap text-xs text-fg-tertiary">
-                    {formatDate(value)}
-                  </span>
-                ),
-              },
-              ...(showSecurityColumn ? [securityColumn] : []),
-            ];
+  const columns = artifactColumns({
+    descriptor,
+    repo,
+    proxyMaven,
+    showSecurityColumn,
+    text,
+  });
 
   const FormatDetail = formatViews(format).ArtifactDetail;
   const expandedRowRender = (r: ArtifactRow) => {
@@ -636,15 +268,14 @@ export function RepositoryArtifactsTab({
           <ArtifactSearchMatchControl
             value={match}
             onChange={(value) => {
-              matchRef.current = value;
               setMatch(value);
-              setExpandedImage(null);
-              void load(q);
+              // Changing the match runs the search box's current text.
+              setQuery(q);
             }}
           />
         )}
         <Input.Search
-          loading={loading}
+          loading={refreshing}
           allowClear
           className="ag-artifact-view-search"
           placeholder={
@@ -736,23 +367,7 @@ export function RepositoryArtifactsTab({
               onWarmed={() => void load(q)}
             />
           )}
-          <EmptyState
-            title={
-              q
-                ? text("没有匹配的制品", "No matching artifacts")
-                : text("暂无制品", "No artifacts")
-            }
-            hint={
-              q
-                ? text("换个关键词试试", "Try a different search term")
-                : emptyHint
-                  ? text(...emptyHint)
-                  : text(
-                      `通过 ${format} 客户端推送制品后会显示在这里`,
-                      "Push artifacts with the matching client to display them here.",
-                    )
-            }
-          />
+          <ArtifactsEmptyState searching={Boolean(q)} repo={repo} />
         </>
       ) : (
         <>
@@ -783,9 +398,10 @@ export function RepositoryArtifactsTab({
           />
           <Pagination
             hasMore={!!nextToken}
-            loading={loadingMore}
-            disabled={loading}
-            onMore={() => load(submittedQuery.current, nextToken)}
+            loading={artifacts.isFetchingNextPage}
+            onMore={() => {
+              if (!artifacts.isFetchingNextPage) void artifacts.fetchNextPage();
+            }}
           />
           {proxyMaven && proxyTotal > 0 && (
             <div className="border-t border-line px-4 py-2 text-center text-xs text-fg-tertiary">

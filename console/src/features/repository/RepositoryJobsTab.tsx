@@ -1,15 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { SyncOutlined } from "@ant-design/icons";
 import { Button, Popconfirm } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   reconcileRepositoryArtifactIntelligence,
   reconcileRepositoryArtifactScans,
-  listRepositoryLifecycleJobs,
-  listRepositoryTombstones,
-  restoreRepositoryArtifact,
 } from "../../client";
-import type { ArtifactTombstone, LifecycleJob, Repository } from "../../client";
+import type { LifecycleJob, Repository } from "../../client";
 import { Badge, StateBadge } from "../../components/ui/Badge";
 import { LifecycleJobDetails } from "../operations/LifecycleJobDetails";
 import {
@@ -19,16 +16,19 @@ import {
   Notice,
   isNotFound,
 } from "../../components/ui/Feedback";
-import { Pagination } from "../../components/ui/Layout";
-import { formatDate, shortDigest } from "../../lib/format";
+import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { RepositoryFeatureUnavailable } from "./RepositoryFeatureUnavailable";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
+import { useLifecycleJobs } from "./repositoryQueries";
+
+/** The repository's lifecycle jobs, polled every 10 seconds, with reconciles. */
 export function RepositoryJobsTab({ repo }: { repo: Repository }) {
   const { text } = usePreferences();
-  const [jobs, setJobs] = useState<LifecycleJob[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const jobsQuery = useLifecycleJobs(repo.id);
+  const jobs = jobsQuery.data ?? null;
+  const error = jobsQuery.error;
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [reconcileError, setReconcileError] = useState<unknown>(null);
   const [reconcileNotice, setReconcileNotice] = useState("");
@@ -37,23 +37,7 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
   const [scanReconcileError, setScanReconcileError] = useState<unknown>(null);
   const [scanReconcileNotice, setScanReconcileNotice] = useState("");
 
-  const load = useCallback(async () => {
-    setError(null);
-    const { data, error: err } = await listRepositoryLifecycleJobs({
-      path: { repositoryId: repo.id },
-    });
-    if (err) {
-      setError(err);
-      return;
-    }
-    setJobs(data ?? []);
-  }, [repo.id]);
-
-  useEffect(() => {
-    void load();
-    const timer = setInterval(() => void load(), 10000);
-    return () => clearInterval(timer);
-  }, [load]);
+  const load = () => jobsQuery.refetch();
 
   const failedIntelligenceJobs =
     jobs?.filter(
@@ -288,167 +272,6 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
         pagination={false}
         scroll={{ x: 1100 }}
       />
-    </div>
-  );
-}
-
-export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
-  const { text } = usePreferences();
-  const [items, setItems] = useState<ArtifactTombstone[]>([]);
-  const [nextToken, setNextToken] = useState<string | undefined>();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<unknown>(null);
-  const [restoreError, setRestoreError] = useState<unknown>(null);
-  const [restoreNotice, setRestoreNotice] = useState("");
-  const [restoring, setRestoring] = useState<string | null>(null);
-
-  const load = useCallback(
-    async (pageToken?: string) => {
-      if (!pageToken) {
-        setLoading(true);
-        setError(null);
-      }
-      const { data, error: err } = await listRepositoryTombstones({
-        path: { repositoryId: repo.id },
-        query: { pageSize: 50, pageToken },
-      });
-      setLoading(false);
-      if (err) {
-        setError(err);
-        return;
-      }
-      setItems((prev) =>
-        pageToken ? [...prev, ...(data?.items ?? [])] : (data?.items ?? []),
-      );
-      setNextToken(data?.nextPageToken);
-    },
-    [repo.id],
-  );
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const restore = async (coordinate: string) => {
-    setRestoring(coordinate);
-    setRestoreError(null);
-    setRestoreNotice("");
-    const { error: err } = await restoreRepositoryArtifact({
-      path: { repositoryId: repo.id },
-      body: { coordinate },
-    });
-    setRestoring(null);
-    if (err) {
-      setRestoreError(err);
-      return;
-    }
-    setRestoreNotice(text(`已恢复 ${coordinate}`, `Restored ${coordinate}`));
-    void load();
-  };
-
-  if (error !== null)
-    return isNotFound(error) ? (
-      <RepositoryFeatureUnavailable
-        feature={text("墓碑管理", "Tombstone management")}
-      />
-    ) : (
-      <ErrorBanner error={error} onRetry={() => load()} />
-    );
-  if (loading) return <Loading />;
-
-  const tombstoneColumns: ColumnsType<ArtifactTombstone> = [
-    {
-      title: text("坐标", "Coordinate"),
-      dataIndex: "coordinate",
-      key: "coordinate",
-      width: 360,
-      render: (value: string) => (
-        <span
-          className="block max-w-md truncate font-mono text-xs text-fg"
-          title={value}
-        >
-          {value}
-        </span>
-      ),
-    },
-    {
-      title: text("摘要", "Digest"),
-      dataIndex: "digest",
-      key: "digest",
-      width: 180,
-      render: (value: string) => (
-        <span className="font-mono text-xs text-fg-tertiary">
-          {shortDigest(value)}
-        </span>
-      ),
-    },
-    {
-      title: text("删除时间", "Deleted"),
-      dataIndex: "tombstonedAt",
-      key: "tombstonedAt",
-      width: 190,
-      render: (value: string) => (
-        <span className="whitespace-nowrap text-xs text-fg-tertiary">
-          {formatDate(value)}
-        </span>
-      ),
-    },
-    {
-      title: text("操作", "Actions"),
-      key: "actions",
-      fixed: "right",
-      width: 100,
-      render: (_, item) => (
-        <Popconfirm
-          title={text("确认恢复此制品？", "Restore this artifact?")}
-          description={text(
-            "恢复后制品会重新出现在仓库浏览与协议读取中。",
-            "After restoration, the artifact is available again in repository browsing and protocol reads.",
-          )}
-          okText={text("恢复", "Restore")}
-          cancelText={text("取消", "Cancel")}
-          onConfirm={() => restore(item.coordinate)}
-        >
-          <Button size="small" loading={restoring === item.coordinate}>
-            {text("恢复", "Restore")}
-          </Button>
-        </Popconfirm>
-      ),
-    },
-  ];
-
-  return (
-    <div className="space-y-3">
-      {restoreError !== null && <ErrorBanner error={restoreError} />}
-      {restoreNotice && (
-        <Notice
-          tone="success"
-          title={restoreNotice}
-          onClose={() => setRestoreNotice("")}
-        />
-      )}
-      {items.length === 0 ? (
-        <EmptyState
-          title={text("暂无墓碑", "No tombstones")}
-          hint={text(
-            "被删除的制品会保留墓碑记录，可在此恢复",
-            "Deleted artifacts retain tombstone records and can be restored here.",
-          )}
-        />
-      ) : (
-        <>
-          <ConsoleTable<ArtifactTombstone>
-            rowKey={(item) =>
-              `${item.coordinate}:${item.digest}:${item.tombstonedAt}`
-            }
-            dataSource={items}
-            columns={tombstoneColumns}
-            pagination={false}
-            scroll={{ x: 830 }}
-          />
-          <Pagination hasMore={!!nextToken} onMore={() => load(nextToken)} />
-        </>
-      )}
     </div>
   );
 }

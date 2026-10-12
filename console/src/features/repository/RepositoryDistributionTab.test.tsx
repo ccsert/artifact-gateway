@@ -11,6 +11,7 @@ import {
 import type { Repository } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RepositoryDistributionTab } from "./RepositoryDistributionTab";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", () => ({
   createRepositoryPromotion: vi.fn(),
@@ -91,9 +92,11 @@ describe("RepositoryDistributionTab", () => {
       mockListRepositoryReplications.mockResolvedValue({ data: [] } as never);
 
       render(
-        <PreferencesProvider>
-          <RepositoryDistributionTab repo={repository} />
-        </PreferencesProvider>,
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <RepositoryDistributionTab repo={repository} />
+          </PreferencesProvider>
+        </TestQueryProvider>,
       );
 
       await screen.findByText("暂无复制计划");
@@ -122,9 +125,11 @@ describe("RepositoryDistributionTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryDistributionTab repo={source} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryDistributionTab repo={source} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await screen.findByText("暂无复制计划");
@@ -163,9 +168,11 @@ describe("RepositoryDistributionTab", () => {
     mockCreatePromotion.mockResolvedValue({ data: {} } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryDistributionTab repo={source} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryDistributionTab repo={source} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await screen.findByText("暂无复制计划");
@@ -223,9 +230,11 @@ describe("RepositoryDistributionTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryDistributionTab repo={source} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryDistributionTab repo={source} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await screen.findByText("暂无复制计划");
@@ -287,9 +296,11 @@ describe("RepositoryDistributionTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositoryDistributionTab repo={source} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryDistributionTab repo={source} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     await screen.findByText("暂无复制计划");
@@ -330,31 +341,33 @@ it("uses visible APT packages and requires the target suite, preserving an uncer
     .mockRejectedValueOnce(new Error("connection lost"))
     .mockResolvedValueOnce({ data: {} } as never);
   render(
-    <PreferencesProvider>
-      <RepositoryDistributionTab
-        repo={apt}
-        aptPackages={[
-          {
-            publicationSessionId: "session-a",
-            component: "main",
-            poolPath,
-            revision: {
-              id: "rev-a",
-              repositoryId: apt.id,
-              package: "widget",
-              version: "1.0",
-              architecture: "amd64",
-              canonicalIdentity: "widget@1.0#amd64",
-              digest: digestA,
-              size: 2048,
-              objectName: "native/apt/a",
-              publisher: "operator",
-              createdAt: "2026-01-01T00:00:00Z",
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryDistributionTab
+          repo={apt}
+          aptPackages={[
+            {
+              publicationSessionId: "session-a",
+              component: "main",
+              poolPath,
+              revision: {
+                id: "rev-a",
+                repositoryId: apt.id,
+                package: "widget",
+                version: "1.0",
+                architecture: "amd64",
+                canonicalIdentity: "widget@1.0#amd64",
+                digest: digestA,
+                size: 2048,
+                objectName: "native/apt/a",
+                publisher: "operator",
+                createdAt: "2026-01-01T00:00:00Z",
+              },
             },
-          },
-        ]}
-      />
-    </PreferencesProvider>,
+          ]}
+        />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
   await screen.findByText("暂无复制计划");
   expect(mockListArtifactIdentities).not.toHaveBeenCalled();

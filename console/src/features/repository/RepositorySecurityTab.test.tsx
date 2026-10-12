@@ -1,4 +1,5 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -8,9 +9,15 @@ import {
   replaceQuarantineReadPolicy,
   replaceSecurityPolicy,
 } from "../../client";
-import type { Repository } from "../../client";
+import type {
+  QuarantineReadPolicy,
+  Repository,
+  SecurityPolicy,
+} from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RepositorySecurityTab } from "./RepositorySecurityTab";
+import { TestQueryProvider } from "../../test/queryClient";
+import { repositoryKeys } from "../../lib/query/keys";
 
 vi.mock("../../client", () => ({
   getAptRepositorySigningState: vi.fn(),
@@ -38,6 +45,15 @@ const repo: Repository = {
   version: "1",
 };
 
+type PolicyAnswer<T> = { data: T; request: Request; response: Response };
+function policyAnswer<T>(data: T): PolicyAnswer<T> {
+  return {
+    data,
+    request: new Request("https://gateway.example.test/policy"),
+    response: new Response(),
+  };
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -50,6 +66,229 @@ beforeEach(() => {
 });
 
 describe("RepositorySecurityTab", () => {
+  it("ignores completed saves from the previous repository in cached policy editors", async () => {
+    const user = userEvent.setup();
+    const nextRepo = { ...repo, id: "22222222-2222-4222-8222-222222222222" };
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    client.setQueryData(repositoryKeys.securityPolicy(repo.id), {
+      version: "1",
+      enabled: false,
+      requireSignature: false,
+    });
+    client.setQueryData(repositoryKeys.quarantineReadPolicy(repo.id), {
+      version: "1",
+      enabled: true,
+    });
+    client.setQueryData(repositoryKeys.securityPolicy(nextRepo.id), {
+      version: "2",
+      enabled: true,
+      requireSignature: true,
+    });
+    client.setQueryData(repositoryKeys.quarantineReadPolicy(nextRepo.id), {
+      version: "2",
+      enabled: true,
+    });
+    let admissionAnswer!: (value: PolicyAnswer<SecurityPolicy>) => void;
+    let quarantineAnswer!: (value: PolicyAnswer<QuarantineReadPolicy>) => void;
+    mockReplaceSecurityPolicy
+      .mockImplementationOnce(
+        () =>
+          new Promise<PolicyAnswer<SecurityPolicy>>(
+            (resolve) => (admissionAnswer = resolve),
+          ),
+      )
+      .mockResolvedValueOnce(
+        policyAnswer({
+          version: "3",
+          enabled: true,
+          requireSignature: true,
+          autoScanOnPublish: true,
+        }),
+      );
+    mockReplaceQuarantineReadPolicy
+      .mockImplementationOnce(
+        () =>
+          new Promise<PolicyAnswer<QuarantineReadPolicy>>(
+            (resolve) => (quarantineAnswer = resolve),
+          ),
+      )
+      .mockResolvedValueOnce(policyAnswer({ version: "3", enabled: false }));
+    const content = (repository: Repository) => (
+      <QueryClientProvider client={client}>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repository} publicationScanning />
+        </PreferencesProvider>
+      </QueryClientProvider>
+    );
+    const view = render(content(repo));
+    await screen.findByText("当前版本 1");
+    await user.click(screen.getByRole("switch", { name: "发布后自动扫描" }));
+    await user.click(screen.getByRole("button", { name: "保存策略" }));
+    await user.click(screen.getByRole("switch", { name: "阻断隔离制品读取" }));
+    await user.click(screen.getByRole("button", { name: "保存读取策略" }));
+    view.rerender(content(nextRepo));
+    await screen.findByText("当前版本 2");
+    await act(async () => {
+      admissionAnswer(
+        policyAnswer({
+          version: "2",
+          enabled: false,
+          requireSignature: false,
+          autoScanOnPublish: true,
+        }),
+      );
+      quarantineAnswer(policyAnswer({ version: "2", enabled: false }));
+    });
+    expect(screen.getByRole("switch", { name: "启用准入检查" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "要求签名" })).toBeChecked();
+    expect(
+      screen.getByRole("switch", { name: "阻断隔离制品读取" }),
+    ).toBeChecked();
+    expect(screen.getByRole("button", { name: "保存策略" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "保存读取策略" })).toBeDisabled();
+    expect(screen.queryByText("仓库安全策略已保存")).not.toBeInTheDocument();
+    expect(screen.queryByText("隔离读取策略已保存")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("switch", { name: "发布后自动扫描" }));
+    await user.click(screen.getByRole("button", { name: "保存策略" }));
+    await user.click(screen.getByRole("switch", { name: "阻断隔离制品读取" }));
+    await user.click(screen.getByRole("button", { name: "保存读取策略" }));
+    expect(mockReplaceSecurityPolicy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        path: { repositoryId: nextRepo.id },
+        headers: { "If-Match": "2" },
+        body: expect.objectContaining({
+          version: "2",
+          enabled: true,
+          requireSignature: true,
+          autoScanOnPublish: true,
+        }),
+      }),
+    );
+    expect(mockReplaceQuarantineReadPolicy).toHaveBeenLastCalledWith({
+      path: { repositoryId: nextRepo.id },
+      headers: { "If-Match": "2" },
+      body: { version: "2", enabled: false },
+    });
+  });
+
+  it("updates a cached admission draft before saving a newer policy version", async () => {
+    const user = userEvent.setup();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 0 } },
+    });
+    client.setQueryData(repositoryKeys.securityPolicy(repo.id), {
+      version: "1",
+      enabled: false,
+      requireSignature: false,
+    });
+    client.setQueryData(repositoryKeys.quarantineReadPolicy(repo.id), {
+      version: "1",
+      enabled: false,
+    });
+    let answer!: (value: PolicyAnswer<SecurityPolicy>) => void;
+    mockGetSecurityPolicy.mockImplementationOnce(
+      () =>
+        new Promise<PolicyAnswer<SecurityPolicy>>(
+          (resolve) => (answer = resolve),
+        ),
+    );
+    mockReplaceSecurityPolicy.mockResolvedValue(
+      policyAnswer({
+        version: "3",
+        enabled: true,
+        requireSignature: true,
+        autoScanOnPublish: true,
+      }),
+    );
+    render(
+      <QueryClientProvider client={client}>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repo} publicationScanning />
+        </PreferencesProvider>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("当前版本 1")).toBeInTheDocument();
+    await act(async () =>
+      answer(
+        policyAnswer({ version: "2", enabled: true, requireSignature: true }),
+      ),
+    );
+    await screen.findByText("当前版本 2");
+    expect(screen.getByRole("switch", { name: "启用准入检查" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "要求签名" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "保存策略" })).toBeDisabled();
+    await user.click(screen.getByRole("switch", { name: "发布后自动扫描" }));
+    await user.click(screen.getByRole("button", { name: "保存策略" }));
+    await waitFor(() =>
+      expect(mockReplaceSecurityPolicy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          headers: { "If-Match": "2" },
+          body: expect.objectContaining({
+            version: "2",
+            enabled: true,
+            requireSignature: true,
+            autoScanOnPublish: true,
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("updates a cached quarantine draft before saving a newer policy version", async () => {
+    const user = userEvent.setup();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 0 } },
+    });
+    client.setQueryData(repositoryKeys.securityPolicy(repo.id), {
+      version: "1",
+      enabled: false,
+    });
+    client.setQueryData(repositoryKeys.quarantineReadPolicy(repo.id), {
+      version: "1",
+      enabled: false,
+    });
+    mockGetSecurityPolicy.mockResolvedValue({
+      data: { version: "1", enabled: false },
+    } as never);
+    let answer!: (value: PolicyAnswer<QuarantineReadPolicy>) => void;
+    mockGetQuarantineReadPolicy.mockImplementationOnce(
+      () =>
+        new Promise<PolicyAnswer<QuarantineReadPolicy>>(
+          (resolve) => (answer = resolve),
+        ),
+    );
+    mockReplaceQuarantineReadPolicy.mockResolvedValue({
+      data: { version: "3", enabled: false },
+    } as never);
+    render(
+      <QueryClientProvider client={client}>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repo} publicationScanning />
+        </PreferencesProvider>
+      </QueryClientProvider>,
+    );
+    await screen.findByText("读取策略当前版本 1");
+    await act(async () =>
+      answer(policyAnswer({ version: "2", enabled: true })),
+    );
+    await screen.findByText("读取策略当前版本 2");
+    expect(
+      screen.getByRole("switch", { name: "阻断隔离制品读取" }),
+    ).toBeChecked();
+    expect(screen.getByRole("button", { name: "保存读取策略" })).toBeDisabled();
+    await user.click(screen.getByRole("switch", { name: "阻断隔离制品读取" }));
+    await user.click(screen.getByRole("button", { name: "保存读取策略" }));
+    await waitFor(() =>
+      expect(mockReplaceQuarantineReadPolicy).toHaveBeenCalledWith({
+        path: { repositoryId: repo.id },
+        headers: { "If-Match": "2" },
+        body: { version: "2", enabled: false },
+      }),
+    );
+  });
+
   it("shows APT trust rotation and immutable snapshot evidence without loading unsupported policies", async () => {
     mockGetAptRepositorySigningState.mockResolvedValue({
       data: {
@@ -76,12 +315,14 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab
-          repo={{ ...repo, format: "apt" }}
-          publicationScanning={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab
+            repo={{ ...repo, format: "apt" }}
+            publicationScanning={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("签名信任与当前快照")).toBeInTheDocument();
@@ -111,25 +352,29 @@ describe("RepositorySecurityTab", () => {
       } as never);
 
     const view = render(
-      <PreferencesProvider>
-        <RepositorySecurityTab
-          repo={{ ...repo, format: "apt" }}
-          publicationScanning={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab
+            repo={{ ...repo, format: "apt" }}
+            publicationScanning={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     view.rerender(
-      <PreferencesProvider>
-        <RepositorySecurityTab
-          repo={{
-            ...repo,
-            id: "33333333-3333-4333-8333-333333333333",
-            name: "apt-next",
-            format: "apt",
-          }}
-          publicationScanning={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab
+            repo={{
+              ...repo,
+              id: "33333333-3333-4333-8333-333333333333",
+              name: "apt-next",
+              format: "apt",
+            }}
+            publicationScanning={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("生产信任已固定")).toBeInTheDocument();
@@ -156,12 +401,14 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab
-          repo={{ ...repo, format: "apt" }}
-          publicationScanning={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab
+            repo={{ ...repo, format: "apt" }}
+            publicationScanning={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -205,9 +452,11 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab repo={repo} publicationScanning />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repo} publicationScanning />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("当前版本 3")).toBeInTheDocument();
@@ -245,9 +494,11 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab repo={repo} publicationScanning={false} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repo} publicationScanning={false} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -269,9 +520,11 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab repo={repo} publicationScanning />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repo} publicationScanning />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     const readSwitch = await screen.findByRole("switch", {
@@ -304,12 +557,14 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab
-          repo={{ ...repo, format: "go", name: "go-releases" }}
-          publicationScanning={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab
+            repo={{ ...repo, format: "go", name: "go-releases" }}
+            publicationScanning={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -328,9 +583,11 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab repo={repo} publicationScanning />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repo} publicationScanning />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("读取策略失败")).toBeInTheDocument();
