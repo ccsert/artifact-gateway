@@ -279,6 +279,40 @@ func TestContainsSearchLiteralPermissionAndLegacyCursorBoundaries(t *testing.T) 
 	verifyContainsSearchBoundaries(t, repository.NewMemoryStore())
 }
 
+func verifyPyPILiteralMatchAndLegacyNormalization(t *testing.T, store GatewayStore) {
+	t.Helper()
+	ctx := context.Background()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "pypi-matching-" + uuid.NewString(), Format: repository.FormatPyPI})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.PublishPyPIFile(ctx, repository.PyPIFile{RepositoryID: repo.ID, Project: "my-alpha", Version: "1.0.0", Filename: "my_alpha-1.0.0.tar.gz", FileType: "sdist", PythonVersion: "source", Digest: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(repo.ID))), ObjectKey: "pypi-match/" + repo.ID, Size: 7}); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, testAuthenticator())
+	for _, tc := range []struct {
+		match, q string
+		want     int
+	}{{"", "MY_", 1}, {"prefix", "MY_", 0}, {"prefix", "MY-", 0}, {"prefix", "my-", 1}, {"contains", "ALPHA", 1}, {"contains", "MY_", 0}} {
+		values := url.Values{"q": {tc.q}}
+		if tc.match != "" {
+			values.Set("match", tc.match)
+		}
+		req := httptest.NewRequest("GET", "/api/v2/repositories/"+repo.ID+"/artifact-search?"+values.Encode(), nil)
+		authorize(req, "admin-secret")
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		var page struct{ Items []struct{ Coordinate string } }
+		if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &page) != nil || len(page.Items) != tc.want || tc.want == 1 && page.Items[0].Coordinate != "my-alpha" {
+			t.Fatalf("match=%q q=%q status=%d want=%d body=%s", tc.match, tc.q, res.Code, tc.want, res.Body.String())
+		}
+	}
+}
+
+func TestPyPISearchExplicitMatchIsLiteralAndOmissionPreservesNormalization(t *testing.T) {
+	verifyPyPILiteralMatchAndLegacyNormalization(t, repository.NewMemoryStore())
+}
+
 type searchDeadlineStore struct {
 	GatewayStore
 	deadlines []time.Time

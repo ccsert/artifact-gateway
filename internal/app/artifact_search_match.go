@@ -18,7 +18,7 @@ func artifactSearchMatch[T ~string](value *T) (repository.ArtifactSearchMatch, b
 }
 
 func pypiSearchKeyword(value string, match repository.ArtifactSearchMatch) string {
-	if match == repository.ArtifactSearchContains {
+	if match != "" {
 		return value
 	}
 	return normalizePyPIProject(value)

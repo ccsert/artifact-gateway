@@ -259,6 +259,19 @@ func TestPostgresContainsSearchLiteralPermissionAndLegacyCursorBoundaries(t *tes
 	verifyContainsSearchBoundaries(t, store)
 }
 
+func TestPostgresPyPISearchExplicitMatchIsLiteralAndOmissionPreservesNormalization(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is required")
+	}
+	store, err := repository.NewPostgresStore(databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	verifyPyPILiteralMatchAndLegacyNormalization(t, store)
+}
+
 func TestPostgresContainsSearchMetadataLockBudget(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
