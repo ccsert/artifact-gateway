@@ -49,6 +49,16 @@ test("OCI manifest without image descriptors is not shown as 0 B", async ({
       }),
     }),
   );
+  // Optional detail reads belong to this fixture repository too.
+  for (const endpoint of [
+    "artifact-quarantine",
+    "artifact-scans",
+    "artifact-intelligence",
+  ]) {
+    await page.route(`**/api/v2/repositories/repo-oci/${endpoint}**`, (route) =>
+      route.fulfill({ status: 404, json: { status: 404, title: "Not Found" } }),
+    );
+  }
   await page.route("**/auth/token", (route) =>
     route.fulfill({
       status: 200,

@@ -6,7 +6,8 @@ import {
   getRepositoryArtifactScanStatus,
   listOciManifests,
 } from "../../client";
-import { AuthProvider } from "../../lib/auth";
+import { AuthProvider, useAuth } from "../../lib/auth";
+import { ConsoleQueryProvider } from "../../lib/query/QueryProvider";
 import { PreferencesProvider } from "../../lib/preferences";
 import { TestQueryProvider } from "../../test/queryClient";
 import { OciImageDetail } from "./OciImageDetail";
@@ -96,6 +97,57 @@ afterEach(() => {
 });
 
 describe("OciImageDetail", () => {
+  it("ends an expired session when the manifest list returns 401", async () => {
+    localStorage.setItem("ag.console.token", "expired-token");
+    localStorage.setItem("ag.console.role", "member");
+    const fetchMock = mockRegistry();
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input) === "/auth/session")
+        return Response.json({
+          authenticated: true,
+          identity: {
+            actor: "user:alice",
+            kind: "local_session",
+            role: "member",
+            administrator: false,
+          },
+        });
+      return new Response(null, { status: 204 });
+    });
+    vi.mocked(listOciManifests).mockResolvedValue({
+      error: { status: 401, message: "Session expired" },
+    } as never);
+    function SessionDetail() {
+      const { authenticated, identityLoading } = useAuth();
+      if (identityLoading) return <p>Loading session</p>;
+      if (!authenticated) return <p>Signed out</p>;
+      return (
+        <OciImageDetail
+          repositoryId={repositoryId}
+          repository="docker-hosted"
+          image="app"
+        />
+      );
+    }
+    render(
+      <AuthProvider>
+        <ConsoleQueryProvider>
+          <PreferencesProvider>
+            <SessionDetail />
+          </PreferencesProvider>
+        </ConsoleQueryProvider>
+      </AuthProvider>,
+    );
+    expect(await screen.findByText("Signed out")).toBeVisible();
+    expect(localStorage.getItem("ag.console.token")).toBeNull();
+    expect(localStorage.getItem("ag.console.role")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith("/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    });
+    expect(listOciManifests).toHaveBeenCalledTimes(1);
+  });
+
   it("opens the deep-linked tag and reads its manifest and config", async () => {
     const fetchMock = mockRegistry();
     renderDetail("2.0");

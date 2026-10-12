@@ -121,6 +121,27 @@ afterEach(() => {
 });
 
 describe("GroupsPage dialogs", () => {
+  it("recovers format profiles on retry after the service recovers", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listFormatProfiles).mockResolvedValueOnce({
+      error: {
+        status: 503,
+        message: "format profiles temporarily unavailable",
+      },
+    } as never);
+    renderPage();
+    await screen.findByText("format profiles temporarily unavailable");
+    expect(screen.getByRole("button", { name: /新建分组/ })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /重试/ }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /新建分组/ })).toBeEnabled(),
+    );
+    expect(
+      screen.queryByText("format profiles temporarily unavailable"),
+    ).not.toBeInTheDocument();
+  });
+
   it("holds the create dialog shut while saving and frees it after a failure", async () => {
     const user = userEvent.setup();
     const fail = pendingSave(vi.mocked(createGroup));

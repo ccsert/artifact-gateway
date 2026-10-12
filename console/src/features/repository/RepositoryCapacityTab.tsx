@@ -18,6 +18,10 @@ import { repositoryKeys } from "../../lib/query/keys";
 import { useRepositoryCapacity } from "./repositoryQueries";
 
 export function RepositoryCapacityTab({ repo }: { repo: Repository }) {
+  return <RepositoryCapacityContent key={repo.id} repo={repo} />;
+}
+
+function RepositoryCapacityContent({ repo }: { repo: Repository }) {
   const { resolvedTheme, text } = usePreferences();
   const queryClient = useQueryClient();
   const capacityQuery = useRepositoryCapacity(repo.id);

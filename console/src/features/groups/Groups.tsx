@@ -53,8 +53,9 @@ export function GroupsPage() {
 
   const load = () => {
     setError(null);
-    void invalidateGroups();
+    return invalidateGroups();
   };
+  const retry = () => Promise.allSettled([load(), profilesQuery.refetch()]);
 
   const loadMore = () => {
     if (nextToken && !loadingMore) void groupPages.fetchNextPage();
@@ -127,7 +128,7 @@ export function GroupsPage() {
             />
           </Card>
         ) : (
-          <ErrorBanner error={error} onRetry={load} />
+          <ErrorBanner error={error} onRetry={retry} />
         )
       ) : loading && groups.length === 0 ? (
         <Loading />
@@ -143,7 +144,9 @@ export function GroupsPage() {
         </Card>
       ) : (
         <>
-          {error !== null ? <ErrorBanner error={error} onRetry={load} /> : null}
+          {error !== null ? (
+            <ErrorBanner error={error} onRetry={retry} />
+          ) : null}
           <MetricStrip
             items={[
               {

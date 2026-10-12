@@ -1,6 +1,7 @@
 import { listOciManifests } from "../../client";
 import type { OciManifestSummary } from "../../client";
 import { shortDigest } from "../../lib/format";
+import { unwrap } from "../../lib/query/client";
 
 export interface OciDescriptor {
   mediaType: string;
@@ -40,6 +41,13 @@ export interface OciVersionOption {
 export const MANIFEST_ACCEPT =
   "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json";
 
+async function registryError(response: Response) {
+  return Object.assign(
+    new Error(`${response.status}: ${(await response.text()).slice(0, 120)}`),
+    { status: response.status },
+  );
+}
+
 export async function ociRegistryToken(
   token: string,
   signal?: AbortSignal,
@@ -50,9 +58,7 @@ export async function ociRegistryToken(
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   if (!response.ok) {
-    throw new Error(
-      `${response.status}: ${(await response.text()).slice(0, 120)}`,
-    );
+    throw await registryError(response);
   }
   const body = (await response.json()) as {
     token?: string;
@@ -78,8 +84,7 @@ export async function ociFetch(
     },
   });
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`${res.status}: ${text.slice(0, 120)}`);
+    throw await registryError(res);
   }
   return res;
 }
@@ -93,15 +98,16 @@ export async function fetchOciManifests(
   const seenTokens = new Set<string>();
   let pageToken: string | undefined;
   do {
-    const response = await listOciManifests({
-      path: { repositoryId },
-      query: { name: image, pageSize: 200, pageToken },
-      signal,
-    });
-    if (response.error || !response.data)
-      throw new Error("读取 OCI Manifest 列表失败");
-    items.push(...response.data.items);
-    pageToken = response.data.nextPageToken;
+    const page = await unwrap(
+      listOciManifests({
+        path: { repositoryId },
+        query: { name: image, pageSize: 200, pageToken },
+        signal,
+      }),
+    );
+    if (!page) throw new Error("读取 OCI Manifest 列表失败");
+    items.push(...page.items);
+    pageToken = page.nextPageToken;
     if (pageToken && seenTokens.has(pageToken))
       throw new Error("OCI Manifest 分页游标重复");
     if (pageToken) seenTokens.add(pageToken);
@@ -160,7 +166,10 @@ export async function fetchOciManifest(
         signal,
       );
       config = (await cfgRes.json()) as OciConfig;
-    } catch {
+    } catch (error) {
+      // Optional config metadata must not hide an expired session.
+      if (error instanceof Error && "status" in error && error.status === 401)
+        throw error;
       config = null;
     }
   }
