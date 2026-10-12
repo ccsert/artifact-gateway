@@ -121,18 +121,20 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/public-browse/PublicBrowsePage.tsx`
 - [ ] `features/public-browse/usePublicVersionPages.ts` — OCI/Conan incremental
       state was extracted unchanged under issue 275; migrate its reads separately.
-- [ ] `features/repository/APTOperationsTab.tsx`
-- [ ] `features/repository/ProxyMavenCacheSection.tsx`
+- [x] `features/repository/APTOperationsTab.tsx`
+- [x] `features/repository/ProxyMavenCacheSection.tsx`
 - [ ] `features/repository/RepositoryArtifactSelect.tsx`
-- [ ] `features/repository/RepositoryArtifactsTab.tsx`
-- [ ] `features/repository/RepositoryBrowseTree.tsx`
+- [x] `features/repository/RepositoryArtifactsTab.tsx`
+- [x] `features/repository/RepositoryBrowseTree.tsx` — the tree loads one node
+      page at a time with retry and de-duplication; it is not a cached read.
 - [ ] `features/repository/RepositoryCapacityTab.tsx`
-- [ ] `features/repository/RepositoryDistributionTab.tsx`
+- [x] `features/repository/RepositoryDistributionTab.tsx`
 - [x] `features/repository/RepositoryGrantsTab.tsx`
-- [ ] `features/repository/RepositoryLifecycleTabs.tsx`
-- [ ] `features/repository/RepositoryRetentionTab.tsx`
-- [ ] `features/repository/RepositoryScanningTab.tsx`
-- [ ] `features/repository/RepositorySecurityTab.tsx`
+- [x] `features/repository/RepositoryJobsTab.tsx`
+- [x] `features/repository/RepositoryTombstonesTab.tsx`
+- [x] `features/repository/RepositoryRetentionTab.tsx`
+- [x] `features/repository/RepositoryScanningTab.tsx`
+- [x] `features/repository/RepositorySecurityTab.tsx`
 - [ ] `features/repository/RepositoryUsageTab.tsx`
 - [ ] `features/search/Search.tsx`
 - [ ] `features/settings/Authentication.tsx`

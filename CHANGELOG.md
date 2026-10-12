@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Repository detail tabs (artifacts, retention, APT operations, distribution, security, scanning, settings, lifecycle jobs and tombstones) and the repository list read through the shared query layer and are split into focused sections; every repository Console file is now at most 400 lines. Artifact lists keep the current search when an older answer arrives late, polled job lists stop when the tab is closed, and saved policies stay on screen with their confirmation. Behaviour and layout are otherwise unchanged.
+
 - Unknown artifact formats now show the unified unavailable state in repository detail, public browse, and search detail. Format-specific task entrypoints are resolved from the registry for each repository type.
 
 - The Console describes each artifact format once, in a format registry, instead of repeating format checks across pages. Repository detail no longer downloads every format's detail panels and the Maven publish wizard up front, which shrinks its bundle by about 71 kB; public browse and global search load only the formats they show. Behaviour and layout are unchanged.
