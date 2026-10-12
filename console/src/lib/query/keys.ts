@@ -88,6 +88,14 @@ export const systemKeys = {
   runtimeNodes: () => [...systemKeys.all, "runtime-nodes"] as const,
 };
 
+export const groupKeys = {
+  all: ["groups"] as const,
+  list: () => [...groupKeys.all, "list"] as const,
+  capacity: (id: string) => [...groupKeys.all, "capacity", id] as const,
+  browse: (id: string) => [...groupKeys.all, "browse", id] as const,
+  resolution: (id: string) => [...groupKeys.all, "resolution", id] as const,
+};
+
 export const formatKeys = {
   profiles: ["formats", "profiles"] as const,
 };

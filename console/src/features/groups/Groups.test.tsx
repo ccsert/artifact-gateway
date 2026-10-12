@@ -25,6 +25,7 @@ import { AntdProvider } from "../../app/AntdProvider";
 import { PreferencesProvider } from "../../lib/preferences";
 import { resetFormatProfilesCacheForTests } from "../../lib/formatProfiles";
 import { GroupsPage } from "./Groups";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", () => ({
   createGroup: vi.fn(),
@@ -92,11 +93,13 @@ function renderPage() {
   vi.mocked(getGroupCapacity).mockResolvedValue({ data: {} } as never);
 
   return render(
-    <PreferencesProvider>
-      <AntdProvider>
-        <GroupsPage />
-      </AntdProvider>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <AntdProvider>
+          <GroupsPage />
+        </AntdProvider>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 
