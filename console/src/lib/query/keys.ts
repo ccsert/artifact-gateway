@@ -103,6 +103,11 @@ export const auditKeys = {
   retentionJobs: () => [...auditKeys.all, "retention-jobs"] as const,
 };
 
+export const settingsKeys = {
+  all: ["settings"] as const,
+  oidc: () => [...settingsKeys.all, "oidc"] as const,
+};
+
 export const siteKeys = {
   settings: () => ["site", "settings"] as const,
 };

@@ -138,7 +138,7 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/repository/RepositorySecurityTab.tsx`
 - [x] `features/repository/RepositoryUsageTab.tsx`
 - [x] `features/search/Search.tsx`
-- [ ] `features/settings/Authentication.tsx`
+- [x] `features/settings/Authentication.tsx`
 - [x] `features/settings/SiteSettings.tsx`
 - [ ] `lib/preferences.tsx`
 - [x] `lib/siteSettings.tsx`
