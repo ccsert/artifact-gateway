@@ -1,129 +1,33 @@
-import {
-  artifactCoordinateForDisplay,
-  formatDescriptor,
-  hasPackageVersions,
-} from "../../formats";
-import { formatViews } from "../../formats/views";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { DownOutlined, LinkOutlined, UpOutlined } from "@ant-design/icons";
-import { Button, Descriptions, Input, Space, Tooltip } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { searchArtifacts } from "../../client";
+import { useEffect, useMemo, useState } from "react";
+import { Button, Input } from "antd";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type {
   ArtifactSearchMatch,
   GlobalArtifactSearchHit,
 } from "../../client";
 import { PageHeader, Pagination } from "../../components/ui/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../../components/ui/Feedback";
-import { Badge, FormatBadge } from "../../components/ui/Badge";
-import { ArtifactSecurityBadge } from "../artifact-detail/ArtifactSecurityBadge";
-import { formatBytes, formatDate } from "../../lib/format";
-import { mavenVersion } from "../../lib/usage";
-import { MavenArtifactDetail } from "../artifact-detail/ArtifactRowDetail";
 import {
   ConsoleTable,
-  CopyableValue,
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
-import { RepositoryFeatureUnavailable } from "../repository/RepositoryFeatureUnavailable";
 
 import { ArtifactSearchMatchControl } from "../../components/ui/ArtifactSearchMatchControl";
 
-const SEARCH_PAGE_SIZE = 100;
+import {
+  type SearchTableRow,
+  isMavenGroup,
+  artifactTarget,
+  buildRows,
+} from "./searchModel";
+import { searchColumns } from "./searchColumns";
+import { SearchHitDetail } from "./SearchHitDetail";
+import { useArtifactSearch } from "./searchQueries";
+import { useQueryClient } from "@tanstack/react-query";
+import { searchKeys } from "../../lib/query/keys";
 
-type MavenGroup = {
-  key: string;
-  repositoryId: string;
-  repositoryName: string;
-  format: "maven";
-  coordinate: string;
-  hits: GlobalArtifactSearchHit[];
-};
-
-type SearchRow = GlobalArtifactSearchHit | MavenGroup;
-
-type SearchTableRow = {
-  key: string;
-  row: SearchRow;
-  representative: GlobalArtifactSearchHit;
-};
-
-function isMavenGroup(row: SearchRow): row is MavenGroup {
-  return "hits" in row;
-}
-
-export function artifactTarget(hit: GlobalArtifactSearchHit): string {
-  const params = new URLSearchParams({ artifact: hit.coordinate });
-  if (hit.buildNumber && hit.buildNumber > 0)
-    params.set("build", String(hit.buildNumber));
-  if (formatDescriptor(hit.format)?.digestReferences && hit.digest)
-    params.set("reference", hit.digest);
-  if (hasPackageVersions(hit.format) && hit.version)
-    params.set("version", hit.version);
-  return `/repositories/${hit.repositoryId}?${params.toString()}`;
-}
-
-export function artifactVersionSizeLabel(hit: GlobalArtifactSearchHit): string {
-  const size = formatBytes(hit.size);
-  return hasPackageVersions(hit.format) && hit.version
-    ? `${hit.version} · ${size}`
-    : size;
-}
-
-function buildRows(hits: GlobalArtifactSearchHit[]): SearchRow[] {
-  const rows: SearchRow[] = [];
-  const groups = new Map<string, MavenGroup>();
-  for (const hit of hits) {
-    const ga = formatDescriptor(hit.format)?.groupKey?.(hit.coordinate) ?? null;
-    if (!ga) {
-      rows.push(hit);
-      continue;
-    }
-    const key = `${hit.repositoryId}:${ga}`;
-    const existing = groups.get(key);
-    if (existing) existing.hits.push(hit);
-    else {
-      const group: MavenGroup = {
-        key,
-        repositoryId: hit.repositoryId,
-        repositoryName: hit.repositoryName,
-        format: "maven",
-        coordinate: ga,
-        hits: [hit],
-      };
-      groups.set(key, group);
-      rows.push(group);
-    }
-  }
-  for (const row of rows) {
-    if (isMavenGroup(row)) {
-      row.hits.sort(
-        (a, b) =>
-          (b.createdAt ?? "").localeCompare(a.createdAt ?? "") ||
-          (b.buildNumber ?? 0) - (a.buildNumber ?? 0),
-      );
-    }
-  }
-  return rows;
-}
-
-function mavenVersionLabel(hit: GlobalArtifactSearchHit): string {
-  const version = mavenVersion(hit.coordinate) ?? hit.coordinate;
-  return hit.buildNumber && hit.buildNumber > 0
-    ? `${version} · build #${hit.buildNumber}`
-    : version;
-}
-
-function mavenIntelligence(hits: GlobalArtifactSearchHit[]) {
-  const summaries = hits.map((hit) => hit.intelligence).filter(Boolean);
-  if (summaries.some((summary) => summary?.vulnerabilityStatus === "affected"))
-    return summaries.find(
-      (summary) => summary?.vulnerabilityStatus === "affected",
-    );
-  return summaries[0];
-}
+export { artifactTarget, artifactVersionSizeLabel } from "./searchModel";
 
 export function SearchPage() {
   const { locale, text } = usePreferences();
@@ -132,110 +36,59 @@ export function SearchPage() {
   const q = (params.get("q") ?? "").trim();
   const match: ArtifactSearchMatch =
     params.get("match") === "prefix" ? "prefix" : "contains";
-  const [revision, setRevision] = useState(0);
-  const request = useRef<AbortController | null>(null);
-  const scope = useRef<string | null>(null);
-  const moreInFlight = useRef(false);
   const [query, setQuery] = useState(q);
-  const [hits, setHits] = useState<GlobalArtifactSearchHit[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-  const [searchedRepos, setSearchedRepos] = useState(0);
-  const [nextPageToken, setNextPageToken] = useState<string | undefined>();
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
+  const search = useArtifactSearch(
+    q,
+    match,
+    text("搜索制品失败", "Artifact search failed"),
+  );
+  const hits = useMemo(
+    () => search.data?.pages.flatMap((page) => page.items) ?? [],
+    [search.data],
+  );
+  const lastPage = search.data?.pages.at(-1);
+  const searchedRepos = lastPage?.searchedRepositories ?? 0;
+  const nextPageToken = lastPage?.nextPageToken;
+  const loading = search.isFetching && !search.isFetchingNextPage;
+  const loadingMore = search.isFetchingNextPage;
+  const error = search.error;
+  // The open row and version belong to the search they were opened in.
+  const scope = `${match}:${q}`;
+  const [opened, setOpened] = useState<{
+    scope: string;
+    row: string | null;
+    version: string | null;
+  } | null>(null);
+  const expandedRow = opened?.scope === scope ? opened.row : null;
+  const selectedVersion = opened?.scope === scope ? opened.version : null;
+  const setExpandedRow = (row: string | null) =>
+    setOpened({ scope, row, version: selectedVersion });
+  const setSelectedVersion = (version: string | null) =>
+    setOpened((current) => ({
+      scope,
+      row: current?.scope === scope ? current.row : null,
+      version,
+    }));
 
+  // The search box follows the URL when another search is opened.
   useEffect(() => {
-    const controller = new AbortController();
-    request.current = controller;
-    moreInFlight.current = false;
     setQuery(q);
-    setError(null);
-    const nextScope = `${match}:${q}`;
-    if (scope.current !== nextScope) {
-      setHits([]);
-      setSearchedRepos(0);
-      setNextPageToken(undefined);
-      setExpandedRow(null);
-      setSelectedVersion(null);
-      scope.current = nextScope;
-    }
-    setLoadingMore(false);
-    setLoading(Boolean(q));
-    if (q) {
-      void (async () => {
-        try {
-          const response = await searchArtifacts({
-            query: { q, match, pageSize: SEARCH_PAGE_SIZE },
-            signal: controller.signal,
-          });
-          if (controller.signal.aborted) return;
-          if (response.error || !response.data) {
-            setError(
-              response.error ??
-                new Error(text("搜索制品失败", "Artifact search failed")),
-            );
-          } else {
-            setHits(response.data.items);
-            setSearchedRepos(response.data.searchedRepositories);
-            setNextPageToken(response.data.nextPageToken);
-          }
-        } catch (error) {
-          if (!controller.signal.aborted) setError(error);
-        } finally {
-          if (!controller.signal.aborted) setLoading(false);
-        }
-      })();
-    }
-    return () => controller.abort();
-  }, [q, match, revision, text]);
+  }, [q]);
+
+  const queryClient = useQueryClient();
+  // Searching the same text again always asks again. A refetch alone would
+  // join a first page still in flight instead of restarting it.
+  const retry = async () => {
+    await queryClient.cancelQueries({
+      queryKey: searchKeys.artifacts(match, q),
+    });
+    await search.refetch();
+  };
 
   const rows = useMemo(() => buildRows(hits), [hits]);
-  const loadMore = async () => {
-    const controller = request.current;
-    if (
-      !nextPageToken ||
-      loading ||
-      moreInFlight.current ||
-      !controller ||
-      controller.signal.aborted
-    )
-      return;
-    moreInFlight.current = true;
-    setLoadingMore(true);
-    setError(null);
-    try {
-      const response = await searchArtifacts({
-        query: {
-          q,
-          match,
-          pageSize: SEARCH_PAGE_SIZE,
-          pageToken: nextPageToken,
-        },
-        signal: controller.signal,
-      });
-      if (controller.signal.aborted) return;
-      if (response.error || !response.data) {
-        setError(
-          response.error ??
-            new Error(
-              text("加载更多搜索结果失败", "Failed to load more results"),
-            ),
-        );
-        return;
-      }
-      setHits((current) => [...current, ...response.data.items]);
-      setSearchedRepos(response.data.searchedRepositories);
-      setNextPageToken(response.data.nextPageToken);
-    } catch (error) {
-      if (!controller.signal.aborted) setError(error);
-    } finally {
-      if (!controller.signal.aborted) {
-        moreInFlight.current = false;
-        setLoadingMore(false);
-      }
-    }
+  const loadMore = () => {
+    if (!nextPageToken || loading || loadingMore) return;
+    void search.fetchNextPage();
   };
 
   const openHit = (hit: GlobalArtifactSearchHit) =>
@@ -249,418 +102,32 @@ export function SearchPage() {
     representative: isMavenGroup(row) ? row.hits[0] : row,
   }));
 
-  const setRowExpanded = (tableRow: SearchTableRow, next: boolean) => {
-    setExpandedRow(next ? tableRow.key : null);
-    setSelectedVersion(
-      next && isMavenGroup(tableRow.row)
-        ? `${tableRow.row.key}:${tableRow.row.hits[0].coordinate}:${tableRow.row.hits[0].buildNumber ?? 0}`
-        : null,
-    );
-  };
+  const setRowExpanded = (tableRow: SearchTableRow, next: boolean) =>
+    setOpened({
+      scope,
+      row: next ? tableRow.key : null,
+      version:
+        next && isMavenGroup(tableRow.row)
+          ? `${tableRow.row.key}:${tableRow.row.hits[0].coordinate}:${tableRow.row.hits[0].buildNumber ?? 0}`
+          : null,
+    });
 
-  const columns: ColumnsType<SearchTableRow> = [
-    {
-      title: text("制品 / 坐标", "Artifact / coordinate"),
-      key: "coordinate",
-      width: 420,
-      render: (_, tableRow) => {
-        const expanded = expandedRow === tableRow.key;
-        const row = tableRow.row;
-        const displayCoordinate = artifactCoordinateForDisplay(
-          row.format,
-          row.coordinate,
-        );
-        return (
-          <div>
-            <div className="flex min-w-0 items-center gap-2">
-              <span
-                className="truncate font-mono text-xs text-fg"
-                title={displayCoordinate}
-                dir="auto"
-              >
-                {displayCoordinate}
-              </span>
-              <Badge
-                tone={
-                  tableRow.representative.matchKind === "digest"
-                    ? "visualization-1"
-                    : "neutral"
-                }
-              >
-                {tableRow.representative.matchKind === "digest"
-                  ? text("SHA-256 匹配", "SHA-256 match")
-                  : text("坐标匹配", "Coordinate match")}
-              </Badge>
-            </div>
-            {!isMavenGroup(row) && row.digest && (
-              <div className="mt-1">
-                <CopyableValue
-                  value={row.digest}
-                  label={row.digest.slice(0, 20)}
-                />
-              </div>
-            )}
-            <span className="sr-only">
-              {expanded
-                ? text("已展开", "Expanded")
-                : text("已收起", "Collapsed")}
-            </span>
-          </div>
-        );
-      },
-    },
-    {
-      title: text("仓库", "Repository"),
-      key: "repository",
-      width: 200,
-      render: (_, tableRow) => (
-        <Link
-          to={artifactTarget(tableRow.representative)}
-          onClick={(event) => event.stopPropagation()}
-          className="text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
-        >
-          {tableRow.row.repositoryName}
-        </Link>
-      ),
-    },
-    {
-      title: text("格式", "Format"),
-      key: "format",
-      width: 110,
-      render: (_, tableRow) => <FormatBadge format={tableRow.row.format} />,
-    },
-    {
-      title: text("版本 / 大小", "Versions / size"),
-      key: "versionOrSize",
-      width: 150,
-      render: (_, tableRow) => (
-        <span className="text-xs text-fg-secondary">
-          {isMavenGroup(tableRow.row)
-            ? text(
-                `${tableRow.row.hits.length} 个版本`,
-                `${tableRow.row.hits.length} versions`,
-              )
-            : artifactVersionSizeLabel(tableRow.row)}
-        </span>
-      ),
-    },
-    {
-      title: text("安全情报", "Security"),
-      key: "intelligence",
-      width: 150,
-      render: (_, tableRow) => (
-        <ArtifactSecurityBadge
-          summary={
-            isMavenGroup(tableRow.row)
-              ? mavenIntelligence(tableRow.row.hits)
-              : tableRow.row.intelligence
-          }
-          text={text}
-        />
-      ),
-    },
-    {
-      title: text("更新时间", "Updated"),
-      key: "createdAt",
-      width: 180,
-      render: (_, tableRow) => (
-        <span className="whitespace-nowrap text-xs text-fg-tertiary">
-          {formatDate(tableRow.representative.createdAt, locale)}
-        </span>
-      ),
-    },
-    {
-      title: text("操作", "Actions"),
-      key: "actions",
-      fixed: "right",
-      width: 100,
-      render: (_, tableRow) => {
-        const expanded = expandedRow === tableRow.key;
-        return (
-          <Space size={2}>
-            <Tooltip
-              title={
-                expanded
-                  ? text("收起详情", "Collapse details")
-                  : text("展开详情", "Expand details")
-              }
-            >
-              <Button
-                type="text"
-                size="small"
-                aria-label={`${expanded ? text("收起", "Collapse") : text("展开", "Expand")} ${tableRow.row.coordinate}`}
-                icon={expanded ? <UpOutlined /> : <DownOutlined />}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setRowExpanded(tableRow, !expanded);
-                }}
-              />
-            </Tooltip>
-            <Tooltip
-              title={text("在仓库中精确定位", "Open exact repository location")}
-            >
-              <Button
-                type="text"
-                size="small"
-                icon={<LinkOutlined />}
-                aria-label={text(
-                  `在仓库中打开 ${tableRow.row.coordinate}`,
-                  `Open ${tableRow.row.coordinate} in repository`,
-                )}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openHit(tableRow.representative);
-                }}
-              />
-            </Tooltip>
-          </Space>
-        );
-      },
-    },
-  ];
+  const columns = searchColumns({
+    expandedRow,
+    locale,
+    openHit,
+    setRowExpanded,
+    text,
+  });
 
-  const expandedRowRender = (tableRow: SearchTableRow) => {
-    const row = tableRow.row;
-    if (!formatDescriptor(row.format)) {
-      return (
-        <RepositoryFeatureUnavailable
-          feature={text("制品详情", "Artifact detail")}
-          unsupportedFormat={row.format}
-        />
-      );
-    }
-    if (isMavenGroup(row)) {
-      const hit =
-        row.hits.find(
-          (item) =>
-            `${row.key}:${item.coordinate}:${item.buildNumber ?? 0}` ===
-            selectedVersion,
-        ) ?? row.hits[0];
-      return (
-        <div className="px-2 py-1">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-medium text-fg">
-                {text("版本与构建", "Versions and builds")}
-              </div>
-              <div className="mt-1 text-xs text-fg-tertiary">
-                {text(
-                  "选择版本查看 POM、digest 和发布信息",
-                  "Select a version to view its POM, digest, and publication details",
-                )}
-              </div>
-            </div>
-            <Button
-              size="small"
-              icon={<LinkOutlined />}
-              onClick={() => openHit(tableRow.representative)}
-            >
-              {text("打开最新版本", "Open latest version")}
-            </Button>
-          </div>
-          <div className="max-h-64 overflow-y-auto rounded-md border border-line">
-            {row.hits.map((versionHit) => {
-              const versionKey = `${row.key}:${versionHit.coordinate}:${versionHit.buildNumber ?? 0}`;
-              const selected = selectedVersion === versionKey;
-              return (
-                <div
-                  key={versionKey}
-                  className={`flex items-center justify-between gap-4 border-b border-line px-3 py-2 last:border-b-0 ${selected ? "bg-[var(--ag-navigation-selected-start)]" : ""}`}
-                >
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-left"
-                    onClick={() => setSelectedVersion(versionKey)}
-                  >
-                    <div className="truncate font-mono text-xs text-fg">
-                      {mavenVersionLabel(versionHit)}
-                    </div>
-                    <div className="mt-0.5 text-xs text-fg-tertiary">
-                      {formatDate(versionHit.createdAt, locale)} ·{" "}
-                      {formatBytes(versionHit.size)} ·{" "}
-                      {versionHit.publisher ??
-                        text("发布者未记录", "Publisher not recorded")}
-                    </div>
-                  </button>
-                  <Space size={2}>
-                    <Tooltip
-                      title={
-                        versionHit.digest ?? text("暂无 digest", "No digest")
-                      }
-                    >
-                      <span>
-                        {versionHit.digest ? (
-                          <CopyableValue
-                            value={versionHit.digest}
-                            label={versionHit.digest.slice(0, 14)}
-                          />
-                        ) : (
-                          <span className="text-xs text-fg-disabled">
-                            {text("无 digest", "No digest")}
-                          </span>
-                        )}
-                      </span>
-                    </Tooltip>
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<LinkOutlined />}
-                      aria-label={text(
-                        `打开 ${versionHit.coordinate}`,
-                        `Open ${versionHit.coordinate}`,
-                      )}
-                      onClick={() => openHit(versionHit)}
-                    />
-                  </Space>
-                </div>
-              );
-            })}
-          </div>
-          <Descriptions
-            size="small"
-            column={4}
-            className="my-4"
-            items={[
-              {
-                key: "publisher",
-                label: text("发布者", "Publisher"),
-                children: hit.publisher ?? text("未记录", "Not recorded"),
-              },
-              {
-                key: "createdAt",
-                label: text("发布时间", "Published"),
-                children: formatDate(hit.createdAt, locale),
-              },
-              {
-                key: "size",
-                label: text("大小", "Size"),
-                children: formatBytes(hit.size),
-              },
-              {
-                key: "matchKind",
-                label: text("匹配依据", "Matched by"),
-                children:
-                  hit.matchKind === "digest"
-                    ? text("SHA-256 摘要", "SHA-256 digest")
-                    : text("制品坐标", "Artifact coordinate"),
-              },
-            ]}
-          />
-          {hit.digest && (
-            <div className="mb-4 rounded-md border border-line bg-surface-translucent px-3 py-2.5">
-              <div className="mb-1 text-xs font-medium text-fg-tertiary">
-                SHA-256 Digest
-              </div>
-              <CopyableValue
-                value={hit.digest}
-                label={hit.digest}
-                className="w-full text-xs text-fg-secondary"
-              />
-            </div>
-          )}
-          <MavenArtifactDetail
-            repoId={hit.repositoryId}
-            repoName={hit.repositoryName}
-            meta={{
-              coordinate: hit.coordinate,
-              digest: hit.digest,
-              size: hit.size,
-              createdAt: hit.createdAt,
-              publisher: hit.publisher,
-              buildNumber: hit.buildNumber,
-            }}
-          />
-          <div className="mt-4 flex justify-end">
-            <Button
-              type="primary"
-              icon={<LinkOutlined />}
-              onClick={() => openHit(hit)}
-            >
-              {text("在仓库中打开此版本", "Open this version in repository")}
-            </Button>
-          </div>
-        </div>
-      );
-    }
-    // Maven hits are grouped above; formats without a search detail show
-    // only the summary.
-    const SearchDetail = formatDescriptor(row.format)?.searchDetail
-      ? formatViews(row.format).ArtifactDetail
-      : undefined;
-    return (
-      <div className="px-2 py-1">
-        <Descriptions
-          size="small"
-          column={4}
-          className="mb-4"
-          items={[
-            {
-              key: "repository",
-              label: text("仓库", "Repository"),
-              children: row.repositoryName,
-            },
-            {
-              key: "publisher",
-              label: text("发布者", "Publisher"),
-              children: row.publisher ?? text("未记录", "Not recorded"),
-            },
-            {
-              key: "contentType",
-              label: text("内容类型", "Content type"),
-              children: row.contentType ?? text("未记录", "Not recorded"),
-            },
-            {
-              key: "createdAt",
-              label: text("发布时间", "Published"),
-              children: formatDate(row.createdAt, locale),
-            },
-          ]}
-        />
-        {row.digest && (
-          <div className="mb-4 rounded-md border border-line bg-surface-translucent px-3 py-2.5">
-            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-fg-tertiary">
-              <span>SHA-256 Digest</span>
-              <Badge
-                tone={
-                  row.matchKind === "digest" ? "visualization-1" : "neutral"
-                }
-              >
-                {row.matchKind === "digest"
-                  ? text("精确匹配", "Exact match")
-                  : text("校验信息", "Checksum")}
-              </Badge>
-            </div>
-            <CopyableValue
-              value={row.digest}
-              label={row.digest}
-              className="w-full text-xs text-fg-secondary"
-            />
-          </div>
-        )}
-        {SearchDetail && (
-          <SearchDetail
-            repositoryId={row.repositoryId}
-            repositoryName={row.repositoryName}
-            artifact={row}
-            initialVersion={
-              hasPackageVersions(row.format) ? row.version : undefined
-            }
-            initialReference={row.digest}
-            managed
-          />
-        )}
-        <div className="mt-4 flex justify-end">
-          <Button
-            type="primary"
-            icon={<LinkOutlined />}
-            onClick={() => openHit(row)}
-          >
-            {text("在仓库中打开", "Open in repository")}
-          </Button>
-        </div>
-      </div>
-    );
-  };
+  const expandedRowRender = (tableRow: SearchTableRow) => (
+    <SearchHitDetail
+      tableRow={tableRow}
+      openHit={openHit}
+      selectedVersion={selectedVersion}
+      setSelectedVersion={setSelectedVersion}
+    />
+  );
 
   return (
     <div className="ag-page-stack">
@@ -709,7 +176,7 @@ export function SearchPage() {
           onSearch={(value) => {
             const next = value.trim();
             if (!next) return;
-            if (next === q) setRevision((value) => value + 1);
+            if (next === q) void retry();
             else navigate(`/search?${new URLSearchParams({ q: next, match })}`);
           }}
         />

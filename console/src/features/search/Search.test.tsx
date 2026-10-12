@@ -12,6 +12,7 @@ import { searchArtifacts } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { SearchPage } from "./Search";
 import userEvent from "@testing-library/user-event";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../client")>()),
@@ -42,9 +43,11 @@ it("cancels an old query, ignores its late answer, and retries an identical quer
     .mockRejectedValueOnce(new Error("fixture unavailable"));
   render(
     <MemoryRouter initialEntries={["/search?q=alpha"]}>
-      <PreferencesProvider>
-        <SearchPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <SearchPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
   await waitFor(() => expect(searchArtifacts).toHaveBeenCalledTimes(1));
@@ -103,9 +106,11 @@ it("retains the first page after a rejected continuation and releases its loadin
     } as never);
   render(
     <MemoryRouter initialEntries={["/search?q=alpha"]}>
-      <PreferencesProvider>
-        <SearchPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <SearchPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
   await screen.findByText("alpha.bin");
@@ -144,9 +149,11 @@ it("retains existing results and cursor after an identical search refresh reject
     .mockRejectedValueOnce(new Error("refresh unavailable"));
   render(
     <MemoryRouter initialEntries={["/search?q=alpha"]}>
-      <PreferencesProvider>
-        <SearchPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <SearchPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
   await screen.findByText("alpha.bin");
@@ -165,9 +172,11 @@ it("requests literal contains matching by default", async () => {
   } as never);
   render(
     <MemoryRouter initialEntries={["/search?q=alpha"]}>
-      <PreferencesProvider>
-        <SearchPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <SearchPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
   await waitFor(() =>
@@ -196,9 +205,11 @@ it("shows unavailable detail for a search hit from a newer server format", async
   } as never);
   render(
     <MemoryRouter initialEntries={["/search?q=Widget"]}>
-      <PreferencesProvider>
-        <SearchPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <SearchPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
   await userEvent.setup().click(await screen.findByText("Widget:1.0"));
@@ -227,9 +238,11 @@ it("presents Raw global-search hits with a readable file path", async () => {
 
   render(
     <MemoryRouter initialEntries={["/search?q=ChatGPT%20Image"]}>
-      <PreferencesProvider>
-        <SearchPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <SearchPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
 
