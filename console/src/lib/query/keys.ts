@@ -15,6 +15,8 @@ export const repositoryKeys = {
   effectiveAccess: (id: string) =>
     [...repositoryKeys.detail(id), "effective-access"] as const,
   capacity: (id: string) => [...repositoryKeys.detail(id), "capacity"] as const,
+  retentionPolicy: (id: string) =>
+    [...repositoryKeys.detail(id), "retention-policy"] as const,
 };
 
 export const identityKeys = {

@@ -9,6 +9,7 @@ import {
   getRepositoryCapabilities,
   getRepositoryCapacity,
   getRepositoryEffectiveAccess,
+  getRetentionPolicy,
   listRepositories,
   listRepositoryCapacities,
 } from "../../client";
@@ -92,5 +93,25 @@ export function useInvalidateRepositories() {
   return useCallback(
     () => queryClient.invalidateQueries({ queryKey: repositoryKeys.all }),
     [queryClient],
+  );
+}
+
+/** A repository's retention policy. Its editors invalidate it after a save. */
+export function useRetentionPolicy(repositoryId: string) {
+  return useQuery({
+    queryKey: repositoryKeys.retentionPolicy(repositoryId),
+    queryFn: ({ signal }) =>
+      unwrap(getRetentionPolicy({ path: { repositoryId }, signal })),
+  });
+}
+
+export function useInvalidateRetentionPolicy(repositoryId: string) {
+  const queryClient = useQueryClient();
+  return useCallback(
+    () =>
+      queryClient.invalidateQueries({
+        queryKey: repositoryKeys.retentionPolicy(repositoryId),
+      }),
+    [queryClient, repositoryId],
   );
 }
