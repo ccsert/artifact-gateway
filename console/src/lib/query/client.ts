@@ -6,6 +6,11 @@ declare module "@tanstack/react-query" {
     queryMeta: {
       /** "ignore": a 401/403 is shown on the page and never ends the session. */
       authFailure?: "ignore";
+      /**
+       * true: the answer is the same for every principal (public site
+       * settings), so it survives a sign-in or sign-out cache reset.
+       */
+      sharedAcrossIdentities?: boolean;
     };
   }
 }

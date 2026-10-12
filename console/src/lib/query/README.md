@@ -25,9 +25,12 @@ This directory owns the shared pieces; feature folders own their query hooks
 - **Authorization failures** go through `lib/auth`: 401 ends the expired
   session, clears credentials and drops its cache; 403 keeps the signed-in
   identity and shows the resource's permission error.
-- **Identity scope.** `ConsoleQueryProvider` clears the whole cache when the
-  token or the signed-in actor changes, so protected answers never outlive
-  their principal. It must sit inside `AuthProvider`.
+- **Identity scope.** `ConsoleQueryProvider` drops every cached answer when
+  the token or the signed-in actor changes, so protected answers never outlive
+  their principal. It must sit inside `AuthProvider`. Only an answer that is
+  the same for every principal (public site settings) sets
+  `meta: { sharedAcrossIdentities: true }` and stays; removing a query cancels
+  its read, which would leave a long-lived reader waiting.
 - **Tests** wrap rendered pages in `TestQueryProvider` (`src/test/queryClient.tsx`):
   a fresh cache per render and no retries. Query results arrive a scheduler
   tick after the mocked request resolves, so wait with `findBy…` for anything

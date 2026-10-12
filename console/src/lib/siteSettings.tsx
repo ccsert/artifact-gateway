@@ -58,7 +58,7 @@ export function useSiteSettingsQuery({ fresh = false } = {}) {
       if (!settings) throw new Error("site settings are unavailable");
       return settings;
     },
-    meta: { authFailure: "ignore" },
+    meta: { authFailure: "ignore", sharedAcrossIdentities: true },
     // The provider reads once; the settings page asks again on every visit.
     staleTime: fresh ? 0 : Infinity,
   });
