@@ -213,6 +213,7 @@ describe("RepositoryScanningTab", () => {
       expect(mockListArtifactIdentities).toHaveBeenCalledWith({
         path: { repositoryId: repository.id },
         query: { purpose: "scan", q: "widget", pageSize: 50 },
+        signal: expect.any(AbortSignal),
       }),
     );
   });

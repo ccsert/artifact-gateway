@@ -180,6 +180,7 @@ describe("RepositoryDistributionTab", () => {
       expect(mockListArtifactIdentities).toHaveBeenCalledWith({
         path: { repositoryId: source.id },
         query: { purpose: "distribution", pageSize: 50 },
+        signal: expect.any(AbortSignal),
       }),
     );
     await user.click(

@@ -1,17 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Button, Input, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-  listRepositoryArtifactUsage,
-  type ArtifactUsageStat,
-  type Repository,
-  type RepositoryArtifactUsage,
-} from "../../client";
+import { type ArtifactUsageStat, type Repository } from "../../client";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { formatBytes, formatDate, formatNumber } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { ConsoleTable, FilterBar } from "../../components/ui/ConsolePrimitives";
 import { CONSOLE_PAGE_SIZE } from "../../components/ui/useConsolePagination";
+import { useArtifactUsage } from "./repositoryQueries";
 
 type UsageRow = ArtifactUsageStat & { key: string };
 
@@ -21,53 +17,20 @@ export function RepositoryUsageTab({ repo }: { repo: Repository }) {
 
 function RepositoryUsageContent({ repo }: { repo: Repository }) {
   const { text, locale } = usePreferences();
-  const [usage, setUsage] = useState<RepositoryArtifactUsage | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(CONSOLE_PAGE_SIZE);
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
-  const sequence = useRef(0);
-  const invalidatePending = useCallback(() => {
-    sequence.current++;
-  }, []);
-
-  const load = useCallback(async () => {
-    const request = ++sequence.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const { data, error: err } = await listRepositoryArtifactUsage({
-        path: { repositoryId: repo.id },
-        query: {
-          limit: pageSize,
-          offset: (page - 1) * pageSize,
-          q: query || undefined,
-        },
-      });
-      if (request !== sequence.current) return;
-      if (err) throw err;
-      if (data) {
-        // A live deletion can remove the last page; recover with one bounded read.
-        const lastPage = Math.max(1, Math.ceil(data.totalCount / pageSize));
-        if (page > lastPage) {
-          setPage(lastPage);
-          return;
-        }
-        setUsage(data);
-      }
-    } catch (nextError) {
-      if (request === sequence.current) setError(nextError);
-    } finally {
-      if (request === sequence.current) setLoading(false);
-    }
-  }, [repo.id, page, pageSize, query]);
-
-  useEffect(() => {
-    void load();
-    return invalidatePending;
-  }, [load, invalidatePending]);
+  const usageQuery = useArtifactUsage(repo.id, page, pageSize, query);
+  const usage = usageQuery.data ?? null;
+  const error = usageQuery.error;
+  const loading = usageQuery.isFetching;
+  const load = () => usageQuery.refetch();
+  // A live deletion can remove the last page; move back to the new last page.
+  const lastPage = usage
+    ? Math.max(1, Math.ceil(usage.totalCount / pageSize))
+    : page;
+  if (!usageQuery.isPlaceholderData && page > lastPage) setPage(lastPage);
 
   const columns: ColumnsType<UsageRow> = [
     {
@@ -119,7 +82,7 @@ function RepositoryUsageContent({ repo }: { repo: Repository }) {
     },
   ];
 
-  if (!usage || usage.repositoryId !== repo.id) {
+  if (!usage) {
     return error ? <ErrorBanner error={error} onRetry={load} /> : <Loading />;
   }
 

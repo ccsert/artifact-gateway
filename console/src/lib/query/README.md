@@ -124,11 +124,11 @@ entries only use effects for non-data work and leave the list once checked.
       state was extracted unchanged under issue 275; migrate its reads separately.
 - [x] `features/repository/APTOperationsTab.tsx`
 - [x] `features/repository/ProxyMavenCacheSection.tsx`
-- [ ] `features/repository/RepositoryArtifactSelect.tsx`
+- [x] `features/repository/RepositoryArtifactSelect.tsx`
 - [x] `features/repository/RepositoryArtifactsTab.tsx`
 - [x] `features/repository/RepositoryBrowseTree.tsx` — the tree loads one node
       page at a time with retry and de-duplication; it is not a cached read.
-- [ ] `features/repository/RepositoryCapacityTab.tsx`
+- [x] `features/repository/RepositoryCapacityTab.tsx`
 - [x] `features/repository/RepositoryDistributionTab.tsx`
 - [x] `features/repository/RepositoryGrantsTab.tsx`
 - [x] `features/repository/RepositoryJobsTab.tsx`
@@ -136,7 +136,7 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/repository/RepositoryRetentionTab.tsx`
 - [x] `features/repository/RepositoryScanningTab.tsx`
 - [x] `features/repository/RepositorySecurityTab.tsx`
-- [ ] `features/repository/RepositoryUsageTab.tsx`
+- [x] `features/repository/RepositoryUsageTab.tsx`
 - [x] `features/search/Search.tsx`
 - [ ] `features/settings/Authentication.tsx`
 - [ ] `features/settings/SiteSettings.tsx`
