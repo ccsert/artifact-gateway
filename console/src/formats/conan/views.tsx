@@ -1,4 +1,4 @@
-import { ConanArtifactDetail } from "../../features/artifact-detail/ArtifactRowDetail";
+import { ConanArtifactDetail } from "../../features/artifact-detail/ConanArtifactDetail";
 import type { FormatViews } from "../viewTypes";
 
 export const conanViews: FormatViews = {

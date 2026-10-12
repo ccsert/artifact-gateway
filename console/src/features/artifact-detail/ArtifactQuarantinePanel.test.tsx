@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getArtifactQuarantine, replaceArtifactQuarantine } from "../../client";
 import type { ArtifactQuarantine } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
 
 vi.mock("../../client", () => ({
@@ -35,14 +36,16 @@ function quarantine(
 
 function renderPanel(canManage = true) {
   return render(
-    <PreferencesProvider>
-      <ArtifactQuarantinePanel
-        repositoryId="repo-1"
-        coordinate="releases/widget.bin"
-        digest={digest}
-        canManage={canManage}
-      />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <ArtifactQuarantinePanel
+          repositoryId="repo-1"
+          coordinate="releases/widget.bin"
+          digest={digest}
+          canManage={canManage}
+        />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 

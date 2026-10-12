@@ -1,11 +1,9 @@
-import { useEffect, useState } from "react";
 import { Card, Tag } from "antd";
-import { getArtifactIntelligence } from "../../client";
-import type { ArtifactIntelligence } from "../../client";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
-import { ErrorBanner, isNotFound } from "../../components/ui/Feedback";
+import { ErrorBanner } from "../../components/ui/Feedback";
 import { ArtifactVulnerabilityFindings } from "./ArtifactVulnerabilityFindings";
+import { useArtifactIntelligence } from "./artifactDetailQueries";
 
 export function ArtifactIntelligencePanel({
   repositoryId,
@@ -19,37 +17,14 @@ export function ArtifactIntelligencePanel({
   digest?: string;
 }) {
   const { locale, text } = usePreferences();
-  const [metadata, setMetadata] = useState<ArtifactIntelligence | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-
-  useEffect(() => {
-    if (!repositoryId || !digest || !coordinate) {
-      setMetadata(null);
-      setError(null);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    void getArtifactIntelligence({
-      path: { repositoryId },
-      query: { coordinate, digest },
-    }).then((response) => {
-      if (cancelled) return;
-      setLoading(false);
-      if (response.error || !response.data) {
-        setMetadata(null);
-        if (response.error && !isNotFound(response.error))
-          setError(response.error);
-        return;
-      }
-      setMetadata(response.data);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [coordinate, digest, repositoryId]);
+  const intelligence = useArtifactIntelligence(
+    repositoryId,
+    coordinate,
+    digest,
+  );
+  const metadata = intelligence.data ?? null;
+  const loading = intelligence.isPending && intelligence.fetchStatus !== "idle";
+  const error = intelligence.error;
 
   if (loading) return null;
   if (error) {

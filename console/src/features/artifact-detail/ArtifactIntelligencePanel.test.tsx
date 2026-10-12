@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getArtifactIntelligence } from "../../client";
 import type { ArtifactIntelligence } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 
 vi.mock("../../client", () => ({ getArtifactIntelligence: vi.fn() }));
@@ -31,14 +32,16 @@ function intelligence(
 
 function renderPanel() {
   return render(
-    <PreferencesProvider>
-      <ArtifactIntelligencePanel
-        repositoryId="repo-1"
-        format="raw"
-        coordinate="releases/widget.bin"
-        digest={digest}
-      />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <ArtifactIntelligencePanel
+          repositoryId="repo-1"
+          format="raw"
+          coordinate="releases/widget.bin"
+          digest={digest}
+        />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 

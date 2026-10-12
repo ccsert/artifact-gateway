@@ -5,7 +5,7 @@ import { Button, Descriptions, Space, Tooltip } from "antd";
 import type { GlobalArtifactSearchHit } from "../../client";
 import { Badge } from "../../components/ui/Badge";
 import { formatBytes, formatDate } from "../../lib/format";
-import { MavenArtifactDetail } from "../artifact-detail/ArtifactRowDetail";
+import { MavenArtifactDetail } from "../artifact-detail/MavenArtifactDetail";
 import { CopyableValue } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 import { RepositoryFeatureUnavailable } from "../repository/RepositoryFeatureUnavailable";

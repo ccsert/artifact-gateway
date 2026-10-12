@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { NpmPackageDetail } from "./NpmPackageDetail";
 import { AuthProvider } from "../../lib/auth";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 
 afterEach(() => {
   cleanup();
@@ -57,14 +58,16 @@ describe("NpmPackageDetail", () => {
 
     render(
       <AuthProvider>
-        <PreferencesProvider>
-          <NpmPackageDetail
-            repoName="npm-releases"
-            packageName="@scope/widget"
-            initialVersion="2.0.0-beta.1"
-            onVersionChange={onVersionChange}
-          />
-        </PreferencesProvider>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <NpmPackageDetail
+              repoName="npm-releases"
+              packageName="@scope/widget"
+              initialVersion="2.0.0-beta.1"
+              onVersionChange={onVersionChange}
+            />
+          </PreferencesProvider>
+        </TestQueryProvider>
       </AuthProvider>,
     );
 
@@ -112,9 +115,11 @@ describe("NpmPackageDetail", () => {
 
     render(
       <AuthProvider>
-        <PreferencesProvider>
-          <NpmPackageDetail repoName="npm-proxy" packageName="proxy-widget" />
-        </PreferencesProvider>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <NpmPackageDetail repoName="npm-proxy" packageName="proxy-widget" />
+          </PreferencesProvider>
+        </TestQueryProvider>
       </AuthProvider>,
     );
 
@@ -143,12 +148,14 @@ describe("NpmPackageDetail", () => {
 
     render(
       <AuthProvider>
-        <PreferencesProvider>
-          <NpmPackageDetail
-            repoName="npm-private"
-            packageName="private-widget"
-          />
-        </PreferencesProvider>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <NpmPackageDetail
+              repoName="npm-private"
+              packageName="private-widget"
+            />
+          </PreferencesProvider>
+        </TestQueryProvider>
       </AuthProvider>,
     );
 

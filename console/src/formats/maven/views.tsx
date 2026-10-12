@@ -1,4 +1,4 @@
-import { MavenArtifactDetail } from "../../features/artifact-detail/ArtifactRowDetail";
+import { MavenArtifactDetail } from "../../features/artifact-detail/MavenArtifactDetail";
 import { MavenPublishWizard } from "../../features/repository/MavenPublishWizard";
 import type { FormatViews } from "../viewTypes";
 

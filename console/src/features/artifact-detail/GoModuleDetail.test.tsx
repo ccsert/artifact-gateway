@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { GoModuleDetail } from "./GoModuleDetail";
 import { AuthProvider } from "../../lib/auth";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 
 afterEach(() => {
   cleanup();
@@ -35,13 +36,15 @@ describe("GoModuleDetail", () => {
 
     render(
       <AuthProvider>
-        <PreferencesProvider>
-          <GoModuleDetail
-            repoName="go-public"
-            modulePath="example.com/Acme/widget"
-            initialVersion="v1.1.0"
-          />
-        </PreferencesProvider>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <GoModuleDetail
+              repoName="go-public"
+              modulePath="example.com/Acme/widget"
+              initialVersion="v1.1.0"
+            />
+          </PreferencesProvider>
+        </TestQueryProvider>
       </AuthProvider>,
     );
 
@@ -79,13 +82,15 @@ describe("GoModuleDetail", () => {
 
     render(
       <AuthProvider>
-        <PreferencesProvider>
-          <GoModuleDetail
-            repoName="go-public"
-            modulePath="example.com/team/widget"
-            initialVersion="v1.2.0-RC1"
-          />
-        </PreferencesProvider>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <GoModuleDetail
+              repoName="go-public"
+              modulePath="example.com/team/widget"
+              initialVersion="v1.2.0-RC1"
+            />
+          </PreferencesProvider>
+        </TestQueryProvider>
       </AuthProvider>,
     );
 

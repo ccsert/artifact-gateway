@@ -2,6 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { APTAssetDetail } from "./APTAssetDetail";
 
 afterEach(cleanup);
@@ -12,21 +13,23 @@ describe("APTAssetDetail", () => {
     const path = "pool/main/h/hello/hello_2.10_amd64.deb";
 
     render(
-      <PreferencesProvider>
-        <APTAssetDetail
-          repoName="debian"
-          meta={{
-            coordinate: path,
-            digest:
-              "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            size: 2048,
-            contentType: "application/vnd.debian.binary-package",
-            createdAt: "2026-08-11T04:30:00Z",
-            cachedAt: "2026-08-11T05:30:00Z",
-            sourceUrl: `https://deb.example.test/debian/${path}`,
-          }}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <APTAssetDetail
+            repoName="debian"
+            meta={{
+              coordinate: path,
+              digest:
+                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              size: 2048,
+              contentType: "application/vnd.debian.binary-package",
+              createdAt: "2026-08-11T04:30:00Z",
+              cachedAt: "2026-08-11T05:30:00Z",
+              sourceUrl: `https://deb.example.test/debian/${path}`,
+            }}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(screen.getByText("首次缓存")).toBeInTheDocument();

@@ -1,86 +1,61 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { ReloadOutlined } from "@ant-design/icons";
 import { Button, Space } from "antd";
-import {
-  createRepositoryArtifactScan,
-  getRepositoryArtifactScanStatus,
-} from "../../client";
+import { createRepositoryArtifactScan } from "../../client";
 import type { ArtifactScanStatus as ScanStatus } from "../../client";
 import { StateBadge } from "../../components/ui/Badge";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { ErrorBanner } from "../../components/ui/Feedback";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  artifactScanStatusKey,
+  useArtifactScanStatus,
+} from "./artifactDetailQueries";
 
 const activeStates = new Set(["pending", "running", "retrying"]);
 
-export function ArtifactScanStatus({
-  repositoryId,
-  format,
-  coordinate,
-  digest,
-}: {
+type ScanStatusProps = {
   repositoryId?: string;
   format: string;
   coordinate: string;
   digest?: string;
-}) {
+};
+
+export function ArtifactScanStatus(props: ScanStatusProps) {
+  // A rescan error belongs to one artifact; another one starts afresh.
+  return (
+    <ScanStatusPanel
+      key={`${props.repositoryId}:${props.coordinate}:${props.digest}`}
+      {...props}
+    />
+  );
+}
+
+function ScanStatusPanel({
+  repositoryId,
+  format,
+  coordinate,
+  digest,
+}: ScanStatusProps) {
   const { locale, text } = usePreferences();
-  const [status, setStatus] = useState<ScanStatus | null>(null);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const scan = useArtifactScanStatus(repositoryId, coordinate, digest);
+  const status = scan.data ?? null;
+  const loading = scan.isFetching;
+  const loadError = scan.error
+    ? text("读取扫描状态失败", "Failed to load scan status")
+    : "";
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
-  const [loadError, setLoadError] = useState("");
-  const requestSequence = useRef(0);
-
-  const load = useCallback(async () => {
-    if (!repositoryId || !coordinate || !digest) return;
-    const requestID = ++requestSequence.current;
-    setLoading(true);
-    try {
-      const response = await getRepositoryArtifactScanStatus({
-        path: { repositoryId },
-        query: { coordinate, digest },
-      });
-      if (requestID !== requestSequence.current) return;
-      if (response.error || !response.data) {
-        setLoadError(text("读取扫描状态失败", "Failed to load scan status"));
-        return;
-      }
-      setLoadError("");
-      setStatus(response.data);
-    } catch {
-      if (requestID === requestSequence.current) {
-        setLoadError(text("读取扫描状态失败", "Failed to load scan status"));
-      }
-    } finally {
-      if (requestID === requestSequence.current) setLoading(false);
-    }
-  }, [coordinate, digest, repositoryId, text]);
-
-  useEffect(() => {
-    requestSequence.current++;
-    setError("");
-    setLoadError("");
-    setStatus(null);
-    void load();
-    return () => {
-      // This monotonic generation ref invalidates any response that resolves
-      // after an identity change or unmount; it is not a rendered-node ref.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      requestSequence.current++;
-    };
-  }, [load]);
-
-  useEffect(() => {
-    if (!status || !activeStates.has(status.state)) return;
-    const timer = window.setInterval(() => void load(), 2500);
-    return () => window.clearInterval(timer);
-  }, [load, status]);
+  const load = () => scan.refetch();
 
   if (!repositoryId || !digest) return null;
 
   const rescan = async () => {
-    requestSequence.current++;
+    const key = artifactScanStatusKey(repositoryId, coordinate, digest);
+    // A status read that started before the rescan must not replace it.
+    await queryClient.cancelQueries({ queryKey: key });
     setScanning(true);
     setError("");
     try {
@@ -93,8 +68,7 @@ export function ArtifactScanStatus({
         setError(text("重新扫描入队失败", "Failed to queue a rescan"));
         return;
       }
-      setLoadError("");
-      setStatus({
+      queryClient.setQueryData<ScanStatus>(key, {
         coordinate,
         digest,
         state: response.data.state,
