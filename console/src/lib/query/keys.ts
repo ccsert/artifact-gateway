@@ -103,6 +103,10 @@ export const auditKeys = {
   retentionJobs: () => [...auditKeys.all, "retention-jobs"] as const,
 };
 
+export const siteKeys = {
+  settings: () => ["site", "settings"] as const,
+};
+
 export const searchKeys = {
   all: ["search"] as const,
   artifacts: (match: string, q: string) =>

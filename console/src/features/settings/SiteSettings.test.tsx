@@ -23,6 +23,7 @@ import { SiteName } from "../../components/ui/SiteBrand";
 import { defaultConsoleThemes } from "../../lib/consoleTheme";
 import { PreferencesProvider } from "../../lib/preferences";
 import { SiteSettingsProvider } from "../../lib/siteSettings";
+import { TestQueryProvider } from "../../test/queryClient";
 import { SiteSettingsPage } from "./SiteSettings";
 
 vi.mock("../../client", () => ({
@@ -83,16 +84,18 @@ const uploadedTheme: ConsoleTheme = {
 
 function renderPage() {
   return render(
-    <SiteSettingsProvider>
-      <PreferencesProvider>
-        <AntdProvider>
-          <div data-testid="global-site-name">
-            <SiteName />
-          </div>
-          <SiteSettingsPage />
-        </AntdProvider>
-      </PreferencesProvider>
-    </SiteSettingsProvider>,
+    <TestQueryProvider>
+      <SiteSettingsProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            <div data-testid="global-site-name">
+              <SiteName />
+            </div>
+            <SiteSettingsPage />
+          </AntdProvider>
+        </PreferencesProvider>
+      </SiteSettingsProvider>
+    </TestQueryProvider>,
   );
 }
 
