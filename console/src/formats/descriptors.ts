@@ -38,6 +38,7 @@ const base = {
   distributionSuite: false,
   digestReferences: false,
   publicArtifactColumn: "coordinate",
+  scannerSupport: true,
 } as const satisfies Partial<FormatDescriptor>;
 
 /**
@@ -162,6 +163,7 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
       label: `/cargo/${name}/`,
     }),
     publishGuide: true,
+    scannerSupport: false,
   },
   conan: {
     ...base,
@@ -219,5 +221,6 @@ export const FORMAT_DESCRIPTORS: Record<Format, FormatDescriptor> = {
     publicArtifactColumn: "aptPath",
     coordinateExample:
       "pool/main/g/gateway-widget/gateway-widget_1.2.3_amd64.deb",
+    scannerSupport: false,
   },
 };

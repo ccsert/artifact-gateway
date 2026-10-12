@@ -17,6 +17,12 @@ export const repositoryKeys = {
   capacity: (id: string) => [...repositoryKeys.detail(id), "capacity"] as const,
   retentionPolicy: (id: string) =>
     [...repositoryKeys.detail(id), "retention-policy"] as const,
+  securityPolicy: (id: string) =>
+    [...repositoryKeys.detail(id), "security-policy"] as const,
+  quarantineReadPolicy: (id: string) =>
+    [...repositoryKeys.detail(id), "quarantine-read-policy"] as const,
+  aptSigningState: (id: string) =>
+    [...repositoryKeys.detail(id), "apt-signing-state"] as const,
   replicationPlans: (id: string) =>
     [...repositoryKeys.detail(id), "replication-plans"] as const,
   aptLifecycle: (id: string, suite: string) =>

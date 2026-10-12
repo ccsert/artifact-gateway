@@ -6,6 +6,9 @@ import {
 import { useCallback } from "react";
 import {
   getAptLifecycleState,
+  getAptRepositorySigningState,
+  getQuarantineReadPolicy,
+  getSecurityPolicy,
   getRepository,
   getRepositoryCapabilities,
   getRepositoryCapacity,
@@ -15,6 +18,7 @@ import {
   listRepositoryReplications,
   listRepositoryCapacities,
 } from "../../client";
+import type { QuarantineReadPolicy, SecurityPolicy } from "../../client";
 import { isNotFound } from "../../components/ui/Feedback";
 import { loadFormatProfiles } from "../../lib/formatProfiles";
 import { unwrap } from "../../lib/query/client";
@@ -164,6 +168,64 @@ export function useReplicationPlans(repositoryId: string) {
         throw error;
       }
     },
+    staleTime: 0,
+  });
+}
+
+/** Promotion admission rules. The admission card writes saves back here. */
+export function useSecurityPolicy(repositoryId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: repositoryKeys.securityPolicy(repositoryId),
+    queryFn: ({ signal }) =>
+      unwrap(getSecurityPolicy({ path: { repositoryId }, signal })),
+    enabled,
+  });
+}
+
+export function useSetSecurityPolicy(repositoryId: string) {
+  const queryClient = useQueryClient();
+  return useCallback(
+    (policy: SecurityPolicy) =>
+      queryClient.setQueryData(
+        repositoryKeys.securityPolicy(repositoryId),
+        policy,
+      ),
+    [queryClient, repositoryId],
+  );
+}
+
+/** Whether quarantined artifacts can be read. Saves are written back here. */
+export function useQuarantineReadPolicy(
+  repositoryId: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: repositoryKeys.quarantineReadPolicy(repositoryId),
+    queryFn: ({ signal }) =>
+      unwrap(getQuarantineReadPolicy({ path: { repositoryId }, signal })),
+    enabled,
+  });
+}
+
+export function useSetQuarantineReadPolicy(repositoryId: string) {
+  const queryClient = useQueryClient();
+  return useCallback(
+    (policy: QuarantineReadPolicy) =>
+      queryClient.setQueryData(
+        repositoryKeys.quarantineReadPolicy(repositoryId),
+        policy,
+      ),
+    [queryClient, repositoryId],
+  );
+}
+
+/** A hosted APT repository's signing keys and signer health. */
+export function useAptSigningState(repositoryId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: repositoryKeys.aptSigningState(repositoryId),
+    queryFn: ({ signal }) =>
+      unwrap(getAptRepositorySigningState({ path: { repositoryId }, signal })),
+    enabled,
     staleTime: 0,
   });
 }

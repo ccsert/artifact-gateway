@@ -11,6 +11,7 @@ import {
 import type { Repository } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RepositorySecurityTab } from "./RepositorySecurityTab";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("../../client", () => ({
   getAptRepositorySigningState: vi.fn(),
@@ -76,12 +77,14 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab
-          repo={{ ...repo, format: "apt" }}
-          publicationScanning={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab
+            repo={{ ...repo, format: "apt" }}
+            publicationScanning={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("签名信任与当前快照")).toBeInTheDocument();
@@ -111,25 +114,29 @@ describe("RepositorySecurityTab", () => {
       } as never);
 
     const view = render(
-      <PreferencesProvider>
-        <RepositorySecurityTab
-          repo={{ ...repo, format: "apt" }}
-          publicationScanning={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab
+            repo={{ ...repo, format: "apt" }}
+            publicationScanning={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
     view.rerender(
-      <PreferencesProvider>
-        <RepositorySecurityTab
-          repo={{
-            ...repo,
-            id: "33333333-3333-4333-8333-333333333333",
-            name: "apt-next",
-            format: "apt",
-          }}
-          publicationScanning={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab
+            repo={{
+              ...repo,
+              id: "33333333-3333-4333-8333-333333333333",
+              name: "apt-next",
+              format: "apt",
+            }}
+            publicationScanning={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("生产信任已固定")).toBeInTheDocument();
@@ -156,12 +163,14 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab
-          repo={{ ...repo, format: "apt" }}
-          publicationScanning={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab
+            repo={{ ...repo, format: "apt" }}
+            publicationScanning={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -205,9 +214,11 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab repo={repo} publicationScanning />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repo} publicationScanning />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("当前版本 3")).toBeInTheDocument();
@@ -245,9 +256,11 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab repo={repo} publicationScanning={false} />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repo} publicationScanning={false} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -269,9 +282,11 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab repo={repo} publicationScanning />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repo} publicationScanning />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     const readSwitch = await screen.findByRole("switch", {
@@ -304,12 +319,14 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab
-          repo={{ ...repo, format: "go", name: "go-releases" }}
-          publicationScanning={false}
-        />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab
+            repo={{ ...repo, format: "go", name: "go-releases" }}
+            publicationScanning={false}
+          />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(
@@ -328,9 +345,11 @@ describe("RepositorySecurityTab", () => {
     } as never);
 
     render(
-      <PreferencesProvider>
-        <RepositorySecurityTab repo={repo} publicationScanning />
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositorySecurityTab repo={repo} publicationScanning />
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByText("读取策略失败")).toBeInTheDocument();
