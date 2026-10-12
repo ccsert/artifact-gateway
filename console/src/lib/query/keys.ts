@@ -96,6 +96,11 @@ export const groupKeys = {
   resolution: (id: string) => [...groupKeys.all, "resolution", id] as const,
 };
 
+export const auditKeys = {
+  all: ["audits"] as const,
+  pages: (filters: object) => [...auditKeys.all, "pages", filters] as const,
+};
+
 export const searchKeys = {
   all: ["search"] as const,
   artifacts: (match: string, q: string) =>
