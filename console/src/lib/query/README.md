@@ -142,3 +142,10 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/settings/SiteSettings.tsx`
 - [ ] `lib/preferences.tsx`
 - [x] `lib/siteSettings.tsx`
+
+Quota alerts and email notifications (`features/system`) keep their own
+`useQuotaSnapshot` and `useQuotaAction` for now. Their denial handling differs
+from the shared layer: a password-change or permission denial blocks the whole
+workspace until an explicit refresh succeeds, and an older read or a late
+mutation never lands after a newer one. Their own tests pin this. Move them
+onto queries in a separate change that keeps those rules.

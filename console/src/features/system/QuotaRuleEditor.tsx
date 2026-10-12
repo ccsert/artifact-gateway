@@ -24,6 +24,7 @@ import { usePreferences } from "../../lib/preferences";
 import {
   parsePolicy,
   policyDraft,
+  policyErrorMessage,
   policyErrors,
   safeQuotaError,
   isQuotaAuthError,
@@ -57,35 +58,8 @@ export function QuotaRuleEditor({
   const baseId = useId();
   const { formRef, attempted, reportInvalid } = useFormValidationFocus();
   const errors = attempted ? policyErrors(draft) : {};
-  const errorFor = (key: keyof RepositoryQuotaAlertPolicy) => {
-    switch (errors[key]) {
-      case "percent":
-        return text(
-          "请输入大于 0 且不超过 100 的百分比，最多两位小数。",
-          "Enter a percentage above 0 and at most 100, with up to two decimals.",
-        );
-      case "seconds":
-        return text(
-          "请输入 1–86400 的整数秒。",
-          "Enter integer seconds from 1–86400.",
-        );
-      case "sampleAge":
-        return text(
-          "请输入 30–3600 的整数秒。",
-          "Enter integer seconds from 30–3600.",
-        );
-      case "recoveryOrder":
-        return text(
-          "恢复阈值必须低于警告阈值。",
-          "Recovery must be below the warning threshold.",
-        );
-      case "warningOrder":
-        return text(
-          "警告阈值必须低于严重阈值。",
-          "Warning must be below the critical threshold.",
-        );
-    }
-  };
+  const errorFor = (key: keyof RepositoryQuotaAlertPolicy) =>
+    policyErrorMessage(errors[key], text);
   const repositoryError =
     attempted && !repositoryId
       ? text("请选择仓库。", "Choose a repository.")
