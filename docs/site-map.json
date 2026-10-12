@@ -91,6 +91,7 @@
       "title": { "en": "Quality, performance, and release", "zh-CN": "质量、性能与发布" },
       "items": [
         { "id": "performance", "title": { "en": "Performance baseline", "zh-CN": "性能基线" }, "en": "docs/performance-baseline.md", "zh-CN": "docs/performance-baseline.zh-CN.md" },
+        { "id": "artifact-contains-search-evidence", "title": { "en": "Artifact contains search evidence", "zh-CN": "制品包含搜索实测" }, "en": "docs/reports/artifact-contains-search-2026-10-12.md", "zh-CN": "docs/reports/artifact-contains-search-2026-10-12.zh-CN.md" },
         { "id": "quality-assessment", "title": { "en": "Project quality assessment", "zh-CN": "项目质量评估" }, "en": "docs/project-quality-assessment.md", "zh-CN": "docs/project-quality-assessment.zh-CN.md" },
         { "id": "backend-checklist", "title": { "en": "Backend completion checklist", "zh-CN": "后端完成度检查表" }, "en": "docs/backend-completion-checklist.md", "zh-CN": "docs/backend-completion-checklist.zh-CN.md" },
         { "id": "release-readiness", "title": { "en": "Release readiness", "zh-CN": "发布准备" }, "en": "docs/release-readiness.md", "zh-CN": "docs/release-readiness.zh-CN.md" },

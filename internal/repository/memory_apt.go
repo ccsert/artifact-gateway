@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -66,7 +65,7 @@ func (s *MemoryStore) CacheAPTAsset(_ context.Context, incoming APTAsset) (APTAs
 	return incoming, nil
 }
 
-func (s *MemoryStore) ListAPTAssets(_ context.Context, repositoryID, prefix string, limit int, after string) ([]APTAsset, error) {
+func (s *MemoryStore) ListAPTAssets(_ context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]APTAsset, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if limit <= 0 {
@@ -74,7 +73,7 @@ func (s *MemoryStore) ListAPTAssets(_ context.Context, repositoryID, prefix stri
 	}
 	items := make([]APTAsset, 0)
 	for _, asset := range s.aptAssets {
-		if asset.RepositoryID != repositoryID || !strings.HasPrefix(asset.Path, prefix) || (after != "" && asset.Path <= after) {
+		if asset.RepositoryID != repositoryID || !searchTextMatches(asset.Path, prefix, matches) || (after != "" && asset.Path <= after) {
 			continue
 		}
 		items = append(items, asset)

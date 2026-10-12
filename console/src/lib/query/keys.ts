@@ -75,8 +75,8 @@ export const formatKeys = {
 export const publicKeys = {
   all: ["public"] as const,
   catalog: () => [...publicKeys.all, "catalog"] as const,
-  artifacts: (repositoryId: string, query: string) =>
-    [...publicKeys.all, "artifacts", repositoryId, query] as const,
+  artifacts: (repositoryId: string, query: string, match = "contains") =>
+    [...publicKeys.all, "artifacts", repositoryId, query, match] as const,
   artifactLookup: (repositoryId: string, coordinate: string) =>
     [...publicKeys.all, "artifact-lookup", repositoryId, coordinate] as const,
 };

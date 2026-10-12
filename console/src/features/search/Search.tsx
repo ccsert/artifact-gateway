@@ -4,13 +4,16 @@ import {
   hasPackageVersions,
 } from "../../formats";
 import { formatViews } from "../../formats/views";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DownOutlined, LinkOutlined, UpOutlined } from "@ant-design/icons";
 import { Button, Descriptions, Input, Space, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { searchArtifacts } from "../../client";
-import type { GlobalArtifactSearchHit } from "../../client";
+import type {
+  ArtifactSearchMatch,
+  GlobalArtifactSearchHit,
+} from "../../client";
 import { PageHeader, Pagination } from "../../components/ui/Layout";
 import { Loading, ErrorBanner, EmptyState } from "../../components/ui/Feedback";
 import { Badge, FormatBadge } from "../../components/ui/Badge";
@@ -25,6 +28,8 @@ import {
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 import { RepositoryFeatureUnavailable } from "../repository/RepositoryFeatureUnavailable";
+
+import { ArtifactSearchMatchControl } from "../../components/ui/ArtifactSearchMatchControl";
 
 const SEARCH_PAGE_SIZE = 100;
 
@@ -125,6 +130,12 @@ export function SearchPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const q = (params.get("q") ?? "").trim();
+  const match: ArtifactSearchMatch =
+    params.get("match") === "prefix" ? "prefix" : "contains";
+  const [revision, setRevision] = useState(0);
+  const request = useRef<AbortController | null>(null);
+  const scope = useRef<string | null>(null);
+  const moreInFlight = useRef(false);
   const [query, setQuery] = useState(q);
   const [hits, setHits] = useState<GlobalArtifactSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -136,51 +147,75 @@ export function SearchPage() {
   const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+    request.current = controller;
+    moreInFlight.current = false;
     setQuery(q);
-    if (!q) {
+    setError(null);
+    const nextScope = `${match}:${q}`;
+    if (scope.current !== nextScope) {
       setHits([]);
-      setLoading(false);
-      setError(null);
       setSearchedRepos(0);
       setNextPageToken(undefined);
-      return;
+      setExpandedRow(null);
+      setSelectedVersion(null);
+      scope.current = nextScope;
     }
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setHits([]);
-    setSearchedRepos(0);
-    setNextPageToken(undefined);
-    void searchArtifacts({ query: { q, pageSize: SEARCH_PAGE_SIZE } }).then(
-      (response) => {
-        if (cancelled) return;
-        if (response.error || !response.data)
-          setError(
-            response.error ??
-              new Error(text("搜索制品失败", "Artifact search failed")),
-          );
-        else {
-          setHits(response.data.items);
-          setSearchedRepos(response.data.searchedRepositories);
-          setNextPageToken(response.data.nextPageToken);
+    setLoadingMore(false);
+    setLoading(Boolean(q));
+    if (q) {
+      void (async () => {
+        try {
+          const response = await searchArtifacts({
+            query: { q, match, pageSize: SEARCH_PAGE_SIZE },
+            signal: controller.signal,
+          });
+          if (controller.signal.aborted) return;
+          if (response.error || !response.data) {
+            setError(
+              response.error ??
+                new Error(text("搜索制品失败", "Artifact search failed")),
+            );
+          } else {
+            setHits(response.data.items);
+            setSearchedRepos(response.data.searchedRepositories);
+            setNextPageToken(response.data.nextPageToken);
+          }
+        } catch (error) {
+          if (!controller.signal.aborted) setError(error);
+        } finally {
+          if (!controller.signal.aborted) setLoading(false);
         }
-        setLoading(false);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [q, text]);
+      })();
+    }
+    return () => controller.abort();
+  }, [q, match, revision, text]);
 
   const rows = useMemo(() => buildRows(hits), [hits]);
   const loadMore = async () => {
-    if (!nextPageToken || loadingMore) return;
+    const controller = request.current;
+    if (
+      !nextPageToken ||
+      loading ||
+      moreInFlight.current ||
+      !controller ||
+      controller.signal.aborted
+    )
+      return;
+    moreInFlight.current = true;
     setLoadingMore(true);
     setError(null);
     try {
       const response = await searchArtifacts({
-        query: { q, pageSize: SEARCH_PAGE_SIZE, pageToken: nextPageToken },
+        query: {
+          q,
+          match,
+          pageSize: SEARCH_PAGE_SIZE,
+          pageToken: nextPageToken,
+        },
+        signal: controller.signal,
       });
+      if (controller.signal.aborted) return;
       if (response.error || !response.data) {
         setError(
           response.error ??
@@ -193,10 +228,13 @@ export function SearchPage() {
       setHits((current) => [...current, ...response.data.items]);
       setSearchedRepos(response.data.searchedRepositories);
       setNextPageToken(response.data.nextPageToken);
-    } catch (nextError) {
-      setError(nextError);
+    } catch (error) {
+      if (!controller.signal.aborted) setError(error);
     } finally {
-      setLoadingMore(false);
+      if (!controller.signal.aborted) {
+        moreInFlight.current = false;
+        setLoadingMore(false);
+      }
     }
   };
 
@@ -640,26 +678,42 @@ export function SearchPage() {
               )
         }
       />
-      <Input.Search
-        allowClear
-        enterButton={
-          <Button type="primary" disabled={!query.trim()}>
-            {text("搜索", "Search")}
-          </Button>
-        }
-        className="max-w-3xl"
-        placeholder={text(
-          "输入坐标、路径、镜像名前缀或 SHA-256…",
-          "Enter a coordinate, path, image prefix, or SHA-256 digest…",
-        )}
-        value={query}
-        loading={loading}
-        onChange={(event) => setQuery(event.target.value)}
-        onSearch={(value) => {
-          const next = value.trim();
-          if (next) navigate(`/search?q=${encodeURIComponent(next)}`);
-        }}
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <ArtifactSearchMatchControl
+          value={match}
+          onChange={(value) =>
+            navigate(
+              `/search?${new URLSearchParams({ ...(q ? { q } : {}), match: value })}`,
+            )
+          }
+        />
+        <Input.Search
+          allowClear
+          enterButton={
+            <Button type="primary" disabled={!query.trim()}>
+              {text("搜索", "Search")}
+            </Button>
+          }
+          className="max-w-3xl"
+          placeholder={text(
+            "输入坐标、包名、路径关键词或 SHA-256…",
+            "Enter a coordinate, package, path keyword, or SHA-256 digest…",
+          )}
+          value={query}
+          loading={loading}
+          onChange={(event) => {
+            const value = event.target.value;
+            setQuery(value);
+            if (!value) navigate(`/search?${new URLSearchParams({ match })}`);
+          }}
+          onSearch={(value) => {
+            const next = value.trim();
+            if (!next) return;
+            if (next === q) setRevision((value) => value + 1);
+            else navigate(`/search?${new URLSearchParams({ q: next, match })}`);
+          }}
+        />
+      </div>
       {!q ? (
         <EmptyState
           title={text("输入关键词开始搜索", "Enter a keyword to search")}
@@ -670,7 +724,7 @@ export function SearchPage() {
         />
       ) : error && hits.length === 0 ? (
         <ErrorBanner error={error} />
-      ) : loading ? (
+      ) : loading && hits.length === 0 ? (
         <Loading
           label={
             searchedRepos
@@ -714,7 +768,9 @@ export function SearchPage() {
                 value:
                   hits[0]?.matchKind === "digest"
                     ? text("SHA-256 精确", "Exact SHA-256")
-                    : text("坐标前缀", "Coordinate prefix"),
+                    : (hits[0]?.match ?? match) === "contains"
+                      ? text("关键词包含", "Literal contains")
+                      : text("坐标前缀", "Coordinate prefix"),
                 hint:
                   hits[0]?.matchKind === "digest"
                     ? text(
@@ -766,6 +822,7 @@ export function SearchPage() {
           <Pagination
             hasMore={!!nextPageToken}
             loading={loadingMore}
+            disabled={loading}
             onMore={() => void loadMore()}
           />
         </>

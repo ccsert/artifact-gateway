@@ -483,7 +483,7 @@ func (s *PostgresStore) GetNPMVersionByTarball(ctx context.Context, repositoryID
 	return version, err
 }
 
-func (s *PostgresStore) SearchNPMPackages(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]NPMPackageSummary, error) {
+func (s *PostgresStore) SearchNPMPackages(ctx context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]NPMPackageSummary, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -500,10 +500,10 @@ func (s *PostgresStore) SearchNPMPackages(ctx context.Context, repositoryID, pre
 			ORDER BY (nv.version=p.dist_tags->>'latest') DESC,nv.created_at DESC,nv.version DESC
 			LIMIT 1
 		) latest ON true
-		WHERE p.repository_id::text=$1 AND NOT p.negative AND ($2='' OR p.name LIKE $2 || '%' ESCAPE '\') AND p.name>$3
+		WHERE p.repository_id=$1::uuid AND NOT p.negative AND ($2='' OR `+searchTextSQL("p.name", "$2", matches)+`) AND p.name>$3
 		GROUP BY p.repository_id,p.name,p.created_at,p.updated_at,latest.version,latest.digest,latest.integrity,
 		         latest.shasum,latest.tarball_name,latest.object_key,latest.size,latest.manifest,latest.publisher,latest.created_at
-		ORDER BY p.name LIMIT $4`, repositoryID, escapeLikePrefix(prefix), after, limit)
+		ORDER BY p.name LIMIT $4`, repositoryID, searchTextPattern(prefix, matches), after, limit)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,5 @@
 import { listMavenCoordinates, searchRepositoryArtifacts } from "../../client";
+import type { ArtifactSearchMatch } from "../../client";
 import type { ArtifactRow } from "../../features/repository/artifactRow";
 import { mavenGA, mavenVersion } from "../../lib/usage";
 import type { ArtifactPage, ListArtifacts } from "../artifactListing";
@@ -8,10 +9,13 @@ async function searchMavenPage(
   query: string,
   pageSize: number,
   pageToken?: string,
+  match?: ArtifactSearchMatch,
+  signal?: AbortSignal,
 ): Promise<ArtifactPage> {
   const response = await searchRepositoryArtifacts({
     path: { repositoryId },
-    query: { q: query, pageSize, pageToken },
+    query: { q: query, pageSize, pageToken, ...(match ? { match } : {}) },
+    signal,
   });
   return {
     items: (response.data?.items ?? []).map((item) => ({
@@ -43,6 +47,8 @@ export const listMavenArtifacts: ListArtifacts = async ({
   pageSize,
   artifactTarget,
   buildTarget,
+  match,
+  signal,
 }) => {
   if (query) {
     const first = await searchMavenPage(
@@ -50,6 +56,8 @@ export const listMavenArtifacts: ListArtifacts = async ({
       query,
       pageSize,
       pageToken,
+      match,
+      signal,
     );
     if (pageToken || !artifactTarget || !buildTarget || first.error) {
       return first;
@@ -59,7 +67,14 @@ export const listMavenArtifacts: ListArtifacts = async ({
     let target = first.items.find(isTarget);
     let next = first.nextPageToken;
     while (!target && next) {
-      const page = await searchMavenPage(repositoryId, query, pageSize, next);
+      const page = await searchMavenPage(
+        repositoryId,
+        query,
+        pageSize,
+        next,
+        match,
+        signal,
+      );
       if (page.error) {
         return { items: first.items, nextPageToken: next, error: page.error };
       }
@@ -76,6 +91,7 @@ export const listMavenArtifacts: ListArtifacts = async ({
   const response = await listMavenCoordinates({
     path: { repositoryId },
     query: { pageSize, pageToken },
+    signal,
   });
   const byGA = new Map<
     string,

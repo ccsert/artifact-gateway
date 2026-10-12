@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FolderOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import { Button, Input, Segmented, Select } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { listProxyCacheEntries } from "../../client";
-import type { BrowseNode, Repository } from "../../client";
+import type { ArtifactSearchMatch, BrowseNode, Repository } from "../../client";
 import { Badge } from "../../components/ui/Badge";
 import { ArtifactSecurityBadge } from "../artifact-detail/ArtifactSecurityBadge";
 import {
@@ -41,6 +41,8 @@ import {
 import type { ArtifactRow } from "./artifactRow";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
+import { ArtifactSearchMatchControl } from "../../components/ui/ArtifactSearchMatchControl";
+
 /** The proxy cache answered without a page; shown as its own message. */
 const PROXY_CACHE_UNAVAILABLE = Symbol("proxy-cache-unavailable");
 
@@ -50,11 +52,13 @@ async function listProxyMavenPage(
   query: string,
   assetFilter: ProxyMavenAssetFilter | "all",
   pageToken?: string,
+  signal?: AbortSignal,
 ): Promise<ArtifactPage & { totalEstimate?: number }> {
   try {
     const { data: pageData, error: requestError } = await listProxyCacheEntries(
       {
         path: { repositoryId },
+        signal,
         query: {
           groupBy: "version",
           assetFilter,
@@ -120,6 +124,14 @@ export function RepositoryArtifactsTab({
   const [q, setQ] = useState(
     artifactCoordinateForDisplay(repo.format, artifactTarget),
   );
+  const [match, setMatch] = useState<ArtifactSearchMatch>(
+    artifactTarget ? "prefix" : "contains",
+  );
+  const matchRef = useRef(match);
+  const submittedQuery = useRef(q);
+  const requestRef = useRef<AbortController | null>(null);
+  const moreInFlight = useRef(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [view, setView] = useState<"directory" | "list">("list");
   const [rows, setRows] = useState<ArtifactRow[]>([]);
   const [nextToken, setNextToken] = useState<string | undefined>();
@@ -143,56 +155,84 @@ export function RepositoryArtifactsTab({
 
   useEffect(() => {
     setView("list");
-  }, [repo.id]);
+    setRows([]);
+    setNextToken(undefined);
+    setError(null);
+    setExpandedImage(null);
+  }, [repo.id, format]);
 
   const load = useCallback(
     async (query: string, pageToken?: string) => {
-      if (!pageToken) {
-        setLoading(true);
-        setError(null);
-      }
-      // One await for either source: the proxy cache or the format's list.
-      const result: ArtifactPage & { totalEstimate?: number } =
-        await (proxyMaven
-          ? listProxyMavenPage(
-              repo.id,
-              query,
-              assetTarget ? "all" : proxyAssetFilter,
-              pageToken,
-            )
-          : listArtifactPage(format, {
-              repositoryId: repo.id,
-              query,
-              pageToken,
-              pageSize: 50,
-              artifactTarget,
-              buildTarget,
-            }));
-      const err =
-        result.error === PROXY_CACHE_UNAVAILABLE
-          ? new Error(text("读取 Proxy 缓存失败", "Failed to load proxy cache"))
-          : result.error;
-      const items = result.items;
-      const next = result.nextPageToken;
-      if (proxyMaven && !err) {
-        setProxyTotal(result.totalEstimate ?? 0);
-        setProxyPage((current) => (pageToken ? current + 1 : 1));
-      }
+      if (pageToken && moreInFlight.current) return;
+      requestRef.current?.abort();
+      const controller = new AbortController();
+      requestRef.current = controller;
+      moreInFlight.current = Boolean(pageToken);
+      setLoadingMore(Boolean(pageToken));
+      try {
+        if (!pageToken) {
+          submittedQuery.current = query;
+          setNextToken(undefined);
+          setLoading(true);
+          setError(null);
+        }
+        // One await for either source: the proxy cache or the format's list.
+        const result: ArtifactPage & { totalEstimate?: number } =
+          await (proxyMaven
+            ? listProxyMavenPage(
+                repo.id,
+                query,
+                assetTarget ? "all" : proxyAssetFilter,
+                pageToken,
+                controller.signal,
+              )
+            : listArtifactPage(format, {
+                repositoryId: repo.id,
+                query,
+                pageToken,
+                pageSize: 50,
+                match: matchRef.current,
+                signal: controller.signal,
+                artifactTarget,
+                buildTarget,
+              }));
+        if (controller.signal.aborted) return;
+        const err =
+          result.error === PROXY_CACHE_UNAVAILABLE
+            ? new Error(
+                text("读取 Proxy 缓存失败", "Failed to load proxy cache"),
+              )
+            : result.error;
+        const items = result.items;
+        const next = result.nextPageToken;
+        if (proxyMaven && !err) {
+          setProxyTotal(result.totalEstimate ?? 0);
+          setProxyPage((current) => (pageToken ? current + 1 : 1));
+        }
 
-      setLoading(false);
-      if (err) {
-        setError(err);
-        return;
-      }
-      setRows((prev) => (pageToken ? [...prev, ...items] : items));
-      setNextToken(next);
-      if (!pageToken && artifactTarget) {
-        const target = items.find(
-          (item) =>
-            item.coordinate === artifactTarget &&
-            (proxyMaven || !buildTarget || item.buildNumber === buildTarget),
-        );
-        setExpandedImage(target?.key ?? null);
+        setLoading(false);
+        if (err) {
+          setError(err);
+          return;
+        }
+        setRows((prev) => (pageToken ? [...prev, ...items] : items));
+        setNextToken(next);
+        if (!pageToken && artifactTarget) {
+          const target = items.find(
+            (item) =>
+              item.coordinate === artifactTarget &&
+              (proxyMaven || !buildTarget || item.buildNumber === buildTarget),
+          );
+          setExpandedImage(target?.key ?? null);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) setError(error);
+      } finally {
+        if (!controller.signal.aborted) {
+          moreInFlight.current = false;
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
     [
@@ -214,8 +254,12 @@ export function RepositoryArtifactsTab({
     const targetQuery = proxyMaven
       ? (assetTarget ?? artifactTarget)
       : artifactCoordinateForDisplay(format, artifactTarget);
+    const matching = artifactTarget ? "prefix" : "contains";
+    matchRef.current = matching;
+    setMatch(matching);
     setQ(targetQuery);
     void load(targetQuery);
+    return () => requestRef.current?.abort();
   }, [artifactTarget, assetTarget, format, proxyMaven, load]);
 
   const searchPlaceholder = descriptor
@@ -588,10 +632,30 @@ export function RepositoryArtifactsTab({
             onChange={setView}
           />
         )}
+        {!proxyMaven && descriptor?.serverKeywordSearch && (
+          <ArtifactSearchMatchControl
+            value={match}
+            onChange={(value) => {
+              matchRef.current = value;
+              setMatch(value);
+              setExpandedImage(null);
+              void load(q);
+            }}
+          />
+        )}
         <Input.Search
+          loading={loading}
           allowClear
           className="ag-artifact-view-search"
-          placeholder={searchPlaceholder ?? text("搜索…", "Search…")}
+          placeholder={
+            descriptor?.serverKeywordSearch &&
+            match === "contains" &&
+            !proxyMaven
+              ? searchPlaceholder
+                  ?.replace("前缀", "关键词")
+                  .replace("prefix", "keyword")
+              : (searchPlaceholder ?? text("搜索…", "Search…"))
+          }
           value={q}
           onChange={(e) => {
             const value = e.target.value;
@@ -649,7 +713,10 @@ export function RepositoryArtifactsTab({
           </Button>
         )}
       </div>
-      {error !== null ? (
+      {error !== null && rows.length > 0 && (
+        <ErrorBanner error={error} onRetry={() => load(q)} />
+      )}
+      {error !== null && rows.length === 0 ? (
         isNotFound(error) ? (
           <RepositoryFeatureUnavailable
             feature={text("制品浏览", "Artifact browser")}
@@ -657,7 +724,7 @@ export function RepositoryArtifactsTab({
         ) : (
           <ErrorBanner error={error} onRetry={() => load(q)} />
         )
-      ) : loading ? (
+      ) : loading && rows.length === 0 ? (
         <Loading />
       ) : rows.length === 0 ? (
         <>
@@ -714,7 +781,12 @@ export function RepositoryArtifactsTab({
                 setExpandedImage(expanded ? record.key : null),
             }}
           />
-          <Pagination hasMore={!!nextToken} onMore={() => load(q, nextToken)} />
+          <Pagination
+            hasMore={!!nextToken}
+            loading={loadingMore}
+            disabled={loading}
+            onMore={() => load(submittedQuery.current, nextToken)}
+          />
           {proxyMaven && proxyTotal > 0 && (
             <div className="border-t border-line px-4 py-2 text-center text-xs text-fg-tertiary">
               {text(

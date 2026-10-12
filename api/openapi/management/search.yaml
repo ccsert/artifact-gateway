@@ -7,7 +7,7 @@ artifact_search:
     - name: q
       in: query
       required: true
-      description: Coordinate prefix, or an exact SHA-256 digest with or without the sha256 prefix.
+      description: Coordinate keyword using the selected match mode, or an exact SHA-256 digest with or without the sha256 prefix. Omitting match preserves legacy matching.
       schema:
         type: string
         minLength: 1
@@ -16,6 +16,7 @@ artifact_search:
       in: query
       schema:
         "$ref": "../components/schemas.yaml#/Format"
+    - "$ref": "../components/parameters.yaml#/ArtifactSearchMatch"
     - "$ref": "../components/parameters.yaml#/PageSize"
     - "$ref": "../components/parameters.yaml#/PageToken"
     responses:
@@ -40,12 +41,14 @@ repositories_repositoryId_artifact_search:
     parameters:
     - name: q
       in: query
-      description: Format-aware coordinate prefix. Raw repositories accept a canonical
-        percent-encoded path of up to 4096 characters; other formats apply their
-        own stricter coordinate grammar.
+      description: Coordinate keyword using the selected match mode. Raw accepts
+        a canonical percent-encoded path or path fragment of up to 4096 characters.
+        Contains keywords for other formats accept up to 255 characters. Legacy
+        prefix matching retains the format-specific coordinate grammar.
       schema:
         type: string
         maxLength: 4096
+    - "$ref": "../components/parameters.yaml#/ArtifactSearchMatch"
     - "$ref": "../components/parameters.yaml#/PageSize"
     - "$ref": "../components/parameters.yaml#/PageToken"
     responses:

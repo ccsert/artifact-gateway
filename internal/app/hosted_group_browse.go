@@ -19,11 +19,18 @@ type artifactIdentity struct {
 // searchHostedGroupArtifacts exposes the same format-aware projection as a
 // repository search, but merges only members that are explicitly anonymous.
 func (h generatedRepositoryAPIAdapter) searchHostedGroupArtifacts(w http.ResponseWriter, r *http.Request, group repository.HostedGroup, params adminopenapi.SearchRepositoryArtifactsParams) {
+	match, valid := artifactSearchMatch(params.Match)
+	if !valid {
+		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "match must be prefix or contains")
+		return
+	}
+	r, cancel := artifactSearchRequest(r, match)
+	defer cancel()
 	query := ""
 	if params.Q != nil {
 		query = *params.Q
 	}
-	if !validArtifactSearchQuery(group.Format, query) {
+	if !validArtifactKeyword(group.Format, query, match) {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q is not a valid artifact prefix for this group format")
 		return
 	}
@@ -39,7 +46,7 @@ func (h generatedRepositoryAPIAdapter) searchHostedGroupArtifacts(w http.Respons
 	if params.PageToken != nil {
 		pageToken = string(*params.PageToken)
 	}
-	after, err := h.decodeArtifactSearchCursor(pageToken, group.ID, group.Format, query)
+	after, err := h.decodeArtifactSearchCursor(pageToken, group.ID, group.Format, query, match)
 	if err != nil {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
 		return
@@ -58,7 +65,7 @@ func (h generatedRepositoryAPIAdapter) searchHostedGroupArtifacts(w http.Respons
 		if err != nil {
 			continue
 		}
-		items, err := h.searchGroupMemberArtifacts(r, repo, query, pageSize+1, after)
+		items, err := h.searchGroupMemberArtifactsByQuery(r, repo, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: query, Match: match}, pageSize+1, after)
 		if err != nil {
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "search group member artifacts failed")
 			return
@@ -99,14 +106,10 @@ func (h generatedRepositoryAPIAdapter) searchHostedGroupArtifacts(w http.Respons
 		if last.BuildNumber != nil {
 			buildNumber = int(*last.BuildNumber)
 		}
-		token := h.encodeArtifactSearchCursor(group.ID, group.Format, query, last.Coordinate, buildNumber)
+		token := h.encodeArtifactSearchCursor(group.ID, group.Format, query, last.Coordinate, buildNumber, match)
 		next = &token
 	}
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ArtifactSummaryPage{Items: items, NextPageToken: next})
-}
-
-func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifacts(r *http.Request, repo repository.HostedRepository, query string, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {
-	return h.searchGroupMemberArtifactsByQuery(r, repo, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: query}, limit, after)
 }
 
 func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http.Request, repo repository.HostedRepository, query repository.ArtifactSearchQuery, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {
@@ -119,9 +122,9 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 		var crates []repository.CargoCrateSummary
 		var err error
 		if repo.Type == repository.RepositoryTypeProxy {
-			crates, err = h.cargoProxy.SearchCargoProxyCrates(r.Context(), repo.ID, query.Value, limit, after.Coordinate)
+			crates, err = h.cargoProxy.SearchCargoProxyCrates(r.Context(), repo.ID, query.Value, limit, after.Coordinate, query.Match)
 		} else {
-			crates, _, err = h.cargo.SearchCargoCrates(r.Context(), repo.ID, query.Value, limit, after.Coordinate, true)
+			crates, _, err = h.cargo.SearchCargoCrates(r.Context(), repo.ID, query.Value, limit, after.Coordinate, true, query.Match)
 		}
 		if err != nil {
 			return nil, err
@@ -170,7 +173,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 	}
 	switch repo.Format {
 	case repository.FormatOCI:
-		names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query.Value, limit, after.Coordinate)
+		names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query.Value, limit, after.Coordinate, query.Match)
 		if err != nil {
 			return nil, err
 		}
@@ -178,7 +181,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: name})
 		}
 	case repository.FormatMaven:
-		artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, query.Value, limit, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber})
+		artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, query.Value, limit, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber}, query.Match)
 		if err != nil {
 			return nil, err
 		}
@@ -188,7 +191,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: artifact.Coordinate, Digest: &digest, CreatedAt: &createdAt, BuildNumber: &buildNumber, Publisher: optionalPublisher(artifact.Publisher), SourceTimestamp: optionalString(artifact.SourceTimestamp), SourceBuildNumber: optionalBuildNumber(artifact.SourceBuildNumber)})
 		}
 	case repository.FormatConan:
-		references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query.Value, limit, after.Coordinate)
+		references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query.Value, limit, after.Coordinate, query.Match)
 		if err != nil {
 			return nil, err
 		}
@@ -196,7 +199,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: reference.Reference, Publisher: optionalPublisher(reference.Publisher)})
 		}
 	case repository.FormatRaw:
-		assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query.Value, limit, after.Coordinate)
+		assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query.Value, limit, after.Coordinate, query.Match)
 		if err != nil {
 			return nil, err
 		}
@@ -206,7 +209,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: asset.Path, Digest: &digest, ContentType: &contentType, Size: &size, CreatedAt: &updatedAt})
 		}
 	case repository.FormatNPM:
-		packages, err := h.sessions.store.SearchNPMPackages(r.Context(), repo.ID, query.Value, limit, after.Coordinate)
+		packages, err := h.sessions.store.SearchNPMPackages(r.Context(), repo.ID, query.Value, limit, after.Coordinate, query.Match)
 		if err != nil {
 			return nil, err
 		}
@@ -216,7 +219,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: pkg.Name, Version: &version, VersionCount: &versionCount, Digest: &digest, Size: &size, CreatedAt: &updatedAt, Publisher: optionalPublisher(pkg.Latest.Publisher)})
 		}
 	case repository.FormatPyPI:
-		projects, err := h.sessions.store.ListPyPIProjects(r.Context(), repo.ID, normalizePyPIProject(query.Value), limit, after.Coordinate)
+		projects, err := h.sessions.store.ListPyPIProjects(r.Context(), repo.ID, normalizePyPIProject(query.Value), limit, after.Coordinate, query.Match)
 		if err != nil {
 			return nil, err
 		}

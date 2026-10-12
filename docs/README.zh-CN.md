@@ -77,6 +77,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 ## 质量、性能与发布
 
 - [性能基线](performance-baseline.zh-CN.md) — 二进制/镜像体积、静默内存、并发与大对象证据。
+- [制品包含搜索实测](reports/artifact-contains-search-2026-10-12.zh-CN.md) — 隔离 PostgreSQL 查询计划、短词成本与分页预算。
 - [项目质量评估](project-quality-assessment.zh-CN.md) — 当前强项、风险与优化优先级。
 - [后端完成清单](backend-completion-checklist.zh-CN.md) — V1 实现状态与下一阶段。
 - [发布就绪](release-readiness.zh-CN.md) — 协议、集成、升级与恢复的可执行门禁。

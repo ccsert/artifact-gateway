@@ -1,4 +1,11 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { searchArtifacts } from "../../client";
@@ -18,6 +25,158 @@ vi.mock("../../lib/auth", () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+it("cancels an old query, ignores its late answer, and retries an identical query", async () => {
+  let answerOld!: (value: never) => void;
+  vi.mocked(searchArtifacts)
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answerOld = resolve;
+        }),
+    )
+    .mockResolvedValueOnce({
+      data: { searchedRepositories: 1, items: [] },
+    } as never)
+    .mockRejectedValueOnce(new Error("fixture unavailable"));
+  render(
+    <MemoryRouter initialEntries={["/search?q=alpha"]}>
+      <PreferencesProvider>
+        <SearchPage />
+      </PreferencesProvider>
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(searchArtifacts).toHaveBeenCalledTimes(1));
+  const signal = vi.mocked(searchArtifacts).mock.calls[0][0]?.signal;
+  fireEvent.click(screen.getByRole("radio", { name: "前缀" }));
+  await waitFor(() => expect(searchArtifacts).toHaveBeenCalledTimes(2));
+  expect(signal?.aborted).toBe(true);
+  await act(async () =>
+    answerOld({
+      data: {
+        searchedRepositories: 1,
+        items: [
+          {
+            repositoryId: "old",
+            repositoryName: "stale",
+            format: "raw",
+            matchKind: "coordinate",
+            coordinate: "old-alpha.bin",
+          },
+        ],
+      },
+    } as never),
+  );
+  expect(screen.queryByText("old-alpha.bin")).not.toBeInTheDocument();
+  fireEvent.keyDown(screen.getByRole("searchbox"), {
+    key: "Enter",
+    code: "Enter",
+  });
+  await waitFor(() => expect(searchArtifacts).toHaveBeenCalledTimes(3));
+  expect(await screen.findByText("fixture unavailable")).toBeInTheDocument();
+  expect(vi.mocked(searchArtifacts).mock.calls[2][0]?.query).toEqual({
+    q: "alpha",
+    match: "prefix",
+    pageSize: 100,
+  });
+});
+
+it("retains the first page after a rejected continuation and releases its loading guard", async () => {
+  const first = {
+    repositoryId: "first",
+    repositoryName: "raw",
+    format: "raw",
+    matchKind: "coordinate",
+    coordinate: "alpha.bin",
+  };
+  vi.mocked(searchArtifacts)
+    .mockResolvedValueOnce({
+      data: { searchedRepositories: 1, items: [first], nextPageToken: "next" },
+    } as never)
+    .mockRejectedValueOnce(new Error("continuation unavailable"))
+    .mockResolvedValueOnce({
+      data: {
+        searchedRepositories: 1,
+        items: [{ ...first, coordinate: "alpha-2.bin" }],
+      },
+    } as never);
+  render(
+    <MemoryRouter initialEntries={["/search?q=alpha"]}>
+      <PreferencesProvider>
+        <SearchPage />
+      </PreferencesProvider>
+    </MemoryRouter>,
+  );
+  await screen.findByText("alpha.bin");
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }));
+  expect(
+    await screen.findByText("continuation unavailable"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("alpha.bin")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }));
+  expect(await screen.findByText("alpha-2.bin")).toBeInTheDocument();
+  expect(vi.mocked(searchArtifacts).mock.calls[2][0]?.query).toEqual({
+    q: "alpha",
+    match: "contains",
+    pageSize: 100,
+    pageToken: "next",
+  });
+});
+
+it("retains existing results and cursor after an identical search refresh rejects", async () => {
+  vi.mocked(searchArtifacts)
+    .mockResolvedValueOnce({
+      data: {
+        searchedRepositories: 1,
+        items: [
+          {
+            repositoryId: "first",
+            repositoryName: "raw",
+            format: "raw",
+            matchKind: "coordinate",
+            coordinate: "alpha.bin",
+          },
+        ],
+        nextPageToken: "next",
+      },
+    } as never)
+    .mockRejectedValueOnce(new Error("refresh unavailable"));
+  render(
+    <MemoryRouter initialEntries={["/search?q=alpha"]}>
+      <PreferencesProvider>
+        <SearchPage />
+      </PreferencesProvider>
+    </MemoryRouter>,
+  );
+  await screen.findByText("alpha.bin");
+  fireEvent.keyDown(screen.getByRole("searchbox"), {
+    key: "Enter",
+    code: "Enter",
+  });
+  expect(await screen.findByText("refresh unavailable")).toBeInTheDocument();
+  expect(screen.getByText("alpha.bin")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "加载更多" })).toBeEnabled();
+});
+
+it("requests literal contains matching by default", async () => {
+  vi.mocked(searchArtifacts).mockResolvedValue({
+    data: { searchedRepositories: 1, items: [] },
+  } as never);
+  render(
+    <MemoryRouter initialEntries={["/search?q=alpha"]}>
+      <PreferencesProvider>
+        <SearchPage />
+      </PreferencesProvider>
+    </MemoryRouter>,
+  );
+  await waitFor(() =>
+    expect(searchArtifacts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: { q: "alpha", pageSize: 100, match: "contains" },
+      }),
+    ),
+  );
 });
 
 it("shows unavailable detail for a search hit from a newer server format", async () => {

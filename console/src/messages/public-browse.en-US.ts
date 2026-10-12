@@ -56,6 +56,8 @@ export const publicBrowseEnUS: Record<PublicBrowseMessageKey, string> = {
   "publicBrowse.unknownRepository": "Unknown repository",
   "publicBrowse.coordinatePathOrNamePrefixOptional":
     "Coordinate, path, or name prefix (optional)",
+  "publicBrowse.coordinatePathOrNameKeywordOptional":
+    "Coordinate, package, or path keyword (optional)",
   "publicBrowse.search": "Search",
   "publicBrowse.loadingPublicArtifacts": "Loading public artifacts…",
   "publicBrowse.noMatchingPublicArtifacts": "No matching public artifacts",

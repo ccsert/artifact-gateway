@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { SafetyCertificateOutlined, SearchOutlined } from "@ant-design/icons";
+import type { ArtifactSearchMatch } from "../../client";
+import { Pagination } from "../../components/ui/Layout";
 import { Button } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
 import { Loading, ErrorBanner, EmptyState } from "../../components/ui/Feedback";
@@ -45,6 +47,8 @@ export function PublicBrowsePage() {
   const [params, setParams] = useSearchParams();
   const repositoryId = params.get("repository") ?? "";
   const query = params.get("q") ?? "";
+  const match: ArtifactSearchMatch =
+    params.get("match") === "prefix" ? "prefix" : "contains";
   const artifactParam = params.get("artifact") ?? "";
   const buildParam = params.get("build") ?? "";
   const tagParam = params.get("tag") ?? "";
@@ -75,10 +79,14 @@ export function PublicBrowsePage() {
     error,
     recoveryKeys: artifactRecoveryKeys,
     refetch: refetchArtifacts,
+    hasMore,
+    loadingMore,
+    loadMore,
   } = usePublicArtifacts(
     repositoryId ? selectedRepository : undefined,
     query,
     artifactParam,
+    match,
   );
   const {
     ociTagPages,
@@ -146,9 +154,15 @@ export function PublicBrowsePage() {
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!repositoryId) return;
+    const next = queryDraft.trim();
+    if (next === query) {
+      void refetchArtifacts().catch(() => {});
+      return;
+    }
     setParams({
       repository: repositoryId,
-      ...(queryDraft.trim() ? { q: queryDraft.trim() } : {}),
+      match,
+      ...(next ? { q: next } : {}),
     });
   };
 
@@ -250,6 +264,14 @@ export function PublicBrowsePage() {
           <PublicRepositoryBar
             selectedRepository={selectedRepository}
             queryDraft={queryDraft}
+            match={match}
+            onMatchChange={(value) =>
+              setParams({
+                repository: repositoryId,
+                match: value,
+                ...(query ? { q: query } : {}),
+              })
+            }
             onQueryDraftChange={setQueryDraft}
             onSubmit={submit}
             onBack={() => setParams({})}
@@ -334,43 +356,54 @@ export function PublicBrowsePage() {
                     }}
                   />
                 ) : (
-                  <PublicArtifactResults
-                    selectedRepository={selectedRepository}
-                    items={items}
-                    error={error}
-                    artifactRowOptions={{
-                      expandedCoordinate,
-                      artifactParam,
-                      tagParam,
-                      ociTagPages,
-                      ociManifestDetails,
-                      selectedProtocolVersions,
-                    }}
-                    onRetry={retryArtifacts}
-                    artifactParam={artifactParam}
-                    buildParam={buildParam}
-                    revisionParam={revisionParam}
-                    versionParam={versionParam}
-                    copiedCoordinate={copiedCoordinate}
-                    conanRevisionPages={conanRevisionPages}
-                    selectedProtocolVersions={selectedProtocolVersions}
-                    protocolVersionFilter={protocolVersionFilter}
-                    actions={{
-                      artifactHref,
-                      openArtifact,
-                      clearArtifactParams,
-                      copyCoordinate,
-                      copyPageLink,
-                      copyUsage,
-                      toggleArtifactRow,
-                      selectOciVersion,
-                      loadOciTags,
-                      loadOciManifest,
-                      loadConanRevisions,
-                      setSelectedProtocolVersions,
-                      setProtocolVersionFilter,
-                    }}
-                  />
+                  <>
+                    <PublicArtifactResults
+                      selectedRepository={selectedRepository}
+                      items={items}
+                      error={error}
+                      artifactRowOptions={{
+                        expandedCoordinate,
+                        artifactParam,
+                        tagParam,
+                        ociTagPages,
+                        ociManifestDetails,
+                        selectedProtocolVersions,
+                      }}
+                      onRetry={retryArtifacts}
+                      artifactParam={artifactParam}
+                      buildParam={buildParam}
+                      revisionParam={revisionParam}
+                      versionParam={versionParam}
+                      copiedCoordinate={copiedCoordinate}
+                      conanRevisionPages={conanRevisionPages}
+                      selectedProtocolVersions={selectedProtocolVersions}
+                      protocolVersionFilter={protocolVersionFilter}
+                      actions={{
+                        artifactHref,
+                        openArtifact,
+                        clearArtifactParams,
+                        copyCoordinate,
+                        copyPageLink,
+                        copyUsage,
+                        toggleArtifactRow,
+                        selectOciVersion,
+                        loadOciTags,
+                        loadOciManifest,
+                        loadConanRevisions,
+                        setSelectedProtocolVersions,
+                        setProtocolVersionFilter,
+                      }}
+                    />
+                    {items && (
+                      <Pagination
+                        hasMore={hasMore}
+                        loading={loadingMore}
+                        onMore={() => {
+                          void loadMore().catch(() => {});
+                        }}
+                      />
+                    )}
+                  </>
                 )}
               </div>
             </SectionBoundary>

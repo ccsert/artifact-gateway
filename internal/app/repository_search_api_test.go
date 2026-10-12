@@ -191,11 +191,15 @@ func TestMavenSnapshotSearchPaginationPreservesBuildPositionAcrossSurfaces(t *te
 
 	authenticator := testAuthenticator()
 	handler := NewGatewayHandler(Dependencies{}, store, TestAdapter{}, authenticator)
-	assertPages := func(name, path string, authenticated bool) {
+	assertPages := func(name, path string, authenticated bool, match string) {
 		t.Helper()
 		token := ""
 		for wantBuild := 1; wantBuild <= 3; wantBuild++ {
 			values := url.Values{"q": {"org.example:demo:"}, "pageSize": {"1"}}
+			if match != "" {
+				values.Set("match", match)
+				values.Set("q", "DEMO:1.0-SNAPSHOT")
+			}
 			if strings.Contains(path, "/artifact-search") && !strings.Contains(path, "/repositories/") {
 				values.Set("format", "maven")
 			}
@@ -228,9 +232,11 @@ func TestMavenSnapshotSearchPaginationPreservesBuildPositionAcrossSurfaces(t *te
 		}
 	}
 
-	assertPages("repository", "/api/v2/repositories/"+repo.ID+"/artifact-search", true)
-	assertPages("anonymous group", "/api/v2/repositories/"+group.ID+"/artifact-search", false)
-	assertPages("global", "/api/v2/artifact-search", true)
+	for _, match := range []string{"", "contains"} {
+		assertPages("repository "+match, "/api/v2/repositories/"+repo.ID+"/artifact-search", true, match)
+		assertPages("anonymous group "+match, "/api/v2/repositories/"+group.ID+"/artifact-search", false, match)
+		assertPages("global "+match, "/api/v2/artifact-search", true, match)
+	}
 }
 
 func TestOCIManifestBrowseIncludesUntaggedManifest(t *testing.T) {

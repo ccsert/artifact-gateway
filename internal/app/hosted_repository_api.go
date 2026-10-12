@@ -97,6 +97,7 @@ type artifactSearchPageCursor struct {
 	Endpoint, RepositoryID, Format, Query, Coordinate string
 	BuildNumber                                       int
 	ExpiresAt                                         int64
+	Match                                             string `json:",omitempty"`
 }
 
 type repositoryBrowseNodeCursor struct {
@@ -194,7 +195,7 @@ func (h hostedRepositoryAPIHandler) authorizePlatformAdministrator(w http.Respon
 }
 
 func (h hostedRepositoryAPIHandler) authenticate(w http.ResponseWriter, r *http.Request) (Principal, bool) {
-	principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	principal, ok := h.authenticator.AuthenticateContext(r.Context(), r.Header.Get("Authorization"))
 	if !ok {
 		writeHostedProblem(w, http.StatusUnauthorized, "access_denied", "authentication is required")
 		return Principal{}, false
@@ -203,7 +204,7 @@ func (h hostedRepositoryAPIHandler) authenticate(w http.ResponseWriter, r *http.
 }
 
 func (h hostedRepositoryAPIHandler) authenticateManagementRequest(w http.ResponseWriter, r *http.Request) (Principal, bool) {
-	if principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization")); ok {
+	if principal, ok := h.authenticator.AuthenticateContext(r.Context(), r.Header.Get("Authorization")); ok {
 		return principal, true
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -477,7 +478,7 @@ func (h generatedRepositoryAPIAdapter) withRepositoryScope(w http.ResponseWriter
 }
 
 func (h generatedRepositoryAPIAdapter) withRepositoryBrowseScope(w http.ResponseWriter, r *http.Request, repositoryID string, handler func(Principal, repository.HostedRepository)) {
-	principal, authenticated := h.authenticator.Authenticate(r.Header.Get("Authorization"))
+	principal, authenticated := h.authenticator.AuthenticateContext(r.Context(), r.Header.Get("Authorization"))
 	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID)
 	if errors.Is(err, repository.ErrNotFound) {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")

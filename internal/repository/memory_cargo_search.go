@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func (s *MemoryStore) SearchCargoCrates(ctx context.Context, repositoryID, query string, limit int, after string, includeYanked bool) ([]CargoCrateSummary, int, error) {
+func (s *MemoryStore) SearchCargoCrates(ctx context.Context, repositoryID, query string, limit int, after string, includeYanked bool, matches ...ArtifactSearchMatch) ([]CargoCrateSummary, int, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, 0, err
 	}
@@ -16,13 +16,14 @@ func (s *MemoryStore) SearchCargoCrates(ctx context.Context, repositoryID, query
 	if err != nil {
 		return nil, 0, err
 	}
-	needle := strings.ToLower(strings.TrimSpace(query))
+	needle := strings.TrimSpace(query)
+	matches = []ArtifactSearchMatch{searchMatch(matches, ArtifactSearchContains)}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	byName := make(map[string]CargoCrateSummary)
 	for _, publication := range s.cargoPublications {
 		if publication.RepositoryID != repositoryID || !publication.CollectedAt.IsZero() || s.cargoPublicationTombstonedLocked(publication) ||
-			(publication.Yanked && !includeYanked) || !strings.Contains(strings.ToLower(publication.Name), needle) {
+			(publication.Yanked && !includeYanked) || !searchTextMatches(publication.Name, needle, matches) {
 			continue
 		}
 		identity, err := normalizeCargoIdentityClaim(publication.CargoIdentityClaim)

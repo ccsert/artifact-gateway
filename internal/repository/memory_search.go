@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -31,7 +30,7 @@ func (s *MemoryStore) SearchArtifactProjection(_ context.Context, repositoryID s
 	}
 	matched := make([]ArtifactSearchItem, 0, len(items))
 	for _, item := range items {
-		if query.Mode == ArtifactSearchByCoordinate && !strings.HasPrefix(item.Coordinate, query.Value) {
+		if query.Mode == ArtifactSearchByCoordinate && !searchTextMatches(item.Coordinate, query.Value, []ArtifactSearchMatch{query.Match}) {
 			continue
 		}
 		if query.Mode == ArtifactSearchByDigest && item.Digest != query.Value {

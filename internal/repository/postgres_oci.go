@@ -395,14 +395,14 @@ func (s *PostgresStore) ListOCIManifests(ctx context.Context, repositoryID, name
 func (s *PostgresStore) ListOCIManifestNames(ctx context.Context, repositoryID string, limit int, after string) ([]string, error) {
 	return s.searchOCIManifestNames(ctx, repositoryID, "", limit, after)
 }
-func (s *PostgresStore) SearchOCIManifestNames(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]string, error) {
-	return s.searchOCIManifestNames(ctx, repositoryID, prefix, limit, after)
+func (s *PostgresStore) SearchOCIManifestNames(ctx context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]string, error) {
+	return s.searchOCIManifestNames(ctx, repositoryID, prefix, limit, after, matches...)
 }
-func (s *PostgresStore) searchOCIManifestNames(ctx context.Context, repositoryID, prefix string, limit int, after string) ([]string, error) {
+func (s *PostgresStore) searchOCIManifestNames(ctx context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]string, error) {
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT name FROM native_oci_manifests WHERE repository_id::text=$1 AND ($2='' OR name LIKE $2 || '%' ESCAPE '\') AND name>$3 ORDER BY name LIMIT $4`, repositoryID, escapeLikePrefix(prefix), after, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT name FROM native_oci_manifests WHERE repository_id=$1::uuid AND ($2='' OR `+searchTextSQL("name", "$2", matches)+`) AND name>$3 ORDER BY name LIMIT $4`, repositoryID, searchTextPattern(prefix, matches), after, limit)
 	if err != nil {
 		return nil, err
 	}
