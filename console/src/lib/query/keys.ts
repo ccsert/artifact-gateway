@@ -17,6 +17,8 @@ export const repositoryKeys = {
   capacity: (id: string) => [...repositoryKeys.detail(id), "capacity"] as const,
   retentionPolicy: (id: string) =>
     [...repositoryKeys.detail(id), "retention-policy"] as const,
+  aptLifecycle: (id: string, suite: string) =>
+    [...repositoryKeys.detail(id), "apt-lifecycle", suite] as const,
 };
 
 export const identityKeys = {

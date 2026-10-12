@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { useCallback } from "react";
 import {
+  getAptLifecycleState,
   getRepository,
   getRepositoryCapabilities,
   getRepositoryCapacity,
@@ -114,4 +115,31 @@ export function useInvalidateRetentionPolicy(repositoryId: string) {
       }),
     [queryClient, repositoryId],
   );
+}
+
+/**
+ * One APT suite's packages and signed snapshots. Snapshots change when the
+ * publication API signs a new one, so the state is always re-read.
+ */
+export function useAptLifecycleState(
+  repositoryId: string,
+  suite: string,
+  /** Shown when the Gateway answers without a state. */
+  emptyMessage: string,
+) {
+  return useQuery({
+    queryKey: repositoryKeys.aptLifecycle(repositoryId, suite),
+    queryFn: async ({ signal }) => {
+      const state = await unwrap(
+        getAptLifecycleState({
+          path: { repositoryId },
+          query: { suite },
+          signal,
+        }),
+      );
+      if (!state) throw new Error(emptyMessage);
+      return state;
+    },
+    staleTime: 0,
+  });
 }
