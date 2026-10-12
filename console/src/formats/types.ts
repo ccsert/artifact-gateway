@@ -110,6 +110,8 @@ export interface FormatDescriptor {
   publicVersionSource?: "ociTags" | "conanRevisions";
   /** How public browse groups listed artifacts, if it does. */
   publicGrouping?: "mavenBuilds" | "conanRevisions";
+  /** An example coordinate for forms that name one artifact. */
+  coordinateExample?: string;
   /** Hosted repositories of this format have a publish guide. */
   publishGuide: boolean;
   /** The client endpoint a group of this format serves, if it has one. */

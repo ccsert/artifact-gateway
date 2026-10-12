@@ -12,8 +12,10 @@ import {
   getRepositoryEffectiveAccess,
   getRetentionPolicy,
   listRepositories,
+  listRepositoryReplications,
   listRepositoryCapacities,
 } from "../../client";
+import { isNotFound } from "../../components/ui/Feedback";
 import { loadFormatProfiles } from "../../lib/formatProfiles";
 import { unwrap } from "../../lib/query/client";
 import { formatKeys, repositoryKeys } from "../../lib/query/keys";
@@ -139,6 +141,28 @@ export function useAptLifecycleState(
       );
       if (!state) throw new Error(emptyMessage);
       return state;
+    },
+    staleTime: 0,
+  });
+}
+
+/**
+ * Replication plans sourced from a repository. A repository without the
+ * feature answers 404, which means no plans rather than a failure. Plans
+ * progress in workers, so the list is always re-read.
+ */
+export function useReplicationPlans(repositoryId: string) {
+  return useQuery({
+    queryKey: repositoryKeys.replicationPlans(repositoryId),
+    queryFn: async ({ signal }) => {
+      try {
+        return await unwrap(
+          listRepositoryReplications({ path: { repositoryId }, signal }),
+        );
+      } catch (error) {
+        if (isNotFound(error)) return [];
+        throw error;
+      }
     },
     staleTime: 0,
   });
