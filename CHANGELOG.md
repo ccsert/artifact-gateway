@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Public browse reads OCI tags, manifest details and Conan revisions through the shared query layer: each version page is cached and cancellable, a failed later page keeps the earlier ones and Retry reads only that page, and leaving a repository drops its pages. Every Console source file is now at most 400 lines, including the user details drawer, the access evaluator and the theme resolver. Behaviour and layout are unchanged.
+
 - Added the `agctl` client skeleton (`cmd/agctl`), built with `make cli-build`: command registry and global flags, configuration precedence (`--server`/`--token`/`--profile`, then `AGCTL_SERVER`/`AGCTL_TOKEN`/`AGCTL_PROFILE`, then `~/.config/agctl/config.yaml` at mode 0600), the documented exit-code contract, the versioned JSON envelope with structured errors and request ids, a retrying management HTTP client, and the `version`, `info` (health, readiness, identity, formats), and `commands` introspection commands. The client never prints credentials and never prompts.
 
 - The Console shell (overview, sign-in, navigation and command palette) reads through the shared query layer and is split into focused files; Layout, Login, Dashboard and the preferences provider are now each at most 400 lines. Each overview source keeps its own banner and Retry, and an expired session now ends cleanly from the overview. Single sign-on discovery falls back to local and token sign-in when it is unavailable. The command palette reads every repository page once per session and follows catalog changes. Shell messages move into feature dictionaries without changing their text. A 5xx overview groups read is retried once like other pages. Behaviour and layout are otherwise unchanged.

@@ -6,22 +6,7 @@ import {
   LogoutOutlined,
   SaveOutlined,
 } from "@ant-design/icons";
-import {
-  Alert,
-  App,
-  Avatar,
-  Badge as AntdBadge,
-  Button,
-  Descriptions,
-  Divider,
-  Drawer,
-  Form,
-  Input,
-  Select,
-  Space,
-  Switch,
-  theme as antdTheme,
-} from "antd";
+import { Alert, App, Avatar, Button, Divider, Drawer, Form, Space } from "antd";
 import {
   deleteUser,
   resetUserPassword,
@@ -31,17 +16,18 @@ import {
 import type { ResetUserPassword, UpdateUser, User } from "../../../client";
 import { Badge, StateBadge } from "../../../components/ui/Badge";
 import { ErrorBanner } from "../../../components/ui/Feedback";
-import { ConfirmDialog, Modal } from "../../../components/ui/Modal";
+import { ConfirmDialog } from "../../../components/ui/Modal";
 import { formatDate } from "../../../lib/format";
 import { usePreferences } from "../../../lib/preferences";
 import { identityKeys } from "../../../lib/query/keys";
-import {
-  localPasswordFitsBcrypt,
-  localPasswordMeetsMinimum,
-} from "./passwordPolicy";
 import { UserIdentitiesPanel } from "./UserIdentitiesPanel";
 import { UserRepositoryAccessPanel } from "./UserRepositoryAccessPanel";
 import { UserSessionsPanel } from "./UserSessionsPanel";
+import {
+  ResetPasswordDialog,
+  UserProfileFields,
+  UserSecuritySummary,
+} from "./UserDetailsSections";
 import { isUserLocked, roleTone, userInitials } from "./userPresentation";
 
 interface UserDetailsDrawerProps {
@@ -61,7 +47,6 @@ export function UserDetailsDrawer({
 }: UserDetailsDrawerProps) {
   const { message } = App.useApp();
   const { locale, t } = usePreferences();
-  const { token } = antdTheme.useToken();
   const [profileForm] = Form.useForm<UpdateUser>();
   const [passwordForm] = Form.useForm<ResetUserPassword>();
   const [profileBusy, setProfileBusy] = useState(false);
@@ -277,50 +262,7 @@ export function UserDetailsDrawer({
             colon={false}
             requiredMark="optional"
           >
-            <Form.Item name="displayName" label={t("identity.displayName")}>
-              <Input maxLength={128} />
-            </Form.Item>
-            <Form.Item
-              name="email"
-              label={t("identity.email")}
-              rules={[
-                {
-                  type: "email",
-                  message: t("identity.enterAValidEmail"),
-                },
-              ]}
-            >
-              <Input maxLength={254} />
-            </Form.Item>
-            <Form.Item name="description" label={t("identity.description")}>
-              <Input.TextArea rows={3} maxLength={512} showCount />
-            </Form.Item>
-            <Form.Item name="role" label={t("identity.role")}>
-              <Select
-                options={[
-                  {
-                    value: "member",
-                    label: t("identity.memberNoRepositoryAccessUntilGranted"),
-                  },
-                  {
-                    value: "none",
-                    label: t("identity.noneAwaitingApproval"),
-                  },
-                  {
-                    value: "admin",
-                    label: t("identity.adminAdministrator"),
-                  },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item name="state" label={t("identity.accountState")}>
-              <Select
-                options={[
-                  { value: "active", label: t("identity.active") },
-                  { value: "disabled", label: t("identity.disabled") },
-                ]}
-              />
-            </Form.Item>
+            <UserProfileFields />
           </Form>
         </section>
 
@@ -330,43 +272,7 @@ export function UserDetailsDrawer({
           <h2 className="mb-3 text-sm font-semibold text-fg-strong">
             {t("identity.signInAndSecurity")}
           </h2>
-          <Descriptions bordered size="small" column={2}>
-            <Descriptions.Item label={t("identity.lastSignIn")}>
-              {user.lastLoginAt
-                ? formatDate(user.lastLoginAt, locale)
-                : t("identity.never")}
-            </Descriptions.Item>
-            <Descriptions.Item label={t("identity.failedAttempts")}>
-              <AntdBadge
-                count={user.failedLoginAttempts}
-                showZero
-                color={
-                  user.failedLoginAttempts
-                    ? token.colorWarning
-                    : token.colorTextQuaternary
-                }
-              />
-            </Descriptions.Item>
-            <Descriptions.Item label={t("identity.passwordChanged")}>
-              {user.localPasswordEnabled
-                ? formatDate(user.passwordChangedAt, locale)
-                : t("identity.notConfigured")}
-            </Descriptions.Item>
-            <Descriptions.Item label={t("identity.localPassword")}>
-              {user.localPasswordEnabled
-                ? t("identity.enabled")
-                : t("identity.notEnabledExternalIdentity")}
-            </Descriptions.Item>
-            <Descriptions.Item label={t("identity.changeRequired2")}>
-              {user.mustChangePassword ? t("identity.yes") : t("identity.no")}
-            </Descriptions.Item>
-            <Descriptions.Item label={t("identity.created")}>
-              {formatDate(user.createdAt, locale)}
-            </Descriptions.Item>
-            <Descriptions.Item label={t("identity.updated")}>
-              {formatDate(user.updatedAt, locale)}
-            </Descriptions.Item>
-          </Descriptions>
+          <UserSecuritySummary user={user} />
           <Space className="mt-4" wrap>
             <Button
               icon={<KeyOutlined />}
@@ -424,66 +330,15 @@ export function UserDetailsDrawer({
         </section>
       </Drawer>
 
-      <Modal
+      <ResetPasswordDialog
         open={passwordOpen}
-        title={t("identity.resetPasswordFor", { user: String(user.name) })}
-        onClose={closePassword}
+        userName={user.name}
+        form={passwordForm}
         busy={actionBusy}
-        footer={
-          <Space>
-            <Button onClick={closePassword} disabled={actionBusy}>
-              {t("identity.cancel")}
-            </Button>
-            <Button
-              type="primary"
-              loading={actionBusy}
-              onClick={() => void resetPassword()}
-            >
-              {t("identity.resetPassword")}
-            </Button>
-          </Space>
-        }
-      >
-        {error ? (
-          <div className="mb-4">
-            <ErrorBanner error={error} />
-          </div>
-        ) : null}
-        <Form<ResetUserPassword> form={passwordForm} layout="vertical">
-          <Form.Item
-            name="password"
-            label={t("identity.newPassword")}
-            rules={[
-              {
-                required: true,
-                message: t("identity.enterANewPassword"),
-              },
-              {
-                validator: async (_rule, value?: string) => {
-                  if (value && !localPasswordMeetsMinimum(value)) {
-                    throw new Error(t("identity.useAtLeast8Characters"));
-                  }
-                  if (value && !localPasswordFitsBcrypt(value)) {
-                    throw new Error(t("identity.useNoMoreThan72Bytes"));
-                  }
-                },
-              },
-            ]}
-          >
-            <Input.Password autoComplete="new-password" maxLength={72} />
-          </Form.Item>
-          <Form.Item
-            name="mustChangePassword"
-            label={t("identity.nextSignIn")}
-            valuePropName="checked"
-          >
-            <Switch
-              checkedChildren={t("identity.changeRequired3")}
-              unCheckedChildren={t("identity.readyToUse")}
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
+        error={error}
+        onClose={closePassword}
+        onSubmit={() => void resetPassword()}
+      />
 
       <ConfirmDialog
         open={pendingAction !== null}

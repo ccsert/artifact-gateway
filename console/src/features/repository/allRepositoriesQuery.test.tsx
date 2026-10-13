@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { listRepositories, type Repository } from "../../client";
 import { repositoryKeys } from "../../lib/query/keys";
-import { useAllRepositories } from "./repositoryQueries";
+import { useAllRepositories } from "./allRepositoriesQuery";
 
 vi.mock("../../client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../client")>()),

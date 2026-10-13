@@ -16,7 +16,7 @@ import {
 } from "@ant-design/icons";
 import { Input, Modal, type InputRef } from "antd";
 import { useNavigate } from "react-router-dom";
-import { useAllRepositories } from "../features/repository/repositoryQueries";
+import { useAllRepositories } from "../features/repository/allRepositoriesQuery";
 import { FormatBadge, RepositoryTypeBadge } from "../components/ui/Badge";
 import { ErrorBanner } from "../components/ui/Feedback";
 import { usePreferences } from "../lib/preferences";
