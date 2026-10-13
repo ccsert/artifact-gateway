@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Public browse reads OCI tags, manifest details and Conan revisions through the shared query layer: each version page is cached and cancellable, a failed later page keeps the earlier ones and Retry reads only that page, and leaving a repository drops its pages. Every Console source file is now at most 400 lines, including the user details drawer, the access evaluator and the theme resolver. Behaviour and layout are unchanged.
+
 - The Console shell (overview, sign-in, navigation and command palette) reads through the shared query layer and is split into focused files; Layout, Login, Dashboard and the preferences provider are now each at most 400 lines. Each overview source keeps its own banner and Retry, and an expired session now ends cleanly from the overview. Single sign-on discovery falls back to local and token sign-in when it is unavailable. The command palette reads every repository page once per session and follows catalog changes. Shell messages move into feature dictionaries without changing their text. A 5xx overview groups read is retried once like other pages. Behaviour and layout are otherwise unchanged.
 
 - Console settings retain loaded forms and drafts after failed refreshes. Late OIDC saves cannot repopulate a previous session's cache, and audit retention edits reset when the saved policy version changes. Failed audit refreshes keep the displayed page; successful refreshes read and replace only the first page. Audit group filters retain the original 200-group window across cursor pages.
