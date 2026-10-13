@@ -74,6 +74,7 @@ agree with executable tests and the
 - [Repository Grant authorization](repository-grant-authorization-plan.md) — scoped runtime decisions and rollout.
 - [Service Account operations](service-account-operations.md) — stable machine principals and zero-downtime rotation.
 - [agctl CLI](cli.md) — client contract for CI, platform management, and agents: configuration precedence, exit codes, JSON envelope, and the current introspection commands.
+- [agctl command map](cli-command-map.md) — every management and native protocol operation classified as first-release, later, or explicitly not applicable, with permissions and acceptance codes; guarded by `make cli-contract-check`.
 - [Security admission policy](security-admission-policy.md) — promotion evidence, Quarantine, and optional read enforcement.
 - [Artifact scanner contract](artifact-scanner-contract.md) — bounded external scanning, health, evidence, and reconciliation.
 - [Proxy egress design](proxy-egress-design.md) — direct, environment, HTTP, and SOCKS5 per-Repository routing.
