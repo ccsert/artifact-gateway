@@ -1,19 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { SafetyCertificateOutlined, SearchOutlined } from "@ant-design/icons";
 import type { ArtifactSearchMatch } from "../../client";
 import { Pagination } from "../../components/ui/Layout";
-import { Button } from "antd";
-import { Link, useSearchParams } from "react-router-dom";
-import { Loading, ErrorBanner, EmptyState } from "../../components/ui/Feedback";
+import { useSearchParams } from "react-router-dom";
+import { Loading, ErrorBanner } from "../../components/ui/Feedback";
 import { SectionBoundary } from "../../components/ui/SectionBoundary";
 import type { UsageSnippet } from "../../lib/usage";
 import { usePreferences } from "../../lib/preferences";
-import {
-  artifactBrowseParams,
-  artifactBrowsePath,
-  clearArtifactBrowseParams,
-} from "../../lib/publicBrowseModel";
 import type { PublicRepositoryFormat } from "../../lib/publicRepositoryUsage";
 import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 import { useAuth } from "../../lib/auth";
@@ -34,6 +27,11 @@ import {
 } from "./publicBrowseQueries";
 import { PUBLIC_FORMAT_ORDER } from "./publicFormats";
 import { usePublicVersionPages } from "./usePublicVersionPages";
+import { useArtifactBrowseLinks } from "./useArtifactBrowseLinks";
+import {
+  AnonymousReadsDisabled,
+  PublicRepositoryMissing,
+} from "./PublicBrowseStates";
 import { formatDescriptor } from "../../formats";
 
 /**
@@ -170,43 +168,8 @@ export function PublicBrowsePage() {
 
   const copyUsage = (snippet: UsageSnippet) => copy(snippet.code);
 
-  const artifactHref = (
-    coordinate: string,
-    buildNumber?: number,
-    tag?: string,
-    revision?: string,
-    version?: string,
-  ) => {
-    return artifactBrowsePath(params, {
-      coordinate,
-      buildNumber,
-      tag,
-      revision,
-      version,
-    });
-  };
-
-  const openArtifact = (
-    coordinate: string,
-    buildNumber?: number,
-    tag?: string,
-    revision?: string,
-    version?: string,
-  ) => {
-    const next = artifactBrowseParams(params, {
-      coordinate,
-      buildNumber,
-      tag,
-      revision,
-      version,
-    });
-    setParams(next, { replace: true, preventScrollReset: true });
-  };
-
-  const clearArtifactParams = () => {
-    const next = clearArtifactBrowseParams(params);
-    setParams(next, { replace: true, preventScrollReset: true });
-  };
+  const { artifactHref, openArtifact, clearArtifactParams } =
+    useArtifactBrowseLinks(params, setParams);
 
   const copyPageLink = (href: string) =>
     copy(new URL(href, window.location.origin).toString(), href);
@@ -312,36 +275,9 @@ export function PublicBrowsePage() {
                     />
                   </PublicBrowseStateSurface>
                 ) : anonymousEnabled === false ? (
-                  <PublicBrowseStateSurface>
-                    <EmptyState
-                      icon={<SafetyCertificateOutlined />}
-                      title={t("publicBrowse.globalAnonymousReadsAreDisabled")}
-                      hint={t("publicBrowse.anonymousDisabledHint")}
-                      action={
-                        <Link
-                          to="/access"
-                          className="text-sm text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
-                        >
-                          {t("publicBrowse.openAccessControl")}
-                        </Link>
-                      }
-                    />
-                  </PublicBrowseStateSurface>
+                  <AnonymousReadsDisabled />
                 ) : repositoryId && !selectedRepository ? (
-                  <PublicBrowseStateSurface>
-                    <EmptyState
-                      icon={<SearchOutlined />}
-                      title={t(
-                        "publicBrowse.publicRepositoryNotFoundOrVisible",
-                      )}
-                      hint={t("publicBrowse.repositoryMissingHint")}
-                      action={
-                        <Button type="primary" onClick={() => setParams({})}>
-                          {t("publicBrowse.backToCatalog")}
-                        </Button>
-                      }
-                    />
-                  </PublicBrowseStateSurface>
+                  <PublicRepositoryMissing onBack={() => setParams({})} />
                 ) : !repositoryId ? (
                   <PublicCatalog
                     authenticated={authenticated}
