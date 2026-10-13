@@ -10,16 +10,92 @@ reviewable slices and appears in the command tree only once implemented. The
 client shape and its machine contract are recorded in
 [ADR 0007](adr/0007-agctl-cli-shape.md).
 
-## Build
+## Install
 
-```sh
-make cli-build          # writes dist/agctl
-dist/agctl version
-dist/agctl info --server https://gateway.example.com --token "$GATEWAY_TOKEN"
+`agctl` is a single client binary at the version the release pins in the
+`VERSION` file; CI pipelines, platform management, and agents all run the same
+build. It carries no server-side configuration or secrets: connection settings
+come from flags, environment variables, or the profile file described below.
+
+### Release archives
+
+Every release tag is `v` followed by the `VERSION` value, and each release
+publishes one client archive per platform next to the Gateway archives:
+
+```text
+artifact-gateway-agctl_<version>_linux_amd64.tar.gz
+artifact-gateway-agctl_<version>_linux_arm64.tar.gz
+artifact-gateway-agctl_<version>_darwin_amd64.tar.gz
+artifact-gateway-agctl_<version>_darwin_arm64.tar.gz
 ```
 
-The build uses the local Go toolchain at the version declared in `go.mod`.
-Release packaging and multi-platform binaries are tracked separately.
+A client archive holds only `agctl` plus `VERSION.txt` and `INSTALL.txt`; the
+server binary, healthcheck, migrations, and environment template stay in the
+`artifact-gateway_<version>_<goos>_<goarch>` archive. `SHA256SUMS` lists every
+archive of the release, so verify the download before extracting it:
+
+```sh
+sha256sum -c SHA256SUMS --ignore-missing   # shasum -a 256 -c SHA256SUMS on macOS
+tar -xzf artifact-gateway-agctl_<version>_<goos>_<goarch>.tar.gz
+./agctl version
+```
+
+`agctl version` reports the client version and revision; compare both with the
+release tag before relying on the binary. The newest published release at the
+time of writing is `v0.8.1` and predates the CLI, so the first release carrying
+these archives is the next tag cut from `main`.
+
+### Go module install
+
+```sh
+go install github.com/artifact-gateway/artifact-gateway/cmd/agctl@<tag>
+```
+
+`<tag>` is the release tag (`v<VERSION>`) of a release that contains
+`cmd/agctl`, and the path is the module path `go.mod` declares. This channel
+needs both to be publicly resolvable, which is not the case yet: the newest tag
+`v0.8.1` predates the CLI, no repository is served at
+`github.com/artifact-gateway/artifact-gateway` (`repository not found`), and
+requesting the module through the repository path
+`github.com/ccsert/artifact-gateway` fails with a module path mismatch because
+the tagged `go.mod` declares the other path. Read the line above as the target
+of this channel, not as a working install: release archives and the local build
+below are the channels that work today, and this one starts working once a
+post-CLI tag is published at the declared module path.
+
+### Container image
+
+The client image is built from this checkout for pipelines that execute `agctl`
+inside a job. It is a distroless static image with CA certificates, no shell,
+and the client binary only — the release workflow still publishes the Gateway
+and Console images, so build it locally at the version you need:
+
+```sh
+make cli-docker-build                                     # docker build -f Dockerfile.agctl -t artifact-gateway-agctl:dev .
+docker run --rm artifact-gateway-agctl:dev version
+docker run --rm -e AGCTL_SERVER=https://gateway.example.com -e AGCTL_TOKEN="$GATEWAY_TOKEN" \
+  artifact-gateway-agctl:dev info
+```
+
+`make cli-docker-build` passes the `VERSION` file value and the current Git
+revision as build arguments. A profile file works inside the image by mounting
+it under the nonroot home:
+`-e HOME=/home/nonroot -v "$HOME/.config/agctl/config.yaml:/home/nonroot/.config/agctl/config.yaml:ro"`.
+
+### Local build
+
+```sh
+make cli-build                             # writes dist/agctl_<goos>_<goarch>
+dist/agctl_darwin_arm64 version
+dist/agctl_linux_amd64 info --server https://gateway.example.com --token "$GATEWAY_TOKEN"
+```
+
+`make cli-build` cross-compiles linux and darwin for amd64 and arm64 with the
+local Go toolchain at the version declared in `go.mod`, and injects the
+`VERSION` file value and the current Git revision with the same `-ldflags` as
+the release archives. From a checkout, `go install ./cmd/agctl` installs the
+same client into `$GOBIN`; without the injection it reports the development
+version instead of a release version.
 
 ## Configuration
 

@@ -8,16 +8,81 @@
 命令树中。客户端形态与机器契约记录在
 [ADR 0007](adr/0007-agctl-cli-shape.zh-CN.md)。
 
-## 构建
+## 安装
 
-```sh
-make cli-build          # 输出 dist/agctl
-dist/agctl version
-dist/agctl info --server https://gateway.example.com --token "$GATEWAY_TOKEN"
+`agctl` 是单一客户端二进制，版本跟随 Release 在 `VERSION` 文件中固定的值；CI
+流水线、平台管理与 agent 运行同一份构建。它不携带任何服务端配置或秘密：连接设置
+来自 flag、环境变量或下文介绍的 profile 文件。
+
+### Release 附件
+
+每个 Release 的 tag 为 `v` 加上 `VERSION` 文件的值，Release 在 Gateway 附件旁
+发布各平台的客户端附件：
+
+```text
+artifact-gateway-agctl_<version>_linux_amd64.tar.gz
+artifact-gateway-agctl_<version>_linux_arm64.tar.gz
+artifact-gateway-agctl_<version>_darwin_amd64.tar.gz
+artifact-gateway-agctl_<version>_darwin_arm64.tar.gz
 ```
 
-构建使用 `go.mod` 声明版本对应的本地 Go 工具链。正式分发与多平台二进制另行
-跟踪。
+客户端附件只包含 `agctl` 以及 `VERSION.txt`、`INSTALL.txt`；服务端二进制、
+healthcheck、迁移与环境模板留在 `artifact-gateway_<version>_<goos>_<goarch>`
+附件中。`SHA256SUMS` 覆盖该 Release 的全部附件，解压前先校验：
+
+```sh
+sha256sum -c SHA256SUMS --ignore-missing   # macOS 使用 shasum -a 256 -c SHA256SUMS
+tar -xzf artifact-gateway-agctl_<version>_<goos>_<goarch>.tar.gz
+./agctl version
+```
+
+`agctl version` 输出客户端版本与 revision，与 Release tag 核对后再使用。当前最新
+已发布版本为 `v0.8.1`，早于本 CLI，因此第一个包含这些附件的 Release 是从
+`main` 切出的下一个 tag。
+
+### Go module 安装
+
+```sh
+go install github.com/artifact-gateway/artifact-gateway/cmd/agctl@<tag>
+```
+
+`<tag>` 是包含 `cmd/agctl` 的 Release tag（`v<VERSION>`），路径是 `go.mod`
+声明的 module path。该通道要求两者都可公开解析，目前尚不满足：最新 tag
+`v0.8.1` 早于本 CLI；`github.com/artifact-gateway/artifact-gateway` 没有对应
+仓库（`repository not found`）；改用仓库路径 `github.com/ccsert/artifact-gateway`
+请求时，会因 tagged `go.mod` 声明的是另一个路径而报 module path 不匹配。上面的
+命令是该通道的目标形态，不是当前可用的安装方式：当前可用的是 Release 附件与下文
+本地构建，待包含 CLI 的 tag 在声明的 module path 上发布后该通道才生效。
+
+### 容器镜像
+
+客户端镜像由当前 checkout 构建，供在 CI 任务内执行 `agctl` 的流水线使用。它是
+distroless static 镜像，含 CA 证书、无 shell，且只包含客户端二进制——Release
+workflow 仍然只发布 Gateway 与 Console 镜像，因此按需要的版本在本地构建：
+
+```sh
+make cli-docker-build                                     # docker build -f Dockerfile.agctl -t artifact-gateway-agctl:dev .
+docker run --rm artifact-gateway-agctl:dev version
+docker run --rm -e AGCTL_SERVER=https://gateway.example.com -e AGCTL_TOKEN="$GATEWAY_TOKEN" \
+  artifact-gateway-agctl:dev info
+```
+
+`make cli-docker-build` 会把 `VERSION` 文件的值与当前 Git revision 作为构建参数
+传入。镜像内使用 profile 文件时，把它挂载到 nonroot 家目录：
+`-e HOME=/home/nonroot -v "$HOME/.config/agctl/config.yaml:/home/nonroot/.config/agctl/config.yaml:ro"`。
+
+### 本地构建
+
+```sh
+make cli-build                             # 输出 dist/agctl_<goos>_<goarch>
+dist/agctl_darwin_arm64 version
+dist/agctl_linux_amd64 info --server https://gateway.example.com --token "$GATEWAY_TOKEN"
+```
+
+`make cli-build` 用 `go.mod` 声明版本的本地 Go 工具链交叉编译 linux 与 darwin
+的 amd64/arm64，并用与 Release 附件相同的 `-ldflags` 注入 `VERSION` 文件的值与
+当前 Git revision。在 checkout 内执行 `go install ./cmd/agctl` 会把同一客户端
+安装到 `$GOBIN`；没有注入时它报告开发版本而非 Release 版本。
 
 ## 配置
 
