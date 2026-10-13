@@ -103,30 +103,40 @@ func currentFormat(flags *globalFlags) outputFormat {
 	return outputTable
 }
 
-// scanFailureFlags finds output preferences even when ordinary parsing stops
-// at an unknown command or invalid flag. Known non-boolean flags still consume
-// their values, and -- terminates the scan, so a value cannot become an output
-// option. Only failure rendering uses this result; normal parsing is unchanged.
+// scanFailureFlags finds output preferences and credential values even when
+// ordinary parsing stops at an unknown command or invalid flag. Known
+// non-boolean flags still consume their values, and -- terminates the scan, so
+// a value cannot become an output option. Nested command paths are followed so
+// a failure anywhere under a group still honors --json and redacts secrets.
+// Only failure rendering uses this result; normal parsing is unchanged.
 func scanFailureFlags(args []string) (outputFormat, []string) {
 	flags := &globalFlags{timeout: defaultTimeout, output: string(outputTable)}
 	fs := flag.NewFlagSet("agctl", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	registerGlobalFlags(fs, flags)
 	var tokens []string
-	commandSeen := false
+	var path []string
+	commandResolved := false
 	for index := 0; index < len(args); index++ {
 		argument := args[index]
 		if argument == "--" {
 			break
 		}
 		if len(argument) < 2 || argument[0] != '-' {
-			if commandSeen {
+			if commandResolved {
+				// A stray positional after a resolved command keeps the
+				// original contract: later flags no longer select output.
 				break
 			}
-			commandSeen = true
-			if cmd, ok := lookupCommand(argument); ok && cmd.setFlags != nil {
-				cmd.setFlags(fs)
+			path = append(path, argument)
+			if cmd, ok := lookupCommand(strings.Join(path, " ")); ok {
+				commandResolved = true
+				if cmd.setFlags != nil {
+					cmd.setFlags(fs)
+				}
 			}
+			// Group paths and unknown tokens both keep scanning: the failure
+			// they lead to must still honor --json and collect credentials.
 			continue
 		}
 		name := strings.TrimPrefix(argument, "-")
@@ -180,6 +190,7 @@ func RunCLI(ctx context.Context, args []string, stdin io.Reader, stdout, stderr 
 			printUsage(stdout)
 			return ExitOK
 		}
+		knownSecrets = collectTokenSecret(globalSet, knownSecrets)
 		renderFailure(stdout, stderr, failureFormat, &UsageError{Message: err.Error(), Hint: "run agctl --help for usage"}, knownSecrets...)
 		return ExitUsage
 	}
@@ -216,6 +227,7 @@ func RunCLI(ctx context.Context, args []string, stdin io.Reader, stdout, stderr 
 			printCommandUsage(stdout, cmd)
 			return ExitOK
 		}
+		knownSecrets = collectTokenSecret(localSet, knownSecrets)
 		renderFailure(stdout, stderr, failureFormat, &UsageError{
 			Message: err.Error(),
 			Hint:    fmt.Sprintf("run agctl %s --help for usage", cmd.name),
@@ -239,6 +251,24 @@ func RunCLI(ctx context.Context, args []string, stdin io.Reader, stdout, stderr 
 		return fail(&UsageError{
 			Message: fmt.Sprintf("timeout %s must be positive", flags.timeout),
 			Hint:    "pass --timeout with a duration such as 30s",
+		})
+	}
+	if len(positionalArgs) < cmd.positionals {
+		message := fmt.Sprintf("agctl %s requires %d arguments", cmd.name, cmd.positionals)
+		if cmd.argsUsage != "" {
+			message = fmt.Sprintf("missing required argument %s", cmd.argsUsage)
+		}
+		return fail(&UsageError{
+			Message: message,
+			Hint:    fmt.Sprintf("run agctl %s --help for usage", cmd.name),
+		})
+	}
+	if flags.dryRun && cmd.meta.Mutating && cmd.meta.DryRun == "unsupported" {
+		// A write that cannot plan without side effects must refuse before any
+		// configuration write or HTTP request, never run the write silently.
+		return fail(&UsageError{
+			Message: fmt.Sprintf("--dry-run is not supported by agctl %s", cmd.name),
+			Hint:    "this write command cannot plan without side effects yet; re-run without --dry-run",
 		})
 	}
 	if len(positionalArgs) > cmd.positionals {
@@ -282,6 +312,17 @@ func collectFlags(fs *flag.FlagSet) map[string]bool {
 	set := make(map[string]bool)
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	return set
+}
+
+// collectTokenSecret records a --token value that parsing already applied, so
+// failure rendering can redact it even before settings are resolved.
+func collectTokenSecret(fs *flag.FlagSet, knownSecrets []string) []string {
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "token" {
+			knownSecrets = append(knownSecrets, f.Value.String())
+		}
+	})
+	return knownSecrets
 }
 
 func mergeFlags(set map[string]bool, fs *flag.FlagSet) {
@@ -360,6 +401,16 @@ func nearestGroup(args []string) []string {
 }
 
 func handleUnknownCommand(stdout, stderr io.Writer, format outputFormat, rest []string, knownSecrets []string) int {
+	// Only the leading command path belongs in the message: flag names and
+	// their values (which may be credentials) must never be echoed.
+	path := rest
+	for index, argument := range rest {
+		if strings.HasPrefix(argument, "-") {
+			path = rest[:index]
+			break
+		}
+	}
+	described := strings.Join(path, " ")
 	// `agctl <group…> --help` prints that group's subcommands.
 	if len(rest) > 1 {
 		last := rest[len(rest)-1]
@@ -372,24 +423,24 @@ func handleUnknownCommand(stdout, stderr io.Writer, format outputFormat, rest []
 		}
 	}
 	// A path that names a group needs a subcommand.
-	if children := directChildren(rest); len(children) > 0 {
+	if children := directChildren(path); len(children) > 0 {
 		renderFailure(stdout, stderr, format, &UsageError{
-			Message: fmt.Sprintf("%q requires a subcommand", strings.Join(rest, " ")),
+			Message: fmt.Sprintf("%q requires a subcommand", described),
 			Hint:    fmt.Sprintf("choose one of: %s", strings.Join(children, ", ")),
 		}, knownSecrets...)
 		return ExitUsage
 	}
 	// An unknown subcommand names its nearest group's alternatives.
-	if parent := nearestGroup(rest); parent != nil {
+	if parent := nearestGroup(path); parent != nil {
 		children := directChildren(parent)
 		renderFailure(stdout, stderr, format, &UsageError{
-			Message: fmt.Sprintf("unknown command %q", strings.Join(rest, " ")),
+			Message: fmt.Sprintf("unknown command %q", described),
 			Hint:    fmt.Sprintf("subcommands of `agctl %s`: %s", strings.Join(parent, " "), strings.Join(children, ", ")),
 		}, knownSecrets...)
 		return ExitUsage
 	}
 	renderFailure(stdout, stderr, format, &UsageError{
-		Message: fmt.Sprintf("unknown command %q", rest[0]),
+		Message: fmt.Sprintf("unknown command %q", described),
 		Hint:    "run agctl --help for the command list",
 	}, knownSecrets...)
 	return ExitUsage

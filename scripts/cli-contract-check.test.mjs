@@ -9,6 +9,7 @@ import {
   enumerateContractOperations,
   findContractDrift,
   loadContractFile,
+  normalizedCommand,
   parseCommandMap,
 } from './cli-contract-check.mjs';
 
@@ -188,4 +189,71 @@ test('the repository command map classifies every contract operation', () => {
     readFileSync(path.join(repoRoot, 'docs/cli-command-map.zh-CN.md'), 'utf8'),
   );
   assert.deepEqual(findContractDrift({ managementOperations, nativeOperations, englishMap, chineseMap }), []);
+});
+
+test('fails an implemented row whose command is not registered', () => {
+  const managementOperations = enumerateContractOperations({
+    paths: { '/widgets': { get: { operationId: 'listWidgets' } } },
+  });
+  const englishMap = classification([
+    mapRow('GET', '/widgets', 'listWidgets', '`widget list`', '#999', 'M1 implemented', 'A', 'Q'),
+  ]);
+  const issues = findContractDrift({
+    managementOperations,
+    nativeOperations: [],
+    englishMap,
+    registeredCommands: new Set(['info', 'version']),
+  });
+  const finding = issues.find((issue) => issue.kind === 'implemented-without-command');
+  assert.ok(finding, `expected implemented-without-command in ${JSON.stringify(issues)}`);
+  assert.match(finding.message, /listWidgets/);
+  assert.match(finding.message, /widget list/);
+  assert.match(finding.message, /not registered/);
+});
+
+test('accepts an implemented row whose command is registered', () => {
+  const managementOperations = enumerateContractOperations({
+    paths: { '/widgets': { get: { operationId: 'listWidgets' } } },
+  });
+  const englishMap = classification([
+    mapRow('GET', '/widgets', 'listWidgets', '`agctl widget list`', '#999', 'M1 implemented', 'A', 'Q'),
+  ]);
+  assert.deepEqual(
+    findContractDrift({
+      managementOperations,
+      nativeOperations: [],
+      englishMap,
+      registeredCommands: new Set(['widget list']),
+    }),
+    [],
+  );
+});
+
+test('fails two implemented rows that claim the same registered command', () => {
+  const managementOperations = enumerateContractOperations({
+    paths: {
+      '/widgets': { get: { operationId: 'listWidgets' } },
+      '/widgets/{widgetId}': { get: { operationId: 'getWidget' } },
+    },
+  });
+  const englishMap = classification([
+    mapRow('GET', '/widgets', 'listWidgets', '`widget list`', '#999', 'M1 implemented', 'A', 'Q'),
+    mapRow('GET', '/widgets/{widgetId}', 'getWidget', '`widget list <id>`', '#999', 'M1 implemented', 'A', 'Q'),
+  ]);
+  const issues = findContractDrift({
+    managementOperations,
+    nativeOperations: [],
+    englishMap,
+    registeredCommands: new Set(['widget list']),
+  });
+  const finding = issues.find((issue) => issue.kind === 'duplicate-implementation');
+  assert.ok(finding, `expected duplicate-implementation in ${JSON.stringify(issues)}`);
+  assert.match(finding.message, /listWidgets and getWidget/);
+});
+
+test('normalizes planned-command cells to registry names', () => {
+  assert.equal(normalizedCommand('`config profile add NAME --server URL`'), 'config profile add');
+  assert.equal(normalizedCommand('agctl auth whoami'), 'auth whoami');
+  assert.equal(normalizedCommand('`publish upload <session>`'), 'publish upload');
+  assert.equal(normalizedCommand(''), '');
 });

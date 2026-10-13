@@ -70,10 +70,11 @@ func readPasswordPair(reader io.Reader, limit int) (string, string, error) {
 	return current, updated, nil
 }
 
-// explicitProfile returns the profile a login must store its token in. Only a
-// flag or the environment select it explicitly; until the secure secret-output
-// destination lands, an implicit profile is refused before any request.
-func explicitProfile(env *commandContext) (string, error) {
+// explicitProfile returns the profile a login must store its token in and its
+// stored settings. Only a flag or the environment select it explicitly; until
+// the secure secret-output destination lands, an implicit profile is refused
+// before any request.
+func explicitProfile(env *commandContext) (string, profileConfig, error) {
 	name := ""
 	switch {
 	case env.flagSet["profile"] && env.globals.profile != "":
@@ -82,22 +83,23 @@ func explicitProfile(env *commandContext) (string, error) {
 		name = os.Getenv("AGCTL_PROFILE")
 	}
 	if name == "" {
-		return "", &UsageError{
+		return "", profileConfig{}, &UsageError{
 			Message: "auth login needs an explicit profile to store the session token",
 			Hint:    "pass --profile NAME (or set AGCTL_PROFILE); a secure --secret-output destination is not available yet",
 		}
 	}
 	config, err := storedProfiles(env.configPath)
 	if err != nil {
-		return "", err
+		return "", profileConfig{}, err
 	}
-	if _, ok := config.Profiles[name]; !ok {
-		return "", &UsageError{
+	profile, ok := config.Profiles[name]
+	if !ok {
+		return "", profileConfig{}, &UsageError{
 			Message: fmt.Sprintf("profile %q does not exist", name),
 			Hint:    fmt.Sprintf("create it first: agctl config profile add %s --server %s", name, env.settings.Server),
 		}
 	}
-	return name, nil
+	return name, profile, nil
 }
 
 // clearStoredToken removes token from every profile that stores it and
@@ -129,6 +131,7 @@ func clearStoredToken(env *commandContext, token string) (string, error) {
 
 type authLoginResult struct {
 	Profile            string `json:"profile"`
+	Server             string `json:"server"`
 	Username           string `json:"username"`
 	DisplayName        string `json:"displayName,omitempty"`
 	Role               string `json:"role,omitempty"`
@@ -158,9 +161,19 @@ func authLoginCommand() command {
 			DryRun:       "unsupported",
 		},
 		run: func(ctx context.Context, env *commandContext) error {
-			profile, err := explicitProfile(env)
+			profile, stored, err := explicitProfile(env)
 			if err != nil {
 				return err
+			}
+			// A session token must never land in a profile that targets a
+			// different server: later invocations would send it elsewhere.
+			target := strings.TrimSuffix(env.settings.Server, "/")
+			bound := strings.TrimSuffix(stored.Server, "/")
+			if bound != "" && bound != target {
+				return &UsageError{
+					Message: fmt.Sprintf("profile %q targets %s but this login targets %s", profile, stored.Server, env.settings.Server),
+					Hint:    fmt.Sprintf("update the profile first (agctl config profile add %s --server %s), or log in to the profile's own target", profile, env.settings.Server),
+				}
 			}
 			if strings.TrimSpace(username) == "" {
 				return &UsageError{Message: "auth login requires --username", Hint: "pass --username NAME"}
@@ -206,6 +219,9 @@ func authLoginCommand() command {
 					return &UsageError{Message: fmt.Sprintf("profile %q does not exist", profile)}
 				}
 				profileConfig.Token = login.Token
+				if profileConfig.Server == "" {
+					profileConfig.Server = env.settings.Server
+				}
 				config.Profiles[profile] = profileConfig
 				return nil
 			}); err != nil {
@@ -213,13 +229,14 @@ func authLoginCommand() command {
 			}
 			result := authLoginResult{
 				Profile:            profile,
+				Server:             env.settings.Server,
 				Username:           login.Username,
 				DisplayName:        login.DisplayName,
 				Role:               login.Role,
 				MustChangePassword: login.MustChangePassword,
 			}
 			return env.render(result, nil, func(w io.Writer) error {
-				if _, err := fmt.Fprintf(w, "authenticated as %s; session token stored in profile %q\n", result.Username, result.Profile); err != nil {
+				if _, err := fmt.Fprintf(w, "authenticated as %s against %s; session token stored in profile %q\n", result.Username, result.Server, result.Profile); err != nil {
 					return err
 				}
 				if result.MustChangePassword {
@@ -233,13 +250,16 @@ func authLoginCommand() command {
 }
 
 type authLogoutResult struct {
-	ServerRevoked  bool   `json:"serverRevoked"`
-	AlreadyInvalid bool   `json:"alreadyInvalid,omitempty"`
-	ProfileCleared string `json:"profileCleared,omitempty"`
-	Note           string `json:"note"`
+	ServerLogoutRequested bool `json:"serverLogoutRequested"`
+	AlreadyInvalid        bool `json:"alreadyInvalid,omitempty"`
+	// CredentialInvalidated is null when the state could not be confirmed
+	// (--local-only or an unreachable probe after the logout request).
+	CredentialInvalidated *bool  `json:"credentialInvalidated"`
+	ProfileCleared        string `json:"profileCleared,omitempty"`
+	Note                  string `json:"note"`
 }
 
-const authLogoutNote = "logout revokes the caller's local user session and removes a stored session token; service account tokens and API keys are not revoked"
+const authLogoutNote = "the Gateway revokes a local user session; service account tokens, API keys, and static administrator tokens are revoked from their own management surfaces, never by this command"
 
 func authLogoutCommand() command {
 	var localOnly bool
@@ -278,9 +298,22 @@ func authLogoutCommand() command {
 				var api *APIError
 				switch {
 				case err == nil:
-					result.ServerRevoked = true
+					result.ServerLogoutRequested = true
+					// The endpoint answers 204 for every credential kind but
+					// only revokes local user sessions, so the state is probed
+					// instead of assumed: a still-valid credential must not be
+					// reported as revoked.
+					var session struct {
+						Authenticated bool `json:"authenticated"`
+					}
+					if probeErr := client.getJSON(ctx, "/auth/session", nil, &session); probeErr == nil {
+						invalidated := !session.Authenticated
+						result.CredentialInvalidated = &invalidated
+					}
 				case errors.As(err, &api) && api.HTTPStatus == http.StatusUnauthorized:
 					result.AlreadyInvalid = true
+					invalidated := true
+					result.CredentialInvalidated = &invalidated
 				default:
 					return err
 				}
@@ -293,12 +326,24 @@ func authLogoutCommand() command {
 			return env.render(result, nil, func(w io.Writer) error {
 				lines := []string{}
 				switch {
-				case result.ServerRevoked:
-					lines = append(lines, "the server revoked the session for this credential")
+				case result.ServerLogoutRequested:
+					lines = append(lines, "the server accepted the logout request")
 				case result.AlreadyInvalid:
 					lines = append(lines, "the server reported the credential as already invalid")
 				default:
-					lines = append(lines, "the server session was not revoked (--local-only)")
+					lines = append(lines, "the server session was not contacted (--local-only)")
+				}
+				switch {
+				case result.CredentialInvalidated == nil:
+					if !localOnly {
+						lines = append(lines, "the credential state could not be confirmed")
+					}
+				case !*result.CredentialInvalidated:
+					lines = append(lines, "this credential still authenticates — it is a machine credential or static token; revoke it from its own management surface")
+				case result.AlreadyInvalid:
+					// covered by the server line above
+				default:
+					lines = append(lines, "the credential no longer authenticates")
 				}
 				if result.ProfileCleared != "" {
 					lines = append(lines, fmt.Sprintf("stored token removed from profile %q", result.ProfileCleared))

@@ -129,7 +129,8 @@ profile，最后是只定义一个 profile 的文件。该文件由 profile 命�
 
 全局 flag 可放在命令名前后：`agctl --json info` 与 `agctl info --json`
 等价。`--dry-run` 与 `--yes` 作用于写命令，只读命令接受但忽略这两个 flag；
-对无法无副作用地预演的每个命令，命令树都报告 `dry-run: unsupported`。
+无法无副作用地预演的写命令会在任何变更之前以用法错误（退出码 2）拒绝
+`--dry-run`，命令树对这类命令报告 `dry-run: unsupported`。
 
 ## 输出契约
 
@@ -215,16 +216,20 @@ dry-run、重试、wait 能力。脚本与 agent 通过该树发现已安装客�
 profile。密码来自有界 stdin（`--password-stdin`）；缺失、为空或超限都会在发出
 任何请求之前以退出码 2 失败。未给出 `--profile`（或 `AGCTL_PROFILE`）时命令
 拒绝存储 token：安全的 `--secret-output` 目的地尚不存在，且客户端从不打印
-token。服务端报告 `mustChangePassword` 时，命令会存储 token、退出码 0，并指引
-运行 `agctl auth change-password`；它绝不自动改密，且该账号在改密前访问管理
-端点会得到 403。
+token。已绑定其他服务器的 profile 会在请求前被拒绝（包括 `--server` 或
+`AGCTL_SERVER` 覆盖的情形）；未绑定服务器的 profile 在存 token 时会绑定到本次
+实际登录目标，token 之后不会被发往错误部署。服务端报告 `mustChangePassword`
+时，命令会存储 token、退出码 0，并指引运行 `agctl auth change-password`；它
+绝不自动改密，且该账号在改密前访问管理端点会得到 403。
 
 ### `agctl auth logout`
 
-撤销调用者的本地用户会话（`POST /auth/logout`），并从所有存储该 token 的
-profile 中移除它。`--local-only` 跳过服务端调用，只遗忘本地凭据。logout 不会
-声称吊销服务账号 token 或 API key；通过 `--token` 或 `AGCTL_TOKEN` 提供的
-token 不会从任何地方被移除。
+请求服务端退出登录（`POST /auth/logout`），并从所有存储该 token 的 profile
+中移除它。该端点对每种凭据都返回 204，但只撤销本地用户会话，因此命令随后会
+探测凭据状态（`GET /auth/session`）而不是假定已撤销：`credentialInvalidated`
+报告凭据是否仍可认证——机器凭据或静态管理员 token 会报告"仍可认证"，必须从
+其各自的管理面吊销。`--local-only` 跳过服务端调用，只遗忘本地凭据。通过
+`--token` 或 `AGCTL_TOKEN` 提供的 token 不会从任何地方被移除。
 
 ### `agctl auth whoami`
 

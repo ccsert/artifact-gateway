@@ -30,6 +30,7 @@ func configProfileAddCommand() command {
 		synopsis:    "create or update a profile in ~/.config/agctl/config.yaml",
 		usage:       "agctl config profile add NAME --server URL [--token-stdin] [--insecure]",
 		positionals: 1,
+		argsUsage:   "NAME",
 		setFlags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&tokenStdin, "token-stdin", false, "read the profile token from stdin (bounded, never echoed)")
 		},
@@ -171,6 +172,7 @@ func configProfileUseCommand() command {
 		synopsis:    "set the current profile for later invocations",
 		usage:       "agctl config profile use NAME",
 		positionals: 1,
+		argsUsage:   "NAME",
 		meta: commandMeta{
 			Resource:     "local",
 			Scenarios:    []string{"ci", "admin"},
@@ -224,6 +226,7 @@ func configProfileRemoveCommand() command {
 		synopsis:    "delete a profile from the local configuration file",
 		usage:       "agctl config profile remove NAME",
 		positionals: 1,
+		argsUsage:   "NAME",
 		meta: commandMeta{
 			Resource:     "local",
 			Scenarios:    []string{"ci", "admin"},

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -80,7 +81,59 @@ function contractIndex(operations) {
   return index;
 }
 
-export function findContractDrift({ managementOperations, nativeOperations, englishMap, chineseMap = null }) {
+// normalizedCommand extracts the registry name from a planned-command cell:
+// backticks and an `agctl ` prefix are stripped, and argument placeholders or
+// flags end the name. `config profile add NAME --server URL` normalizes to
+// `config profile add`.
+export function normalizedCommand(cell) {
+  const cleaned = String(cell ?? '')
+    .replace(/`/gu, '')
+    .trim()
+    .replace(/^agctl\s+/iu, '');
+  if (!cleaned) return '';
+  const leading = [];
+  for (const part of cleaned.split(/\s+/u)) {
+    // Registry names are lowercase words; placeholders (NAME, <id>), flags,
+    // and prose end the name.
+    if (!/^[a-z][a-z0-9-]*$/u.test(part)) break;
+    leading.push(part);
+  }
+  return leading.join(' ').toLowerCase();
+}
+
+// A row claims implementation by carrying `implemented` in its Phase cell
+// (for example `M1 implemented`). The claim is only legal when the installed
+// command registry actually exposes the command, and two rows may not claim
+// one command.
+function findImplementationIssues(englishMap, registeredCommands) {
+  const issues = [];
+  const byCommand = new Map();
+  for (const [operationId, row] of englishMap) {
+    if (!/implemented/iu.test(row.phase)) continue;
+    const command = normalizedCommand(row.command);
+    if (!command || !registeredCommands.has(command)) {
+      issues.push({
+        kind: 'implemented-without-command',
+        message: `${commandMapPath} marks ${operationId} implemented, but ${command ? `command "${command}" is` : 'its planned command is'} not registered in cmd/agctl; register it or drop the implemented claim`,
+      });
+      continue;
+    }
+    const claimants = byCommand.get(command) ?? [];
+    claimants.push(operationId);
+    byCommand.set(command, claimants);
+  }
+  for (const [command, claimants] of byCommand) {
+    if (claimants.length > 1) {
+      issues.push({
+        kind: 'duplicate-implementation',
+        message: `command "${command}" is claimed implemented by ${claimants.join(' and ')}; one registration serves exactly one implementation claim`,
+      });
+    }
+  }
+  return issues;
+}
+
+export function findContractDrift({ managementOperations, nativeOperations, englishMap, chineseMap = null, registeredCommands = new Set() }) {
   const issues = [];
   const bundles = [
     { source: contractBundlePaths.management, operations: managementOperations },
@@ -164,7 +217,23 @@ export function findContractDrift({ managementOperations, nativeOperations, engl
     }
   }
 
+  issues.push(...findImplementationIssues(englishMap, registeredCommands));
+
   return issues;
+}
+
+// loadRegisteredCommands reads the installed command registry through its
+// stable machine contract (`agctl commands --json`).
+export function loadRegisteredCommands(repoRoot) {
+  const output = execFileSync('go', ['run', './cmd/agctl', 'commands', '--json'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  });
+  const items = JSON.parse(output)?.data?.items;
+  if (!Array.isArray(items)) {
+    throw new Error('agctl commands --json did not return a command list');
+  }
+  return new Set(items.map((item) => String(item.name).toLowerCase()));
 }
 
 function main() {
@@ -178,8 +247,9 @@ function main() {
   );
   const englishMap = parseCommandMap(readFileSync(path.join(repoRoot, commandMapPath), 'utf8'));
   const chineseMap = parseCommandMap(readFileSync(path.join(repoRoot, chineseCommandMapPath), 'utf8'));
+  const registeredCommands = loadRegisteredCommands(repoRoot);
 
-  const issues = findContractDrift({ managementOperations, nativeOperations, englishMap, chineseMap });
+  const issues = findContractDrift({ managementOperations, nativeOperations, englishMap, chineseMap, registeredCommands });
   if (issues.length > 0) {
     for (const issue of issues) process.stderr.write(`${issue.message}\n`);
     process.exitCode = 1;
@@ -195,7 +265,7 @@ function main() {
       .filter((operationId) => operationId && !managementIds.has(operationId)),
   );
   process.stdout.write(
-    `CLI command map contract check passed (${managementIds.size} management operations + ${nativeExtras.size} native protocol operations classified)\n`,
+    `CLI command map contract check passed (${managementIds.size} management operations + ${nativeExtras.size} native protocol operations classified; ${registeredCommands.size} registered commands checked)\n`,
   );
 }
 

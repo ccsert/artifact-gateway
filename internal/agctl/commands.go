@@ -38,6 +38,7 @@ type command struct {
 	synopsis    string
 	usage       string
 	positionals int
+	argsUsage   string
 	setFlags    func(*flag.FlagSet)
 	meta        commandMeta
 	run         func(context.Context, *commandContext) error

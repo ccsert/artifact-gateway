@@ -331,12 +331,16 @@ server base）。计划命令省略前导 `agctl`。
   N/A 行同样失败。管理操作与 native 附加协议操作都在覆盖内；守卫从 bundle
   推导集合，不硬编码忽略清单。
 - 映射覆盖与实现覆盖分开：全部行必须分类，只有 implemented 或当前交付里程碑
-  的行要求注册命令与真实验收；计划 M2/blocked 不强迫首版实现。
+  的行要求注册命令与真实验收；计划 M2/blocked 不强迫首版实现。行通过在阶段
+  列携带 `implemented` 声明实现（例如 `M1 implemented`）；守卫经
+  `agctl commands --json` 读取已安装的命令注册表，implemented 行没有注册命令、
+  或两行声明同一个命令时失败。
 - 一个资源命令/别名使用同一注册实现；CLI tree 的 CI/管理 tags 不复制操作；
   JSON 输出 schema、权限、mutation、分页、幂等、dry-run、wait/cancel 必须来自
   同一元数据来源。
 - 增补验收：注入一个新 operationId 未分类失败；改名/删接口仍引用失败；planned
-  M2 不误判首版缺实现；只为已实现命令生成 #140 可执行菜谱。
+  M2 不误判首版缺实现；implemented 行没有注册命令失败、两行声明同一命令失败；
+  只为已实现命令生成 #140 可执行菜谱。
 - 本页在上方记录契约基线 SHA 与核对日期；计数由守卫重新推导，不把旧计数固定
   在文档里。
 - 双语注册：`docs/cli-command-map.md` 与 `docs/cli-command-map.zh-CN.md` 双向

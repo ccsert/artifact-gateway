@@ -22,6 +22,7 @@ type authFakeGateway struct {
 	password   string
 	mustChange bool
 	valid      map[string]bool
+	sessions   map[string]bool
 	loginCalls int
 	logoutCall int
 	changeBody map[string]string
@@ -33,6 +34,7 @@ func newAuthFakeGateway(t *testing.T) *authFakeGateway {
 	fake := &authFakeGateway{
 		password: "initial-password",
 		valid:    map[string]bool{},
+		sessions: map[string]bool{},
 	}
 	fake.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -42,11 +44,18 @@ func newAuthFakeGateway(t *testing.T) *authFakeGateway {
 			fake.mu.Lock()
 			fake.logoutCall++
 			token := bearerToken(r)
-			if token != "" {
+			// Like the real Gateway, only local user sessions are revoked;
+			// machine credentials and static tokens keep answering.
+			if token != "" && fake.sessions[token] {
 				delete(fake.valid, token)
 			}
 			fake.mu.Unlock()
 			w.WriteHeader(http.StatusNoContent)
+		case "/auth/session":
+			fake.mu.Lock()
+			authenticated := fake.valid[bearerToken(r)]
+			fake.mu.Unlock()
+			_ = json.NewEncoder(w).Encode(map[string]any{"authenticated": authenticated})
 		case "/auth/change-password":
 			fake.handleChangePassword(w, r)
 		case "/api/v2/identity":
@@ -90,6 +99,7 @@ func (f *authFakeGateway) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	token := fmt.Sprintf("session-token-%d", f.loginCalls)
 	f.valid[token] = true
+	f.sessions[token] = true
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"token":              token,
 		"username":           body.Username,
@@ -315,6 +325,7 @@ func TestAuthLogoutRevokesAndClearsStoredToken(t *testing.T) {
 	isolatedCLI(t)
 	fake := newAuthFakeGateway(t)
 	fake.valid["stored-token"] = true
+	fake.sessions["stored-token"] = true
 	configPath := writeHomeConfig(t, fmt.Sprintf("profiles:\n  prod:\n    server: %s\n    token: stored-token\n", fake.server.URL))
 
 	code, stdout, stderr := runCLI(t, "auth", "logout", "--json")
@@ -325,8 +336,11 @@ func TestAuthLogoutRevokesAndClearsStoredToken(t *testing.T) {
 	if err := json.Unmarshal(decodeEnvelope(t, stdout).Data, &data); err != nil {
 		t.Fatalf("data: %v", err)
 	}
-	if !data.ServerRevoked || data.AlreadyInvalid || data.ProfileCleared != "prod" {
+	if !data.ServerLogoutRequested || data.AlreadyInvalid || data.ProfileCleared != "prod" {
 		t.Fatalf("data = %#v", data)
+	}
+	if data.CredentialInvalidated == nil || !*data.CredentialInvalidated {
+		t.Fatalf("credential state = %#v", data.CredentialInvalidated)
 	}
 	if fake.logoutCall != 1 || fake.tokenIsValid("stored-token") {
 		t.Fatalf("server state: logoutCall = %d, still valid = %t", fake.logoutCall, fake.tokenIsValid("stored-token"))
@@ -358,7 +372,7 @@ func TestAuthLogoutLocalOnlySkipsServer(t *testing.T) {
 	if fake.logoutCall != 0 || !fake.tokenIsValid("stored-token") {
 		t.Fatalf("local-only logout called the server or revoked state")
 	}
-	if !strings.Contains(stdout, "was not revoked") || !strings.Contains(stdout, "service account tokens and API keys are not revoked") {
+	if !strings.Contains(stdout, "was not contacted") || !strings.Contains(stdout, "revoked from their own management surfaces") {
 		t.Fatalf("stdout = %q", stdout)
 	}
 	if content := readConfigContent(t, configPath); strings.Contains(content, "stored-token") {

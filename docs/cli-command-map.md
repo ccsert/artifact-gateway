@@ -382,15 +382,20 @@ operator file/OS privileges are two different authorization boundaries.
 - Map coverage and implementation coverage are separate checks: every row
   must be classified, but only implemented rows or rows in the currently
   delivered milestone require command registration and real acceptance.
-  Planned M2 or blocked rows do not force first-release implementation.
+  Planned M2 or blocked rows do not force first-release implementation. A row
+  claims implementation by carrying `implemented` in its Phase cell (for
+  example `M1 implemented`); the guard reads the installed command registry
+  through `agctl commands --json` and fails when an implemented row has no
+  registered command, or when two implemented rows claim the same command.
 - One resource command/alias uses one registration implementation; the CLI
   tree's CI/platform tags do not duplicate operations, and JSON output schema,
   permission, mutation, pagination, idempotency, dry-run, and wait/cancel
   metadata all come from one metadata source.
 - Supplementary acceptance: injecting a new unclassified operationId fails;
   a rename or removal that is still referenced fails; planned M2 rows are not
-  misjudged as a missing first release; and #140 runnable recipes are
-  generated only for implemented commands.
+  misjudged as a missing first release; an implemented row without a
+  registered command fails and two implemented rows sharing one command fail;
+  and #140 runnable recipes are generated only for implemented commands.
 - The map records the contract baseline SHA and review date above; the guard
   re-derives the operation counts and the page never pins the old counts as
   fact.

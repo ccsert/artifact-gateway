@@ -143,9 +143,9 @@ add|list|use|remove`; every write replaces the file atomically with mode 0600.
 
 Global flags work before and after the command name: `agctl --json info` and
 `agctl info --json` are equivalent. `--dry-run` and `--yes` apply to write
-commands and are ignored by read-only ones; the command tree reports
-`dry-run: unsupported` for every command that cannot plan without side
-effects.
+commands and are ignored by read-only ones. A write command that cannot plan
+without side effects rejects `--dry-run` with a usage error (exit 2) before
+any change; the command tree reports `dry-run: unsupported` for such commands.
 
 ## Output contract
 
@@ -241,18 +241,27 @@ password comes from bounded stdin (`--password-stdin`); missing, empty, or
 oversized input exits 2 before any request. Without `--profile` (or
 `AGCTL_PROFILE`) the command refuses to store the token: a secure
 `--secret-output` destination does not exist yet, and the client never prints
-a token. When the server reports `mustChangePassword`, the command stores the
-token, exits 0, and points at `agctl auth change-password`; it never changes
-the password automatically, and management endpoints answer 403 for such an
-account until the password is changed.
+a token. A profile already bound to a different server is refused before the
+request (`--server` or `AGCTL_SERVER` overrides included), and a profile
+without a server is bound to the actual login target when the token is
+stored, so a token is never sent to the wrong deployment later. When the
+server reports `mustChangePassword`, the command stores the token, exits 0,
+and points at `agctl auth change-password`; it never changes the password
+automatically, and management endpoints answer 403 for such an account until
+the password is changed.
 
 ### `agctl auth logout`
 
-Revokes the caller's local user session (`POST /auth/logout`) and removes the
-matching token from every profile that stores it. `--local-only` skips the
-server call and only forgets the local credential. Logout does not revoke
-service account tokens or API keys, and tokens supplied through `--token` or
-`AGCTL_TOKEN` are never removed from anywhere.
+Requests the server-side logout (`POST /auth/logout`) and removes the
+matching token from every profile that stores it. The endpoint answers 204
+for every credential kind but only revokes local user sessions, so the
+command probes the credential state afterwards (`GET /auth/session`) instead
+of assuming revocation: `credentialInvalidated` reports whether the
+credential still authenticates — a machine credential or static admin token
+is reported as still authenticating and must be revoked from its own
+management surface. `--local-only` skips the server call and only forgets the
+local credential. Tokens supplied through `--token` or `AGCTL_TOKEN` are
+never removed from anywhere.
 
 ### `agctl auth whoami`
 
