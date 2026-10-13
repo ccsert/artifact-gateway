@@ -470,6 +470,8 @@ describe("incremental runtime log controls", () => {
   });
 
   it("announces a new session on refresh without mixing records", async () => {
+    // Keep the snapshot commit separate from Ant Design's loading effect.
+    configure({ asyncWrapper: async (callback) => callback() });
     api.mockResolvedValueOnce(reply(page(1, 1))).mockResolvedValueOnce(
       reply(
         page(2, 2, {
@@ -480,12 +482,13 @@ describe("incremental runtime log controls", () => {
     );
     mount();
     await screen.findByText("event-1");
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: /刷新快照/ }),
-      ).not.toBeDisabled(),
-    );
+    await waitFor(() => {
+      const refresh = screen.getByRole("button", { name: /刷新快照/ });
+      expect(refresh).not.toBeDisabled();
+      expect(refresh).not.toHaveClass("ant-btn-loading");
+    });
     fireEvent.click(screen.getByRole("button", { name: /刷新快照/ }));
+    expect(api).toHaveBeenCalledTimes(2);
     await screen.findByText("event-2");
     expect(screen.queryByText("event-1")).toBeNull();
     expect(

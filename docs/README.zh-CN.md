@@ -34,6 +34,8 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [ADR 0003：仅协议格式](adr/0003-protocol-only-formats.zh-CN.md)
 - [ADR 0004：Go Hosted 发布](adr/0004-go-hosted-publication.zh-CN.md)
 - [ADR 0005：Console 语义主题系统](adr/0005-console-semantic-theme-system.zh-CN.md)
+- [ADR 0006：账号等级与按仓库授权](adr/0006-account-levels-and-repository-grants.zh-CN.md)
+- [ADR 0007：agctl 命令行形态与横切契约](adr/0007-agctl-cli-shape.zh-CN.md)
 
 ## 协议与仓库格式
 
@@ -68,6 +70,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [Kubernetes 上的 Keycloak](oidc-keycloak-k8s.zh-CN.md) — 真实浏览器 callback 验收。
 - [Repository Grant 授权](repository-grant-authorization-plan.zh-CN.md) — Scoped 运行时判定和推进方式。
 - [Service Account 运维](service-account-operations.zh-CN.md) — 稳定机器身份和零停机轮换。
+- [agctl 命令行](cli.zh-CN.md) — 面向 CI、平台管理与 agent 的客户端契约：配置优先级、退出码、JSON 信封与当前自省命令。
 - [安全准入策略](security-admission-policy.zh-CN.md) — 晋级证据、隔离和可选读取强制。
 - [Artifact 扫描器契约](artifact-scanner-contract.zh-CN.md) — 有界外部扫描、健康、证据与补偿。
 - [Proxy 出站设计](proxy-egress-design.zh-CN.md) — 每 Repository 的直连、环境、HTTP 与 SOCKS5。

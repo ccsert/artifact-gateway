@@ -36,7 +36,8 @@
         { "id": "adr-protocol-only", "title": { "en": "ADR 0003: protocol-only formats", "zh-CN": "ADR 0003：仅协议格式" }, "en": "docs/adr/0003-protocol-only-formats.md", "zh-CN": "docs/adr/0003-protocol-only-formats.zh-CN.md" },
         { "id": "adr-go-hosted", "title": { "en": "ADR 0004: Go Hosted publication", "zh-CN": "ADR 0004：Go Hosted 发布" }, "en": "docs/adr/0004-go-hosted-publication.md", "zh-CN": "docs/adr/0004-go-hosted-publication.zh-CN.md" },
         { "id": "adr-console-theme-system", "title": { "en": "ADR 0005: Console semantic theme system", "zh-CN": "ADR 0005：Console 语义主题系统" }, "en": "docs/adr/0005-console-semantic-theme-system.md", "zh-CN": "docs/adr/0005-console-semantic-theme-system.zh-CN.md" },
-        { "id": "adr-account-levels", "title": { "en": "ADR 0006: account levels and per-repository authority", "zh-CN": "ADR 0006：账号等级与按仓库授权" }, "en": "docs/adr/0006-account-levels-and-repository-grants.md", "zh-CN": "docs/adr/0006-account-levels-and-repository-grants.zh-CN.md" }
+        { "id": "adr-account-levels", "title": { "en": "ADR 0006: account levels and per-repository authority", "zh-CN": "ADR 0006：账号等级与按仓库授权" }, "en": "docs/adr/0006-account-levels-and-repository-grants.md", "zh-CN": "docs/adr/0006-account-levels-and-repository-grants.zh-CN.md" },
+        { "id": "adr-agctl-cli", "title": { "en": "ADR 0007: agctl CLI shape and cross-cutting contract", "zh-CN": "ADR 0007：agctl 命令行形态与横切契约" }, "en": "docs/adr/0007-agctl-cli-shape.md", "zh-CN": "docs/adr/0007-agctl-cli-shape.zh-CN.md" }
       ]
     },
     {
@@ -79,6 +80,7 @@
         { "id": "oidc-keycloak", "title": { "en": "Keycloak on Kubernetes", "zh-CN": "Kubernetes 上的 Keycloak" }, "en": "docs/oidc-keycloak-k8s.md", "zh-CN": "docs/oidc-keycloak-k8s.zh-CN.md" },
         { "id": "repository-grants", "title": { "en": "Repository grant authorization", "zh-CN": "仓库授权" }, "en": "docs/repository-grant-authorization-plan.md", "zh-CN": "docs/repository-grant-authorization-plan.zh-CN.md" },
         { "id": "service-accounts", "title": { "en": "Service account operations", "zh-CN": "Service Account 运维" }, "en": "docs/service-account-operations.md", "zh-CN": "docs/service-account-operations.zh-CN.md" },
+        { "id": "cli", "title": { "en": "agctl CLI", "zh-CN": "agctl 命令行" }, "en": "docs/cli.md", "zh-CN": "docs/cli.zh-CN.md" },
         { "id": "security-admission", "title": { "en": "Security admission policy", "zh-CN": "安全准入策略" }, "en": "docs/security-admission-policy.md", "zh-CN": "docs/security-admission-policy.zh-CN.md" },
         { "id": "artifact-scanner", "title": { "en": "Artifact scanner contract", "zh-CN": "制品扫描器契约" }, "en": "docs/artifact-scanner-contract.md", "zh-CN": "docs/artifact-scanner-contract.zh-CN.md" },
         { "id": "proxy-egress", "title": { "en": "Proxy egress design", "zh-CN": "Proxy 出网设计" }, "en": "docs/proxy-egress-design.md", "zh-CN": "docs/proxy-egress-design.zh-CN.md" },
