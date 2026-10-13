@@ -11,6 +11,12 @@ their meaning.
 
 ## Unreleased
 
+## 0.9.0 - 2026-10-13
+
+- Upgrading from v0.8.1 adds migration `000145_artifact_contains_search_indexes.sql`: eight GIN search indexes; the previous 144 migration files are unchanged. Ordinary index creation can block writes, so plan the migration window and index disk space, retain a consistent PostgreSQL/object-store recovery point and follow the [release upgrade notes](.github/release-notes/v0.9.0.md). This code release does not declare any target's artifact migration or production rollout complete.
+
+- CLI delivery remains limited to the already merged `agctl` skeleton and local source build (`version`, `info`, `commands`). The distribution/auth/profile batch in PR #346 is excluded; this release does not ship separate agctl archives or a published agctl image, and the remote `go install` channel remains unresolved in #347. Other CLI work and incomplete issues remain tracked independently.
+
 - Maven V2 Groups authorize member reads with the same canonical Maven resource as single repositories, so coordinate-prefix grants cover permitted artifacts, checksum sidecars and metadata. Hosted artifact metadata matches the exact groupId/artifactId, excluding child-group and adjacent-artifact versions while retaining Group fallback when the requested metadata is absent. Authorization still precedes member payload/cache access (#348).
 
 - Public browse reads OCI tags, manifest details and Conan revisions through the shared query layer: each version page is cached and cancellable, a failed later page keeps the earlier ones and Retry reads only that page, and leaving a repository drops its pages. Every Console source file is now at most 400 lines, including the user details drawer, the access evaluator and the theme resolver. Behaviour and layout are unchanged.
