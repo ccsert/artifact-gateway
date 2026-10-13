@@ -3,6 +3,7 @@ package agctl
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -19,10 +20,45 @@ func TestRenderFailureHumanFormat(t *testing.T) {
 	if stdout.Len() != 0 {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
-	for _, want := range []string{"error: not allowed", "hint: ask an administrator for access", "request id: req-42"} {
+	for _, want := range []string{"error: not allowed", "code: access_denied", "hint: ask an administrator for access", "request id: req-42"} {
 		if !strings.Contains(stderr.String(), want) {
 			t.Fatalf("stderr missing %q: %s", want, stderr.String())
 		}
+	}
+}
+
+func TestRenderFailureHumanFormatWrappedAPIError(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := fmt.Errorf("identity probe: %w", &APIError{Code: "access_denied", HTTPStatus: 403, Message: "not allowed"})
+	renderFailure(&stdout, &stderr, outputTable, err)
+	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "code: access_denied") {
+		t.Fatalf("stdout = %q, stderr = %q", stdout.String(), stderr.String())
+	}
+}
+
+func TestRenderFailureRedactsAllDiagnosticFields(t *testing.T) {
+	const secret = "output-diagnostic-secret"
+	for _, format := range []outputFormat{outputTable, outputJSON} {
+		t.Run(string(format), func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			renderFailure(&stdout, &stderr, format, &APIError{
+				Code:       "failure_" + secret,
+				HTTPStatus: 403,
+				Message:    "failed with " + secret,
+				Hint:       "replace " + secret,
+				RequestID:  "request-" + secret,
+			}, secret)
+			output := stdout.String() + stderr.String()
+			if strings.Contains(output, secret) || !strings.Contains(output, "REDACTED") {
+				t.Fatalf("stdout = %q, stderr = %q", stdout.String(), stderr.String())
+			}
+			if format == outputJSON {
+				result := decodeEnvelope(t, stdout.String())
+				if result.OK || result.Error == nil || result.Error.HTTPStatus == nil || *result.Error.HTTPStatus != 403 {
+					t.Fatalf("envelope = %#v", result)
+				}
+			}
+		})
 	}
 }
 

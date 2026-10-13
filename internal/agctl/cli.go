@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/artifact-gateway/artifact-gateway/internal/buildinfo"
@@ -93,10 +95,74 @@ func currentFormat(flags *globalFlags) outputFormat {
 	return outputTable
 }
 
+// scanFailureFlags finds output preferences even when ordinary parsing stops
+// at an unknown command or invalid flag. Known non-boolean flags still consume
+// their values, and -- terminates the scan, so a value cannot become an output
+// option. Only failure rendering uses this result; normal parsing is unchanged.
+func scanFailureFlags(args []string) (outputFormat, []string) {
+	flags := &globalFlags{timeout: defaultTimeout, output: string(outputTable)}
+	fs := flag.NewFlagSet("agctl", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	registerGlobalFlags(fs, flags)
+	var tokens []string
+	commandSeen := false
+	for index := 0; index < len(args); index++ {
+		argument := args[index]
+		if argument == "--" {
+			break
+		}
+		if len(argument) < 2 || argument[0] != '-' {
+			if commandSeen {
+				break
+			}
+			commandSeen = true
+			if cmd, ok := lookupCommand(argument); ok && cmd.setFlags != nil {
+				cmd.setFlags(fs)
+			}
+			continue
+		}
+		name := strings.TrimPrefix(argument, "-")
+		name = strings.TrimPrefix(name, "-")
+		name, value, hasValue := strings.Cut(name, "=")
+		definition := fs.Lookup(name)
+		if definition == nil {
+			continue
+		}
+		isBool := false
+		if boolean, ok := definition.Value.(interface{ IsBoolFlag() bool }); ok {
+			isBool = boolean.IsBoolFlag()
+		}
+		if !hasValue {
+			if isBool {
+				value = "true"
+			} else {
+				if index+1 >= len(args) {
+					continue
+				}
+				index++
+				value = args[index]
+			}
+		}
+		switch name {
+		case "json":
+			if enabled, err := strconv.ParseBool(value); err == nil {
+				flags.jsonFlag = enabled
+			}
+		case "o":
+			_ = definition.Value.Set(value)
+		case "token":
+			tokens = append(tokens, value)
+		}
+	}
+	return currentFormat(flags), tokens
+}
+
 // RunCLI executes one agctl invocation and returns its documented exit code.
 // Commands never prompt: missing required input fails with a usage error
 // before any request is sent.
 func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	failureFormat, knownSecrets := scanFailureFlags(args)
+	knownSecrets = append(knownSecrets, os.Getenv("AGCTL_TOKEN"))
 	flags := &globalFlags{timeout: defaultTimeout, output: string(outputTable)}
 	globalSet := flag.NewFlagSet("agctl", flag.ContinueOnError)
 	globalSet.SetOutput(io.Discard)
@@ -106,14 +172,14 @@ func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			printUsage(stdout)
 			return ExitOK
 		}
-		renderFailure(stdout, stderr, currentFormat(flags), &UsageError{Message: err.Error(), Hint: "run agctl --help for usage"})
+		renderFailure(stdout, stderr, failureFormat, &UsageError{Message: err.Error(), Hint: "run agctl --help for usage"}, knownSecrets...)
 		return ExitUsage
 	}
 	set := collectFlags(globalSet)
 	rest := globalSet.Args()
 	if len(rest) == 0 {
 		if currentFormat(flags) == outputJSON {
-			renderFailure(stdout, stderr, outputJSON, &UsageError{Message: "no command given", Hint: "run agctl --help for the command list"})
+			renderFailure(stdout, stderr, outputJSON, &UsageError{Message: "no command given", Hint: "run agctl --help for the command list"}, knownSecrets...)
 			return ExitUsage
 		}
 		printUsage(stderr)
@@ -125,10 +191,10 @@ func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	cmd, ok := lookupCommand(rest[0])
 	if !ok {
-		renderFailure(stdout, stderr, currentFormat(flags), &UsageError{
+		renderFailure(stdout, stderr, failureFormat, &UsageError{
 			Message: fmt.Sprintf("unknown command %q", rest[0]),
 			Hint:    "run agctl --help for the command list",
-		})
+		}, knownSecrets...)
 		return ExitUsage
 	}
 
@@ -145,22 +211,22 @@ func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			printCommandUsage(stdout, cmd)
 			return ExitOK
 		}
-		renderFailure(stdout, stderr, currentFormat(flags), &UsageError{
+		renderFailure(stdout, stderr, failureFormat, &UsageError{
 			Message: err.Error(),
 			Hint:    fmt.Sprintf("run agctl %s --help for usage", cmd.name),
-		})
+		}, knownSecrets...)
 		return ExitUsage
 	}
 	mergeFlags(set, localSet)
 
 	resolvedFormat, err := flags.format()
 	if err != nil {
-		renderFailure(stdout, stderr, currentFormat(flags), err)
+		renderFailure(stdout, stderr, currentFormat(flags), err, knownSecrets...)
 		return exitCodeFor(err)
 	}
 	format := resolvedFormat
 	fail := func(err error) int {
-		renderFailure(stdout, stderr, format, err)
+		renderFailure(stdout, stderr, format, err, knownSecrets...)
 		return exitCodeFor(err)
 	}
 
@@ -180,6 +246,7 @@ func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(err)
 	}
+	knownSecrets = append(knownSecrets, settings.Token)
 	env := &commandContext{
 		globals:  flags,
 		settings: settings,

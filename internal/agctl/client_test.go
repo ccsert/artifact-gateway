@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -83,7 +84,7 @@ func TestClientRetriesIdempotentRequestsWithBackoff(t *testing.T) {
 	}
 }
 
-func TestClientHonorsRetryAfterAndCapsIt(t *testing.T) {
+func TestClientHonorsRetryAfterWithoutApplyingBackoffCap(t *testing.T) {
 	server, attempts := countingHandler([]int{429, 429, 200}, `{}`, "7")
 	defer server.Close()
 	client := newTestClient(t, profileSettings{Server: server.URL}, clientOptions{})
@@ -96,8 +97,8 @@ func TestClientHonorsRetryAfterAndCapsIt(t *testing.T) {
 		t.Fatalf("attempts = %d", *attempts)
 	}
 	for i, wait := range *waits {
-		if wait != clientRetryMaxWait {
-			t.Fatalf("wait[%d] = %s, want the %s cap", i, wait, clientRetryMaxWait)
+		if wait != 7*time.Second {
+			t.Fatalf("wait[%d] = %s, want the server's 7s delay", i, wait)
 		}
 	}
 }
@@ -247,7 +248,7 @@ func TestParseAPIErrorVariants(t *testing.T) {
 		Body:       []byte(`{"type":"about:blank","title":"Forbidden","status":403,"code":"access_denied","message":"not allowed","requestId":"req-1"}`),
 	}
 	api := parseAPIError(problem)
-	if api.Code != "access_denied" || api.Message != "not allowed" || api.RequestID != "req-1" || api.HTTPStatus != 403 || api.Hint == "" {
+	if api.Code != "access_denied" || api.Message != "server returned HTTP 403 (Forbidden)" || api.RequestID != "req-1" || api.HTTPStatus != 403 || api.Hint == "" {
 		t.Fatalf("problem = %#v", api)
 	}
 
@@ -262,7 +263,7 @@ func TestParseAPIErrorVariants(t *testing.T) {
 
 	plain := &apiResponse{StatusCode: 502, Header: http.Header{}, Body: []byte(strings.Repeat("x", 500))}
 	api = parseAPIError(plain)
-	if api.Code != "api_error" || len(api.Message) != clientMaxErrorText {
+	if api.Code != "api_error" || api.Message != "server returned HTTP 502 (Bad Gateway)" {
 		t.Fatalf("plain body = %#v", api)
 	}
 
@@ -334,14 +335,14 @@ func TestNewAPIClientRejectsInvalidServers(t *testing.T) {
 	}
 }
 
-func TestRedactURLMasksUserinfoAndSensitiveQuery(t *testing.T) {
-	target, err := url.Parse("https://user:pw@gateway.example.com/x?apiKey=abc&limit=2&Secret=z")
+func TestRedactURLMasksUserinfoSensitiveQueryAndFragment(t *testing.T) {
+	target, err := url.Parse("https://user:pw@gateway.example.com/x?apiKey=abc&limit=2&Secret=z#fragment-secret")
 	if err != nil {
 		t.Fatal(err)
 	}
 	redacted := redactURL(target)
-	if strings.Contains(redacted, "pw") {
-		t.Fatalf("redacted url leaked password: %s", redacted)
+	if strings.Contains(redacted, "pw") || strings.Contains(redacted, "user") || strings.Contains(redacted, "fragment-secret") {
+		t.Fatalf("redacted url leaked userinfo or fragment: %s", redacted)
 	}
 	if strings.Contains(redacted, "abc") || strings.Contains(redacted, "=z") {
 		t.Fatalf("redacted url leaked query secret: %s", redacted)
@@ -381,5 +382,146 @@ func TestCommandInfosExposeContractMetadata(t *testing.T) {
 	}
 	if !strings.Contains(text, `"stage":"m0"`) {
 		t.Fatalf("stage missing: %s", text)
+	}
+}
+
+func TestClientRefusesRedirectsWithoutForwardingCredentials(t *testing.T) {
+	for _, secure := range []bool{false, true} {
+		name := "cross_origin"
+		if secure {
+			name = "https_downgrade"
+		}
+		t.Run(name, func(t *testing.T) {
+			var forwarded bool
+			target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				forwarded = true
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			defer target.Close()
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.Redirect(w, r, target.URL+r.URL.Path, http.StatusFound)
+			})
+			var source *httptest.Server
+			if secure {
+				source = httptest.NewTLSServer(handler)
+			} else {
+				source = httptest.NewServer(handler)
+			}
+			defer source.Close()
+			client := newTestClient(t, profileSettings{Server: source.URL, Token: "synthetic-secret-token", Insecure: secure}, clientOptions{})
+			response, err := client.do(context.Background(), http.MethodGet, "/probe", requestOptions{idempotent: true})
+			if err != nil || response.StatusCode != http.StatusFound {
+				t.Fatalf("response = %#v, err = %v", response, err)
+			}
+			if forwarded {
+				t.Fatal("redirect target was contacted with credentials")
+			}
+		})
+	}
+}
+
+func TestClientWaitsForRetryAfterUntilContextExpires(t *testing.T) {
+	server, attempts := countingHandler([]int{429}, `{}`, "60")
+	defer server.Close()
+	client := newTestClient(t, profileSettings{Server: server.URL}, clientOptions{timeout: 50 * time.Millisecond})
+	_, err := client.do(context.Background(), http.MethodGet, "/probe", requestOptions{idempotent: true})
+	var connection *ConnectionError
+	if !errors.As(err, &connection) || !strings.Contains(err.Error(), "timed out") || *attempts != 1 {
+		t.Fatalf("err = %v, attempts = %d", err, *attempts)
+	}
+}
+
+func TestParseRetryAfterAvoidsOverflowAndSupportsDates(t *testing.T) {
+	now := time.Date(2026, 10, 13, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		header string
+		want   time.Duration
+	}{
+		{"60", time.Minute},
+		{"0", 0},
+		{"9223372036854775807", time.Duration(math.MaxInt64)},
+		{"18446744073709551616", time.Duration(math.MaxInt64)},
+		{"99999999999999999999999999999999999999", time.Duration(math.MaxInt64)},
+		{now.Add(time.Minute).Format(http.TimeFormat), time.Minute},
+	}
+	for _, tt := range tests {
+		if got, ok := parseRetryAfter(tt.header, now); !ok || got != tt.want {
+			t.Errorf("parseRetryAfter(%q) = %s, %t; want %s, true", tt.header, got, ok, tt.want)
+		}
+	}
+	if _, ok := parseRetryAfter("invalid", now); ok {
+		t.Fatal("accepted an invalid Retry-After value")
+	}
+}
+
+func TestNewAPIClientDoesNotEchoInvalidServerCredentials(t *testing.T) {
+	_, err := newAPIClient(profileSettings{Server: "http://synthetic-user:synthetic-password@[::1?token=synthetic-token"}, clientOptions{})
+	if err == nil || strings.Contains(err.Error(), "synthetic-") {
+		t.Fatalf("invalid server error = %v", err)
+	}
+}
+
+func TestParseAPIErrorSuppressesAuthenticationBodiesAndSanitizesMetadata(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		response := &apiResponse{
+			StatusCode: status,
+			Header:     http.Header{},
+			Body:       []byte(`{"code":"synthetic-known-token","message":"Bearer synthetic-body-token","requestId":"req-token=synthetic-request-token"}`),
+		}
+		api := parseAPIError(response, "synthetic-known-token")
+		encoded, err := json.Marshal(api)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(encoded), "synthetic-") || !strings.Contains(api.Message, http.StatusText(status)) || api.Hint == "" {
+			t.Fatalf("unsafe or unhelpful authentication error: %s", encoded)
+		}
+	}
+}
+
+func TestParseAPIErrorSanitizesProblemAndDiscardsPlainBodies(t *testing.T) {
+	response := &apiResponse{
+		StatusCode: http.StatusBadRequest,
+		Header:     http.Header{"X-Request-Id": {"req synthetic-known-token"}},
+		Body:       []byte(`{"code":"invalid_request","message":"bad input: Bearer synthetic-bearer-token; apiKey=synthetic-query-token; upstream synthetic-known-token"}`),
+	}
+	api := parseAPIError(response, "synthetic-known-token")
+	if strings.Contains(api.Message, "synthetic-") || strings.Contains(api.RequestID, "synthetic-") || !strings.Contains(api.Message, "bad input") {
+		t.Fatalf("problem error = %#v", api)
+	}
+	response.Body = []byte("unknown private information: synthetic-token")
+	api = parseAPIError(response)
+	if api.Message != "server returned HTTP 400 (Bad Request)" {
+		t.Fatalf("plain error body was exposed: %#v", api)
+	}
+}
+
+func TestClientSanitizesTransportAndRequestBuildErrors(t *testing.T) {
+	client := newTestClient(t, profileSettings{Server: "http://gateway.example.com", Token: "synthetic-known-token"}, clientOptions{})
+	requestURL, _ := url.Parse("http://gateway.example.com")
+	err := client.transportError(&url.Error{Err: errors.New("cannot parse https://user:synthetic-password@[::1?token=synthetic-query-token; echoed synthetic-known-token")}, requestURL)
+	if strings.Contains(err.Error(), "synthetic-") || !strings.Contains(err.Error(), "cannot reach gateway.example.com") {
+		t.Fatalf("transport error = %v", err)
+	}
+	_, err = client.do(context.Background(), "synthetic-known-token\n", "/probe", requestOptions{})
+	if err == nil || strings.Contains(err.Error(), "synthetic-known-token") {
+		t.Fatalf("request build error = %v", err)
+	}
+}
+
+func TestGetJSONDoesNotEchoInvalidResponseValues(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Request-ID", "req synthetic-known-token")
+		_, _ = fmt.Fprint(w, `{"count":123456789}`)
+	}))
+	defer server.Close()
+	client := newTestClient(t, profileSettings{Server: server.URL, Token: "synthetic-known-token"}, clientOptions{})
+	var target struct {
+		Count string `json:"count"`
+	}
+	err := client.getJSON(context.Background(), "/probe", nil, &target)
+	var api *APIError
+	if !errors.As(err, &api) || strings.Contains(api.Message, "123456789") || strings.Contains(api.RequestID, "synthetic-known-token") {
+		t.Fatalf("JSON decode error = %#v", err)
 	}
 }

@@ -141,6 +141,9 @@ rejected token reports `unauthorized`. The command exits 0 whenever the server
 answered, and exits 8 when it could not be reached. `--json` data is an
 `InfoReport` with per-source `status` (`ok`, `not_ready`, `unauthenticated`,
 `unauthorized`, `forbidden`, `error`) and details.
+The `server` field is the effective endpoint with userinfo, query, and fragment
+removed. Failed probes preserve `code`, `requestId`, and an actionable `hint`
+when available; human output displays the same diagnostics.
 
 ### `agctl commands`
 
@@ -154,6 +157,12 @@ this tree to discover what the installed client can do.
 
 - Credentials never reach output: not through verbose logs, error messages,
   or JSON envelopes. The `Authorization` header is never printed.
+- Authentication failures use a standard HTTP message; unstructured error
+  bodies are not echoed. Structured problem messages are redacted.
+- HTTP redirects are reported without following them, so credentials cannot
+  be forwarded to another endpoint or a plaintext connection.
+- A server's `Retry-After` delay is never shortened; the request timeout
+  cancels the wait when the remaining budget is insufficient.
 - The configuration file must be mode 0600; commands refuse a lax file.
 - `--insecure` disables TLS certificate verification and is intended only for
   trusted test networks; prefer a valid certificate.

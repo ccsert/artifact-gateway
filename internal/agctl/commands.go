@@ -99,6 +99,9 @@ type probeResult struct {
 	Status     string `json:"status"`
 	HTTPStatus int    `json:"httpStatus,omitempty"`
 	Detail     string `json:"detail,omitempty"`
+	Code       string `json:"code,omitempty"`
+	RequestID  string `json:"requestId,omitempty"`
+	Hint       string `json:"hint,omitempty"`
 }
 
 type identityResult struct {
@@ -149,19 +152,19 @@ func infoCommand() command {
 			if err != nil {
 				return err
 			}
-			report := infoReport{Server: env.settings.Server}
+			report := infoReport{Server: redactText(redactURL(client.baseURL), client.token)}
 
 			livez, err := client.do(ctx, http.MethodGet, "/livez", requestOptions{idempotent: true})
 			if err != nil {
 				return err
 			}
-			report.Livez = simpleProbe(livez)
+			report.Livez = simpleProbe(livez, client.token)
 
 			readyz, err := client.do(ctx, http.MethodGet, "/readyz", requestOptions{idempotent: true})
 			if err != nil {
 				return err
 			}
-			report.Readyz = readinessProbe(readyz)
+			report.Readyz = readinessProbe(readyz, client.token)
 
 			report.Identity, err = probeIdentity(ctx, client, env.settings.Token != "")
 			if err != nil {
@@ -178,43 +181,38 @@ func infoCommand() command {
 	}
 }
 
-// simpleProbe reports the reachability of an endpoint without interpreting
-// its body.
-func simpleProbe(response *apiResponse) probeResult {
+// simpleProbe preserves structured diagnostics without exposing raw bodies.
+func simpleProbe(response *apiResponse, secrets ...string) probeResult {
 	if response.StatusCode < 300 {
 		return probeResult{Status: "ok"}
 	}
-	return probeResult{
-		Status:     "error",
-		HTTPStatus: response.StatusCode,
-		Detail:     bodyText(response, http.StatusText(response.StatusCode)),
-	}
+	return errorProbe(parseAPIError(response, secrets...))
 }
 
-func readinessProbe(response *apiResponse) probeResult {
-	if response.StatusCode < 300 {
-		return probeResult{Status: "ok"}
-	}
-	status := "error"
+func readinessProbe(response *apiResponse, secrets ...string) probeResult {
+	result := simpleProbe(response, secrets...)
 	if response.StatusCode == http.StatusServiceUnavailable {
-		status = "not_ready"
+		result.Status = "not_ready"
+	}
+	return result
+}
+
+func errorProbe(api *APIError) probeResult {
+	status := "error"
+	switch api.HTTPStatus {
+	case http.StatusUnauthorized:
+		status = "unauthorized"
+	case http.StatusForbidden:
+		status = "forbidden"
 	}
 	return probeResult{
 		Status:     status,
-		HTTPStatus: response.StatusCode,
-		Detail:     bodyText(response, http.StatusText(response.StatusCode)),
+		HTTPStatus: api.HTTPStatus,
+		Detail:     api.Message,
+		Code:       api.Code,
+		RequestID:  api.RequestID,
+		Hint:       api.Hint,
 	}
-}
-
-func bodyText(response *apiResponse, fallback string) string {
-	text := strings.TrimSpace(string(response.Body))
-	if text == "" {
-		return fallback
-	}
-	if len(text) > clientMaxErrorText {
-		text = text[:clientMaxErrorText]
-	}
-	return text
 }
 
 func probeIdentity(ctx context.Context, client *apiClient, hasToken bool) (*identityResult, error) {
@@ -230,16 +228,7 @@ func probeIdentity(ctx context.Context, client *apiClient, hasToken bool) (*iden
 		if !errors.As(err, &api) {
 			return nil, err
 		}
-		switch api.HTTPStatus {
-		case http.StatusUnauthorized:
-			result.Status = "unauthorized"
-		case http.StatusForbidden:
-			result.Status = "forbidden"
-		default:
-			result.Status = "error"
-		}
-		result.HTTPStatus = api.HTTPStatus
-		result.Detail = api.Message
+		result.probeResult = errorProbe(api)
 		return result, nil
 	}
 	result.Status = "ok"
@@ -267,16 +256,7 @@ func probeFormats(ctx context.Context, client *apiClient, hasToken bool) (*forma
 		if !errors.As(err, &api) {
 			return nil, err
 		}
-		switch api.HTTPStatus {
-		case http.StatusUnauthorized:
-			result.Status = "unauthorized"
-		case http.StatusForbidden:
-			result.Status = "forbidden"
-		default:
-			result.Status = "error"
-		}
-		result.HTTPStatus = api.HTTPStatus
-		result.Detail = api.Message
+		result.probeResult = errorProbe(api)
 		return result, nil
 	}
 	result.Status = "ok"
@@ -311,8 +291,17 @@ func formatProbe(probe probeResult) string {
 	if probe.HTTPStatus != 0 {
 		line += fmt.Sprintf(" (HTTP %d)", probe.HTTPStatus)
 	}
+	if probe.Code != "" {
+		line += " [" + probe.Code + "]"
+	}
 	if probe.Detail != "" {
 		line += " — " + probe.Detail
+	}
+	if probe.Hint != "" {
+		line += "; hint: " + probe.Hint
+	}
+	if probe.RequestID != "" {
+		line += "; request id: " + probe.RequestID
 	}
 	return line
 }

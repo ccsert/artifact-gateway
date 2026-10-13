@@ -133,6 +133,8 @@ profile，最后是只定义一个 profile 的文件。
 应答时命令退出码为 0；不可达时退出码为 8。`--json` 的 data 为 `InfoReport`，
 逐来源给出 `status`（`ok`、`not_ready`、`unauthenticated`、`unauthorized`、
 `forbidden`、`error`）与细节。
+`server` 字段为实际请求端点，移除 userinfo、查询参数与 fragment。失败探针保留
+可用的 `code`、`requestId` 与可操作的 `hint`；人类输出显示相同的诊断信息。
 
 ### `agctl commands`
 
@@ -144,6 +146,9 @@ dry-run、重试、wait 能力。脚本与 agent 通过该树发现已安装客�
 
 - 凭据不会进入任何输出：verbose 日志、错误消息与 JSON 信封均不例外；
   `Authorization` 头永不打印。
+- 认证失败使用标准 HTTP 说明；非结构化错误正文不回显，结构化 problem 消息脱敏。
+- HTTP 重定向直接报告，不自动跟随，避免凭据被转发到其他端点或明文连接。
+- 服务端 `Retry-After` 要求的等待时间不会缩短；剩余预算不足时，请求超时取消等待。
 - 配置文件权限必须为 0600；权限过宽时命令直接拒绝。
 - `--insecure` 关闭 TLS 证书校验，仅用于受信测试网络；优先使用有效证书。
 - 一次性秘密（签发的 API key、token）由服务账号命令的承接工作治理：没有显式

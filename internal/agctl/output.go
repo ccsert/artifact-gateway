@@ -2,6 +2,7 @@ package agctl
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -74,26 +75,31 @@ func renderSuccess(stdout io.Writer, format outputFormat, data any, meta *envelo
 
 // renderFailure writes with the selected format. JSON mode prints exactly one
 // failure envelope on stdout; table mode prints diagnostics on stderr.
-func renderFailure(stdout, stderr io.Writer, format outputFormat, err error) {
+func renderFailure(stdout, stderr io.Writer, format outputFormat, err error, knownSecrets ...string) {
+	report := errorReportFrom(err, knownSecrets...)
 	if format == outputJSON {
-		_ = writeEnvelope(stdout, envelope{SchemaVersion: outputSchemaVersion, OK: false, Error: errorReportFrom(err)})
+		_ = writeEnvelope(stdout, envelope{SchemaVersion: outputSchemaVersion, OK: false, Error: report})
 		return
 	}
-	_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
-	if hint := errorHint(err); hint != "" {
+	_, _ = fmt.Fprintf(stderr, "error: %s\n", report.Message)
+	var api *APIError
+	if errors.As(err, &api) && report.Code != "" {
+		_, _ = fmt.Fprintf(stderr, "code: %s\n", report.Code)
+	}
+	if hint := report.Hint; hint != "" {
 		_, _ = fmt.Fprintf(stderr, "hint: %s\n", hint)
 	}
-	if requestID := errorRequestID(err); requestID != "" {
+	if requestID := report.RequestID; requestID != "" {
 		_, _ = fmt.Fprintf(stderr, "request id: %s\n", requestID)
 	}
 }
 
-func errorReportFrom(err error) *errorReport {
+func errorReportFrom(err error, knownSecrets ...string) *errorReport {
 	return &errorReport{
-		Code:       localErrorCode(err),
+		Code:       redactText(localErrorCode(err), knownSecrets...),
 		HTTPStatus: errorHTTPStatus(err),
-		Message:    err.Error(),
-		Hint:       errorHint(err),
-		RequestID:  errorRequestID(err),
+		Message:    redactText(err.Error(), knownSecrets...),
+		Hint:       redactText(errorHint(err), knownSecrets...),
+		RequestID:  redactText(errorRequestID(err), knownSecrets...),
 	}
 }

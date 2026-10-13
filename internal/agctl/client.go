@@ -7,9 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -20,12 +20,7 @@ const (
 	clientRetryBaseWait = 200 * time.Millisecond
 	clientRetryMaxWait  = 5 * time.Second
 	clientMaxBody       = 16 << 20
-	clientMaxErrorText  = 200
 )
-
-// sensitiveQuery is the redaction pattern for verbose URLs and error
-// messages. Credentials must never appear in either.
-var sensitiveQuery = regexp.MustCompile(`(?i)(token|secret|password|credential|key)`)
 
 type apiClient struct {
 	baseURL    *url.URL
@@ -66,7 +61,7 @@ func newAPIClient(settings profileSettings, options clientOptions) (*apiClient, 
 	parsed, err := url.Parse(server)
 	if err != nil || !parsed.IsAbs() || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		return nil, &UsageError{
-			Message: fmt.Sprintf("server URL %q is not a valid http(s) URL", server),
+			Message: "server URL is not a valid http(s) URL",
 			Hint:    "use the Gateway root URL, for example https://gateway.example.com",
 		}
 	}
@@ -83,9 +78,14 @@ func newAPIClient(settings profileSettings, options clientOptions) (*apiClient, 
 		timeout = defaultTimeout
 	}
 	return &apiClient{
-		baseURL:    parsed,
-		token:      settings.Token,
-		httpClient: &http.Client{Transport: transport},
+		baseURL: parsed,
+		token:   settings.Token,
+		httpClient: &http.Client{
+			Transport: transport,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
 		userAgent:  options.userAgent,
 		timeout:    timeout,
 		verbose:    options.verbose,
@@ -138,7 +138,7 @@ func (c *apiClient) do(ctx context.Context, method, path string, options request
 		}
 		request, err := http.NewRequestWithContext(ctx, method, requestURL.String(), nil)
 		if err != nil {
-			return nil, &UsageError{Message: fmt.Sprintf("cannot build request: %v", err)}
+			return nil, &UsageError{Message: "cannot build HTTP request: " + redactText(err.Error(), c.token)}
 		}
 		request.Header.Set("Accept", "application/json")
 		if c.userAgent != "" {
@@ -148,7 +148,7 @@ func (c *apiClient) do(ctx context.Context, method, path string, options request
 			request.Header.Set("Authorization", "Bearer "+c.token)
 		}
 		if c.verbose != nil {
-			_, _ = fmt.Fprintf(c.verbose, "> %s %s\n", method, redactURL(requestURL))
+			_, _ = fmt.Fprintf(c.verbose, "> %s %s\n", method, redactText(redactURL(requestURL), c.token))
 		}
 		response, err := c.httpClient.Do(request)
 		lastErr = err
@@ -194,9 +194,6 @@ func retryableStatus(status int) bool {
 func (c *apiClient) retryWait(lastResponse *apiResponse, attempt int) time.Duration {
 	if lastResponse != nil {
 		if wait, ok := parseRetryAfter(lastResponse.Header.Get("Retry-After"), time.Now()); ok {
-			if wait > clientRetryMaxWait {
-				return clientRetryMaxWait
-			}
 			return wait
 		}
 	}
@@ -210,12 +207,12 @@ func (c *apiClient) retryWait(lastResponse *apiResponse, attempt int) time.Durat
 func (c *apiClient) contextError(ctx context.Context, requestURL *url.URL) error {
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return &ConnectionError{
-			Message: fmt.Sprintf("request to %s timed out after %s", requestURL.Host, c.timeout),
+			Message: redactText(fmt.Sprintf("request to %s timed out after %s", requestURL.Host, c.timeout), c.token),
 			Hint:    "raise --timeout or check connectivity to the server",
 		}
 	}
 	return &ConnectionError{
-		Message: fmt.Sprintf("request to %s was canceled", requestURL.Host),
+		Message: redactText(fmt.Sprintf("request to %s was canceled", requestURL.Host), c.token),
 		Hint:    "interrupted before the server answered",
 	}
 }
@@ -231,7 +228,7 @@ func (c *apiClient) transportError(err error, requestURL *url.URL) error {
 		}
 	}
 	return &ConnectionError{
-		Message: fmt.Sprintf("cannot reach %s: %s", requestURL.Host, detail),
+		Message: redactText(fmt.Sprintf("cannot reach %s: %s", requestURL.Host, detail), c.token),
 		Hint:    "check --server and network connectivity to the Gateway",
 	}
 }
@@ -244,7 +241,7 @@ func (c *apiClient) getJSON(ctx context.Context, path string, query url.Values, 
 		return err
 	}
 	if response.StatusCode >= 300 {
-		return parseAPIError(response)
+		return parseAPIError(response, c.token)
 	}
 	if target == nil || len(response.Body) == 0 {
 		return nil
@@ -253,8 +250,8 @@ func (c *apiClient) getJSON(ctx context.Context, path string, query url.Values, 
 		return &APIError{
 			Code:       "invalid_response",
 			HTTPStatus: response.StatusCode,
-			Message:    fmt.Sprintf("server returned an unreadable response: %v", err),
-			RequestID:  response.Header.Get("X-Request-ID"),
+			Message:    "server returned an unreadable JSON response",
+			RequestID:  redactText(response.Header.Get("X-Request-ID"), c.token),
 		}
 	}
 	return nil
@@ -262,8 +259,9 @@ func (c *apiClient) getJSON(ctx context.Context, path string, query url.Values, 
 
 // parseAPIError converts a non-2xx response into an APIError. The management
 // API answers with a problem document carrying code, message, and requestId;
-// responses without one fall back to a truncated text body.
-func parseAPIError(response *apiResponse) *APIError {
+// responses without one fall back to the HTTP status, because arbitrary
+// upstream bodies and authentication messages may contain credentials.
+func parseAPIError(response *apiResponse, knownSecrets ...string) *APIError {
 	var problem struct {
 		Title     string `json:"title"`
 		Status    int    `json:"status"`
@@ -279,11 +277,6 @@ func parseAPIError(response *apiResponse) *APIError {
 			api.Message = problem.Title
 		}
 		api.RequestID = problem.RequestID
-	} else {
-		api.Message = strings.TrimSpace(string(response.Body))
-		if len(api.Message) > clientMaxErrorText {
-			api.Message = api.Message[:clientMaxErrorText]
-		}
 	}
 	if api.Code == "" {
 		api.Code = "api_error"
@@ -291,9 +284,12 @@ func parseAPIError(response *apiResponse) *APIError {
 	if api.RequestID == "" {
 		api.RequestID = response.Header.Get("X-Request-ID")
 	}
-	if api.Message == "" {
-		api.Message = fmt.Sprintf("server returned HTTP %d", response.StatusCode)
+	if api.Message == "" || response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		api.Message = fmt.Sprintf("server returned HTTP %d (%s)", response.StatusCode, http.StatusText(response.StatusCode))
 	}
+	api.Code = redactText(api.Code, knownSecrets...)
+	api.Message = redactText(api.Message, knownSecrets...)
+	api.RequestID = redactText(api.RequestID, knownSecrets...)
 	return api
 }
 
@@ -303,11 +299,13 @@ func parseRetryAfter(value string, now time.Time) (time.Duration, bool) {
 	if value == "" {
 		return 0, false
 	}
-	if seconds, err := strconv.Atoi(value); err == nil {
-		if seconds < 0 {
-			return 0, true
+	if seconds, err := strconv.ParseUint(value, 10, 64); err == nil {
+		if seconds > uint64(math.MaxInt64/int64(time.Second)) {
+			return time.Duration(math.MaxInt64), true
 		}
 		return time.Duration(seconds) * time.Second, true
+	} else if numErr, ok := err.(*strconv.NumError); ok && errors.Is(numErr.Err, strconv.ErrRange) && onlyDigits(value) {
+		return time.Duration(math.MaxInt64), true
 	}
 	if moment, err := http.ParseTime(value); err == nil {
 		wait := moment.Sub(now)
@@ -319,20 +317,11 @@ func parseRetryAfter(value string, now time.Time) (time.Duration, bool) {
 	return 0, false
 }
 
-// redactURL hides credential-bearing URL parts before they reach any writer.
-func redactURL(target *url.URL) string {
-	sanitized := *target
-	if sanitized.User != nil {
-		if _, hasPassword := sanitized.User.Password(); hasPassword {
-			sanitized.User = url.UserPassword(sanitized.User.Username(), "REDACTED")
+func onlyDigits(value string) bool {
+	for _, digit := range value {
+		if digit < '0' || digit > '9' {
+			return false
 		}
 	}
-	query := sanitized.Query()
-	for key := range query {
-		if sensitiveQuery.MatchString(key) {
-			query.Set(key, "REDACTED")
-		}
-	}
-	sanitized.RawQuery = query.Encode()
-	return sanitized.String()
+	return value != ""
 }

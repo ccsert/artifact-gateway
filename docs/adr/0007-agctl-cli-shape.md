@@ -85,6 +85,11 @@ on transport failures, 429, and 502/503/504, with exponential backoff honoring
 `Retry-After`. Writes are never retried without endpoint-declared idempotency.
 Server problem documents are parsed into the error envelope, and the request
 id is surfaced for support.
+Server retry delays are not capped by the local backoff limit; the request's
+timeout bounds the wait. Redirects are returned without following them.
+Authentication failures and unstructured bodies use safe HTTP descriptions;
+structured problem messages are redacted before rendering. The `info` probes
+preserve the error code, request id, and hint alongside each source's status.
 
 **Introspection is a feature.** `agctl version`, `agctl info` (health,
 readiness, caller identity, format catalog), and `agctl commands --json`
