@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Added the `agctl` client skeleton (`cmd/agctl`), built with `make cli-build`: command registry and global flags, configuration precedence (`--server`/`--token`/`--profile`, then `AGCTL_SERVER`/`AGCTL_TOKEN`/`AGCTL_PROFILE`, then `~/.config/agctl/config.yaml` at mode 0600), the documented exit-code contract, the versioned JSON envelope with structured errors and request ids, a retrying management HTTP client, and the `version`, `info` (health, readiness, identity, formats), and `commands` introspection commands. The client never prints credentials and never prompts.
+
 - The Console shell (overview, sign-in, navigation and command palette) reads through the shared query layer and is split into focused files; Layout, Login, Dashboard and the preferences provider are now each at most 400 lines. Each overview source keeps its own banner and Retry, and an expired session now ends cleanly from the overview. Single sign-on discovery falls back to local and token sign-in when it is unavailable. The command palette reads every repository page once per session and follows catalog changes. Shell messages move into feature dictionaries without changing their text. A 5xx overview groups read is retried once like other pages. Behaviour and layout are otherwise unchanged.
 
 - Console settings retain loaded forms and drafts after failed refreshes. Late OIDC saves cannot repopulate a previous session's cache, and audit retention edits reset when the saved policy version changes. Failed audit refreshes keep the displayed page; successful refreshes read and replace only the first page. Audit group filters retain the original 200-group window across cursor pages.

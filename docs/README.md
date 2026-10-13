@@ -37,6 +37,8 @@ agree with executable tests and the
 - [ADR 0003: protocol-only formats](adr/0003-protocol-only-formats.md)
 - [ADR 0004: Go Hosted publication](adr/0004-go-hosted-publication.md)
 - [ADR 0005: Console semantic theme system](adr/0005-console-semantic-theme-system.md)
+- [ADR 0006: account levels and per-repository authority](adr/0006-account-levels-and-repository-grants.md)
+- [ADR 0007: agctl CLI shape and cross-cutting contract](adr/0007-agctl-cli-shape.md)
 
 ## Protocols and formats
 
@@ -71,6 +73,7 @@ agree with executable tests and the
 - [Keycloak on Kubernetes](oidc-keycloak-k8s.md) — real browser callback acceptance.
 - [Repository Grant authorization](repository-grant-authorization-plan.md) — scoped runtime decisions and rollout.
 - [Service Account operations](service-account-operations.md) — stable machine principals and zero-downtime rotation.
+- [agctl CLI](cli.md) — client contract for CI, platform management, and agents: configuration precedence, exit codes, JSON envelope, and the current introspection commands.
 - [Security admission policy](security-admission-policy.md) — promotion evidence, Quarantine, and optional read enforcement.
 - [Artifact scanner contract](artifact-scanner-contract.md) — bounded external scanning, health, evidence, and reconciliation.
 - [Proxy egress design](proxy-egress-design.md) — direct, environment, HTTP, and SOCKS5 per-Repository routing.
