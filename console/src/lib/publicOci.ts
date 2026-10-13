@@ -84,7 +84,10 @@ async function readManifest(
     { headers: { Accept: manifestAccept } },
   );
   if (!response.ok) {
-    throw new Error(`读取 OCI manifest 失败 (${response.status})`);
+    throw Object.assign(
+      new Error(`读取 OCI manifest 失败 (${response.status})`),
+      { status: response.status },
+    );
   }
 
   const envelope = (await response.json()) as ManifestEnvelope;

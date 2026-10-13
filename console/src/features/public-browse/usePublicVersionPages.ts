@@ -245,14 +245,39 @@ export function usePublicVersionPages({
   const loadOciTags = async (coordinate: string, after = "") => {
     if (!repository || source !== "ociTags") return;
     if (!after) {
+      // The panel's Retry omits the cursor. Resume a failed continuation
+      // without throwing away the earlier successful pages.
+      const failedCursor = requests.ociTags[coordinate]?.find(
+        (cursor) =>
+          queryClient.getQueryState(tagKey(coordinate, cursor))?.error,
+      );
+      if (failedCursor) {
+        await queryClient.refetchQueries({
+          queryKey: tagKey(coordinate, failedCursor),
+          exact: true,
+        });
+        return;
+      }
       // A first read or a Retry starts the image's pages over.
       setRequests((current) => ({
         ...current,
         ociTags: { ...current.ociTags, [coordinate]: [""] },
       }));
-      await queryClient.invalidateQueries({
-        queryKey: [...publicKeys.all, "oci-tags", repositoryId, coordinate],
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [...publicKeys.all, "oci-tags", repositoryId, coordinate],
+        }),
+        // Tags are mutable references. Restarting their pages must also
+        // refresh their manifests, including on a repository's return.
+        queryClient.invalidateQueries({
+          queryKey: [
+            ...publicKeys.all,
+            "oci-manifest",
+            repositoryId,
+            coordinate,
+          ],
+        }),
+      ]);
       return;
     }
     setRequests((current) => {

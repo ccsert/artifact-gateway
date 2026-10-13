@@ -135,7 +135,8 @@ describe("public version pages", () => {
     );
     expect(result.current.ociTagPages.app.items).toEqual(["1.0"]);
 
-    await act(() => result.current.loadOciTags("app", "page-2"));
+    // The panel's Retry button supplies no cursor.
+    await act(() => result.current.loadOciTags("app"));
     await waitFor(() =>
       expect(result.current.ociTagPages.app).toMatchObject({
         items: ["1.0", "2.0"],
