@@ -126,8 +126,9 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/operations/SystemDiagnosticsPanel.tsx`
 - [x] `features/operations/WebhookDeliveriesPanel.tsx`
 - [x] `features/public-browse/PublicBrowsePage.tsx`
-- [ ] `features/public-browse/usePublicVersionPages.ts` — OCI/Conan incremental
-      state was extracted unchanged under issue 275; migrate its reads separately.
+- [x] `features/public-browse/usePublicVersionPages.ts` — each OCI tag, manifest
+      and Conan revision page is a query; the hook keeps which pages were asked
+      for and assembles them per coordinate.
 - [x] `features/repository/APTOperationsTab.tsx`
 - [x] `features/repository/ProxyMavenCacheSection.tsx`
 - [x] `features/repository/RepositoryArtifactSelect.tsx`
