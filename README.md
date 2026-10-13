@@ -155,6 +155,12 @@ make dev-down     # stop only the checkout-managed Console
 make down         # stop Compose services and preserve data volumes
 ```
 
+`make cli-build` cross-compiles `agctl`, the command line client for CI
+pipelines and platform management, into `dist/agctl_<goos>_<goarch>` for Linux
+and macOS, and `make cli-docker-build` builds the client container image. See
+the [agctl CLI](docs/cli.md) guide for the install channels and their current
+limits.
+
 See [Getting started](docs/getting-started.md) for credential handling,
 first-repository guidance, ports, lifecycle commands, and troubleshooting.
 

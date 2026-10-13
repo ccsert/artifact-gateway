@@ -179,6 +179,35 @@ for target in "${targets[@]}"; do
       BACKUPOPS_BUILT_PLATFORM="$target" \
       go test -count=1 ./internal/backupops -run '^TestBuiltNativeArchiveIdentity$'
   fi
+
+  # The CLI client ships as its own archive: agctl is the client for CI,
+  # platform management, and agents, so it must not be mixed into the server
+  # archives whose INSTALL.txt and future native backup profile cover server
+  # materials only. The version and revision are injected with the same
+  # ldflags, and write-release-checksums.sh covers the new archives unchanged.
+  agctl_stage="$workdir/artifact-gateway-agctl_${version}_${goos}_${goarch}"
+  mkdir -p "$agctl_stage"
+  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath -buildvcs=false -ldflags "$ldflags" -o "$agctl_stage/agctl$suffix" ./cmd/agctl
+  printf 'version=%s\nrevision=%s\ntarget=%s/%s\n' "$version" "$revision" "$goos" "$goarch" > "$agctl_stage/VERSION.txt"
+  printf '%s\n' \
+    'Artifact Gateway CLI installation materials' \
+    '' \
+    'This archive carries only the agctl client; server materials live in the' \
+    'artifact-gateway_ archive of the same release.' \
+    '' \
+    '1. Verify SHA256SUMS before extracting this archive.' \
+    '2. Run ./agctl version to confirm the client version and revision.' \
+    '3. Configure a profile in ~/.config/agctl/config.yaml (mode 0600) or export AGCTL_SERVER and AGCTL_TOKEN.' \
+    '4. Point the client at a deployment, for example ./agctl info --server https://gateway.example.com' \
+    '' \
+    "Documentation: https://github.com/ccsert/artifact-gateway/blob/$revision/docs/cli.md" \
+    > "$agctl_stage/INSTALL.txt"
+
+  if [[ "$goos" == "windows" ]]; then
+    create_zip "$agctl_stage" "$output/artifact-gateway-agctl_${version}_${goos}_${goarch}.zip"
+  else
+    create_tar_gz "$agctl_stage" "$output/artifact-gateway-agctl_${version}_${goos}_${goarch}.tar.gz"
+  fi
 done
 
 if [[ "$skip_console" -eq 0 ]]; then

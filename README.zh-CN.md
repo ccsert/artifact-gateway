@@ -140,6 +140,11 @@ make dev-down     # 只停止当前 checkout 管理的 Console
 make down         # 停止 Compose 服务并保留数据卷
 ```
 
+`make cli-build` 会把面向 CI 流水线与平台管理的命令行客户端 `agctl` 交叉编译到
+`dist/agctl_<goos>_<goarch>`（Linux 与 macOS），`make cli-docker-build` 构建
+客户端容器镜像。安装通道及当前限制见
+[agctl 命令行](docs/cli.zh-CN.md)。
+
 凭据处理、首个仓库、端口、生命周期命令和故障排查详见
 [快速入门](docs/getting-started.zh-CN.md)。
 
