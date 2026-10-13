@@ -96,6 +96,22 @@ export const groupKeys = {
   resolution: (id: string) => [...groupKeys.all, "resolution", id] as const,
 };
 
+export const auditKeys = {
+  all: ["audits"] as const,
+  pages: (filters: object) => [...auditKeys.all, "pages", filters] as const,
+  retentionPolicy: () => [...auditKeys.all, "retention-policy"] as const,
+  retentionJobs: () => [...auditKeys.all, "retention-jobs"] as const,
+};
+
+export const settingsKeys = {
+  all: ["settings"] as const,
+  oidc: () => [...settingsKeys.all, "oidc"] as const,
+};
+
+export const siteKeys = {
+  settings: () => ["site", "settings"] as const,
+};
+
 export const searchKeys = {
   all: ["search"] as const,
   artifacts: (match: string, q: string) =>

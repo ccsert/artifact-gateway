@@ -17,7 +17,12 @@ function IdentityCacheScope() {
   useEffect(() => {
     if (previous.current === principal) return;
     previous.current = principal;
-    queryClient.clear();
+    // Removing a query also cancels its read; answers every principal shares
+    // stay, so a long-lived reader of them is never left waiting.
+    queryClient.removeQueries({
+      predicate: (query) => query.meta?.sharedAcrossIdentities !== true,
+    });
+    queryClient.getMutationCache().clear();
   }, [principal, queryClient]);
 
   return null;

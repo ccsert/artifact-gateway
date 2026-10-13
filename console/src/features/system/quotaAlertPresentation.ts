@@ -254,6 +254,40 @@ export function policyErrors(draft: PolicyDraft) {
   }
   return errors;
 }
+/** The reader-facing explanation of one policy field error. */
+export function policyErrorMessage(
+  error: PolicyError | undefined,
+  text: (zh: string, en: string) => string,
+) {
+  switch (error) {
+    case "percent":
+      return text(
+        "请输入大于 0 且不超过 100 的百分比，最多两位小数。",
+        "Enter a percentage above 0 and at most 100, with up to two decimals.",
+      );
+    case "seconds":
+      return text(
+        "请输入 1–86400 的整数秒。",
+        "Enter integer seconds from 1–86400.",
+      );
+    case "sampleAge":
+      return text(
+        "请输入 30–3600 的整数秒。",
+        "Enter integer seconds from 30–3600.",
+      );
+    case "recoveryOrder":
+      return text(
+        "恢复阈值必须低于警告阈值。",
+        "Recovery must be below the warning threshold.",
+      );
+    case "warningOrder":
+      return text(
+        "警告阈值必须低于严重阈值。",
+        "Warning must be below the critical threshold.",
+      );
+  }
+}
+
 export function parsePolicy(
   draft: PolicyDraft,
 ): RepositoryQuotaAlertPolicy | undefined {

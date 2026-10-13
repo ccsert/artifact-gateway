@@ -189,7 +189,8 @@ test("audit refresh failure retains the previously loaded records", async ({
   await expect(page.getByText("refresh failed")).toBeVisible();
   await expect(page.getByText("stable-releases").first()).toBeVisible();
   await expect(page.getByText("加载中…")).toHaveCount(0);
-  expect(consoleErrors).toHaveLength(1);
-  expect(consoleErrors[0]).toContain("503");
+  // A 5xx answer is retried once by the shared query layer, then reported.
+  expect(consoleErrors).toHaveLength(2);
+  for (const message of consoleErrors) expect(message).toContain("503");
   expect(pageErrors).toEqual([]);
 });

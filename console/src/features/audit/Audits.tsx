@@ -1,15 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Collapse, DatePicker, Select, Space } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import dayjs from "dayjs";
-import type { Dayjs } from "dayjs";
+import { useState } from "react";
+import { Button, Space } from "antd";
 import {
   ClearOutlined,
   DownloadOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
-import { listAuditPage, listRepositories, listGroups } from "../../client";
-import type { AuditRecord } from "../../client";
+import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card } from "../../components/ui/Layout";
 import {
   Loading,
@@ -17,369 +13,110 @@ import {
   EmptyState,
   isNotFound,
 } from "../../components/ui/Feedback";
-import { FormatBadge, StatusText, statusTone } from "../../components/ui/Badge";
-import { formatBytes, formatDate } from "../../lib/format";
-import { toCsv, downloadCsv } from "../../lib/csv";
-import {
-  ConsoleTable,
-  FilterBar,
-  FilterField,
-} from "../../components/ui/ConsolePrimitives";
+import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
-import { Link } from "react-router-dom";
+import { useAccessRepositories } from "../access-control/accessQueries";
 import { auditOperationLabel } from "./auditOperations";
-import { auditOutcomeLabel, auditOutcomeTone } from "./auditOutcomes";
+import { auditOutcomeLabel } from "./auditOutcomes";
+import {
+  AuditRecordDetail,
+  auditColumns,
+  type AuditTableRow,
+} from "./auditColumns";
+import { exportAuditCsv } from "./auditCsv";
+import { AuditFilters } from "./AuditFilters";
+import {
+  auditQuery,
+  auditPagesOptions,
+  emptyAuditFilters,
+  useAuditGroupOptions,
+  useAuditPages,
+  type AuditFilters as Filters,
+} from "./auditQueries";
 
-const AUDIT_CSV_COLUMNS_ZH = [
-  "时间",
-  "操作",
-  "结果",
-  "仓库",
-  "分组",
-  "格式",
-  "状态",
-  "流量",
-  "Actor",
-  "资源",
-  "表示",
-  "成员",
-  "成员类型",
-  "上游主机",
-  "缓存",
-  "授权来源",
-  "授权原因",
-  "Request ID",
-  "Trace ID",
-];
-const AUDIT_CSV_COLUMNS_EN = [
-  "Time",
-  "Operation",
-  "Outcome",
-  "Repository",
-  "Group",
-  "Format",
-  "Status",
-  "Traffic",
-  "Actor",
-  "Resource",
-  "Representation",
-  "Member",
-  "Member type",
-  "Upstream host",
-  "Cache",
-  "Authorization source",
-  "Authorization reason",
-  "Request ID",
-  "Trace ID",
-];
-type AuditTableRow = {
-  key: string;
-  rowIndex: number;
-  record: AuditRecord;
-};
-
-function AuditSelect({
-  label,
-  value,
-  placeholder,
-  options,
-  searchByValue,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  options: { value: string; label: string }[];
-  searchByValue?: boolean;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <FilterField label={label}>
-      <Select
-        className="w-full min-w-[170px]"
-        allowClear
-        showSearch={{
-          // Options carry a readable label and the stored machine code, and a
-          // reader may search by either — for operations, pasting the code
-          // from a CSV export has to find the row it names.
-          optionFilterProp: searchByValue ? ["label", "value"] : "label",
-        }}
-        value={value || undefined}
-        placeholder={placeholder}
-        options={options}
-        onChange={(next) => onChange(next ?? "")}
-      />
-    </FilterField>
+/** Distinct, non-empty values of one record field, as select options. */
+function distinct(values: (string | undefined)[], sort = true) {
+  const unique = Array.from(
+    new Set(values.filter((value): value is string => Boolean(value))),
   );
+  return sort ? unique.sort() : unique;
 }
 
 export function AuditsPage() {
   const { locale, text } = usePreferences();
-  const [records, setRecords] = useState<AuditRecord[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [repository, setRepository] = useState("");
-  const [group, setGroup] = useState("");
-  const [outcome, setOutcome] = useState("");
-  const [format, setFormat] = useState("");
-  const [operation, setOperation] = useState("");
-  const [actor, setActor] = useState("");
-  const [limit, setLimit] = useState(100);
-  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null]>([
-    null,
-    null,
-  ]);
-  const [repoOptions, setRepoOptions] = useState<string[]>([]);
-  const [groupOptions, setGroupOptions] = useState<string[]>([]);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageTokens, setPageTokens] = useState<string[]>([""]);
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const requestSequence = useRef(0);
-
-  useEffect(() => {
-    void listRepositories({ query: { pageSize: 200 } }).then(({ data }) =>
-      setRepoOptions((data?.items ?? []).map((r) => r.name)),
-    );
-    void listGroups({ query: { pageSize: 200 } }).then(({ data }) =>
-      setGroupOptions((data?.items ?? []).map((g) => g.name)),
-    );
-  }, []);
-
-  const load = useCallback(
-    async (token = "", pageNumber = 1) => {
-      const requestID = ++requestSequence.current;
-      setError(null);
-      setRefreshing(true);
-      try {
-        const { data, error: err } = await listAuditPage({
-          query: {
-            repository: repository || undefined,
-            group: group || undefined,
-            outcome: outcome || undefined,
-            format: format || undefined,
-            operation: operation || undefined,
-            actor: actor || undefined,
-            from: dateRange[0]?.toISOString(),
-            to: dateRange[1]?.toISOString(),
-            pageSize: limit,
-            pageToken: token || undefined,
-          },
-        });
-        if (requestID !== requestSequence.current) return;
-        if (err) {
-          setError(err);
-          return;
-        }
-        setExpanded(null);
-        setPage(pageNumber);
-        setPageTokens((current) =>
-          pageNumber === 1
-            ? [token]
-            : [...current.slice(0, pageNumber - 1), token],
-        );
-        setRecords(data?.items ?? []);
-        setNextPageToken(data?.nextPageToken ?? null);
-      } catch (error) {
-        if (requestID === requestSequence.current) setError(error);
-      } finally {
-        if (requestID === requestSequence.current) setRefreshing(false);
-      }
-    },
-    [repository, group, outcome, format, operation, actor, limit, dateRange],
+  const queryClient = useQueryClient();
+  const [filters, setFilters] = useState<Filters>(emptyAuditFilters);
+  const updateFilters = (change: Partial<Filters>) =>
+    setFilters((current) => ({ ...current, ...change }));
+  const audit = useAuditPages(filters);
+  const repositoriesQuery = useAccessRepositories();
+  const groupOptions = useAuditGroupOptions();
+  const repositoryOptions = (repositoriesQuery.data?.items ?? []).map(
+    (repository) => repository.name,
   );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-  const filtered = records ?? [];
-  const currentPage = page;
-  const pageRecords = filtered;
-  const tableRows: AuditTableRow[] = pageRecords.map((record, index) => ({
+  // The page shown and the open row belong to one filter set.
+  const scope = JSON.stringify(auditQuery(filters));
+  const [view, setView] = useState<{
+    scope: string;
+    page: number;
+    expanded: string | null;
+  }>({ scope, page: 1, expanded: null });
+  const pages = audit.data?.pages ?? [];
+  const page =
+    view.scope === scope ? Math.min(view.page, Math.max(pages.length, 1)) : 1;
+  const expanded =
+    view.scope === scope && view.page === page ? view.expanded : null;
+  const showPage = (next: number) =>
+    setView({ scope, page: next, expanded: null });
+  const setExpanded = (key: string | null) =>
+    setView({ scope, page, expanded: key });
+
+  const records = pages[page - 1]?.items ?? null;
+  const error = audit.error;
+  const refreshing = audit.isFetching;
+  const hasNext =
+    !audit.isPlaceholderData && (page < pages.length || audit.hasNextPage);
+
+  // Re-read only the first page. Query commits it atomically on success;
+  // a failed refresh retains every cached page and the current position.
+  const refresh = async () => {
+    const options = auditPagesOptions(filters);
+    const queryKey = options.queryKey;
+    await queryClient.cancelQueries({ queryKey });
+    try {
+      await queryClient.fetchInfiniteQuery({ ...options, pages: 1 });
+      setView((current) =>
+        current.scope === scope ? { scope, page: 1, expanded: null } : current,
+      );
+    } catch {
+      // The query owns the error and Retry; keep the displayed page.
+    }
+  };
+  // A page that fails to load keeps the current one on screen.
+  const nextPage = async () => {
+    if (page < pages.length) return showPage(page + 1);
+    const result = await audit.fetchNextPage();
+    if (!result.isError && (result.data?.pages.length ?? 0) > page)
+      showPage(page + 1);
+  };
+
+  const shown = records ?? [];
+  const tableRows: AuditTableRow[] = shown.map((record, index) => ({
     key: String(index),
     rowIndex: index,
     record,
   }));
-  const outcomeOptions = Array.from(
-    new Set(filtered.map((a) => a.outcome).filter(Boolean)),
-  )
-    .sort()
-    .map((value) => ({ value, label: auditOutcomeLabel(value, text) }));
-  const formatOptions = Array.from(
-    new Set(
-      filtered
-        .map((a) => a.format)
-        .filter((value): value is string => Boolean(value)),
-    ),
-  ).map((value) => ({ value, label: value.toUpperCase() }));
-  const operationOptions = Array.from(
-    new Set(
-      filtered
-        .map((a) => a.operation)
-        .filter((value): value is string => Boolean(value)),
-    ),
-  )
-    .sort()
-    .map((value) => ({ value, label: auditOperationLabel(value, text) }));
-  const actorOptions = Array.from(
-    new Set(
-      filtered
-        .map((a) => a.actor)
-        .filter((value): value is string => Boolean(value)),
-    ),
-  )
-    .sort()
-    .map((value) => ({ value, label: value }));
-  const hasFilters = Boolean(
-    repository ||
-    group ||
-    outcome ||
-    format ||
-    operation ||
-    actor ||
-    dateRange[0] ||
-    dateRange[1],
-  );
-  const clearFilters = () => {
-    setRepository("");
-    setGroup("");
-    setOutcome("");
-    setFormat("");
-    setOperation("");
-    setActor("");
-    setDateRange([null, null]);
-  };
-  const columns: ColumnsType<AuditTableRow> = [
-    {
-      title: text("时间", "Time"),
-      key: "occurredAt",
-      width: 180,
-      render: (_, row) => (
-        <span className="whitespace-nowrap font-mono text-xs text-fg-secondary">
-          {formatDate(row.record.occurredAt, locale)}
-        </span>
-      ),
-    },
-    {
-      title: text("操作", "Operation"),
-      key: "operation",
-      width: 190,
-      render: (_, row) => (
-        <span
-          className="block max-w-52 truncate text-xs text-fg"
-          title={row.record.operation}
-        >
-          {row.record.operation
-            ? auditOperationLabel(row.record.operation, text)
-            : "—"}
-        </span>
-      ),
-    },
-    {
-      title: text("结果", "Outcome"),
-      key: "outcome",
-      width: 170,
-      render: (_, row) => (
-        <span title={row.record.outcome}>
-          <StatusText tone={statusTone(auditOutcomeTone(row.record.outcome))}>
-            {row.record.outcome
-              ? auditOutcomeLabel(row.record.outcome, text)
-              : "—"}
-          </StatusText>
-        </span>
-      ),
-    },
-    {
-      title: text("仓库/分组", "Repository / group"),
-      key: "repository",
-      width: 180,
-      render: (_, row) => (
-        <span className="block max-w-40 truncate font-mono text-xs text-fg-secondary">
-          {row.record.repository ?? row.record.groupName ?? "—"}
-        </span>
-      ),
-    },
-    {
-      title: text("格式", "Format"),
-      key: "format",
-      width: 110,
-      render: (_, row) =>
-        row.record.format ? <FormatBadge format={row.record.format} /> : "—",
-    },
-    {
-      title: text("状态", "Status"),
-      key: "status",
-      width: 90,
-      render: (_, row) => (
-        <span className="font-mono text-xs text-fg-secondary">
-          {row.record.status ?? "—"}
-        </span>
-      ),
-    },
-    {
-      title: text("流量", "Traffic"),
-      key: "bytes",
-      width: 110,
-      render: (_, row) => (
-        <span className="text-xs text-fg-secondary">
-          {formatBytes(row.record.bytes)}
-        </span>
-      ),
-    },
-    {
-      title: text("访问主体", "Actor"),
-      key: "actor",
-      width: 170,
-      render: (_, row) => (
-        <span
-          className="block max-w-32 truncate text-xs text-fg-tertiary"
-          title={row.record.actor}
-        >
-          {row.record.actor ?? "—"}
-        </span>
-      ),
-    },
-  ];
-
-  const expandedRowRender = ({ record }: AuditTableRow) => (
-    <div className="grid grid-cols-3 gap-x-8 gap-y-2 px-2 py-1 text-xs">
-      {(
-        [
-          [text("资源", "Resource"), record.resource],
-          [text("表示", "Representation"), record.representation],
-          [text("成员", "Member"), record.memberName],
-          [text("成员类型", "Member type"), record.memberType],
-          [text("上游主机", "Upstream host"), record.upstreamHost],
-          [text("缓存", "Cache"), record.cacheDisposition],
-          [
-            text("授权来源", "Authorization source"),
-            record.authorizationSource,
-          ],
-          [
-            text("授权原因", "Authorization reason"),
-            record.authorizationReason,
-          ],
-          ["Request ID", record.requestId],
-          ["Trace ID", record.traceId],
-        ] as const
-      ).map(([label, value]) => (
-        <div key={label} className="flex min-w-0 gap-2">
-          <span className="w-20 shrink-0 text-fg-disabled">{label}</span>
-          {value && (label === "Request ID" || label === "Trace ID") ? (
-            <Link
-              className="min-w-0 break-all font-mono"
-              to={`/system?tab=logs&${label === "Request ID" ? "requestId" : "traceId"}=${encodeURIComponent(value)}`}
-            >
-              {value}
-            </Link>
-          ) : (
-            <span className="min-w-0 break-all font-mono text-fg-secondary">
-              {value ?? "—"}
-            </span>
-          )}
-        </div>
-      ))}
-    </div>
+  const option = (label: (value: string) => string) => (value: string) => ({
+    value,
+    label: label(value),
+  });
+  const hasFilters = Object.entries(filters).some(([key, value]) =>
+    key === "limit"
+      ? false
+      : key === "dateRange"
+        ? (value as Filters["dateRange"]).some(Boolean)
+        : Boolean(value),
   );
 
   return (
@@ -392,182 +129,55 @@ export function AuditsPage() {
         )}
       />
       <Card>
-        <FilterBar
-          embedded
+        <AuditFilters
+          filters={filters}
+          onChange={updateFilters}
+          repositoryOptions={repositoryOptions}
+          groupOptions={groupOptions}
+          outcomeOptions={distinct(shown.map((a) => a.outcome)).map(
+            option((value) => auditOutcomeLabel(value, text)),
+          )}
+          formatOptions={distinct(
+            shown.map((a) => a.format),
+            false,
+          ).map(option((value) => value.toUpperCase()))}
+          operationOptions={distinct(shown.map((a) => a.operation)).map(
+            option((value) => auditOperationLabel(value, text)),
+          )}
+          actorOptions={distinct(shown.map((a) => a.actor)).map(
+            option((value) => value),
+          )}
           actions={
             <Space size="small">
               <Button
                 icon={<ClearOutlined />}
                 disabled={!hasFilters}
-                onClick={clearFilters}
+                onClick={() =>
+                  setFilters({ ...emptyAuditFilters, limit: filters.limit })
+                }
               >
                 {text("清除", "Clear")}
               </Button>
               <Button
                 icon={<ReloadOutlined />}
                 loading={refreshing}
-                onClick={() => void load()}
+                onClick={() => void refresh()}
               >
                 {text("刷新", "Refresh")}
               </Button>
               <Button
                 icon={<DownloadOutlined />}
-                disabled={!filtered.length}
-                onClick={() => {
-                  const rows = filtered.map((a) => [
-                    a.occurredAt,
-                    a.operation,
-                    a.outcome,
-                    a.repository,
-                    a.groupName,
-                    a.format,
-                    a.status,
-                    a.bytes,
-                    a.actor,
-                    a.resource,
-                    a.representation,
-                    a.memberName,
-                    a.memberType,
-                    a.upstreamHost,
-                    a.cacheDisposition,
-                    a.authorizationSource,
-                    a.authorizationReason,
-                    a.requestId,
-                    a.traceId,
-                  ]);
-                  downloadCsv(
-                    `audits-${new Date().toISOString().slice(0, 19)}.csv`,
-                    toCsv(
-                      locale === "en-US"
-                        ? AUDIT_CSV_COLUMNS_EN
-                        : AUDIT_CSV_COLUMNS_ZH,
-                      rows,
-                    ),
-                  );
-                }}
+                disabled={!shown.length}
+                onClick={() => exportAuditCsv(shown, locale)}
               >
                 {text("导出 CSV", "Export CSV")}
               </Button>
             </Space>
           }
-        >
-          <AuditSelect
-            label={text("仓库", "Repository")}
-            value={repository}
-            placeholder={text("全部仓库", "All repositories")}
-            options={repoOptions.map((value) => ({ value, label: value }))}
-            onChange={setRepository}
-          />
-          <AuditSelect
-            label={text("结果", "Outcome")}
-            value={outcome}
-            placeholder={text("全部结果", "All outcomes")}
-            options={outcomeOptions}
-            searchByValue
-            onChange={setOutcome}
-          />
-          <FilterField label={text("加载窗口", "Load window")}>
-            <Select
-              className="min-w-[150px]"
-              value={String(limit)}
-              options={[50, 100, 200].map((value) => ({
-                value: String(value),
-                label: text(`最近 ${value} 条`, `Latest ${value}`),
-              }))}
-              onChange={(value) => setLimit(Number(value))}
-            />
-          </FilterField>
-          <FilterField label={text("时间范围", "Date range")}>
-            <DatePicker.RangePicker
-              className="w-full min-w-0 sm:min-w-[310px]"
-              allowEmpty={[true, true]}
-              format="YYYY-MM-DD HH:mm"
-              showTime={{ format: "HH:mm" }}
-              value={dateRange}
-              placeholder={[
-                text("起始时间", "Start time"),
-                text("结束时间", "End time"),
-              ]}
-              presets={[
-                {
-                  label: text("最近 1 小时", "Last hour"),
-                  value: () => [dayjs().subtract(1, "hour"), dayjs()],
-                },
-                {
-                  label: text("最近 24 小时", "Last 24 hours"),
-                  value: () => [dayjs().subtract(24, "hour"), dayjs()],
-                },
-                {
-                  label: text("最近 7 天", "Last 7 days"),
-                  value: () => [dayjs().subtract(7, "day"), dayjs()],
-                },
-              ]}
-              onChange={(dates) =>
-                setDateRange(dates ? [dates[0], dates[1]] : [null, null])
-              }
-            />
-          </FilterField>
-        </FilterBar>
-        <Collapse
-          ghost
-          className="border-t border-line"
-          items={[
-            {
-              key: "advanced",
-              label: (
-                <span className="text-xs text-fg-secondary">
-                  {text("高级筛选", "Advanced filters")}{" "}
-                  <span className="ml-2 text-fg-disabled">
-                    {text(
-                      "操作、访问主体、分组、格式",
-                      "Operation, actor, group, and format",
-                    )}
-                  </span>
-                </span>
-              ),
-              children: (
-                <FilterBar embedded>
-                  <AuditSelect
-                    label={text("操作类型", "Operation")}
-                    value={operation}
-                    placeholder={text("全部操作类型", "All operations")}
-                    options={operationOptions}
-                    searchByValue
-                    onChange={setOperation}
-                  />
-                  <AuditSelect
-                    label={text("访问主体", "Actor")}
-                    value={actor}
-                    placeholder={text("全部访问主体", "All actors")}
-                    options={actorOptions}
-                    searchByValue
-                    onChange={setActor}
-                  />
-                  <AuditSelect
-                    label={text("所属分组", "Group")}
-                    value={group}
-                    placeholder={text("全部分组", "All groups")}
-                    options={groupOptions.map((value) => ({
-                      value,
-                      label: value,
-                    }))}
-                    onChange={setGroup}
-                  />
-                  <AuditSelect
-                    label={text("制品格式", "Artifact format")}
-                    value={format}
-                    placeholder={text("全部格式", "All formats")}
-                    options={formatOptions}
-                    onChange={setFormat}
-                  />
-                </FilterBar>
-              ),
-            },
-          ]}
         />
       </Card>
       {error !== null && records !== null && (
-        <ErrorBanner error={error} onRetry={() => void load()} />
+        <ErrorBanner error={error} onRetry={refresh} />
       )}
       {records === null ? (
         error !== null ? (
@@ -582,12 +192,12 @@ export function AuditsPage() {
               />
             </Card>
           ) : (
-            <ErrorBanner error={error} onRetry={() => void load()} />
+            <ErrorBanner error={error} onRetry={refresh} />
           )
         ) : (
           <Loading />
         )
-      ) : filtered.length === 0 ? (
+      ) : shown.length === 0 ? (
         <Card>
           <EmptyState
             title={text("没有匹配的审计记录", "No matching audit records")}
@@ -602,7 +212,7 @@ export function AuditsPage() {
           <ConsoleTable<AuditTableRow>
             rowKey="key"
             dataSource={tableRows}
-            columns={columns}
+            columns={auditColumns(text, locale)}
             pagination={false}
             scroll={{
               x: 1200,
@@ -611,7 +221,9 @@ export function AuditsPage() {
             rowClassName="cursor-pointer"
             expandable={{
               expandedRowKeys: expanded === null ? [] : [expanded],
-              expandedRowRender,
+              expandedRowRender: ({ record }) => (
+                <AuditRecordDetail record={record} text={text} />
+              ),
               expandRowByClick: true,
               onExpandedRowsChange: (keys) => {
                 const key = keys[keys.length - 1];
@@ -622,25 +234,21 @@ export function AuditsPage() {
           <div className="ag-pagination-footer flex items-center justify-end gap-3 border-t border-line px-4 py-3 text-xs text-fg-tertiary">
             <span>
               {text(
-                `第 ${currentPage} 页 · 当前页 ${pageRecords.length} 条`,
-                `Page ${currentPage} · ${pageRecords.length} records`,
+                `第 ${page} 页 · 当前页 ${shown.length} 条`,
+                `Page ${page} · ${shown.length} records`,
               )}
             </span>
             <Space size="small">
               <Button
-                disabled={currentPage <= 1 || !records}
-                onClick={() => {
-                  const previousPage = Math.max(1, currentPage - 1);
-                  void load(pageTokens[previousPage - 1] ?? "", previousPage);
-                }}
+                disabled={page <= 1}
+                onClick={() => showPage(Math.max(1, page - 1))}
               >
                 {text("上一页", "Previous")}
               </Button>
               <Button
-                disabled={!nextPageToken || !records}
-                onClick={() =>
-                  nextPageToken && void load(nextPageToken, currentPage + 1)
-                }
+                disabled={!hasNext || audit.isFetchingNextPage}
+                loading={audit.isFetchingNextPage}
+                onClick={() => void nextPage()}
               >
                 {text("下一页", "Next")}
               </Button>

@@ -25,9 +25,15 @@ This directory owns the shared pieces; feature folders own their query hooks
 - **Authorization failures** go through `lib/auth`: 401 ends the expired
   session, clears credentials and drops its cache; 403 keeps the signed-in
   identity and shows the resource's permission error.
-- **Identity scope.** `ConsoleQueryProvider` clears the whole cache when the
-  token or the signed-in actor changes, so protected answers never outlive
-  their principal. It must sit inside `AuthProvider`.
+- **Identity scope.** `ConsoleQueryProvider` drops every cached answer when
+  the token or the signed-in actor changes, so protected answers never outlive
+  their principal. It must sit inside `AuthProvider`. Only an answer that is
+  the same for every principal (public site settings) sets
+  `meta: { sharedAcrossIdentities: true }` and stays; removing a query cancels
+  its read, which would leave a long-lived reader waiting.
+  The authentication settings save captures its protected query instance as a
+  generation before awaiting the SDK write. It only writes the returned settings
+  when that same instance still exists, so an old session cannot refill the cache.
 - **Tests** wrap rendered pages in `TestQueryProvider` (`src/test/queryClient.tsx`):
   a fresh cache per render and no retries. Query results arrive a scheduler
   tick after the mocked request resolves, so wait with `findBy…` for anything
@@ -94,8 +100,8 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/artifact-detail/MavenArtifactDetail.tsx`
 - [x] `features/artifact-detail/ArtifactScanStatus.tsx`
 - [x] `features/artifact-detail/OciImageDetail.tsx`
-- [ ] `features/audit/AuditRetention.tsx`
-- [ ] `features/audit/Audits.tsx`
+- [x] `features/audit/AuditRetention.tsx`
+- [x] `features/audit/Audits.tsx`
 - [ ] `features/auth/Login.tsx`
 - [ ] `features/dashboard/Dashboard.tsx`
 - [x] `features/groups/Groups.tsx`
@@ -138,7 +144,14 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/repository/RepositorySecurityTab.tsx`
 - [x] `features/repository/RepositoryUsageTab.tsx`
 - [x] `features/search/Search.tsx`
-- [ ] `features/settings/Authentication.tsx`
-- [ ] `features/settings/SiteSettings.tsx`
+- [x] `features/settings/Authentication.tsx`
+- [x] `features/settings/SiteSettings.tsx`
 - [ ] `lib/preferences.tsx`
-- [ ] `lib/siteSettings.tsx`
+- [x] `lib/siteSettings.tsx`
+
+Quota alerts and email notifications (`features/system`) keep their own
+`useQuotaSnapshot` and `useQuotaAction` for now. Their denial handling differs
+from the shared layer: a password-change or permission denial blocks the whole
+workspace until an explicit refresh succeeds, and an older read or a late
+mutation never lands after a newer one. Their own tests pin this. Move them
+onto queries in a separate change that keeps those rules.
