@@ -167,12 +167,17 @@ func authLoginCommand() command {
 			}
 			// A session token must never land in a profile that targets a
 			// different server: later invocations would send it elsewhere.
-			target := strings.TrimSuffix(env.settings.Server, "/")
-			bound := strings.TrimSuffix(stored.Server, "/")
-			if bound != "" && bound != target {
-				return &UsageError{
-					Message: fmt.Sprintf("profile %q targets %s but this login targets %s", profile, stored.Server, env.settings.Server),
-					Hint:    fmt.Sprintf("update the profile first (agctl config profile add %s --server %s), or log in to the profile's own target", profile, env.settings.Server),
+			target, err := normalizeServerTarget(env.settings.Server)
+			if err != nil {
+				return err
+			}
+			if stored.Server != "" {
+				bound, err := normalizeServerTarget(stored.Server)
+				if err != nil || bound != target {
+					return &UsageError{
+						Message: fmt.Sprintf("profile %q targets %s but this login targets %s", profile, stored.Server, env.settings.Server),
+						Hint:    fmt.Sprintf("update the profile first (agctl config profile add %s --server %s), or log in to the profile's own target", profile, env.settings.Server),
+					}
 				}
 			}
 			if strings.TrimSpace(username) == "" {
@@ -217,6 +222,18 @@ func authLoginCommand() command {
 				profileConfig, ok := config.Profiles[profile]
 				if !ok {
 					return &UsageError{Message: fmt.Sprintf("profile %q does not exist", profile)}
+				}
+				// The profile may have been edited while the login request was
+				// in flight; refuse instead of binding the token to a target
+				// that changed under it.
+				if profileConfig.Server != "" {
+					storedTarget, err := normalizeServerTarget(profileConfig.Server)
+					if err != nil || storedTarget != target {
+						return &UsageError{
+							Message: fmt.Sprintf("profile %q changed target while login was in flight; the session token was not stored", profile),
+							Hint:    fmt.Sprintf("re-run agctl auth login for the current target of profile %s", profile),
+						}
+					}
 				}
 				profileConfig.Token = login.Token
 				if profileConfig.Server == "" {

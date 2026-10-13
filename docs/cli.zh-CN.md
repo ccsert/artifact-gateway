@@ -252,7 +252,9 @@ token。该端点只接受本地用户会话。
 
 - `agctl config profile add NAME --server URL [--token-stdin] [--insecure]`
   创建或更新 profile；不带 `--server` 时已有 profile 保留其 server，
-  `--token-stdin` 从 stdin 读取一行有界秘密且永不回显；
+  `--token-stdin` 从 stdin 读取一行有界秘密且永不回显。更换 server 时会丢弃
+  已存 token，除非 `--token-stdin` 提供了新目标的凭据——旧部署的 token 绝不会
+  被发往新部署；
 - `agctl config profile list` 列出所有 profile 及当前选中项；
 - `agctl config profile use NAME` 设置 `current_profile`；
 - `agctl config profile remove NAME` 删除 profile，并在它正是 `current_profile`

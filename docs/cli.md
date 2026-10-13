@@ -287,7 +287,9 @@ Manages `~/.config/agctl/config.yaml` without hand-editing:
 - `agctl config profile add NAME --server URL [--token-stdin] [--insecure]`
   creates or updates a profile; without `--server` an existing profile keeps
   its server, and `--token-stdin` reads one bounded secret line that is never
-  echoed;
+  echoed. Changing the server drops the stored token unless `--token-stdin`
+  provides the new target's credential, so an old deployment's token is never
+  sent to a new one;
 - `agctl config profile list` shows the profiles and which one is current;
 - `agctl config profile use NAME` sets `current_profile`;
 - `agctl config profile remove NAME` deletes a profile and unsets

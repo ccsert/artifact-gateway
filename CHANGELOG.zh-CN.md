@@ -8,7 +8,7 @@
 
 ## Unreleased
 
-- `agctl` 客户端迎来第一组命令面：`agctl auth login|logout|whoami|change-password` 与 `agctl config profile add|list|use|remove`。login 用有界 stdin 中的本地用户名与密码换取会话 token，且只存入显式选择的 0600 profile，绑定其他服务器的 profile 会被拒绝；`mustChangePassword` 账号会被引导到 `change-password` 而不会被自动改密，密码、token 与一次性秘密永不打印。logout 请求服务端结束会话、探测凭据是否仍可认证，并遗忘匹配的已存 token；机器凭据或静态 token 会被如实报告为"仍可认证"而不是"已撤销"。无法无副作用地预演的写命令会在任何变更之前以用法错误拒绝 `--dry-run`。profile 以 0600 原子写入，宽松权限的文件被拒绝。
+- `agctl` 客户端迎来第一组命令面：`agctl auth login|logout|whoami|change-password` 与 `agctl config profile add|list|use|remove`。login 用有界 stdin 中的本地用户名与密码换取会话 token，且只存入显式选择的 0600 profile，绑定其他服务器的 profile 会被拒绝；`mustChangePassword` 账号会被引导到 `change-password` 而不会被自动改密，密码、token 与一次性秘密永不打印。logout 请求服务端结束会话、探测凭据是否仍可认证，并遗忘匹配的已存 token；机器凭据或静态 token 会被如实报告为"仍可认证"而不是"已撤销"。无法无副作用地预演的写命令会在任何变更之前以用法错误拒绝 `--dry-run`。更换 profile 的 server 时会丢弃已存 token，除非随更新提供新凭据，凭据绝不会被发往其他部署。profile 以 0600 原子写入，宽松权限的文件被拒绝。
 
 - CLI 命令地图（`docs/cli-command-map.md`，含中文对照）把每个管理 API 操作按承接单、阶段、权限与验收代码归类，且不宣称未实现的覆盖。`make cli-contract-check`（并入 `make ci-local`）在 OpenAPI 契约出现未归类操作时失败，脚本测试用注入的假操作证明漂移检测生效。
 

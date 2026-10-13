@@ -18,15 +18,17 @@ import (
 type authFakeGateway struct {
 	server *httptest.Server
 
-	mu         sync.Mutex
-	password   string
-	mustChange bool
-	valid      map[string]bool
-	sessions   map[string]bool
-	loginCalls int
-	logoutCall int
-	changeBody map[string]string
-	lastLogin  map[string]string
+	mu                  sync.Mutex
+	password            string
+	mustChange          bool
+	valid               map[string]bool
+	sessions            map[string]bool
+	loginCalls          int
+	logoutCall          int
+	changeBody          map[string]string
+	lastLogin           map[string]string
+	authorizations      []string
+	beforeLoginResponse func()
 }
 
 func newAuthFakeGateway(t *testing.T) *authFakeGateway {
@@ -37,6 +39,13 @@ func newAuthFakeGateway(t *testing.T) *authFakeGateway {
 		sessions: map[string]bool{},
 	}
 	fake.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fake.mu.Lock()
+		fake.authorizations = append(fake.authorizations, r.Header.Get("Authorization"))
+		hook := fake.beforeLoginResponse
+		fake.mu.Unlock()
+		if r.URL.Path == "/auth/login" && hook != nil {
+			hook()
+		}
 		switch r.URL.Path {
 		case "/auth/login":
 			fake.handleLogin(w, r)
@@ -144,6 +153,24 @@ func (f *authFakeGateway) tokenIsValid(token string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.valid[token]
+}
+
+// sawToken reports whether any request carried the token as a bearer header.
+func (f *authFakeGateway) sawToken(token string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, header := range f.authorizations {
+		if header == "Bearer "+token {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *authFakeGateway) requestCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.authorizations)
 }
 
 // writeHomeConfig writes ~/.config/agctl/config.yaml under the isolated HOME

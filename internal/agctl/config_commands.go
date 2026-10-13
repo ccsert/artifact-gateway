@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 )
 
 type profileRecord struct {
-	Name        string `json:"name"`
-	Server      string `json:"server,omitempty"`
-	TokenStored bool   `json:"tokenStored"`
-	Insecure    bool   `json:"insecure"`
-	Current     bool   `json:"current"`
+	Name         string `json:"name"`
+	Server       string `json:"server,omitempty"`
+	TokenStored  bool   `json:"tokenStored"`
+	TokenCleared bool   `json:"tokenCleared,omitempty"`
+	Insecure     bool   `json:"insecure"`
+	Current      bool   `json:"current"`
 }
 
 func yesNo(value bool) string {
@@ -63,17 +65,35 @@ func configProfileAddCommand() command {
 			record := profileRecord{Name: name}
 			err := mutateConfigFile(env.configPath, func(config *configFile) error {
 				profile := config.Profiles[name]
+				previousTarget := ""
+				if profile.Server != "" {
+					if target, err := normalizeServerTarget(profile.Server); err == nil {
+						previousTarget = target
+					}
+					// An unusable stored server cannot hold a credential
+					// bound to it; treat it as a target change.
+				}
 				if serverSet {
 					profile.Server = env.globals.server
 				}
-				if profile.Server == "" {
+				if strings.TrimSpace(profile.Server) == "" {
 					return &UsageError{
 						Message: fmt.Sprintf("--server is required to store profile %q", name),
 						Hint:    "pass --server https://gateway.example.com",
 					}
 				}
+				target, err := normalizeServerTarget(profile.Server)
+				if err != nil {
+					return err
+				}
+				// A stored credential belongs to its target: changing the
+				// target without providing its credential drops the old one
+				// instead of sending it to the new server later.
 				if tokenStdin {
 					profile.Token = token
+				} else if previousTarget != target {
+					record.TokenCleared = profile.Token != ""
+					profile.Token = ""
 				}
 				if env.flagSet["insecure"] {
 					profile.Insecure = env.globals.insecure
@@ -89,8 +109,12 @@ func configProfileAddCommand() command {
 				return err
 			}
 			return env.render(record, nil, func(w io.Writer) error {
-				_, err := fmt.Fprintf(w, "profile %q stored in %s (server %s, token: %s, insecure: %s)\n",
-					record.Name, env.configPath, record.Server, yesNo(record.TokenStored), yesNo(record.Insecure))
+				details := ""
+				if record.TokenCleared {
+					details = " (stored token cleared: target changed)"
+				}
+				_, err := fmt.Fprintf(w, "profile %q stored in %s (server %s, token: %s, insecure: %s)%s\n",
+					record.Name, env.configPath, record.Server, yesNo(record.TokenStored), yesNo(record.Insecure), details)
 				return err
 			})
 		},

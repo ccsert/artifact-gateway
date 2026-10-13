@@ -52,6 +52,38 @@ type apiResponse struct {
 	Body       []byte
 }
 
+// normalizeServerTarget canonicalizes a Gateway server URL for identity
+// comparison, matching how the HTTP client addresses endpoints: scheme and
+// host are case-folded, default ports are dropped, and one trailing slash is
+// trimmed from the base path. The path itself is preserved.
+func normalizeServerTarget(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", &UsageError{
+			Message: "the server URL is empty",
+			Hint:    "use the Gateway root URL, for example https://gateway.example.com",
+		}
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || !parsed.IsAbs() || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return "", &UsageError{
+			Message: fmt.Sprintf("server URL %q is not a valid http(s) URL", raw),
+			Hint:    "use the Gateway root URL, for example https://gateway.example.com",
+		}
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	host := strings.ToLower(parsed.Hostname())
+	port := parsed.Port()
+	if (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
+		port = ""
+	}
+	authority := host
+	if port != "" {
+		authority = host + ":" + port
+	}
+	return scheme + "://" + authority + strings.TrimSuffix(parsed.Path, "/"), nil
+}
+
 func newAPIClient(settings profileSettings, options clientOptions) (*apiClient, error) {
 	server := strings.TrimSpace(settings.Server)
 	if server == "" {

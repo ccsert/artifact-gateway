@@ -104,54 +104,67 @@ func currentFormat(flags *globalFlags) outputFormat {
 }
 
 // scanFailureFlags finds output preferences and credential values even when
-// ordinary parsing stops at an unknown command or invalid flag. Known
-// non-boolean flags still consume their values, and -- terminates the scan, so
-// a value cannot become an output option. Nested command paths are followed so
-// a failure anywhere under a group still honors --json and redacts secrets.
-// Only failure rendering uses this result; normal parsing is unchanged.
+// ordinary parsing stops at an unknown command or invalid flag. The format
+// scan follows the command path and honors each command's declared positional
+// arguments; a stray positional beyond them keeps the conservative contract
+// that later flags no longer select output. Credential collection is
+// independent of the format scan: every --token occurrence is collected across
+// the whole argument list (respecting --), so a token that appears after a
+// failing argument is still redacted everywhere.
 func scanFailureFlags(args []string) (outputFormat, []string) {
+	return scanFailureFormat(args), scanFailureTokens(args)
+}
+
+func cutFlag(argument string) (name, value string, hasValue bool) {
+	name = strings.TrimPrefix(argument, "-")
+	name = strings.TrimPrefix(name, "-")
+	return strings.Cut(name, "=")
+}
+
+func isBoolFlag(definition *flag.Flag) bool {
+	if boolean, ok := definition.Value.(interface{ IsBoolFlag() bool }); ok {
+		return boolean.IsBoolFlag()
+	}
+	return false
+}
+
+func scanFailureFormat(args []string) outputFormat {
 	flags := &globalFlags{timeout: defaultTimeout, output: string(outputTable)}
 	fs := flag.NewFlagSet("agctl", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	registerGlobalFlags(fs, flags)
-	var tokens []string
 	var path []string
-	commandResolved := false
+	allowedPositionals := -1
+	seenPositionals := 0
 	for index := 0; index < len(args); index++ {
 		argument := args[index]
 		if argument == "--" {
 			break
 		}
 		if len(argument) < 2 || argument[0] != '-' {
-			if commandResolved {
-				// A stray positional after a resolved command keeps the
-				// original contract: later flags no longer select output.
-				break
+			if allowedPositionals >= 0 {
+				if seenPositionals >= allowedPositionals {
+					break
+				}
+				seenPositionals++
+				continue
 			}
 			path = append(path, argument)
 			if cmd, ok := lookupCommand(strings.Join(path, " ")); ok {
-				commandResolved = true
+				allowedPositionals = cmd.positionals
 				if cmd.setFlags != nil {
 					cmd.setFlags(fs)
 				}
 			}
-			// Group paths and unknown tokens both keep scanning: the failure
-			// they lead to must still honor --json and collect credentials.
 			continue
 		}
-		name := strings.TrimPrefix(argument, "-")
-		name = strings.TrimPrefix(name, "-")
-		name, value, hasValue := strings.Cut(name, "=")
+		name, value, hasValue := cutFlag(argument)
 		definition := fs.Lookup(name)
 		if definition == nil {
 			continue
 		}
-		isBool := false
-		if boolean, ok := definition.Value.(interface{ IsBoolFlag() bool }); ok {
-			isBool = boolean.IsBoolFlag()
-		}
 		if !hasValue {
-			if isBool {
+			if isBoolFlag(definition) {
 				value = "true"
 			} else {
 				if index+1 >= len(args) {
@@ -168,11 +181,46 @@ func scanFailureFlags(args []string) (outputFormat, []string) {
 			}
 		case "o":
 			_ = definition.Value.Set(value)
-		case "token":
+		}
+	}
+	return currentFormat(flags)
+}
+
+// scanFailureTokens collects every --token value in the arguments, including
+// ones that appear after a failing argument. Known non-boolean flags consume
+// their values so a value cannot masquerade as the flag itself, and -- ends
+// the scan.
+func scanFailureTokens(args []string) []string {
+	fs := flag.NewFlagSet("agctl", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	registerGlobalFlags(fs, &globalFlags{timeout: defaultTimeout, output: string(outputTable)})
+	var tokens []string
+	for index := 0; index < len(args); index++ {
+		argument := args[index]
+		if argument == "--" {
+			break
+		}
+		if len(argument) < 2 || argument[0] != '-' {
+			continue
+		}
+		name, value, hasValue := cutFlag(argument)
+		definition := fs.Lookup(name)
+		if !hasValue {
+			if definition != nil && !isBoolFlag(definition) {
+				if index+1 >= len(args) {
+					continue
+				}
+				index++
+				value = args[index]
+			} else {
+				continue
+			}
+		}
+		if name == "token" {
 			tokens = append(tokens, value)
 		}
 	}
-	return currentFormat(flags), tokens
+	return tokens
 }
 
 // RunCLI executes one agctl invocation and returns its documented exit code.

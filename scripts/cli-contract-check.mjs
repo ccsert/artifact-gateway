@@ -264,8 +264,9 @@ function main() {
       .map((operation) => operation.operationId)
       .filter((operationId) => operationId && !managementIds.has(operationId)),
   );
+  const implementedRows = [...englishMap.values()].filter((row) => /implemented/iu.test(row.phase)).length;
   process.stdout.write(
-    `CLI command map contract check passed (${managementIds.size} management operations + ${nativeExtras.size} native protocol operations classified; ${registeredCommands.size} registered commands checked)\n`,
+    `CLI command map contract check passed (${managementIds.size} management operations + ${nativeExtras.size} native protocol operations classified; ${implementedRows} implemented rows checked against ${registeredCommands.size} registered commands; planned rows are classified, not verified)\n`,
   );
 }
 
