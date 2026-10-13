@@ -8,6 +8,12 @@
 
 ## Unreleased
 
+## 0.9.0 - 2026-10-13
+
+- 从 v0.8.1 升级新增 `000145_artifact_contains_search_indexes.sql`：八个 GIN 搜索索引，此前 144 项迁移文件保持不变。普通索引创建可能阻塞写入，需安排迁移窗口与索引磁盘空间，保留一致的 PostgreSQL/对象存储恢复点并遵循[发行升级说明](.github/release-notes/v0.9.0.md)。代码发行不代表任何目标实例的制品迁移或生产切换已经完成。
+
+- CLI 交付仍限于已合入的 `agctl` 骨架与源码本地构建（`version`、`info`、`commands`）。PR #346 的分发/auth/profile 批次未纳入；本版不提供独立 agctl 归档或已发布 agctl 镜像，远端 `go install` 通道仍由 #347 跟踪。其他 CLI 工作与未完成 issue 独立保留。
+
 - Maven V2 Group 使用与单仓库一致的 Maven canonical resource 评估成员读取授权，使坐标前缀 Grant 正确覆盖获准制品、checksum sidecar 和 metadata。Hosted 制品 metadata 精确匹配 groupId/artifactId，排除子 groupId 与相邻制品的版本；请求的 metadata 不存在时仍允许 Group 回退。保留先授权、后访问成员 payload/缓存的顺序（#348）。
 
 - 公开浏览的 OCI 标签、Manifest 详情与 Conan revisions 改为通过统一查询层读取：每一页版本都可缓存、可取消，后续页失败时保留已加载内容且重试只读取该页，离开仓库后清除其版本页。所有 Console 源文件均不超过 400 行，包括用户详情抽屉、访问评估器与主题解析器。行为与布局保持不变。
