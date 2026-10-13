@@ -192,7 +192,8 @@ for (const width of [1440, 390]) {
     await page.goto("/repositories");
     await expect(page.getByText("cargo-hosted", { exact: true })).toBeVisible();
     const tokens: (string | null)[] = [];
-    let failFirstRequest = true;
+    // The first read and the shared layer's single 5xx retry both fail.
+    let failuresLeft = 2;
     await page.route(
       (url) => url.pathname === "/api/v2/repositories",
       async (route) => {
@@ -200,8 +201,8 @@ for (const width of [1440, 390]) {
           "pageToken",
         );
         tokens.push(token);
-        if (failFirstRequest) {
-          failFirstRequest = false;
+        if (failuresLeft > 0) {
+          failuresLeft -= 1;
           await route.fulfill({
             status: 503,
             json: {
@@ -249,7 +250,7 @@ for (const width of [1440, 390]) {
     }
     await page.getByRole("button", { name: /重\s*试/ }).click();
     await expect(alert).toHaveCount(0);
-    await expect.poll(() => tokens).toEqual([null, null, "opaque-next"]);
+    await expect.poll(() => tokens).toEqual([null, null, null, "opaque-next"]);
     await input.press("ArrowDown");
     for (let index = 0; index < 18; index += 1) await input.press("ArrowDown");
     await expect

@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { notifyManager, useQuery, useQueryClient } from "@tanstack/react-query";
 
 /**
  * One overview source with its own loading state and Retry. A newer read
@@ -22,6 +22,10 @@ export function useDashboardResource<T>(
     if (query.isFetching && query.data === undefined)
       await queryClient.cancelQueries({ queryKey, exact: true });
     await query.refetch();
+    // The answer reaches components through the query's notification queue.
+    // Resolve after it, so a section boundary waiting on this Retry renders
+    // the new answer rather than the one that failed.
+    await new Promise<void>((resolve) => notifyManager.schedule(resolve));
   };
   return {
     data: query.data,
