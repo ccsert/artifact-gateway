@@ -31,6 +31,9 @@ This directory owns the shared pieces; feature folders own their query hooks
   the same for every principal (public site settings) sets
   `meta: { sharedAcrossIdentities: true }` and stays; removing a query cancels
   its read, which would leave a long-lived reader waiting.
+  The authentication settings save captures its protected query instance as a
+  generation before awaiting the SDK write. It only writes the returned settings
+  when that same instance still exists, so an old session cannot refill the cache.
 - **Tests** wrap rendered pages in `TestQueryProvider` (`src/test/queryClient.tsx`):
   a fresh cache per render and no retries. Query results arrive a scheduler
   tick after the mocked request resolves, so wait with `findBy…` for anything

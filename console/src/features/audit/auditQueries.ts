@@ -1,4 +1,9 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  infiniteQueryOptions,
+  useInfiniteQuery,
+  useQuery,
+} from "@tanstack/react-query";
+import { useEffect } from "react";
 import type { Dayjs } from "dayjs";
 import {
   getAuditRetentionPolicy,
@@ -7,6 +12,7 @@ import {
 } from "../../client";
 import { unwrap } from "../../lib/query/client";
 import { auditKeys } from "../../lib/query/keys";
+import { useGroupPages } from "../groups/groupQueries";
 
 export type AuditFilters = {
   repository: string;
@@ -49,9 +55,9 @@ export function auditQuery(filters: AuditFilters) {
  * Audit records for one filter set, newest first, one cursor page at a time.
  * Pages already read stay cached, so going back does not ask again.
  */
-export function useAuditPages(filters: AuditFilters) {
+export function auditPagesOptions(filters: AuditFilters) {
   const query = auditQuery(filters);
-  return useInfiniteQuery({
+  return infiniteQueryOptions({
     queryKey: auditKeys.pages(query),
     queryFn: async ({ pageParam, signal }) => {
       const page = await unwrap(
@@ -66,6 +72,23 @@ export function useAuditPages(filters: AuditFilters) {
     // A new filter set keeps the previous records on screen until it answers.
     placeholderData: (previous) => previous,
   });
+}
+
+export function useAuditPages(filters: AuditFilters) {
+  return useInfiniteQuery(auditPagesOptions(filters));
+}
+
+/** Keep the original 200-group filter window, including later cursor pages. */
+export function useAuditGroupOptions() {
+  const query = useGroupPages();
+  const groups = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const { fetchNextPage, hasNextPage, isFetching, isError } = query;
+  useEffect(() => {
+    if (groups.length < 200 && hasNextPage && !isFetching && !isError) {
+      void fetchNextPage({ cancelRefetch: false });
+    }
+  }, [groups.length, hasNextPage, isFetching, isError, fetchNextPage]);
+  return groups.slice(0, 200).map((group) => group.name);
 }
 
 export function useAuditRetentionPolicy() {

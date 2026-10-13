@@ -25,11 +25,20 @@ export function AuditRetentionPage() {
   const policy = policyQuery.data ?? null;
   const jobs = jobsQuery.data ?? [];
   const error = policyQuery.error;
-  // The form edits drafts over the saved policy.
-  const [enabledDraft, setEnabled] = useState<boolean | null>(null);
-  const [keepDaysDraft, setKeepDays] = useState<number | null>(null);
-  const enabled = enabledDraft ?? policy?.enabled ?? false;
-  const keepDays = keepDaysDraft ?? policy?.keepDays ?? 90;
+  // An edit belongs to the saved version it started from. A refreshed new
+  // version resets the form instead of pairing old edits with a new If-Match.
+  const [draft, setDraft] = useState<{
+    version: string;
+    enabled: boolean;
+    keepDays: number;
+  } | null>(null);
+  const currentDraft = draft?.version === policy?.version ? draft : null;
+  const enabled = currentDraft?.enabled ?? policy?.enabled ?? false;
+  const keepDays = currentDraft?.keepDays ?? policy?.keepDays ?? 90;
+  const editPolicy = (change: { enabled?: boolean; keepDays?: number }) => {
+    if (!policy) return;
+    setDraft({ version: policy.version, enabled, keepDays, ...change });
+  };
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
@@ -52,8 +61,7 @@ export function AuditRetentionPage() {
         return;
       }
       setNotice(text("策略已保存", "Policy saved"));
-      setEnabled(null);
-      setKeepDays(null);
+      setDraft(null);
       void queryClient.invalidateQueries({
         queryKey: auditKeys.retentionPolicy(),
       });
@@ -87,7 +95,7 @@ export function AuditRetentionPage() {
     }
   };
 
-  if (error !== null) {
+  if (error !== null && !policy) {
     return (
       <div>
         <PageHeader title={text("审计保留策略", "Audit retention policy")} />
@@ -185,6 +193,7 @@ export function AuditRetentionPage() {
           "Automatic cleanup rules for global audit records",
         )}
       />
+      {error !== null && <ErrorBanner error={error} onRetry={load} />}
       {saveError !== null && <ErrorBanner error={saveError} />}
       {notice && (
         <Notice tone="success" title={notice} onClose={() => setNotice("")} />
@@ -213,8 +222,10 @@ export function AuditRetentionPage() {
               <Switch
                 checked={enabled}
                 onChange={(checked) => {
-                  setEnabled(checked);
-                  if (checked && keepDays < 1) setKeepDays(90);
+                  editPolicy({
+                    enabled: checked,
+                    keepDays: checked && keepDays < 1 ? 90 : keepDays,
+                  });
                 }}
                 aria-label={text("切换自动清理", "Toggle automatic cleanup")}
               />
@@ -231,7 +242,9 @@ export function AuditRetentionPage() {
                 precision={0}
                 className="w-full"
                 value={keepDays}
-                onChange={(value) => setKeepDays(value ?? (enabled ? 1 : 0))}
+                onChange={(value) =>
+                  editPolicy({ keepDays: value ?? (enabled ? 1 : 0) })
+                }
               />
             </Form.Item>
             <Space>

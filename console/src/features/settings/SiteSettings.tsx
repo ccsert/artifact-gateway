@@ -146,7 +146,7 @@ export function SiteSettingsPage() {
   };
 
   if (loading) return <Loading />;
-  if (initialError !== null || !settings) {
+  if (!settings) {
     return (
       <div className="ag-page-stack">
         <PageHeader title={text("站点设置", "Site settings")} />
@@ -164,6 +164,9 @@ export function SiteSettingsPage() {
           "Manage the site name and brand identity used by sign-in, public browse, and Console navigation.",
         )}
       />
+      {initialError !== null && (
+        <ErrorBanner error={initialError} onRetry={load} />
+      )}
       {mutationError !== null && <ErrorBanner error={mutationError} />}
       <Card bodyClassName="ag-site-settings-workspace">
         <form

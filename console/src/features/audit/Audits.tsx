@@ -5,7 +5,7 @@ import {
   DownloadOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
-import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card } from "../../components/ui/Layout";
 import {
   Loading,
@@ -15,9 +15,7 @@ import {
 } from "../../components/ui/Feedback";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
-import { auditKeys } from "../../lib/query/keys";
 import { useAccessRepositories } from "../access-control/accessQueries";
-import { useGroupPages } from "../groups/groupQueries";
 import { auditOperationLabel } from "./auditOperations";
 import { auditOutcomeLabel } from "./auditOutcomes";
 import {
@@ -29,7 +27,9 @@ import { exportAuditCsv } from "./auditCsv";
 import { AuditFilters } from "./AuditFilters";
 import {
   auditQuery,
+  auditPagesOptions,
   emptyAuditFilters,
+  useAuditGroupOptions,
   useAuditPages,
   type AuditFilters as Filters,
 } from "./auditQueries";
@@ -50,12 +50,9 @@ export function AuditsPage() {
     setFilters((current) => ({ ...current, ...change }));
   const audit = useAuditPages(filters);
   const repositoriesQuery = useAccessRepositories();
-  const groupsQuery = useGroupPages();
+  const groupOptions = useAuditGroupOptions();
   const repositoryOptions = (repositoriesQuery.data?.items ?? []).map(
     (repository) => repository.name,
-  );
-  const groupOptions = (groupsQuery.data?.pages[0]?.items ?? []).map(
-    (group) => group.name,
   );
 
   // The page shown and the open row belong to one filter set.
@@ -81,22 +78,20 @@ export function AuditsPage() {
   const hasNext =
     !audit.isPlaceholderData && (page < pages.length || audit.hasNextPage);
 
-  // Refresh reads the newest records again from the first page; later pages
-  // are dropped so a refresh is one request, and the first page stays on
-  // screen while it runs.
+  // Re-read only the first page. Query commits it atomically on success;
+  // a failed refresh retains every cached page and the current position.
   const refresh = async () => {
-    const queryKey = auditKeys.pages(auditQuery(filters));
+    const options = auditPagesOptions(filters);
+    const queryKey = options.queryKey;
     await queryClient.cancelQueries({ queryKey });
-    queryClient.setQueryData<InfiniteData<unknown, string | undefined>>(
-      queryKey,
-      (data) =>
-        data && {
-          pages: data.pages.slice(0, 1),
-          pageParams: data.pageParams.slice(0, 1),
-        },
-    );
-    showPage(1);
-    await audit.refetch();
+    try {
+      await queryClient.fetchInfiniteQuery({ ...options, pages: 1 });
+      setView((current) =>
+        current.scope === scope ? { scope, page: 1, expanded: null } : current,
+      );
+    } catch {
+      // The query owns the error and Retry; keep the displayed page.
+    }
   };
   // A page that fails to load keeps the current one on screen.
   const nextPage = async () => {

@@ -6,6 +6,8 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   deleteConsoleThemePackage,
@@ -25,6 +27,7 @@ import { PreferencesProvider } from "../../lib/preferences";
 import { SiteSettingsProvider } from "../../lib/siteSettings";
 import { TestQueryProvider } from "../../test/queryClient";
 import { SiteSettingsPage } from "./SiteSettings";
+import { siteKeys } from "../../lib/query/keys";
 
 vi.mock("../../client", () => ({
   deleteConsoleThemePackage: vi.fn(),
@@ -82,9 +85,19 @@ const uploadedTheme: ConsoleTheme = {
   version: "1",
 };
 
+let queryClient: QueryClient;
+function QueryProbe() {
+  const client = useQueryClient();
+  useEffect(() => {
+    queryClient = client;
+  }, [client]);
+  return null;
+}
+
 function renderPage() {
   return render(
     <TestQueryProvider>
+      <QueryProbe />
       <SiteSettingsProvider>
         <PreferencesProvider>
           <AntdProvider>
@@ -106,6 +119,29 @@ afterEach(() => {
 });
 
 describe("SiteSettingsPage", () => {
+  it("retains the loaded form and draft after a failed refresh", async () => {
+    mockGetSiteSettings.mockResolvedValue({ data: initial } as never);
+    const user = userEvent.setup();
+    renderPage();
+    const name = await screen.findByLabelText("站点名称");
+    await user.clear(name);
+    await user.type(name, "Unsaved brand");
+    mockGetSiteSettings.mockResolvedValue({
+      error: { status: 503, message: "settings unavailable" },
+    } as never);
+    await queryClient.refetchQueries({ queryKey: siteKeys.settings() });
+    await screen.findByText("settings unavailable");
+    expect(screen.getByLabelText("站点名称")).toHaveValue("Unsaved brand");
+    mockGetSiteSettings.mockResolvedValue({ data: initial } as never);
+    await user.click(screen.getByRole("button", { name: /重试/ }));
+    await waitFor(() =>
+      expect(
+        screen.queryByText("settings unavailable"),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText("站点名称")).toHaveValue("Unsaved brand");
+  });
+
   it("saves a versioned identity and applies it to the whole Console", async () => {
     mockGetSiteSettings.mockResolvedValue({ data: initial } as never);
     mockReplaceSiteSettings.mockResolvedValue({

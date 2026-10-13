@@ -40,6 +40,13 @@ export function AuthenticationPage() {
 
   const save = async (body: OidcSettingsUpdateWritable) => {
     if (!settings) return;
+    // Identity changes remove protected queries. Capture this query instance
+    // as its generation so a late save cannot repopulate another session.
+    const generation = queryClient.getQueryCache().find({
+      queryKey: settingsKeys.oidc(),
+      exact: true,
+    });
+    if (!generation) return;
     setSaving(true);
     setActionError(null);
     setNotice("");
@@ -49,6 +56,13 @@ export function AuthenticationPage() {
         body,
         headers: { "If-Match": settings.version },
       });
+      if (
+        queryClient.getQueryCache().find({
+          queryKey: settingsKeys.oidc(),
+          exact: true,
+        }) !== generation
+      )
+        return;
       if (error || !data) {
         setActionError(
           error ??
@@ -96,7 +110,7 @@ export function AuthenticationPage() {
     setTestResult(data);
   };
 
-  if (loadError !== null) {
+  if (loadError !== null && !settings) {
     return (
       <div>
         <PageHeader title={text("身份认证", "Authentication")} />
@@ -121,6 +135,10 @@ export function AuthenticationPage() {
           "Configure an external OIDC provider, browser sign-in, and role mapping",
         )}
       />
+
+      {loadError !== null && (
+        <ErrorBanner error={loadError} onRetry={settingsQuery.refetch} />
+      )}
 
       <MetricStrip
         items={[
