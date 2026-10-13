@@ -71,6 +71,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [Repository Grant 授权](repository-grant-authorization-plan.zh-CN.md) — Scoped 运行时判定和推进方式。
 - [Service Account 运维](service-account-operations.zh-CN.md) — 稳定机器身份和零停机轮换。
 - [agctl 命令行](cli.zh-CN.md) — 面向 CI、平台管理与 agent 的客户端契约：配置优先级、退出码、JSON 信封与当前自省命令。
+- [agctl 命令地图](cli-command-map.zh-CN.md) — 逐个归类管理契约与原生协议操作（首版/后续/明确不适用），附权限与验收代码，由 `make cli-contract-check` 守卫。
 - [安全准入策略](security-admission-policy.zh-CN.md) — 晋级证据、隔离和可选读取强制。
 - [Artifact 扫描器契约](artifact-scanner-contract.zh-CN.md) — 有界外部扫描、健康、证据与补偿。
 - [Proxy 出站设计](proxy-egress-design.zh-CN.md) — 每 Repository 的直连、环境、HTTP 与 SOCKS5。
