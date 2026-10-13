@@ -14,20 +14,15 @@ import { Card } from "../../components/ui/Layout";
 import { ErrorBanner, Notice, Spinner } from "../../components/ui/Feedback";
 import { FilterField } from "../../components/ui/ConsolePrimitives";
 import { useAuth } from "../../lib/auth";
-import {
-  isActiveApiKeyPrincipal,
-  isActiveUserPrincipal,
-} from "../../lib/accessPrincipals";
 import { usePreferences } from "../../lib/preferences";
 import { AccessDecisionSummary } from "./AccessDecisionSummary";
+import { evaluatorPrincipalChoices } from "./evaluatorPrincipals";
 import {
   AUTHORIZATION_STEPS,
   CURRENT_PRINCIPAL,
   CUSTOM_PRINCIPAL,
   ROLE_REFERENCE,
   resourcePlaceholder,
-  strongestRole,
-  type EvaluatorPrincipal,
   type EvaluatorRole,
 } from "./accessModel";
 
@@ -69,61 +64,19 @@ export function AccessEvaluator({
   const [evaluationError, setEvaluationError] = useState<unknown>(null);
   const [evaluating, setEvaluating] = useState(false);
 
-  const evaluatorPrincipals = useMemo<EvaluatorPrincipal[]>(() => {
-    const choices: EvaluatorPrincipal[] = [];
-    if (identity) {
-      choices.push({
-        value: CURRENT_PRINCIPAL,
-        actor: identity.actor,
-        label: t("access.currentIdentity"),
-        detail: `${identity.actor} · ${identity.role ?? t("access.noGlobalRole")}`,
-        role: identity.role ?? "none",
-        current: true,
-      });
-    }
-    choices.push(
-      ...users.filter(isActiveUserPrincipal).map((user) => ({
-        value: `user:${user.name}`,
-        actor: `user:${user.name}`,
-        label: `${t("access.user")} · ${user.name}`,
-        detail: `${t("access.globalRole")} ${user.role}`,
-        role: user.role,
-      })),
-      ...apiKeys
-        .filter((key) => isActiveApiKeyPrincipal(key))
-        .map((key) => {
-          const role = strongestRole(key.roles);
-          return {
-            value: `api-key:${key.id}`,
-            actor: `api-key:${key.id}`,
-            label: `API Key · ${key.name}`,
-            detail: `${t("access.globalRole")} ${
-              role === "none" ? t("access.none") : role
-            }`,
-            role,
-          };
-        }),
-      ...serviceAccounts
-        .filter((account) => account.state === "active")
-        .map((account) => ({
-          value: `service-account:${account.id}`,
-          actor: `service-account:${account.id}`,
-          label: `${t("access.serviceAccount")} · ${account.name}`,
-          detail: t("access.noGlobalRoleRepositoryGrantsDecide"),
-          role: "none" as const,
-        })),
-      {
-        value: CUSTOM_PRINCIPAL,
-        actor: customActor.trim(),
-        label: t("access.oidcCustomActor"),
-        detail: t(
-          "access.enterTheCompleteAuthenticatedActorAndSelectItsGlobal",
-        ),
-        role: customRole,
-      },
-    );
-    return choices;
-  }, [apiKeys, customActor, customRole, identity, serviceAccounts, t, users]);
+  const evaluatorPrincipals = useMemo(
+    () =>
+      evaluatorPrincipalChoices({
+        identity,
+        users,
+        apiKeys,
+        serviceAccounts,
+        customActor,
+        customRole,
+        t,
+      }),
+    [apiKeys, customActor, customRole, identity, serviceAccounts, t, users],
+  );
 
   const selectedPrincipalChoice = evaluatorPrincipals.find(
     (choice) => choice.value === selectedPrincipal,
