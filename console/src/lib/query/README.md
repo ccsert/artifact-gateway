@@ -146,7 +146,8 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/search/Search.tsx`
 - [x] `features/settings/Authentication.tsx`
 - [x] `features/settings/SiteSettings.tsx`
-- [ ] `lib/preferences.tsx`
+- [x] `lib/preferences.tsx` — its effects sync the document language, stored
+      preferences and theme fallback; it reads no server data.
 - [x] `lib/siteSettings.tsx`
 
 Quota alerts and email notifications (`features/system`) keep their own
