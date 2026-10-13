@@ -89,8 +89,8 @@ Components that still read in `useEffect` and import the SDK. Migrate a page
 when it is next touched, together with its split under issue 275; a few
 entries only use effects for non-data work and leave the list once checked.
 
-- [ ] `app/CommandPalette.tsx`
-- [ ] `app/Layout.tsx`
+- [x] `app/CommandPalette.tsx`
+- [x] `app/Layout.tsx`
 - [x] `features/access-control/AccessControl.tsx`
 - [x] `features/access-control/AuthorizationRolesPanel.tsx`
 - [x] `features/access-control/AuthorizationTemplatesPanel.tsx`

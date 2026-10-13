@@ -16,7 +16,7 @@ import {
 } from "@ant-design/icons";
 import { Input, Modal, type InputRef } from "antd";
 import { useNavigate } from "react-router-dom";
-import { listRepositories, type Repository } from "../client";
+import { useAllRepositories } from "../features/repository/repositoryQueries";
 import { FormatBadge, RepositoryTypeBadge } from "../components/ui/Badge";
 import { ErrorBanner } from "../components/ui/Feedback";
 import { usePreferences } from "../lib/preferences";
@@ -73,57 +73,13 @@ export function CommandPalette({
   const navigate = useNavigate();
   const inputRef = useRef<InputRef>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const repositoriesComplete = useRef(false);
   const listId = useId();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const [repositories, setRepositories] = useState<Repository[] | null>(null);
-  const [repositoryError, setRepositoryError] = useState<unknown>(null);
-  const [repositoriesLoading, setRepositoriesLoading] = useState(false);
-  const [retry, setRetry] = useState(0);
-
-  useEffect(() => {
-    if (!open || !canBrowseRepositories || repositoriesComplete.current) return;
-    let cancelled = false;
-    const controller = new AbortController();
-    const load = async () => {
-      setRepositoriesLoading(true);
-      setRepositoryError(null);
-      const loaded = new Map<string, Repository>();
-      const tokens = new Set<string>();
-      let pageToken: string | undefined;
-      try {
-        do {
-          const { data, error } = await listRepositories({
-            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
-            signal: controller.signal,
-          });
-          if (cancelled) return;
-          if (error) throw error;
-          if (!data) throw new Error("Repository response is missing");
-          for (const repository of data.items)
-            loaded.set(repository.id, repository);
-          setRepositories([...loaded.values()]);
-          pageToken = data.nextPageToken;
-          if (pageToken) {
-            if (tokens.has(pageToken))
-              throw new Error("Repository pagination did not advance");
-            tokens.add(pageToken);
-          }
-        } while (pageToken);
-        repositoriesComplete.current = true;
-      } catch (error) {
-        if (!cancelled) setRepositoryError(error);
-      } finally {
-        if (!cancelled) setRepositoriesLoading(false);
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [open, canBrowseRepositories, retry]);
+  const repositoryRead = useAllRepositories(open && canBrowseRepositories);
+  const { repositories } = repositoryRead;
+  const repositoryError = repositoryRead.error;
+  const repositoriesLoading = repositoryRead.loading;
 
   const commands = useMemo<Command[]>(() => {
     const term = query.trim().toLocaleLowerCase();
@@ -300,7 +256,7 @@ export function CommandPalette({
                 error={repositoryError}
                 title={text("仓库列表加载失败", "Could not load repositories")}
                 tone={repositories?.length ? "warning" : "error"}
-                onRetry={() => setRetry((value) => value + 1)}
+                onRetry={() => void repositoryRead.retry()}
               />
             ) : (
               <p role="status" aria-live="polite">

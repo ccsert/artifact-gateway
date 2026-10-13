@@ -51,6 +51,26 @@ export function useDiagnostics() {
   });
 }
 
+/**
+ * The connected node's build, shown in the navigation for every signed-in
+ * reader. It is a hint: a refusal or failure shows "version unknown" and
+ * never reaches session handling, and it is re-read every minute.
+ */
+export function useConnectedBuild() {
+  return (
+    useQuery({
+      queryKey: [...systemKeys.all, "connected-build"],
+      queryFn: async ({ signal }) => {
+        const result = await getDiagnostics({ signal });
+        return result.error ? null : (result.data?.build ?? null);
+      },
+      meta: { authFailure: "ignore" },
+      refetchInterval: 60_000,
+      retry: false,
+    }).data ?? null
+  );
+}
+
 function normalizeRuntimeNode(node: RuntimeNode): RuntimeNode {
   const raw = node as RuntimeNode & {
     instanceId?: string | null;

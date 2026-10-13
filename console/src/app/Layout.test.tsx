@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { PreferencesProvider } from "../lib/preferences";
+import { TestQueryProvider } from "../test/queryClient";
 import { AppLayout } from "./Layout";
 import { getDiagnostics, listRepositories } from "../client";
 
@@ -44,39 +45,41 @@ function LocationProbe() {
 
 function renderLayout(pathname: string) {
   return render(
-    <PreferencesProvider>
-      <MemoryRouter initialEntries={[pathname]}>
-        <Routes>
-          <Route path="/browse" element={<div>public browse</div>} />
-          <Route path="/login" element={<LocationProbe />} />
-          <Route path="/search" element={<AppLayout />}>
-            <Route index element={<LocationProbe />} />
-          </Route>
-          <Route path="/repositories" element={<AppLayout />}>
-            <Route index element={<div>repository catalog</div>} />
-          </Route>
-          <Route path="/repositories/:repositoryId" element={<AppLayout />}>
-            <Route index element={<div>repository detail</div>} />
-          </Route>
-          <Route path="/groups/:groupId/browse" element={<AppLayout />}>
-            <Route index element={<div>group browse</div>} />
-          </Route>
-          <Route path="/users" element={<AppLayout />}>
-            <Route index element={<div>user management</div>} />
-            <Route path=":userId" element={<div>user detail</div>} />
-          </Route>
-          <Route path="/service-accounts" element={<AppLayout />}>
-            <Route index element={<div>service account management</div>} />
-          </Route>
-          <Route path="/operations" element={<AppLayout />}>
-            <Route index element={<LocationProbe />} />
-          </Route>
-          <Route path="/system" element={<AppLayout />}>
-            <Route index element={<LocationProbe />} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <MemoryRouter initialEntries={[pathname]}>
+          <Routes>
+            <Route path="/browse" element={<div>public browse</div>} />
+            <Route path="/login" element={<LocationProbe />} />
+            <Route path="/search" element={<AppLayout />}>
+              <Route index element={<LocationProbe />} />
+            </Route>
+            <Route path="/repositories" element={<AppLayout />}>
+              <Route index element={<div>repository catalog</div>} />
+            </Route>
+            <Route path="/repositories/:repositoryId" element={<AppLayout />}>
+              <Route index element={<div>repository detail</div>} />
+            </Route>
+            <Route path="/groups/:groupId/browse" element={<AppLayout />}>
+              <Route index element={<div>group browse</div>} />
+            </Route>
+            <Route path="/users" element={<AppLayout />}>
+              <Route index element={<div>user management</div>} />
+              <Route path=":userId" element={<div>user detail</div>} />
+            </Route>
+            <Route path="/service-accounts" element={<AppLayout />}>
+              <Route index element={<div>service account management</div>} />
+            </Route>
+            <Route path="/operations" element={<AppLayout />}>
+              <Route index element={<LocationProbe />} />
+            </Route>
+            <Route path="/system" element={<AppLayout />}>
+              <Route index element={<LocationProbe />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 

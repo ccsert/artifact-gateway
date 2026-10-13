@@ -1,387 +1,35 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
-  ClockCircleOutlined,
-  DashboardOutlined,
-  DownOutlined,
-  FileSearchOutlined,
-  InboxOutlined,
-  KeyOutlined,
-  LoginOutlined,
-  LogoutOutlined,
   MenuOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  MonitorOutlined,
   ReloadOutlined,
-  RobotOutlined,
-  SafetyCertificateOutlined,
   SearchOutlined,
-  SettingOutlined,
-  SyncOutlined,
-  TeamOutlined,
-  UserOutlined,
 } from "@ant-design/icons";
-import { Button, Drawer, Dropdown, Input, Menu, Space, Tooltip } from "antd";
+import { Button, Drawer, Menu, Space, Tooltip } from "antd";
 import type { MenuProps } from "antd";
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { platformCapabilities } from "../lib/authorization";
-import { Modal, useDisclosure } from "../components/ui/Modal";
-import { Field } from "../components/ui/Layout";
 import { Loading } from "../components/ui/Feedback";
 import { PreferenceControls } from "../components/ui/PreferenceControls";
 import { usePreferences } from "../lib/preferences";
-import { SiteBrandMark, SiteName } from "../components/ui/SiteBrand";
-import { getDiagnostics, type CurrentIdentity } from "../client";
+import { SiteBrandMark } from "../components/ui/SiteBrand";
 import { CommandPalette, useCommandPaletteShortcut } from "./CommandPalette";
 
-const navItems = [
-  {
-    to: "/",
-    label: "nav.dashboard",
-    exact: true,
-    icon: <DashboardOutlined />,
-    group: "runtime",
-    admin: true,
-  },
-  {
-    to: "/repositories",
-    label: "nav.repositories",
-    icon: <InboxOutlined />,
-    group: "runtime",
-  },
-  {
-    to: "/search",
-    label: "nav.search",
-    icon: <SearchOutlined />,
-    group: "runtime",
-  },
-  {
-    to: "/operations",
-    label: "nav.operations",
-    icon: <SyncOutlined />,
-    group: "runtime",
-    admin: true,
-  },
-  {
-    to: "/system",
-    label: "nav.system",
-    icon: <MonitorOutlined />,
-    group: "runtime",
-    admin: true,
-  },
-  {
-    to: "/groups",
-    label: "nav.groups",
-    icon: <TeamOutlined />,
-    group: "governance",
-    admin: true,
-  },
-  {
-    to: "/access",
-    label: "nav.access",
-    icon: <SafetyCertificateOutlined />,
-    group: "governance",
-    admin: true,
-  },
-  {
-    to: "/audits",
-    label: "nav.audits",
-    icon: <FileSearchOutlined />,
-    group: "governance",
-    admin: true,
-  },
-  {
-    to: "/audit-retention",
-    label: "nav.auditRetention",
-    icon: <ClockCircleOutlined />,
-    group: "governance",
-    admin: true,
-  },
-  {
-    to: "/identity-providers",
-    label: "nav.authentication",
-    icon: <LoginOutlined />,
-    group: "management",
-    admin: true,
-  },
-  {
-    to: "/site-settings",
-    label: "nav.siteSettings",
-    icon: <SettingOutlined />,
-    group: "management",
-    admin: true,
-  },
-  {
-    to: "/keys",
-    label: "nav.apiKeys",
-    icon: <KeyOutlined />,
-    group: "management",
-    admin: true,
-  },
-  {
-    to: "/service-accounts",
-    label: "nav.serviceAccounts",
-    icon: <RobotOutlined />,
-    group: "management",
-    admin: true,
-  },
-  {
-    to: "/users",
-    label: "nav.users",
-    icon: <UserOutlined />,
-    group: "management",
-    admin: true,
-  },
-] as const;
-
-function BrandLockup({ collapsed = false }: { collapsed?: boolean }) {
-  return (
-    <div
-      className="ag-brand-lockup flex items-center"
-      data-collapsed={collapsed ? "true" : "false"}
-    >
-      <SiteBrandMark className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-on-identity" />
-      <div className="ag-brand-copy min-w-0">
-        <div className="truncate text-sm font-semibold text-fg-strong">
-          <SiteName />
-        </div>
-        <div className="text-xs uppercase tracking-widest text-fg-disabled">
-          Console
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CommandTrigger({
-  collapsed,
-  onOpen,
-}: {
-  collapsed: boolean;
-  onOpen: () => void;
-}) {
-  const { t } = usePreferences();
-  const shortcut =
-    typeof navigator !== "undefined" &&
-    /Mac|iP(hone|ad)/.test(navigator.platform)
-      ? "⌘K"
-      : "Ctrl K";
-  return (
-    <Tooltip
-      title={collapsed ? t("palette.trigger") : undefined}
-      placement="right"
-    >
-      <button
-        type="button"
-        className="ag-command-trigger"
-        data-collapsed={collapsed ? "true" : "false"}
-        aria-label={t("palette.trigger")}
-        aria-keyshortcuts="Meta+K Control+K"
-        onClick={onOpen}
-      >
-        <SearchOutlined aria-hidden="true" />
-        <span className="ag-command-trigger-label">{t("palette.trigger")}</span>
-        <kbd className="ag-command-trigger-kbd">{shortcut}</kbd>
-      </button>
-    </Tooltip>
-  );
-}
-
-function TokenDialog({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: () => void;
-}) {
-  const { token, setToken, clearToken } = useAuth();
-  const { t } = usePreferences();
-  const [draft, setDraft] = useState("");
-
-  useEffect(() => {
-    if (open) setDraft(token);
-  }, [open, token]);
-
-  return (
-    <Modal
-      open={open}
-      title={t("auth.tokenDialog")}
-      onClose={onClose}
-      footer={
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            {token && (
-              <Button
-                danger
-                onClick={() => {
-                  clearToken();
-                  onClose();
-                }}
-              >
-                {t("auth.clearToken")}
-              </Button>
-            )}
-          </div>
-          <Space>
-            <Button onClick={onClose}>{t("common.cancel")}</Button>
-            <Button
-              type="primary"
-              disabled={!draft.trim()}
-              onClick={() => {
-                setToken(draft);
-                window.location.reload();
-              }}
-            >
-              {t("auth.saveToken")}
-            </Button>
-          </Space>
-        </div>
-      }
-    >
-      <Field label="Bearer Token" hint={t("auth.tokenDialogHint")}>
-        <Input.TextArea
-          className="font-mono text-xs"
-          autoSize={{ minRows: 4, maxRows: 8 }}
-          placeholder={t("auth.tokenPlaceholder")}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-      </Field>
-    </Modal>
-  );
-}
-
-/**
- * Who is signed in, and how. Token management and sign-out live here instead
- * of the old top bar, so the button states the real authentication method.
- */
-function AccountMenu({
-  identity,
-  collapsed = false,
-  onSignOut,
-}: {
-  identity: CurrentIdentity | null;
-  collapsed?: boolean;
-  onSignOut: () => void;
-}) {
-  const { token } = useAuth();
-  const { t } = usePreferences();
-  const tokenDialog = useDisclosure();
-  const actor = identity?.actor ?? "—";
-  const initial =
-    actor
-      .replace(/^[a-z-]+:/, "")
-      .charAt(0)
-      .toUpperCase() || "?";
-  const kind = identity ? t(`account.kind.${identity.kind}`) : "";
-  const role =
-    identity?.role && identity.role !== "none"
-      ? t(`account.role.${identity.role}`)
-      : "";
-  const summary = [role, kind].filter(Boolean).join(" · ");
-
-  return (
-    <>
-      <Dropdown
-        trigger={["click"]}
-        placement="topLeft"
-        menu={{
-          items: [
-            {
-              key: "token",
-              icon: <KeyOutlined />,
-              label: token ? t("auth.tokenConfigured") : t("auth.setToken"),
-              onClick: tokenDialog.show,
-            },
-            { type: "divider" },
-            {
-              key: "sign-out",
-              icon: <LogoutOutlined />,
-              label: t("auth.logout"),
-              onClick: onSignOut,
-            },
-          ],
-        }}
-      >
-        <button
-          type="button"
-          className="ag-account-button"
-          data-collapsed={collapsed ? "true" : "false"}
-          aria-label={`${t("account.menu")}: ${actor}`}
-        >
-          <span className="ag-account-avatar" aria-hidden="true">
-            {initial}
-          </span>
-          <span className="ag-account-copy">
-            <span className="ag-account-name">{actor}</span>
-            {summary && <span className="ag-account-meta">{summary}</span>}
-          </span>
-          <DownOutlined className="ag-account-caret" aria-hidden="true" />
-        </button>
-      </Dropdown>
-      <TokenDialog open={tokenDialog.open} onClose={tokenDialog.hide} />
-    </>
-  );
-}
-
-function ConnectedVersion() {
-  const { text } = usePreferences();
-  const [build, setBuild] = useState<{
-    version: string;
-    revision: string;
-  } | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        const result = await getDiagnostics();
-        if (mounted)
-          setBuild(result.error ? null : (result.data?.build ?? null));
-      } catch {
-        if (mounted) setBuild(null);
-      }
-    };
-    void load();
-    const timer = window.setInterval(() => void load(), 60_000);
-    return () => {
-      mounted = false;
-      window.clearInterval(timer);
-    };
-  }, []);
-
-  const version =
-    build?.version && build.version !== "unknown"
-      ? build.version === "dev"
-        ? text("开发构建", "Development build")
-        : build.version
-      : text("版本未知", "Version unknown");
-  const revision =
-    build?.revision && build.revision !== "unknown"
-      ? ` · ${build.revision.slice(0, 12)}`
-      : "";
-
-  return (
-    <Link
-      to="/system?tab=diagnostics"
-      className="ag-sider-meta text-xs leading-4 text-fg-tertiary hover:text-fg"
-      title={text(
-        "查看当前连接节点的系统诊断",
-        "View diagnostics for the connected node",
-      )}
-    >
-      {text("当前节点", "Connected node")} · {version}
-      {revision}
-    </Link>
-  );
-}
+import { AccountMenu } from "./AccountMenu";
+import { BrandLockup, CommandTrigger, ConnectedVersion } from "./ShellChrome";
+import { navItems } from "./shellNavigation";
 
 export function AppLayout() {
   const { authenticated, identity, identityLoading, clearToken } = useAuth();
   const { colorMode, t } = usePreferences();
   const location = useLocation();
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Mobile navigation stays open only on the page it was opened from.
+  const [mobileNavPath, setMobileNavPath] = useState<string | null>(null);
+  const mobileNavOpen = mobileNavPath === location.pathname;
+  const setMobileNavOpen = (open: boolean) =>
+    setMobileNavPath(open ? location.pathname : null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   useCommandPaletteShortcut(openPalette);
@@ -404,10 +52,6 @@ export function AppLayout() {
       return next;
     });
   };
-
-  useEffect(() => {
-    setMobileNavOpen(false);
-  }, [location.pathname]);
 
   if (identityLoading) {
     return (
