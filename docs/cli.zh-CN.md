@@ -108,7 +108,9 @@ profiles:
 ```
 
 Profile 选择顺序：`--profile`、`AGCTL_PROFILE`、`current_profile`、`default`
-profile，最后是只定义一个 profile 的文件。
+profile，最后是只定义一个 profile 的文件。该文件由 profile 命令管理、无需手工
+编辑：`agctl config profile add|list|use|remove`；每次写入都以 0600 权限原子
+替换文件。
 
 ## 全局 flag
 
@@ -126,8 +128,8 @@ profile，最后是只定义一个 profile 的文件。
 | `--yes` | 确认提示一律视为同意（写命令） |
 
 全局 flag 可放在命令名前后：`agctl --json info` 与 `agctl info --json`
-等价。`--dry-run` 与 `--yes` 作用于写命令；当前可用命令均为只读，接受但忽略
-这两个 flag。
+等价。`--dry-run` 与 `--yes` 作用于写命令，只读命令接受但忽略这两个 flag；
+对无法无副作用地预演的每个命令，命令树都报告 `dry-run: unsupported`。
 
 ## 输出契约
 
@@ -207,6 +209,53 @@ profile，最后是只定义一个 profile 的文件。
 资源对象、场景标签、交付阶段、真实端点、是否改变状态、最低权限，以及分页、
 dry-run、重试、wait 能力。脚本与 agent 通过该树发现已安装客户端的能力。
 
+### `agctl auth login`
+
+用本地用户名与密码换取会话 token（`POST /auth/login`），并存入显式选择的
+profile。密码来自有界 stdin（`--password-stdin`）；缺失、为空或超限都会在发出
+任何请求之前以退出码 2 失败。未给出 `--profile`（或 `AGCTL_PROFILE`）时命令
+拒绝存储 token：安全的 `--secret-output` 目的地尚不存在，且客户端从不打印
+token。服务端报告 `mustChangePassword` 时，命令会存储 token、退出码 0，并指引
+运行 `agctl auth change-password`；它绝不自动改密，且该账号在改密前访问管理
+端点会得到 403。
+
+### `agctl auth logout`
+
+撤销调用者的本地用户会话（`POST /auth/logout`），并从所有存储该 token 的
+profile 中移除它。`--local-only` 跳过服务端调用，只遗忘本地凭据。logout 不会
+声称吊销服务账号 token 或 API key；通过 `--token` 或 `AGCTL_TOKEN` 提供的
+token 不会从任何地方被移除。
+
+### `agctl auth whoami`
+
+显示调用者身份（`GET /api/v2/identity`）与一页有界大小、可读的仓库
+（`GET /api/v2/repositories`，`pageSize=200`）。`--json` 的 data 为
+`{actor, kind, role, administrator, oidc, repositories: {count, names,
+truncated}}`；当仓库数量超过该页或示例名单时 `truncated` 为 true。缺少凭据时
+在发出任何请求之前以退出码 5 失败。
+
+### `agctl auth change-password`
+
+使用本地用户会话修改调用者本人的密码（`POST /auth/change-password`）。两个
+密码都来自有界 stdin，各占一行（先是当前密码，再是新密码）。成功后匹配的已
+存 token 会被移除，并要求重新执行 `agctl auth login`；被拒绝的修改保留已存
+token。该端点只接受本地用户会话。
+
+### `agctl config profile`
+
+无需手工编辑即可管理 `~/.config/agctl/config.yaml`：
+
+- `agctl config profile add NAME --server URL [--token-stdin] [--insecure]`
+  创建或更新 profile；不带 `--server` 时已有 profile 保留其 server，
+  `--token-stdin` 从 stdin 读取一行有界秘密且永不回显；
+- `agctl config profile list` 列出所有 profile 及当前选中项；
+- `agctl config profile use NAME` 设置 `current_profile`；
+- `agctl config profile remove NAME` 删除 profile，并在它正是 `current_profile`
+  时将其清空。
+
+写入以 0600 权限原子替换文件；已存在的宽松权限文件会被拒绝并提示
+`chmod 600`。
+
 ## 安全说明
 
 - 凭据不会进入任何输出：verbose 日志、错误消息与 JSON 信封均不例外；
@@ -215,6 +264,9 @@ dry-run、重试、wait 能力。脚本与 agent 通过该树发现已安装客�
 - HTTP 重定向直接报告，不自动跟随，避免凭据被转发到其他端点或明文连接。
 - 服务端 `Retry-After` 要求的等待时间不会缩短；剩余预算不足时，请求超时取消等待。
 - 配置文件权限必须为 0600；权限过宽时命令直接拒绝。
+- `agctl auth login` 只把会话 token 存入显式选择的 profile，否则在请求前拒绝；
+  密码与 token 来自有界 stdin，不会被 `--json`、verbose 输出或错误渲染回显，
+  并注册进失败脱敏。
 - `--insecure` 关闭 TLS 证书校验，仅用于受信测试网络；优先使用有效证书。
 - 一次性秘密（签发的 API key、token）由服务账号命令的承接工作治理：没有显式
   安全目的地时，它们不会写入 stdout、stderr 或历史（见

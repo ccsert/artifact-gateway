@@ -122,7 +122,9 @@ profiles:
 ```
 
 Profile selection order: `--profile`, `AGCTL_PROFILE`, `current_profile`, the
-`default` profile, then a file that defines exactly one profile.
+`default` profile, then a file that defines exactly one profile. The profile
+commands manage this file without hand-editing: `agctl config profile
+add|list|use|remove`; every write replaces the file atomically with mode 0600.
 
 ## Global flags
 
@@ -141,7 +143,9 @@ Profile selection order: `--profile`, `AGCTL_PROFILE`, `current_profile`, the
 
 Global flags work before and after the command name: `agctl --json info` and
 `agctl info --json` are equivalent. `--dry-run` and `--yes` apply to write
-commands; the commands available today are read-only and ignore them.
+commands and are ignored by read-only ones; the command tree reports
+`dry-run: unsupported` for every command that cannot plan without side
+effects.
 
 ## Output contract
 
@@ -229,6 +233,60 @@ stage, real endpoints, whether it mutates state, minimum role, and its
 pagination, dry-run, retry, and wait capabilities. Scripts and agents use
 this tree to discover what the installed client can do.
 
+### `agctl auth login`
+
+Exchanges a local username and password for a session token (`POST
+/auth/login`) and stores the token in an explicitly selected profile. The
+password comes from bounded stdin (`--password-stdin`); missing, empty, or
+oversized input exits 2 before any request. Without `--profile` (or
+`AGCTL_PROFILE`) the command refuses to store the token: a secure
+`--secret-output` destination does not exist yet, and the client never prints
+a token. When the server reports `mustChangePassword`, the command stores the
+token, exits 0, and points at `agctl auth change-password`; it never changes
+the password automatically, and management endpoints answer 403 for such an
+account until the password is changed.
+
+### `agctl auth logout`
+
+Revokes the caller's local user session (`POST /auth/logout`) and removes the
+matching token from every profile that stores it. `--local-only` skips the
+server call and only forgets the local credential. Logout does not revoke
+service account tokens or API keys, and tokens supplied through `--token` or
+`AGCTL_TOKEN` are never removed from anywhere.
+
+### `agctl auth whoami`
+
+Shows the caller identity (`GET /api/v2/identity`) and one bounded page of
+readable repositories (`GET /api/v2/repositories`, `pageSize=200`). `--json`
+data is `{actor, kind, role, administrator, oidc, repositories: {count,
+names, truncated}}`; `truncated` is true when more repositories exist than
+the page or the sample of names shows. Missing credentials exit 5 before any
+request.
+
+### `agctl auth change-password`
+
+Changes the caller's own password (`POST /auth/change-password`) using a local
+user session. Both passwords come from bounded stdin, one line each (current
+first, then new). On success the matching stored token is removed and a fresh
+`agctl auth login` is required; a rejected change keeps the stored token. The
+endpoint only accepts local user sessions.
+
+### `agctl config profile`
+
+Manages `~/.config/agctl/config.yaml` without hand-editing:
+
+- `agctl config profile add NAME --server URL [--token-stdin] [--insecure]`
+  creates or updates a profile; without `--server` an existing profile keeps
+  its server, and `--token-stdin` reads one bounded secret line that is never
+  echoed;
+- `agctl config profile list` shows the profiles and which one is current;
+- `agctl config profile use NAME` sets `current_profile`;
+- `agctl config profile remove NAME` deletes a profile and unsets
+  `current_profile` when it pointed at it.
+
+Writes replace the file atomically with mode 0600; a lax existing file is
+refused with a `chmod 600` hint.
+
 ## Security notes
 
 - Credentials never reach output: not through verbose logs, error messages,
@@ -240,6 +298,10 @@ this tree to discover what the installed client can do.
 - A server's `Retry-After` delay is never shortened; the request timeout
   cancels the wait when the remaining budget is insufficient.
 - The configuration file must be mode 0600; commands refuse a lax file.
+- `agctl auth login` stores the session token only in an explicitly selected
+  profile and refuses before the request otherwise; passwords and tokens come
+  from bounded stdin, are never echoed by `--json`, verbose output, or error
+  rendering, and are registered for failure redaction.
 - `--insecure` disables TLS certificate verification and is intended only for
   trusted test networks; prefer a valid certificate.
 - One-time secrets (issued API keys, tokens) are governed by the

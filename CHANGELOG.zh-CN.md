@@ -8,6 +8,12 @@
 
 ## Unreleased
 
+- `agctl` 客户端迎来第一组命令面：`agctl auth login|logout|whoami|change-password` 与 `agctl config profile add|list|use|remove`。login 用有界 stdin 中的本地用户名与密码换取会话 token，且只存入显式选择的 0600 profile；`mustChangePassword` 账号会被引导到 `change-password` 而不会被自动改密，密码、token 与一次性秘密永不打印。logout 撤销调用者的本地用户会话并遗忘匹配的已存 token，不声称吊销服务账号或 API key。profile 以 0600 原子写入，宽松权限的文件被拒绝。
+
+- CLI 命令地图（`docs/cli-command-map.md`，含中文对照）把每个管理 API 操作按承接单、阶段、权限与验收代码归类，且不宣称未实现的覆盖。`make cli-contract-check`（并入 `make ci-local`）在 OpenAPI 契约出现未归类操作时失败，脚本测试用注入的假操作证明漂移检测生效。
+
+- `agctl` 客户端现已可分发：发布构建产出带版本号的 `artifact-gateway-agctl_<version>_<os>_<arch>` 归档并纳入既有校验和；`make cli-build` 以注入的 VERSION 与 revision 构建 linux/darwin amd64+arm64 二进制；`Dockerfile.agctl` 配合 `make cli-docker-build` 产出携带 CA 证书的 distroless 客户端镜像；安装文档覆盖归档、模块安装路径与容器镜像。模块安装路径如实标注了前提：只有声明的模块路径与源码仓库一致后才可解析。
+
 - 新增 `agctl` 客户端骨架（`cmd/agctl`，以 `make cli-build` 构建）：命令注册与全局 flag、配置优先级（`--server`/`--token`/`--profile`，其次 `AGCTL_SERVER`/`AGCTL_TOKEN`/`AGCTL_PROFILE`，最后权限 0600 的 `~/.config/agctl/config.yaml`）、文档化的退出码契约、带结构化错误与 request id 的版本化 JSON 信封、带重试的管理 HTTP 客户端，以及 `version`、`info`（健康、就绪、身份、格式）与 `commands` 三个自省命令。客户端不打印凭据，也从不交互提问。
 
 - Console 外壳（总览、登录、导航与命令面板）改为通过统一查询层读取，并拆分为聚焦的文件；Layout、Login、Dashboard 与偏好设置提供者均不超过 400 行。总览各数据源保留各自的提示与重试，会话过期时可从总览正常退出。单点登录发现不可用时回退到本地账号与令牌登录。命令面板在会话内一次读取全部仓库分页，并随仓库目录变更刷新。外壳文案移入功能字典，文本保持不变。总览分组读取遇到 5xx 时与其他页面一样重试一次。其余行为与布局保持不变。
