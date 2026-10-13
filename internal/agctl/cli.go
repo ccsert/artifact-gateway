@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -61,12 +62,19 @@ func (flags *globalFlags) format() (outputFormat, error) {
 }
 
 type commandContext struct {
-	globals  *globalFlags
-	settings profileSettings
-	stdout   io.Writer
-	stderr   io.Writer
-	format   outputFormat
-	version  buildinfo.Info
+	globals    *globalFlags
+	settings   profileSettings
+	stdin      io.Reader
+	stdout     io.Writer
+	stderr     io.Writer
+	args       []string
+	format     outputFormat
+	version    buildinfo.Info
+	configPath string
+	flagSet    map[string]bool
+	// addKnownSecret registers a credential that later failure rendering must
+	// redact even if it only appears inside server-controlled text.
+	addKnownSecret func(string)
 }
 
 func (c *commandContext) client() (*apiClient, error) {
@@ -160,7 +168,7 @@ func scanFailureFlags(args []string) (outputFormat, []string) {
 // RunCLI executes one agctl invocation and returns its documented exit code.
 // Commands never prompt: missing required input fails with a usage error
 // before any request is sent.
-func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+func RunCLI(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	failureFormat, knownSecrets := scanFailureFlags(args)
 	knownSecrets = append(knownSecrets, os.Getenv("AGCTL_TOKEN"))
 	flags := &globalFlags{timeout: defaultTimeout, output: string(outputTable)}
@@ -189,13 +197,9 @@ func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		printUsage(stdout)
 		return ExitOK
 	}
-	cmd, ok := lookupCommand(rest[0])
+	cmd, commandArgs, ok := resolveCommand(rest)
 	if !ok {
-		renderFailure(stdout, stderr, failureFormat, &UsageError{
-			Message: fmt.Sprintf("unknown command %q", rest[0]),
-			Hint:    "run agctl --help for the command list",
-		}, knownSecrets...)
-		return ExitUsage
+		return handleUnknownCommand(stdout, stderr, failureFormat, rest, knownSecrets)
 	}
 
 	// Command-level parse: global flags are registered again with their
@@ -206,7 +210,8 @@ func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if cmd.setFlags != nil {
 		cmd.setFlags(localSet)
 	}
-	if err := localSet.Parse(rest[1:]); err != nil {
+	positionalArgs, err := parseInterspersed(localSet, commandArgs)
+	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			printCommandUsage(stdout, cmd)
 			return ExitOK
@@ -236,24 +241,36 @@ func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			Hint:    "pass --timeout with a duration such as 30s",
 		})
 	}
-	if extra := localSet.Args(); len(extra) > 0 {
-		return fail(&UsageError{
-			Message: fmt.Sprintf("unexpected argument %q", extra[0]),
+	if len(positionalArgs) > cmd.positionals {
+		// A malformed positional tail must not select the output format of the
+		// failure: post-command flags are not trusted once a stray positional
+		// appears (see scanFailureFlags).
+		renderFailure(stdout, stderr, failureFormat, &UsageError{
+			Message: fmt.Sprintf("unexpected argument %q", positionalArgs[cmd.positionals]),
 			Hint:    fmt.Sprintf("run agctl %s --help for usage", cmd.name),
-		})
+		}, knownSecrets...)
+		return ExitUsage
 	}
-	settings, err := resolveSettings(flags, set, os.Getenv, defaultConfigPath())
+	configPath := defaultConfigPath()
+	settings, err := resolveSettings(flags, set, os.Getenv, configPath)
 	if err != nil {
 		return fail(err)
 	}
 	knownSecrets = append(knownSecrets, settings.Token)
 	env := &commandContext{
-		globals:  flags,
-		settings: settings,
-		stdout:   stdout,
-		stderr:   stderr,
-		format:   format,
-		version:  buildinfo.Read(),
+		globals:    flags,
+		settings:   settings,
+		stdin:      stdin,
+		stdout:     stdout,
+		stderr:     stderr,
+		args:       positionalArgs,
+		format:     format,
+		version:    buildinfo.Read(),
+		configPath: configPath,
+		flagSet:    set,
+		addKnownSecret: func(secret string) {
+			knownSecrets = append(knownSecrets, secret)
+		},
 	}
 	if err := cmd.run(ctx, env); err != nil {
 		return fail(err)
@@ -271,20 +288,171 @@ func mergeFlags(set map[string]bool, fs *flag.FlagSet) {
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
 }
 
+// parseInterspersed parses command arguments where flags and positional
+// arguments may be interleaved. The stdlib flag package stops at the first
+// positional, so each consumed positional triggers a re-parse of the rest.
+func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
+	var positionals []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return nil, err
+		}
+		rest := fs.Args()
+		if len(rest) == 0 {
+			return positionals, nil
+		}
+		positionals = append(positionals, rest[0])
+		args = rest[1:]
+	}
+}
+
+// resolveCommand matches the longest registered command name at the start of
+// args (commands may span several words, such as `config profile add`) and
+// returns the remaining arguments.
+func resolveCommand(args []string) (command, []string, bool) {
+	for length := len(args); length >= 1; length-- {
+		if cmd, ok := lookupCommand(strings.Join(args[:length], " ")); ok {
+			return cmd, args[length:], true
+		}
+	}
+	return command{}, nil, false
+}
+
+// directChildren lists the distinct next subcommand words registered under a
+// group path. An empty prefix lists the top-level commands.
+func directChildren(prefix []string) []string {
+	seen := map[string]bool{}
+	var children []string
+	for _, cmd := range registry() {
+		parts := strings.Split(cmd.name, " ")
+		if len(parts) <= len(prefix) {
+			continue
+		}
+		matches := true
+		for index, part := range prefix {
+			if parts[index] != part {
+				matches = false
+				break
+			}
+		}
+		if !matches {
+			continue
+		}
+		child := parts[len(prefix)]
+		if !seen[child] {
+			seen[child] = true
+			children = append(children, child)
+		}
+	}
+	sort.Strings(children)
+	return children
+}
+
+// nearestGroup finds the deepest known group path in args, used to explain an
+// unknown subcommand with its parent's available subcommands.
+func nearestGroup(args []string) []string {
+	for length := len(args) - 1; length >= 1; length-- {
+		if len(directChildren(args[:length])) > 0 {
+			return args[:length]
+		}
+	}
+	return nil
+}
+
+func handleUnknownCommand(stdout, stderr io.Writer, format outputFormat, rest []string, knownSecrets []string) int {
+	// `agctl <group…> --help` prints that group's subcommands.
+	if len(rest) > 1 {
+		last := rest[len(rest)-1]
+		if last == "--help" || last == "-h" {
+			prefix := rest[:len(rest)-1]
+			if children := directChildren(prefix); len(children) > 0 {
+				printGroupUsage(stdout, prefix, children)
+				return ExitOK
+			}
+		}
+	}
+	// A path that names a group needs a subcommand.
+	if children := directChildren(rest); len(children) > 0 {
+		renderFailure(stdout, stderr, format, &UsageError{
+			Message: fmt.Sprintf("%q requires a subcommand", strings.Join(rest, " ")),
+			Hint:    fmt.Sprintf("choose one of: %s", strings.Join(children, ", ")),
+		}, knownSecrets...)
+		return ExitUsage
+	}
+	// An unknown subcommand names its nearest group's alternatives.
+	if parent := nearestGroup(rest); parent != nil {
+		children := directChildren(parent)
+		renderFailure(stdout, stderr, format, &UsageError{
+			Message: fmt.Sprintf("unknown command %q", strings.Join(rest, " ")),
+			Hint:    fmt.Sprintf("subcommands of `agctl %s`: %s", strings.Join(parent, " "), strings.Join(children, ", ")),
+		}, knownSecrets...)
+		return ExitUsage
+	}
+	renderFailure(stdout, stderr, format, &UsageError{
+		Message: fmt.Sprintf("unknown command %q", rest[0]),
+		Hint:    "run agctl --help for the command list",
+	}, knownSecrets...)
+	return ExitUsage
+}
+
 func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "agctl — Gateway command line for CI, platform management, and agents")
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintln(w, "usage: agctl [global flags] <command> [command flags]")
 	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintln(w, "commands:")
+	type usageLine struct{ name, synopsis string }
+	seenGroups := map[string]bool{}
+	var lines []usageLine
+	width := 0
 	for _, cmd := range registry() {
-		_, _ = fmt.Fprintf(w, "  %-10s %s\n", cmd.name, cmd.synopsis)
+		parts := strings.SplitN(cmd.name, " ", 2)
+		line := usageLine{name: parts[0], synopsis: cmd.synopsis}
+		if len(parts) == 2 {
+			if seenGroups[parts[0]] {
+				continue
+			}
+			seenGroups[parts[0]] = true
+			line.name = parts[0] + " <subcommand>"
+			line.synopsis = groupSynopses[parts[0]]
+		}
+		if len(line.name) > width {
+			width = len(line.name)
+		}
+		lines = append(lines, line)
+	}
+	_, _ = fmt.Fprintln(w, "commands:")
+	for _, line := range lines {
+		_, _ = fmt.Fprintf(w, "  %-*s  %s\n", width, line.name, line.synopsis)
 	}
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintln(w, "run `agctl <command> --help` for command flags; `agctl commands --json` prints the machine-readable tree")
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintln(w, "global flags:")
 	printGlobalFlags(w)
+}
+
+var groupSynopses = map[string]string{
+	"auth":   "authenticate, inspect the caller, and end the local session",
+	"config": "manage local profiles in ~/.config/agctl/config.yaml",
+}
+
+func printGroupUsage(w io.Writer, prefix, children []string) {
+	path := strings.Join(prefix, " ")
+	_, _ = fmt.Fprintf(w, "usage: agctl %s <subcommand> [flags]\n\nsubcommands:\n", path)
+	width := 0
+	for _, child := range children {
+		if len(child) > width {
+			width = len(child)
+		}
+	}
+	for _, child := range children {
+		synopsis := ""
+		if cmd, ok := lookupCommand(path + " " + child); ok {
+			synopsis = cmd.synopsis
+		}
+		_, _ = fmt.Fprintf(w, "  %-*s  %s\n", width, child, synopsis)
+	}
+	_, _ = fmt.Fprintf(w, "\nrun `agctl %s <subcommand> --help` for flags\n", path)
 }
 
 func printCommandUsage(w io.Writer, cmd command) {
