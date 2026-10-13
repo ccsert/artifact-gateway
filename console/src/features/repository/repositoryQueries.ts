@@ -95,7 +95,10 @@ export function useAllRepositories(enabled: boolean) {
     error:
       query.error ??
       (stalled ? new Error("Repository pagination did not advance") : null),
-    retry: () => (data && !stalled ? fetchNextPage() : query.refetch()),
+    // A failed continuation resumes that page. A failed catalog refresh must
+    // reread the cached pages; fetchNextPage can succeed without reading any.
+    retry: () =>
+      query.isFetchNextPageError ? fetchNextPage() : query.refetch(),
   };
 }
 

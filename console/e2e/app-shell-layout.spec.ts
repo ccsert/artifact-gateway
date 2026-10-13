@@ -293,3 +293,47 @@ for (const width of [1440, 390]) {
     expect(gateway.unmatched).toEqual([]);
   });
 }
+
+test("mobile navigation stays closed on a history return after its footer link", async ({
+  page,
+}, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript(() =>
+    localStorage.setItem("ag.console.locale", "zh-CN"),
+  );
+  const gateway = await mockGateway(page, { authenticated: true });
+  await page.goto("/repositories");
+  await expect(page.getByText("cargo-hosted", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "打开导航" }).click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toBeVisible();
+  await drawer.getByRole("link", { name: /当前节点/ }).click();
+  await expect(page).toHaveURL(/\/system\?tab=diagnostics$/);
+  await expect(drawer).toBeHidden();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/repositories$/);
+  await expect(drawer).toBeHidden();
+  await page.getByRole("button", { name: "打开导航" }).click();
+  await expect(drawer).toBeVisible();
+  const bounds = await drawer.boundingBox();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  expect(
+    await page.evaluate(
+      () => document.body.scrollWidth - document.body.clientWidth,
+    ),
+  ).toBe(0);
+  if (process.env.CAPTURE_SIDER_LAYOUT === "1")
+    await page.screenshot({
+      path: testInfo.outputPath("mobile-navigation-history.png"),
+      fullPage: true,
+    });
+  expect(errors).toEqual([]);
+  expect(gateway.unmatched).toEqual([]);
+});

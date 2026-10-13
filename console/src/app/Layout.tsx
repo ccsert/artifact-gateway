@@ -30,6 +30,9 @@ export function AppLayout() {
   const mobileNavOpen = mobileNavPath === location.pathname;
   const setMobileNavOpen = (open: boolean) =>
     setMobileNavPath(open ? location.pathname : null);
+  // Leaving this page closes the drawer for good, including a history return.
+  if (mobileNavPath !== null && mobileNavPath !== location.pathname)
+    setMobileNavPath(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   useCommandPaletteShortcut(openPalette);
