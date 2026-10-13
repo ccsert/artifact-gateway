@@ -103,7 +103,7 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/audit/AuditRetention.tsx`
 - [x] `features/audit/Audits.tsx`
 - [ ] `features/auth/Login.tsx`
-- [ ] `features/dashboard/Dashboard.tsx`
+- [x] `features/dashboard/Dashboard.tsx`
 - [x] `features/groups/Groups.tsx`
 - [x] `features/groups/pages/GroupBrowsePage.tsx`
 - [x] `features/groups/pages/GroupResolutionDialog.tsx`

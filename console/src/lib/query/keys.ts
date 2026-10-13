@@ -108,6 +108,13 @@ export const settingsKeys = {
   oidc: () => [...settingsKeys.all, "oidc"] as const,
 };
 
+export const dashboardKeys = {
+  all: ["dashboard"] as const,
+  groups: () => [...dashboardKeys.all, "groups"] as const,
+  audits: () => [...dashboardKeys.all, "audits"] as const,
+  statistics: () => [...dashboardKeys.all, "statistics"] as const,
+};
+
 export const siteKeys = {
   settings: () => ["site", "settings"] as const,
 };

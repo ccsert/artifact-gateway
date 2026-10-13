@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreferencesProvider } from "../../lib/preferences";
 import { SectionBoundary } from "./SectionBoundary";
+import { TestQueryProvider } from "../../test/queryClient";
 import { useDashboardResource } from "../../features/dashboard/useDashboardResource";
 
 let broken = true;
@@ -61,10 +62,13 @@ describe("SectionBoundary", () => {
       return <p>Recovered panel</p>;
     }
     function ResourcePage() {
-      const resource = useDashboardResource(read);
+      const resource = useDashboardResource(["probe"], read);
       return (
         <PreferencesProvider>
-          <SectionBoundary onReset={resource.reload}>
+          <SectionBoundary
+            onReset={resource.reload}
+            recoveryKeys={[resource.data]}
+          >
             {resource.data ? (
               <Content value={resource.data} />
             ) : (
@@ -76,7 +80,11 @@ describe("SectionBoundary", () => {
       );
     }
     const user = userEvent.setup();
-    render(<ResourcePage />);
+    render(
+      <TestQueryProvider>
+        <ResourcePage />
+      </TestQueryProvider>,
+    );
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "malformed answer",
     );

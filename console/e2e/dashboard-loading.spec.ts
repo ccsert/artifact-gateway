@@ -208,7 +208,8 @@ test("a failed groups source preserves storage and retries only groups", async (
   let audits = 0;
   await page.route("**/api/v2/groups**", (route) => {
     groups++;
-    return groups === 1
+    // The first read and the shared layer's single 5xx retry both fail.
+    return groups <= 2
       ? route.fulfill({
           status: 500,
           json: { message: "synthetic groups unavailable" },
@@ -230,7 +231,7 @@ test("a failed groups source preserves storage and retries only groups", async (
   await page.getByRole("button", { name: /重试/ }).click();
   await expect(page.getByText("共 0 个成员引用")).toBeVisible();
   expect({ groups, overview, audits }).toEqual({
-    groups: 2,
+    groups: 3,
     overview: 1,
     audits: 1,
   });
