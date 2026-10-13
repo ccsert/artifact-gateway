@@ -133,7 +133,7 @@ func (h nativeMavenHandler) serveHostedRead(w http.ResponseWriter, r *http.Reque
 // when it can answer the request, reusing the native metadata generator. It
 // reports whether metadata was available.
 func (h nativeMavenHandler) serveHostedMetadata(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string) bool {
-	metadataPath, _, ok := mavenMetadataRequest(path)
+	_, _, ok := mavenMetadataRequest(path)
 	if !ok {
 		return false
 	}
@@ -142,10 +142,9 @@ func (h nativeMavenHandler) serveHostedMetadata(w http.ResponseWriter, r *http.R
 		http.Error(w, "metadata unavailable", http.StatusServiceUnavailable)
 		return true
 	}
-	prefix := strings.TrimSuffix(metadataPath, "/maven-metadata.xml")
+	resource := mavenResourceFromPath(path)
 	for _, item := range items {
-		base := mavenCoordinatePath(item.Coordinate)
-		if base == prefix || strings.HasPrefix(base, prefix+"/") {
+		if item.Coordinate == resource || strings.HasPrefix(item.Coordinate, resource+":") {
 			h.metadata(w, r, repo, path, "")
 			return true
 		}

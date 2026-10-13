@@ -8,7 +8,7 @@
 
 ## Unreleased
 
-- Maven V2 Group 使用与单仓库一致的 Maven canonical resource 评估成员读取授权，使坐标前缀 Grant 正确覆盖获准制品、checksum sidecar 和 metadata。保留精确 groupId 边界，以及先授权、后访问成员 payload/缓存的顺序（#348）。
+- Maven V2 Group 使用与单仓库一致的 Maven canonical resource 评估成员读取授权，使坐标前缀 Grant 正确覆盖获准制品、checksum sidecar 和 metadata。Hosted 制品 metadata 精确匹配 groupId/artifactId，排除子 groupId 与相邻制品的版本；请求的 metadata 不存在时仍允许 Group 回退。保留先授权、后访问成员 payload/缓存的顺序（#348）。
 
 - 公开浏览的 OCI 标签、Manifest 详情与 Conan revisions 改为通过统一查询层读取：每一页版本都可缓存、可取消，后续页失败时保留已加载内容且重试只读取该页，离开仓库后清除其版本页。所有 Console 源文件均不超过 400 行，包括用户详情抽屉、访问评估器与主题解析器。行为与布局保持不变。
 

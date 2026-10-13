@@ -1201,16 +1201,15 @@ func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, rep
 	}
 	versions := map[string]bool{}
 	releases := []string{}
+	group := strings.Join(parts[:len(parts)-1], ".")
+	artifact := parts[len(parts)-1]
 	for _, a := range items {
-		base := mavenCoordinatePath(a.Coordinate)
-		if strings.HasPrefix(base, prefix) {
-			p := strings.Split(a.Coordinate, ":")
-			if len(p) >= 3 {
-				version := p[2]
-				versions[version] = true
-				if !repository.IsMavenSnapshotCoordinate(a.Coordinate) {
-					releases = append(releases, version)
-				}
+		p := strings.Split(a.Coordinate, ":")
+		if len(p) >= 3 && p[0] == group && p[1] == artifact {
+			version := p[2]
+			versions[version] = true
+			if !repository.IsMavenSnapshotCoordinate(a.Coordinate) {
+				releases = append(releases, version)
 			}
 		}
 	}
@@ -1224,9 +1223,6 @@ func (h nativeMavenHandler) metadata(w http.ResponseWriter, r *http.Request, rep
 	}
 	sort.Strings(orderedVersions)
 	sort.Strings(releases)
-	p := strings.Split(prefix, "/")
-	group := strings.Join(p[:len(p)-1], ".")
-	artifact := p[len(p)-1]
 	body := []byte("<metadata><groupId>" + group + "</groupId><artifactId>" + artifact + "</artifactId><versioning><latest>" + orderedVersions[len(orderedVersions)-1] + "</latest>" + func() string {
 		if len(releases) == 0 {
 			return ""

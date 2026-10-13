@@ -184,6 +184,45 @@ func TestV2GroupMavenCoordinateGrantReadVariants(t *testing.T) {
 	}
 }
 
+func TestV2GroupMavenCoordinateGrantMetadataIsolation(t *testing.T) {
+	f := newGroupMavenAuthorizationFixture(t)
+	f.publish(t, f.hosted.Name, "org/example/demo-parent/1.0.0/demo-parent-1.0.0.pom", groupMavenAuthorizationPOM)
+	for _, coordinate := range []struct{ group, artifact, version string }{
+		{"org.example.demo-parent", "hidden", "2.0.0"},
+		{"org.example", "demo-parent-extra", "3.0.0"},
+	} {
+		path := strings.ReplaceAll(coordinate.group, ".", "/") + "/" + coordinate.artifact + "/" + coordinate.version + "/" + coordinate.artifact + "-" + coordinate.version + ".pom"
+		pom := fmt.Sprintf(`<project><groupId>%s</groupId><artifactId>%s</artifactId><version>%s</version></project>`, coordinate.group, coordinate.artifact, coordinate.version)
+		f.publish(t, f.hosted.Name, path, pom)
+	}
+	metadata := `<metadata><groupId>org.example</groupId><artifactId>demo-parent</artifactId><versioning><latest>1.0.0</latest><release>1.0.0</release><versions><version>1.0.0</version></versions></versioning></metadata>`
+	f.expectRead(t, "org/example/demo-parent/maven-metadata.xml", metadata)
+	for suffix, body := range groupMavenAuthorizationChecksums(metadata) {
+		f.expectRead(t, "org/example/demo-parent/maven-metadata.xml"+suffix, body)
+	}
+}
+
+func TestV2GroupMavenCoordinateGrantMetadataMissFallsBack(t *testing.T) {
+	f := newGroupMavenAuthorizationFixture(t)
+	f.publish(t, f.hosted.Name, "org/example/demo-parent/hidden/2.0.0/hidden-2.0.0.pom", `<project><groupId>org.example.demo-parent</groupId><artifactId>hidden</artifactId><version>2.0.0</version></project>`)
+	path := "org/example/demo-parent/maven-metadata.xml"
+	metadata := `<metadata><groupId>org.example</groupId><artifactId>demo-parent</artifactId><versioning><versions><version>1.0.0</version></versions></versioning></metadata>`
+	f.upstream.bodies["/"+path] = []byte(metadata)
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		if w := f.request(method, f.hosted.Name, path, "fixture-reader"); w.Code != http.StatusNotFound {
+			t.Fatalf("unrelated hosted coordinate answered metadata: status=%d body=%q", w.Code, w.Body.String())
+		}
+		w := f.request(method, f.group.Name, path, "fixture-reader")
+		wantBody := metadata
+		if method == http.MethodHead {
+			wantBody = ""
+		}
+		if w.Code != http.StatusOK || w.Body.String() != wantBody {
+			t.Fatalf("metadata fallback %s: status=%d body=%q", method, w.Code, w.Body.String())
+		}
+	}
+}
+
 func TestV2GroupMavenCoordinateGrantSnapshotMetadata(t *testing.T) {
 	f := newGroupMavenAuthorizationFixture(t)
 	base := "org/example/demo-parent/1.0-SNAPSHOT/"

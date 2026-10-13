@@ -11,7 +11,7 @@ their meaning.
 
 ## Unreleased
 
-- Maven V2 Groups authorize member reads with the same canonical Maven resource as single repositories, so coordinate-prefix grants cover permitted artifacts, checksum sidecars and metadata. Exact groupId boundaries and authorization before member payload/cache access are preserved (#348).
+- Maven V2 Groups authorize member reads with the same canonical Maven resource as single repositories, so coordinate-prefix grants cover permitted artifacts, checksum sidecars and metadata. Hosted artifact metadata matches the exact groupId/artifactId, excluding child-group and adjacent-artifact versions while retaining Group fallback when the requested metadata is absent. Authorization still precedes member payload/cache access (#348).
 
 - Public browse reads OCI tags, manifest details and Conan revisions through the shared query layer: each version page is cached and cancellable, a failed later page keeps the earlier ones and Retry reads only that page, and leaving a repository drops its pages. Every Console source file is now at most 400 lines, including the user details drawer, the access evaluator and the theme resolver. Behaviour and layout are unchanged.
 
