@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { listRepositories, type Repository } from "../client";
 import { PreferencesProvider } from "../lib/preferences";
+import { TestQueryProvider } from "../test/queryClient";
 import { CommandPalette, type CommandPage } from "./CommandPalette";
 
 vi.mock("../client", async (importOriginal) => ({
@@ -41,18 +42,20 @@ function Location() {
 function renderPalette(pages: readonly CommandPage[] = []) {
   const onClose = vi.fn();
   render(
-    <PreferencesProvider>
-      <MemoryRouter initialEntries={["/repositories"]}>
-        <Location />
-        <CommandPalette
-          open
-          onClose={onClose}
-          pages={pages}
-          canBrowseRepositories
-          onSignOut={vi.fn()}
-        />
-      </MemoryRouter>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <MemoryRouter initialEntries={["/repositories"]}>
+          <Location />
+          <CommandPalette
+            open
+            onClose={onClose}
+            pages={pages}
+            canBrowseRepositories
+            onSignOut={vi.fn()}
+          />
+        </MemoryRouter>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
   return { onClose, input: screen.getByRole("combobox", { name: "命令面板" }) };
 }

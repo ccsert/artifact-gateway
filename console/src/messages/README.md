@@ -10,6 +10,10 @@ dialogs split in issue 275. Their display text is unchanged, including preset
 names, role explanations, interpolated values, and punctuation. Shared grant
 and protocol helpers retain their existing localization interface.
 
+The shell's own messages (navigation, sign-in, preferences) live in
+`shell.zh-CN.ts` and `shell.en-US.ts`; `index.ts` merges every dictionary into
+the `zhCN` and `enUS` tables the translator reads.
+
 Keep each feature's Chinese and English messages in `<feature>.zh-CN.ts` and
 `<feature>.en-US.ts`. Derive the key type from the Chinese dictionary and type
 the English dictionary as `Record<FeatureMessageKey, string>`, so missing or

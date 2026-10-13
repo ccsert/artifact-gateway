@@ -9,6 +9,7 @@ import {
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { DashboardPage } from "./Dashboard";
 
 const api = vi.hoisted(() => ({
@@ -56,9 +57,11 @@ function deferred<T>() {
 function renderDashboard() {
   return render(
     <MemoryRouter>
-      <PreferencesProvider>
-        <DashboardPage />
-      </PreferencesProvider>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <DashboardPage />
+        </PreferencesProvider>
+      </TestQueryProvider>
     </MemoryRouter>,
   );
 }

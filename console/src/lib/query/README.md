@@ -89,8 +89,8 @@ Components that still read in `useEffect` and import the SDK. Migrate a page
 when it is next touched, together with its split under issue 275; a few
 entries only use effects for non-data work and leave the list once checked.
 
-- [ ] `app/CommandPalette.tsx`
-- [ ] `app/Layout.tsx`
+- [x] `app/CommandPalette.tsx`
+- [x] `app/Layout.tsx`
 - [x] `features/access-control/AccessControl.tsx`
 - [x] `features/access-control/AuthorizationRolesPanel.tsx`
 - [x] `features/access-control/AuthorizationTemplatesPanel.tsx`
@@ -102,8 +102,8 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/artifact-detail/OciImageDetail.tsx`
 - [x] `features/audit/AuditRetention.tsx`
 - [x] `features/audit/Audits.tsx`
-- [ ] `features/auth/Login.tsx`
-- [ ] `features/dashboard/Dashboard.tsx`
+- [x] `features/auth/Login.tsx`
+- [x] `features/dashboard/Dashboard.tsx`
 - [x] `features/groups/Groups.tsx`
 - [x] `features/groups/pages/GroupBrowsePage.tsx`
 - [x] `features/groups/pages/GroupResolutionDialog.tsx`
@@ -146,7 +146,8 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/search/Search.tsx`
 - [x] `features/settings/Authentication.tsx`
 - [x] `features/settings/SiteSettings.tsx`
-- [ ] `lib/preferences.tsx`
+- [x] `lib/preferences.tsx` — its effects sync the document language, stored
+      preferences and theme fallback; it reads no server data.
 - [x] `lib/siteSettings.tsx`
 
 Quota alerts and email notifications (`features/system`) keep their own

@@ -7,7 +7,6 @@ import {
   UserOutlined,
 } from "@ant-design/icons";
 import { Alert, Button, Input, Segmented } from "antd";
-import { Notice } from "../../components/ui/Feedback";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../lib/auth";
 import { client } from "../../client/client.gen";
@@ -15,19 +14,16 @@ import { getCurrentIdentity } from "../../client";
 import { Field } from "../../components/ui/Layout";
 import { LoginBeamsBackground } from "../../components/ui/kokonutui/LoginBeamsBackground";
 import { PreferenceControls } from "../../components/ui/PreferenceControls";
-import { SiteBrandMark, SiteName } from "../../components/ui/SiteBrand";
 import { usePreferences } from "../../lib/preferences";
+import { useOidcLoginConfig } from "./authQueries";
+import { LoginBrandPanel } from "./LoginBrandPanel";
+import { PasswordChangeForm } from "./PasswordChangeForm";
 import {
   localPasswordFitsBcrypt,
   localPasswordMeetsMinimum,
 } from "../identity/users/passwordPolicy";
 
 type Mode = "oidc" | "password" | "token";
-
-interface OIDCConfig {
-  enabled: boolean;
-  issuer?: string;
-}
 
 interface LocalLoginResponse {
   token?: string;
@@ -51,7 +47,10 @@ export function LoginPage() {
   const [params] = useSearchParams();
   const redirect = params.get("redirect") || "/";
 
-  const [mode, setMode] = useState<Mode>("password");
+  const oidc = useOidcLoginConfig().data ?? { enabled: false };
+  // Single sign-on is offered first once discovery finds it.
+  const [chosenMode, setMode] = useState<Mode | null>(null);
+  const mode = chosenMode ?? (oidc.enabled ? "oidc" : "password");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [token, setTokenDraft] = useState("");
@@ -60,37 +59,19 @@ export function LoginPage() {
   const [pendingPasswordChange, setPendingPasswordChange] =
     useState<PendingPasswordChange | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [oidc, setOIDC] = useState<OIDCConfig>({ enabled: false });
+  const [actionError, setError] = useState<string | null>(null);
+  // A failed or unconfirmed single sign-on comes back with a marker.
+  const ssoFailed =
+    Boolean(params.get("oidc_error")) ||
+    (!identityLoading && !authenticated && params.get("oidc") === "success");
+  // Any later message, including clearing it on a mode switch, replaces it.
+  const error = actionError ?? (ssoFailed ? t("auth.ssoFailed") : "");
 
+  // A signed-in visitor leaves for the page they asked for.
   useEffect(() => {
-    let cancelled = false;
-    void fetch("/auth/oidc/config", { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) return;
-        const config = (await response.json()) as OIDCConfig;
-        if (cancelled) return;
-        setOIDC(config);
-        if (config.enabled) setMode("oidc");
-      })
-      .catch(() => {
-        // Local and token login remain available when discovery is offline.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    const oidcError = params.get("oidc_error");
-    if (oidcError) setError(t("auth.ssoFailed"));
-    if (identityLoading) return;
-    if (authenticated) {
+    if (!identityLoading && authenticated)
       navigate(redirect, { replace: true });
-      return;
-    }
-    if (params.get("oidc") === "success") setError(t("auth.ssoFailed"));
-  }, [authenticated, identityLoading, navigate, params, redirect, t]);
+  }, [authenticated, identityLoading, navigate, redirect]);
 
   const finish = (next: string, role?: string) => {
     setToken(next, role);
@@ -228,40 +209,7 @@ export function LoginPage() {
       </div>
 
       <main className="ag-login-frame">
-        <aside className="ag-login-brand-panel">
-          <div className="ag-login-brand-lockup">
-            <SiteBrandMark className="flex h-11 w-11 items-center justify-center rounded-lg text-base font-bold text-on-identity" />
-            <div>
-              <div className="text-sm font-semibold text-fg-strong">
-                Console
-              </div>
-              <div className="mt-0.5 font-mono text-xs uppercase tracking-wider text-[var(--ag-content-secondary)]">
-                Native Hosted API v2
-              </div>
-            </div>
-          </div>
-
-          <div className="ag-login-brand-copy">
-            <h1 className="break-words text-3xl font-semibold leading-tight text-fg-strong xl:text-4xl">
-              <SiteName />
-            </h1>
-            <p className="mt-3 max-w-xs text-sm leading-6 text-fg-secondary">
-              {t("auth.controlPlane")}
-            </p>
-          </div>
-
-          <div className="ag-login-security-note">
-            <SafetyCertificateOutlined />
-            <div>
-              <div className="text-xs font-medium text-fg">
-                {t("auth.protectedAccess")}
-              </div>
-              <div className="mt-1 font-mono text-xs text-fg-tertiary">
-                OIDC · Local session · Bearer token
-              </div>
-            </div>
-          </div>
-        </aside>
+        <LoginBrandPanel />
 
         <section className="ag-login-panel" aria-labelledby="login-heading">
           <header>
@@ -312,44 +260,15 @@ export function LoginPage() {
 
           <div className="ag-login-mode-body">
             {pendingPasswordChange ? (
-              <form onSubmit={submitPasswordChange} className="ag-login-form">
-                <Notice
-                  tone="info"
-                  closable={false}
-                  title={t("auth.changePasswordTitle")}
-                  description={t("auth.changePasswordHint")}
-                />
-                <Field label={t("auth.newPassword")}>
-                  <Input.Password
-                    size="large"
-                    autoComplete="new-password"
-                    maxLength={72}
-                    value={newPassword}
-                    onChange={(event) => setNewPassword(event.target.value)}
-                  />
-                </Field>
-                <Field label={t("auth.confirmPassword")}>
-                  <Input.Password
-                    size="large"
-                    autoComplete="new-password"
-                    maxLength={72}
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                  />
-                </Field>
-                {error && <Alert type="error" showIcon title={error} />}
-                <Button
-                  type="primary"
-                  size="large"
-                  htmlType="submit"
-                  block
-                  icon={<KeyOutlined />}
-                  loading={busy}
-                  disabled={!newPassword || !confirmPassword}
-                >
-                  {t("auth.changePassword")}
-                </Button>
-              </form>
+              <PasswordChangeForm
+                newPassword={newPassword}
+                setNewPassword={setNewPassword}
+                confirmPassword={confirmPassword}
+                setConfirmPassword={setConfirmPassword}
+                error={error}
+                busy={busy}
+                onSubmit={submitPasswordChange}
+              />
             ) : mode === "oidc" && oidc.enabled ? (
               <div className="ag-login-sso text-center">
                 <div className="ag-login-mode-icon">

@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AntdProvider } from "../../app/AntdProvider";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 import { LoginPage } from "./Login";
 
 const auth = vi.hoisted(() => ({
@@ -26,13 +27,15 @@ function LocationProbe() {
 
 function renderPage() {
   return render(
-    <PreferencesProvider>
-      <AntdProvider>
-        <MemoryRouter initialEntries={["/login"]}>
-          <LoginPage />
-        </MemoryRouter>
-      </AntdProvider>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <AntdProvider>
+          <MemoryRouter initialEntries={["/login"]}>
+            <LoginPage />
+          </MemoryRouter>
+        </AntdProvider>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 
@@ -69,16 +72,18 @@ describe("LoginPage forced password change", () => {
     Object.assign(auth, { authenticated: true });
 
     render(
-      <PreferencesProvider>
-        <AntdProvider>
-          <MemoryRouter initialEntries={["/login?redirect=%2Frepositories"]}>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/repositories" element={<LocationProbe />} />
-            </Routes>
-          </MemoryRouter>
-        </AntdProvider>
-      </PreferencesProvider>,
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            <MemoryRouter initialEntries={["/login?redirect=%2Frepositories"]}>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/repositories" element={<LocationProbe />} />
+              </Routes>
+            </MemoryRouter>
+          </AntdProvider>
+        </PreferencesProvider>
+      </TestQueryProvider>,
     );
 
     expect(await screen.findByTestId("location")).toHaveTextContent(
@@ -151,5 +156,33 @@ describe("LoginPage forced password change", () => {
         newPassword: "personal-password",
       }),
     });
+  });
+
+  it("offers single sign-on once discovery finds it, and a mode switch clears the SSO failure", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input) === "/auth/oidc/config"
+          ? Response.json({ enabled: true, issuer: "https://id.example.com" })
+          : new Response(null, { status: 404 }),
+      ),
+    );
+    render(
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            <MemoryRouter initialEntries={["/login?oidc_error=denied"]}>
+              <LoginPage />
+            </MemoryRouter>
+          </AntdProvider>
+        </PreferencesProvider>
+      </TestQueryProvider>,
+    );
+
+    expect(await screen.findByText("https://id.example.com")).toBeVisible();
+    expect(screen.getByRole("alert")).toBeVisible();
+    await user.click(screen.getByText("访问令牌"));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

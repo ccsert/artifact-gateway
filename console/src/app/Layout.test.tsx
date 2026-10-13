@@ -7,8 +7,15 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { PreferencesProvider } from "../lib/preferences";
+import { TestQueryProvider } from "../test/queryClient";
 import { AppLayout } from "./Layout";
 import { getDiagnostics, listRepositories } from "../client";
 
@@ -42,41 +49,53 @@ function LocationProbe() {
   );
 }
 
+function HistoryNavigation() {
+  const navigate = useNavigate();
+  return (
+    <>
+      <LocationProbe />
+      <button onClick={() => navigate(-1)}>Back</button>
+    </>
+  );
+}
+
 function renderLayout(pathname: string) {
   return render(
-    <PreferencesProvider>
-      <MemoryRouter initialEntries={[pathname]}>
-        <Routes>
-          <Route path="/browse" element={<div>public browse</div>} />
-          <Route path="/login" element={<LocationProbe />} />
-          <Route path="/search" element={<AppLayout />}>
-            <Route index element={<LocationProbe />} />
-          </Route>
-          <Route path="/repositories" element={<AppLayout />}>
-            <Route index element={<div>repository catalog</div>} />
-          </Route>
-          <Route path="/repositories/:repositoryId" element={<AppLayout />}>
-            <Route index element={<div>repository detail</div>} />
-          </Route>
-          <Route path="/groups/:groupId/browse" element={<AppLayout />}>
-            <Route index element={<div>group browse</div>} />
-          </Route>
-          <Route path="/users" element={<AppLayout />}>
-            <Route index element={<div>user management</div>} />
-            <Route path=":userId" element={<div>user detail</div>} />
-          </Route>
-          <Route path="/service-accounts" element={<AppLayout />}>
-            <Route index element={<div>service account management</div>} />
-          </Route>
-          <Route path="/operations" element={<AppLayout />}>
-            <Route index element={<LocationProbe />} />
-          </Route>
-          <Route path="/system" element={<AppLayout />}>
-            <Route index element={<LocationProbe />} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <MemoryRouter initialEntries={[pathname]}>
+          <Routes>
+            <Route path="/browse" element={<div>public browse</div>} />
+            <Route path="/login" element={<LocationProbe />} />
+            <Route path="/search" element={<AppLayout />}>
+              <Route index element={<LocationProbe />} />
+            </Route>
+            <Route path="/repositories" element={<AppLayout />}>
+              <Route index element={<div>repository catalog</div>} />
+            </Route>
+            <Route path="/repositories/:repositoryId" element={<AppLayout />}>
+              <Route index element={<div>repository detail</div>} />
+            </Route>
+            <Route path="/groups/:groupId/browse" element={<AppLayout />}>
+              <Route index element={<div>group browse</div>} />
+            </Route>
+            <Route path="/users" element={<AppLayout />}>
+              <Route index element={<div>user management</div>} />
+              <Route path=":userId" element={<div>user detail</div>} />
+            </Route>
+            <Route path="/service-accounts" element={<AppLayout />}>
+              <Route index element={<div>service account management</div>} />
+            </Route>
+            <Route path="/operations" element={<AppLayout />}>
+              <Route index element={<LocationProbe />} />
+            </Route>
+            <Route path="/system" element={<AppLayout />}>
+              <Route index element={<LocationProbe />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 
@@ -444,6 +463,37 @@ describe("AppLayout", () => {
 
     expect(await screen.findByTestId("location")).toHaveTextContent("/search");
     await waitFor(() => expect(drawer).not.toBeVisible());
+  });
+
+  it("keeps mobile navigation closed when returning to the page it left", async () => {
+    const user = userEvent.setup();
+    render(
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <MemoryRouter initialEntries={["/repositories"]}>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="*" element={<HistoryNavigation />} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </PreferencesProvider>
+      </TestQueryProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: "打开导航" }));
+    const drawer = await screen.findByRole("dialog");
+    await user.click(
+      within(drawer).getByRole("link", { name: /当前节点 · v0.4.3 · abc123/ }),
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/system?tab=diagnostics",
+    );
+    await waitFor(() => expect(drawer).not.toBeVisible());
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/repositories");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "打开导航" }));
+    expect(await screen.findByRole("dialog")).toBeVisible();
   });
 
   it("opens an accessible mobile navigation drawer and closes it with Escape", async () => {
