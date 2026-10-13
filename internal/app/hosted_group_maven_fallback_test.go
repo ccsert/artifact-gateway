@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -213,7 +214,7 @@ func TestV2GroupMavenCacheRevalidatesMemberChanges(t *testing.T) {
 func TestV2GroupMavenCacheUsesAuthorizedCandidates(t *testing.T) {
 	f := newGroupMavenFixture(t, nil, 200, 200)
 	for i, actor := range []string{"alice", "bob"} {
-		if _, err := f.store.ReplaceRepositoryGrants(context.Background(), f.repos[i].ID, []repository.RepositoryGrant{{Principal: actor, Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+		if _, err := f.store.ReplaceRepositoryGrants(context.Background(), f.repos[i].ID, []repository.RepositoryGrant{{Principal: actor, Scopes: []string{"repositories:read"}, ResourcePrefix: "org.example:"}}, "1"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -224,11 +225,58 @@ func TestV2GroupMavenCacheUsesAuthorizedCandidates(t *testing.T) {
 			}
 		}
 	}
-	if _, err := f.store.ReplaceRepositoryGrants(context.Background(), f.repos[0].ID, []repository.RepositoryGrant{{Principal: "bob", Scopes: []string{"repositories:read"}}}, "2"); err != nil {
+	if _, err := f.store.ReplaceRepositoryGrants(context.Background(), f.repos[0].ID, []repository.RepositoryGrant{{Principal: "bob", Scopes: []string{"repositories:read"}, ResourcePrefix: "org.example:"}}, "2"); err != nil {
 		t.Fatal(err)
 	}
 	if status, body := f.request(http.MethodGet, "bob", nil); status != 200 || body != f.repos[0].Name {
 		t.Fatalf("expanded grants status=%d body=%q", status, body)
+	}
+}
+
+func TestV2GroupMavenCoordinateGrantsGuardCachedSources(t *testing.T) {
+	for _, initialStatus := range []int{http.StatusOK, http.StatusNotFound} {
+		t.Run(strconv.Itoa(initialStatus), func(t *testing.T) {
+			f := newGroupMavenFixture(t, nil, initialStatus, http.StatusOK)
+			for i, actor := range []string{"alice", "bob"} {
+				if _, err := f.store.ReplaceRepositoryGrants(context.Background(), f.repos[i].ID, []repository.RepositoryGrant{{Principal: actor, Scopes: []string{"repositories:read"}, ResourcePrefix: "org.example:"}}, "1"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// Prime a positive or negative cache for the first member's candidate
+			// set. A different actor can still reach their authorized later member.
+			if status, body := f.request(http.MethodGet, "alice", nil); status != initialStatus || (status == http.StatusOK && body != f.repos[0].Name) {
+				t.Fatalf("prime status=%d body=%q", status, body)
+			}
+			for range 2 {
+				if status, body := f.request(http.MethodGet, "bob", nil); status != http.StatusOK || body != f.repos[1].Name {
+					t.Fatalf("later member status=%d body=%q", status, body)
+				}
+			}
+			for i := range f.repos {
+				if _, err := f.store.ReplaceRepositoryGrants(context.Background(), f.repos[i].ID, nil, "2"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := []int32{f.upstreams[0].calls.Load(), f.upstreams[1].calls.Load()}
+			for _, actor := range []string{"alice", "bob"} {
+				for _, method := range []string{http.MethodGet, http.MethodHead} {
+					if status, body := f.request(method, actor, nil); status != http.StatusForbidden || strings.Contains(body, f.repos[0].Name) || strings.Contains(body, f.repos[1].Name) {
+						t.Fatalf("revoked cached source: status=%d body=%q", status, body)
+					}
+				}
+			}
+			for i, upstream := range f.upstreams {
+				if calls := upstream.calls.Load(); calls != before[i] {
+					t.Fatalf("denied member %d reached upstream: calls=%d, previously %d", i, calls, before[i])
+				}
+			}
+			if _, err := f.store.ReplaceRepositoryGrants(context.Background(), f.repos[1].ID, []repository.RepositoryGrant{{Principal: "alice", Scopes: []string{"repositories:read"}, ResourcePrefix: "org.example:"}}, "3"); err != nil {
+				t.Fatal(err)
+			}
+			if status, body := f.request(http.MethodGet, "alice", nil); status != http.StatusOK || body != f.repos[1].Name {
+				t.Fatalf("denial poisoned newly authorized candidates: status=%d body=%q", status, body)
+			}
+		})
 	}
 }
 

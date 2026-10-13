@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Maven V2 Groups authorize member reads with the same canonical Maven resource as single repositories, so coordinate-prefix grants cover permitted artifacts, checksum sidecars and metadata. Exact groupId boundaries and authorization before member payload/cache access are preserved (#348).
+
 - Public browse reads OCI tags, manifest details and Conan revisions through the shared query layer: each version page is cached and cancellable, a failed later page keeps the earlier ones and Retry reads only that page, and leaving a repository drops its pages. Every Console source file is now at most 400 lines, including the user details drawer, the access evaluator and the theme resolver. Behaviour and layout are unchanged.
 
 - Added the `agctl` client skeleton (`cmd/agctl`), built with `make cli-build`: command registry and global flags, configuration precedence (`--server`/`--token`/`--profile`, then `AGCTL_SERVER`/`AGCTL_TOKEN`/`AGCTL_PROFILE`, then `~/.config/agctl/config.yaml` at mode 0600), the documented exit-code contract, the versioned JSON envelope with structured errors and request ids, a retrying management HTTP client, and the `version`, `info` (health, readiness, identity, formats), and `commands` introspection commands. The client never prints credentials and never prompts.

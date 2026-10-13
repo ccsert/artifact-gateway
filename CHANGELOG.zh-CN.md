@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Maven V2 Group 使用与单仓库一致的 Maven canonical resource 评估成员读取授权，使坐标前缀 Grant 正确覆盖获准制品、checksum sidecar 和 metadata。保留精确 groupId 边界，以及先授权、后访问成员 payload/缓存的顺序（#348）。
+
 - 公开浏览的 OCI 标签、Manifest 详情与 Conan revisions 改为通过统一查询层读取：每一页版本都可缓存、可取消，后续页失败时保留已加载内容且重试只读取该页，离开仓库后清除其版本页。所有 Console 源文件均不超过 400 行，包括用户详情抽屉、访问评估器与主题解析器。行为与布局保持不变。
 
 - 新增 `agctl` 客户端骨架（`cmd/agctl`，以 `make cli-build` 构建）：命令注册与全局 flag、配置优先级（`--server`/`--token`/`--profile`，其次 `AGCTL_SERVER`/`AGCTL_TOKEN`/`AGCTL_PROFILE`，最后权限 0600 的 `~/.config/agctl/config.yaml`）、文档化的退出码契约、带结构化错误与 request id 的版本化 JSON 信封、带重试的管理 HTTP 客户端，以及 `version`、`info`（健康、就绪、身份、格式）与 `commands` 三个自省命令。客户端不打印凭据，也从不交互提问。

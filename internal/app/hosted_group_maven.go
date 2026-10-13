@@ -56,7 +56,9 @@ func (h v2GroupMavenHandler) serve(w http.ResponseWriter, r *http.Request, resol
 		members = anonymousHostedGroupMembers(group, members)
 	}
 	var denied bool
-	members, denied = resolver.authorizeMembers(r.Context(), principal, repository.FormatMaven, assetPath, members)
+	// Match the native and legacy Maven read paths before touching member
+	// assets or proxy caches, including metadata and checksum sidecars.
+	members, denied = resolver.authorizeMembers(r.Context(), principal, repository.FormatMaven, mavenResourceFromPath(assetPath), members)
 	if denied && len(members) == 0 {
 		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return
