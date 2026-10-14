@@ -1,3 +1,5 @@
+import { LocalizedError, errorText } from "../../messages/translate";
+import { usePreferences } from "../../lib/preferences";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { listConanRecipeRevisions } from "../../client";
@@ -49,10 +51,6 @@ const noRequests = (repositoryId: string): Requests => ({
   conan: {},
 });
 
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
-}
-
 /**
  * Per-artifact version pages for the public browser: OCI tags with their
  * manifest details, and Conan recipe revisions. Every page is a cached,
@@ -72,6 +70,7 @@ export function usePublicVersionPages({
   artifactParam: string;
   tagParam: string;
 }) {
+  const { t } = usePreferences();
   const queryClient = useQueryClient();
   const [stored, setRequests] = useState<Requests>(() =>
     noRequests(repositoryId),
@@ -132,7 +131,7 @@ export function usePublicVersionPages({
       error:
         current.error ??
         (result.error
-          ? errorMessage(result.error, "读取 OCI 标签失败")
+          ? errorText(result.error, t, "publicBrowse.failedToReadOciTags")
           : undefined),
     };
   });
@@ -184,7 +183,7 @@ export function usePublicVersionPages({
       ...(result.data ?? {}),
       loading: result.isFetching,
       error: result.error
-        ? errorMessage(result.error, "读取 OCI manifest 失败")
+        ? errorText(result.error, t, "publicBrowse.failedToReadOciManifest")
         : undefined,
     } as OciManifestDetail;
   });
@@ -210,7 +209,8 @@ export function usePublicVersionPages({
             signal,
           }),
         );
-        if (!page) throw new Error("读取 Conan revisions 失败");
+        if (!page)
+          throw new LocalizedError("publicBrowse.failedToReadConanRevisions");
         return page;
       },
       enabled: Boolean(repository) && source === "conanRevisions",
@@ -238,7 +238,9 @@ export function usePublicVersionPages({
       loading: current.loading || result.isFetching,
       error:
         current.error ??
-        (result.error ? "读取 Conan revisions 失败" : undefined),
+        (result.error
+          ? t("publicBrowse.failedToReadConanRevisions")
+          : undefined),
     };
   });
 

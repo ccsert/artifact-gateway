@@ -1,52 +1,32 @@
 import type { AuditRecord } from "../../client";
 import { downloadCsv, toCsv } from "../../lib/csv";
-import type { AppLocale } from "../../lib/preferences";
+import type { Translate } from "../../lib/preferences";
+import type { MessageKey } from "../../messages";
 
-const AUDIT_CSV_COLUMNS_ZH = [
-  "时间",
-  "操作",
-  "结果",
-  "仓库",
-  "分组",
-  "格式",
-  "状态",
-  "流量",
-  "Actor",
-  "资源",
-  "表示",
-  "成员",
-  "成员类型",
-  "上游主机",
-  "缓存",
-  "授权来源",
-  "授权原因",
-  "Request ID",
-  "Trace ID",
-];
-const AUDIT_CSV_COLUMNS_EN = [
-  "Time",
-  "Operation",
-  "Outcome",
-  "Repository",
-  "Group",
-  "Format",
-  "Status",
-  "Traffic",
-  "Actor",
-  "Resource",
-  "Representation",
-  "Member",
-  "Member type",
-  "Upstream host",
-  "Cache",
-  "Authorization source",
-  "Authorization reason",
-  "Request ID",
-  "Trace ID",
+const AUDIT_CSV_COLUMNS: MessageKey[] = [
+  "audit.csvTime",
+  "audit.csvOperation",
+  "audit.csvOutcome",
+  "audit.csvRepository",
+  "audit.csvGroup",
+  "audit.csvFormat",
+  "audit.csvStatus",
+  "audit.csvTraffic",
+  "audit.csvActor",
+  "audit.csvResource",
+  "audit.csvRepresentation",
+  "audit.csvMember",
+  "audit.csvMemberType",
+  "audit.csvUpstreamHost",
+  "audit.csvCache",
+  "audit.csvAuthorizationSource",
+  "audit.csvAuthorizationReason",
+  "audit.csvRequestId",
+  "audit.csvTraceId",
 ];
 
 /** Download the records on screen as CSV, with headers in the UI language. */
-export function exportAuditCsv(records: AuditRecord[], locale: AppLocale) {
+export function exportAuditCsv(records: AuditRecord[], t: Translate) {
   const rows = records.map((a) => [
     a.occurredAt,
     a.operation,
@@ -71,7 +51,7 @@ export function exportAuditCsv(records: AuditRecord[], locale: AppLocale) {
   downloadCsv(
     `audits-${new Date().toISOString().slice(0, 19)}.csv`,
     toCsv(
-      locale === "en-US" ? AUDIT_CSV_COLUMNS_EN : AUDIT_CSV_COLUMNS_ZH,
+      AUDIT_CSV_COLUMNS.map((column) => t(column)),
       rows,
     ),
   );

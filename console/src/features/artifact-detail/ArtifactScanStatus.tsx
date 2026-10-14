@@ -38,13 +38,13 @@ function ScanStatusPanel({
   coordinate,
   digest,
 }: ScanStatusProps) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const queryClient = useQueryClient();
   const scan = useArtifactScanStatus(repositoryId, coordinate, digest);
   const status = scan.data ?? null;
   const loading = scan.isFetching;
   const loadError = scan.error
-    ? text("读取扫描状态失败", "Failed to load scan status")
+    ? t("artifactDetail.failedToLoadScanStatus")
     : "";
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
@@ -65,7 +65,7 @@ function ScanStatusPanel({
         body: { coordinate, digest },
       });
       if (response.error || !response.data) {
-        setError(text("重新扫描入队失败", "Failed to queue a rescan"));
+        setError(t("artifactDetail.failedToQueueARescan"));
         return;
       }
       queryClient.setQueryData<ScanStatus>(key, {
@@ -75,7 +75,7 @@ function ScanStatusPanel({
         job: response.data,
       });
     } catch {
-      setError(text("重新扫描入队失败", "Failed to queue a rescan"));
+      setError(t("artifactDetail.failedToQueueARescan"));
     } finally {
       setScanning(false);
     }
@@ -95,7 +95,7 @@ function ScanStatusPanel({
     <div className="col-span-full border-b border-line pb-3">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="text-fg-tertiary">
-          {text("扫描状态", "Scan status")} · {format.toUpperCase()}
+          {t("artifactDetail.scanStatus")} · {format.toUpperCase()}
         </span>
         <StateBadge state={status.state} />
         {job?.completedAt && (
@@ -105,10 +105,10 @@ function ScanStatusPanel({
         )}
         {job?.attempts !== undefined && job.attempts > 0 && (
           <span className="text-fg-tertiary">
-            {text(
-              `尝试 ${job.attempts}/${job.maxAttempts}`,
-              `Attempt ${job.attempts}/${job.maxAttempts}`,
-            )}
+            {t("artifactDetail.attempt", {
+              attempts: job.attempts,
+              maxAttempts: job.maxAttempts,
+            })}
           </span>
         )}
         <Space size={6} className="ml-auto">
@@ -120,7 +120,7 @@ function ScanStatusPanel({
               loading={scanning || loading}
               onClick={() => void rescan()}
             >
-              {text("重新扫描", "Rescan")}
+              {t("artifactDetail.rescan")}
             </Button>
           )}
         </Space>

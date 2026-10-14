@@ -1,0 +1,32 @@
+export const libZhCN = {
+  "lib.mavenRepositoryURL": "Maven 仓库 URL",
+  "lib.oCIRegistryAddress": "OCI Registry 地址",
+  "lib.dockerRegistrySetup": "Docker Registry 配置",
+  "lib.conanRemoteAddress": "Conan remote 地址",
+  "lib.npmRegistryURL": "npm Registry 地址",
+  "lib.oneOffUsage": "临时使用",
+  "lib.cargoSparseIndex": "Cargo sparse 索引",
+  "lib.searchAndInstallACrate": "查找与安装 crate",
+  "lib.aPTSourceURL": "APT 源地址",
+  "lib.downloadAnArtifact": "下载制品",
+  "lib.dockerLoginImagePrefix":
+    "docker login {host}\n# 镜像前缀：{host}/{repositoryName}/",
+  "lib.mavenDependencyDynamicSnapshot": "Maven 依赖（动态 SNAPSHOT）",
+  "lib.mavenDependencyPinnedBuild": "Maven 依赖（固定本次构建）",
+  "lib.buildPom": "本次构建 POM",
+  "lib.gradlePinnedBuild": "Gradle 固定构建",
+  "lib.mavenDependencyPomXml": "Maven 依赖 (pom.xml)",
+  "lib.gradleDependency": "Gradle 依赖",
+  "lib.repositoryPath": "仓库路径",
+  "lib.dockerPull": "Docker 拉取",
+  "lib.dockerRun": "Docker 运行",
+  "lib.imageReference": "镜像引用",
+  "lib.addRemote": "添加 remote",
+  "lib.installPackage": "安装包",
+  "lib.downloadUrl": "下载 URL",
+  "lib.curlDownload": "curl 下载",
+  "lib.rawRepositoryAddress": "Raw 仓库地址",
+  "lib.failedToReadOciManifestStatus": "读取 OCI manifest 失败 ({status})",
+};
+
+export type LibMessageKey = keyof typeof libZhCN;

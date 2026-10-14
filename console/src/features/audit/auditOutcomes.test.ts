@@ -1,3 +1,4 @@
+import { createTranslator } from "../../messages/translate";
 import { describe, expect, it } from "vitest";
 import {
   auditOutcomeIsDenied,
@@ -5,8 +6,8 @@ import {
   auditOutcomeTone,
 } from "./auditOutcomes";
 
-const zh = (chinese: string) => chinese;
-const en = (_chinese: string, english: string) => english;
+const zh = createTranslator("zh-CN");
+const en = createTranslator("en-US");
 
 describe("auditOutcomeLabel", () => {
   it("labels every outcome the gateway records, in both languages", () => {

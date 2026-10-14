@@ -29,13 +29,13 @@ const metricTone: Record<NonNullable<MetricItem["tone"]>, string> = {
 };
 
 export function MetricStrip({ items }: { items: MetricItem[] }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const columnCount = Math.min(Math.max(items.length, 1), 5);
   return (
     <div
       className={`ag-metric-strip ag-metric-strip-cols-${columnCount}`}
       role="group"
-      aria-label={text("页面摘要", "Page summary")}
+      aria-label={t("ui.pageSummary")}
     >
       {items.map((item) => (
         <div key={item.label} className="min-w-0 px-5 py-3.5">
@@ -103,7 +103,7 @@ export function FilterBar({
 }
 
 export function useClipboardAction(resetAfterMs = 1500) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const { message } = App.useApp();
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
   const resetTimer = useRef<number | undefined>(undefined);
@@ -125,7 +125,7 @@ export function useClipboardAction(resetAfterMs = 1500) {
         }
         await navigator.clipboard.writeText(value);
         setCopiedValue(stateKey);
-        void message.success?.(text("已复制到剪贴板", "Copied to clipboard"));
+        void message.success?.(t("ui.copiedToClipboard"));
         if (resetTimer.current !== undefined) {
           window.clearTimeout(resetTimer.current);
         }
@@ -136,16 +136,11 @@ export function useClipboardAction(resetAfterMs = 1500) {
         return true;
       } catch {
         setCopiedValue(null);
-        void message.error?.(
-          text(
-            "复制失败，请手动选择并复制该值。",
-            "Copy failed. Select and copy the value manually.",
-          ),
-        );
+        void message.error?.(t("ui.copyFailedSelectAndCopyTheValueManually"));
         return false;
       }
     },
-    [message, resetAfterMs, text],
+    [message, resetAfterMs, t],
   );
 
   return { copiedValue, copy };
@@ -160,10 +155,10 @@ export function CopyableValue({
   label?: string;
   className?: string;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const { copiedValue, copy } = useClipboardAction();
   const copied = copiedValue === value;
-  const copyLabel = copied ? text("已复制", "Copied") : text("复制", "Copy");
+  const copyLabel = copied ? t("ui.copied") : t("ui.copy");
 
   return (
     <span className={`inline-flex min-w-0 items-center gap-1 ${className}`}>
@@ -184,7 +179,7 @@ export function CopyableValue({
         />
       </Tooltip>
       <span className="sr-only" role="status" aria-live="polite">
-        {copied ? text("已复制到剪贴板", "Copied to clipboard") : ""}
+        {copied ? t("ui.copiedToClipboard") : ""}
       </span>
     </span>
   );

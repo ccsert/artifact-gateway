@@ -16,10 +16,10 @@ import { AuthenticationForm } from "./AuthenticationForm";
 import { useOidcSettings } from "./settingsQueries";
 
 export function AuthenticationPage() {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const queryClient = useQueryClient();
   const settingsQuery = useOidcSettings(
-    text("加载身份认证配置失败", "Failed to load authentication settings"),
+    t("settings.failedToLoadAuthenticationSettings"),
   );
   const settings = settingsQuery.data ?? null;
   const loadError = settingsQuery.error;
@@ -65,13 +65,7 @@ export function AuthenticationPage() {
         return;
       if (error || !data) {
         setActionError(
-          error ??
-            new Error(
-              text(
-                "保存身份认证配置失败",
-                "Failed to save authentication settings",
-              ),
-            ),
+          error ?? new Error(t("settings.failedToSaveAuthenticationSettings")),
         );
         return;
       }
@@ -79,12 +73,7 @@ export function AuthenticationPage() {
       void queryClient.invalidateQueries({
         queryKey: identityKeys.oidcIssuer(),
       });
-      setNotice(
-        text(
-          "配置已保存并在当前节点生效",
-          "Settings saved and active on this node",
-        ),
-      );
+      setNotice(t("settings.settingsSavedAndActiveOnThisNode"));
     } catch (nextError) {
       setActionError(nextError);
     } finally {
@@ -100,10 +89,7 @@ export function AuthenticationPage() {
     setTesting(false);
     if (error || !data) {
       setActionError(
-        error ??
-          new Error(
-            text("身份提供方连接失败", "Identity provider connection failed"),
-          ),
+        error ?? new Error(t("settings.identityProviderConnectionFailed")),
       );
       return;
     }
@@ -113,7 +99,7 @@ export function AuthenticationPage() {
   if (loadError !== null && !settings) {
     return (
       <div>
-        <PageHeader title={text("身份认证", "Authentication")} />
+        <PageHeader title={t("settings.authentication")} />
         <ErrorBanner error={loadError} onRetry={settingsQuery.refetch} />
       </div>
     );
@@ -122,18 +108,15 @@ export function AuthenticationPage() {
 
   const sourceLabel =
     settings.source === "database"
-      ? text("运行时配置", "Runtime settings")
-      : text("环境变量引导", "Environment bootstrap");
+      ? t("settings.runtimeSettings")
+      : t("settings.environmentBootstrap");
   const secretConfigured = settings.clientSecretConfigured && !clearSecret;
 
   return (
     <div className="ag-page-stack">
       <PageHeader
-        title={text("身份认证", "Authentication")}
-        description={text(
-          "配置外部 OIDC 身份提供方、浏览器登录与角色映射",
-          "Configure an external OIDC provider, browser sign-in, and role mapping",
-        )}
+        title={t("settings.authentication")}
+        description={t("settings.configureAnExternalOIDCProviderBrowserSignIn")}
       />
 
       {loadError !== null && (
@@ -143,34 +126,34 @@ export function AuthenticationPage() {
       <MetricStrip
         items={[
           {
-            label: text("运行状态", "Runtime status"),
+            label: t("settings.runtimeStatus"),
             value: settings.enabled
-              ? text("已启用", "Enabled")
-              : text("未启用", "Disabled"),
+              ? t("settings.enabled")
+              : t("settings.disabled"),
             hint: sourceLabel,
             tone: settings.enabled ? "success" : "default",
           },
           {
-            label: text("配置来源", "Configuration source"),
+            label: t("settings.configurationSource"),
             value: sourceLabel,
             hint: settings.version
-              ? text(`版本 ${settings.version}`, `Version ${settings.version}`)
-              : text("版本未知", "Version unknown"),
+              ? t("settings.version2", { version: settings.version })
+              : t("settings.versionUnknown"),
           },
           {
-            label: text("客户端密钥", "Client secret"),
+            label: t("settings.clientSecret"),
             value: secretConfigured
-              ? text("已配置", "Configured")
-              : text("未配置", "Not configured"),
-            hint: text("密钥不会从 API 回读", "Never returned by the API"),
+              ? t("settings.configured")
+              : t("settings.notConfigured"),
+            hint: t("settings.neverReturnedByTheAPI"),
             tone: secretConfigured ? "success" : "warning",
           },
           {
-            label: text("最近更新", "Last updated"),
+            label: t("settings.lastUpdated"),
             value: settings.updatedAt
               ? formatDate(settings.updatedAt, locale)
-              : text("尚未持久化", "Not persisted"),
-            hint: text("数据库配置跨节点共享", "Database settings are shared"),
+              : t("settings.notPersisted"),
+            hint: t("settings.databaseSettingsAreShared"),
           },
         ]}
       />
@@ -180,9 +163,8 @@ export function AuthenticationPage() {
           <Alert
             type="info"
             showIcon
-            title={text(
-              "当前读取环境变量；首次保存会创建数据库运行时配置。",
-              "Settings currently come from the environment. The first save creates runtime database settings.",
+            title={t(
+              "settings.settingsCurrentlyComeFromTheEnvironmentTheFirst",
             )}
           />
         )}
@@ -193,10 +175,9 @@ export function AuthenticationPage() {
         {testResult && (
           <Notice
             tone="success"
-            title={text(
-              `连接成功，发现耗时 ${testResult.latencyMs} ms`,
-              `Connection succeeded in ${testResult.latencyMs} ms`,
-            )}
+            title={t("settings.connectionSucceededInMs", {
+              latencyMs: testResult.latencyMs,
+            })}
             description={testResult.authorizationEndpoint || undefined}
             onClose={() => setTestResult(null)}
           />

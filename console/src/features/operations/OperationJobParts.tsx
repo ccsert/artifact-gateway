@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import { useEffect, useState } from "react";
 import {
   CloseOutlined,
@@ -10,11 +11,7 @@ import { Button, Popconfirm, Progress, Space, Tooltip } from "antd";
 import { StateBadge } from "../../components/ui/Badge";
 import { formatDate } from "../../lib/format";
 import { LifecycleJobDetails } from "./LifecycleJobDetails";
-import {
-  type JobAction,
-  type Localize,
-  type OperationRow,
-} from "./operationModel";
+import { type JobAction, type OperationRow } from "./operationModel";
 
 export function useCompactOperationLayout() {
   const [compact, setCompact] = useState(
@@ -34,11 +31,11 @@ export function useCompactOperationLayout() {
 export function OperationIdentity({
   row,
   kindLabel,
-  text,
+  t,
 }: {
   row: OperationRow;
   kindLabel: (kind: string) => string;
-  text: Localize;
+  t: Translate;
 }) {
   return (
     <div className="min-w-0">
@@ -50,9 +47,9 @@ export function OperationIdentity({
       </div>
       <div
         className="mt-1 truncate text-xs text-fg-secondary"
-        title={row.repository ?? text("全局", "Global")}
+        title={row.repository ?? t("operations.global")}
       >
-        {row.repository ?? text("全局", "Global")}
+        {row.repository ?? t("operations.global")}
       </div>
       <div
         className="mt-1 truncate font-mono text-xs text-fg-disabled"
@@ -66,10 +63,10 @@ export function OperationIdentity({
 
 export function OperationStatus({
   row,
-  text,
+  t,
 }: {
   row: OperationRow;
-  text: Localize;
+  t: Translate;
 }) {
   const hasProgress = row.progressTotal !== undefined && row.progressTotal > 0;
   return (
@@ -78,11 +75,11 @@ export function OperationStatus({
         <StateBadge state={row.state} />
         <span className="text-xs text-fg-tertiary">
           {row.attempts === undefined
-            ? text("未报告尝试次数", "Attempts not reported")
-            : text(
-                `${row.attempts} / ${row.maxAttempts} 次尝试`,
-                `${row.attempts} / ${row.maxAttempts} attempts`,
-              )}
+            ? t("operations.attemptsNotReported")
+            : t("operations.attempts", {
+                attempts: row.attempts,
+                maxAttempts: String(row.maxAttempts),
+              })}
         </span>
       </div>
       {hasProgress ? (
@@ -123,17 +120,17 @@ export function OperationStatus({
 export function OperationTimeline({
   row,
   locale,
-  text,
+  t,
 }: {
   row: OperationRow;
   locale: string;
-  text: Localize;
+  t: Translate;
 }) {
   const primaryLabel = row.nextAttemptAt
-    ? text("下次执行", "Next run")
+    ? t("operations.nextRun")
     : row.completedAt
-      ? text("完成", "Completed")
-      : text("创建", "Created");
+      ? t("operations.completed")
+      : t("operations.created");
   const primaryTime = row.nextAttemptAt ?? row.completedAt ?? row.createdAt;
   return (
     <div className="space-y-1 text-xs text-fg-tertiary">
@@ -145,7 +142,7 @@ export function OperationTimeline({
       </div>
       {row.startedAt && (
         <div>
-          <span className="text-fg-disabled">{text("开始", "Started")}</span>
+          <span className="text-fg-disabled">{t("operations.started")}</span>
           <span className="ml-2 whitespace-nowrap">
             {formatDate(row.startedAt, locale)}
           </span>
@@ -153,7 +150,7 @@ export function OperationTimeline({
       )}
       {primaryTime !== row.createdAt && (
         <div>
-          <span className="text-fg-disabled">{text("创建", "Created")}</span>
+          <span className="text-fg-disabled">{t("operations.created")}</span>
           <span className="ml-2 whitespace-nowrap">
             {formatDate(row.createdAt, locale)}
           </span>
@@ -167,27 +164,28 @@ export function OperationActions({
   row,
   acting,
   detailsOpen,
-  text,
+  t,
   onInspect,
   onAction,
 }: {
   row: OperationRow;
   acting: boolean;
   detailsOpen: boolean;
-  text: Localize;
+  t: Translate;
   onInspect: (row: OperationRow) => void;
   onAction: (row: OperationRow, action: JobAction) => void;
 }) {
   return (
     <Space size="small">
       <Tooltip
-        title={text(
-          detailsOpen ? "收起任务详情" : "查看任务详情",
-          detailsOpen ? "Hide job details" : "View job details",
-        )}
+        title={
+          detailsOpen
+            ? t("operations.hideJobDetails")
+            : t("operations.viewJobDetails")
+        }
       >
         <Button
-          aria-label={text("查看任务详情", "View job details")}
+          aria-label={t("operations.viewJobDetails")}
           aria-expanded={detailsOpen}
           type={detailsOpen ? "primary" : "default"}
           size="small"
@@ -197,14 +195,9 @@ export function OperationActions({
       </Tooltip>
       {row.repositoryId &&
         (row.state === "pending" || row.state === "retrying") && (
-          <Tooltip
-            title={text("立即加入执行队列", "Queue for immediate execution")}
-          >
+          <Tooltip title={t("operations.queueForImmediateExecution")}>
             <Button
-              aria-label={text(
-                "立即加入执行队列",
-                "Queue for immediate execution",
-              )}
+              aria-label={t("operations.queueForImmediateExecution")}
               size="small"
               icon={<PlayCircleOutlined />}
               loading={acting}
@@ -214,9 +207,9 @@ export function OperationActions({
         )}
       {row.repositoryId &&
         (row.state === "failed" || row.state === "cancelled") && (
-          <Tooltip title={text("重新执行任务", "Retry job")}>
+          <Tooltip title={t("operations.retryJob")}>
             <Button
-              aria-label={text("重新执行任务", "Retry job")}
+              aria-label={t("operations.retryJob")}
               size="small"
               icon={<RedoOutlined />}
               loading={acting}
@@ -227,18 +220,15 @@ export function OperationActions({
       {row.repositoryId &&
         (row.state === "pending" || row.state === "retrying") && (
           <Popconfirm
-            title={text("取消此任务？", "Cancel this job?")}
-            description={text(
-              "取消后仍可从任务中心重新执行。",
-              "You can retry it later from Operations.",
-            )}
-            okText={text("取消任务", "Cancel job")}
-            cancelText={text("返回", "Back")}
+            title={t("operations.cancelThisJob")}
+            description={t("operations.youCanRetryItLaterFromOperations")}
+            okText={t("operations.cancelJob")}
+            cancelText={t("operations.back")}
             onConfirm={() => onAction(row, "cancel")}
           >
-            <Tooltip title={text("取消任务", "Cancel job")}>
+            <Tooltip title={t("operations.cancelJob")}>
               <Button
-                aria-label={text("取消任务", "Cancel job")}
+                aria-label={t("operations.cancelJob")}
                 danger
                 size="small"
                 icon={<CloseOutlined />}
@@ -253,21 +243,21 @@ export function OperationActions({
 
 export function OperationDetailsPanel({
   row,
-  text,
+  t,
 }: {
   row: OperationRow;
-  text: Localize;
+  t: Translate;
 }) {
   return (
     <div className="ag-operation-details">
       <dl className="ag-operation-details-meta">
         <div>
-          <dt>{text("任务 ID", "Job ID")}</dt>
+          <dt>{t("operations.jobID")}</dt>
           <dd className="font-mono">{row.id}</dd>
         </div>
         <div>
-          <dt>{text("仓库", "Repository")}</dt>
-          <dd>{row.repository ?? text("全局任务", "Global job")}</dd>
+          <dt>{t("operations.repository")}</dt>
+          <dd>{row.repository ?? t("operations.globalJob")}</dd>
         </div>
       </dl>
       {row.details && <LifecycleJobDetails details={row.details} />}
@@ -278,10 +268,7 @@ export function OperationDetailsPanel({
       )}
       {!row.details && !row.lastError && (
         <p className="text-xs leading-5 text-fg-tertiary">
-          {text(
-            "此任务没有报告额外的执行详情。",
-            "This job did not report additional execution details.",
-          )}
+          {t("operations.thisJobDidNotReportAdditionalExecutionDetails")}
         </p>
       )}
     </div>
@@ -294,7 +281,7 @@ export function OperationMobileCard({
   kindLabel,
   acting,
   detailsOpen,
-  text,
+  t,
   onInspect,
   onAction,
 }: {
@@ -303,32 +290,32 @@ export function OperationMobileCard({
   kindLabel: (kind: string) => string;
   acting: boolean;
   detailsOpen: boolean;
-  text: Localize;
+  t: Translate;
   onInspect: (row: OperationRow) => void;
   onAction: (row: OperationRow, action: JobAction) => void;
 }) {
   return (
     <article className="ag-operation-mobile-card">
-      <OperationIdentity row={row} kindLabel={kindLabel} text={text} />
+      <OperationIdentity row={row} kindLabel={kindLabel} t={t} />
       <div className="mt-4 border-t border-line pt-4">
-        <OperationStatus row={row} text={text} />
+        <OperationStatus row={row} t={t} />
       </div>
       <div className="mt-4 border-t border-line pt-4">
-        <OperationTimeline row={row} locale={locale} text={text} />
+        <OperationTimeline row={row} locale={locale} t={t} />
       </div>
       <div className="mt-4 flex justify-end border-t border-line pt-3">
         <OperationActions
           row={row}
           acting={acting}
           detailsOpen={detailsOpen}
-          text={text}
+          t={t}
           onInspect={onInspect}
           onAction={onAction}
         />
       </div>
       {detailsOpen && (
         <div className="mt-4 border-t border-line pt-4">
-          <OperationDetailsPanel row={row} text={text} />
+          <OperationDetailsPanel row={row} t={t} />
         </div>
       )}
     </article>

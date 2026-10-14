@@ -24,7 +24,7 @@ export function RawUploadDialog({
   onUploaded: () => void;
 }) {
   const { token } = useAuth();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const dialog = useDisclosure();
   const [file, setFile] = useState<File | null>(null);
   const [path, setPath] = useState("");
@@ -55,12 +55,7 @@ export function RawUploadDialog({
       )
     ) {
       setError(
-        new Error(
-          text(
-            "目标路径无效：不能使用空路径段、. 或 .. 路径段、反斜杠、控制字符或双向格式化字符。支持中文、空格和括号。",
-            "Invalid target path: empty, dot, dot-dot, backslash, control, and bidirectional formatting characters are not allowed. Unicode, spaces, and parentheses are supported.",
-          ),
-        ),
+        new Error(t("repository.invalidTargetPathEmptyDotDotDotBackslash")),
       );
       return;
     }
@@ -69,24 +64,14 @@ export function RawUploadDialog({
       segments = rawSegments.map(encodeRawPathSegment);
     } catch {
       setError(
-        new Error(
-          text(
-            "目标路径包含无法编码的字符，请修改文件名或目标路径后重试。",
-            "The target path contains characters that cannot be encoded. Change the file name or target path and try again.",
-          ),
-        ),
+        new Error(t("repository.theTargetPathContainsCharactersThatCannotBe")),
       );
       return;
     }
     const canonicalPath = segments.join("/");
     if (canonicalPath.length > 4096) {
       setError(
-        new Error(
-          text(
-            "目标路径编码后不能超过 4096 字节，请缩短目录或文件名。",
-            "The encoded target path cannot exceed 4096 bytes. Shorten the directories or file name.",
-          ),
-        ),
+        new Error(t("repository.theEncodedTargetPathCannotExceed4096Bytes")),
       );
       return;
     }
@@ -107,14 +92,11 @@ export function RawUploadDialog({
         const detail = (await res.text().catch(() => "")).trim();
         if (res.status === 400 && detail === "invalid raw path") {
           throw new Error(
-            text(
-              "上传失败（400）：目标路径不符合 Raw 路径规则。支持中文、空格和括号；请删除空路径段、.、..、反斜杠或空字符后重试。",
-              "Upload failed (400): the target does not follow the Raw path rules. Unicode, spaces, and parentheses are supported; remove empty, dot, dot-dot, backslash, or NUL segments and try again.",
-            ),
+            t("repository.uploadFailed400TheTargetDoesNotFollow"),
           );
         }
         throw new Error(
-          `${text("上传失败", "Upload failed")} (${res.status})${
+          `${t("repository.uploadFailed")} (${res.status})${
             detail ? `: ${detail.slice(0, 200)}` : ""
           }`,
         );
@@ -139,17 +121,17 @@ export function RawUploadDialog({
           dialog.show();
         }}
       >
-        {text("上传", "Upload")}
+        {t("repository.upload")}
       </Button>
       <Modal
         open={dialog.open}
-        title={`${text("上传到", "Upload to")} ${repo.name}`}
+        title={`${t("repository.uploadTo")} ${repo.name}`}
         onClose={dialog.hide}
         busy={busy}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
-              {text("取消", "Cancel")}
+              {t("repository.cancel")}
             </Button>
             <Button
               type="primary"
@@ -157,7 +139,7 @@ export function RawUploadDialog({
               loading={busy}
               disabled={!file}
             >
-              {text("上传", "Upload")}
+              {t("repository.upload")}
             </Button>
           </Space>
         }
@@ -166,10 +148,10 @@ export function RawUploadDialog({
           {error ? (
             <ErrorBanner
               error={error}
-              title={text("Raw 文件上传失败", "Raw file upload failed")}
+              title={t("repository.rawFileUploadFailed")}
             />
           ) : null}
-          <Field label={text("文件", "File")} group>
+          <Field label={t("repository.file")} group>
             <Space>
               <Upload
                 maxCount={1}
@@ -180,23 +162,20 @@ export function RawUploadDialog({
                 }}
               >
                 <Button icon={<UploadOutlined />}>
-                  {text("选择文件", "Choose file")}
+                  {t("repository.chooseFile")}
                 </Button>
               </Upload>
               <span
                 className="max-w-72 truncate text-xs text-fg-secondary"
                 title={file?.name}
               >
-                {file?.name ?? text("尚未选择文件", "No file selected")}
+                {file?.name ?? t("repository.noFileSelected")}
               </span>
             </Space>
           </Field>
           <Field
-            label={text("目标路径", "Target path")}
-            hint={text(
-              "相对于仓库根；可以用一个前导 / 明确表示仓库根，上传时会自动转换。留空则用文件名。支持中文、空格和括号；编码后最多 4096 字节，不能使用空路径段、.、..、反斜杠、控制字符或双向格式化字符。",
-              "Relative to the repository root. One optional leading / may explicitly represent the repository root and is removed on upload. Leave empty to use the file name. Unicode, spaces, and parentheses are supported up to 4096 encoded bytes; empty, dot, dot-dot, backslash, control, and bidirectional formatting characters are not.",
-            )}
+            label={t("repository.targetPath")}
+            hint={t("repository.relativeToTheRepositoryRootOneOptionalLeading")}
           >
             <Input
               className="font-mono"
@@ -206,10 +185,7 @@ export function RawUploadDialog({
             />
           </Field>
           <p className="text-xs text-fg-tertiary">
-            {text(
-              "服务端会校验 sha256；同名路径会被覆盖。",
-              "The server validates SHA-256. An existing path with the same name will be overwritten.",
-            )}
+            {t("repository.theServerValidatesSHA256AnExistingPath")}
           </p>
         </div>
       </Modal>

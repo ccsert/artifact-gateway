@@ -1,14 +1,15 @@
+import { createTranslator } from "../../messages/translate";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ArtifactIntelligenceSummary } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { ArtifactSecurityBadge } from "./ArtifactSecurityBadge";
 
-const text = (zh: string, en: string) => zh || en;
+const t = createTranslator("zh-CN");
 const renderBadge = (summary?: ArtifactIntelligenceSummary) =>
   render(
     <PreferencesProvider>
-      <ArtifactSecurityBadge summary={summary} text={text} />
+      <ArtifactSecurityBadge summary={summary} t={t} />
     </PreferencesProvider>,
   );
 

@@ -69,7 +69,7 @@ export function CommandPalette({
   canBrowseRepositories: boolean;
   onSignOut: () => void;
 }) {
-  const { t, text, locale, setLocale, toggleColorMode } = usePreferences();
+  const { t, locale, setLocale, toggleColorMode } = usePreferences();
   const navigate = useNavigate();
   const inputRef = useRef<InputRef>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -254,13 +254,13 @@ export function CommandPalette({
             {repositoryError ? (
               <ErrorBanner
                 error={repositoryError}
-                title={text("仓库列表加载失败", "Could not load repositories")}
+                title={t("shell.couldNotLoadRepositories")}
                 tone={repositories?.length ? "warning" : "error"}
                 onRetry={() => void repositoryRead.retry()}
               />
             ) : (
               <p role="status" aria-live="polite">
-                {text("正在加载仓库…", "Loading repositories…")}
+                {t("shell.loadingRepositories")}
               </p>
             )}
           </div>
@@ -274,10 +274,7 @@ export function CommandPalette({
       >
         {commands.length === 0 && !repositoriesLoading && !repositoryError ? (
           <p className="ag-command-empty">
-            {text(
-              `没有匹配“${query.trim()}”的页面或仓库。`,
-              `No page or repository matches “${query.trim()}”.`,
-            )}
+            {t("shell.noPageOrRepositoryMatches", { query: query.trim() })}
           </p>
         ) : (
           commands.map((command, index) => (
@@ -316,15 +313,15 @@ export function CommandPalette({
         <span>
           <kbd>↑</kbd>
           <kbd>↓</kbd>
-          {text("选择", "Select")}
+          {t("shell.select")}
         </span>
         <span>
           <kbd>⏎</kbd>
-          {text("打开", "Open")}
+          {t("shell.open")}
         </span>
         <span>
           <kbd>esc</kbd>
-          {text("关闭", "Close")}
+          {t("shell.close")}
         </span>
       </div>
     </Modal>

@@ -33,60 +33,53 @@ export function DashboardMetrics({
   groupsResource: DashboardResource<Group[]>;
   window: StatisticsWindow;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const statistics = statisticsResource.data;
   const groups = groupsResource.data;
   return (
     <MetricStrip
       items={[
         {
-          label: text("总请求量", "Total requests"),
+          label: t("dashboard.totalRequests"),
           value: statistics
             ? formatNumber(statistics.totals.requests[window], locale)
             : "—",
           hint: statistics
-            ? text(
-                `其中拒绝 ${formatNumber(statistics.totals.denied[window], locale)}`,
-                `${formatNumber(statistics.totals.denied[window], locale)} denied`,
-              )
-            : text(
-                statisticsResource.loading
-                  ? "正在加载仓库统计…"
-                  : "仓库统计不可用",
-                statisticsResource.loading
-                  ? "Loading repository statistics…"
-                  : "Repository statistics unavailable",
-              ),
+            ? t("dashboard.denied", {
+                number: formatNumber(statistics.totals.denied[window], locale),
+              })
+            : statisticsResource.loading
+              ? t("dashboard.loadingRepositoryStatistics")
+              : t("dashboard.repositoryStatisticsUnavailable"),
         },
         {
-          label: text("总对象数", "Total objects"),
+          label: t("dashboard.totalObjects"),
           value: statistics
             ? formatNumber(statistics.totals.objectCount, locale)
             : "—",
-          hint: text("当前仓库容量口径", "Current repository capacity basis"),
+          hint: t("dashboard.currentRepositoryCapacityBasis"),
         },
         {
-          label: text("存储占用", "Storage used"),
+          label: t("dashboard.storageUsed"),
           value: statistics ? formatBytes(statistics.totals.usedBytes) : "—",
         },
         {
-          label: text("仓库总数", "Repositories"),
+          label: t("dashboard.repositories"),
           value: statistics?.repositories.length ?? "—",
         },
         {
-          label: text("分组", "Groups"),
+          label: t("dashboard.groups"),
           value: groups?.length ?? "—",
           hint: groups
-            ? text(
-                `共 ${groups.reduce((n, g) => n + (g.members?.length ?? 0), 0)} 个成员引用`,
-                `${groups.reduce((n, g) => n + (g.members?.length ?? 0), 0)} member references`,
-              )
-            : text(
-                groupsResource.loading ? "正在加载分组…" : "分组统计不可用",
-                groupsResource.loading
-                  ? "Loading groups…"
-                  : "Group statistics unavailable",
-              ),
+            ? t("dashboard.memberReferences", {
+                groups: groups.reduce(
+                  (n, g) => n + (g.members?.length ?? 0),
+                  0,
+                ),
+              })
+            : groupsResource.loading
+              ? t("dashboard.loadingGroups")
+              : t("dashboard.groupStatisticsUnavailable"),
         },
       ]}
     />
@@ -100,14 +93,14 @@ export function RepositoryActivity({
   statisticsResource: DashboardResource<OverviewStatistics>;
   window: StatisticsWindow;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const statistics = statisticsResource.data;
   const rankedRepositories = statistics
     ? sortRepositoryStatistics(statistics.repositories, window)
     : [];
   const repositoryColumns: ColumnsType<OverviewRepositoryStatistics> = [
     {
-      title: text("名称", "Name"),
+      title: t("dashboard.name"),
       dataIndex: "name",
       key: "name",
       render: (value: string, repository) => (
@@ -120,7 +113,7 @@ export function RepositoryActivity({
       ),
     },
     {
-      title: text("格式", "Format"),
+      title: t("dashboard.format"),
       dataIndex: "format",
       key: "format",
       width: 100,
@@ -129,14 +122,14 @@ export function RepositoryActivity({
       ),
     },
     {
-      title: text("对象数", "Objects"),
+      title: t("dashboard.objects"),
       dataIndex: "objectCount",
       key: "objectCount",
       width: 120,
       render: (value: number) => formatNumber(value, locale),
     },
     {
-      title: text("请求量", "Requests"),
+      title: t("dashboard.requests"),
       key: "requests",
       width: 165,
       render: (_, repository) => (
@@ -144,17 +137,16 @@ export function RepositoryActivity({
           {formatNumber(repository.requests[window], locale)}
           {repository.denied[window] > 0 && (
             <span className="ml-2 text-xs text-[var(--ag-status-warning)]">
-              {text(
-                `拒绝 ${formatNumber(repository.denied[window], locale)}`,
-                `${formatNumber(repository.denied[window], locale)} denied`,
-              )}
+              {t("dashboard.denied2", {
+                number: formatNumber(repository.denied[window], locale),
+              })}
             </span>
           )}
         </span>
       ),
     },
     {
-      title: text("存储", "Storage"),
+      title: t("dashboard.storage"),
       dataIndex: "usedBytes",
       key: "usedBytes",
       width: 125,
@@ -165,13 +157,13 @@ export function RepositoryActivity({
   return (
     <Card className="ag-page-primary">
       <CardHeader
-        title={text("仓库活动", "Repository activity")}
+        title={t("dashboard.repositoryActivity")}
         extra={
           <Link
             to="/repositories"
             className="text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
           >
-            {text("查看全部 →", "View all →")}
+            {t("dashboard.viewAll")}
           </Link>
         }
       />
@@ -184,24 +176,19 @@ export function RepositoryActivity({
           locale={{
             emptyText: (
               <EmptyState
-                title={text("暂无仓库", "No repositories")}
-                hint={text(
-                  "创建仓库后，这里会展示请求量、对象数与存储占用。",
-                  "Create a repository to see requests, objects, and storage here.",
-                )}
+                title={t("dashboard.noRepositories")}
+                hint={t("dashboard.createARepositoryToSeeRequestsObjectsAnd")}
               />
             ),
           }}
           scroll={{ x: 700 }}
         />
       ) : statisticsResource.loading ? (
-        <Loading
-          label={text("正在加载仓库统计…", "Loading repository statistics…")}
-        />
+        <Loading label={t("dashboard.loadingRepositoryStatistics")} />
       ) : (
         <EmptyState
           compact
-          title={text("仓库统计不可用", "Repository statistics unavailable")}
+          title={t("dashboard.repositoryStatisticsUnavailable")}
         />
       )}
     </Card>
@@ -213,7 +200,7 @@ export function StorageByFormat({
 }: {
   statisticsResource: DashboardResource<OverviewStatistics>;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const statistics = statisticsResource.data;
   const bytesByFormat = statistics?.repositories.reduce<Record<string, number>>(
     (byFormat, item) => {
@@ -226,13 +213,13 @@ export function StorageByFormat({
   return (
     <Card>
       <CardHeader
-        title={text("存储占用（按格式）", "Storage by format")}
+        title={t("dashboard.storageByFormat")}
         extra={
           <Link
             to="/repositories"
             className="text-xs text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
           >
-            {text("查看仓库 →", "View repositories →")}
+            {t("dashboard.viewRepositories")}
           </Link>
         }
       />
@@ -243,13 +230,11 @@ export function StorageByFormat({
             totalBytes={statistics.totals.usedBytes}
           />
         ) : statisticsResource.loading ? (
-          <Loading
-            label={text("正在加载容量统计…", "Loading capacity statistics…")}
-          />
+          <Loading label={t("dashboard.loadingCapacityStatistics")} />
         ) : (
           <EmptyState
             compact
-            title={text("容量统计不可用", "Capacity statistics unavailable")}
+            title={t("dashboard.capacityStatisticsUnavailable")}
           />
         )}
       </div>
@@ -262,32 +247,29 @@ export function RecentAudits({
 }: {
   auditsResource: DashboardResource<AuditRecord[]>;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const audits = auditsResource.data;
   return (
     <Card>
       <CardHeader
-        title={text("最近审计事件", "Recent audit events")}
+        title={t("dashboard.recentAuditEvents")}
         extra={
           <div className="flex items-center gap-3 text-xs">
             <span className="text-fg-tertiary">
-              {text(
-                audits ? `${audits.length} 条最新记录` : "",
-                audits ? `${audits.length} latest` : "",
-              )}
+              {audits ? t("dashboard.latest", { length: audits.length }) : ""}
             </span>
             <Link
               to="/audits"
               className="text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
             >
-              {text("查看全部 →", "View all →")}
+              {t("dashboard.viewAll")}
             </Link>
           </div>
         }
       />
       {auditsResource.error ? (
         <ErrorBanner
-          title={text("审计事件加载失败", "Audit events unavailable")}
+          title={t("dashboard.auditEventsUnavailable")}
           error={auditsResource.error}
           onRetry={auditsResource.reload}
           tone={audits ? "warning" : "error"}
@@ -298,15 +280,14 @@ export function RecentAudits({
           <RecentAuditList records={audits} />
         ) : (
           <EmptyState
-            title={text("暂无审计记录", "No audit records")}
-            hint={text(
-              "产生访问或发布行为后，这里会列出最近的判定记录。",
-              "Recent decisions appear here once access or publishing is recorded.",
+            title={t("dashboard.noAuditRecords")}
+            hint={t(
+              "dashboard.recentDecisionsAppearHereOnceAccessOrPublishing",
             )}
           />
         )
       ) : auditsResource.loading ? (
-        <Loading label={text("正在加载审计事件…", "Loading audit events…")} />
+        <Loading label={t("dashboard.loadingAuditEvents")} />
       ) : null}
     </Card>
   );

@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import { DeleteOutlined } from "@ant-design/icons";
 import { Button } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -12,14 +13,12 @@ export interface StagedFile {
   uploaded: boolean;
 }
 
-type Localize = (chinese: string, english: string) => string;
-
 /**
  * The wizard's file tables: staged files, removable before upload, and the
  * upload step's per-file status.
  */
 export function stagedFileColumns(
-  text: Localize,
+  t: Translate,
   removeFile: (name: string) => void,
 ): {
   stagedColumns: ColumnsType<StagedFile>;
@@ -27,7 +26,7 @@ export function stagedFileColumns(
 } {
   const stagedColumns: ColumnsType<StagedFile> = [
     {
-      title: text("文件名", "File name"),
+      title: t("repository.fileName"),
       dataIndex: "name",
       key: "name",
       render: (value: string) => (
@@ -46,7 +45,7 @@ export function stagedFileColumns(
       ),
     },
     {
-      title: text("大小", "Size"),
+      title: t("repository.size"),
       dataIndex: "size",
       key: "size",
       width: 110,
@@ -55,7 +54,7 @@ export function stagedFileColumns(
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("repository.actions"),
       key: "actions",
       width: 90,
       render: (_, file) => (
@@ -66,14 +65,14 @@ export function stagedFileColumns(
           icon={<DeleteOutlined />}
           onClick={() => removeFile(file.name)}
         >
-          {text("移除", "Remove")}
+          {t("repository.remove")}
         </Button>
       ),
     },
   ];
   const uploadColumns: ColumnsType<StagedFile> = [
     {
-      title: text("文件名", "File name"),
+      title: t("repository.fileName"),
       dataIndex: "name",
       key: "name",
       render: (value: string) => (
@@ -81,7 +80,7 @@ export function stagedFileColumns(
       ),
     },
     {
-      title: text("大小", "Size"),
+      title: t("repository.size"),
       dataIndex: "size",
       key: "size",
       width: 120,
@@ -90,15 +89,15 @@ export function stagedFileColumns(
       ),
     },
     {
-      title: text("状态", "Status"),
+      title: t("repository.status"),
       dataIndex: "uploaded",
       key: "uploaded",
       width: 120,
       render: (value: boolean) =>
         value ? (
-          <Badge tone="success">{text("已上传", "Uploaded")}</Badge>
+          <Badge tone="success">{t("repository.uploaded")}</Badge>
         ) : (
-          <Badge tone="neutral">{text("待上传", "Pending")}</Badge>
+          <Badge tone="neutral">{t("repository.pending")}</Badge>
         ),
     },
   ];

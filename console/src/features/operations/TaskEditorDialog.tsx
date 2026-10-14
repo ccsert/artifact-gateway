@@ -41,7 +41,7 @@ export function TaskEditorDialog({
   repositories: Repository[];
   onClose: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const invalidate = useInvalidateScheduledTasks();
   const [form, setForm] = useState<TaskForm>(() => formFor(editing));
   const [saving, setSaving] = useState(false);
@@ -88,15 +88,15 @@ export function TaskEditorDialog({
       open={open}
       title={
         editing
-          ? text("编辑计划任务", "Edit scheduled task")
-          : text("新建计划任务", "New scheduled task")
+          ? t("operations.editScheduledTask")
+          : t("operations.newScheduledTask")
       }
       onClose={onClose}
       busy={saving}
       footer={
         <Space>
           <Button onClick={onClose} disabled={saving}>
-            {text("取消", "Cancel")}
+            {t("operations.cancel")}
           </Button>
           <Button
             type="primary"
@@ -104,21 +104,18 @@ export function TaskEditorDialog({
             loading={saving}
             onClick={() => void save()}
           >
-            {editing ? text("保存", "Save") : text("创建", "Create")}
+            {editing ? t("operations.save") : t("operations.create")}
           </Button>
         </Space>
       }
     >
       <div className="space-y-4">
         {saveError ? <ErrorBanner error={saveError} /> : null}
-        <Field label={text("任务名称", "Task name")}>
+        <Field label={t("operations.taskName")}>
           <Input
             maxLength={100}
             value={form.name}
-            placeholder={text(
-              "例如：每日清理快照",
-              "e.g. Daily snapshot cleanup",
-            )}
+            placeholder={t("operations.eGDailySnapshotCleanup")}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
@@ -127,18 +124,18 @@ export function TaskEditorDialog({
             }
           />
         </Field>
-        <Field label={text("任务动作", "Task action")}>
+        <Field label={t("operations.taskAction")}>
           <Select<TaskForm["kind"]>
             className="w-full"
             value={form.kind}
             options={[
               {
                 value: "repository-retention",
-                label: text("执行仓库保留策略", "Run repository retention"),
+                label: t("operations.runRepositoryRetention"),
               },
               {
                 value: "audit-retention",
-                label: text("执行审计保留策略", "Run audit retention"),
+                label: t("operations.runAuditRetention"),
               },
             ]}
             onChange={(kind) =>
@@ -153,16 +150,15 @@ export function TaskEditorDialog({
         </Field>
         {form.kind === "repository-retention" && (
           <Field
-            label={text("目标仓库", "Target repository")}
-            hint={text(
-              "只列出支持保留策略的运行中 Hosted 仓库。",
-              "Only active hosted repositories with retention support are listed.",
+            label={t("operations.targetRepository")}
+            hint={t(
+              "operations.onlyActiveHostedRepositoriesWithRetentionSupportAre",
             )}
           >
             <Select
               className="w-full"
               value={form.repositoryId}
-              placeholder={text("选择仓库", "Select a repository")}
+              placeholder={t("operations.selectARepository")}
               showSearch={{ optionFilterProp: ["label", "format"] }}
               options={repositories.map((repo) => ({
                 value: repo.id,
@@ -177,11 +173,8 @@ export function TaskEditorDialog({
         )}
         <div className="grid grid-cols-[minmax(0,1fr)_160px] items-end gap-4">
           <Field
-            label={text("执行间隔", "Run interval")}
-            hint={text(
-              "最短 15 分钟；服务停机恢复后只补投一次。",
-              "Minimum 15 minutes; only one dispatch is recovered after downtime.",
-            )}
+            label={t("operations.runInterval")}
+            hint={t("operations.minimum15MinutesOnlyOneDispatchIsRecovered")}
           >
             <Space.Compact block>
               <InputNumber
@@ -197,10 +190,10 @@ export function TaskEditorDialog({
                   }))
                 }
               />
-              <Space.Addon>{text("分钟", "minutes")}</Space.Addon>
+              <Space.Addon>{t("operations.minutes")}</Space.Addon>
             </Space.Compact>
           </Field>
-          <Field label={text("状态", "Status")}>
+          <Field label={t("operations.status")}>
             <div className="flex h-8 items-center gap-2">
               <Switch
                 value={form.enabled}
@@ -210,13 +203,13 @@ export function TaskEditorDialog({
               />
               <span className="text-xs text-fg-secondary">
                 {form.enabled
-                  ? text("创建后启用", "Enabled")
-                  : text("保持停用", "Disabled")}
+                  ? t("operations.enabled")
+                  : t("operations.disabled")}
               </span>
             </div>
           </Field>
         </div>
-        <Field label={text("备注", "Description")}>
+        <Field label={t("operations.description")}>
           <Input.TextArea
             rows={3}
             maxLength={500}

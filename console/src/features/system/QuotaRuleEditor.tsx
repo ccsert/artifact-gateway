@@ -1,3 +1,4 @@
+import type { MessageKey } from "../../messages";
 import { useId, useState } from "react";
 import { Button, Input, Select } from "antd";
 import {
@@ -51,7 +52,7 @@ export function QuotaRuleEditor({
   nextPageToken?: string;
   onAuthBlocked: (error: unknown) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [repositoryId, setRepositoryId] = useState(rule?.repositoryId ?? "");
   const [targetId, setTargetId] = useState(rule?.targetId ?? "");
   const [draft, setDraft] = useState(() => policyDraft(rule?.policy));
@@ -59,15 +60,11 @@ export function QuotaRuleEditor({
   const { formRef, attempted, reportInvalid } = useFormValidationFocus();
   const errors = attempted ? policyErrors(draft) : {};
   const errorFor = (key: keyof RepositoryQuotaAlertPolicy) =>
-    policyErrorMessage(errors[key], text);
+    policyErrorMessage(errors[key], t);
   const repositoryError =
-    attempted && !repositoryId
-      ? text("请选择仓库。", "Choose a repository.")
-      : undefined;
+    attempted && !repositoryId ? t("system.chooseARepository") : undefined;
   const targetError =
-    attempted && !targetId
-      ? text("请选择邮件目标。", "Choose an email target.")
-      : undefined;
+    attempted && !targetId ? t("system.chooseAnEmailTarget") : undefined;
   const [catalogue, setCatalogue] = useState(() => ({
     items: repositories,
     nextPageToken,
@@ -77,21 +74,18 @@ export function QuotaRuleEditor({
   const fields = (
     percentKey: keyof RepositoryQuotaAlertPolicy,
     holdKey: keyof RepositoryQuotaAlertPolicy,
-    prefix: [string, string],
+    labels: { threshold: MessageKey; hold: MessageKey },
   ) => (
     <div className="grid min-w-0 grid-cols-1 items-start gap-4 sm:grid-cols-2">
       {[
         {
           key: percentKey,
-          label: text(`${prefix[0]}阈值（%）`, `${prefix[1]} threshold (%)`),
+          label: t(labels.threshold),
           mode: "decimal" as const,
         },
         {
           key: holdKey,
-          label: text(
-            `${prefix[0]}持续时间（秒）`,
-            `${prefix[1]} hold duration (seconds)`,
-          ),
+          label: t(labels.hold),
           mode: "numeric" as const,
         },
       ].map((field) => (
@@ -119,15 +113,11 @@ export function QuotaRuleEditor({
   return (
     <div className="ag-page-stack">
       {Boolean(action.error) && !isQuotaAuthError(action.error) && (
-        <ErrorBanner error={safeQuotaError(action.error, text)} />
+        <ErrorBanner error={safeQuotaError(action.error, t)} />
       )}
       <Card>
         <CardHeader
-          title={
-            rule
-              ? text("编辑规则", "Edit rule")
-              : text("创建停用规则", "Create disabled rule")
-          }
+          title={rule ? t("system.editRule") : t("system.createDisabledRule")}
         />
         <form
           ref={formRef}
@@ -194,10 +184,10 @@ export function QuotaRuleEditor({
                       })),
                   )
                 }
-                label={text("加载更多仓库", "Load more repositories")}
+                label={t("system.loadMoreRepositories")}
               />
               {Boolean(more.error) && !isQuotaAuthError(more.error) && (
-                <ErrorBanner error={safeQuotaError(more.error, text)} />
+                <ErrorBanner error={safeQuotaError(more.error, t)} />
               )}
             </div>
           )}
@@ -205,11 +195,8 @@ export function QuotaRuleEditor({
             <Field
               id={`${baseId}-repository`}
               error={repositoryError}
-              label={text("仓库", "Repository")}
-              hint={text(
-                "创建后不能修改所属仓库。",
-                "Repository scope cannot be changed after creation.",
-              )}
+              label={t("system.repository")}
+              hint={t("system.repositoryScopeCannotBeChangedAfterCreation")}
             >
               <Select
                 {...fieldFeedback(
@@ -218,12 +205,12 @@ export function QuotaRuleEditor({
                   true,
                 )}
                 virtual={false}
-                aria-label={text("仓库", "Repository")}
+                aria-label={t("system.repository")}
                 style={{ width: "100%" }}
                 value={repositoryId || undefined}
                 disabled={Boolean(rule) || action.busy}
                 onChange={setRepositoryId}
-                placeholder={text("选择仓库", "Choose a repository")}
+                placeholder={t("system.chooseARepository2")}
                 options={[
                   ...catalogue.items
                     .filter(
@@ -242,79 +229,67 @@ export function QuotaRuleEditor({
             <Field
               id={`${baseId}-target`}
               error={targetError}
-              label={text("邮件目标", "Email target")}
-              hint={text(
-                "仅显示名称和配置状态，不读取收件地址。",
-                "Only the name and configuration status are shown; recipient addresses are not read.",
-              )}
+              label={t("system.emailTarget")}
+              hint={t("system.onlyTheNameAndConfigurationStatusAreShown")}
             >
               <Select
                 {...fieldFeedback(`${baseId}-target`, targetError, true)}
                 virtual={false}
-                aria-label={text("邮件目标", "Email target")}
+                aria-label={t("system.emailTarget")}
                 style={{ width: "100%" }}
                 value={targetId || undefined}
                 disabled={action.busy}
                 onChange={setTargetId}
-                placeholder={text("选择邮件目标", "Choose an email target")}
+                placeholder={t("system.chooseAnEmailTarget2")}
                 options={targets.map((target) => ({
                   value: target.id,
                   disabled: Boolean(
                     rule?.enabled &&
                     (!target.enabled || !target.recipientConfigured),
                   ),
-                  label: `${target.name} · ${target.locale === "en" ? "English" : "中文"} · ${target.enabled && target.recipientConfigured ? text("可用", "Ready") : text("未就绪", "Not ready")}`,
+                  label: `${target.name} · ${target.locale === "en" ? "English" : "中文"} · ${target.enabled && target.recipientConfigured ? t("system.ready") : t("system.notReady")}`,
                 }))}
               />
             </Field>
           </div>
           <fieldset className="grid min-w-0 gap-3 border-0 p-0">
             <legend className="mb-3 text-sm font-semibold text-fg-strong">
-              {text("触发警告", "Trigger warning")}
+              {t("system.triggerWarning")}
             </legend>
-            {fields("warningBasisPoints", "warningForSeconds", [
-              "警告",
-              "Warning",
-            ])}
+            {fields("warningBasisPoints", "warningForSeconds", {
+              threshold: "system.warningThreshold",
+              hold: "system.warningHoldDuration",
+            })}
             <p className="text-xs text-fg-tertiary">
-              {text(
-                "用量达到阈值并持续指定时间后触发。",
-                "Triggers after usage reaches the threshold for the specified duration.",
-              )}
+              {t("system.triggersAfterUsageReachesTheThresholdForThe")}
             </p>
           </fieldset>
           <fieldset className="grid min-w-0 gap-3 border-0 p-0">
             <legend className="mb-3 text-sm font-semibold text-fg-strong">
-              {text("升级为严重", "Escalate to critical")}
+              {t("system.escalateToCritical")}
             </legend>
-            {fields("criticalBasisPoints", "criticalForSeconds", [
-              "严重",
-              "Critical",
-            ])}
+            {fields("criticalBasisPoints", "criticalForSeconds", {
+              threshold: "system.criticalThreshold",
+              hold: "system.criticalHoldDuration",
+            })}
           </fieldset>
           <fieldset className="grid min-w-0 gap-3 border-0 p-0">
             <legend className="mb-3 text-sm font-semibold text-fg-strong">
-              {text("恢复", "Recovery")}
+              {t("system.recovery")}
             </legend>
-            {fields("recoveryBelowBasisPoints", "recoveryForSeconds", [
-              "恢复",
-              "Recovery",
-            ])}
+            {fields("recoveryBelowBasisPoints", "recoveryForSeconds", {
+              threshold: "system.recoveryThreshold",
+              hold: "system.recoveryHoldDuration",
+            })}
             <p className="text-xs text-fg-tertiary">
-              {text(
-                "用量严格低于恢复阈值并持续指定时间后通知恢复。",
-                "Recovery is notified after usage stays strictly below this threshold for the specified duration.",
-              )}
+              {t("system.recoveryIsNotifiedAfterUsageStaysStrictlyBelow")}
             </p>
           </fieldset>
           <Field
             id={`${baseId}-maxSampleAgeSeconds`}
             error={errorFor("maxSampleAgeSeconds")}
-            label={text("最大样本年龄（秒）", "Maximum sample age (seconds)")}
-            hint={text(
-              "陈旧或未知数据会中断持续计时，保留已有严重度。",
-              "Stale or unknown evidence interrupts hold timing and retains existing severity.",
-            )}
+            label={t("system.maximumSampleAgeSeconds")}
+            hint={t("system.staleOrUnknownEvidenceInterruptsHoldTimingAnd")}
           >
             <Input
               {...fieldFeedback(
@@ -322,10 +297,7 @@ export function QuotaRuleEditor({
                 errorFor("maxSampleAgeSeconds"),
                 true,
               )}
-              aria-label={text(
-                "最大样本年龄（秒）",
-                "Maximum sample age (seconds)",
-              )}
+              aria-label={t("system.maximumSampleAgeSeconds")}
               inputMode="numeric"
               autoComplete="off"
               value={draft.maxSampleAgeSeconds}
@@ -340,16 +312,10 @@ export function QuotaRuleEditor({
           </Field>
           <p className="text-sm text-fg-tertiary">
             {rule
-              ? text(
-                  "保存会重新绑定目标的当前版本，重置持续计时并保留严重度；未领取的旧自动交付会取消，已领取的交付可能完成一次。",
-                  "Saving binds the current target version, resets hold timing, and retains severity. Unclaimed old automatic deliveries are cancelled; a claimed delivery may finish once.",
-                )
-              : text(
-                  "创建默认停用，不发送测试邮件。保存后可查看前提并明确启用。",
-                  "New rules are disabled by default and send no test email. Review prerequisites and explicitly enable after saving.",
-                )}
+              ? t("system.savingBindsTheCurrentTargetVersionResetsHold")
+              : t("system.newRulesAreDisabledByDefaultAndSend")}
             {rule?.enabled &&
-              ` ${text("此规则已启用，保存后会继续评估并可能产生通知。", "This rule is enabled; saving continues evaluation and may produce notifications.")}`}
+              ` ${t("system.thisRuleIsEnabledSavingContinuesEvaluationAnd")}`}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -358,16 +324,14 @@ export function QuotaRuleEditor({
               loading={action.busy}
               disabled={!canSave || action.blocked}
             >
-              {rule
-                ? text("保存规则", "Save rule")
-                : text("创建停用规则", "Create disabled rule")}
+              {rule ? t("system.saveRule") : t("system.createDisabledRule")}
             </Button>
             <Button
-              aria-label={text("取消", "Cancel")}
+              aria-label={t("system.cancel")}
               disabled={action.busy}
               onClick={onCancel}
             >
-              {text("取消", "Cancel")}
+              {t("system.cancel")}
             </Button>
           </div>
         </form>

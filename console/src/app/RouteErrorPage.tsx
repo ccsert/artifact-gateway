@@ -22,7 +22,7 @@ function routeErrorDetail(error: unknown): string | undefined {
 
 export function RouteErrorPage() {
   const error = useRouteError();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const dynamicModuleError = isDynamicModuleError(error);
   const detail = routeErrorDetail(error);
 
@@ -41,23 +41,17 @@ export function RouteErrorPage() {
         </div>
         <h1 id="route-error-title" className="ag-route-error-title">
           {dynamicModuleError
-            ? text("页面资源加载失败", "Page resources failed to load")
-            : text("页面加载失败", "Page failed to load")}
+            ? t("shell.pageResourcesFailedToLoad")
+            : t("shell.pageFailedToLoad")}
         </h1>
         <p className="ag-route-error-description">
           {dynamicModuleError
-            ? text(
-                "页面资源可能已更新，或开发服务正在重建依赖。请重新加载；若仍失败，请重启本地 Console。",
-                "Page resources may have changed, or the development server may be rebuilding dependencies. Reload the page; if it still fails, restart the local Console.",
-              )
-            : text(
-                "页面未能完成加载。请先重新加载；如果问题持续，可以前往公开制品浏览。",
-                "The page could not finish loading. Reload it first; if the problem continues, open public artifact browsing.",
-              )}
+            ? t("shell.pageResourcesMayHaveChangedOrTheDevelopment")
+            : t("shell.thePageCouldNotFinishLoadingReloadIt")}
         </p>
         {detail && (
           <details className="ag-route-error-detail">
-            <summary>{text("技术详情", "Technical details")}</summary>
+            <summary>{t("shell.technicalDetails")}</summary>
             <code>{detail}</code>
           </details>
         )}
@@ -67,10 +61,10 @@ export function RouteErrorPage() {
             className="ag-route-error-primary"
             onClick={() => window.location.reload()}
           >
-            {text("重新加载", "Reload")}
+            {t("shell.reload")}
           </button>
           <a href="/browse" className="ag-route-error-secondary">
-            {text("浏览公开制品", "Browse public artifacts")}
+            {t("shell.browsePublicArtifacts")}
           </a>
         </div>
       </section>

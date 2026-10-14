@@ -30,7 +30,7 @@ export function AdmissionPolicyCard({
   /** New publications can enqueue scans automatically. */
   publicationScanning: boolean;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const setStoredPolicy = useSetSecurityPolicy(repo.id);
   const [draft, setDraft] = useState<SecurityPolicyDraft>(() =>
     draftFromPolicy(policy),
@@ -77,7 +77,7 @@ export function AdmissionPolicyCard({
         setSaveError(err);
         return;
       }
-      setNotice(text("仓库安全策略已保存", "Repository security policy saved"));
+      setNotice(t("repository.repositorySecurityPolicySaved"));
       if (data) {
         setStoredPolicy(data);
         setDraft(draftFromPolicy(data));
@@ -90,40 +90,37 @@ export function AdmissionPolicyCard({
   };
 
   const severityOptions = [
-    { value: "none", label: text("不允许漏洞", "No vulnerabilities") },
-    { value: "low", label: text("最多低危", "Up to low") },
-    { value: "medium", label: text("最多中危", "Up to medium") },
-    { value: "high", label: text("最多高危", "Up to high") },
-    { value: "critical", label: text("允许严重等级", "Allow critical") },
+    { value: "none", label: t("repository.noVulnerabilities") },
+    { value: "low", label: t("repository.upToLow") },
+    { value: "medium", label: t("repository.upToMedium") },
+    { value: "high", label: t("repository.upToHigh") },
+    { value: "critical", label: t("repository.allowCritical") },
   ];
   const policyDirty =
     JSON.stringify(draft) !== JSON.stringify(draftFromPolicy(policy));
   const scanUnavailableLabel = formatDescriptor(repo.format)?.scannerSupport
-    ? text("未配置可用扫描器", "No scanner configured")
-    : text("当前格式不可用", "Unavailable for this format");
+    ? t("repository.noScannerConfigured")
+    : t("repository.unavailableForThisFormat");
 
   return (
     <PolicyCard
-      eyebrow={text("晋升防线", "Promotion guardrail")}
-      title={text("晋升准入", "Promotion admission")}
-      description={text(
-        "在创建晋升任务前评估签名、SBOM、构建来源和漏洞情报；不会改变普通协议读取。",
-        "Evaluates signatures, SBOMs, provenance, and vulnerability intelligence before a promotion job is created. Ordinary reads are unchanged.",
+      eyebrow={t("repository.promotionGuardrail")}
+      title={t("repository.promotionAdmission")}
+      description={t(
+        "repository.evaluatesSignaturesSBOMsProvenanceAndVulnerabilityIntelligenceBefore",
       )}
       status={
         <>
           <Tag color={draft.enabled ? "success" : "default"}>
             {draft.enabled
-              ? text("正在执行", "Enforced")
-              : text("尚未执行", "Not enforced")}
+              ? t("repository.enforced")
+              : t("repository.notEnforced")}
           </Tag>
           {policyDirty && (
-            <Tag color="processing">
-              {text("有未保存更改", "Unsaved changes")}
-            </Tag>
+            <Tag color="processing">{t("repository.unsavedChanges")}</Tag>
           )}
           <Switch
-            aria-label={text("启用准入检查", "Enforce admission checks")}
+            aria-label={t("repository.enforceAdmissionChecks")}
             checked={draft.enabled}
             onChange={(value) => update("enabled", value)}
           />
@@ -136,18 +133,14 @@ export function AdmissionPolicyCard({
       )}
 
       <PolicySectionHeader
-        title={text("安全情报", "Security intelligence")}
-        description={text(
-          "决定新发布制品是否自动生成后续准入所需的情报。",
-          "Controls whether newly published artifacts automatically produce intelligence used by admission.",
+        title={t("repository.securityIntelligence")}
+        description={t(
+          "repository.controlsWhetherNewlyPublishedArtifactsAutomaticallyProduceIntelligence",
         )}
       />
       <SettingRow
-        label={text("发布后自动扫描", "Scan after publication")}
-        hint={text(
-          "仅对保存策略后新发布的制品生效；扫描异步执行，结果可在制品详情中查看。",
-          "Applies only to artifacts published after this policy is saved. Scans run asynchronously and results appear in artifact details.",
-        )}
+        label={t("repository.scanAfterPublication")}
+        hint={t("repository.appliesOnlyToArtifactsPublishedAfterThisPolicy")}
         meta={
           !publicationScanning && (
             <Tag color="warning">{scanUnavailableLabel}</Tag>
@@ -155,7 +148,7 @@ export function AdmissionPolicyCard({
         }
       >
         <Switch
-          aria-label={text("发布后自动扫描", "Scan after publication")}
+          aria-label={t("repository.scanAfterPublication")}
           checked={draft.autoScanOnPublish}
           disabled={!publicationScanning}
           onChange={(value) => update("autoScanOnPublish", value)}
@@ -163,93 +156,62 @@ export function AdmissionPolicyCard({
       </SettingRow>
 
       <PolicySectionHeader
-        title={text("证据要求", "Evidence requirements")}
+        title={t("repository.evidenceRequirements")}
         description={
           draft.enabled
-            ? text(
-                "已选择的条件会在每次晋升前执行。",
-                "Selected requirements run before every promotion.",
-              )
-            : text(
-                "可提前配置条件；只有启用晋升准入后才会执行。",
-                "Requirements may be configured in advance and take effect only after admission is enabled.",
-              )
+            ? t("repository.selectedRequirementsRunBeforeEveryPromotion")
+            : t("repository.requirementsMayBeConfiguredInAdvanceAndTake")
         }
       />
       <div className="grid gap-3 md:grid-cols-2">
         <PolicySwitch
-          label={text("要求签名", "Require a signature")}
-          hint={text(
-            "没有任何签名证据的制品不能晋升。",
-            "Reject artifacts without signature evidence.",
-          )}
+          label={t("repository.requireASignature")}
+          hint={t("repository.rejectArtifactsWithoutSignatureEvidence")}
           checked={draft.requireSignature}
           onChange={(value) => update("requireSignature", value)}
         />
         <PolicySwitch
-          label={text("要求已验证签名", "Require a verified signature")}
-          hint={text(
-            "至少一个签名必须通过验证；适合受保护的发布仓库。",
-            "At least one signature must be verified; useful for protected release repositories.",
-          )}
+          label={t("repository.requireAVerifiedSignature")}
+          hint={t("repository.atLeastOneSignatureMustBeVerifiedUseful")}
           checked={draft.requireVerifiedSignature}
           onChange={(value) => update("requireVerifiedSignature", value)}
         />
         <PolicySwitch
-          label={text("要求 SBOM", "Require an SBOM")}
-          hint={text(
-            "没有软件物料清单的制品不能晋升。",
-            "Reject artifacts without a software bill of materials.",
-          )}
+          label={t("repository.requireAnSBOM")}
+          hint={t("repository.rejectArtifactsWithoutASoftwareBillOfMaterials")}
           checked={draft.requireSbom}
           onChange={(value) => update("requireSbom", value)}
         />
         <PolicySwitch
-          label={text("要求 provenance", "Require provenance")}
-          hint={text(
-            "要求构建来源、构建器和提交信息完整。",
-            "Require build source, builder, and commit provenance.",
-          )}
+          label={t("repository.requireProvenance")}
+          hint={t("repository.requireBuildSourceBuilderAndCommitProvenance")}
           checked={draft.requireProvenance}
           onChange={(value) => update("requireProvenance", value)}
         />
         <PolicySwitch
-          label={text("要求漏洞扫描", "Require vulnerability scanning")}
-          hint={text(
-            "未扫描或扫描状态异常的制品不能绕过检查。",
-            "Do not admit artifacts that have not been scanned.",
-          )}
+          label={t("repository.requireVulnerabilityScanning")}
+          hint={t("repository.doNotAdmitArtifactsThatHaveNotBeen")}
           checked={draft.requireVulnerabilityScan}
           onChange={(value) => update("requireVulnerabilityScan", value)}
         />
         <PolicySwitch
-          label={text("扫描错误时阻断", "Block on scan errors")}
-          hint={text(
-            "扫描器返回 error 时阻断晋升；关闭可允许故障降级。",
-            "Block when a scanner reports an error; disable for a fail-open fallback.",
-          )}
+          label={t("repository.blockOnScanErrors")}
+          hint={t("repository.blockWhenAScannerReportsAnErrorDisable")}
           checked={draft.failOnScanError}
           onChange={(value) => update("failOnScanError", value)}
         />
       </div>
 
       <PolicySectionHeader
-        title={text("风险门槛", "Risk thresholds")}
-        description={text(
-          "进一步限制允许通过的漏洞等级与许可证集合。",
-          "Further restrict the vulnerability severity and license set allowed through admission.",
+        title={t("repository.riskThresholds")}
+        description={t(
+          "repository.furtherRestrictTheVulnerabilitySeverityAndLicenseSet",
         )}
       />
       <div className="grid gap-5 md:grid-cols-2">
         <Field
-          label={text(
-            "最大允许漏洞等级",
-            "Maximum allowed vulnerability severity",
-          )}
-          hint={text(
-            "超过此等级的 affected 结果会拒绝晋升；unknown 始终视为最高风险。",
-            "Affected results above this level are rejected. Unknown findings are always treated as highest risk.",
-          )}
+          label={t("repository.maximumAllowedVulnerabilitySeverity")}
+          hint={t("repository.affectedResultsAboveThisLevelAreRejectedUnknown")}
         >
           <Select
             className="w-full"
@@ -259,11 +221,8 @@ export function AdmissionPolicyCard({
           />
         </Field>
         <Field
-          label={text("允许的 SPDX 许可证", "Allowed SPDX licenses")}
-          hint={text(
-            "留空表示不限制；填写后制品必须只包含列表中的 SPDX ID。",
-            "Leave empty for no restriction. When set, every license must be in this SPDX ID list.",
-          )}
+          label={t("repository.allowedSPDXLicenses")}
+          hint={t("repository.leaveEmptyForNoRestrictionWhenSetEvery")}
         >
           <Select
             mode="tags"
@@ -276,7 +235,7 @@ export function AdmissionPolicyCard({
             }))}
             tokenSeparators={[",", " "]}
             maxTagCount="responsive"
-            placeholder={text("如 Apache-2.0、MIT", "e.g. Apache-2.0, MIT")}
+            placeholder={t("repository.eGApache20MIT")}
             onChange={(value) => update("allowedLicenses", value)}
           />
         </Field>
@@ -284,10 +243,7 @@ export function AdmissionPolicyCard({
 
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-4">
         <span className="text-xs text-fg-disabled">
-          {text(
-            `当前版本 ${policy.version}`,
-            `Current version ${policy.version}`,
-          )}
+          {t("repository.currentVersion", { version: policy.version })}
         </span>
         <Button
           type="primary"
@@ -295,7 +251,7 @@ export function AdmissionPolicyCard({
           loading={saving}
           disabled={!policyDirty}
         >
-          {text("保存策略", "Save policy")}
+          {t("repository.savePolicy")}
         </Button>
       </div>
     </PolicyCard>

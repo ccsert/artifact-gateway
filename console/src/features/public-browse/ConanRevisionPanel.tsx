@@ -20,7 +20,7 @@ export function ConanRevisionPanel({
   row: ConanTableRow;
   table: ConanGroupTableProps;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const {
     versionFilter,
     copiedCoordinate,
@@ -37,7 +37,7 @@ export function ConanRevisionPanel({
       <div>
         <div className="flex items-center justify-between gap-3">
           <label className="text-xs font-medium text-fg-tertiary">
-            {text("选择包版本", "Select package version")}{" "}
+            {t("publicBrowse.selectPackageVersion")}{" "}
             <span className="font-normal text-fg-disabled">
               ({row.group.versions.length})
             </span>
@@ -59,16 +59,10 @@ export function ConanRevisionPanel({
             onLoadRevisions(reference);
             onOpenArtifact(reference);
           }}
-          placeholder={text(
-            "搜索并选择 Conan 包版本",
-            "Search Conan package versions",
-          )}
+          placeholder={t("publicBrowse.searchConanPackageVersions")}
         />
         <p className="mt-2 text-xs leading-5 text-fg-disabled">
-          {text(
-            "同一 name@user/channel 下收拢不同版本；选定版本后再查看 recipe revision。",
-            "Versions are grouped under the same name@user/channel; select one to inspect its recipe revision.",
-          )}
+          {t("publicBrowse.versionsAreGroupedUnderTheSameNameUser")}
         </p>
       </div>
       <div className="min-w-0">
@@ -83,10 +77,7 @@ export function ConanRevisionPanel({
         <div className="mt-1.5 flex gap-2">
           <Input
             className="min-w-0 flex-1 font-mono text-xs"
-            placeholder={text(
-              "输入 revision 或 digest",
-              "Enter revision or digest",
-            )}
+            placeholder={t("publicBrowse.enterRevisionOrDigest")}
             value={versionFilter}
             onChange={(event) => onFilterChange(event.target.value)}
             onPressEnter={() =>
@@ -99,7 +90,7 @@ export function ConanRevisionPanel({
               onLoadRevisions(row.selectedReference, versionFilter)
             }
           >
-            {text("搜索", "Search")}
+            {t("publicBrowse.search")}
           </Button>
         </div>
         {row.page?.error && (
@@ -116,13 +107,10 @@ export function ConanRevisionPanel({
           loading={row.page?.loading === true}
           notFoundContent={
             row.page?.loading && row.visibleRevisions.length === 0
-              ? text("正在读取 revision…", "Loading revisions…")
-              : text("没有匹配 revision", "No matching revisions")
+              ? t("publicBrowse.loadingRevisions")
+              : t("publicBrowse.noMatchingRevisions")
           }
-          placeholder={text(
-            "搜索并选择 recipe revision",
-            "Search recipe revisions",
-          )}
+          placeholder={t("publicBrowse.searchRecipeRevisions")}
           onChange={(revision) => {
             onSelectRevision(row.selectedReference, revision);
             onOpenArtifact(row.selectedReference, revision);
@@ -143,11 +131,8 @@ export function ConanRevisionPanel({
             className="mt-2"
           >
             {row.page.loading
-              ? text("加载中…", "Loading…")
-              : text(
-                  `再加载 ${VERSION_PAGE_SIZE} 个 revision`,
-                  `Load ${VERSION_PAGE_SIZE} more revisions`,
-                )}
+              ? t("publicBrowse.loadingVersionPage")
+              : t("publicBrowse.loadMoreRevisions", { VERSION_PAGE_SIZE })}
           </Button>
         )}
         {row.selectedRevisionItem ? (
@@ -167,7 +152,7 @@ export function ConanRevisionPanel({
                 icon={<LinkOutlined />}
                 href={row.versionHref}
               >
-                {text("打开版本页", "Open version")}
+                {t("publicBrowse.openVersionPage")}
               </Button>
               <Button
                 type="link"
@@ -175,8 +160,8 @@ export function ConanRevisionPanel({
                 onClick={() => onCopyPageLink(row.versionHref)}
               >
                 {copiedCoordinate === row.versionHref
-                  ? text("链接已复制", "Link copied")
-                  : text("复制链接", "Copy link")}
+                  ? t("publicBrowse.linkCopied")
+                  : t("publicBrowse.copyLink")}
               </Button>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-line py-3 text-xs sm:grid-cols-4">
@@ -191,19 +176,19 @@ export function ConanRevisionPanel({
                 mono
               />
               <MetadataItem
-                label={text("发布时间", "Published")}
+                label={t("publicBrowse.published")}
                 value={formatDate(row.selectedRevisionItem.createdAt, locale)}
               />
               <MetadataItem
-                label={text("发布者", "Publisher")}
-                value={row.latest.publisher ?? text("未记录", "Not recorded")}
+                label={t("publicBrowse.publisher")}
+                value={row.latest.publisher ?? t("publicBrowse.notRecorded")}
                 mono
               />
               <MetadataItem
-                label={text("校验摘要", "Digest")}
+                label={t("publicBrowse.checksum")}
                 value={
                   row.selectedRevisionItem.digest ??
-                  text("未记录", "Not recorded")
+                  t("publicBrowse.notRecorded")
                 }
                 mono
               />
@@ -221,10 +206,7 @@ export function ConanRevisionPanel({
           </>
         ) : (
           <div className="mt-3 rounded-md border border-dashed border-line px-4 py-6 text-sm text-fg-disabled">
-            {text(
-              "选择一个 recipe revision 查看详情与使用方式。",
-              "Select a recipe revision to view details and usage.",
-            )}
+            {t("publicBrowse.selectARecipeRevisionToViewDetailsAnd")}
           </div>
         )}
       </div>

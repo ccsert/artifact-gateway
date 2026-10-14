@@ -1,3 +1,5 @@
+import { LocalizedError } from "../../messages/translate";
+import type { Translate } from "../../lib/preferences";
 import { listOciManifests } from "../../client";
 import type { OciManifestSummary } from "../../client";
 import { shortDigest } from "../../lib/format";
@@ -105,11 +107,12 @@ export async function fetchOciManifests(
         signal,
       }),
     );
-    if (!page) throw new Error("读取 OCI Manifest 列表失败");
+    if (!page)
+      throw new LocalizedError("artifactDetail.failedToReadOciManifestList");
     items.push(...page.items);
     pageToken = page.nextPageToken;
     if (pageToken && seenTokens.has(pageToken))
-      throw new Error("OCI Manifest 分页游标重复");
+      throw new LocalizedError("artifactDetail.ociManifestPageCursorRepeated");
     if (pageToken) seenTokens.add(pageToken);
   } while (pageToken);
   return items;
@@ -117,14 +120,17 @@ export async function fetchOciManifests(
 
 export function ociVersionOptions(
   manifests: OciManifestSummary[],
+  t: Translate,
 ): OciVersionOption[] {
   return manifests.flatMap<OciVersionOption>((manifest) => {
     if (manifest.tags.length === 0) {
       return [
         {
           value: manifest.digest,
-          label: `无标签 · ${shortDigest(manifest.digest)}`,
-          searchText: `无标签 ${manifest.digest}`,
+          label: t("artifactDetail.untaggedDigest", {
+            digest: shortDigest(manifest.digest),
+          }),
+          searchText: `${t("artifactDetail.untagged")} ${manifest.digest}`,
           digest: manifest.digest,
           size: manifest.size,
           kind: "digest" as const,

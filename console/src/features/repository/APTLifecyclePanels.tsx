@@ -17,7 +17,7 @@ export function APTSnapshotHistory({
   disabled: boolean;
   onPrune: (snapshotId: string) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <ConsoleTable
       rowKey={(item) => item.snapshot.id}
@@ -26,7 +26,7 @@ export function APTSnapshotHistory({
       pagination={{}}
       columns={[
         {
-          title: text("快照", "Snapshot"),
+          title: t("repository.snapshot"),
           render: (_, item) => (
             <div>
               #{item.snapshot.sequence}
@@ -37,34 +37,28 @@ export function APTSnapshotHistory({
           ),
         },
         {
-          title: text("状态", "State"),
+          title: t("repository.state"),
           render: (_, item) => <StateBadge state={item.snapshot.state} />,
         },
         {
-          title: text("签名指纹", "Signing fingerprint"),
+          title: t("repository.signingFingerprint"),
           render: (_, item) => (
             <code className="ag-apt-wrap">{item.snapshot.keyFingerprint}</code>
           ),
         },
         {
-          title: text("最早清理时间", "Prunable after"),
+          title: t("repository.prunableAfter"),
           render: (_, item) => formatDate(item.prunableAfter),
         },
         {
-          title: text("操作", "Action"),
+          title: t("repository.action"),
           render: (_, item) => (
             <Popconfirm
-              title={text(
-                "清理此退役快照的引用？",
-                "Prune this retired snapshot's references?",
-              )}
-              description={text(
-                "使用此旧索引的客户端将无法继续读取。共享对象仍受其他引用保护。",
-                "Clients using this old index can no longer read it. Other references still protect shared objects.",
-              )}
+              title={t("repository.pruneThisRetiredSnapshotSReferences")}
+              description={t("repository.clientsUsingThisOldIndexCanNoLonger")}
               onConfirm={() => onPrune(item.snapshot.id)}
-              okText={text("清理引用", "Prune references")}
-              cancelText={text("取消", "Cancel")}
+              okText={t("repository.pruneReferences")}
+              cancelText={t("repository.cancel")}
             >
               <Button
                 danger
@@ -75,7 +69,7 @@ export function APTSnapshotHistory({
                   Date.parse(item.prunableAfter) > Date.now()
                 }
               >
-                {text("清理引用", "Prune references")}
+                {t("repository.pruneReferences")}
               </Button>
             </Popconfirm>
           ),
@@ -95,7 +89,7 @@ export function APTRecoveryList({
   disabled: boolean;
   onRestore: (deletionId: string) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <ConsoleTable
       rowKey="id"
@@ -104,19 +98,19 @@ export function APTRecoveryList({
       pagination={{}}
       columns={[
         {
-          title: text("软件包", "Package"),
+          title: t("repository.package"),
           render: (_, item) => packageName(item.package),
         },
         {
-          title: text("状态", "State"),
+          title: t("repository.state"),
           render: (_, item) => <StateBadge state={item.state} />,
         },
         {
-          title: text("恢复截止", "Recover until"),
+          title: t("repository.recoverUntil"),
           render: (_, item) => formatDate(item.restoreUntil),
         },
         {
-          title: text("操作", "Action"),
+          title: t("repository.action"),
           render: (_, item) => (
             <Button
               disabled={
@@ -126,7 +120,7 @@ export function APTRecoveryList({
               }
               onClick={() => onRestore(item.id)}
             >
-              {text("预览恢复", "Preview recovery")}
+              {t("repository.previewRecovery")}
             </Button>
           ),
         },

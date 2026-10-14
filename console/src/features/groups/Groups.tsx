@@ -27,7 +27,7 @@ import { useGroupPages, useInvalidateGroups } from "./groupQueries";
 import { groupColumns } from "./groupColumns";
 
 export function GroupsPage() {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const groupPages = useGroupPages();
   // Member names come from the repository catalog; a failed read only
   // leaves ids in their place, as before.
@@ -97,17 +97,14 @@ export function GroupsPage() {
     repoById,
     onSaved: load,
     onDelete: setToDelete,
-    text,
+    t,
   });
 
   return (
     <div className="ag-page-stack">
       <PageHeader
-        title={text("分组", "Groups")}
-        description={text(
-          "将多个同格式仓库聚合为统一入口",
-          "Aggregate repositories of the same format behind one entry point",
-        )}
+        title={t("groups.groups")}
+        description={t("groups.aggregateRepositoriesOfTheSameFormatBehindOne")}
         actions={
           <CreateGroupDialog
             repos={repos}
@@ -120,11 +117,8 @@ export function GroupsPage() {
         isNotFound(error) ? (
           <Card>
             <EmptyState
-              title={text("分组功能未启用", "Groups are unavailable")}
-              hint={text(
-                "当前后端构建尚未挂载分组管理端点（返回 404）",
-                "The current backend does not expose the groups endpoint (404)",
-              )}
+              title={t("groups.groupsAreUnavailable")}
+              hint={t("groups.theCurrentBackendDoesNotExposeTheGroups")}
             />
           </Card>
         ) : (
@@ -135,11 +129,8 @@ export function GroupsPage() {
       ) : groups.length === 0 ? (
         <Card>
           <EmptyState
-            title={text("暂无分组", "No groups")}
-            hint={text(
-              "创建分组以聚合多个仓库",
-              "Create a group to aggregate repositories",
-            )}
+            title={t("groups.noGroups")}
+            hint={t("groups.createAGroupToAggregateRepositories")}
           />
         </Card>
       ) : (
@@ -150,28 +141,22 @@ export function GroupsPage() {
           <MetricStrip
             items={[
               {
-                label: text("分组总数", "Groups"),
+                label: t("groups.groups2"),
                 value: groups.length,
-                hint: text(
-                  `${memberCount} 个成员引用`,
-                  `${memberCount} member references`,
-                ),
+                hint: t("groups.memberReferences", { memberCount }),
               },
               {
-                label: text("匿名可读", "Anonymous readable"),
+                label: t("groups.anonymousReadable"),
                 value: publicGroups,
                 hint: publicGroups
-                  ? text(
-                      "仍需成员仓库允许匿名读取",
-                      "Member repositories must allow anonymous reads",
-                    )
-                  : text("全部为私有入口", "All entry points are private"),
+                  ? t("groups.memberRepositoriesMustAllowAnonymousReads")
+                  : t("groups.allEntryPointsArePrivate"),
                 tone: publicGroups ? "success" : "default",
               },
               {
-                label: text("覆盖格式", "Formats"),
+                label: t("groups.formats"),
                 value: new Set(groups.map((group) => group.format)).size,
-                hint: text("按同格式仓库解析", "Resolved by matching format"),
+                hint: t("groups.resolvedByMatchingFormat"),
               },
             ]}
           />
@@ -187,33 +172,27 @@ export function GroupsPage() {
                       setFormatFilter("all");
                     }}
                   >
-                    {text("清除筛选", "Clear filters")}
+                    {t("groups.clearFilters")}
                   </Button>
                 ) : undefined
               }
             >
-              <FilterField
-                label={text("搜索", "Search")}
-                className="min-w-[260px]"
-              >
+              <FilterField label={t("groups.search")} className="min-w-[260px]">
                 <Input
                   allowClear
                   prefix={<SearchOutlined />}
-                  placeholder={text("搜索分组名称…", "Search group names…")}
+                  placeholder={t("groups.searchGroupNames")}
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                 />
               </FilterField>
-              <FilterField
-                label={text("格式", "Format")}
-                className="min-w-[150px]"
-              >
+              <FilterField label={t("groups.format")} className="min-w-[150px]">
                 <Select<Format | "all">
                   className="w-full"
                   value={formatFilter}
                   onChange={setFormatFilter}
                   options={[
-                    { value: "all", label: text("全部格式", "All formats") },
+                    { value: "all", label: t("groups.allFormats") },
                     ...groupFormats(formatProfiles).map((format) => ({
                       value: format,
                       label: format,
@@ -224,11 +203,8 @@ export function GroupsPage() {
             </FilterBar>
             {visibleGroups.length === 0 ? (
               <EmptyState
-                title={text("没有匹配的分组", "No matching groups")}
-                hint={text(
-                  "调整筛选条件后重试",
-                  "Adjust the filters and try again",
-                )}
+                title={t("groups.noMatchingGroups")}
+                hint={t("groups.adjustTheFiltersAndTryAgain")}
               />
             ) : (
               <ConsoleTable<Group>
@@ -249,18 +225,15 @@ export function GroupsPage() {
       )}
       <ConfirmDialog
         open={!!toDelete}
-        title={text("删除分组", "Delete group")}
+        title={t("groups.deleteGroup2")}
         message={
           <>
-            {text("确定删除分组", "Delete group")}{" "}
+            {t("groups.deleteGroup3")}{" "}
             <span className="font-mono text-fg-strong">{toDelete?.name}</span>{" "}
-            {text(
-              "吗？成员仓库本身不会被删除。",
-              "? Member repositories are not deleted.",
-            )}
+            {t("groups.memberRepositoriesAreNotDeleted")}
           </>
         }
-        confirmLabel={text("删除", "Delete")}
+        confirmLabel={t("groups.delete")}
         danger
         busy={deleting}
         onConfirm={confirmDelete}

@@ -19,14 +19,16 @@ describe("SearchableVersionSelect", () => {
     const onChange = vi.fn();
 
     render(
-      <SearchableVersionSelect
-        value=""
-        options={[
-          { value: "release", label: "1.0.0" },
-          { value: "snapshot", label: "1.1-SNAPSHOT #42" },
-        ]}
-        onChange={onChange}
-      />,
+      <PreferencesProvider>
+        <SearchableVersionSelect
+          value=""
+          options={[
+            { value: "release", label: "1.0.0" },
+            { value: "snapshot", label: "1.1-SNAPSHOT #42" },
+          ]}
+          onChange={onChange}
+        />
+      </PreferencesProvider>,
     );
 
     const input = screen.getByRole("combobox");

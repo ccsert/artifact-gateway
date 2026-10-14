@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import type { Repository } from "../../client";
 import { FolderOpenOutlined, DeleteOutlined } from "@ant-design/icons";
 import { Button } from "antd";
@@ -12,8 +13,6 @@ import { CapacityDialog } from "./GroupCapacityDialog";
 import { MembersDialog } from "./GroupMembersDialog";
 import { RenameGroupDialog } from "./RenameGroupDialog";
 
-type Localize = (chinese: string, english: string) => string;
-
 /** The group table: name and endpoint, format, access, members and actions. */
 export function groupColumns({
   repos,
@@ -21,18 +20,18 @@ export function groupColumns({
   repoById,
   onSaved,
   onDelete,
-  text,
+  t,
 }: {
   repos: Repository[];
   repoName: (repositoryId: string) => string;
   repoById: (repositoryId: string) => Repository | undefined;
   onSaved: () => void;
   onDelete: (group: Group) => void;
-  text: Localize;
+  t: Translate;
 }): ColumnsType<Group> {
   return [
     {
-      title: text("名称", "Name"),
+      title: t("groups.name"),
       dataIndex: "name",
       key: "name",
       width: 240,
@@ -53,27 +52,25 @@ export function groupColumns({
       },
     },
     {
-      title: text("格式", "Format"),
+      title: t("groups.format"),
       dataIndex: "format",
       key: "format",
       width: 100,
       render: (format: Group["format"]) => <FormatBadge format={format} />,
     },
     {
-      title: text("访问", "Access"),
+      title: t("groups.access"),
       dataIndex: "anonymousRead",
       key: "anonymousRead",
       width: 140,
       render: (anonymousRead: boolean) => (
         <Badge tone={anonymousRead ? "success" : "neutral"}>
-          {anonymousRead
-            ? text("匿名可读", "Anonymous read")
-            : text("私有", "Private")}
+          {anonymousRead ? t("groups.anonymousRead") : t("groups.private")}
         </Badge>
       ),
     },
     {
-      title: text("成员（配置顺序）", "Members (configured order)"),
+      title: t("groups.membersConfiguredOrder"),
       key: "members",
       width: 440,
       render: (_value, group) => (
@@ -89,21 +86,21 @@ export function groupColumns({
                   title={member.repositoryId}
                 >
                   {member.position + 1}. {repoName(member.repositoryId)} ·{" "}
-                  {repository?.type ?? text("未知", "unknown")} ·{" "}
+                  {repository?.type ?? t("groups.unknown")} ·{" "}
                   {repository?.anonymousRead ? "anon" : "private"}
                 </span>
               );
             })}
           {(group.members ?? []).length === 0 && (
             <span className="text-xs text-fg-disabled">
-              {text("无成员", "No members")}
+              {t("groups.noMembers")}
             </span>
           )}
         </div>
       ),
     },
     {
-      title: text("版本", "Version"),
+      title: t("groups.version"),
       dataIndex: "version",
       key: "version",
       width: 90,
@@ -112,7 +109,7 @@ export function groupColumns({
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("groups.actions"),
       key: "actions",
       width: 280,
       align: "right",
@@ -124,7 +121,7 @@ export function groupColumns({
               href={`/groups/${group.id}/browse`}
               icon={<FolderOpenOutlined />}
             >
-              {text("浏览目录", "Browse directory")}
+              {t("groups.browseDirectory")}
             </Button>
           )}
           <GroupResolutionDialog group={group} />
@@ -136,10 +133,7 @@ export function groupColumns({
             size="small"
             danger
             icon={<DeleteOutlined />}
-            aria-label={text(
-              `删除分组 ${group.name}`,
-              `Delete group ${group.name}`,
-            )}
+            aria-label={t("groups.deleteGroup", { name: group.name })}
             onClick={() => onDelete(group)}
           />
         </div>

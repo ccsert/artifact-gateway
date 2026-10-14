@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import type { PublicBrowseMessageKey } from "../../messages/public-browse.zh-CN";
 import type { PublicRepositoryFormat } from "../../lib/publicRepositoryUsage";
 
@@ -46,8 +47,6 @@ export const PUBLIC_FORMAT_STYLE: Record<
   },
 };
 
-type Localize = (key: PublicBrowseMessageKey) => string;
-
 const USAGE_LABELS: Record<PublicRepositoryFormat, PublicBrowseMessageKey> = {
   oci: "publicBrowse.registerAnOciRegistry",
   maven: "publicBrowse.registerAMavenRepository",
@@ -63,7 +62,7 @@ const USAGE_LABELS: Record<PublicRepositoryFormat, PublicBrowseMessageKey> = {
 /** The heading of the repository-level usage card. */
 export function publicUsageLabel(
   format: PublicRepositoryFormat | undefined,
-  t: Localize,
+  t: Translate,
 ) {
   return t(USAGE_LABELS[format ?? "raw"]);
 }

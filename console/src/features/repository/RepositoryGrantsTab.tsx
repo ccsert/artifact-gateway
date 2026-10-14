@@ -46,7 +46,7 @@ function grantKey(grant: Pick<Grant, "principal" | "resourcePrefix">): string {
  */
 export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
   const { message } = App.useApp();
-  const { t, text } = usePreferences();
+  const { t } = usePreferences();
   const queryClient = useQueryClient();
   const grantsQuery = useRepositoryGrants(repo.id);
   const grants = grantsQuery.data ?? null;
@@ -238,7 +238,7 @@ export function RepositoryGrantsTab({ repo }: { repo: Repository }) {
       width: 260,
       render: (_, grant) => (
         <Badge tone={grantTone(grantLevel(grant.scopes))}>
-          {grantedCapabilitiesLabel(grant.scopes, text)}
+          {grantedCapabilitiesLabel(grant.scopes, t)}
         </Badge>
       ),
     },

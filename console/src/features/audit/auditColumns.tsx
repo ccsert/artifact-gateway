@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import type { ColumnsType } from "antd/es/table";
 import { Link } from "react-router-dom";
 import type { AuditRecord } from "../../client";
@@ -7,8 +8,6 @@ import type { AppLocale } from "../../lib/preferences";
 import { auditOperationLabel } from "./auditOperations";
 import { auditOutcomeLabel, auditOutcomeTone } from "./auditOutcomes";
 
-type Text = (zh: string, en: string) => string;
-
 export type AuditTableRow = {
   key: string;
   rowIndex: number;
@@ -16,12 +15,12 @@ export type AuditTableRow = {
 };
 
 export function auditColumns(
-  text: Text,
+  t: Translate,
   locale: AppLocale,
 ): ColumnsType<AuditTableRow> {
   return [
     {
-      title: text("时间", "Time"),
+      title: t("audit.time"),
       key: "occurredAt",
       width: 180,
       render: (_, row) => (
@@ -31,7 +30,7 @@ export function auditColumns(
       ),
     },
     {
-      title: text("操作", "Operation"),
+      title: t("audit.operation"),
       key: "operation",
       width: 190,
       render: (_, row) => (
@@ -40,27 +39,27 @@ export function auditColumns(
           title={row.record.operation}
         >
           {row.record.operation
-            ? auditOperationLabel(row.record.operation, text)
+            ? auditOperationLabel(row.record.operation, t)
             : "—"}
         </span>
       ),
     },
     {
-      title: text("结果", "Outcome"),
+      title: t("audit.outcome"),
       key: "outcome",
       width: 170,
       render: (_, row) => (
         <span title={row.record.outcome}>
           <StatusText tone={statusTone(auditOutcomeTone(row.record.outcome))}>
             {row.record.outcome
-              ? auditOutcomeLabel(row.record.outcome, text)
+              ? auditOutcomeLabel(row.record.outcome, t)
               : "—"}
           </StatusText>
         </span>
       ),
     },
     {
-      title: text("仓库/分组", "Repository / group"),
+      title: t("audit.repositoryGroup"),
       key: "repository",
       width: 180,
       render: (_, row) => (
@@ -70,14 +69,14 @@ export function auditColumns(
       ),
     },
     {
-      title: text("格式", "Format"),
+      title: t("audit.format"),
       key: "format",
       width: 110,
       render: (_, row) =>
         row.record.format ? <FormatBadge format={row.record.format} /> : "—",
     },
     {
-      title: text("状态", "Status"),
+      title: t("audit.status"),
       key: "status",
       width: 90,
       render: (_, row) => (
@@ -87,7 +86,7 @@ export function auditColumns(
       ),
     },
     {
-      title: text("流量", "Traffic"),
+      title: t("audit.traffic"),
       key: "bytes",
       width: 110,
       render: (_, row) => (
@@ -97,7 +96,7 @@ export function auditColumns(
       ),
     },
     {
-      title: text("访问主体", "Actor"),
+      title: t("audit.actor"),
       key: "actor",
       width: 170,
       render: (_, row) => (
@@ -115,29 +114,23 @@ export function auditColumns(
 /** The fields of one record that do not fit in its row. */
 export function AuditRecordDetail({
   record,
-  text,
+  t,
 }: {
   record: AuditRecord;
-  text: Text;
+  t: Translate;
 }) {
   return (
     <div className="grid grid-cols-3 gap-x-8 gap-y-2 px-2 py-1 text-xs">
       {(
         [
-          [text("资源", "Resource"), record.resource],
-          [text("表示", "Representation"), record.representation],
-          [text("成员", "Member"), record.memberName],
-          [text("成员类型", "Member type"), record.memberType],
-          [text("上游主机", "Upstream host"), record.upstreamHost],
-          [text("缓存", "Cache"), record.cacheDisposition],
-          [
-            text("授权来源", "Authorization source"),
-            record.authorizationSource,
-          ],
-          [
-            text("授权原因", "Authorization reason"),
-            record.authorizationReason,
-          ],
+          [t("audit.resource"), record.resource],
+          [t("audit.representation"), record.representation],
+          [t("audit.member"), record.memberName],
+          [t("audit.memberType"), record.memberType],
+          [t("audit.upstreamHost"), record.upstreamHost],
+          [t("audit.cache"), record.cacheDisposition],
+          [t("audit.authorizationSource"), record.authorizationSource],
+          [t("audit.authorizationReason"), record.authorizationReason],
           ["Request ID", record.requestId],
           ["Trace ID", record.traceId],
         ] as const

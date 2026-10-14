@@ -23,7 +23,7 @@ export function RawArtifactDetail({
   canQuarantine?: boolean;
   canDelete?: boolean;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const { token } = useAuth();
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -45,7 +45,7 @@ export function RawArtifactDetail({
       setDeleteError(
         error instanceof Error
           ? error.message
-          : text("删除 Raw 文件失败", "Failed to delete Raw file"),
+          : t("artifactDetail.failedToDeleteRawFile"),
       );
     } finally {
       setDeleting(false);
@@ -64,7 +64,7 @@ export function RawArtifactDetail({
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2">
           <div>
             <div className="text-xs font-medium text-fg">
-              {text("Raw 文件", "Raw file")}
+              {t("artifactDetail.rawFile")}
             </div>
             {deleteError && (
               <div className="mt-1 text-xs text-[var(--ag-status-danger)]">
@@ -73,13 +73,10 @@ export function RawArtifactDetail({
             )}
           </div>
           <Popconfirm
-            title={text("删除 Raw 文件？", "Delete this Raw file?")}
-            description={text(
-              "删除后该路径将不可见。",
-              "This path will no longer be visible.",
-            )}
-            okText={text("删除", "Delete")}
-            cancelText={text("取消", "Cancel")}
+            title={t("artifactDetail.deleteThisRawFile")}
+            description={t("artifactDetail.thisPathWillNoLongerBeVisible")}
+            okText={t("artifactDetail.delete")}
+            cancelText={t("artifactDetail.cancel")}
             okButtonProps={{ danger: true }}
             onConfirm={() => void deleteCurrent()}
           >
@@ -89,7 +86,7 @@ export function RawArtifactDetail({
               icon={<DeleteOutlined />}
               loading={deleting}
             >
-              {text("删除文件", "Delete file")}
+              {t("artifactDetail.deleteFile")}
             </Button>
           </Popconfirm>
         </div>

@@ -1,8 +1,9 @@
+import { createTranslator } from "../../messages/translate";
 import { describe, expect, it } from "vitest";
 import { auditOperationLabel } from "./auditOperations";
 
-const zh = (chinese: string) => chinese;
-const en = (_chinese: string, english: string) => english;
+const zh = createTranslator("zh-CN");
+const en = createTranslator("en-US");
 
 describe("auditOperationLabel", () => {
   it("translates the traffic operations derived from HTTP methods", () => {

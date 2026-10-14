@@ -15,14 +15,14 @@ import {
  * label tables as the audit log, so both pages say the same words.
  */
 export function RecentAuditList({ records }: { records: AuditRecord[] }) {
-  const { text, locale } = usePreferences();
+  const { t, locale } = usePreferences();
 
   return (
     <ol className="ag-activity-list">
       {records.map((record) => {
         const operation = record.operation
-          ? auditOperationLabel(record.operation, text)
-          : text("访问", "Access");
+          ? auditOperationLabel(record.operation, t)
+          : t("dashboard.access");
         const target = [record.repository ?? record.groupName, record.resource]
           .filter(Boolean)
           .join("/");
@@ -51,8 +51,8 @@ export function RecentAuditList({ records }: { records: AuditRecord[] }) {
             <div className="ag-activity-meta">
               <span className="ag-activity-actor" title={record.actor}>
                 {record.actor === "anonymous"
-                  ? text("匿名", "Anonymous")
-                  : record.actor || text("未记录", "Not recorded")}
+                  ? t("dashboard.anonymous")
+                  : record.actor || t("dashboard.notRecorded")}
               </span>
               <span aria-hidden="true">·</span>
               <time dateTime={record.occurredAt}>
@@ -60,7 +60,7 @@ export function RecentAuditList({ records }: { records: AuditRecord[] }) {
               </time>
               <span aria-hidden="true">·</span>
               <StatusText tone={tone === "success" ? "neutral" : tone}>
-                {auditOutcomeLabel(record.outcome, text)}
+                {auditOutcomeLabel(record.outcome, t)}
               </StatusText>
             </div>
           </li>

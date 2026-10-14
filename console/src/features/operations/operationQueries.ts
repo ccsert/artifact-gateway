@@ -27,7 +27,7 @@ const POLL_INTERVAL = 15_000;
  * without anything in the Console invalidating them.
  */
 export function useOperationJobs({ poll }: { poll: boolean }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   // Selector failures are query errors, so the panel stays mounted and
   // its Retry can fetch a corrected answer instead of reusing bad data.
   const select = useCallback(
@@ -35,7 +35,7 @@ export function useOperationJobs({ poll }: { poll: boolean }) {
       lifecycle: ListLifecycleJobsResponse;
       auditRetention: ListAuditRetentionJobsResponse;
     }) => ({
-      rows: toOperationRows(data.lifecycle, data.auditRetention, text),
+      rows: toOperationRows(data.lifecycle, data.auditRetention, t),
       repositories: Array.from(
         new Map(
           data.lifecycle.map((record) => [
@@ -45,7 +45,7 @@ export function useOperationJobs({ poll }: { poll: boolean }) {
         ).values(),
       ).sort((a, b) => a.name.localeCompare(b.name)),
     }),
-    [text],
+    [t],
   );
   const query = useQuery({
     queryKey: operationKeys.jobs(),

@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import { useState } from "react";
 import {
   dryRunRepositoryRetention,
@@ -5,8 +6,6 @@ import {
 } from "../../client";
 import type { Repository, RetentionDryRun } from "../../client";
 import { downloadCsv } from "../../lib/csv";
-
-import type { Localize } from "./retentionCopy";
 
 const RETENTION_DRY_RUN_PAGE_SIZE = 100;
 
@@ -18,13 +17,13 @@ const RETENTION_DRY_RUN_PAGE_SIZE = 100;
 export function useRetentionDryRun({
   repo,
   token,
-  text,
+  t,
   setSaveError,
   setNotice,
 }: {
   repo: Repository;
   token: string | null | undefined;
-  text: Localize;
+  t: Translate;
   setSaveError: (error: unknown) => void;
   setNotice: (notice: string) => void;
 }) {
@@ -66,12 +65,7 @@ export function useRetentionDryRun({
       if (code === "invalid_page_token") {
         setDryRun(null);
         setSaveError(
-          new Error(
-            text(
-              "试运行结果已过期或策略已变化，请重新试运行",
-              "The dry-run result expired or the policy changed. Run it again.",
-            ),
-          ),
+          new Error(t("repository.theDryRunResultExpiredOrThePolicy")),
         );
       } else {
         setSaveError(err);
@@ -105,24 +99,14 @@ export function useRetentionDryRun({
       if (code === "version_conflict") {
         setDryRun(null);
         setSaveError(
-          new Error(
-            text(
-              "保留策略已变化，当前预览不再有效，请重新试运行",
-              "The retention policy changed, so this preview is no longer valid. Run it again.",
-            ),
-          ),
+          new Error(t("repository.theRetentionPolicyChangedSoThisPreviewIs")),
         );
       } else {
         setSaveError(err);
       }
       return;
     }
-    setNotice(
-      text(
-        "保留执行任务已提交，请在「生命周期任务」标签页查看进度",
-        "The retention task was submitted. Track it on the Lifecycle jobs tab.",
-      ),
-    );
+    setNotice(t("repository.theRetentionTaskWasSubmittedTrackItOn"));
     setDryRun(null);
   };
 
@@ -143,8 +127,7 @@ export function useRetentionDryRun({
           message?: string;
         } | null;
         throw new Error(
-          problem?.message ??
-            text("导出试运行结果失败", "Failed to export dry-run results"),
+          problem?.message ?? t("repository.failedToExportDryRunResults"),
         );
       }
       downloadCsv(`${repo.name}-retention.csv`, await response.text());

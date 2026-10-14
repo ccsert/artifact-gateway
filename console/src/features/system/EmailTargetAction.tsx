@@ -29,7 +29,7 @@ export function EmailTargetAction({
   onDone: (sent: boolean) => void;
   onAuthBlocked: (error: unknown) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [scenario, setScenario] =
     useState<EmailPreviewInput["scenario"]>("warning");
   const [requestKey] = useState(() => crypto.randomUUID());
@@ -37,17 +37,17 @@ export function EmailTargetAction({
   const action = useQuotaAction(onAuthBlocked);
   const title =
     kind === "test"
-      ? text("确认合成测试发送", "Confirm synthetic test send")
+      ? t("system.confirmSyntheticTestSend")
       : kind === "enable"
-        ? text("确认启用邮件目标", "Confirm enabling email target")
-        : text("确认停用邮件目标", "Confirm disabling email target");
+        ? t("system.confirmEnablingEmailTarget")
+        : t("system.confirmDisablingEmailTarget");
   return (
     <div className="ag-page-stack">
       {Boolean(action.error) && (
         <ErrorBanner
           error={safeEmailError(
             action.error,
-            text,
+            t,
             kind === "test" ? "test" : "save",
           )}
         />
@@ -56,57 +56,45 @@ export function EmailTargetAction({
         <CardHeader title={title} />
         <div className="grid min-w-0 gap-5 p-5">
           <dl className="grid min-w-0 gap-2 text-sm">
-            <dt className="text-fg-tertiary">{text("目标", "Target")}</dt>
+            <dt className="text-fg-tertiary">{t("system.target")}</dt>
             <dd className="break-words font-semibold">{target.name}</dd>
             <dt className="text-fg-tertiary">
-              {text("标识与确认版本", "Identity and confirmed version")}
+              {t("system.identityAndConfirmedVersion")}
             </dt>
             <dd className="break-all font-mono text-xs">
               {target.id} · {target.version}
             </dd>
             <dt className="text-fg-tertiary">
-              {text("邮件语言与收件人", "Email language and recipient")}
+              {t("system.emailLanguageAndRecipient")}
             </dt>
             <dd>
               {target.locale === "en" ? "English" : "简体中文"} ·{" "}
-              {text(
-                "已配置的单个收件人，地址不可读取",
-                "One configured recipient; the address cannot be read",
-              )}
+              {t("system.oneConfiguredRecipientTheAddressCannotBeRead")}
             </dd>
           </dl>
           {kind === "test" ? (
             <>
-              <Field label={text("合成场景", "Synthetic scenario")}>
+              <Field label={t("system.syntheticScenario")}>
                 <Select
-                  aria-label={text("合成场景", "Synthetic scenario")}
+                  aria-label={t("system.syntheticScenario")}
                   value={scenario}
                   disabled={attempted}
                   onChange={setScenario}
                   options={["warning", "critical", "resolved"].map((value) => ({
                     value,
-                    label: quotaLabel(value, text),
+                    label: quotaLabel(value, t),
                   }))}
                 />
               </Field>
               <Notice
                 tone="warning"
                 closable={false}
-                title={text(
-                  "确认将向此目标配置的收件人发送一封邮件",
-                  "Confirmation sends one email to this target's configured recipient",
-                )}
-                description={text(
-                  "数据是合成样例。请求会入真实交付队列并受全局限频；取消不能撤回已入队或正在发送的邮件。SMTP 接受不等于收件箱送达。",
-                  "The data is synthetic. The request enters the real delivery queue and is rate limited. Cancelling cannot recall queued or in-flight mail. SMTP acceptance does not mean inbox delivery.",
-                )}
+                title={t("system.confirmationSendsOneEmailToThisTargetS")}
+                description={t("system.theDataIsSyntheticTheRequestEntersThe")}
               />
               {attempted && Boolean(action.error) && (
                 <p className="text-sm text-fg-tertiary">
-                  {text(
-                    "重试沿用本次目标、版本、场景和测试标识，不会自动创建另一次测试。",
-                    "Retry keeps this target, version, scenario, and test key; it does not automatically create another test.",
-                  )}
+                  {t("system.retryKeepsThisTargetVersionScenarioAndTest")}
                 </p>
               )}
             </>
@@ -116,21 +104,17 @@ export function EmailTargetAction({
               closable={false}
               title={
                 kind === "enable"
-                  ? text("启用不发送测试邮件", "Enabling sends no test email")
-                  : text(
-                      "停用不能撤回正在发送的邮件",
-                      "Disabling cannot recall in-flight mail",
-                    )
+                  ? t("system.enablingSendsNoTestEmail")
+                  : t("system.disablingCannotRecallInFlightMail")
               }
-              description={text(
-                "目标版本会变更。已有配额规则绑定旧版本，需要在规则页重新确认路由；队列中的旧版本邮件会停止交付。",
-                "The target version changes. Existing quota rules bind the old version and require route confirmation on the rules page; queued old-version mail will stop.",
+              description={t(
+                "system.theTargetVersionChangesExistingQuotaRulesBind",
               )}
             />
           )}
           <div className="flex flex-wrap gap-2">
-            <Button aria-label={text("取消", "Cancel")} onClick={onCancel}>
-              {text("取消", "Cancel")}
+            <Button aria-label={t("system.cancel")} onClick={onCancel}>
+              {t("system.cancel")}
             </Button>
             <Button
               type="primary"
@@ -169,10 +153,10 @@ export function EmailTargetAction({
               }}
             >
               {kind === "test"
-                ? text("确认发送合成测试", "Confirm synthetic test send")
+                ? t("system.confirmSyntheticTestSend2")
                 : kind === "enable"
-                  ? text("确认启用", "Confirm enable")
-                  : text("确认停用", "Confirm disable")}
+                  ? t("system.confirmEnable")
+                  : t("system.confirmDisable")}
             </Button>
           </div>
         </div>

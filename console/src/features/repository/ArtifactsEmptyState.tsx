@@ -14,7 +14,7 @@ export function ArtifactsEmptyState({
   searching: boolean;
   repo: Repository;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const hint =
     repo.type === "hosted" || repo.type === "proxy"
       ? formatDescriptor(repo.format)?.emptyHint[repo.type]
@@ -23,18 +23,17 @@ export function ArtifactsEmptyState({
     <EmptyState
       title={
         searching
-          ? text("没有匹配的制品", "No matching artifacts")
-          : text("暂无制品", "No artifacts")
+          ? t("repository.noMatchingArtifacts")
+          : t("repository.noArtifacts")
       }
       hint={
         searching
-          ? text("换个关键词试试", "Try a different search term")
+          ? t("repository.tryADifferentSearchTerm")
           : hint
-            ? text(...hint)
-            : text(
-                `通过 ${repo.format} 客户端推送制品后会显示在这里`,
-                "Push artifacts with the matching client to display them here.",
-              )
+            ? t(hint)
+            : t("repository.pushArtifactsWithTheMatchingClient", {
+                format: repo.format,
+              })
       }
     />
   );

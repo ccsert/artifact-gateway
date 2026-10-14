@@ -11,10 +11,14 @@ import {
   rawUsage,
   usageFor,
 } from "./usage";
+import { createTranslator } from "../messages/translate";
+
+const t = createTranslator("zh-CN");
 
 describe("Raw usage", () => {
   it("downloads to the readable file name and shell-quotes every user-controlled value", () => {
     const snippets = rawUsage(
+      t,
       "raw-releases",
       "releases/Joe%27s%20draft%20&%20notes.png",
     );
@@ -36,7 +40,7 @@ describe("APT usage", () => {
     expect(snippets[1].code).toBe(
       `curl -fsSL ${window.location.origin}/apt/debian/${path} -o package`,
     );
-    expect(usageFor("apt", "debian", path)).toEqual(snippets);
+    expect(usageFor(t, "apt", "debian", path)).toEqual(snippets);
     expect(aptRepositoryURL("debian")).toBe(
       `${window.location.origin}/apt/debian`,
     );
@@ -53,7 +57,7 @@ describe("Go usage", () => {
       "go mod download example.com/Acme/widget@v1.2.3",
     );
     expect(
-      usageFor("go", "go-all", "example.com/Acme/widget", "v1.2.3")[2].code,
+      usageFor(t, "go", "go-all", "example.com/Acme/widget", "v1.2.3")[2].code,
     ).toContain("go get example.com/Acme/widget@v1.2.3");
     expect(goProxyURL("go-all")).toBe(`${window.location.origin}/go/go-all`);
   });
@@ -76,7 +80,7 @@ describe("npm usage", () => {
       },
     ]);
     expect(
-      usageFor("npm", "npm-releases", "widget", "1.4.0")[0].code,
+      usageFor(t, "npm", "npm-releases", "widget", "1.4.0")[0].code,
     ).toContain("widget@1.4.0");
     expect(npmRegistryURL("all-packages")).toBe(
       `${window.location.origin}/npm/all-packages/`,
@@ -92,7 +96,7 @@ describe("PyPI usage", () => {
     );
     expect(snippets[1].code).toContain("gateway-widget==2.0.0");
     expect(
-      usageFor("pypi", "python", "gateway-widget", "1.0.0")[0].code,
+      usageFor(t, "pypi", "python", "gateway-widget", "1.0.0")[0].code,
     ).toContain("gateway-widget==1.0.0");
     expect(pypiIndexURL("python-all")).toBe(
       `${window.location.origin}/pypi/python-all/simple/`,

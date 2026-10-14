@@ -1,3 +1,4 @@
+import type { Translate } from "./preferences";
 import type { UsageSnippet } from "./usage";
 
 export type PublicRepositoryFormat =
@@ -8,7 +9,7 @@ export interface PublicRepositoryUsageContext {
   repositoryName: string;
   origin: string;
   host: string;
-  text: (chinese: string, english: string) => string;
+  t: Translate;
 }
 
 export function publicRepositoryUsage({
@@ -16,12 +17,12 @@ export function publicRepositoryUsage({
   repositoryName,
   origin,
   host,
-  text,
+  t,
 }: PublicRepositoryUsageContext): UsageSnippet[] {
   if (format === "maven") {
     const url = `${origin}/maven/${repositoryName}`;
     return [
-      { label: text("Maven 仓库 URL", "Maven repository URL"), code: url },
+      { label: t("lib.mavenRepositoryURL"), code: url },
       {
         label: "settings.xml",
         code: `<repository>\n  <id>${repositoryName}</id>\n  <url>${url}</url>\n</repository>`,
@@ -32,22 +33,19 @@ export function publicRepositoryUsage({
   if (format === "oci") {
     return [
       {
-        label: text("OCI Registry 地址", "OCI registry address"),
+        label: t("lib.oCIRegistryAddress"),
         code: `${host}/${repositoryName}`,
       },
       {
-        label: text("Docker Registry 配置", "Docker registry setup"),
-        code: text(
-          `docker login ${host}\n# 镜像前缀：${host}/${repositoryName}/`,
-          `docker login ${host}\n# Image prefix: ${host}/${repositoryName}/`,
-        ),
+        label: t("lib.dockerRegistrySetup"),
+        code: t("lib.dockerLoginImagePrefix", { host, repositoryName }),
       },
     ];
   }
   if (format === "conan") {
     return [
       {
-        label: text("Conan remote 地址", "Conan remote address"),
+        label: t("lib.conanRemoteAddress"),
         code: `conan remote add ${repositoryName} ${origin}/conan/v2/${repositoryName}`,
       },
     ];
@@ -55,7 +53,7 @@ export function publicRepositoryUsage({
   if (format === "npm") {
     const registry = `${origin}/npm/${repositoryName}/`;
     return [
-      { label: text("npm Registry 地址", "npm registry URL"), code: registry },
+      { label: t("lib.npmRegistryURL"), code: registry },
       { label: ".npmrc", code: `registry=${registry}` },
     ];
   }
@@ -71,7 +69,7 @@ export function publicRepositoryUsage({
     return [
       { label: "GOPROXY", code: `go env -w GOPROXY=${proxy}` },
       {
-        label: text("临时使用", "One-off usage"),
+        label: t("lib.oneOffUsage"),
         code: `GOPROXY=${proxy} go mod download`,
       },
     ];
@@ -79,13 +77,13 @@ export function publicRepositoryUsage({
   if (format === "cargo") {
     const index = `sparse+${origin}/cargo/${repositoryName}/`;
     return [
-      { label: text("Cargo sparse 索引", "Cargo sparse index"), code: index },
+      { label: t("lib.cargoSparseIndex"), code: index },
       {
         label: ".cargo/config.toml",
         code: `[registries.gateway]\nindex = "${index}"\ncredential-provider = "cargo:token"`,
       },
       {
-        label: text("查找与安装 crate", "Search and install a crate"),
+        label: t("lib.searchAndInstallACrate"),
         code: "cargo search <crate> --registry gateway\ncargo add <crate> --registry gateway\ncargo install <crate> --registry gateway",
       },
     ];
@@ -93,17 +91,17 @@ export function publicRepositoryUsage({
   if (format === "apt") {
     const source = `${origin}/apt/${repositoryName}`;
     return [
-      { label: text("APT 源地址", "APT source URL"), code: source },
+      { label: t("lib.aPTSourceURL"), code: source },
       { label: "sources.list", code: `deb ${source} <suite> <component>` },
       {
-        label: text("下载制品", "Download an artifact"),
+        label: t("lib.downloadAnArtifact"),
         code: `curl -fsSL ${source}/pool/<component>/<path>/<package>.deb -o package.deb`,
       },
     ];
   }
   return [
     {
-      label: "Raw 仓库地址",
+      label: t("lib.rawRepositoryAddress"),
       code: `${origin}/raw/${repositoryName}/`,
     },
   ];

@@ -37,7 +37,7 @@ export function ConanGroupTable(props: ConanGroupTableProps) {
     artifactHref,
     onCopyCoordinate,
   } = props;
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const tableRows: ConanTableRow[] = groups.map((group) => {
     const latest = group.versions[0];
     const urlReference = group.versions.some(
@@ -93,7 +93,12 @@ export function ConanGroupTable(props: ConanGroupTableProps) {
       versionHref: selectedRevisionValue
         ? artifactHref(selectedReference, selectedRevisionValue)
         : artifactHref(selectedReference),
-      snippets: usageFor(repository.format, repository.name, selectedReference),
+      snippets: usageFor(
+        t,
+        repository.format,
+        repository.name,
+        selectedReference,
+      ),
     };
   });
 
@@ -115,7 +120,7 @@ export function ConanGroupTable(props: ConanGroupTableProps) {
 
   const columns: ColumnsType<ConanTableRow> = [
     {
-      title: text("Conan 包", "Conan package"),
+      title: t("publicBrowse.conanPackage"),
       dataIndex: "key",
       key: "key",
       width: 260,
@@ -124,7 +129,7 @@ export function ConanGroupTable(props: ConanGroupTableProps) {
       ),
     },
     {
-      title: text("最新版本", "Latest version"),
+      title: t("publicBrowse.latestVersion"),
       key: "latest",
       width: 160,
       render: (_, row) => (
@@ -134,7 +139,7 @@ export function ConanGroupTable(props: ConanGroupTableProps) {
       ),
     },
     {
-      title: text("版本数", "Versions"),
+      title: t("publicBrowse.versions2"),
       key: "versionCount",
       width: 100,
       render: (_, row) => (
@@ -144,7 +149,7 @@ export function ConanGroupTable(props: ConanGroupTableProps) {
       ),
     },
     {
-      title: text("当前 revision", "Current revision"),
+      title: t("publicBrowse.currentRevision"),
       key: "revision",
       width: 240,
       render: (_, row) => (
@@ -154,13 +159,13 @@ export function ConanGroupTable(props: ConanGroupTableProps) {
         >
           {row.selectedRevisionItem?.revision ??
             (row.expanded
-              ? text("读取中…", "Loading…")
-              : text("展开后加载", "Load when expanded"))}
+              ? t("publicBrowse.loading")
+              : t("publicBrowse.loadWhenExpanded"))}
         </span>
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("publicBrowse.actions"),
       key: "actions",
       fixed: "right",
       width: 270,
@@ -173,8 +178,8 @@ export function ConanGroupTable(props: ConanGroupTableProps) {
             onClick={() => toggleRow(row)}
           >
             {row.expanded
-              ? text("收起", "Collapse")
-              : text("选择版本", "Select version")}
+              ? t("publicBrowse.collapse")
+              : t("publicBrowse.selectVersion")}
           </Button>
           <Button
             type="link"
@@ -183,20 +188,20 @@ export function ConanGroupTable(props: ConanGroupTableProps) {
             href={row.versionHref}
           >
             {row.selectedRevisionValue
-              ? text("打开版本", "Open version")
-              : text("打开", "Open")}
+              ? t("publicBrowse.openVersion")
+              : t("publicBrowse.open")}
           </Button>
           <Tooltip
             title={
               copiedCoordinate === row.key
-                ? text("已复制", "Copied")
-                : text("复制 Conan 包标识", "Copy Conan package identifier")
+                ? t("publicBrowse.copied")
+                : t("publicBrowse.copyConanPackageIdentifier")
             }
           >
             <Button
               type="text"
               size="small"
-              aria-label={`${text("复制", "Copy")} ${row.key}`}
+              aria-label={`${t("publicBrowse.copy2")} ${row.key}`}
               icon={
                 copiedCoordinate === row.key ? (
                   <CheckOutlined />

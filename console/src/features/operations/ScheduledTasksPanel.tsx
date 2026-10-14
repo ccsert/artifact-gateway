@@ -32,7 +32,7 @@ import { TaskRunHistory } from "./TaskRunHistory";
 
 /** Recurring retention dispatches, with each task's dispatch history. */
 export function ScheduledTasksPanel() {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const tasksQuery = useScheduledTasks();
   const repositoriesQuery = useRetentionRepositories();
   const tasks = tasksQuery.data ?? null;
@@ -141,7 +141,7 @@ export function ScheduledTasksPanel() {
 
   const columns: ColumnsType<ScheduledTask> = [
     {
-      title: text("任务", "Task"),
+      title: t("operations.task"),
       key: "task",
       width: 260,
       render: (_, task) => (
@@ -153,13 +153,13 @@ export function ScheduledTasksPanel() {
             className="mt-1 truncate text-xs text-fg-tertiary"
             title={task.description}
           >
-            {task.description || text("无备注", "No description")}
+            {task.description || t("operations.noDescription")}
           </div>
         </div>
       ),
     },
     {
-      title: text("动作", "Action"),
+      title: t("operations.action"),
       dataIndex: "kind",
       key: "kind",
       width: 170,
@@ -170,13 +170,13 @@ export function ScheduledTasksPanel() {
           }
         >
           {kind === "audit-retention"
-            ? text("审计保留", "Audit retention")
-            : text("仓库保留", "Repository retention")}
+            ? t("operations.auditRetention")
+            : t("operations.repositoryRetention")}
         </Badge>
       ),
     },
     {
-      title: text("目标", "Target"),
+      title: t("operations.target"),
       key: "target",
       width: 180,
       render: (_, task) => {
@@ -185,7 +185,7 @@ export function ScheduledTasksPanel() {
           : undefined;
         return (
           <div className="text-xs text-fg-secondary">
-            {repository?.name ?? text("全局审计日志", "Global audit log")}
+            {repository?.name ?? t("operations.globalAuditLog")}
             {repository && (
               <div className="mt-1 font-mono text-xs text-fg-disabled">
                 {repository.format}
@@ -196,18 +196,18 @@ export function ScheduledTasksPanel() {
       },
     },
     {
-      title: text("周期", "Interval"),
+      title: t("operations.interval"),
       dataIndex: "intervalMinutes",
       key: "interval",
       width: 130,
       render: (minutes: number) => (
         <span className="whitespace-nowrap text-xs text-fg-secondary">
-          {formatTaskInterval(minutes, text)}
+          {formatTaskInterval(minutes, t)}
         </span>
       ),
     },
     {
-      title: text("下次执行", "Next run"),
+      title: t("operations.nextRun"),
       dataIndex: "nextRunAt",
       key: "nextRunAt",
       width: 180,
@@ -218,7 +218,7 @@ export function ScheduledTasksPanel() {
       ),
     },
     {
-      title: text("最近投递", "Last dispatch"),
+      title: t("operations.lastDispatch"),
       key: "lastRun",
       width: 180,
       render: (_, task) => (
@@ -237,7 +237,7 @@ export function ScheduledTasksPanel() {
       ),
     },
     {
-      title: text("启用", "Enabled"),
+      title: t("operations.enabled2"),
       dataIndex: "enabled",
       key: "enabled",
       width: 90,
@@ -246,61 +246,60 @@ export function ScheduledTasksPanel() {
           size="small"
           value={enabled}
           loading={busyId === task.id}
-          aria-label={text("启用计划任务", "Enable scheduled task")}
+          aria-label={t("operations.enableScheduledTask")}
           onChange={(value) => void updateEnabled(task, value)}
         />
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("operations.actions"),
       key: "actions",
       fixed: "right",
       width: 170,
       render: (_, task) => (
         <Space size="small">
-          <Tooltip title={text("立即执行", "Run now")}>
+          <Tooltip title={t("operations.runNow")}>
             <Button
               size="small"
               icon={<RocketOutlined />}
-              aria-label={text("立即执行", "Run now")}
+              aria-label={t("operations.runNow")}
               loading={busyId === task.id}
               onClick={() => void runNow(task)}
             />
           </Tooltip>
-          <Tooltip title={text("投递历史", "Dispatch history")}>
+          <Tooltip title={t("operations.dispatchHistory")}>
             <Button
               size="small"
               type={expandedTask === task.id ? "primary" : "default"}
               icon={<HistoryOutlined />}
-              aria-label={text("投递历史", "Dispatch history")}
+              aria-label={t("operations.dispatchHistory")}
               onClick={() => toggleHistory(task)}
             />
           </Tooltip>
-          <Tooltip title={text("编辑", "Edit")}>
+          <Tooltip title={t("operations.edit")}>
             <Button
               size="small"
               icon={<EditOutlined />}
-              aria-label={text("编辑", "Edit")}
+              aria-label={t("operations.edit")}
               onClick={() => openEdit(task)}
             />
           </Tooltip>
           <Popconfirm
-            title={text("删除此计划任务？", "Delete this scheduled task?")}
-            description={text(
-              "投递历史会一并删除，已经生成的后台任务不受影响。",
-              "Dispatch history is removed; already submitted jobs are unaffected.",
+            title={t("operations.deleteThisScheduledTask")}
+            description={t(
+              "operations.dispatchHistoryIsRemovedAlreadySubmittedJobsAre",
             )}
-            okText={text("删除", "Delete")}
-            cancelText={text("取消", "Cancel")}
+            okText={t("operations.delete")}
+            cancelText={t("operations.cancel")}
             okButtonProps={{ danger: true }}
             onConfirm={() => remove(task)}
           >
-            <Tooltip title={text("删除", "Delete")}>
+            <Tooltip title={t("operations.delete")}>
               <Button
                 size="small"
                 danger
                 icon={<DeleteOutlined />}
-                aria-label={text("删除", "Delete")}
+                aria-label={t("operations.delete")}
                 loading={busyId === task.id}
               />
             </Tooltip>
@@ -315,7 +314,7 @@ export function ScheduledTasksPanel() {
       {error ? <ErrorBanner error={error} onRetry={load} /> : null}
       <Card>
         <CardHeader
-          title={text("计划任务", "Scheduled tasks")}
+          title={t("operations.scheduledTasks")}
           extra={
             <Space>
               <Button
@@ -323,14 +322,14 @@ export function ScheduledTasksPanel() {
                 loading={loading}
                 onClick={() => void load()}
               >
-                {text("刷新", "Refresh")}
+                {t("operations.refresh")}
               </Button>
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={openCreate}
               >
-                {text("新建计划", "New schedule")}
+                {t("operations.newSchedule")}
               </Button>
             </Space>
           }
@@ -339,15 +338,12 @@ export function ScheduledTasksPanel() {
           // A first load in flight is the only case that shows a placeholder:
           // once it fails, the banner above is the whole answer.
           error ? null : (
-            <Loading label={text("加载计划任务…", "Loading schedules…")} />
+            <Loading label={t("operations.loadingSchedules")} />
           )
         ) : tasks.length === 0 ? (
           <EmptyState
-            title={text("还没有计划任务", "No scheduled tasks yet")}
-            hint={text(
-              "创建计划，将现有的仓库或审计保留策略按固定周期投递到后台任务队列。",
-              "Create a schedule to dispatch existing repository or audit retention policies on a fixed interval.",
-            )}
+            title={t("operations.noScheduledTasksYet")}
+            hint={t("operations.createAScheduleToDispatchExistingRepositoryOr")}
           />
         ) : (
           <ConsoleTable<ScheduledTask>

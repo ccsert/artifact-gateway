@@ -163,7 +163,7 @@ export function StorageByFormatChart({
   bytesByFormat: Record<string, number> | null;
   totalBytes: number | null;
 }) {
-  const { colorMode, resolvedTheme, text } = usePreferences();
+  const { colorMode, resolvedTheme, t } = usePreferences();
   const chartData = bytesByFormat ? buildStorageChartData(bytesByFormat) : [];
   const palette = resolvedTheme.roles.visualization.categorical;
   const data: ThemedStorageChartDatum[] = chartData.map((datum) => {
@@ -178,12 +178,7 @@ export function StorageByFormatChart({
 
   if (totalBytes === null || totalBytes <= 0 || data.length === 0) {
     return (
-      <EmptyChart>
-        {text(
-          "容量统计未启用或暂无数据",
-          "Capacity metrics are unavailable or empty",
-        )}
-      </EmptyChart>
+      <EmptyChart>{t("ui.capacityMetricsAreUnavailableOrEmpty")}</EmptyChart>
     );
   }
 
@@ -220,7 +215,7 @@ export function StorageByFormatChart({
       items: [
         {
           field: "bytes",
-          name: text("存储占用", "Storage used"),
+          name: t("ui.storageUsed"),
           valueFormatter: (value) => formatBytes(Number(value)),
         },
       ],
@@ -233,11 +228,8 @@ export function StorageByFormatChart({
         fallback={
           <div className="flex min-h-56 items-center">
             <ErrorBanner
-              title={text("存储图表加载失败", "Storage chart unavailable")}
-              error={text(
-                "容量数据仍可查看，请刷新页面重试图表。",
-                "Capacity data remains available. Reload the page to retry the chart.",
-              )}
+              title={t("ui.storageChartUnavailable")}
+              error={t("ui.capacityDataRemainsAvailableReloadThePageTo")}
               onRetry={() => window.location.reload()}
             />
           </div>
@@ -246,16 +238,12 @@ export function StorageByFormatChart({
         <div
           className="relative min-w-0"
           role="img"
-          aria-label={text(
-            `各制品格式的存储占比，合计 ${formatBytes(totalBytes)}`,
-            `Storage share by artifact format, ${formatBytes(totalBytes)} total`,
-          )}
+          aria-label={t("ui.storageShareByArtifactFormatTotal", {
+            bytes: formatBytes(totalBytes),
+          })}
           data-testid="storage-by-format-chart"
         >
-          <DeferredChart
-            height={224}
-            label={text("正在加载图表…", "Loading chart…")}
-          >
+          <DeferredChart height={224} label={t("ui.loadingChart")}>
             <DashboardPiePlot key={colorMode} config={config} />
           </DeferredChart>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
@@ -263,14 +251,14 @@ export function StorageByFormatChart({
               {formatBytes(totalBytes)}
             </span>
             <span className="text-xs uppercase tracking-wider text-fg-tertiary">
-              {text("合计", "Total")}
+              {t("ui.total")}
             </span>
           </div>
         </div>
       </StoragePlotBoundary>
       <ul
         className="grid min-w-36 grid-cols-2 gap-x-5 gap-y-2 sm:grid-cols-1"
-        aria-label={text("格式图例", "Format legend")}
+        aria-label={t("ui.formatLegend")}
       >
         {data.map((datum) => (
           <li

@@ -39,7 +39,7 @@ export function CargoCrateDetail({
   onVersionChange?: (version: string) => void;
 }) {
   const { token } = useAuth();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [versions, setVersions] = useState<CargoIndexEntry[]>([]);
   const [selectedVersion, setSelectedVersion] = useState("");
   const [loading, setLoading] = useState(true);
@@ -59,10 +59,9 @@ export function CargoCrateDetail({
       .then(async (response) => {
         if (!response.ok)
           throw new Error(
-            text(
-              `读取 Cargo 版本失败 (${response.status})`,
-              `Failed to load Cargo versions (${response.status})`,
-            ),
+            t("artifactDetail.failedToLoadCargoVersions", {
+              status: response.status,
+            }),
           );
         return response.text();
       })
@@ -93,7 +92,7 @@ export function CargoCrateDetail({
           setError(
             requestError instanceof Error
               ? requestError.message
-              : text("读取 Cargo 版本失败", "Failed to load Cargo versions"),
+              : t("artifactDetail.failedToLoadCargoVersions2"),
           );
       })
       .finally(() => {
@@ -102,7 +101,7 @@ export function CargoCrateDetail({
     return () => {
       cancelled = true;
     };
-  }, [base, crateName, initialVersion, text, token]);
+  }, [base, crateName, initialVersion, t, token]);
 
   const selected = versions.find((entry) => entry.vers === selectedVersion);
   const downloadURL = selected
@@ -144,7 +143,7 @@ export function CargoCrateDetail({
       setError(
         requestError instanceof Error
           ? requestError.message
-          : text("下载失败", "Download failed"),
+          : t("artifactDetail.downloadFailed"),
       );
     } finally {
       setDownloading(false);
@@ -160,7 +159,7 @@ export function CargoCrateDetail({
       <div className="grid gap-4 lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
         <div>
           <div className="mb-1 text-xs font-medium text-fg-tertiary">
-            {text("选择 crate 版本", "Select crate version")}
+            {t("artifactDetail.selectCrateVersion")}
           </div>
           <SearchableVersionSelect
             value={selectedVersion}
@@ -168,7 +167,7 @@ export function CargoCrateDetail({
               value: entry.vers,
               label: entry.yanked ? `${entry.vers} · yanked` : entry.vers,
             }))}
-            placeholder={text("搜索版本", "Search versions")}
+            placeholder={t("artifactDetail.searchVersions")}
             onChange={(version) => {
               setSelectedVersion(version);
               onVersionChange?.(version);
@@ -178,13 +177,13 @@ export function CargoCrateDetail({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <MetadataItem label="Crate" value={crateName} mono />
           <MetadataItem
-            label={text("版本", "Version")}
+            label={t("artifactDetail.version")}
             value={selectedVersion}
             mono
           />
           <MetadataItem
-            label={text("索引状态", "Index status")}
-            value={selected?.yanked ? "yanked" : text("可解析", "Available")}
+            label={t("artifactDetail.indexStatus")}
+            value={selected?.yanked ? "yanked" : t("artifactDetail.available")}
           />
         </div>
       </div>
@@ -203,8 +202,8 @@ export function CargoCrateDetail({
               onClick={() => void copy(downloadURL)}
             >
               {copiedValue === downloadURL
-                ? text("已复制链接", "Link copied")
-                : text("复制下载链接", "Copy download link")}
+                ? t("artifactDetail.linkCopied")
+                : t("artifactDetail.copyDownloadLink")}
             </Button>
             <Button
               size="small"
@@ -212,7 +211,7 @@ export function CargoCrateDetail({
               loading={downloading}
               onClick={() => void download()}
             >
-              {text("下载 .crate", "Download .crate")}
+              {t("artifactDetail.downloadCrate")}
             </Button>
           </div>
           <UsageSnippetBlock

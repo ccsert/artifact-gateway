@@ -40,7 +40,7 @@ export function RepositoryDistributionTab({
   aptPackages?: AptLifecyclePackage[];
   disabled?: boolean;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   // APT promotes and replicates into a named distribution suite.
   const suiteTarget = Boolean(formatDescriptor(repo.format)?.distributionSuite);
   // The same catalog read Access Control uses to name repositories.
@@ -64,12 +64,7 @@ export function RepositoryDistributionTab({
         setActionError(err);
         return;
       }
-      setNotice(
-        text(
-          "已取消复制计划，工作进程不再重试。",
-          "Replication plan canceled. Workers will not retry it.",
-        ),
-      );
+      setNotice(t("repository.replicationPlanCanceledWorkersWillNotRetryIt"));
       void plansQuery.refetch();
     } catch (err) {
       setActionError(err);
@@ -101,9 +96,9 @@ export function RepositoryDistributionTab({
     repoName,
     cancelPlan,
     showDetail,
-    text,
+    t,
   });
-  const checkpointColumns = replicationCheckpointColumns(text);
+  const checkpointColumns = replicationCheckpointColumns(t);
 
   return (
     <div className="ag-page-stack ag-distribution">
@@ -128,15 +123,12 @@ export function RepositoryDistributionTab({
       {/* 复制计划列表 */}
       <div>
         <div className="mb-2 text-sm font-medium text-fg">
-          {text(
-            `复制计划（${plans?.length ?? 0}）`,
-            `Replication plans (${plans?.length ?? 0})`,
-          )}
+          {t("repository.replicationPlans", { count: plans?.length ?? 0 })}
         </div>
         {!plans ? (
           <Loading />
         ) : plans.length === 0 ? (
-          <EmptyState title={text("暂无复制计划", "No replication plans")} />
+          <EmptyState title={t("repository.noReplicationPlans")} />
         ) : (
           <ConsoleTable<ReplicationPlan>
             rowKey="id"
@@ -151,7 +143,7 @@ export function RepositoryDistributionTab({
       {/* 复制进度详情 */}
       <Modal
         open={!!detail}
-        title={text("复制进度详情", "Replication progress")}
+        title={t("repository.replicationProgress")}
         onClose={() => setDetail(null)}
         wide
       >
@@ -159,15 +151,15 @@ export function RepositoryDistributionTab({
           <div className="space-y-4">
             <div className="flex flex-wrap gap-4 text-xs text-fg-secondary">
               <span>
-                {text("状态：", "Status: ")}
+                {t("repository.status2")}
                 <StateBadge state={detail.state} />
               </span>
               <span>
-                {text("目标：", "Target: ")}
+                {t("repository.target")}
                 {repoName(detail.targetRepositoryId)}
               </span>
               <span>
-                {text("创建：", "Created: ")}
+                {t("repository.created2")}
                 {formatDate(detail.createdAt)}
               </span>
               {detail.lastError && (
@@ -178,7 +170,7 @@ export function RepositoryDistributionTab({
             </div>
             {detail.checkpoints.length === 0 ? (
               <p className="py-4 text-center text-sm text-fg-tertiary">
-                {text("暂无检查点", "No checkpoints")}
+                {t("repository.noCheckpoints")}
               </p>
             ) : (
               <ConsoleTable<ReplicationPlanDetail["checkpoints"][number]>

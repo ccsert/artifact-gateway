@@ -16,7 +16,7 @@ export function ArtifactIntelligencePanel({
   coordinate: string;
   digest?: string;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const intelligence = useArtifactIntelligence(
     repositoryId,
     coordinate,
@@ -30,7 +30,7 @@ export function ArtifactIntelligencePanel({
   if (error) {
     const message =
       (error as { message?: string })?.message ??
-      text("读取制品情报失败", "Failed to load artifact intelligence");
+      t("artifactDetail.failedToLoadArtifactIntelligence");
     return (
       <div className="col-span-full">
         <ErrorBanner error={message} tone="warning" />
@@ -49,43 +49,39 @@ export function ArtifactIntelligencePanel({
           : "default";
   const vulnerabilityLabel = vulnerability
     ? {
-        affected: text("受影响", "Affected"),
-        clean: text("未发现", "Clean"),
-        error: text("扫描失败", "Scan failed"),
-        not_scanned: text("未扫描", "Not scanned"),
+        affected: t("artifactDetail.affected"),
+        clean: t("artifactDetail.clean"),
+        error: t("artifactDetail.scanFailed"),
+        not_scanned: t("artifactDetail.notScanned"),
       }[vulnerability.status]
     : "";
   const vulnerabilitySummary = vulnerability
     ? vulnerability.status === "affected"
       ? `${vulnerability.critical} C · ${vulnerability.high} H · ${vulnerability.medium} M · ${vulnerability.low} L · ${vulnerability.unknown} U`
       : vulnerability.status === "clean"
-        ? text("未发现已知漏洞", "No known vulnerabilities")
+        ? t("artifactDetail.noKnownVulnerabilities")
         : vulnerability.status === "error"
-          ? text(
-              "扫描未成功，请检查任务详情",
-              "Scan did not complete; check the job details",
-            )
-          : text("尚无扫描结果", "No scan result yet")
+          ? t("artifactDetail.scanDidNotCompleteCheckTheJobDetails")
+          : t("artifactDetail.noScanResultYet")
     : "";
   return (
     <Card
       size="small"
-      title={text("制品情报", "Artifact intelligence")}
+      title={t("artifactDetail.artifactIntelligence")}
       className="col-span-full border-line bg-surface-translucent"
       extra={<Tag>{format.toUpperCase()}</Tag>}
     >
       <div className="grid gap-4 lg:grid-cols-4">
         <div>
           <div className="mb-2 text-xs font-medium uppercase tracking-wider text-fg-tertiary">
-            {text("签名", "Signatures")}
+            {t("artifactDetail.signatures")}
           </div>
           <div className="text-sm text-fg">
             {metadata.signatures.length > 0
-              ? text(
-                  `${metadata.signatures.length} 条记录`,
-                  `${metadata.signatures.length} record(s)`,
-                )
-              : text("未关联", "None linked")}
+              ? t("artifactDetail.recordS", {
+                  length: metadata.signatures.length,
+                })
+              : t("artifactDetail.noneLinked")}
           </div>
           {metadata.signatures.slice(0, 2).map((signature) => (
             <div
@@ -104,11 +100,8 @@ export function ArtifactIntelligencePanel({
           </div>
           <div className="text-sm text-fg">
             {metadata.sboms.length > 0
-              ? text(
-                  `${metadata.sboms.length} 份清单`,
-                  `${metadata.sboms.length} document(s)`,
-                )
-              : text("未关联", "None linked")}
+              ? t("artifactDetail.documentS", { length: metadata.sboms.length })
+              : t("artifactDetail.noneLinked")}
           </div>
           {metadata.sboms.slice(0, 2).map((sbom) => (
             <div
@@ -122,7 +115,7 @@ export function ArtifactIntelligencePanel({
         </div>
         <div>
           <div className="mb-2 text-xs font-medium uppercase tracking-wider text-fg-tertiary">
-            {text("构建来源", "Provenance")}
+            {t("artifactDetail.provenance")}
           </div>
           {metadata.provenance ? (
             <>
@@ -142,13 +135,13 @@ export function ArtifactIntelligencePanel({
             </>
           ) : (
             <div className="text-sm text-fg-tertiary">
-              {text("未关联", "None linked")}
+              {t("artifactDetail.noneLinked")}
             </div>
           )}
         </div>
         <div>
           <div className="mb-2 text-xs font-medium uppercase tracking-wider text-fg-tertiary">
-            {text("漏洞摘要", "Vulnerabilities")}
+            {t("artifactDetail.vulnerabilities")}
           </div>
           {vulnerability ? (
             <>
@@ -162,7 +155,7 @@ export function ArtifactIntelligencePanel({
             </>
           ) : (
             <div className="text-sm text-fg-tertiary">
-              {text("未扫描", "Not scanned")}
+              {t("artifactDetail.notScanned")}
             </div>
           )}
         </div>
@@ -171,17 +164,17 @@ export function ArtifactIntelligencePanel({
         <ArtifactVulnerabilityFindings findings={vulnerability.findings} />
       )}
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3 text-xs text-fg-tertiary">
-        <span>{text("许可证", "Licenses")}:</span>
+        <span>{t("artifactDetail.licenses")}:</span>
         {metadata.licenses.length > 0 ? (
           metadata.licenses.map((license) => (
             <Tag key={license.spdxId}>{license.spdxId}</Tag>
           ))
         ) : (
-          <span>{text("未关联", "None linked")}</span>
+          <span>{t("artifactDetail.noneLinked")}</span>
         )}
         <span className="ml-auto">
-          {text("更新于", "Updated")} {formatDate(metadata.updatedAt, locale)} ·{" "}
-          {metadata.updatedBy}
+          {t("artifactDetail.updated")} {formatDate(metadata.updatedAt, locale)}{" "}
+          · {metadata.updatedBy}
         </span>
       </div>
     </Card>

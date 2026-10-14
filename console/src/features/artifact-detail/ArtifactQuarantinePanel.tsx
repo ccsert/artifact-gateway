@@ -40,7 +40,7 @@ function QuarantinePanel({
   canManage = false,
   label,
 }: QuarantinePanelProps) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const queryClient = useQueryClient();
   const quarantine = useArtifactQuarantine(repositoryId, coordinate, digest);
   const record = quarantine.data ?? null;
@@ -112,7 +112,7 @@ function QuarantinePanel({
         <Alert
           type="warning"
           showIcon
-          title={text("制品已隔离", "Artifact quarantined")}
+          title={t("artifactDetail.artifactQuarantined")}
           description={
             <div className="space-y-1 text-xs">
               {label && (
@@ -122,9 +122,8 @@ function QuarantinePanel({
               )}
               <div>{activeRecord.reason}</div>
               <div className="text-fg-tertiary">
-                {text(
-                  "已阻止晋升和复制；普通读取不受影响。",
-                  "Promotion and replication are blocked; ordinary reads are unaffected.",
+                {t(
+                  "artifactDetail.promotionAndReplicationAreBlockedOrdinaryReadsAre",
                 )}
               </div>
               <div className="text-fg-tertiary">
@@ -139,7 +138,7 @@ function QuarantinePanel({
                 icon={<UnlockOutlined />}
                 onClick={() => openTransition("released")}
               >
-                {text("解除隔离", "Release")}
+                {t("artifactDetail.release")}
               </Button>
             ) : undefined
           }
@@ -149,12 +148,12 @@ function QuarantinePanel({
           <div>
             <div className="text-fg-secondary">
               {label
-                ? `${label} · ${text("未隔离", "Not quarantined")}`
-                : text("制品未隔离", "Artifact not quarantined")}
+                ? `${label} · ${t("artifactDetail.notQuarantined")}`
+                : t("artifactDetail.artifactNotQuarantined")}
             </div>
             {record && (
               <div className="mt-1 text-fg-disabled">
-                {text("最近解除", "Last released")} · {record.updatedBy} ·{" "}
+                {t("artifactDetail.lastReleased")} · {record.updatedBy} ·{" "}
                 {formatDate(updatedAt, locale)}
               </div>
             )}
@@ -165,7 +164,7 @@ function QuarantinePanel({
             icon={<SafetyCertificateOutlined />}
             onClick={() => openTransition("quarantined")}
           >
-            {text("隔离制品", "Quarantine")}
+            {t("artifactDetail.quarantine")}
           </Button>
         </div>
       )}
@@ -174,15 +173,15 @@ function QuarantinePanel({
         open={nextState !== null}
         title={
           modalQuarantining
-            ? text("隔离制品", "Quarantine artifact")
-            : text("解除隔离", "Release artifact")
+            ? t("artifactDetail.quarantineArtifact")
+            : t("artifactDetail.releaseArtifact")
         }
         onClose={closeTransition}
         busy={saving}
         footer={
           <Space>
             <Button onClick={closeTransition} disabled={saving}>
-              {text("取消", "Cancel")}
+              {t("artifactDetail.cancel")}
             </Button>
             <Button
               type="primary"
@@ -192,8 +191,8 @@ function QuarantinePanel({
               onClick={() => void submit()}
             >
               {modalQuarantining
-                ? text("确认隔离", "Quarantine")
-                : text("确认解除", "Release")}
+                ? t("artifactDetail.quarantine2")
+                : t("artifactDetail.release2")}
             </Button>
           </Space>
         }
@@ -201,13 +200,11 @@ function QuarantinePanel({
         <div className="space-y-3">
           <p className="text-sm leading-6 text-fg-secondary">
             {modalQuarantining
-              ? text(
-                  "隔离后将阻止该制品晋升和复制，但不会阻止普通读取。",
-                  "Quarantine blocks promotion and replication for this artifact, but does not block ordinary reads.",
+              ? t(
+                  "artifactDetail.quarantineBlocksPromotionAndReplicationForThisArtifact",
                 )
-              : text(
-                  "解除后将重新允许晋升和复制，其他安全准入规则仍然生效。",
-                  "Release permits promotion and replication again; other security admission rules still apply.",
+              : t(
+                  "artifactDetail.releasePermitsPromotionAndReplicationAgainOtherSecurity",
                 )}
           </p>
           <div className="rounded border border-line px-3 py-2">
@@ -230,8 +227,8 @@ function QuarantinePanel({
               htmlFor="artifact-quarantine-reason"
             >
               {modalQuarantining
-                ? text("隔离原因", "Quarantine reason")
-                : text("解除原因", "Release reason")}
+                ? t("artifactDetail.quarantineReason")
+                : t("artifactDetail.releaseReason")}
             </label>
             <Input.TextArea
               id="artifact-quarantine-reason"
@@ -239,10 +236,7 @@ function QuarantinePanel({
               maxLength={1024}
               showCount
               rows={4}
-              placeholder={text(
-                "请输入可供审计追踪的原因",
-                "Enter a reason for the audit trail",
-              )}
+              placeholder={t("artifactDetail.enterAReasonForTheAuditTrail")}
               onChange={(event) => setReason(event.target.value)}
             />
           </div>

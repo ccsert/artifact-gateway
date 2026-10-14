@@ -28,20 +28,19 @@ import { EmailDeliveryResults } from "./EmailDeliveryResults";
 
 export function EmailNotificationsPanel() {
   const { identity } = useAuth();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   if (!platformCapabilities(identity).platformAdmin)
     return (
       <EmptyState
-        title={text(
-          "仅平台管理员可管理邮件通知",
-          "Only platform administrators can manage email notifications",
+        title={t(
+          "system.onlyPlatformAdministratorsCanManageEmailNotifications",
         )}
       />
     );
   return <AuthorizedEmailNotifications />;
 }
 function AuthorizedEmailNotifications() {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [editor, setEditor] = useState<{ target?: EmailTarget }>();
   const [confirmation, setConfirmation] = useState<{
     target: EmailTarget;
@@ -87,14 +86,14 @@ function AuthorizedEmailNotifications() {
   if (authBlocked)
     return (
       <ErrorBanner
-        error={safeEmailError(authBlocked, text, "read")}
+        error={safeEmailError(authBlocked, t, "read")}
         onRetry={() => void refresh()}
       />
     );
   if (!snapshot.data)
     return snapshot.error ? (
       <ErrorBanner
-        error={safeEmailError(snapshot.error, text, "read")}
+        error={safeEmailError(snapshot.error, t, "read")}
         onRetry={() => void refresh()}
       />
     ) : (
@@ -113,13 +112,10 @@ function AuthorizedEmailNotifications() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-fg-strong">
-            {text("邮件通知", "Email notifications")}
+            {t("system.emailNotifications")}
           </h2>
           <p className="mt-1 text-sm text-fg-tertiary">
-            {text(
-              "管理只写收件目标、预览模板并明确发送合成测试。",
-              "Manage write-only recipient targets, preview templates, and explicitly send synthetic tests.",
-            )}
+            {t("system.manageWriteOnlyRecipientTargetsPreviewTemplatesAnd")}
           </p>
         </div>
         <Button
@@ -127,14 +123,14 @@ function AuthorizedEmailNotifications() {
           loading={snapshot.loading}
           onClick={() => void refresh()}
         >
-          {text("刷新", "Refresh")}
+          {t("system.refresh")}
         </Button>
       </div>
       {Boolean(snapshot.error) && (
         <ErrorBanner
           tone="warning"
-          title={text("当前显示上次读取的数据", "Showing previously read data")}
-          error={safeEmailError(snapshot.error, text, "read")}
+          title={t("system.showingPreviouslyReadData")}
+          error={safeEmailError(snapshot.error, t, "read")}
           onRetry={() => void refresh()}
         />
       )}
@@ -143,14 +139,8 @@ function AuthorizedEmailNotifications() {
           tone="success"
           title={
             notice === "queued"
-              ? text(
-                  "合成测试已入队，请查看交付结果",
-                  "Synthetic test queued; check delivery results",
-                )
-              : text(
-                  "邮件目标已保存，没有发送测试",
-                  "Email target saved; no test sent",
-                )
+              ? t("system.syntheticTestQueuedCheckDeliveryResults")
+              : t("system.emailTargetSavedNoTestSent")
           }
           onClose={() => setNotice(undefined)}
         />
@@ -158,10 +148,9 @@ function AuthorizedEmailNotifications() {
       {!capability.enabled && (
         <Notice
           tone="info"
-          title={quotaLabel(capability.reason, text)}
-          description={text(
-            "部署管理员配置邮件通道；此页不接收 SMTP 凭据。仍可预览，保存目标需要可用加密密钥。",
-            "A deployment administrator configures the channel; this page accepts no SMTP credentials. Preview remains available; saving targets requires usable encryption.",
+          title={quotaLabel(capability.reason, t)}
+          description={t(
+            "system.aDeploymentAdministratorConfiguresTheChannelThisPage",
           )}
         />
       )}
@@ -187,7 +176,7 @@ function AuthorizedEmailNotifications() {
         <>
           <Card>
             <CardHeader
-              title={text("邮件目标", "Email targets")}
+              title={t("system.emailTargets")}
               extra={
                 <Button
                   type="primary"
@@ -197,17 +186,14 @@ function AuthorizedEmailNotifications() {
                     setEditor({});
                   }}
                 >
-                  {text("新建邮件目标", "New email target")}
+                  {t("system.newEmailTarget")}
                 </Button>
               }
             />
             {targets.length === 0 ? (
               <EmptyState
-                title={text("尚无邮件目标", "No email targets")}
-                hint={text(
-                  "新目标默认停用，保存不会发送邮件。",
-                  "New targets are disabled; saving sends no mail.",
-                )}
+                title={t("system.noEmailTargets")}
+                hint={t("system.newTargetsAreDisabledSavingSendsNoMail")}
               />
             ) : (
               <ul className="divide-y divide-line">
@@ -219,40 +205,36 @@ function AuthorizedEmailNotifications() {
                       </h3>
                       <QuotaBadge>
                         {target.enabled
-                          ? text("已启用", "Enabled")
-                          : text("已停用", "Disabled")}
+                          ? t("system.enabled")
+                          : t("system.disabled")}
                       </QuotaBadge>
                     </div>
                     <p className="text-xs text-fg-tertiary">
                       {target.locale === "en" ? "English" : "简体中文"} ·{" "}
                       {target.recipientConfigured
-                        ? text(
-                            "收件人已配置（只写）",
-                            "Recipient configured (write-only)",
-                          )
-                        : text("未配置收件人", "Recipient not configured")}
+                        ? t("system.recipientConfiguredWriteOnly")
+                        : t("system.recipientNotConfigured")}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <Button
                         size="small"
-                        aria-label={text(
-                          `编辑 ${target.name}`,
-                          `Edit ${target.name}`,
-                        )}
+                        aria-label={t("system.edit", { name: target.name })}
                         disabled={!writable}
                         onClick={() => {
                           setNotice(undefined);
                           setEditor({ target });
                         }}
                       >
-                        {text("编辑", "Edit")}
+                        {t("system.edit2")}
                       </Button>
                       <Button
                         size="small"
                         disabled={!writable || !target.recipientConfigured}
-                        aria-label={text(
-                          `${target.enabled ? "停用" : "启用"} ${target.name}`,
-                          `${target.enabled ? "Disable" : "Enable"} ${target.name}`,
+                        aria-label={t(
+                          target.enabled
+                            ? "system.disableTarget"
+                            : "system.enableTarget",
+                          { name: target.name },
                         )}
                         onClick={() => {
                           setNotice(undefined);
@@ -263,8 +245,8 @@ function AuthorizedEmailNotifications() {
                         }}
                       >
                         {target.enabled
-                          ? text("停用", "Disable")
-                          : text("启用", "Enable")}
+                          ? t("system.disable")
+                          : t("system.enable")}
                       </Button>
                       <Button
                         size="small"
@@ -274,16 +256,13 @@ function AuthorizedEmailNotifications() {
                           !target.enabled ||
                           !target.recipientConfigured
                         }
-                        aria-label={text(
-                          `测试 ${target.name}`,
-                          `Test ${target.name}`,
-                        )}
+                        aria-label={t("system.test", { name: target.name })}
                         onClick={() => {
                           setNotice(undefined);
                           setConfirmation({ target, kind: "test" });
                         }}
                       >
-                        {text("发送合成测试…", "Send synthetic test…")}
+                        {t("system.sendSyntheticTest")}
                       </Button>
                     </div>
                   </li>
@@ -298,12 +277,8 @@ function AuthorizedEmailNotifications() {
           <EmailDeliveryResults deliveries={deliveries} targets={targets} />
           {snapshot.readAt && (
             <p className="text-xs text-fg-tertiary">
-              {text("读取时间", "Read at")}:{" "}
-              {new Date(snapshot.readAt).toLocaleString()} ·{" "}
-              {text(
-                "可见页面每 30 秒刷新",
-                "Refreshes every 30 seconds while visible",
-              )}
+              {t("system.readAt")}: {new Date(snapshot.readAt).toLocaleString()}{" "}
+              · {t("system.refreshesEvery30SecondsWhileVisible")}
             </p>
           )}
         </>

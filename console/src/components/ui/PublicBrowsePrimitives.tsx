@@ -10,8 +10,8 @@ export function SearchableVersionSelect({
   options,
   onChange,
   loading = false,
-  placeholder = "搜索并选择版本",
-  notFoundContent = "没有匹配版本",
+  placeholder,
+  notFoundContent,
   className = "",
 }: {
   value: string;
@@ -22,6 +22,7 @@ export function SearchableVersionSelect({
   notFoundContent?: string;
   className?: string;
 }) {
+  const { t } = usePreferences();
   return (
     <Select
       showSearch={{
@@ -35,8 +36,10 @@ export function SearchableVersionSelect({
       options={options}
       onChange={onChange}
       loading={loading}
-      placeholder={placeholder}
-      notFoundContent={notFoundContent}
+      placeholder={placeholder ?? t("artifactDetail.searchAndSelectAVersion")}
+      notFoundContent={
+        notFoundContent ?? t("artifactDetail.noMatchingVersions")
+      }
       listHeight={280}
       className={`w-full ${className}`}
     />
@@ -54,24 +57,18 @@ export function UsageSnippetBlock({
   onCopy: () => void;
   compact?: boolean;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <div className="rounded-lg border border-line bg-surface-translucent p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-xs font-medium text-fg-secondary">
           {snippet.label}
         </span>
-        <Tooltip
-          title={
-            copied
-              ? text("已复制", "Copied")
-              : text("复制使用方式", "Copy usage")
-          }
-        >
+        <Tooltip title={copied ? t("ui.copied") : t("ui.copyUsage")}>
           <Button
             type="text"
             size="small"
-            aria-label={`${text("复制", "Copy")} ${snippet.label}`}
+            aria-label={`${t("ui.copy")} ${snippet.label}`}
             onClick={onCopy}
             icon={copied ? <CheckOutlined /> : <CopyOutlined />}
           />

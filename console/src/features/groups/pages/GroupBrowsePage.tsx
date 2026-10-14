@@ -9,7 +9,7 @@ import { useGroupBrowseRoot, useSetGroupBrowseRoot } from "../groupQueries";
 
 export function GroupBrowsePage() {
   const { groupId = "" } = useParams();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const rootQuery = useGroupBrowseRoot(groupId);
   const page = rootQuery.data ?? null;
   const error = rootQuery.error;
@@ -18,14 +18,11 @@ export function GroupBrowsePage() {
   return (
     <div className="ag-page-stack ag-group-browse-page">
       <Link to="/groups" className="ag-group-browse-back">
-        <ArrowLeftOutlined aria-hidden /> {text("返回分组", "Back to groups")}
+        <ArrowLeftOutlined aria-hidden /> {t("groups.backToGroups")}
       </Link>
       <PageHeader
-        title={page?.groupName ?? text("分组目录", "Group directory")}
-        description={text(
-          "浏览成员提供的制品，追溯每个本地来源。",
-          "Explore member artifacts and trace each local source.",
-        )}
+        title={page?.groupName ?? t("groups.groupDirectory")}
+        description={t("groups.exploreMemberArtifactsAndTraceEachLocalSource")}
       />
       {error !== null && (
         <ErrorBanner error={error} onRetry={() => void load()} />
@@ -37,13 +34,10 @@ export function GroupBrowsePage() {
             <div className="ag-group-browse-labels">
               <FormatBadge format={page.format} />
               <Badge>Group</Badge>
-              <span>{text("只读视图", "Read-only view")}</span>
+              <span>{t("groups.readOnlyView")}</span>
             </div>
             <p>
-              {text(
-                "目录展示已发布制品与已知缓存。前序 Proxy 暂无缓存，不代表上游不存在；实际下载仍按协议解析。",
-                "This directory contains publications and known cache. An earlier Proxy without cached data may still serve the artifact; downloads follow protocol resolution.",
-              )}
+              {t("groups.thisDirectoryContainsPublicationsAndKnownCacheAn")}
             </p>
           </div>
           <RepositoryBrowseTree
@@ -60,14 +54,9 @@ export function GroupBrowsePage() {
           />
           <section
             className="ag-group-browse-candidates"
-            aria-label={text(
-              "可见成员候选顺序",
-              "Visible member candidate order",
-            )}
+            aria-label={t("groups.visibleMemberCandidateOrder")}
           >
-            <h3>
-              {text("可见成员候选顺序", "Visible member candidate order")}
-            </h3>
+            <h3>{t("groups.visibleMemberCandidateOrder")}</h3>
             <ol>
               {page.candidates.map((candidate) => (
                 <li key={candidate.repositoryId}>

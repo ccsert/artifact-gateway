@@ -43,7 +43,7 @@ function distinct(values: (string | undefined)[], sort = true) {
 }
 
 export function AuditsPage() {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<Filters>(emptyAuditFilters);
   const updateFilters = (change: Partial<Filters>) =>
@@ -122,10 +122,9 @@ export function AuditsPage() {
   return (
     <div className="ag-page-stack">
       <PageHeader
-        title={text("审计日志", "Audit log")}
-        description={text(
-          "网关访问与授权决策记录（最新在前）",
-          "Gateway access and authorization decisions, newest first",
+        title={t("audit.auditLog")}
+        description={t(
+          "audit.gatewayAccessAndAuthorizationDecisionsNewestFirst",
         )}
       />
       <Card>
@@ -135,14 +134,14 @@ export function AuditsPage() {
           repositoryOptions={repositoryOptions}
           groupOptions={groupOptions}
           outcomeOptions={distinct(shown.map((a) => a.outcome)).map(
-            option((value) => auditOutcomeLabel(value, text)),
+            option((value) => auditOutcomeLabel(value, t)),
           )}
           formatOptions={distinct(
             shown.map((a) => a.format),
             false,
           ).map(option((value) => value.toUpperCase()))}
           operationOptions={distinct(shown.map((a) => a.operation)).map(
-            option((value) => auditOperationLabel(value, text)),
+            option((value) => auditOperationLabel(value, t)),
           )}
           actorOptions={distinct(shown.map((a) => a.actor)).map(
             option((value) => value),
@@ -156,21 +155,21 @@ export function AuditsPage() {
                   setFilters({ ...emptyAuditFilters, limit: filters.limit })
                 }
               >
-                {text("清除", "Clear")}
+                {t("audit.clear")}
               </Button>
               <Button
                 icon={<ReloadOutlined />}
                 loading={refreshing}
                 onClick={() => void refresh()}
               >
-                {text("刷新", "Refresh")}
+                {t("audit.refresh")}
               </Button>
               <Button
                 icon={<DownloadOutlined />}
                 disabled={!shown.length}
-                onClick={() => exportAuditCsv(shown, locale)}
+                onClick={() => exportAuditCsv(shown, t)}
               >
-                {text("导出 CSV", "Export CSV")}
+                {t("audit.exportCSV")}
               </Button>
             </Space>
           }
@@ -184,11 +183,8 @@ export function AuditsPage() {
           isNotFound(error) ? (
             <Card>
               <EmptyState
-                title={text("审计功能未启用", "Audit log is unavailable")}
-                hint={text(
-                  "当前后端构建尚未挂载审计端点（返回 404）",
-                  "The current backend does not expose the audit endpoint (404)",
-                )}
+                title={t("audit.auditLogIsUnavailable")}
+                hint={t("audit.theCurrentBackendDoesNotExposeTheAudit")}
               />
             </Card>
           ) : (
@@ -200,11 +196,8 @@ export function AuditsPage() {
       ) : shown.length === 0 ? (
         <Card>
           <EmptyState
-            title={text("没有匹配的审计记录", "No matching audit records")}
-            hint={text(
-              "尝试清除筛选或扩大加载窗口",
-              "Clear filters or expand the load window",
-            )}
+            title={t("audit.noMatchingAuditRecords")}
+            hint={t("audit.clearFiltersOrExpandTheLoadWindow")}
           />
         </Card>
       ) : (
@@ -212,7 +205,7 @@ export function AuditsPage() {
           <ConsoleTable<AuditTableRow>
             rowKey="key"
             dataSource={tableRows}
-            columns={auditColumns(text, locale)}
+            columns={auditColumns(t, locale)}
             pagination={false}
             scroll={{
               x: 1200,
@@ -222,7 +215,7 @@ export function AuditsPage() {
             expandable={{
               expandedRowKeys: expanded === null ? [] : [expanded],
               expandedRowRender: ({ record }) => (
-                <AuditRecordDetail record={record} text={text} />
+                <AuditRecordDetail record={record} t={t} />
               ),
               expandRowByClick: true,
               onExpandedRowsChange: (keys) => {
@@ -233,24 +226,21 @@ export function AuditsPage() {
           />
           <div className="ag-pagination-footer flex items-center justify-end gap-3 border-t border-line px-4 py-3 text-xs text-fg-tertiary">
             <span>
-              {text(
-                `第 ${page} 页 · 当前页 ${shown.length} 条`,
-                `Page ${page} · ${shown.length} records`,
-              )}
+              {t("audit.pageRecords", { page, length: shown.length })}
             </span>
             <Space size="small">
               <Button
                 disabled={page <= 1}
                 onClick={() => showPage(Math.max(1, page - 1))}
               >
-                {text("上一页", "Previous")}
+                {t("audit.previous")}
               </Button>
               <Button
                 disabled={!hasNext || audit.isFetchingNextPage}
                 loading={audit.isFetchingNextPage}
                 onClick={() => void nextPage()}
               >
-                {text("下一页", "Next")}
+                {t("audit.next")}
               </Button>
             </Space>
           </div>

@@ -24,7 +24,7 @@ export function RepositorySecurityTab({
   repo: Repository;
   publicationScanning: boolean;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const aptSigningApplicable =
     Boolean(formatDescriptor(repo.format)?.signedIndexes) &&
     repo.type === "hosted";
@@ -40,7 +40,7 @@ export function RepositorySecurityTab({
     if (signing.error !== null) {
       return isNotFound(signing.error) ? (
         <RepositoryFeatureUnavailable
-          feature={text("APT 签名状态", "APT signing state")}
+          feature={t("repository.aPTSigningState")}
         />
       ) : (
         <ErrorBanner
@@ -56,7 +56,7 @@ export function RepositorySecurityTab({
   if (error !== null) {
     return isNotFound(error) ? (
       <RepositoryFeatureUnavailable
-        feature={text("安全准入策略", "Security admission policy")}
+        feature={t("repository.securityAdmissionPolicy")}
       />
     ) : (
       <ErrorBanner error={error} onRetry={() => void policyQuery.refetch()} />
@@ -68,16 +68,13 @@ export function RepositorySecurityTab({
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(320px,0.78fr)_minmax(0,1.55fr)]">
       <div className="border-b border-line pb-4 xl:col-span-2">
         <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ag-content-tertiary)]">
-          {text("仓库安全防线", "Repository guardrails")}
+          {t("repository.repositoryGuardrails")}
         </div>
         <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-fg-strong">
-          {text("安全准入与隔离读取", "Admission and quarantined reads")}
+          {t("repository.admissionAndQuarantinedReads")}
         </h2>
         <p className="mt-1.5 max-w-3xl text-sm leading-6 text-fg-tertiary">
-          {text(
-            "这里有两条彼此独立的防线：读取策略决定已隔离制品能否被下载；晋升准入决定制品能否进入当前仓库。",
-            "Two independent guardrails live here: the read policy decides whether quarantined artifacts can be downloaded, while admission decides whether artifacts may enter this repository.",
-          )}
+          {t("repository.twoIndependentGuardrailsLiveHereTheReadPolicy")}
         </p>
       </div>
 

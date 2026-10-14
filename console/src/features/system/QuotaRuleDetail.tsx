@@ -43,7 +43,7 @@ export function QuotaRuleDetail({
   onChanged: (rule: RepositoryQuotaAlertRule) => void;
   onDeleted: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [confirmation, setConfirmation] = useState<{
     kind: "enable" | "disable" | "delete";
     rule: RepositoryQuotaAlertRule;
@@ -59,16 +59,16 @@ export function QuotaRuleDetail({
   return (
     <div className="ag-page-stack">
       {Boolean(action.error) && !isQuotaAuthError(action.error) && (
-        <ErrorBanner error={safeQuotaError(action.error, text)} />
+        <ErrorBanner error={safeQuotaError(action.error, t)} />
       )}
       {confirmation && (
         <Card bodyClassName="grid gap-4 p-5">
           <h3 className="text-sm font-semibold text-fg-strong">
             {confirmation.kind === "enable"
-              ? text("确认启用规则", "Confirm enabling this rule")
+              ? t("system.confirmEnablingThisRule")
               : confirmation.kind === "disable"
-                ? text("确认停用规则", "Confirm disabling this rule")
-                : text("确认删除规则", "Confirm deleting this rule")}
+                ? t("system.confirmDisablingThisRule")
+                : t("system.confirmDeletingThisRule")}
           </h3>
           <p className="break-words text-sm text-fg-secondary">
             {repositoryName} · {target?.name ?? rule.targetId} ·{" "}
@@ -76,22 +76,15 @@ export function QuotaRuleDetail({
               ? "English"
               : target?.locale === "zh-CN"
                 ? "中文"
-                : text("语言未知", "Locale unknown")}
+                : t("system.localeUnknown")}
           </p>
           <p className="text-sm text-fg-secondary">
             {confirmation.kind === "enable"
-              ? text(
-                  "启用后，后续真实超限事件可能产生发往该目标的邮件。不会补发先前未入队的事件，也不会发送测试邮件。",
-                  "Enabling may send email to this target for future real quota events. Previously unqueued events are not caught up, and no test email is sent.",
-                )
+              ? t("system.enablingMaySendEmailToThisTargetFor")
               : confirmation.kind === "disable"
-                ? text(
-                    "停用会停止新评估并保留严重度和历史。未领取的自动交付会取消；已领取的交付可能完成一次。",
-                    "Disabling stops new evaluations and retains severity and history. Unclaimed automatic deliveries are cancelled; a claimed delivery may finish once.",
-                  )
-                : text(
-                    "删除会停止新评估并保留历史，不会生成恢复事件。未领取的自动交付会取消；已领取的交付可能完成一次。",
-                    "Deletion stops new evaluations and retains history without generating a recovery event. Unclaimed automatic deliveries are cancelled; a claimed delivery may finish once.",
+                ? t("system.disablingStopsNewEvaluationsAndRetainsSeverityAnd")
+                : t(
+                    "system.deletionStopsNewEvaluationsAndRetainsHistoryWithout",
                   )}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -141,23 +134,23 @@ export function QuotaRuleDetail({
               }}
             >
               {confirmation.kind === "enable"
-                ? text("确认启用", "Confirm enable")
+                ? t("system.confirmEnable")
                 : confirmation.kind === "disable"
-                  ? text("确认停用", "Confirm disable")
-                  : text("确认删除", "Confirm delete")}
+                  ? t("system.confirmDisable")
+                  : t("system.confirmDelete")}
             </Button>
             <Button
-              aria-label={text("取消", "Cancel")}
+              aria-label={t("system.cancel")}
               disabled={action.busy}
               onClick={() => setConfirmation(undefined)}
             >
-              {text("取消", "Cancel")}
+              {t("system.cancel")}
             </Button>
           </div>
         </Card>
       )}
       <Card>
-        <CardHeader title={text("规则状态", "Rule state")} />
+        <CardHeader title={t("system.ruleState")} />
         <div className="grid min-w-0 gap-4 p-5">
           <h3 className="break-words text-base font-semibold text-fg-strong">
             {repositoryName}
@@ -165,10 +158,10 @@ export function QuotaRuleDetail({
           <div className="flex flex-wrap gap-2">
             <Badge>
               {rule.deleted
-                ? quotaLabel("deleted", text)
+                ? quotaLabel("deleted", t)
                 : rule.enabled
-                  ? text("已启用", "Enabled")
-                  : quotaLabel("disabled", text)}
+                  ? t("system.enabled")
+                  : quotaLabel("disabled", t)}
             </Badge>
             <Badge
               tone={
@@ -179,60 +172,59 @@ export function QuotaRuleDetail({
                     : "neutral"
               }
             >
-              {quotaLabel(rule.state.severity, text)}
+              {quotaLabel(rule.state.severity, t)}
             </Badge>
-            <Badge>{quotaLabel(rule.state.dataState, text)}</Badge>
+            <Badge>{quotaLabel(rule.state.dataState, t)}</Badge>
           </div>
           {rule.state.dataState !== "available" && (
             <p className="text-sm text-fg-tertiary">
-              {text(
-                "严重度为保留状态；当前证据不可用于判断是否恢复。",
-                "Severity is retained; current evidence cannot determine whether the repository has recovered.",
+              {t(
+                "system.severityIsRetainedCurrentEvidenceCannotDetermineWhether",
               )}
             </p>
           )}
           {rule.state.lastSampleAt ? (
             <p className="break-words text-sm text-fg-secondary">
               {rule.state.dataState === "available"
-                ? text("最近样本", "Latest sample")
-                : text("历史样本", "Historical sample")}{" "}
+                ? t("system.latestSample")
+                : t("system.historicalSample")}{" "}
               ({new Date(rule.state.lastSampleAt).toLocaleString()}):{" "}
-              {sampleBytes(rule.state.usedBytes, text)} /{" "}
-              {sampleBytes(rule.state.quotaBytes, text)}
+              {sampleBytes(rule.state.usedBytes, t)} /{" "}
+              {sampleBytes(rule.state.quotaBytes, t)}
               {((rule.state.usedBytes !== undefined &&
                 !Number.isSafeInteger(rule.state.usedBytes)) ||
                 (rule.state.quotaBytes !== undefined &&
                   !Number.isSafeInteger(rule.state.quotaBytes))) &&
-                ` · ${text("字节值为近似显示，严重度以服务端为准。", "Byte values are approximate; severity comes from the server.")}`}
+                ` · ${t("system.byteValuesAreApproximateSeverityComesFromThe")}`}
             </p>
           ) : (
             <p className="text-sm text-fg-tertiary">
-              {text("尚无有效容量样本", "No valid capacity sample yet")}
+              {t("system.noValidCapacitySampleYet")}
             </p>
           )}
           <dl className="grid min-w-0 gap-3 text-sm sm:grid-cols-2">
             {[
               [
-                text("警告条件", "Warning condition"),
-                `${text("达到", "At or above")} ${percent(rule.policy.warningBasisPoints)} · ${rule.policy.warningForSeconds} ${text("秒", "seconds")}`,
+                t("system.warningCondition"),
+                `${t("system.atOrAbove")} ${percent(rule.policy.warningBasisPoints)} · ${rule.policy.warningForSeconds} ${t("system.seconds")}`,
               ],
               [
-                text("严重条件", "Critical condition"),
-                `${text("达到", "At or above")} ${percent(rule.policy.criticalBasisPoints)} · ${rule.policy.criticalForSeconds} ${text("秒", "seconds")}`,
+                t("system.criticalCondition"),
+                `${t("system.atOrAbove")} ${percent(rule.policy.criticalBasisPoints)} · ${rule.policy.criticalForSeconds} ${t("system.seconds")}`,
               ],
               [
-                text("恢复条件", "Recovery condition"),
-                `${text("严格低于", "Strictly below")} ${percent(rule.policy.recoveryBelowBasisPoints)} · ${rule.policy.recoveryForSeconds} ${text("秒", "seconds")}`,
+                t("system.recoveryCondition"),
+                `${t("system.strictlyBelow")} ${percent(rule.policy.recoveryBelowBasisPoints)} · ${rule.policy.recoveryForSeconds} ${t("system.seconds")}`,
               ],
               [
-                text("最大样本年龄", "Maximum sample age"),
-                `${rule.policy.maxSampleAgeSeconds} ${text("秒", "seconds")}`,
+                t("system.maximumSampleAge"),
+                `${rule.policy.maxSampleAgeSeconds} ${t("system.seconds")}`,
               ],
               [
-                text("最近评估", "Last evaluation"),
+                t("system.lastEvaluation"),
                 rule.evaluatedAt
                   ? new Date(rule.evaluatedAt).toLocaleString()
-                  : text("尚未评估", "Not evaluated yet"),
+                  : t("system.notEvaluatedYet"),
               ],
             ].map(([label, value]) => (
               <div key={label} className="min-w-0">
@@ -243,15 +235,9 @@ export function QuotaRuleDetail({
           </dl>
           {(
             [
-              ["warningSince", text("警告计时起点", "Warning evidence since")],
-              [
-                "criticalSince",
-                text("严重计时起点", "Critical evidence since"),
-              ],
-              [
-                "recoverySince",
-                text("恢复计时起点", "Recovery evidence since"),
-              ],
+              ["warningSince", t("system.warningEvidenceSince")],
+              ["criticalSince", t("system.criticalEvidenceSince")],
+              ["recoverySince", t("system.recoveryEvidenceSince")],
             ] as const
           ).map(
             ([key, label]) =>
@@ -263,50 +249,42 @@ export function QuotaRuleDetail({
           )}
           <div className="grid gap-2 border-t border-line pt-4">
             <p className="break-words text-sm text-fg-secondary">
-              {text("通知目标", "Notification target")}:{" "}
-              {target?.name ?? rule.targetId} ·{" "}
+              {t("system.notificationTarget")}: {target?.name ?? rule.targetId}{" "}
+              ·{" "}
               {target?.locale === "en"
                 ? "English"
                 : target?.locale === "zh-CN"
                   ? "中文"
-                  : text("语言未知", "Locale unknown")}{" "}
+                  : t("system.localeUnknown")}{" "}
               ·{" "}
               {target?.recipientConfigured
-                ? text("收件人已配置", "Recipient configured")
-                : text(
-                    "收件人未配置或目标不可用",
-                    "Recipient missing or target unavailable",
-                  )}
+                ? t("system.recipientConfigured")
+                : t("system.recipientMissingOrTargetUnavailable")}
             </p>
             <p className="text-sm text-fg-secondary">
-              {text("目标状态", "Target state")}:{" "}
+              {t("system.targetState")}:{" "}
               {target
                 ? target.enabled
-                  ? text("已启用", "Enabled")
-                  : text("已停用", "Disabled")
-                : text("不可用", "Unavailable")}
+                  ? t("system.enabled")
+                  : t("system.disabled")
+                : t("system.unavailable")}
             </p>
             <p className="break-all text-xs text-fg-tertiary">
-              {text("绑定目标版本", "Bound target version")}:{" "}
-              {rule.targetVersion}
+              {t("system.boundTargetVersion")}: {rule.targetVersion}
             </p>
             {target && target.version !== rule.targetVersion && (
               <div className="grid gap-2">
                 <p className="break-all text-xs text-fg-tertiary">
-                  {text("当前目标版本", "Current target version")}:{" "}
-                  {target.version}
+                  {t("system.currentTargetVersion")}: {target.version}
                 </p>
                 <p className="text-sm text-fg-tertiary">
-                  {text(
-                    "目标版本已变更。编辑并保存以重新绑定；此前未入队的事件不会补发。",
-                    "The target version changed. Edit and save to bind it again; previously unqueued events are not caught up.",
-                  )}
+                  {t("system.theTargetVersionChangedEditAndSaveTo")}
                 </p>
               </div>
             )}
             {target && !target.enabled && (
               <p className="text-sm text-fg-tertiary">
-                {quotaLabel("target_disabled", text)}
+                {quotaLabel("target_disabled", t)}
               </p>
             )}
             {!rule.deleted && (
@@ -320,7 +298,7 @@ export function QuotaRuleDetail({
                   }
                   onClick={onEdit}
                 >
-                  {text("编辑规则", "Edit rule")}
+                  {t("system.editRule")}
                 </Button>
                 <Button
                   disabled={
@@ -338,8 +316,8 @@ export function QuotaRuleDetail({
                   }
                 >
                   {rule.enabled
-                    ? text("停用规则", "Disable rule")
-                    : text("启用规则", "Enable rule")}
+                    ? t("system.disableRule")
+                    : t("system.enableRule")}
                 </Button>
                 <Button
                   danger
@@ -351,7 +329,7 @@ export function QuotaRuleDetail({
                   }
                   onClick={() => setConfirmation({ kind: "delete", rule })}
                 >
-                  {text("删除规则", "Delete rule")}
+                  {t("system.deleteRule")}
                 </Button>
               </div>
             )}

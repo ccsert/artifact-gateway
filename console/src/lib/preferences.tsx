@@ -1,4 +1,9 @@
-import { enUS, zhCN, type MessageKey } from "../messages";
+import type { MessageKey } from "../messages";
+import {
+  createTranslator,
+  type MessageLocale,
+  type MessageVariables,
+} from "../messages/translate";
 import {
   createContext,
   useCallback,
@@ -21,7 +26,7 @@ import {
 import { useSiteSettings } from "./siteSettings";
 
 export type ColorMode = "dark" | "light";
-export type AppLocale = "zh-CN" | "en-US";
+export type AppLocale = MessageLocale;
 
 interface ThemeViewTransition {
   ready?: Promise<void>;
@@ -56,9 +61,11 @@ interface PreferencesContextValue {
   setColorMode: (mode: ColorMode) => void;
   setLocale: (locale: AppLocale) => void;
   toggleColorMode: () => void;
-  t: (key: MessageKey, variables?: Record<string, string | number>) => string;
-  text: (chinese: string, english: string) => string;
+  t: (key: MessageKey, variables?: MessageVariables) => string;
 }
+
+/** The Console's translator: a message key plus its `{placeholder}` values. */
+export type Translate = PreferencesContextValue["t"];
 
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
 
@@ -300,24 +307,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     const next = availableThemes[(currentIndex + 1) % availableThemes.length];
     if (next) setThemeId(next.id);
   }, [activeTheme.id, availableThemes, colorMode, setThemeId]);
-  const t = useCallback(
-    (key: MessageKey, variables?: Record<string, string | number>) => {
-      const message: string = (locale === "zh-CN" ? zhCN : enUS)[key];
-      if (!variables) return message;
-      // Match the original template once; inserted names stay literal.
-      return message.replace(/\{([^{}]+)\}/g, (placeholder, name: string) =>
-        variables && Object.hasOwn(variables, name)
-          ? String(variables[name])
-          : placeholder,
-      );
-    },
-    [locale],
-  );
-  const text = useCallback(
-    (chinese: string, english: string) =>
-      locale === "zh-CN" ? chinese : english,
-    [locale],
-  );
+  const t = useMemo(() => createTranslator(locale), [locale]);
 
   const value = useMemo(
     () => ({
@@ -332,7 +322,6 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       setLocale,
       toggleColorMode,
       t,
-      text,
     }),
     [
       activeTheme,
@@ -345,7 +334,6 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       setLocale,
       toggleColorMode,
       t,
-      text,
     ],
   );
 

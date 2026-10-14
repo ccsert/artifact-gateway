@@ -22,11 +22,11 @@ export function BrowseNodePanel({
   selected: BrowseNode | null;
   onOpenInList: (node: BrowseNode) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <aside
       className="ag-repository-tree-inspector"
-      aria-label={text("节点详情", "Node details")}
+      aria-label={t("repository.nodeDetails")}
     >
       {selected ? (
         <div className="ag-repository-tree-inspector-content">
@@ -35,7 +35,7 @@ export function BrowseNodePanel({
               {nodeIcon(selected.kind, true)}
               <strong>{selected.name}</strong>
             </div>
-            <Badge tone="neutral">{nodeKindLabel(selected.kind, text)}</Badge>
+            <Badge tone="neutral">{nodeKindLabel(selected.kind, t)}</Badge>
           </div>
           {selected.kind === "asset" &&
             selected.coordinate &&
@@ -44,12 +44,12 @@ export function BrowseNodePanel({
                 className="ag-repository-tree-open"
                 onClick={() => onOpenInList(selected)}
               >
-                {text("在列表中查看", "Open in list")}
+                {t("repository.openInList")}
               </Button>
             )}
           {(selected.coordinate || selected.path) && (
             <div className="ag-repository-tree-field">
-              <span>{text("规范位置", "Canonical location")}</span>
+              <span>{t("repository.canonicalLocation")}</span>
               <div>
                 <code>
                   {artifactCoordinateForDisplay(
@@ -64,18 +64,13 @@ export function BrowseNodePanel({
           {selected.sources && (
             <section
               className="ag-repository-tree-sources"
-              aria-label={text("本地来源", "Local sources")}
+              aria-label={t("repository.localSources")}
             >
               <h4>
-                {text("本地来源", "Local sources")}{" "}
+                {t("repository.localSources")}{" "}
                 <span>{selected.sources.length}</span>
               </h4>
-              <p>
-                {text(
-                  "按可见成员的候选顺序排列，不代表本次下载命中。",
-                  "Ordered by visible member priority, not an actual download result.",
-                )}
-              </p>
+              <p>{t("repository.orderedByVisibleMemberPriorityNotAnActual")}</p>
               {selected.kind === "asset" &&
                 new Set(
                   selected.sources
@@ -84,10 +79,7 @@ export function BrowseNodePanel({
                 ).size > 1 && (
                   <p>
                     <Badge tone="warning">
-                      {text(
-                        "同路径存在不同内容",
-                        "Different content at this path",
-                      )}
+                      {t("repository.differentContentAtThisPath")}
                     </Badge>
                   </p>
                 )}
@@ -105,31 +97,31 @@ export function BrowseNodePanel({
           <dl className="ag-repository-tree-evidence">
             {selected.sourceRepositoryName && (
               <Evidence
-                label={text("来源仓库", "Source repository")}
+                label={t("repository.sourceRepository")}
                 value={selected.sourceRepositoryName}
               />
             )}
             {selected.cacheState === "cached" && (
               <Evidence
-                label={text("缓存状态", "Cache state")}
-                value={text("已缓存", "Cached")}
+                label={t("repository.cacheState")}
+                value={t("repository.cached")}
               />
             )}
             {selected.buildNumber !== undefined && (
               <Evidence
-                label={text("构建号", "Build number")}
+                label={t("repository.buildNumber")}
                 value={selected.buildNumber}
               />
             )}
             {selected.size !== undefined && (
               <Evidence
-                label={text("大小", "Size")}
+                label={t("repository.size")}
                 value={formatBytes(selected.size)}
               />
             )}
             {selected.contentType && (
               <Evidence
-                label={text("内容类型", "Content type")}
+                label={t("repository.contentType")}
                 value={selected.contentType}
               />
             )}
@@ -137,8 +129,8 @@ export function BrowseNodePanel({
               <Evidence
                 label={
                   selected.cachedAt
-                    ? text("缓存更新时间", "Cache updated")
-                    : text("更新时间", "Updated")
+                    ? t("repository.cacheUpdated")
+                    : t("repository.updated")
                 }
                 value={formatDate(selected.cachedAt ?? selected.createdAt!)}
               />
@@ -148,7 +140,7 @@ export function BrowseNodePanel({
             selected.kind === "asset" &&
             selected.path && (
               <div className="ag-repository-tree-field">
-                <span>{text("文件路径", "Asset path")}</span>
+                <span>{t("repository.assetPath")}</span>
                 <div>
                   <code>{selected.path}</code>
                   <CopyButton text={selected.path} />
@@ -170,21 +162,13 @@ export function BrowseNodePanel({
       ) : (
         <div className="ag-repository-tree-inspector-empty">
           <FolderOpenOutlined aria-hidden />
-          <strong>
-            {text("从目录中选择一项", "Select an item in the directory")}
-          </strong>
+          <strong>{t("repository.selectAnItemInTheDirectory")}</strong>
           <p>
-            {text(
-              "在这里查看完整名称、来源与校验信息。",
-              "Inspect its full name, sources and verification details here.",
-            )}
+            {t("repository.inspectItsFullNameSourcesAndVerificationDetails")}
           </p>
           <span>
             <ArrowUpOutlined aria-hidden />{" "}
-            {text(
-              "方向键浏览 · Enter 选择",
-              "Arrow keys to browse · Enter to select",
-            )}
+            {t("repository.arrowKeysToBrowseEnterToSelect")}
           </span>
         </div>
       )}
@@ -220,7 +204,7 @@ function SourceRow({
   source: BrowseSource;
   groupName: string;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <li>
       <span className="ag-repository-source-order">
@@ -235,15 +219,15 @@ function SourceRow({
           {source.digest && (
             <span>
               {source.type === "proxy"
-                ? text("已缓存", "Cached")
-                : text("已发布", "Published")}
+                ? t("repository.cached")
+                : t("repository.published")}
             </span>
           )}
           {source.size !== undefined && <span>{formatBytes(source.size)}</span>}
         </div>
         {source.cacheRepositoryName && (
           <p>
-            {text("缓存范围", "Cache scope")} · {source.cacheRepositoryName}
+            {t("repository.cacheScope")} · {source.cacheRepositoryName}
           </p>
         )}
         {source.digest && (

@@ -1,3 +1,4 @@
+import type { MessageKey } from "../../messages";
 import type { ReactNode } from "react";
 import { artifactFormatVisualizationSlot } from "../../lib/artifactFormatVisuals";
 import { usePreferences } from "../../lib/preferences";
@@ -78,39 +79,39 @@ const stateTone: Record<string, BadgeTone> = {
 };
 
 export function StateBadge({ state }: { state: string | undefined }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const value = state ?? "unknown";
-  const labels: Record<string, [string, string]> = {
-    active: ["运行中", "Active"],
-    deleting: ["删除中", "Deleting"],
-    deleted: ["已删除", "Deleted"],
-    pending: ["待处理", "Pending"],
-    retrying: ["重试中", "Retrying"],
-    delivering: ["投递中", "Delivering"],
-    running: ["运行中", "Running"],
-    completed: ["已完成", "Completed"],
-    failed: ["失败", "Failed"],
-    cancelled: ["已取消", "Cancelled"],
-    expired: ["已过期", "Expired"],
-    revoked: ["已吊销", "Revoked"],
-    enabled: ["已启用", "Enabled"],
-    disabled: ["已停用", "Disabled"],
-    online: ["在线", "Online"],
-    offline: ["离线", "Offline"],
-    stale: ["陈旧", "Stale"],
-    healthy: ["健康", "Healthy"],
-    degraded: ["降级", "Degraded"],
-    critical: ["严重", "Critical"],
-    denied: ["拒绝", "Denied"],
-    submitted: ["已投递", "Submitted"],
-    succeeded: ["已送达", "Succeeded"],
-    dead: ["已停止", "Dead"],
-    never: ["未扫描", "Not scanned"],
+  const labels: Record<string, MessageKey> = {
+    active: "ui.active",
+    deleting: "ui.deleting",
+    deleted: "ui.deleted",
+    pending: "ui.pending",
+    retrying: "ui.retrying",
+    delivering: "ui.delivering",
+    running: "ui.running",
+    completed: "ui.completed",
+    failed: "ui.failed",
+    cancelled: "ui.cancelled",
+    expired: "ui.expired",
+    revoked: "ui.revoked",
+    enabled: "ui.enabled",
+    disabled: "ui.disabled",
+    online: "ui.online",
+    offline: "ui.offline",
+    stale: "ui.stale",
+    healthy: "ui.healthy",
+    degraded: "ui.degraded",
+    critical: "ui.critical",
+    denied: "ui.denied",
+    submitted: "ui.submitted",
+    succeeded: "ui.succeeded",
+    dead: "ui.dead",
+    never: "ui.notScanned",
   };
   const label = labels[value];
   return (
     <StatusText tone={statusTone(stateTone[value])}>
-      {label ? text(label[0], label[1]) : value}
+      {label ? t(label) : value}
     </StatusText>
   );
 }

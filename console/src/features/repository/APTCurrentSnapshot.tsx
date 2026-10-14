@@ -10,40 +10,37 @@ export function APTCurrentSnapshot({
 }: {
   current: AptLifecycleState["snapshots"][number]["snapshot"] | undefined;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return current ? (
     <div
       className="ag-apt-current"
-      aria-label={text("当前签名快照", "Current signed snapshot")}
+      aria-label={t("repository.currentSignedSnapshot")}
     >
       <div className="ag-apt-heading">
         <strong>
-          {text(
-            `当前快照 #${current.sequence}`,
-            `Current snapshot #${current.sequence}`,
-          )}
+          {t("repository.currentSnapshot", { sequence: current.sequence })}
         </strong>
-        <Badge tone="success">{text("可见", "Visible")}</Badge>
+        <Badge tone="success">{t("repository.visible")}</Badge>
       </div>
       <dl className="ag-apt-evidence">
         <div>
-          <dt>{text("快照 ID", "Snapshot ID")}</dt>
+          <dt>{t("repository.snapshotID")}</dt>
           <dd>
             <code>{current.id}</code>
           </dd>
         </div>
         <div>
-          <dt>{text("签名指纹", "Signing fingerprint")}</dt>
+          <dt>{t("repository.signingFingerprint")}</dt>
           <dd>
             <code>{current.keyFingerprint}</code>
           </dd>
         </div>
         <div>
-          <dt>{text("签名服务", "Signer")}</dt>
+          <dt>{t("repository.signer")}</dt>
           <dd>{current.signerIdentity}</dd>
         </div>
         <div>
-          <dt>{text("发布时间", "Published")}</dt>
+          <dt>{t("repository.published2")}</dt>
           <dd>{formatDate(current.publishedAt)}</dd>
         </div>
       </dl>
@@ -51,11 +48,8 @@ export function APTCurrentSnapshot({
   ) : (
     <EmptyState
       compact
-      title={text("此套件暂无可见快照", "No visible snapshot in this suite")}
-      hint={text(
-        "请核对套件名，或通过发布 API 创建首个签名快照。",
-        "Check the suite name, or create the first signed snapshot through the publication API.",
-      )}
+      title={t("repository.noVisibleSnapshotInThisSuite")}
+      hint={t("repository.checkTheSuiteNameOrCreateTheFirst")}
     />
   );
 }

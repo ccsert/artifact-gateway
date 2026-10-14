@@ -112,9 +112,9 @@ export function Pagination({
   label?: string;
   disabled?: boolean;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   if (!hasMore) return null;
-  const actionLabel = label ?? text("加载更多", "Load more");
+  const actionLabel = label ?? t("ui.loadMore");
   return (
     <div className="ag-pagination-footer flex justify-end border-t border-line px-4 py-3">
       <Button

@@ -97,6 +97,25 @@ export const shellZhCN = {
   "auth.clearToken": "清除令牌",
   "auth.tokenDialogHint": "管理 API 使用 Bearer 认证，令牌仅保存在浏览器中。",
   "auth.saveToken": "保存",
+  "shell.pageResourcesFailedToLoad": "页面资源加载失败",
+  "shell.pageFailedToLoad": "页面加载失败",
+  "shell.pageResourcesMayHaveChangedOrTheDevelopment":
+    "页面资源可能已更新，或开发服务正在重建依赖。请重新加载；若仍失败，请重启本地 Console。",
+  "shell.thePageCouldNotFinishLoadingReloadIt":
+    "页面未能完成加载。请先重新加载；如果问题持续，可以前往公开制品浏览。",
+  "shell.technicalDetails": "技术详情",
+  "shell.reload": "重新加载",
+  "shell.browsePublicArtifacts": "浏览公开制品",
+  "shell.couldNotLoadRepositories": "仓库列表加载失败",
+  "shell.loadingRepositories": "正在加载仓库…",
+  "shell.noPageOrRepositoryMatches": "没有匹配“{query}”的页面或仓库。",
+  "shell.select": "选择",
+  "shell.open": "打开",
+  "shell.close": "关闭",
+  "shell.developmentBuild": "开发构建",
+  "shell.versionUnknown": "版本未知",
+  "shell.viewDiagnosticsForTheConnectedNode": "查看当前连接节点的系统诊断",
+  "shell.connectedNode": "当前节点",
 } as const;
 
 export type ShellMessageKey = keyof typeof shellZhCN;

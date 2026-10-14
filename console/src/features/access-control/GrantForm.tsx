@@ -60,7 +60,7 @@ export function GrantForm({
   onChange,
   lockPrincipal = false,
 }: GrantFormProps) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const kind = principalEditorKind(grant.principal);
   const selectedChoice = principalOptions.find(
     (choice) => choice.value === grant.principal,
@@ -72,42 +72,33 @@ export function GrantForm({
     <div className="grid gap-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
         {lockPrincipal ? (
-          <Field
-            label={text("授权主体", "Principal")}
-            hint={selectedChoice?.detail}
-          >
+          <Field label={t("access.principal")} hint={selectedChoice?.detail}>
             <div className="min-h-8 font-mono text-sm text-fg">
               {grant.principal}
             </div>
           </Field>
         ) : (
           <Field
-            label={text("授权主体", "Principal")}
+            label={t("access.principal")}
             hint={
               kind === "custom"
-                ? text(
-                    "必须与认证完成后产生的 actor 完全一致",
-                    "Must exactly match the authenticated actor",
-                  )
+                ? t("access.mustExactlyMatchTheAuthenticatedActor")
                 : selectedChoice?.detail
             }
           >
             <Select
               className="w-full"
-              aria-label={text("授权主体", "Principal")}
+              aria-label={t("access.principal")}
               showSearch={{ optionFilterProp: "label" }}
               value={
                 kind === "custom"
                   ? CUSTOM_PRINCIPAL
                   : grant.principal || undefined
               }
-              placeholder={text(
-                "选择用户、API Key、服务账号或外部身份",
-                "Select a user, API key, service account, or external identity",
-              )}
+              placeholder={t("access.selectAUserAPIKeyServiceAccountOr")}
               options={[
                 {
-                  label: text("用户", "Users"),
+                  label: t("access.users"),
                   options: principalOptions
                     .filter((choice) => choice.value.startsWith("user:"))
                     .map((choice) => ({
@@ -125,7 +116,7 @@ export function GrantForm({
                     })),
                 },
                 {
-                  label: text("服务账号", "Service accounts"),
+                  label: t("access.serviceAccounts"),
                   options: principalOptions
                     .filter((choice) =>
                       choice.value.startsWith("service-account:"),
@@ -136,11 +127,11 @@ export function GrantForm({
                     })),
                 },
                 {
-                  label: text("外部身份", "External identities"),
+                  label: t("access.externalIdentities"),
                   options: [
                     {
                       value: CUSTOM_PRINCIPAL,
-                      label: text("OIDC / 自定义 actor", "OIDC / custom actor"),
+                      label: t("access.oidcCustomActor"),
                     },
                   ],
                 },
@@ -162,11 +153,8 @@ export function GrantForm({
         {!lockPrincipal && kind === "custom" && (
           <div className="mt-3">
             <Field
-              label={text("主体标识", "Principal identifier")}
-              hint={text(
-                "完整 actor，例如 oidc:gitlab:team/release",
-                "Complete actor, for example oidc:gitlab:team/release",
-              )}
+              label={t("access.principalIdentifier")}
+              hint={t("access.completeActorForExampleOidcGitlabTeamRelease")}
             >
               <Input
                 className="font-mono"
@@ -182,49 +170,43 @@ export function GrantForm({
           </div>
         )}
       </div>
-      <Field label={text("权限级别", "Permission")}>
+      <Field label={t("access.permission2")}>
         <Select
           className="w-full"
-          aria-label={text("权限级别", "Permission")}
+          aria-label={t("access.permission2")}
           value={selectedPermission}
           options={[
             ...(selectedPermission === SNAPSHOT_PERMISSION
               ? [
                   {
                     value: SNAPSHOT_PERMISSION,
-                    label: text(
-                      "已保存的权限快照",
-                      "Saved permission snapshot",
-                    ),
+                    label: t("access.savedPermissionSnapshot"),
                   },
                 ]
               : []),
             {
-              label: text("内置权限", "Built-in permissions"),
+              label: t("access.builtInPermissions"),
               options: [
                 {
                   value: `${BUILTIN_PERMISSION_PREFIX}read`,
-                  label: text("读取 · 浏览 / 拉取", "Read · browse / pull"),
+                  label: t("access.readBrowsePull"),
                 },
                 {
                   value: `${BUILTIN_PERMISSION_PREFIX}write`,
-                  label: text("写入 · 发布 / 编辑", "Write · publish / edit"),
+                  label: t("access.writePublishEdit"),
                 },
                 {
                   value: `${BUILTIN_PERMISSION_PREFIX}admin`,
-                  label: text("管理 · 授权 / 删除", "Admin · grant / delete"),
+                  label: t("access.adminGrantDelete2"),
                 },
                 {
                   value: `${BUILTIN_PERMISSION_PREFIX}intelligence`,
-                  label: text(
-                    "制品情报 · 安全元数据",
-                    "Artifact intelligence · security metadata",
-                  ),
+                  label: t("access.artifactIntelligenceSecurityMetadata"),
                 },
               ],
             },
             {
-              label: text("自定义角色", "Custom roles"),
+              label: t("access.customRoles"),
               options: authorizationRoles.map((role) => ({
                 value: `${CUSTOM_ROLE_PREFIX}${role.id}`,
                 label: role.name,
@@ -249,16 +231,16 @@ export function GrantForm({
       </Field>
       <div className="min-w-0">
         <span className="mb-1.5 block text-xs font-medium text-fg-secondary">
-          {text("本规则授予", "Granted by this rule")}
+          {t("access.grantedByThisRule")}
         </span>
         <div className="flex min-h-8 items-center">
           <Badge tone={grantTone(level)}>
-            {grantedCapabilitiesLabel(grant.scopes, text)}
+            {grantedCapabilitiesLabel(grant.scopes, t)}
           </Badge>
         </div>
       </div>
       <div className="sm:col-span-2">
-        <Field label={text("资源范围", "Resource scope")} group>
+        <Field label={t("access.resourceScope")} group>
           <ResourcePrefixEditor
             format={format}
             value={grant.resourcePrefix ?? ""}

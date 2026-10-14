@@ -9,7 +9,7 @@ import { WebhookDeliveriesPanel } from "./WebhookDeliveriesPanel";
 
 /** Operations: scheduled tasks, webhook delivery and the job history. */
 export function OperationsPage() {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const activeTab =
@@ -24,10 +24,9 @@ export function OperationsPage() {
   return (
     <div className="ag-page-stack">
       <PageHeader
-        title={text("任务中心", "Operations")}
-        description={text(
-          "配置周期性维护计划，并跨仓库查看后台任务的执行状态。",
-          "Schedule recurring maintenance and track background jobs across repositories.",
+        title={t("operations.operations")}
+        description={t(
+          "operations.scheduleRecurringMaintenanceAndTrackBackgroundJobsAcross",
         )}
       />
       <Tabs
@@ -42,17 +41,17 @@ export function OperationsPage() {
         items={[
           {
             key: "schedules",
-            label: text("计划任务", "Scheduled tasks"),
+            label: t("operations.scheduledTasks"),
             children: <ScheduledTasksPanel />,
           },
           {
             key: "webhooks",
-            label: text("Webhook 投递", "Webhook delivery"),
+            label: t("operations.webhookDelivery"),
             children: <WebhookDeliveriesPanel />,
           },
           {
             key: "jobs",
-            label: text("执行记录", "Job history"),
+            label: t("operations.jobHistory"),
             children: (
               <SectionBoundary resetKeys={[activeTab]}>
                 <JobHistoryPanel active={activeTab === "jobs"} />

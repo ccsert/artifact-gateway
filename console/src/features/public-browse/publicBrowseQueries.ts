@@ -1,3 +1,4 @@
+import { LocalizedError } from "../../messages/translate";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { searchRepositoryArtifacts } from "../../client";
 import type { ArtifactSearchMatch, ArtifactSummary } from "../../client";
@@ -39,8 +40,9 @@ export function usePublicCatalog() {
     queryFn: async ({ signal }) => {
       const response = await fetch("/api/v2/public/repositories", { signal });
       if (!response.ok)
-        throw Object.assign(
-          new Error(`读取公开仓库失败 (${response.status})`),
+        throw new LocalizedError(
+          "publicBrowse.failedToReadPublicRepositories",
+          { status: response.status },
           { status: response.status },
         );
       const data = (await response.json()) as PublicRepositoryCatalogResponse;

@@ -1,7 +1,8 @@
 import type { Format } from "../client";
+import type { Translate } from "./preferences";
 import { decodeRawPathForDisplay, rawResourceURL } from "./rawPath";
 
-// 按格式生成制品的"使用方法"（可复制的接入方式）
+// Per-format "how to use" snippets an artifact page offers for copying.
 
 export interface UsageSnippet {
   label: string;
@@ -42,7 +43,7 @@ export function aptUsage(
   ];
 }
 
-// Maven GAV 坐标 → 各用法
+// Maven GAV coordinate -> its usage snippets.
 export interface MavenUsageOptions {
   buildNumber?: number;
   createdAt?: string;
@@ -69,6 +70,7 @@ function mavenSnapshotBuildVersion(
 }
 
 export function mavenUsage(
+  t: Translate,
   repoName: string,
   coordinate: string,
   options: MavenUsageOptions = {},
@@ -82,41 +84,42 @@ export function mavenUsage(
     const fixedVersion = mavenSnapshotBuildVersion(v, options);
     if (fixedVersion) {
       out.push({
-        label: "Maven 依赖（动态 SNAPSHOT）",
+        label: t("lib.mavenDependencyDynamicSnapshot"),
         code: dynamicPom,
       });
       out.push({
-        label: "Maven 依赖（固定本次构建）",
+        label: t("lib.mavenDependencyPinnedBuild"),
         code: `<dependency>\n  <groupId>${g}</groupId>\n  <artifactId>${a}</artifactId>\n  <version>${fixedVersion}</version>\n</dependency>`,
       });
       out.push({
-        label: "本次构建 POM",
+        label: t("lib.buildPom"),
         code: `${gatewayBase()}/maven/${repoName}/${path}/${a}-${fixedVersion}.pom`,
       });
       out.push({
-        label: "Gradle 固定构建",
+        label: t("lib.gradlePinnedBuild"),
         code: `implementation '${g}:${a}:${fixedVersion}'`,
       });
     } else {
       out.push({
-        label: "Maven 依赖 (pom.xml)",
+        label: t("lib.mavenDependencyPomXml"),
         code: dynamicPom,
       });
       out.push({
-        label: "Gradle 依赖",
+        label: t("lib.gradleDependency"),
         code: `implementation '${g}:${a}:${v}'`,
       });
     }
     out.push({
-      label: "仓库路径",
+      label: t("lib.repositoryPath"),
       code: `${gatewayBase()}/maven/${repoName}/${path}`,
     });
   }
   return out;
 }
 
-// OCI 镜像 → docker 命令
+// OCI image -> docker commands.
 export function ociUsage(
+  t: Translate,
   repoName: string,
   image: string,
   tag?: string,
@@ -126,43 +129,51 @@ export function ociUsage(
     : image;
   const host = gatewayHost();
   return [
-    { label: "Docker 拉取", code: `docker pull ${host}/${repoName}/${ref}` },
     {
-      label: "Docker 运行",
+      label: t("lib.dockerPull"),
+      code: `docker pull ${host}/${repoName}/${ref}`,
+    },
+    {
+      label: t("lib.dockerRun"),
       code: `docker run --rm ${host}/${repoName}/${ref}`,
     },
-    { label: "镜像引用", code: `${host}/${repoName}/${ref}` },
+    { label: t("lib.imageReference"), code: `${host}/${repoName}/${ref}` },
   ];
 }
 
-// Conan 引用 → conan 命令
+// Conan reference -> conan commands.
 export function conanUsage(
+  t: Translate,
   repoName: string,
   reference: string,
 ): UsageSnippet[] {
   const base = gatewayBase();
   return [
     {
-      label: "添加 remote",
+      label: t("lib.addRemote"),
       code: `conan remote add ${repoName} ${base}/conan/v2/${repoName}`,
     },
     {
-      label: "安装包",
+      label: t("lib.installPackage"),
       code: `conan install --requires=${reference} -r ${repoName}`,
     },
   ];
 }
 
-// Raw 文件 → 下载
-export function rawUsage(repoName: string, path: string): UsageSnippet[] {
+// Raw file -> download.
+export function rawUsage(
+  t: Translate,
+  repoName: string,
+  path: string,
+): UsageSnippet[] {
   const url = `${gatewayBase()}${rawResourceURL(repoName, path)}`;
   const readablePath = decodeRawPathForDisplay(path);
   const filename = readablePath.slice(readablePath.lastIndexOf("/") + 1);
   const shellQuote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
   return [
-    { label: "下载 URL", code: url },
+    { label: t("lib.downloadUrl"), code: url },
     {
-      label: "curl 下载",
+      label: t("lib.curlDownload"),
       code: `curl --fail --location --output ${shellQuote(filename)} ${shellQuote(url)}`,
     },
   ];
@@ -230,6 +241,7 @@ export function goUsage(
 }
 
 export function usageFor(
+  t: Translate,
   format: Format | string,
   repoName: string,
   coordinate: string,
@@ -238,13 +250,13 @@ export function usageFor(
 ): UsageSnippet[] {
   switch (format) {
     case "maven":
-      return mavenUsage(repoName, coordinate, mavenOptions);
+      return mavenUsage(t, repoName, coordinate, mavenOptions);
     case "oci":
-      return ociUsage(repoName, coordinate, tag);
+      return ociUsage(t, repoName, coordinate, tag);
     case "conan":
-      return conanUsage(repoName, coordinate);
+      return conanUsage(t, repoName, coordinate);
     case "raw":
-      return rawUsage(repoName, coordinate);
+      return rawUsage(t, repoName, coordinate);
     case "npm":
       return npmUsage(repoName, coordinate, tag ?? "latest");
     case "pypi":
@@ -258,7 +270,7 @@ export function usageFor(
   }
 }
 
-// Maven 坐标 → group:artifact（用于版本聚合）
+// Maven coordinate -> group:artifact, used to group versions.
 export function mavenGA(coordinate: string): string | null {
   const parts = coordinate.split(":");
   return parts.length >= 3 ? `${parts[0]}:${parts[1]}` : null;

@@ -34,11 +34,11 @@ import { useControlJob, useOperationJobs } from "./operationQueries";
  * tab is the one on screen.
  */
 export function JobHistoryPanel({ active }: { active: boolean }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const compactLayout = useCompactOperationLayout();
   const kindLabel = (kind: string) => {
     const labels = KIND_LABELS[kind];
-    return labels ? text(labels[0], labels[1]) : kind;
+    return labels ? t(labels) : kind;
   };
   const jobs = useOperationJobs({ poll: active });
   const rows = jobs.rows;
@@ -95,29 +95,27 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
 
   const columns: ColumnsType<OperationRow> = [
     {
-      title: text("任务", "Job"),
+      title: t("operations.job"),
       key: "identity",
       width: 250,
       render: (_, row) => (
-        <OperationIdentity row={row} kindLabel={kindLabel} text={text} />
+        <OperationIdentity row={row} kindLabel={kindLabel} t={t} />
       ),
     },
     {
-      title: text("状态与进度", "Status and progress"),
+      title: t("operations.statusAndProgress"),
       key: "status",
       width: 250,
-      render: (_, row) => <OperationStatus row={row} text={text} />,
+      render: (_, row) => <OperationStatus row={row} t={t} />,
     },
     {
-      title: text("时间线", "Timeline"),
+      title: t("operations.timeline"),
       key: "timeline",
       width: 200,
-      render: (_, row) => (
-        <OperationTimeline row={row} locale={locale} text={text} />
-      ),
+      render: (_, row) => <OperationTimeline row={row} locale={locale} t={t} />,
     },
     {
-      title: text("操作", "Actions"),
+      title: t("operations.actions"),
       key: "actions",
       width: 140,
       render: (_, row) => (
@@ -125,7 +123,7 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
           row={row}
           acting={actingJob === row.id}
           detailsOpen={expandedJobKey === operationRowKey(row)}
-          text={text}
+          t={t}
           onInspect={toggleJobDetails}
           onAction={(target, action) => void controlJob(target, action)}
         />
@@ -139,28 +137,28 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
         <MetricStrip
           items={[
             {
-              label: text("任务总数", "Jobs"),
+              label: t("operations.jobs"),
               value: rows?.length ?? "—",
-              hint: text("当前保留窗口", "Current retention window"),
+              hint: t("operations.currentRetentionWindow"),
             },
             {
-              label: text("运行中", "Running"),
+              label: t("operations.running"),
               value: rows ? running : "—",
-              hint: text("正在处理", "In progress"),
+              hint: t("operations.inProgress"),
               tone: running ? "success" : "default",
             },
             {
-              label: text("待处理", "Pending"),
+              label: t("operations.pending"),
               value: rows ? pending : "—",
-              hint: text("等待 worker", "Waiting for a worker"),
+              hint: t("operations.waitingForAWorker"),
               tone: pending ? "warning" : "default",
             },
             {
-              label: text("失败", "Failed"),
+              label: t("operations.failed"),
               value: rows ? failed : "—",
               hint: failed
-                ? text("需要检查失败原因", "Review failure details")
-                : text("当前没有失败任务", "No failed jobs"),
+                ? t("operations.reviewFailureDetails")
+                : t("operations.noFailedJobs"),
               tone: failed ? "danger" : "success",
             },
           ]}
@@ -170,15 +168,15 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
         <div className="ag-operation-records-header">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold tracking-tight text-fg-strong">
-              {text("执行记录", "Job history")}
+              {t("operations.jobHistory")}
             </h2>
             <p className="mt-1 text-xs text-fg-tertiary">
               {rows
-                ? text(
-                    `显示 ${visibleRows.length} / ${rows.length} 条任务`,
-                    `Showing ${visibleRows.length} of ${rows.length} jobs`,
-                  )
-                : text("正在读取任务记录", "Loading job records")}
+                ? t("operations.showingOfJobs", {
+                    length: visibleRows.length,
+                    length2: rows.length,
+                  })
+                : t("operations.loadingJobRecords")}
             </p>
           </div>
           <Button
@@ -186,7 +184,7 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
             onClick={() => void load()}
             loading={loading}
           >
-            {text("刷新", "Refresh")}
+            {t("operations.refresh")}
           </Button>
         </div>
         <FilterBar
@@ -205,13 +203,13 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
                   setRepositoryFilter("all");
                 }}
               >
-                {text("清除筛选", "Clear filters")}
+                {t("operations.clearFilters")}
               </Button>
             ) : undefined
           }
         >
           <FilterField
-            label={text("状态", "Status")}
+            label={t("operations.status")}
             className="ag-operation-filter-field min-w-[150px]"
           >
             <Select
@@ -221,7 +219,7 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
               options={[
                 {
                   value: "all",
-                  label: text("全部状态", "All statuses"),
+                  label: t("operations.allStatuses"),
                 },
                 { value: "pending", label: "pending" },
                 { value: "running", label: "running" },
@@ -233,7 +231,7 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
             />
           </FilterField>
           <FilterField
-            label={text("任务类型", "Job type")}
+            label={t("operations.jobType")}
             className="ag-operation-filter-field min-w-[180px]"
           >
             <Select
@@ -243,7 +241,7 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
               options={[
                 {
                   value: "all",
-                  label: text("全部类型", "All types"),
+                  label: t("operations.allTypes"),
                 },
                 ...kindOptions.map((kind) => ({
                   value: kind,
@@ -253,7 +251,7 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
             />
           </FilterField>
           <FilterField
-            label={text("仓库", "Repository")}
+            label={t("operations.repository")}
             className="ag-operation-filter-field min-w-[220px]"
           >
             <Select
@@ -264,7 +262,7 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
               options={[
                 {
                   value: "all",
-                  label: text("全部仓库", "All repositories"),
+                  label: t("operations.allRepositories"),
                 },
                 ...repositories.map((repo) => ({
                   value: repo.id,
@@ -280,16 +278,13 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
           </div>
         ) : !rows ? (
           <div className="px-5 py-8">
-            <Loading label={text("加载任务状态…", "Loading job status…")} />
+            <Loading label={t("operations.loadingJobStatus")} />
           </div>
         ) : visibleRows.length === 0 ? (
           <div className="px-5 py-8">
             <EmptyState
-              title={text("没有匹配的任务", "No matching jobs")}
-              hint={text(
-                "调整筛选条件，或等待任务产生后再刷新。",
-                "Adjust the filters or refresh after new jobs are created.",
-              )}
+              title={t("operations.noMatchingJobs")}
+              hint={t("operations.adjustTheFiltersOrRefreshAfterNewJobs")}
             />
           </div>
         ) : compactLayout ? (
@@ -302,7 +297,7 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
                 kindLabel={kindLabel}
                 acting={actingJob === row.id}
                 detailsOpen={expandedJobKey === operationRowKey(row)}
-                text={text}
+                t={t}
                 onInspect={toggleJobDetails}
                 onAction={(target, action) => void controlJob(target, action)}
               />
@@ -318,7 +313,7 @@ export function JobHistoryPanel({ active }: { active: boolean }) {
               expandedRowKeys: expandedJobKey ? [expandedJobKey] : [],
               showExpandColumn: false,
               expandedRowRender: (row) => (
-                <OperationDetailsPanel row={row} text={text} />
+                <OperationDetailsPanel row={row} t={t} />
               ),
             }}
             pagination={false}

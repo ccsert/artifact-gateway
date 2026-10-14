@@ -14,16 +14,13 @@ export function APTOperationsTab({
   repo: Repository;
   canAdmin: boolean;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [suite, setSuite] = useState("stable");
   const [query, setQuery] = useState("stable");
   if (!canAdmin)
     return (
       <EmptyState
-        title={text(
-          "需要仓库管理权限",
-          "Repository administrator access required",
-        )}
+        title={t("repository.repositoryAdministratorAccessRequired")}
       />
     );
   return (
@@ -31,31 +28,24 @@ export function APTOperationsTab({
       <Notice
         tone="info"
         closable={false}
-        title={text(
-          "APT 签名快照 · 操作预览",
-          "APT signed snapshots · Operator preview",
-        )}
-        description={text(
-          "成员变更会生成完整索引并签署新快照。应用需要已配置的签名服务；生产密钥托管尚未完成验收。",
-          "Membership changes rebuild and sign a complete snapshot. Applying requires a configured signer; production key custody has not been accepted.",
+        title={t("repository.aPTSignedSnapshotsOperatorPreview")}
+        description={t(
+          "repository.membershipChangesRebuildAndSignACompleteSnapshot",
         )}
       />
       <div className="ag-apt-toolbar">
         <Field
-          label={text("发行套件", "Suite")}
-          hint={text(
-            "输入完整套件名，例如 stable 或 bookworm。",
-            "Enter the exact suite, for example stable or bookworm.",
-          )}
+          label={t("repository.suite")}
+          hint={t("repository.enterTheExactSuiteForExampleStableOr")}
         >
           <Input.Search
-            aria-label={text("发行套件", "Suite")}
+            aria-label={t("repository.suite")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onSearch={() => {
               if (query.trim()) setSuite(query.trim());
             }}
-            enterButton={text("查看", "View")}
+            enterButton={t("repository.view")}
           />
         </Field>
       </div>

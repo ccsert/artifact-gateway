@@ -1,18 +1,18 @@
+import type { MessageKey } from "../../messages";
+import type { Translate } from "../../lib/preferences";
 import type { DiagnosticScanner, Diagnostics } from "../../client";
 import { formatDate } from "../../lib/format";
 
-type Localize = (chinese: string, english: string) => string;
-
 export const scannerStatusLabels: Record<
   DiagnosticScanner["status"],
-  [string, string]
+  MessageKey
 > = {
-  healthy: ["健康", "Healthy"],
-  degraded: ["需关注", "Degraded"],
-  unhealthy: ["异常", "Unhealthy"],
-  unreachable: ["不可达", "Unreachable"],
-  unknown: ["未知", "Unknown"],
-  not_configured: ["未配置", "Not configured"],
+  healthy: "operations.healthy",
+  degraded: "operations.degraded",
+  unhealthy: "operations.unhealthy",
+  unreachable: "operations.unreachable",
+  unknown: "operations.unknown",
+  not_configured: "operations.notConfigured",
 };
 
 export const scannerStatusTone: Record<DiagnosticScanner["status"], string> = {
@@ -26,45 +26,32 @@ export const scannerStatusTone: Record<DiagnosticScanner["status"], string> = {
 
 export function scannerOperationalDetail(
   scanner: DiagnosticScanner,
-  text: Localize,
+  t: Translate,
   locale: string,
 ): string {
   if (scanner.status === "not_configured") {
-    return text("未启用外部扫描器", "External scanner is not configured");
+    return t("operations.externalScannerIsNotConfigured");
   }
   if (scanner.status === "unknown") {
-    return text(
-      "健康探针未配置或不可用 · 漏洞库新鲜度未知",
-      "Health reporting unavailable · Database freshness unknown",
-    );
+    return t("operations.healthReportingUnavailableDatabaseFreshnessUnknown");
   }
   const databaseDetail =
     scanner.databaseFreshness === "unknown"
-      ? text(
-          "漏洞库未报告更新时间",
-          "Vulnerability database update time unavailable",
-        )
-      : text(
-          `漏洞库${scanner.databaseFreshness === "fresh" ? "新鲜" : "已过期"} · ${formatDate(scanner.databaseUpdatedAt, locale)}`,
-          `Vulnerability database ${scanner.databaseFreshness} · ${formatDate(scanner.databaseUpdatedAt, locale)}`,
+      ? t("operations.vulnerabilityDatabaseUpdateTimeUnavailable")
+      : t(
+          scanner.databaseFreshness === "fresh"
+            ? "operations.vulnerabilityDatabaseFresh"
+            : "operations.vulnerabilityDatabaseStale",
+          { date: formatDate(scanner.databaseUpdatedAt, locale) },
         );
   if (scanner.status === "unreachable") {
-    return text(
-      `健康检查失败 · ${databaseDetail}`,
-      `Health check failed · ${databaseDetail}`,
-    );
+    return t("operations.healthCheckFailed", { databaseDetail });
   }
   if (scanner.status === "unhealthy") {
-    return text(
-      `扫描器报告异常 · ${databaseDetail}`,
-      `Scanner reports unhealthy · ${databaseDetail}`,
-    );
+    return t("operations.scannerReportsUnhealthy", { databaseDetail });
   }
   if (scanner.status === "degraded" && scanner.databaseFreshness !== "stale") {
-    return text(
-      `扫描器报告降级 · ${databaseDetail}`,
-      `Scanner reports degraded · ${databaseDetail}`,
-    );
+    return t("operations.scannerReportsDegraded", { databaseDetail });
   }
   return databaseDetail;
 }

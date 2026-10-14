@@ -203,4 +203,72 @@ export const accessEnUS: Record<AccessMessageKey, string> = {
   "access.scopeWrite": "Write",
   "access.scopeRead": "Read",
   "access.scopeUnknown": "Not configured",
+  "access.administratorIdentity": "Administrator identity",
+  "access.legacyStaticPolicy": "Legacy static policy",
+  "access.anonymousAccessPolicy": "Anonymous access policy",
+  "access.repositoryGrant": "Repository grant",
+  "access.notSpecified": "Not specified",
+  "access.allowedByAdministratorIdentity": "Allowed by administrator identity",
+  "access.allowedByTheGlobalAdminRole": "Allowed by the global admin role",
+  "access.aMemberLevelCarriesNoImplicitCapabilityRepository":
+    "A member level carries no implicit capability; repository grants decide",
+  "access.principalPermissionAndResourceScopeAllMatch":
+    "Principal, permission, and resource scope all match",
+  "access.noRepositoryRuleMatchesThePrincipalPermissionAnd":
+    "No repository rule matches the principal, permission, and resource scope",
+  "access.repositoryGrantsCouldNotBeLoadedAccessIs":
+    "Repository grants could not be loaded; access is denied",
+  "access.matchedALegacyReadRule": "Matched a legacy read rule",
+  "access.matchedALegacyWriteRule": "Matched a legacy write rule",
+  "access.globalAnonymousReadsAreDisabled":
+    "Global anonymous reads are disabled",
+  "access.anonymousReadsAreDisabledForThisRepository":
+    "Anonymous reads are disabled for this repository",
+  "access.anonymousReadsAreEnabledGloballyAndForThis":
+    "Anonymous reads are enabled globally and for this repository",
+  "access.theRepositoryIsNotCurrentlyActive":
+    "The repository is not currently active",
+  "access.allowed": "Allowed",
+  "access.denied": "Denied",
+  "access.anonymousReads": "Anonymous reads",
+  "access.artifactIdOptional": "artifactId (optional)",
+  "access.namespaceTeam": "Namespace · team",
+  "access.imageNameOptional": "Image name (optional)",
+  "access.name": "Name",
+  "access.versionOptional": "Version (optional)",
+  "access.userOptional": "User (optional)",
+  "access.channelOptional": "Channel (optional)",
+  "access.scopeTeam": "Scope · @team",
+  "access.packageOptional": "Package (optional)",
+  "access.pathPrefixReleases": "Path prefix · releases/",
+  "access.projectPrefixGateway": "Project prefix · gateway-",
+  "access.modulePathPrefixExampleComTeam":
+    "Module path prefix · example.com/team/",
+  "access.repositoryPathPrefixDistsBookworm":
+    "Repository path prefix · dists/bookworm/",
+  "access.limitByPrefix": "Limit by prefix",
+  "access.canonicalPrefix": "Canonical prefix",
+  "access.readWriteAdminIntelligence": "Read + write + admin + intelligence",
+  "access.readWrite": "Read + write",
+  "access.noGlobalRoleRepositoryGrantsDecideAccess":
+    "No global role; repository grants decide access",
+  "access.mustExactlyMatchTheAuthenticatedActor":
+    "Must exactly match the authenticated actor",
+  "access.selectAUserAPIKeyServiceAccountOr":
+    "Select a user, API key, service account, or external identity",
+  "access.users": "Users",
+  "access.serviceAccounts": "Service accounts",
+  "access.externalIdentities": "External identities",
+  "access.principalIdentifier": "Principal identifier",
+  "access.completeActorForExampleOidcGitlabTeamRelease":
+    "Complete actor, for example oidc:gitlab:team/release",
+  "access.permission2": "Permission",
+  "access.savedPermissionSnapshot": "Saved permission snapshot",
+  "access.builtInPermissions": "Built-in permissions",
+  "access.adminGrantDelete2": "Admin · grant / delete",
+  "access.artifactIntelligenceSecurityMetadata":
+    "Artifact intelligence · security metadata",
+  "access.customRoles": "Custom roles",
+  "access.grantedByThisRule": "Granted by this rule",
+  "access.resourceScope": "Resource scope",
 };

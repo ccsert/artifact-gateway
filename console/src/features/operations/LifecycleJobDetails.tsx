@@ -7,15 +7,15 @@ export function LifecycleJobDetails({
 }: {
   details: LifecycleJobDetailsData;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <div className="grid max-w-5xl grid-cols-[max-content_minmax(0,1fr)] gap-x-5 gap-y-2 rounded-md border border-line bg-surface-translucent px-4 py-3 text-xs">
-      <span className="text-fg-tertiary">{text("格式", "Format")}</span>
+      <span className="text-fg-tertiary">{t("operations.format")}</span>
       <span className="font-mono text-fg">{details.format}</span>
       {details.sourceRepositoryId ? (
         <>
           <span className="text-fg-tertiary">
-            {text("源仓库 ID", "Source repository ID")}
+            {t("operations.sourceRepositoryID")}
           </span>
           <CopyableValue
             value={details.sourceRepositoryId}
@@ -23,7 +23,7 @@ export function LifecycleJobDetails({
           />
         </>
       ) : null}
-      <span className="text-fg-tertiary">{text("坐标", "Coordinate")}</span>
+      <span className="text-fg-tertiary">{t("operations.coordinate")}</span>
       <CopyableValue value={details.coordinate} />
       <span className="text-fg-tertiary">digest</span>
       <CopyableValue

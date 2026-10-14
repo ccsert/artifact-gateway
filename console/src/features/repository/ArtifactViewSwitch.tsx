@@ -12,19 +12,19 @@ export function ArtifactViewSwitch({
   value: ArtifactView;
   onChange: (value: ArtifactView) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <Segmented<ArtifactView>
-      aria-label={text("制品浏览视图", "Artifact browse view")}
+      aria-label={t("repository.artifactBrowseView")}
       options={[
         {
           value: "directory",
-          label: text("目录", "Directory"),
+          label: t("repository.directory"),
           icon: <FolderOutlined />,
         },
         {
           value: "list",
-          label: text("列表", "List"),
+          label: t("repository.list"),
           icon: <UnorderedListOutlined />,
         },
       ]}

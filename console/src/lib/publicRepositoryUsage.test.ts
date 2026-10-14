@@ -1,10 +1,11 @@
+import { createTranslator } from "../messages/translate";
 import { describe, expect, it } from "vitest";
 import {
   publicRepositoryUsage,
   type PublicRepositoryFormat,
 } from "./publicRepositoryUsage";
 
-const english = (_chinese: string, value: string) => value;
+const english = createTranslator("en-US");
 
 function usage(format: PublicRepositoryFormat) {
   return publicRepositoryUsage({
@@ -12,7 +13,7 @@ function usage(format: PublicRepositoryFormat) {
     repositoryName: "releases",
     origin: "https://gateway.test",
     host: "gateway.test",
-    text: english,
+    t: english,
   });
 }
 
@@ -63,7 +64,7 @@ describe("public repository usage", () => {
         repositoryName: "releases",
         origin: "https://gateway.test",
         host: "gateway.test",
-        text: (chinese) => chinese,
+        t: createTranslator("zh-CN"),
       })[1].label,
     ).toBe("临时使用");
   });

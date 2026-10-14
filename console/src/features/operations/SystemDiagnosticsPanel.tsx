@@ -25,7 +25,7 @@ import { isAuthorizationFailure, useDiagnostics } from "./systemQueries";
 
 /** The Gateway's diagnostic snapshot: health summary, then detail cards. */
 export function SystemDiagnosticsPanel() {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const consoleVersion = getConsoleBuildVersion();
   const diagnosticsQuery = useDiagnostics();
   const error = diagnosticsQuery.error;
@@ -60,7 +60,7 @@ export function SystemDiagnosticsPanel() {
   if (error && !diagnostics)
     return <ErrorBanner error={error} onRetry={load} />;
   if (!diagnostics)
-    return <Loading label={text("加载系统诊断…", "Loading diagnostics…")} />;
+    return <Loading label={t("operations.loadingDiagnostics")} />;
 
   const scanner = diagnostics.scanner;
   const scannerCritical =
@@ -73,9 +73,8 @@ export function SystemDiagnosticsPanel() {
           error={error}
           onRetry={load}
           tone="warning"
-          title={text(
-            "刷新失败，仍显示旧诊断快照",
-            "Refresh failed; showing the previous diagnostic snapshot",
+          title={t(
+            "operations.refreshFailedShowingThePreviousDiagnosticSnapshot",
           )}
         />
       )}
@@ -83,40 +82,32 @@ export function SystemDiagnosticsPanel() {
         <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold tracking-tight text-fg-strong">
-              {text("诊断快照", "Diagnostic snapshot")}
+              {t("operations.diagnosticSnapshot")}
             </h2>
             <p className="mt-1 text-xs text-fg-tertiary">
-              {text("生成于", "Generated")}{" "}
+              {t("operations.generated")}{" "}
               {formatDate(diagnostics.generatedAt, locale)}
             </p>
           </div>
           <Space size="small" wrap>
-            <Tooltip
-              title={text(
-                "复制脱敏诊断 JSON",
-                "Copy sanitized diagnostics JSON",
-              )}
-            >
+            <Tooltip title={t("operations.copySanitizedDiagnosticsJSON")}>
               <Button
-                aria-label={text(
-                  "复制脱敏诊断 JSON",
-                  "Copy sanitized diagnostics JSON",
-                )}
+                aria-label={t("operations.copySanitizedDiagnosticsJSON")}
                 icon={<CopyOutlined />}
                 onClick={() =>
                   void copy(JSON.stringify(diagnostics, null, 2), "diagnostics")
                 }
               >
-                {copied ? text("已复制", "Copied") : text("复制", "Copy")}
+                {copied ? t("operations.copied") : t("operations.copy")}
               </Button>
             </Tooltip>
             <Button
-              aria-label={text("刷新诊断", "Refresh diagnostics")}
+              aria-label={t("operations.refreshDiagnostics")}
               icon={<ReloadOutlined />}
               loading={loading}
               onClick={() => void load()}
             >
-              {text("刷新", "Refresh")}
+              {t("operations.refresh")}
             </Button>
           </Space>
         </div>
@@ -135,49 +126,44 @@ export function SystemDiagnosticsPanel() {
               : "warning"
           }
           showIcon
-          title={text("系统运行状态需要关注", "System health needs attention")}
-          description={text(
-            "先处理下列依赖、扫描器、节点能力或失败队列问题，再执行维护操作。",
-            "Resolve the dependency, scanner, node capability, or failed queue issues below before maintenance.",
+          title={t("operations.systemHealthNeedsAttention")}
+          description={t(
+            "operations.resolveTheDependencyScannerNodeCapabilityOrFailed",
           )}
         />
       )}
       <MetricStrip
         items={[
           {
-            label: text("依赖可用", "Dependencies ready"),
+            label: t("operations.dependenciesReady"),
             value: diagnostics.dependencies.length - unavailable,
-            hint: text(
-              `${diagnostics.dependencies.length} 项检查`,
-              `${diagnostics.dependencies.length} checks`,
-            ),
+            hint: t("operations.checks", {
+              length: diagnostics.dependencies.length,
+            }),
             tone: unavailable ? "danger" : "success",
           },
           {
-            label: text("在线节点", "Online nodes"),
+            label: t("operations.onlineNodes"),
             value: diagnostics.nodes.online,
-            hint: text(
-              `${diagnostics.nodes.stale} 陈旧 · ${diagnostics.nodes.offline} 离线`,
-              `${diagnostics.nodes.stale} stale · ${diagnostics.nodes.offline} offline`,
-            ),
+            hint: t("operations.staleOffline", {
+              stale: diagnostics.nodes.stale,
+              offline: diagnostics.nodes.offline,
+            }),
             tone:
               diagnostics.nodes.status === "healthy" ? "success" : "warning",
           },
           {
-            label: text("活跃队列", "Queued work"),
+            label: t("operations.queuedWork"),
             value: queueTotal,
-            hint: text(
-              "待处理、运行、重试和失败",
-              "Pending, running, retrying, and failed",
-            ),
+            hint: t("operations.pendingRunningRetryingAndFailed"),
             tone: queueTotal ? "warning" : "default",
           },
           {
-            label: text("失败任务", "Failed work"),
+            label: t("operations.failedWork"),
             value: failedQueues,
             hint: failedQueues
-              ? text("需要人工检查", "Needs review")
-              : text("当前无失败", "No failures"),
+              ? t("operations.needsReview")
+              : t("operations.noFailures"),
             tone: failedQueues ? "danger" : "success",
           },
         ]}

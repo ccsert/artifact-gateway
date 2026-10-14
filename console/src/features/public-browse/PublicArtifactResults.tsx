@@ -79,7 +79,7 @@ export function PublicArtifactResults({
   error: unknown;
   artifactRowOptions: Omit<
     Parameters<typeof buildPublicArtifactRows>[0],
-    "items" | "selectedRepository" | "artifactHref"
+    "items" | "selectedRepository" | "artifactHref" | "t"
   >;
   onRetry: () => void;
   artifactParam: string;
@@ -92,7 +92,7 @@ export function PublicArtifactResults({
   protocolVersionFilter: string;
   actions: PublicBrowseActions;
 }) {
-  const { t, text } = usePreferences();
+  const { t } = usePreferences();
   const {
     artifactHref,
     openArtifact,
@@ -137,13 +137,14 @@ export function PublicArtifactResults({
     items: items ?? [],
     selectedRepository,
     artifactHref,
+    t,
   });
 
   if (selectedRepository && !descriptor) {
     return (
       <PublicBrowseStateSurface>
         <RepositoryFeatureUnavailable
-          feature={text("制品浏览", "Artifact browser")}
+          feature={t("publicBrowse.artifactBrowser")}
           unsupportedFormat={selectedRepository.format}
         />
       </PublicBrowseStateSurface>

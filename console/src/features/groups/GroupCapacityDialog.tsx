@@ -11,7 +11,7 @@ import { useGroupCapacity } from "./groupQueries";
 
 /** A group's capacity across its member repositories. */
 export function CapacityDialog({ group }: { group: Group }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const dialog = useDisclosure();
   const capacityQuery = useGroupCapacity(group.id, dialog.open);
   const capacity = capacityQuery.data ?? null;
@@ -20,7 +20,7 @@ export function CapacityDialog({ group }: { group: Group }) {
     value < 1024 ? `${value} B` : `${(value / 1024 / 1024).toFixed(1)} MB`;
   const columns: ColumnsType<GroupCapacityMember> = [
     {
-      title: text("位置", "Position"),
+      title: t("groups.position"),
       dataIndex: "position",
       key: "position",
       width: 70,
@@ -29,7 +29,7 @@ export function CapacityDialog({ group }: { group: Group }) {
       ),
     },
     {
-      title: text("成员", "Member"),
+      title: t("groups.member"),
       dataIndex: "repositoryId",
       key: "repositoryId",
       width: 180,
@@ -40,7 +40,7 @@ export function CapacityDialog({ group }: { group: Group }) {
       ),
     },
     {
-      title: text("类型", "Type"),
+      title: t("groups.type"),
       dataIndex: "type",
       key: "type",
       width: 110,
@@ -49,7 +49,7 @@ export function CapacityDialog({ group }: { group: Group }) {
       ),
     },
     {
-      title: text("已用", "Used"),
+      title: t("groups.used"),
       dataIndex: "usedBytes",
       key: "usedBytes",
       width: 120,
@@ -58,7 +58,7 @@ export function CapacityDialog({ group }: { group: Group }) {
       ),
     },
     {
-      title: text("对象", "Objects"),
+      title: t("groups.objects"),
       dataIndex: "objectCount",
       key: "objectCount",
       width: 90,
@@ -67,13 +67,13 @@ export function CapacityDialog({ group }: { group: Group }) {
       ),
     },
     {
-      title: text("配额", "Quota"),
+      title: t("groups.quota"),
       dataIndex: "quotaBytes",
       key: "quotaBytes",
       width: 120,
       render: (value: number | undefined) => (
         <span className="text-fg-tertiary">
-          {value ? formatBytes(value) : text("无限制", "Unlimited")}
+          {value ? formatBytes(value) : t("groups.unlimited")}
         </span>
       ),
     },
@@ -86,13 +86,13 @@ export function CapacityDialog({ group }: { group: Group }) {
         icon={<DatabaseOutlined />}
         onClick={dialog.show}
       >
-        {text("容量", "Capacity")}
+        {t("groups.capacity")}
       </Button>
       <Modal
         open={dialog.open}
         onClose={dialog.hide}
         wide
-        title={text(`容量贡献 · ${group.name}`, `Capacity · ${group.name}`)}
+        title={t("groups.capacity2", { name: group.name })}
       >
         {error !== null && <ErrorBanner error={error} />}
         {!capacity ? (

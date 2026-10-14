@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import { ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -12,12 +13,12 @@ import { useRuntimeNodes } from "./systemQueries";
 
 function runtimeNodeColumns(
   locale: string,
-  text: (chinese: string, english: string) => string,
+  t: Translate,
   currentSessionId: string | null,
 ): ColumnsType<RuntimeNode> {
   return [
     {
-      title: text("实例", "Instance"),
+      title: t("operations.instance2"),
       dataIndex: "instanceId",
       key: "instanceId",
       width: 190,
@@ -26,20 +27,20 @@ function runtimeNodeColumns(
           <div className="font-mono text-xs text-fg">{value}</div>
           {node.sessionId === currentSessionId && (
             <div className="text-xs text-[var(--ag-status-success)]">
-              {text("当前连接节点", "Connected node")}
+              {t("operations.connectedNode")}
             </div>
           )}
           <div
             className="truncate text-xs text-fg-disabled"
             title={node.sessionId}
           >
-            {text("会话", "Session")} {node.sessionId.slice(0, 12)}…
+            {t("operations.session")} {node.sessionId.slice(0, 12)}…
           </div>
         </div>
       ),
     },
     {
-      title: text("构建版本", "Build version"),
+      title: t("operations.buildVersion"),
       key: "build",
       width: 190,
       render: (_, node) => (
@@ -47,27 +48,27 @@ function runtimeNodeColumns(
           <div className="text-fg">
             {node.version && node.version !== "unknown"
               ? node.version === "dev"
-                ? text("开发构建", "Development build")
+                ? t("operations.developmentBuild")
                 : node.version
-              : text("版本未知", "Version unknown")}
+              : t("operations.versionUnknown")}
           </div>
           <div className="font-mono text-fg-tertiary">
             {node.revision && node.revision !== "unknown"
               ? node.revision.slice(0, 12)
-              : text("修订号未知", "Revision unknown")}
+              : t("operations.revisionUnknown")}
           </div>
         </div>
       ),
     },
     {
-      title: text("状态", "Status"),
+      title: t("operations.status"),
       dataIndex: "status",
       key: "status",
       width: 100,
       render: (value: RuntimeNode["status"]) => <StateBadge state={value} />,
     },
     {
-      title: text("角色", "Roles"),
+      title: t("operations.roles"),
       dataIndex: "roles",
       key: "roles",
       width: 150,
@@ -76,7 +77,7 @@ function runtimeNodeColumns(
       ),
     },
     {
-      title: text("Worker 能力", "Worker capabilities"),
+      title: t("operations.workerCapabilities"),
       key: "capabilities",
       width: 330,
       render: (_, node) => (
@@ -87,7 +88,7 @@ function runtimeNodeColumns(
             ))
           ) : (
             <span className="text-xs text-fg-disabled">
-              {text("无格式 Worker", "No format worker")}
+              {t("operations.noFormatWorker")}
             </span>
           )}
           {node.workerKinds.length > 0 && (
@@ -99,7 +100,7 @@ function runtimeNodeColumns(
       ),
     },
     {
-      title: text("启动时间", "Started"),
+      title: t("operations.started2"),
       dataIndex: "startedAt",
       key: "startedAt",
       width: 190,
@@ -110,14 +111,14 @@ function runtimeNodeColumns(
       ),
     },
     {
-      title: text("最近心跳", "Last heartbeat"),
+      title: t("operations.lastHeartbeat"),
       dataIndex: "lastSeenAt",
       key: "lastSeenAt",
       width: 190,
       render: (value: string, node) =>
         node.stoppedAt ? (
           <span className="whitespace-nowrap text-xs text-fg-tertiary">
-            {text("已退出", "Stopped")} {formatDate(node.stoppedAt, locale)}
+            {t("operations.stopped")} {formatDate(node.stoppedAt, locale)}
           </span>
         ) : (
           <span className="whitespace-nowrap text-xs text-fg-tertiary">
@@ -136,13 +137,13 @@ export function RuntimeNodesPanel({
 }: {
   pollIntervalMs?: number;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const nodesQuery = useRuntimeNodes(pollIntervalMs);
   const nodes = nodesQuery.data?.nodes ?? null;
   const health = nodesQuery.data?.health ?? null;
   const nodeColumns = runtimeNodeColumns(
     locale,
-    text,
+    t,
     nodesQuery.data?.currentSessionId ?? null,
   );
   const error = nodesQuery.error;
@@ -152,18 +153,18 @@ export function RuntimeNodesPanel({
   return (
     <Card className="ag-runtime-nodes-card">
       <CardHeader
-        title={text("运行节点", "Runtime nodes")}
+        title={t("operations.runtimeNodes")}
         extra={
           <div className="flex items-center gap-2">
             {health && <StateBadge state={health.status} />}
             <span className="text-xs text-fg-tertiary">
               {nodes
-                ? text(`${nodes.length} 个实例`, `${nodes.length} instances`)
-                : text("加载中", "Loading")}
+                ? t("operations.instances", { length: nodes.length })
+                : t("operations.loading")}
             </span>
-            <Tooltip title={text("刷新运行节点", "Refresh runtime nodes")}>
+            <Tooltip title={t("operations.refreshRuntimeNodes")}>
               <Button
-                aria-label={text("刷新运行节点", "Refresh runtime nodes")}
+                aria-label={t("operations.refreshRuntimeNodes")}
                 type="text"
                 icon={<ReloadOutlined />}
                 loading={refreshing}
@@ -179,10 +180,7 @@ export function RuntimeNodesPanel({
             className="ag-feedback-enter"
             type={health.status === "critical" ? "error" : "warning"}
             showIcon
-            title={text(
-              "集群运行能力需要关注",
-              "Cluster capabilities need attention",
-            )}
+            title={t("operations.clusterCapabilitiesNeedAttention")}
             description={
               <div className="space-y-1">
                 {(health.issues ?? []).map((issue) => (
@@ -193,7 +191,7 @@ export function RuntimeNodesPanel({
                     <span className="ml-2">{issue.message}</span>
                     {issue.affectedNodes?.length ? (
                       <div className="break-all font-mono text-xs text-fg-tertiary">
-                        {text("涉及会话", "Sessions")}:{" "}
+                        {t("operations.sessions")}:{" "}
                         {issue.affectedNodes.join(", ")}
                       </div>
                     ) : null}
@@ -206,26 +204,20 @@ export function RuntimeNodesPanel({
       )}
       {nodes !== null && (
         <p className="px-5 pt-3 text-xs text-fg-tertiary">
-          {text(
-            "发布版本源未配置，无法判断当前构建是否为最新版本。",
-            "No release source is configured, so the latest version cannot be determined.",
-          )}
+          {t("operations.noReleaseSourceIsConfiguredSoTheLatest")}
         </p>
       )}
       {error ? (
         <ErrorBanner error={error} onRetry={load} />
       ) : nodes === null ? (
         <div className="px-5 py-6">
-          <Loading label={text("加载节点清单…", "Loading runtime nodes…")} />
+          <Loading label={t("operations.loadingRuntimeNodes")} />
         </div>
       ) : nodes.length === 0 ? (
         <div className="px-5 py-6">
           <EmptyState
-            title={text("暂未收到节点心跳", "No node heartbeats received")}
-            hint={text(
-              "节点启动后会自动出现在这里。",
-              "Nodes appear automatically after startup.",
-            )}
+            title={t("operations.noNodeHeartbeatsReceived")}
+            hint={t("operations.nodesAppearAutomaticallyAfterStartup")}
           />
         </div>
       ) : (

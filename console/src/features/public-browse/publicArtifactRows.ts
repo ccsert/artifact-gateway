@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import type { ArtifactSummary } from "../../client";
 import { shortDigest } from "../../lib/format";
 import { usageFor, type UsageSnippet } from "../../lib/usage";
@@ -53,6 +54,7 @@ export function buildPublicArtifactRows({
   ociManifestDetails,
   selectedProtocolVersions,
   artifactHref,
+  t,
 }: {
   items: ArtifactSummary[];
   selectedRepository: PublicRepository | undefined;
@@ -63,6 +65,7 @@ export function buildPublicArtifactRows({
   ociManifestDetails: Record<string, OciManifestDetail>;
   selectedProtocolVersions: Record<string, string>;
   artifactHref: ArtifactHref;
+  t: Translate;
 }): PublicArtifactTableRow[] {
   return items.map((item, index) => {
     const isOci =
@@ -85,7 +88,7 @@ export function buildPublicArtifactRows({
         ].map((tag) => ({
           value: tag,
           label: tag.startsWith("sha256:")
-            ? `无标签 · ${shortDigest(tag)}`
+            ? t("publicBrowse.untaggedDigest", { digest: shortDigest(tag) })
             : tag,
           searchText: tag,
           digest: tag.startsWith("sha256:") ? tag : undefined,
@@ -143,6 +146,7 @@ export function buildPublicArtifactRows({
       ),
       snippets: selectedRepository
         ? usageFor(
+            t,
             selectedRepository.format,
             selectedRepository.name,
             item.coordinate,

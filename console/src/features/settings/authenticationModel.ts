@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import type { OidcSettings, OidcSettingsUpdateWritable } from "../../client";
 
 export interface AuthenticationFormValues {
@@ -16,8 +17,6 @@ export interface AuthenticationFormValues {
   emailLinkingEnabled: boolean;
   jitDefaultRole: "none" | "member" | "admin";
 }
-
-type Text = (zh: string, en: string) => string;
 
 /** The form's starting values; the client secret is never read back. */
 export function toFormValues(settings: OidcSettings): AuthenticationFormValues {
@@ -42,37 +41,27 @@ export function toFormValues(settings: OidcSettings): AuthenticationFormValues {
 /** Field errors the server would otherwise reject; empty when valid. */
 export function authenticationFieldErrors(
   values: AuthenticationFormValues,
-  text: Text,
+  t: Translate,
 ) {
   if (!values.enabled) return [];
   const required: (keyof AuthenticationFormValues)[] = ["issuer", "audience"];
   const missing = required.filter((name) => !String(values[name] ?? "").trim());
   const fields = missing.map((name) => ({
     name,
-    errors: [text("启用 OIDC 时必填", "Required when OIDC is enabled")],
+    errors: [t("settings.requiredWhenOIDCIsEnabled")],
   }));
   const hasClientId = Boolean(values.clientId.trim());
   const hasRedirectUrl = Boolean(values.redirectUrl.trim());
   if (hasClientId !== hasRedirectUrl) {
     fields.push({
       name: hasClientId ? "redirectUrl" : "clientId",
-      errors: [
-        text(
-          "Client ID 与回调地址必须同时配置",
-          "Client ID and Redirect URL must be configured together",
-        ),
-      ],
+      errors: [t("settings.clientIDAndRedirectURLMustBeConfigured")],
     });
   }
   if (values.clientSecret.trim() && !hasClientId) {
     fields.push({
       name: "clientId",
-      errors: [
-        text(
-          "配置 Client Secret 时必须填写 Client ID",
-          "Client ID is required when a client secret is configured",
-        ),
-      ],
+      errors: [t("settings.clientIDIsRequiredWhenAClientSecret")],
     });
   }
   return fields;

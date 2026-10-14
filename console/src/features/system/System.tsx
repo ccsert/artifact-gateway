@@ -9,7 +9,7 @@ import { QuotaAlertsPanel } from "./QuotaAlertsPanel";
 import { EmailNotificationsPanel } from "./EmailNotificationsPanel";
 
 export function SystemPage() {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const activeTab =
@@ -22,10 +22,9 @@ export function SystemPage() {
   return (
     <div className="ag-page-stack">
       <PageHeader
-        title={text("系统运行", "System runtime")}
-        description={text(
-          "查看 Gateway 节点、诊断、日志、仓库配额告警与邮件通知。",
-          "Inspect Gateway nodes, diagnostics, logs, repository quota alerts, and email notifications.",
+        title={t("system.systemRuntime")}
+        description={t(
+          "system.inspectGatewayNodesDiagnosticsLogsRepositoryQuotaAlerts",
         )}
       />
       <Tabs
@@ -40,7 +39,7 @@ export function SystemPage() {
         items={[
           {
             key: "diagnostics",
-            label: text("系统诊断", "System diagnostics"),
+            label: t("system.systemDiagnostics"),
             children: (
               <div className="ag-page-stack ag-diagnostics-tab">
                 <SystemDiagnosticsPanel />
@@ -50,17 +49,17 @@ export function SystemPage() {
           },
           {
             key: "logs",
-            label: text("运行日志", "Runtime logs"),
+            label: t("system.runtimeLogs"),
             children: <RuntimeLogsPanel />,
           },
           {
             key: "alerts",
-            label: text("配额告警", "Quota alerts"),
+            label: t("system.quotaAlerts"),
             children: activeTab === "alerts" ? <QuotaAlertsPanel /> : null,
           },
           {
             key: "email",
-            label: text("邮件通知", "Email notifications"),
+            label: t("system.emailNotifications"),
             children:
               activeTab === "email" ? <EmailNotificationsPanel /> : null,
           },

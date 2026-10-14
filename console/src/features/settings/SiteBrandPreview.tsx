@@ -9,15 +9,15 @@ export function SiteBrandPreview({
 }: {
   normalizedDraft: SiteSettingsDraft;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <aside
       className="ag-site-settings-preview"
-      aria-label={text("品牌预览", "Brand preview")}
+      aria-label={t("settings.brandPreview")}
     >
       <div className="ag-site-preview-label">
         <PictureOutlined />
-        {text("实时预览", "Live preview")}
+        {t("settings.livePreview")}
       </div>
       <div className="ag-site-preview-lockup">
         <SiteBrandMark
@@ -26,7 +26,7 @@ export function SiteBrandPreview({
         />
         <div className="min-w-0">
           <div className="ag-site-preview-name">
-            {normalizedDraft.siteName || text("未命名站点", "Untitled site")}
+            {normalizedDraft.siteName || t("settings.untitledSite")}
           </div>
           <div className="ag-site-preview-product">Console</div>
         </div>
@@ -37,16 +37,11 @@ export function SiteBrandPreview({
           preview={normalizedDraft}
         />
         <span>
-          {(normalizedDraft.siteName || text("未命名站点", "Untitled site")) +
+          {(normalizedDraft.siteName || t("settings.untitledSite")) +
             " Console"}
         </span>
       </div>
-      <p>
-        {text(
-          "预览仅展示身份组合；保存前不会影响其他用户。",
-          "This preview shows the identity lockup only; other users are unaffected until you save.",
-        )}
-      </p>
+      <p>{t("settings.thisPreviewShowsTheIdentityLockupOnlyOther")}</p>
     </aside>
   );
 }

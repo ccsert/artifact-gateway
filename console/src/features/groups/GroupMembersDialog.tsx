@@ -18,7 +18,7 @@ export function MembersDialog({
   repos: Repository[];
   onSaved: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const dialog = useDisclosure();
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [version, setVersion] = useState(group.version);
@@ -72,20 +72,20 @@ export function MembersDialog({
   return (
     <>
       <Button size="small" icon={<EditOutlined />} onClick={open}>
-        {text("编辑成员", "Edit members")}
+        {t("groups.editMembers")}
       </Button>
       <Modal
         open={dialog.open}
-        title={text(`编辑成员：${group.name}`, `Edit members: ${group.name}`)}
+        title={t("groups.editMembers2", { name: group.name })}
         onClose={dialog.hide}
         busy={busy}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
-              {text("取消", "Cancel")}
+              {t("groups.cancel")}
             </Button>
             <Button type="primary" onClick={save} loading={busy}>
-              {text("保存", "Save")}
+              {t("groups.save")}
             </Button>
           </Space>
         }
@@ -93,10 +93,7 @@ export function MembersDialog({
         <div className="space-y-3">
           {error !== null && <ErrorBanner error={error} />}
           <p className="text-xs text-fg-tertiary">
-            {text(
-              "配置顺序在同类型成员内生效；Hosted 始终优先于 Proxy。",
-              "Set the order within each type; Hosted members are tried before Proxy members.",
-            )}
+            {t("groups.setTheOrderWithinEachTypeHostedMembers")}
           </p>
           <MemberOrderPicker
             candidates={candidates}

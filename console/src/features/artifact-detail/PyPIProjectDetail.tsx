@@ -69,7 +69,7 @@ export function PyPIProjectDetail({
   onVersionChange?: (version: string) => void;
   canQuarantine?: boolean;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const { token } = useAuth();
   const [document, setDocument] = useState<PyPISimpleProject | null>(null);
   const [selectedVersion, setSelectedVersion] = useState("");
@@ -94,10 +94,9 @@ export function PyPIProjectDetail({
       .then(async (response) => {
         if (!response.ok)
           throw new Error(
-            text(
-              `读取 PyPI 项目失败 (${response.status})`,
-              `Failed to load PyPI project (${response.status})`,
-            ),
+            t("artifactDetail.failedToLoadPyPIProject", {
+              status: response.status,
+            }),
           );
         return response.json() as Promise<PyPISimpleProject>;
       })
@@ -111,14 +110,14 @@ export function PyPIProjectDetail({
         setError(
           requestError instanceof Error
             ? requestError.message
-            : text("读取 PyPI 项目失败", "Failed to load PyPI project"),
+            : t("artifactDetail.failedToLoadPyPIProject2"),
         );
         setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [project, repoName, text, token]);
+  }, [project, repoName, t, token]);
 
   const versions = useMemo(() => {
     const byVersion = new Map<string, string>();
@@ -168,7 +167,7 @@ export function PyPIProjectDetail({
   const snippets = pypiUsage(repoName, project, selectedVersion);
   const columns: TableProps<PyPIFile>["columns"] = [
     {
-      title: text("分发文件", "Distribution file"),
+      title: t("artifactDetail.distributionFile"),
       dataIndex: "filename",
       key: "filename",
       ellipsis: true,
@@ -179,7 +178,7 @@ export function PyPIProjectDetail({
       ),
     },
     {
-      title: text("类型", "Type"),
+      title: t("artifactDetail.type"),
       key: "type",
       width: 130,
       render: (_, file) => (
@@ -189,7 +188,7 @@ export function PyPIProjectDetail({
       ),
     },
     {
-      title: text("Python", "Python"),
+      title: t("artifactDetail.python"),
       key: "python",
       width: 130,
       render: (_, file) => (
@@ -201,14 +200,14 @@ export function PyPIProjectDetail({
       ),
     },
     {
-      title: text("大小", "Size"),
+      title: t("artifactDetail.size"),
       key: "size",
       width: 110,
       render: (_, file) => (
         <span className="text-xs text-fg-tertiary">
           {file["_artifact-gateway"]?.cached
             ? formatBytes(file["_artifact-gateway"]?.size)
-            : text("首次下载后", "After download")}
+            : t("artifactDetail.afterDownload")}
         </span>
       ),
     },
@@ -253,7 +252,7 @@ export function PyPIProjectDetail({
       />
       <div>
         <label className="mb-1.5 block text-xs font-medium text-fg-tertiary">
-          {text("选择版本", "Select version")} ({versions.length})
+          {t("artifactDetail.selectVersion")} ({versions.length})
         </label>
         <SearchableVersionSelect
           value={selectedVersion}
@@ -265,7 +264,7 @@ export function PyPIProjectDetail({
             setSelectedVersion(version);
             onVersionChange?.(version);
           }}
-          placeholder={text("搜索并选择 PyPI 版本", "Search PyPI versions")}
+          placeholder={t("artifactDetail.searchPyPIVersions")}
         />
       </div>
       <div className="min-w-0">
@@ -278,33 +277,33 @@ export function PyPIProjectDetail({
             variant="filled"
           >
             {cachedCount === selectedFiles.length
-              ? text("已缓存", "Cached")
-              : text(
-                  `${cachedCount}/${selectedFiles.length} 已缓存`,
-                  `${cachedCount}/${selectedFiles.length} cached`,
-                )}
+              ? t("artifactDetail.cached")
+              : t("artifactDetail.cached2", {
+                  cachedCount,
+                  length: selectedFiles.length,
+                })}
           </Tag>
         </div>
         <div className="mt-3 grid grid-cols-4 gap-x-4 border-y border-line py-3 text-xs">
           <MetadataItem
-            label={text("发布时间", "Published")}
+            label={t("artifactDetail.published")}
             value={formatDate(latestMetadata?.["created-at"], locale)}
           />
           <MetadataItem
-            label={text("发布者", "Publisher")}
+            label={t("artifactDetail.publisher")}
             value={
               latestMetadata?.publisher ??
               publisher ??
-              text("未记录", "Not recorded")
+              t("artifactDetail.notRecorded")
             }
             mono
           />
           <MetadataItem
-            label={text("分发文件", "Distribution files")}
+            label={t("artifactDetail.distributionFiles")}
             value={String(selectedFiles.length)}
           />
           <MetadataItem
-            label={text("总大小", "Total size")}
+            label={t("artifactDetail.totalSize")}
             value={totalSize > 0 ? formatBytes(totalSize) : formatBytes(size)}
           />
         </div>

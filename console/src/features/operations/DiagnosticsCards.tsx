@@ -34,13 +34,13 @@ export function DiagnosticsAttentionCard({
 }: {
   diagnostics: Diagnostics;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const scanner = diagnostics.scanner;
   const scannerStatusLabel = scanner
     ? scannerStatusLabels[scanner.status]
     : null;
   const scannerDetail = scanner
-    ? scannerOperationalDetail(scanner, text, locale)
+    ? scannerOperationalDetail(scanner, t, locale)
     : "";
   const scannerNeedsAttention = scannerNeedsAttentionFor(diagnostics);
   const unavailableDependencies = diagnostics.dependencies.filter(
@@ -67,10 +67,10 @@ export function DiagnosticsAttentionCard({
   return (
     <Card>
       <CardHeader
-        title={text("需要处理", "Needs attention")}
+        title={t("operations.needsAttention")}
         extra={
           <span className="text-xs text-fg-tertiary">
-            {text(`${attentionCount} 项`, `${attentionCount} items`)}
+            {t("operations.items", { attentionCount })}
           </span>
         }
       />
@@ -79,8 +79,7 @@ export function DiagnosticsAttentionCard({
           <div key={dependency.name} className="ag-diagnostic-issue-row">
             <div className="min-w-0">
               <div className="text-sm font-medium text-fg">
-                {text("依赖不可用", "Dependency unavailable")} ·{" "}
-                {dependency.name}
+                {t("operations.dependencyUnavailable")} · {dependency.name}
               </div>
               <div className="mt-1 break-words text-xs leading-5 text-fg-tertiary">
                 {dependency.detail}
@@ -93,7 +92,7 @@ export function DiagnosticsAttentionCard({
           <div className="ag-diagnostic-issue-row">
             <div className="min-w-0">
               <div className="text-sm font-medium text-fg">
-                {text("扫描器可信度", "Scanner trust")} · {scanner.name}
+                {t("operations.scannerTrust")} · {scanner.name}
               </div>
               <div className="mt-1 break-words text-xs leading-5 text-fg-tertiary">
                 {scannerDetail}
@@ -102,7 +101,7 @@ export function DiagnosticsAttentionCard({
             <span
               className={`shrink-0 text-xs ${scannerStatusTone[scanner.status]}`}
             >
-              {text(scannerStatusLabel[0], scannerStatusLabel[1])}
+              {t(scannerStatusLabel)}
             </span>
           </div>
         )}
@@ -123,13 +122,13 @@ export function DiagnosticsAttentionCard({
           <div className="ag-diagnostic-issue-row">
             <div className="min-w-0">
               <div className="text-sm font-medium text-fg">
-                {text("运行节点状态异常", "Runtime node health degraded")}
+                {t("operations.runtimeNodeHealthDegraded")}
               </div>
               <div className="mt-1 text-xs leading-5 text-fg-tertiary">
-                {text(
-                  `${diagnostics.nodes.stale} 个陈旧，${diagnostics.nodes.offline} 个离线`,
-                  `${diagnostics.nodes.stale} stale and ${diagnostics.nodes.offline} offline`,
-                )}
+                {t("operations.staleAndOffline", {
+                  stale: diagnostics.nodes.stale,
+                  offline: diagnostics.nodes.offline,
+                })}
               </div>
             </div>
             <StateBadge state={diagnostics.nodes.status} />
@@ -142,11 +141,10 @@ export function DiagnosticsAttentionCard({
           >
             <div className="min-w-0">
               <div className="text-sm font-medium text-fg">
-                {text("失败队列", "Failed queue")} · {queue.kind}
+                {t("operations.failedQueue")} · {queue.kind}
               </div>
               <div className="mt-1 text-xs leading-5 text-fg-tertiary">
-                {queue.format} ·{" "}
-                {text(`${queue.count} 个任务`, `${queue.count} jobs`)}
+                {queue.format} · {t("operations.jobs2", { count: queue.count })}
               </div>
             </div>
             <StateBadge state={queue.state} />
@@ -164,27 +162,25 @@ export function DiagnosticsIdentityCard({
   diagnostics: Diagnostics;
   consoleVersion: string;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <Card className="ag-diagnostics-identity-card">
-      <CardHeader
-        title={text("构建与运行身份", "Build and runtime identity")}
-      />
+      <CardHeader title={t("operations.buildAndRuntimeIdentity")} />
       <div className="ag-diagnostic-identity-groups">
         <section className="ag-diagnostic-identity-group">
-          <h3>{text("构建信息", "Build information")}</h3>
+          <h3>{t("operations.buildInformation")}</h3>
           <div className="grid gap-4">
             <dl>
               <DiagnosticIdentityItem
-                label={text("Console 版本", "Console version")}
+                label={t("operations.consoleVersion")}
                 value={consoleVersion}
               />
               <DiagnosticIdentityItem
-                label={text("Gateway 版本", "Gateway version")}
+                label={t("operations.gatewayVersion")}
                 value={diagnostics.build.version}
               />
               <DiagnosticIdentityItem
-                label={text("Gateway 修订", "Gateway revision")}
+                label={t("operations.gatewayRevision")}
                 value={diagnostics.build.revision}
                 mono
               />
@@ -194,11 +190,11 @@ export function DiagnosticsIdentityCard({
                 mono
               />
               <DiagnosticIdentityItem
-                label={text("工作区", "Workspace")}
+                label={t("operations.workspace")}
                 value={
                   diagnostics.build.modified
-                    ? text("有未提交修改", "Modified")
-                    : text("干净", "Clean")
+                    ? t("operations.modified")
+                    : t("operations.clean")
                 }
               />
             </dl>
@@ -209,36 +205,30 @@ export function DiagnosticsIdentityCard({
               <Alert
                 type="warning"
                 showIcon
-                title={text(
-                  "前后端版本不一致",
-                  "Console and Gateway versions differ",
-                )}
-                description={text(
-                  "可能是镜像 tag 不一致或浏览器缓存了旧 bundle。请核对部署版本并刷新页面。",
-                  "Image tags may differ, or the browser may have cached an older bundle. Check the deployed versions and refresh the page.",
-                )}
+                title={t("operations.consoleAndGatewayVersionsDiffer")}
+                description={t("operations.imageTagsMayDifferOrTheBrowserMay")}
               />
             )}
           </div>
         </section>
         <section className="ag-diagnostic-identity-group">
-          <h3>{text("运行身份", "Runtime identity")}</h3>
+          <h3>{t("operations.runtimeIdentity")}</h3>
           <dl>
             <DiagnosticIdentityItem
-              label={text("实例", "Instance")}
+              label={t("operations.instance2")}
               value={diagnostics.runtime.instanceId || "—"}
               mono
             />
             <DiagnosticIdentityItem
-              label={text("角色", "Roles")}
+              label={t("operations.roles")}
               value={diagnostics.runtime.roles.join(" · ") || "—"}
             />
             <DiagnosticIdentityItem
-              label={text("Worker 格式", "Worker formats")}
+              label={t("operations.workerFormats")}
               value={diagnostics.runtime.workerFormats.join(" · ") || "—"}
             />
             <DiagnosticIdentityItem
-              label={text("Worker 任务", "Worker jobs")}
+              label={t("operations.workerJobs")}
               value={diagnostics.runtime.workerKinds.join(" · ") || "—"}
             />
           </dl>

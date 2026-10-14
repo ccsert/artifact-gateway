@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import type { LifecycleJob, Repository } from "../../client";
 import { type RepositoryArtifactIdentity } from "./RepositoryArtifactSelect";
 
@@ -9,7 +10,7 @@ export type ScanForm = {
 export function scanStatus(
   option: RepositoryArtifactIdentity,
   jobs: LifecycleJob[] | null,
-  text: (zh: string, en: string) => string,
+  t: Translate,
 ): { color?: string; label: string } {
   const job = jobs?.find(
     (candidate) =>
@@ -18,30 +19,30 @@ export function scanStatus(
   );
   switch (job?.state) {
     case "completed":
-      return { color: "success", label: text("扫描完成", "Scan completed") };
+      return { color: "success", label: t("repository.scanCompleted") };
     case "pending":
     case "running":
     case "retrying":
-      return { color: "processing", label: text("扫描中", "Scanning") };
+      return { color: "processing", label: t("repository.scanning") };
     case "failed":
     case "cancelled":
-      return { color: "error", label: text("扫描失败", "Scan failed") };
+      return { color: "error", label: t("repository.scanFailed") };
   }
   switch (option.intelligence?.vulnerabilityStatus) {
     case "clean":
-      return { color: "success", label: text("已扫描", "Scanned") };
+      return { color: "success", label: t("repository.scanned") };
     case "affected":
-      return { color: "warning", label: text("发现漏洞", "Affected") };
+      return { color: "warning", label: t("repository.affected") };
     case "error":
-      return { color: "error", label: text("扫描异常", "Scan error") };
+      return { color: "error", label: t("repository.scanError") };
   }
   if (
     (option.intelligence?.sbomCount ?? 0) > 0 ||
     (option.intelligence?.licenseCount ?? 0) > 0
   ) {
-    return { color: "processing", label: text("已有情报", "Has evidence") };
+    return { color: "processing", label: t("repository.hasEvidence") };
   }
-  return { label: text("未扫描", "Not scanned") };
+  return { label: t("repository.notScanned") };
 }
 
 export function coordinatePlaceholder(

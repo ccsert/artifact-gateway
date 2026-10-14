@@ -3,36 +3,21 @@ import type { CurrentIdentity } from "../../client";
 import { Badge } from "../../components/ui/Badge";
 import { usePreferences } from "../../lib/preferences";
 
-export function authenticationKindLabel(kind: CurrentIdentity["kind"]): string {
-  const labels: Record<CurrentIdentity["kind"], string> = {
-    static_admin: "静态管理员令牌",
-    static_resolver: "静态解析凭据",
-    local_session: "本地用户会话",
-    api_key: "API Key",
-    service_account_credential: "服务账号凭据",
-    oidc: "OIDC",
-  };
-  return labels[kind];
-}
-
 export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const role = identity.role;
   const kindLabels: Record<CurrentIdentity["kind"], string> = {
-    static_admin: text("静态管理员令牌", "Static administrator token"),
-    static_resolver: text("静态解析凭据", "Static resolver credential"),
-    local_session: text("本地用户会话", "Local user session"),
+    static_admin: t("identity.staticAdministratorToken"),
+    static_resolver: t("identity.staticResolverCredential"),
+    local_session: t("identity.localUserSession"),
     api_key: "API Key",
-    service_account_credential: text(
-      "服务账号凭据",
-      "Service account credential",
-    ),
+    service_account_credential: t("identity.serviceAccountCredential"),
     oidc: "OIDC",
   };
   const roleLabels = {
-    none: text("待授权", "Awaiting approval"),
-    member: text("成员", "Member"),
-    admin: text("管理员", "Administrator"),
+    none: t("identity.awaitingApproval"),
+    member: t("identity.member"),
+    admin: t("identity.administrator"),
   };
   return (
     <div className="min-w-0">
@@ -44,7 +29,7 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
         items={[
           {
             key: "actor",
-            label: text("主体", "Principal"),
+            label: t("identity.principal"),
             children: (
               <span className="font-mono text-xs text-fg">
                 {identity.actor}
@@ -53,14 +38,14 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
           },
           {
             key: "kind",
-            label: text("认证来源", "Authentication"),
+            label: t("identity.authentication"),
             children: (
               <Badge tone="visualization-1">{kindLabels[identity.kind]}</Badge>
             ),
           },
           {
             key: "role",
-            label: text("全局角色", "Global role"),
+            label: t("identity.globalRole"),
             children: role ? (
               <Badge
                 tone={role === "admin" ? "visualization-3" : "visualization-1"}
@@ -69,17 +54,17 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
               </Badge>
             ) : (
               <span className="text-xs text-fg-tertiary">
-                {text("无，由仓库规则判定", "None; repository rules decide")}
+                {t("identity.noneRepositoryRulesDecide")}
               </span>
             ),
           },
           {
             key: "administrator",
-            label: text("管理员身份", "Administrator"),
+            label: t("identity.administrator2"),
             children: identity.administrator ? (
-              <Badge tone="danger">{text("是", "Yes")}</Badge>
+              <Badge tone="danger">{t("identity.yes")}</Badge>
             ) : (
-              <Badge tone="neutral">{text("否", "No")}</Badge>
+              <Badge tone="neutral">{t("identity.no")}</Badge>
             ),
           },
         ]}
@@ -87,15 +72,12 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
       {identity.oidc && (
         <div className="mt-3 flex min-w-0 items-start gap-4 border-t border-line pt-3 text-xs">
           <span className="shrink-0 text-fg-tertiary">
-            {text("OIDC 映射", "OIDC mapping")}
+            {t("identity.oIDCMapping")}
           </span>
           <div className="flex min-w-0 flex-wrap gap-2">
             {identity.oidc.adminSubject && (
               <Badge tone="danger">
-                {text(
-                  "subject 管理员名单 → admin",
-                  "Administrator subject list → admin",
-                )}
+                {t("identity.administratorSubjectListAdmin")}
               </Badge>
             )}
             {identity.oidc.roleMappings.map((mapping) => (
@@ -113,10 +95,7 @@ export function IdentitySummary({ identity }: { identity: CurrentIdentity }) {
             {!identity.oidc.adminSubject &&
               identity.oidc.roleMappings.length === 0 && (
                 <span className="text-fg-tertiary">
-                  {text(
-                    "未命中已配置的角色映射",
-                    "No configured role mapping matched",
-                  )}
+                  {t("identity.noConfiguredRoleMappingMatched")}
                 </span>
               )}
           </div>

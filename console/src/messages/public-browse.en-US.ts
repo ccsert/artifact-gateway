@@ -124,4 +124,37 @@ export const publicBrowseEnUS: Record<PublicBrowseMessageKey, string> = {
   "publicBrowse.registerACargoRegistry": "Register a Cargo registry",
   "publicBrowse.registerAnAptSource": "Register an APT source",
   "publicBrowse.registerARawSource": "Register a Raw source",
+  "publicBrowse.selectPackageVersion": "Select package version",
+  "publicBrowse.searchConanPackageVersions": "Search Conan package versions",
+  "publicBrowse.versionsAreGroupedUnderTheSameNameUser":
+    "Versions are grouped under the same name@user/channel; select one to inspect its recipe revision.",
+  "publicBrowse.enterRevisionOrDigest": "Enter revision or digest",
+  "publicBrowse.loadingRevisions": "Loading revisions…",
+  "publicBrowse.noMatchingRevisions": "No matching revisions",
+  "publicBrowse.searchRecipeRevisions": "Search recipe revisions",
+  "publicBrowse.loadMoreRevisions": "Load {VERSION_PAGE_SIZE} more revisions",
+  "publicBrowse.selectARecipeRevisionToViewDetailsAnd":
+    "Select a recipe revision to view details and usage.",
+  "publicBrowse.conanPackage": "Conan package",
+  "publicBrowse.latestVersion": "Latest version",
+  "publicBrowse.versions2": "Versions",
+  "publicBrowse.currentRevision": "Current revision",
+  "publicBrowse.copyConanPackageIdentifier": "Copy Conan package identifier",
+  "publicBrowse.copy2": "Copy",
+  "publicBrowse.artifact": "Artifact",
+  "publicBrowse.searchMavenVersions": "Search Maven versions",
+  "publicBrowse.searchByVersionOrSNAPSHOTBuildNumberWithout":
+    "Search by version or SNAPSHOT build number without expanding the full list.",
+  "publicBrowse.buildType": "Build type",
+  "publicBrowse.release": "Release",
+  "publicBrowse.artifactBrowser": "Artifact browser",
+  "publicBrowse.failedToReadPublicRepositories":
+    "Failed to read public repositories ({status})",
+  "publicBrowse.failedToReadOciVersions": "Failed to read OCI versions",
+  "publicBrowse.failedToReadOciTags": "Failed to read OCI tags",
+  "publicBrowse.failedToReadOciTagsStatus":
+    "Failed to read OCI tags ({status})",
+  "publicBrowse.failedToReadOciManifest": "Failed to read the OCI manifest",
+  "publicBrowse.failedToReadConanRevisions": "Failed to read Conan revisions",
+  "publicBrowse.untaggedDigest": "Untagged · {digest}",
 };

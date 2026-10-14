@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import { DeleteOutlined } from "@ant-design/icons";
 import { Button } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -13,23 +14,21 @@ import { formatBytes } from "../../lib/format";
 import { CopyableValue } from "../../components/ui/ConsolePrimitives";
 import type { RepositoryCapacity } from "../../client";
 
-type Localize = (chinese: string, english: string) => string;
-
 /** The repository catalog's columns; administrators also see capacity and actions. */
 export function repositoryListColumns({
   capacities,
   isAdmin,
   setToDelete,
-  text,
+  t,
 }: {
   capacities: Record<string, RepositoryCapacity>;
   isAdmin: boolean;
   setToDelete: (repository: Repository) => void;
-  text: Localize;
+  t: Translate;
 }): ColumnsType<Repository> {
   const columns: ColumnsType<Repository> = [
     {
-      title: text("名称", "Name"),
+      title: t("repository.name"),
       dataIndex: "name",
       key: "name",
       fixed: "left",
@@ -45,7 +44,7 @@ export function repositoryListColumns({
       ),
     },
     {
-      title: text("类型", "Type"),
+      title: t("repository.type"),
       dataIndex: "type",
       key: "type",
       width: 105,
@@ -54,21 +53,21 @@ export function repositoryListColumns({
       ),
     },
     {
-      title: text("格式", "Format"),
+      title: t("repository.format"),
       dataIndex: "format",
       key: "format",
       width: 105,
       render: (format: Repository["format"]) => <FormatBadge format={format} />,
     },
     {
-      title: text("状态", "Status"),
+      title: t("repository.status"),
       dataIndex: "state",
       key: "state",
       width: 120,
       render: (state: Repository["state"]) => <StateBadge state={state} />,
     },
     {
-      title: text("容量", "Capacity"),
+      title: t("repository.capacity"),
       key: "capacity",
       width: 140,
       defaultSortOrder: "descend",
@@ -94,7 +93,7 @@ export function repositoryListColumns({
       },
     },
     {
-      title: text("配置", "Configuration"),
+      title: t("repository.configuration"),
       key: "configuration",
       width: 230,
       ellipsis: true,
@@ -127,7 +126,7 @@ export function repositoryListColumns({
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("repository.actions"),
       key: "actions",
       fixed: "right",
       width: 82,
@@ -140,14 +139,11 @@ export function repositoryListColumns({
             danger
             icon={<DeleteOutlined />}
             className="opacity-40 transition-opacity group-hover:opacity-100 focus:opacity-100"
-            aria-label={text(
-              `删除 ${repository.name}`,
-              `Delete ${repository.name}`,
-            )}
+            aria-label={t("repository.delete", { name: repository.name })}
             onClick={() => setToDelete(repository)}
           />
         ) : repository.state === "deleting" ? (
-          <Badge tone="warning">{text("删除中", "Deleting")}</Badge>
+          <Badge tone="warning">{t("repository.deleting")}</Badge>
         ) : (
           <span className="text-xs text-fg-disabled">—</span>
         ),

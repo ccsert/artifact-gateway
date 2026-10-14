@@ -18,7 +18,7 @@ import { WebhookDeliveryLog } from "./WebhookDeliveryLog";
 
 /** Webhook subscriptions and their recent deliveries. */
 export function WebhookDeliveriesPanel() {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const subscriptionsQuery = useWebhookSubscriptions();
   const subscriptions = subscriptionsQuery.data ?? null;
   const loading = subscriptionsQuery.isFetching;
@@ -78,7 +78,7 @@ export function WebhookDeliveriesPanel() {
 
   const subscriptionColumns: ColumnsType<WebhookSubscription> = [
     {
-      title: text("订阅", "Subscription"),
+      title: t("operations.subscription"),
       key: "name",
       width: 210,
       render: (_, subscription) => (
@@ -93,7 +93,7 @@ export function WebhookDeliveriesPanel() {
       ),
     },
     {
-      title: text("接收地址", "Endpoint"),
+      title: t("operations.endpoint"),
       dataIndex: "endpointUrl",
       key: "endpointUrl",
       width: 340,
@@ -105,7 +105,7 @@ export function WebhookDeliveriesPanel() {
       ),
     },
     {
-      title: text("事件", "Events"),
+      title: t("operations.events2"),
       dataIndex: "eventTypes",
       key: "eventTypes",
       width: 260,
@@ -120,18 +120,18 @@ export function WebhookDeliveriesPanel() {
       ),
     },
     {
-      title: text("签名", "Signing"),
+      title: t("operations.signing"),
       dataIndex: "secretConfigured",
       key: "secretConfigured",
       width: 100,
       render: (configured: boolean) => (
         <Badge tone={configured ? "success" : "danger"}>
-          {configured ? text("已配置", "Configured") : text("缺失", "Missing")}
+          {configured ? t("operations.configured") : t("operations.missing")}
         </Badge>
       ),
     },
     {
-      title: text("启用", "Enabled"),
+      title: t("operations.enabled2"),
       dataIndex: "enabled",
       key: "enabled",
       width: 90,
@@ -140,22 +140,22 @@ export function WebhookDeliveriesPanel() {
           size="small"
           value={enabled}
           loading={busyId === subscription.id}
-          aria-label={text("启用 Webhook 订阅", "Enable webhook subscription")}
+          aria-label={t("operations.enableWebhookSubscription")}
           onChange={(value) => void setEnabled(subscription, value)}
         />
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("operations.actions"),
       key: "actions",
       fixed: "right",
       width: 80,
       render: (_, subscription) => (
-        <Tooltip title={text("编辑订阅", "Edit subscription")}>
+        <Tooltip title={t("operations.editSubscription")}>
           <Button
             size="small"
             icon={<EditOutlined />}
-            aria-label={text("编辑订阅", "Edit subscription")}
+            aria-label={t("operations.editSubscription")}
             onClick={() => openEdit(subscription)}
           />
         </Tooltip>
@@ -168,7 +168,7 @@ export function WebhookDeliveriesPanel() {
       {error ? <ErrorBanner error={error} onRetry={load} /> : null}
       <Card>
         <CardHeader
-          title={text("Webhook 订阅", "Webhook subscriptions")}
+          title={t("operations.webhookSubscriptions")}
           extra={
             <Space>
               <Button
@@ -176,15 +176,15 @@ export function WebhookDeliveriesPanel() {
                 loading={loading}
                 onClick={() => void load()}
               >
-                {text("刷新", "Refresh")}
+                {t("operations.refresh")}
               </Button>
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
-                aria-label={text("新建订阅", "New subscription")}
+                aria-label={t("operations.newSubscription")}
                 onClick={openCreate}
               >
-                {text("新建订阅", "New subscription")}
+                {t("operations.newSubscription")}
               </Button>
             </Space>
           }
@@ -193,14 +193,13 @@ export function WebhookDeliveriesPanel() {
           // A first load in flight is the only case that shows a placeholder:
           // once it fails, the banner above is the whole answer.
           error ? null : (
-            <Loading label={text("加载 Webhook 订阅…", "Loading webhooks…")} />
+            <Loading label={t("operations.loadingWebhooks")} />
           )
         ) : subscriptions.length === 0 ? (
           <EmptyState
-            title={text("还没有 Webhook 订阅", "No webhook subscriptions yet")}
-            hint={text(
-              "创建订阅，将隔离状态变更可靠投递给自动化系统。",
-              "Create a subscription to deliver quarantine state changes to automation systems.",
+            title={t("operations.noWebhookSubscriptionsYet")}
+            hint={t(
+              "operations.createASubscriptionToDeliverQuarantineStateChanges",
             )}
           />
         ) : (

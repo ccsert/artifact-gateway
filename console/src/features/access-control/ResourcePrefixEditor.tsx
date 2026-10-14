@@ -106,7 +106,7 @@ export function ResourcePrefixEditor({
   formats,
   onFormatChange,
 }: Props) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const parts = parseResourcePrefix(format, value);
   const updatePart = (index: number, next: string) => {
     const updated = [...parts];
@@ -147,7 +147,7 @@ export function ResourcePrefixEditor({
             <Input
               className="font-mono"
               value={parts[1] ?? ""}
-              placeholder={text("artifactId（可选）", "artifactId (optional)")}
+              placeholder={t("access.artifactIdOptional")}
               onChange={(event) => updatePart(1, event.target.value)}
             />
           </div>
@@ -158,13 +158,13 @@ export function ResourcePrefixEditor({
             <Input
               className="font-mono"
               value={parts[0] ?? ""}
-              placeholder={text("命名空间 · team", "Namespace · team")}
+              placeholder={t("access.namespaceTeam")}
               onChange={(event) => updatePart(0, event.target.value)}
             />
             <Input
               className="font-mono"
               value={parts[1] ?? ""}
-              placeholder={text("镜像名（可选）", "Image name (optional)")}
+              placeholder={t("access.imageNameOptional")}
               onChange={(event) => updatePart(1, event.target.value)}
             />
           </div>
@@ -173,10 +173,10 @@ export function ResourcePrefixEditor({
         return (
           <div className="grid grid-cols-2 gap-2">
             {[
-              text("包名", "Name"),
-              text("版本（可选）", "Version (optional)"),
-              text("用户（可选）", "User (optional)"),
-              text("频道（可选）", "Channel (optional)"),
+              t("access.name"),
+              t("access.versionOptional"),
+              t("access.userOptional"),
+              t("access.channelOptional"),
             ].map((placeholder, index) => (
               <Input
                 key={placeholder}
@@ -194,39 +194,25 @@ export function ResourcePrefixEditor({
             <Input
               className="font-mono"
               value={parts[0] ?? ""}
-              placeholder={text("scope · @team", "Scope · @team")}
+              placeholder={t("access.scopeTeam")}
               onChange={(event) => updatePart(0, event.target.value)}
             />
             <Input
               className="font-mono"
               value={parts[1] ?? ""}
-              placeholder={text("包名（可选）", "Package (optional)")}
+              placeholder={t("access.packageOptional")}
               onChange={(event) => updatePart(1, event.target.value)}
             />
           </div>
         );
       case "raw":
-        return singleField(
-          text("路径前缀 · releases/", "Path prefix · releases/"),
-        );
+        return singleField(t("access.pathPrefixReleases"));
       case "pypi":
-        return singleField(
-          text("项目名前缀 · gateway-", "Project prefix · gateway-"),
-        );
+        return singleField(t("access.projectPrefixGateway"));
       case "go":
-        return singleField(
-          text(
-            "模块路径前缀 · example.com/team/",
-            "Module path prefix · example.com/team/",
-          ),
-        );
+        return singleField(t("access.modulePathPrefixExampleComTeam"));
       case "apt":
-        return singleField(
-          text(
-            "仓库路径前缀 · dists/bookworm/",
-            "Repository path prefix · dists/bookworm/",
-          ),
-        );
+        return singleField(t("access.repositoryPathPrefixDistsBookworm"));
     }
   })();
 
@@ -250,8 +236,8 @@ export function ResourcePrefixEditor({
           size="small"
           value={value ? "prefix" : "all"}
           options={[
-            { value: "all", label: text("整个仓库", "Entire repository") },
-            { value: "prefix", label: text("限定范围", "Limit by prefix") },
+            { value: "all", label: t("access.entireRepository") },
+            { value: "prefix", label: t("access.limitByPrefix") },
           ]}
           onChange={(mode) =>
             onChange(mode === "all" ? "" : RESOURCE_PREFIX_EXAMPLES[format][0])
@@ -265,7 +251,7 @@ export function ResourcePrefixEditor({
             className="truncate font-mono text-xs text-fg-tertiary"
             title={value}
           >
-            {text("实际前缀", "Canonical prefix")}: {value}
+            {t("access.canonicalPrefix")}: {value}
           </div>
         </>
       )}

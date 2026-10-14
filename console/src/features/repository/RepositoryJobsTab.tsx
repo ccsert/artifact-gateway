@@ -25,7 +25,7 @@ import { useLifecycleJobs } from "./repositoryQueries";
 
 /** The repository's lifecycle jobs, polled every 10 seconds, with reconciles. */
 export function RepositoryJobsTab({ repo }: { repo: Repository }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const jobsQuery = useLifecycleJobs(repo.id);
   const jobs = jobsQuery.data ?? null;
   const error = jobsQuery.error;
@@ -60,10 +60,9 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       return;
     }
     setReconcileNotice(
-      text(
-        `已重新排队 ${data?.requeued ?? 0} 个情报同步任务`,
-        `Requeued ${data?.requeued ?? 0} intelligence sync job(s)`,
-      ),
+      t("repository.requeuedIntelligenceSyncJobS", {
+        count: data?.requeued ?? 0,
+      }),
     );
     void load();
   };
@@ -82,10 +81,11 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       return;
     }
     setScanReconcileNotice(
-      text(
-        `已检查 ${data?.inspected ?? 0} 个制品，补入 ${data?.enqueued ?? 0} 个，重试 ${data?.retried ?? 0} 个`,
-        `Inspected ${data?.inspected ?? 0} artifacts, queued ${data?.enqueued ?? 0}, retried ${data?.retried ?? 0}`,
-      ),
+      t("repository.inspectedArtifactsQueuedRetried", {
+        inspected: data?.inspected ?? 0,
+        enqueued: data?.enqueued ?? 0,
+        retried: data?.retried ?? 0,
+      }),
     );
     void load();
   };
@@ -98,15 +98,13 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       loading={scanReconciling}
       onClick={() => void reconcileScans()}
     >
-      {text("对账并补扫", "Reconcile scans")}
+      {t("repository.reconcileScans")}
     </Button>
   );
 
   if (error !== null)
     return isNotFound(error) ? (
-      <RepositoryFeatureUnavailable
-        feature={text("生命周期任务", "Lifecycle jobs")}
-      />
+      <RepositoryFeatureUnavailable feature={t("repository.lifecycleJobs")} />
     ) : (
       <ErrorBanner error={error} onRetry={load} />
     );
@@ -115,10 +113,9 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
   if (jobs.length === 0)
     return (
       <EmptyState
-        title={text("暂无生命周期任务", "No lifecycle jobs")}
-        hint={text(
-          "保留清理、晋升、复制任务会显示在这里",
-          "Retention cleanup, promotion, and replication tasks appear here.",
+        title={t("repository.noLifecycleJobs")}
+        hint={t(
+          "repository.retentionCleanupPromotionAndReplicationTasksAppearHere",
         )}
         action={scanReconcileAction}
       />
@@ -137,21 +134,21 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: text("类型", "Kind"),
+      title: t("repository.kind"),
       dataIndex: "kind",
       key: "kind",
       width: 150,
       render: (value: string) => <Badge tone="visualization-5">{value}</Badge>,
     },
     {
-      title: text("状态", "Status"),
+      title: t("repository.status"),
       dataIndex: "state",
       key: "state",
       width: 130,
       render: (value: string) => <StateBadge state={value} />,
     },
     {
-      title: text("创建时间", "Created"),
+      title: t("repository.created"),
       dataIndex: "createdAt",
       key: "createdAt",
       width: 180,
@@ -162,7 +159,7 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: text("完成时间", "Completed"),
+      title: t("repository.completed"),
       dataIndex: "completedAt",
       key: "completedAt",
       width: 180,
@@ -173,7 +170,7 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: text("错误", "Error"),
+      title: t("repository.error"),
       dataIndex: "lastError",
       key: "lastError",
       width: 300,
@@ -210,9 +207,8 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       )}
       <div className="flex items-center justify-between gap-4 border-b border-line pb-3">
         <div className="text-xs text-fg-tertiary">
-          {text(
-            "对账可补入发布时漏掉的扫描任务，并重试失败任务。",
-            "Reconciliation fills publication scan gaps and retries failed jobs.",
+          {t(
+            "repository.reconciliationFillsPublicationScanGapsAndRetriesFailed",
           )}
         </div>
         {scanReconcileAction}
@@ -220,22 +216,15 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
       {failedIntelligenceJobs.length > 0 && (
         <div className="flex items-center justify-between gap-4 rounded-md border border-[var(--ag-status-info-border)] bg-[var(--ag-status-info-soft)] px-4 py-3">
           <div className="text-xs text-[var(--ag-status-info)]">
-            {text(
-              `${failedIntelligenceJobs.length} 个情报同步任务需要补偿`,
-              `${failedIntelligenceJobs.length} intelligence sync job(s) need reconciliation`,
-            )}
+            {t("repository.intelligenceSyncJobSNeedReconciliation", {
+              length: failedIntelligenceJobs.length,
+            })}
           </div>
           <Popconfirm
-            title={text(
-              "重新排队失败的情报同步？",
-              "Requeue failed intelligence syncs?",
-            )}
-            description={text(
-              "只会重置失败或取消的情报同步任务，不会修改制品内容。",
-              "Only failed or cancelled sync jobs are reset; artifact content is unchanged.",
-            )}
-            okText={text("重新排队", "Requeue")}
-            cancelText={text("取消", "Cancel")}
+            title={t("repository.requeueFailedIntelligenceSyncs")}
+            description={t("repository.onlyFailedOrCancelledSyncJobsAreReset")}
+            okText={t("repository.requeue")}
+            cancelText={t("repository.cancel")}
             onConfirm={() => void reconcileIntelligence()}
           >
             <Button
@@ -244,7 +233,7 @@ export function RepositoryJobsTab({ repo }: { repo: Repository }) {
               icon={<SyncOutlined />}
               loading={reconciling}
             >
-              {text("补偿情报同步", "Reconcile intelligence")}
+              {t("repository.reconcileIntelligence")}
             </Button>
           </Popconfirm>
         </div>

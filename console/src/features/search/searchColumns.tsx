@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import { artifactCoordinateForDisplay } from "../../formats";
 import { DownOutlined, LinkOutlined, UpOutlined } from "@ant-design/icons";
 import { Button, Space, Tooltip } from "antd";
@@ -16,7 +17,6 @@ import {
   artifactVersionSizeLabel,
   mavenIntelligence,
 } from "./searchModel";
-type Localize = (chinese: string, english: string) => string;
 
 /** Search result columns: artifact, repository, match, size, time, action. */
 export function searchColumns({
@@ -24,17 +24,17 @@ export function searchColumns({
   locale,
   openHit,
   setRowExpanded,
-  text,
+  t,
 }: {
   expandedRow: string | null;
   locale: string;
   openHit: (hit: GlobalArtifactSearchHit) => void;
   setRowExpanded: (tableRow: SearchTableRow, next: boolean) => void;
-  text: Localize;
+  t: Translate;
 }): ColumnsType<SearchTableRow> {
   return [
     {
-      title: text("制品 / 坐标", "Artifact / coordinate"),
+      title: t("search.artifactCoordinate"),
       key: "coordinate",
       width: 420,
       render: (_, tableRow) => {
@@ -62,8 +62,8 @@ export function searchColumns({
                 }
               >
                 {tableRow.representative.matchKind === "digest"
-                  ? text("SHA-256 匹配", "SHA-256 match")
-                  : text("坐标匹配", "Coordinate match")}
+                  ? t("search.sHA256Match")
+                  : t("search.coordinateMatch")}
               </Badge>
             </div>
             {!isMavenGroup(row) && row.digest && (
@@ -75,16 +75,14 @@ export function searchColumns({
               </div>
             )}
             <span className="sr-only">
-              {expanded
-                ? text("已展开", "Expanded")
-                : text("已收起", "Collapsed")}
+              {expanded ? t("search.expanded") : t("search.collapsed")}
             </span>
           </div>
         );
       },
     },
     {
-      title: text("仓库", "Repository"),
+      title: t("search.repository"),
       key: "repository",
       width: 200,
       render: (_, tableRow) => (
@@ -98,28 +96,25 @@ export function searchColumns({
       ),
     },
     {
-      title: text("格式", "Format"),
+      title: t("search.format"),
       key: "format",
       width: 110,
       render: (_, tableRow) => <FormatBadge format={tableRow.row.format} />,
     },
     {
-      title: text("版本 / 大小", "Versions / size"),
+      title: t("search.versionsSize"),
       key: "versionOrSize",
       width: 150,
       render: (_, tableRow) => (
         <span className="text-xs text-fg-secondary">
           {isMavenGroup(tableRow.row)
-            ? text(
-                `${tableRow.row.hits.length} 个版本`,
-                `${tableRow.row.hits.length} versions`,
-              )
+            ? t("search.versions", { length: tableRow.row.hits.length })
             : artifactVersionSizeLabel(tableRow.row)}
         </span>
       ),
     },
     {
-      title: text("安全情报", "Security"),
+      title: t("search.security"),
       key: "intelligence",
       width: 150,
       render: (_, tableRow) => (
@@ -129,12 +124,12 @@ export function searchColumns({
               ? mavenIntelligence(tableRow.row.hits)
               : tableRow.row.intelligence
           }
-          text={text}
+          t={t}
         />
       ),
     },
     {
-      title: text("更新时间", "Updated"),
+      title: t("search.updated"),
       key: "createdAt",
       width: 180,
       render: (_, tableRow) => (
@@ -144,7 +139,7 @@ export function searchColumns({
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("search.actions"),
       key: "actions",
       fixed: "right",
       width: 100,
@@ -155,14 +150,14 @@ export function searchColumns({
             <Tooltip
               title={
                 expanded
-                  ? text("收起详情", "Collapse details")
-                  : text("展开详情", "Expand details")
+                  ? t("search.collapseDetails")
+                  : t("search.expandDetails")
               }
             >
               <Button
                 type="text"
                 size="small"
-                aria-label={`${expanded ? text("收起", "Collapse") : text("展开", "Expand")} ${tableRow.row.coordinate}`}
+                aria-label={`${expanded ? t("search.collapse") : t("search.expand")} ${tableRow.row.coordinate}`}
                 icon={expanded ? <UpOutlined /> : <DownOutlined />}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -170,17 +165,14 @@ export function searchColumns({
                 }}
               />
             </Tooltip>
-            <Tooltip
-              title={text("在仓库中精确定位", "Open exact repository location")}
-            >
+            <Tooltip title={t("search.openExactRepositoryLocation")}>
               <Button
                 type="text"
                 size="small"
                 icon={<LinkOutlined />}
-                aria-label={text(
-                  `在仓库中打开 ${tableRow.row.coordinate}`,
-                  `Open ${tableRow.row.coordinate} in repository`,
-                )}
+                aria-label={t("search.openInRepository", {
+                  coordinate: tableRow.row.coordinate,
+                })}
                 onClick={(event) => {
                   event.stopPropagation();
                   openHit(tableRow.representative);

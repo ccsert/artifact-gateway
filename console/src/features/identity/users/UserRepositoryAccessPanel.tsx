@@ -63,7 +63,7 @@ export function UserRepositoryAccessPanel({
   username,
 }: UserRepositoryAccessPanelProps) {
   const { message } = App.useApp();
-  const { t, text } = usePreferences();
+  const { t } = usePreferences();
   const principal = `user:${username}`;
   const invalidate = useInvalidateAccess();
   const grantsQuery = useRepositoryGrantRecords();
@@ -209,7 +209,7 @@ export function UserRepositoryAccessPanel({
                   </span>
                   <FormatBadge format={record.format} />
                   <Badge tone={grantTone(grantLevel(record.scopes))}>
-                    {grantedCapabilitiesLabel(record.scopes, text)}
+                    {grantedCapabilitiesLabel(record.scopes, t)}
                   </Badge>
                 </div>
                 <div className="mt-1 font-mono text-xs text-fg-tertiary">

@@ -88,7 +88,7 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onClose: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <Modal
       open={open}
@@ -98,7 +98,7 @@ export function ConfirmDialog({
       footer={
         <Space>
           <Button onClick={onClose} disabled={busy}>
-            {text("取消", "Cancel")}
+            {t("ui.cancel")}
           </Button>
           <Button
             type="primary"
@@ -106,7 +106,7 @@ export function ConfirmDialog({
             danger={danger}
             loading={busy}
           >
-            {confirmLabel ?? text("确认", "Confirm")}
+            {confirmLabel ?? t("ui.confirm")}
           </Button>
         </Space>
       }

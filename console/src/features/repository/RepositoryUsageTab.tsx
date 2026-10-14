@@ -16,7 +16,7 @@ export function RepositoryUsageTab({ repo }: { repo: Repository }) {
 }
 
 function RepositoryUsageContent({ repo }: { repo: Repository }) {
-  const { text, locale } = usePreferences();
+  const { t, locale } = usePreferences();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(CONSOLE_PAGE_SIZE);
   const [input, setInput] = useState("");
@@ -34,7 +34,7 @@ function RepositoryUsageContent({ repo }: { repo: Repository }) {
 
   const columns: ColumnsType<UsageRow> = [
     {
-      title: text("制品地址", "Artifact address"),
+      title: t("repository.artifactAddress"),
       dataIndex: "resource",
       render: (resource: string) => (
         <Tooltip title={resource}>
@@ -45,37 +45,37 @@ function RepositoryUsageContent({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: text("格式", "Format"),
+      title: t("repository.format"),
       dataIndex: "format",
       width: 96,
       render: (format: string) => <Tag>{format}</Tag>,
     },
     {
-      title: text("下载次数", "Downloads"),
+      title: t("repository.downloads"),
       dataIndex: "downloadCount",
       width: 128,
       render: (value: number) => formatNumber(value, locale),
     },
     {
-      title: text("累计流量", "Total bytes"),
+      title: t("repository.totalBytes"),
       dataIndex: "totalBytes",
       width: 128,
       render: (value: number) => formatBytes(value),
     },
     {
-      title: text("首次下载", "First download"),
+      title: t("repository.firstDownload"),
       dataIndex: "firstDownloadedAt",
       width: 184,
       render: (value: string) => formatDate(value, locale),
     },
     {
-      title: text("最近下载", "Last download"),
+      title: t("repository.lastDownload"),
       dataIndex: "lastDownloadedAt",
       width: 184,
       render: (value: string) => formatDate(value, locale),
     },
     {
-      title: text("最近使用者", "Last downloaded by"),
+      title: t("repository.lastDownloadedBy"),
       dataIndex: "lastActor",
       width: 160,
       render: (value: string | undefined) => value ?? "—",
@@ -97,11 +97,8 @@ function RepositoryUsageContent({ repo }: { repo: Repository }) {
       <FilterBar>
         <Input.Search
           className="max-w-md"
-          aria-label={text("搜索制品地址", "Search artifact address")}
-          placeholder={text(
-            "搜索制品地址（区分大小写）",
-            "Search address (case-sensitive)",
-          )}
+          aria-label={t("repository.searchArtifactAddress")}
+          placeholder={t("repository.searchAddressCaseSensitive")}
           maxLength={512}
           allowClear
           value={input}
@@ -112,14 +109,15 @@ function RepositoryUsageContent({ repo }: { repo: Repository }) {
           }}
         />
         <Button onClick={() => void load()} loading={loading}>
-          {text("刷新", "Refresh")}
+          {t("repository.refresh")}
         </Button>
       </FilterBar>
       <div className="text-sm text-fg-secondary" role="status">
-        {text(
-          `全仓库：${formatNumber(usage.totals.resources, locale)} 个地址 · ${formatNumber(usage.totals.downloadCount, locale)} 次下载 · ${formatBytes(usage.totals.totalBytes)}`,
-          `Whole repository: ${formatNumber(usage.totals.resources, locale)} addresses · ${formatNumber(usage.totals.downloadCount, locale)} downloads · ${formatBytes(usage.totals.totalBytes)}`,
-        )}
+        {t("repository.wholeRepositoryAddressesDownloads", {
+          number: formatNumber(usage.totals.resources, locale),
+          number2: formatNumber(usage.totals.downloadCount, locale),
+          bytes: formatBytes(usage.totals.totalBytes),
+        })}
       </div>
       <ConsoleTable<UsageRow>
         size="small"
@@ -143,18 +141,14 @@ function RepositoryUsageContent({ repo }: { repo: Repository }) {
               compact
               title={
                 query
-                  ? text("没有匹配的制品地址", "No matching artifact addresses")
-                  : text("暂无下载记录", "No downloads recorded yet")
+                  ? t("repository.noMatchingArtifactAddresses")
+                  : t("repository.noDownloadsRecordedYet")
               }
               hint={
                 query
-                  ? text(
-                      "调整地址搜索条件后重试。",
-                      "Try a different address search.",
-                    )
-                  : text(
-                      "尚无来自此仓库的下载记录。",
-                      "No downloads from this repository have been recorded yet.",
+                  ? t("repository.tryADifferentAddressSearch")
+                  : t(
+                      "repository.noDownloadsFromThisRepositoryHaveBeenRecorded",
                     )
               }
             />

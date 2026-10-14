@@ -20,7 +20,7 @@ export function EmailTemplatePreview({
   writable: boolean;
   onAuthBlocked: (error: unknown) => void;
 }) {
-  const { text, locale: uiLocale, colorMode } = usePreferences();
+  const { t, locale: uiLocale, colorMode } = usePreferences();
   const [scenario, setScenario] =
     useState<EmailPreviewInput["scenario"]>("warning");
   const [locale, setLocale] = useState<EmailPreviewInput["locale"]>(
@@ -31,18 +31,15 @@ export function EmailTemplatePreview({
   const action = useQuotaAction(onAuthBlocked);
   return (
     <Card>
-      <CardHeader title={text("邮件模板预览", "Email template preview")} />
+      <CardHeader title={t("system.emailTemplatePreview")} />
       <div className="grid min-w-0 gap-4 p-5">
         <p className="text-sm text-fg-tertiary">
-          {text(
-            "离线合成样例，不读取收件人、不入队、不发送。链接与外部资源在沙箱预览中禁用。",
-            "Offline synthetic sample: no recipient read, queue entry, or send. Links and external resources are disabled in the sandbox preview.",
-          )}
+          {t("system.offlineSyntheticSampleNoRecipientReadQueueEntry")}
         </p>
         <div className="grid min-w-0 grid-cols-1 items-start gap-4 sm:grid-cols-2">
-          <Field label={text("预览场景", "Preview scenario")}>
+          <Field label={t("system.previewScenario")}>
             <Select
-              aria-label={text("预览场景", "Preview scenario")}
+              aria-label={t("system.previewScenario")}
               value={scenario}
               disabled={!writable || action.busy}
               onChange={(v) => {
@@ -51,13 +48,13 @@ export function EmailTemplatePreview({
               }}
               options={["warning", "critical", "resolved"].map((value) => ({
                 value,
-                label: quotaLabel(value, text),
+                label: quotaLabel(value, t),
               }))}
             />
           </Field>
-          <Field label={text("预览语言", "Preview language")}>
+          <Field label={t("system.previewLanguage")}>
             <Select
-              aria-label={text("预览语言", "Preview language")}
+              aria-label={t("system.previewLanguage")}
               value={locale}
               disabled={!writable || action.busy}
               onChange={(v) => {
@@ -88,20 +85,20 @@ export function EmailTemplatePreview({
               )
             }
           >
-            {text("预览模板", "Preview template")}
+            {t("system.previewTemplate")}
           </Button>
           <Segmented
-            aria-label={text("预览格式", "Preview format")}
+            aria-label={t("system.previewFormat")}
             value={format}
             onChange={setFormat}
             options={[
               { value: "html", label: "HTML" },
-              { value: "text", label: text("纯文本", "Plain text") },
+              { value: "text", label: t("system.plainText") },
             ]}
           />
         </div>
         {Boolean(action.error) && (
-          <ErrorBanner error={safeEmailError(action.error, text, "preview")} />
+          <ErrorBanner error={safeEmailError(action.error, t, "preview")} />
         )}
         {preview ? (
           <>
@@ -109,16 +106,13 @@ export function EmailTemplatePreview({
               {preview.subject}
             </p>
             <p className="text-xs text-fg-tertiary">
-              {text("模板版本", "Template version")}: {preview.templateVersion}{" "}
-              · {quotaLabel(scenario, text)} · {locale}
+              {t("system.templateVersion")}: {preview.templateVersion} ·{" "}
+              {quotaLabel(scenario, t)} · {locale}
             </p>
             {format === "html" ? (
               <iframe
                 className="ag-email-preview"
-                title={text(
-                  "合成邮件 HTML 预览",
-                  "Synthetic email HTML preview",
-                )}
+                title={t("system.syntheticEmailHTMLPreview")}
                 sandbox=""
                 referrerPolicy="no-referrer"
                 style={{ colorScheme: colorMode }}
@@ -130,13 +124,9 @@ export function EmailTemplatePreview({
           </>
         ) : !action.busy && !action.error ? (
           <EmptyState
-            title={text(
-              "选择场景后预览模板",
-              "Choose a scenario and preview the template",
-            )}
-            hint={text(
-              "警告、严重和恢复均提供中英文 HTML 与等价纯文本。",
-              "Warning, critical, and recovery provide English and Chinese HTML and equivalent plain text.",
+            title={t("system.chooseAScenarioAndPreviewTheTemplate")}
+            hint={t(
+              "system.warningCriticalAndRecoveryProvideEnglishAndChinese",
             )}
           />
         ) : null}

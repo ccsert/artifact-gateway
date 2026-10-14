@@ -15,7 +15,7 @@ export function OciManifestView({
   config: OciConfig | null;
   manifestSize?: number;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const totalSize =
     (manifest.layers ?? []).reduce((n, l) => n + (l.size ?? 0), 0) +
     (manifest.config?.size ?? 0);
@@ -28,16 +28,16 @@ export function OciManifestView({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-lg border border-line px-3 py-2">
           <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-            {text("镜像大小", "Image size")}
+            {t("artifactDetail.imageSize")}
           </div>
           <div className="mt-0.5 text-sm font-semibold text-fg-strong">
             {hasImageDescriptors
               ? formatBytes(totalSize)
-              : text("无层数据", "No layer data")}
+              : t("artifactDetail.noLayerData")}
           </div>
           {!hasImageDescriptors && (
             <div className="mt-1 text-xs leading-4 text-fg-disabled">
-              {text("仅包含 Manifest 元数据", "Manifest metadata only")}
+              {t("artifactDetail.manifestMetadataOnly")}
             </div>
           )}
           <div className="mt-1 text-xs leading-4 text-fg-disabled">
@@ -46,7 +46,7 @@ export function OciManifestView({
         </div>
         <div className="rounded-lg border border-line px-3 py-2">
           <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-            {text("层数", "Layers")}
+            {t("artifactDetail.layers")}
           </div>
           <div className="mt-0.5 text-sm font-semibold text-fg-strong">
             {manifest.layers?.length ?? 0}
@@ -54,7 +54,7 @@ export function OciManifestView({
         </div>
         <div className="rounded-lg border border-line px-3 py-2">
           <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-            {text("架构 / 系统", "Architecture / OS")}
+            {t("artifactDetail.architectureOS")}
           </div>
           <div className="mt-0.5 text-sm font-semibold text-fg-strong">
             {config?.architecture ?? "—"} / {config?.os ?? "—"}
@@ -62,7 +62,7 @@ export function OciManifestView({
         </div>
         <div className="rounded-lg border border-line px-3 py-2">
           <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-            {text("创建时间", "Created")}
+            {t("artifactDetail.created")}
           </div>
           <div className="mt-0.5 text-sm font-semibold text-fg-strong">
             {config?.created ? formatDate(config.created, locale) : "—"}
@@ -74,7 +74,7 @@ export function OciManifestView({
       {config?.config && (
         <div className="rounded-lg border border-line px-3 py-2.5 text-xs">
           <div className="mb-1.5 text-xs uppercase tracking-wider text-fg-tertiary">
-            {text("启动配置", "Runtime configuration")}
+            {t("artifactDetail.runtimeConfiguration")}
           </div>
           <div className="space-y-1 font-mono">
             {config.config.Entrypoint && (
@@ -108,7 +108,7 @@ export function OciManifestView({
       {/* 层列表 */}
       <div>
         <div className="mb-1.5 flex items-center gap-2 text-xs uppercase tracking-wider text-fg-tertiary">
-          {text("文件层", "Layers")} ({manifest.layers?.length ?? 0})
+          {t("artifactDetail.layers2")} ({manifest.layers?.length ?? 0})
           {manifest.mediaType && (
             <Badge tone="neutral">{manifest.mediaType.split(".").pop()}</Badge>
           )}
@@ -146,7 +146,7 @@ export function OciManifestView({
                 ),
               },
               {
-                title: text("类型", "Type"),
+                title: t("artifactDetail.type"),
                 dataIndex: "mediaType",
                 key: "mediaType",
                 width: 160,
@@ -162,7 +162,7 @@ export function OciManifestView({
                 },
               },
               {
-                title: text("大小", "Size"),
+                title: t("artifactDetail.size"),
                 dataIndex: "size",
                 key: "size",
                 width: 120,

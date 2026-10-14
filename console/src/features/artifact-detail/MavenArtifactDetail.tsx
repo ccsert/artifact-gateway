@@ -24,7 +24,7 @@ export function MavenArtifactDetail({
   onDeleted?: () => void;
   canQuarantine?: boolean;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   // coordinate 是 GA（2 段）时直接用它，否则取 GA 部分
   const ga =
     meta.coordinate.split(":").length === 2
@@ -115,24 +115,26 @@ export function MavenArtifactDetail({
       const { data, error } = await listArtifacts({
         path: { repositoryId: repoId },
       });
-      if (error) throw new Error("读取 Maven artifact 列表失败");
+      if (error)
+        throw new Error(t("artifactDetail.failedToReadMavenArtifacts"));
       const artifact = (data?.items ?? []).find(
         (item) =>
           item.coordinate === effectiveMeta.coordinate &&
           item.state === "visible",
       );
       if (!artifact)
-        throw new Error("当前 Maven 版本未找到可删除的 artifact id");
+        throw new Error(t("artifactDetail.noDeletableMavenArtifact"));
       const deleted = await deleteArtifact({
         path: { repositoryId: repoId, artifactId: artifact.id },
       });
-      if (deleted.error) throw new Error("删除 Maven artifact 失败");
+      if (deleted.error)
+        throw new Error(t("artifactDetail.failedToDeleteMavenArtifact"));
       onDeleted?.();
     } catch (error) {
       setDeleteError(
         error instanceof Error
           ? error.message
-          : text("删除失败", "Delete failed"),
+          : t("artifactDetail.deleteFailed"),
       );
     } finally {
       setDeleting(false);
@@ -152,7 +154,7 @@ export function MavenArtifactDetail({
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2">
             <div className="min-w-0">
               <div className="text-xs font-medium text-fg">
-                {text("当前版本", "Current version")}
+                {t("artifactDetail.currentVersion")}
               </div>
               <div
                 className="mt-0.5 truncate font-mono text-xs text-fg-tertiary"
@@ -167,16 +169,12 @@ export function MavenArtifactDetail({
               )}
             </div>
             <Popconfirm
-              title={text(
-                "删除当前 Maven 版本？",
-                "Delete this Maven version?",
+              title={t("artifactDetail.deleteThisMavenVersion")}
+              description={t(
+                "artifactDetail.thisVersionAndItsRecoverableReferencesWillNo",
               )}
-              description={text(
-                "删除后该版本及其可恢复引用将不可见。",
-                "This version and its recoverable references will no longer be visible.",
-              )}
-              okText={text("删除", "Delete")}
-              cancelText={text("取消", "Cancel")}
+              okText={t("artifactDetail.delete")}
+              cancelText={t("artifactDetail.cancel")}
               okButtonProps={{ danger: true }}
               onConfirm={() => void deleteCurrent()}
             >
@@ -186,18 +184,18 @@ export function MavenArtifactDetail({
                 icon={<DeleteOutlined />}
                 loading={deleting}
               >
-                {text("删除当前版本", "Delete current version")}
+                {t("artifactDetail.deleteCurrentVersion")}
               </Button>
             </Popconfirm>
           </div>
           <VersionList
-            title={`${text("发布版本", "Release versions")} (${ga ?? ""})`}
+            title={`${t("artifactDetail.releaseVersions")} (${ga ?? ""})`}
             items={releases}
             current={currentVersion}
             onSelect={setSelected}
           />
           <VersionList
-            title={text("快照构建", "Snapshot builds")}
+            title={t("artifactDetail.snapshotBuilds")}
             items={snapshots}
             current={currentVersion}
             onSelect={setSelected}

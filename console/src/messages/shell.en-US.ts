@@ -104,4 +104,24 @@ export const shellEnUS: Record<ShellMessageKey, string> = {
   "auth.tokenDialogHint":
     "Management APIs use Bearer authentication. The token is stored only in this browser.",
   "auth.saveToken": "Save",
+  "shell.pageResourcesFailedToLoad": "Page resources failed to load",
+  "shell.pageFailedToLoad": "Page failed to load",
+  "shell.pageResourcesMayHaveChangedOrTheDevelopment":
+    "Page resources may have changed, or the development server may be rebuilding dependencies. Reload the page; if it still fails, restart the local Console.",
+  "shell.thePageCouldNotFinishLoadingReloadIt":
+    "The page could not finish loading. Reload it first; if the problem continues, open public artifact browsing.",
+  "shell.technicalDetails": "Technical details",
+  "shell.reload": "Reload",
+  "shell.browsePublicArtifacts": "Browse public artifacts",
+  "shell.couldNotLoadRepositories": "Could not load repositories",
+  "shell.loadingRepositories": "Loading repositories…",
+  "shell.noPageOrRepositoryMatches": "No page or repository matches “{query}”.",
+  "shell.select": "Select",
+  "shell.open": "Open",
+  "shell.close": "Close",
+  "shell.developmentBuild": "Development build",
+  "shell.versionUnknown": "Version unknown",
+  "shell.viewDiagnosticsForTheConnectedNode":
+    "View diagnostics for the connected node",
+  "shell.connectedNode": "Connected node",
 };
