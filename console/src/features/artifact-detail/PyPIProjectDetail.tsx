@@ -84,7 +84,7 @@ export function PyPIProjectDetail({
   }, [initialVersion, versions]);
 
   if (projectQuery.isPending) return <Loading />;
-  if (projectQuery.isError)
+  if (projectQuery.isError && !document)
     return (
       <ErrorBanner
         error={errorText(
@@ -170,6 +170,19 @@ export function PyPIProjectDetail({
 
   return (
     <div className="grid gap-5 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+      {projectQuery.isError && (
+        <div className="xl:col-span-2">
+          <ErrorBanner
+            tone="warning"
+            error={errorText(
+              projectQuery.error,
+              t,
+              "artifactDetail.failedToLoadPyPIProject2",
+            )}
+            onRetry={() => void projectQuery.refetch()}
+          />
+        </div>
+      )}
       {selectedFiles.map((file) => {
         const digest = fileDigest(file);
         return digest ? (

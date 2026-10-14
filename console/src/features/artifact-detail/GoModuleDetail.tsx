@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button } from "antd";
+import { Button } from "antd";
 import { CopyOutlined, DownloadOutlined } from "@ant-design/icons";
 import { formatBytes, formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
@@ -110,7 +110,16 @@ export function GoModuleDetail({
         coordinate={`${modulePath}@${selectedVersion}`}
         digest={versionDigest}
       />
-      {error && <Alert type="warning" showIcon title={error} />}
+      {error && (
+        <ErrorBanner
+          tone="warning"
+          error={error}
+          onRetry={() => {
+            if (versionsQuery.isError) void versionsQuery.refetch();
+            if (infoQuery.isError) void infoQuery.refetch();
+          }}
+        />
+      )}
       <div className="grid gap-4 lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
         <div>
           <div className="mb-1 text-xs font-medium text-fg-tertiary">

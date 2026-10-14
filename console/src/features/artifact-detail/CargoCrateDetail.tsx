@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "antd";
 import { CopyOutlined, DownloadOutlined } from "@ant-design/icons";
 import { useAuth } from "../../lib/auth";
@@ -14,17 +14,34 @@ import {
 import { errorText } from "../../messages/translate";
 import { useCargoIndex } from "./protocolDetailQueries";
 
-export function CargoCrateDetail({
-  repoName,
-  crateName,
-  initialVersion,
-  onVersionChange,
-}: {
+type CargoCrateDetailProps = {
   repoName: string;
   crateName: string;
   initialVersion?: string;
   onVersionChange?: (version: string) => void;
-}) {
+};
+
+export function CargoCrateDetail(props: CargoCrateDetailProps) {
+  const { token } = useAuth();
+  return (
+    <CargoCrateContent
+      key={JSON.stringify([
+        props.repoName,
+        props.crateName,
+        props.initialVersion,
+        token,
+      ])}
+      {...props}
+    />
+  );
+}
+
+function CargoCrateContent({
+  repoName,
+  crateName,
+  initialVersion,
+  onVersionChange,
+}: CargoCrateDetailProps) {
   const { token } = useAuth();
   const { t } = usePreferences();
   const indexQuery = useCargoIndex(repoName, crateName);
@@ -44,6 +61,8 @@ export function CargoCrateDetail({
   }, [entries, initialVersion]);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState("");
+  const downloadController = useRef<AbortController | undefined>(undefined);
+  useEffect(() => () => downloadController.current?.abort(), []);
   const error = indexQuery.isError
     ? errorText(
         indexQuery.error,
@@ -75,15 +94,20 @@ export function CargoCrateDetail({
 
   const download = async () => {
     if (!selected) return;
+    const controller = new AbortController();
+    downloadController.current = controller;
     setDownloading(true);
     setDownloadError("");
     try {
       const response = await fetch(downloadURL, {
+        signal: controller.signal,
         credentials: "include",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
+      if (controller.signal.aborted) return;
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
+      if (controller.signal.aborted) return;
       const temporaryURL = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = temporaryURL;
@@ -91,6 +115,7 @@ export function CargoCrateDetail({
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(temporaryURL), 1000);
     } catch (requestError) {
+      if (controller.signal.aborted) return;
       setDownloadError(
         requestError instanceof Error
           ? requestError.message
@@ -109,7 +134,15 @@ export function CargoCrateDetail({
 
   return (
     <div className="space-y-4 px-1 py-2">
-      {error && <ErrorBanner error={error} />}
+      {error && (
+        <ErrorBanner
+          tone="warning"
+          error={error}
+          onRetry={
+            indexQuery.isError ? () => void indexQuery.refetch() : undefined
+          }
+        />
+      )}
       <div className="grid gap-4 lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
         <div>
           <div className="mb-1 text-xs font-medium text-fg-tertiary">

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +9,7 @@ import { createQueryClient } from "../../lib/query/client";
 import { CargoCrateDetail } from "./CargoCrateDetail";
 import { GoModuleDetail } from "./GoModuleDetail";
 import { NpmPackageDetail } from "./NpmPackageDetail";
+import { PyPIProjectDetail } from "./PyPIProjectDetail";
 
 afterEach(() => {
   cleanup();
@@ -49,6 +50,99 @@ function json(body: unknown, status = 200) {
 }
 
 describe("protocol detail reads", () => {
+  it("a failed download belongs to its crate and clears when the crate switches", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/download"))
+        return new Response("gone", { status: 410 });
+      const name = url.endsWith("second") ? "second" : "first";
+      return new Response(
+        `${JSON.stringify({ name, vers: "1.0.0", cksum: "a".repeat(64), yanked: false })}\n`,
+      );
+    });
+    const ui = (name: string) => (
+      <AuthProvider>
+        <QueryClientProvider client={client}>
+          <PreferencesProvider>
+            <CargoCrateDetail repoName="cargo" crateName={name} />
+          </PreferencesProvider>
+        </QueryClientProvider>
+      </AuthProvider>
+    );
+    const { client, rerender } = renderWithClient(
+      <CargoCrateDetail repoName="cargo" crateName="first" />,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /下载 \.crate/ }),
+    );
+    expect(await screen.findByText("HTTP 410")).toBeVisible();
+    rerender(ui("second"));
+    expect(await screen.findByText("second")).toBeVisible();
+    expect(screen.queryByText("HTTP 410")).not.toBeInTheDocument();
+  });
+
+  it.each(["npm", "pypi", "go", "cargo"])(
+    "keeps %s content after a failed refresh and recovers with Retry",
+    async (format) => {
+      let fail = false;
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url === "/auth/session") return new Response(null, { status: 401 });
+        if (fail) return new Response("unavailable", { status: 503 });
+        if (url.startsWith("/npm/")) return json(packument("widget"));
+        if (url.startsWith("/pypi/"))
+          return json({
+            name: "widget",
+            files: [
+              {
+                filename: "widget-1.0.0.tar.gz",
+                url: "widget.tar.gz",
+                hashes: { sha256: "a".repeat(64) },
+                "_artifact-gateway": {
+                  version: "1.0.0",
+                  "created-at": "2026-08-01T00:00:00Z",
+                },
+              },
+            ],
+          });
+        if (url.endsWith("/@v/list")) return new Response("v1.0.0\n");
+        if (init?.method === "HEAD") return new Response(null);
+        if (url.endsWith(".info"))
+          return json({ Version: "v1.0.0", Time: "2026-08-01T00:00:00Z" });
+        return new Response(
+          JSON.stringify({
+            name: "widget",
+            vers: "1.0.0",
+            cksum: "a".repeat(64),
+            yanked: false,
+          }),
+        );
+      });
+      const pages: Record<string, ReactNode> = {
+        npm: <NpmPackageDetail repoName="npm" packageName="widget" />,
+        pypi: <PyPIProjectDetail repoName="pypi" project="widget" />,
+        go: <GoModuleDetail repoName="go" modulePath="example.com/widget" />,
+        cargo: <CargoCrateDetail repoName="cargo" crateName="widget" />,
+      };
+      const { client } = renderWithClient(pages[format]);
+      await screen.findByRole("combobox");
+      await waitFor(() =>
+        expect(screen.getAllByText(/1\.0\.0/).length).toBeGreaterThan(0),
+      );
+      fail = true;
+      await act(async () => {
+        await client.invalidateQueries({ queryKey: ["protocol"] });
+      });
+      await screen.findAllByText(/503/);
+      expect(screen.getByRole("combobox")).toBeVisible();
+      fail = false;
+      await userEvent.click(screen.getByRole("button", { name: /重\s*试/ }));
+      await waitFor(() =>
+        expect(screen.queryByText(/503/)).not.toBeInTheDocument(),
+      );
+      expect(screen.getByRole("combobox")).toBeVisible();
+    },
+  );
   it("never lets a slower answer for the previous package replace the current one", async () => {
     let finishFirst: (response: Response) => void = () => {};
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

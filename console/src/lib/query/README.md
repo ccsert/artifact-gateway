@@ -48,7 +48,9 @@ reads: keys come from `protocolKeys`, each read sends the signed-in token when
 there is one, sets `authFailure: "ignore"` because the same pages render in
 anonymous public browse, and fails with a `LocalizedError` that keeps the HTTP
 status for the retry policy. Optional evidence (the Go zip digest from `HEAD`)
-never fails the page.
+never fails the page. Refresh failures keep the loaded package content with a
+warning and Retry. Cargo download errors and requests belong to the selected
+package and identity.
 
 ## Data shared across pages
 

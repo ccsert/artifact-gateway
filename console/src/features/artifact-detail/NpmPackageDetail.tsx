@@ -69,7 +69,7 @@ export function NpmPackageDetail({
   }, [packument]);
 
   if (packumentQuery.isPending) return <Loading />;
-  if (packumentQuery.isError)
+  if (packumentQuery.isError && !packument)
     return (
       <ErrorBanner
         error={errorText(
@@ -95,6 +95,19 @@ export function NpmPackageDetail({
 
   return (
     <div className="grid gap-5 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+      {packumentQuery.isError && (
+        <div className="xl:col-span-2">
+          <ErrorBanner
+            tone="warning"
+            error={errorText(
+              packumentQuery.error,
+              t,
+              "artifactDetail.failedToLoadNpmPackage2",
+            )}
+            onRetry={() => void packumentQuery.refetch()}
+          />
+        </div>
+      )}
       <ArtifactQuarantinePanel
         repositoryId={repositoryId}
         coordinate={`${packageName}@${selectedVersion}`}
