@@ -10,11 +10,15 @@ import { usePreferences } from "../../lib/preferences";
 /** Rename a group and change its anonymous read access. */
 export function RenameGroupDialog({
   group,
+  open,
   onClose,
+  afterClose,
   onSaved,
 }: {
   group: Group;
+  open: boolean;
   onClose: () => void;
+  afterClose: () => void;
   onSaved: () => void;
 }) {
   const { t } = usePreferences();
@@ -48,9 +52,10 @@ export function RenameGroupDialog({
   return (
     <>
       <Modal
-        open
+        open={open}
         title={t("groups.groupSettings", { name: group.name })}
         onClose={onClose}
+        afterClose={afterClose}
         busy={busy}
         footer={
           <Space>

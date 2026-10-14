@@ -138,7 +138,10 @@ export function groupColumns({
                   label: t("groups.deleteGroupAction"),
                 },
               ],
-              onClick: ({ key }) => {
+              onClick: ({ key, domEvent }) => {
+                // Enter opens a dialog that takes focus immediately. Prevent
+                // its native click from activating the dialog's close button.
+                if (key !== "browse") domEvent.preventDefault();
                 if (key === "delete") onDelete(group);
                 else if (key !== "browse") onAction(key as GroupAction, group);
               },

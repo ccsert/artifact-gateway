@@ -10,13 +10,17 @@ import { useGroupCapacity } from "./groupQueries";
 /** A group's capacity across its member repositories. */
 export function CapacityDialog({
   group,
+  open,
   onClose,
+  afterClose,
 }: {
   group: Group;
+  open: boolean;
   onClose: () => void;
+  afterClose: () => void;
 }) {
   const { t } = usePreferences();
-  const capacityQuery = useGroupCapacity(group.id, true);
+  const capacityQuery = useGroupCapacity(group.id, open);
   const capacity = capacityQuery.data ?? null;
   const error = capacityQuery.error;
   const formatBytes = (value: number) =>
@@ -84,8 +88,9 @@ export function CapacityDialog({
   return (
     <>
       <Modal
-        open
+        open={open}
         onClose={onClose}
+        afterClose={afterClose}
         wide
         title={t("groups.capacity2", { name: group.name })}
       >

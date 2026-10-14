@@ -76,14 +76,22 @@ export function GroupsPage() {
   // Closing a dialog returns focus to what opened it: the row's button, or
   // its More actions button when the dialog came from the row menu.
   const [action, setAction] = useState<{
+    key: number;
+    open: boolean;
     kind: GroupAction;
     group: Group;
     returnTo: HTMLElement | null;
   } | null>(null);
+  const [deleteReturnTo, setDeleteReturnTo] = useState<HTMLElement | null>(
+    null,
+  );
   const closeAction = () => {
-    const target = action?.returnTo;
-    setAction(null);
-    window.requestAnimationFrame(() => target?.focus());
+    setAction((current) => current && { ...current, open: false });
+  };
+  const afterActionClose = () => {
+    if (!action) return;
+    action.returnTo?.focus();
+    setAction((current) => (current?.key === action.key ? null : current));
   };
   const columns = groupColumns({
     repoName,
@@ -96,9 +104,22 @@ export function GroupsPage() {
               `[data-group-actions="${CSS.escape(group.id)}"]`,
             )
           : active;
-      setAction({ kind, group, returnTo });
+      setAction((current) => ({
+        kind,
+        group,
+        returnTo,
+        open: true,
+        key: (current?.key ?? 0) + 1,
+      }));
     },
-    onDelete: setToDelete,
+    onDelete: (group) => {
+      setDeleteReturnTo(
+        document.querySelector<HTMLElement>(
+          `[data-group-actions="${CSS.escape(group.id)}"]`,
+        ),
+      );
+      setToDelete(group);
+    },
     t,
   });
 
@@ -205,24 +226,42 @@ export function GroupsPage() {
       </ListStates>
       {action?.kind === "members" && (
         <MembersDialog
+          key={action.key}
+          open={action.open}
           group={action.group}
           repos={repos}
           onClose={closeAction}
+          afterClose={afterActionClose}
           onSaved={() => void load()}
         />
       )}
       {action?.kind === "settings" && (
         <RenameGroupDialog
+          key={action.key}
+          open={action.open}
           group={action.group}
           onClose={closeAction}
+          afterClose={afterActionClose}
           onSaved={() => void load()}
         />
       )}
       {action?.kind === "resolution" && (
-        <GroupResolutionDialog group={action.group} onClose={closeAction} />
+        <GroupResolutionDialog
+          key={action.key}
+          open={action.open}
+          group={action.group}
+          onClose={closeAction}
+          afterClose={afterActionClose}
+        />
       )}
       {action?.kind === "capacity" && (
-        <CapacityDialog group={action.group} onClose={closeAction} />
+        <CapacityDialog
+          key={action.key}
+          open={action.open}
+          group={action.group}
+          onClose={closeAction}
+          afterClose={afterActionClose}
+        />
       )}
       <ConfirmDanger
         target={toDelete}
@@ -239,6 +278,7 @@ export function GroupsPage() {
           unwrap(deleteGroup({ path: { groupId: group.id } })).then(() => {})
         }
         onClose={() => setToDelete(null)}
+        afterClose={() => deleteReturnTo?.focus()}
         onDone={() => void load()}
         onError={setError}
       />

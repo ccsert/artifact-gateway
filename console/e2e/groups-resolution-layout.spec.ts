@@ -156,8 +156,30 @@ for (const width of [1440, 390]) {
     ).toBeInViewport();
     await dialog.getByRole("button", { name: "刷新", exact: true }).click();
     await expect.poll(() => inspected).toBe(2);
+    // Make the closing phase observable before checking focus restoration.
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    const closeMotionStyle = await page.addStyleTag({
+      content:
+        ".ant-modal.ant-zoom-leave { animation-duration: 1s !important; }",
+    });
     await page.keyboard.press("Escape");
+    await expect(dialog).toHaveClass(/ant-zoom-leave/);
     await expect(dialog).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+    await closeMotionStyle.evaluate((element) =>
+      element.parentNode?.removeChild(element),
+    );
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await trigger.click();
+    const deleteItem = page.getByRole("menuitem", { name: "删除分组" });
+    await deleteItem.focus();
+    await deleteItem.press("Enter");
+    const confirmation = page.getByRole("dialog", { name: "删除分组" });
+    await expect(confirmation).toBeVisible();
+    await confirmation
+      .getByRole("button", { name: "取消", exact: true })
+      .click();
+    await expect(confirmation).not.toBeVisible();
     await expect(trigger).toBeFocused();
     expect(errors).toEqual([]);
   });

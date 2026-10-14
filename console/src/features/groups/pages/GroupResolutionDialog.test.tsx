@@ -60,7 +60,11 @@ function Harness() {
         解析顺序
       </button>
       {open && (
-        <GroupResolutionDialog group={group} onClose={() => setOpen(false)} />
+        <GroupResolutionDialog
+          open={open}
+          group={group}
+          onClose={() => setOpen(false)}
+        />
       )}
     </>
   );

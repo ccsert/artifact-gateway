@@ -124,6 +124,116 @@ afterEach(() => {
 });
 
 describe("GroupsPage dialogs", () => {
+  it("waits for the complete member read before allowing edits or saves", async () => {
+    const user = userEvent.setup();
+    let finish: ((value: never) => void) | undefined;
+    vi.mocked(listGroupMembers).mockImplementationOnce(
+      () =>
+        new Promise<never>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    vi.mocked(replaceGroupMembers).mockResolvedValue({ data: [] } as never);
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: /编辑成员/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: /保存/ })).toBeDisabled();
+    expect(
+      within(dialog).queryByRole("button", { name: /npm-lib/ }),
+    ).not.toBeInTheDocument();
+    finish?.({
+      data: [{ repositoryId: repository.id, position: 0 }],
+      response: new Response(null, { headers: { ETag: '"7"' } }),
+    } as never);
+    await within(dialog).findByText("npm-lib");
+    await user.click(within(dialog).getByRole("button", { name: /保存/ }));
+    expect(replaceGroupMembers).toHaveBeenCalledWith({
+      path: { groupId: group.id },
+      body: [{ repositoryId: repository.id, position: 0 }],
+      headers: { "If-Match": "7" },
+    });
+  });
+
+  it("keeps a failed member read out of the editor until retry succeeds", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listGroupMembers)
+      .mockResolvedValueOnce({
+        error: { status: 503, message: "members unavailable" },
+      } as never)
+      .mockResolvedValueOnce({
+        data: [{ repositoryId: repository.id, position: 0 }],
+      } as never);
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: /编辑成员/ }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("members unavailable");
+    expect(within(dialog).queryByRole("status")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: /保存/ })).toBeDisabled();
+    expect(
+      within(dialog).queryByRole("button", { name: /npm-lib/ }),
+    ).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: /重试/ }));
+    await within(dialog).findByText("npm-lib");
+    expect(within(dialog).getByRole("button", { name: /保存/ })).toBeEnabled();
+    expect(within(dialog).queryByText("members unavailable")).toBeNull();
+  });
+
+  it("reopens with fresh members and cancels a read from a closed editor", async () => {
+    const user = userEvent.setup();
+    let finish: ((value: never) => void) | undefined;
+    let oldSignal: AbortSignal | undefined;
+    vi.mocked(listGroupMembers)
+      .mockResolvedValueOnce({
+        data: [{ repositoryId: repository.id, position: 0 }],
+      } as never)
+      .mockImplementationOnce((options) => {
+        oldSignal = options.signal ?? undefined;
+        return new Promise<never>((resolve) => {
+          finish = resolve;
+        });
+      })
+      .mockResolvedValueOnce({
+        data: [{ repositoryId: repository.id, position: 0 }],
+        response: new Response(null, { headers: { ETag: '"9"' } }),
+      } as never);
+    vi.mocked(replaceGroupMembers).mockResolvedValue({ data: [] } as never);
+    renderPage();
+    const trigger = await screen.findByRole("button", { name: /编辑成员/ });
+    await user.click(trigger);
+    await screen.findByText("npm-lib");
+    await user.click(screen.getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await user.click(trigger);
+    expect(screen.getByRole("button", { name: /保存/ })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(oldSignal?.aborted).toBe(true));
+    await user.click(trigger);
+    await screen.findByText("npm-lib");
+    finish?.({ data: [] } as never);
+    await user.click(screen.getByRole("button", { name: /保存/ }));
+    expect(replaceGroupMembers).toHaveBeenCalledWith({
+      path: { groupId: group.id },
+      body: [{ repositoryId: repository.id, position: 0 }],
+      headers: { "If-Match": "9" },
+    });
+  });
+
+  it("restores row focus after cancelling delete from a focused menu item", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const trigger = await screen.findByRole("button", {
+      name: "oci-mirror 的更多操作",
+    });
+    await user.click(trigger);
+    const item = await screen.findByRole("menuitem", { name: "删除分组" });
+    item.focus();
+    expect(item).toHaveFocus();
+    await user.click(item);
+    await screen.findByRole("dialog");
+    await user.click(screen.getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
   it("recovers format profiles on retry after the service recovers", async () => {
     const user = userEvent.setup();
     vi.mocked(listFormatProfiles).mockResolvedValueOnce({

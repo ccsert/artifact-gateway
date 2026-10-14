@@ -17,13 +17,17 @@ import "../group-pages.css";
 
 export function GroupResolutionDialog({
   group,
+  open,
   onClose,
+  afterClose,
 }: {
   group: Group;
+  open: boolean;
   onClose: () => void;
+  afterClose?: () => void;
 }) {
   const { t } = usePreferences();
-  const planQuery = useGroupResolution(group.id, true);
+  const planQuery = useGroupResolution(group.id, open);
   const plan = planQuery.data ?? null;
   const loading = planQuery.isFetching;
   const error = planQuery.error;
@@ -41,8 +45,9 @@ export function GroupResolutionDialog({
   return (
     <>
       <Modal
-        open
+        open={open}
         onClose={() => close()}
+        afterClose={afterClose}
         title={t("groups.resolutionOrder2", { name: group.name })}
         footer={
           <Space>
