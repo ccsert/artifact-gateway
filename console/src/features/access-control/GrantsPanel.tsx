@@ -3,7 +3,7 @@ import type { Repository } from "../../client";
 import { Button, Input, Select } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ClearOutlined } from "@ant-design/icons";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Card, CardHeader } from "../../components/ui/Layout";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { FormatBadge, Badge } from "../../components/ui/Badge";
@@ -28,7 +28,16 @@ export function GrantsPanel({
   onRetry: () => void;
 }) {
   const { t } = usePreferences();
-  const [principalFilter, setPrincipalFilter] = useState("");
+  // `?principal=` opens the grants of one principal (linked from a service
+  // account); a later change of that parameter replaces the filter.
+  const [params] = useSearchParams();
+  const urlPrincipal = params.get("principal") ?? "";
+  const [principalFilter, setPrincipalFilter] = useState(urlPrincipal);
+  const [seededPrincipal, setSeededPrincipal] = useState(urlPrincipal);
+  if (seededPrincipal !== urlPrincipal) {
+    setSeededPrincipal(urlPrincipal);
+    setPrincipalFilter(urlPrincipal);
+  }
   const [repoFilter, setRepoFilter] = useState("");
   const [scopeFilter, setScopeFilter] = useState<
     "all" | "read" | "write" | "admin"

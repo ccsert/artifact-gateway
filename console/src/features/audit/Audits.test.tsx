@@ -22,13 +22,13 @@ const record = (actor: string) => ({
   repository: "stable-releases",
 });
 
-function renderPage() {
+function renderPage(entry = "/audits") {
   vi.mocked(listRepositories).mockResolvedValue({
     data: { items: [] },
   } as never);
   vi.mocked(listGroups).mockResolvedValue({ data: { items: [] } } as never);
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[entry]}>
       <TestQueryProvider>
         <PreferencesProvider>
           <AuditsPage />
@@ -106,4 +106,20 @@ it("refreshes from the first page with one request", async () => {
     "pageToken",
     "cursor-2",
   );
+});
+
+it("opens filtered to the actor a link names", async () => {
+  vi.mocked(listAuditPage).mockResolvedValue({
+    data: { items: [record("service-account:sa-1")] },
+  } as never);
+  renderPage("/audits?actor=service-account%3Asa-1");
+
+  expect(await screen.findAllByText("service-account:sa-1")).not.toHaveLength(
+    0,
+  );
+  expect(vi.mocked(listAuditPage).mock.calls[0][0]?.query).toMatchObject({
+    actor: "service-account:sa-1",
+  });
+  // The filter is visible, so it can be cleared.
+  expect(screen.getByRole("button", { name: /清\s*除/ })).toBeEnabled();
 });

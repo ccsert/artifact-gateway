@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import {
   act,
   cleanup,
@@ -88,13 +89,15 @@ const mockUpdateServiceAccount = vi.mocked(updateServiceAccount);
 
 function renderPage() {
   return render(
-    <TestQueryProvider>
-      <PreferencesProvider>
-        <AntdProvider>
-          <ServiceAccountsPage />
-        </AntdProvider>
-      </PreferencesProvider>
-    </TestQueryProvider>,
+    <MemoryRouter>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            <ServiceAccountsPage />
+          </AntdProvider>
+        </PreferencesProvider>
+      </TestQueryProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -259,6 +262,16 @@ describe("ServiceAccountsPage", () => {
     ).toBeInTheDocument();
     expect(await screen.findByText("jenkins-blue")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /签发新凭据/ })).toBeEnabled();
+    // Rotation is verified where the principal is granted and used.
+    const principal = encodeURIComponent(`service-account:${accountId}`);
+    expect(screen.getByRole("link", { name: "查看仓库授权" })).toHaveAttribute(
+      "href",
+      `/access?principal=${principal}`,
+    );
+    expect(screen.getByRole("link", { name: "查看最近审计" })).toHaveAttribute(
+      "href",
+      `/audits?actor=${principal}`,
+    );
   });
 
   it("loads additional machine principals and credential history through bounded pages", async () => {

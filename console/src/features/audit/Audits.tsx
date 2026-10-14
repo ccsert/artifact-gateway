@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { Button, Space } from "antd";
 import {
@@ -45,7 +46,19 @@ function distinct(values: (string | undefined)[], sort = true) {
 export function AuditsPage() {
   const { locale, t } = usePreferences();
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState<Filters>(emptyAuditFilters);
+  // `?actor=` opens the log filtered to one principal (linked from a
+  // service account); a later change of that parameter starts over.
+  const [params] = useSearchParams();
+  const urlActor = params.get("actor") ?? "";
+  const [filters, setFilters] = useState<Filters>(() => ({
+    ...emptyAuditFilters,
+    actor: urlActor,
+  }));
+  const [seededActor, setSeededActor] = useState(urlActor);
+  if (seededActor !== urlActor) {
+    setSeededActor(urlActor);
+    setFilters({ ...emptyAuditFilters, limit: filters.limit, actor: urlActor });
+  }
   const updateFilters = (change: Partial<Filters>) =>
     setFilters((current) => ({ ...current, ...change }));
   const audit = useAuditPages(filters);

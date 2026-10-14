@@ -325,6 +325,8 @@ export const identityZhCN = {
     "至少 8 个字符且不超过 72 字节。密码只在创建时使用，不会再次显示。",
   "identity.enterAnInitialPassword": "请输入初始密码",
   "identity.firstSignInRequirement": "首次登录要求",
+  "identity.viewGrants": "查看仓库授权",
+  "identity.viewRecentAudits": "查看最近审计",
 } as const;
 
 export type IdentityMessageKey = keyof typeof identityZhCN;

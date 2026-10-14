@@ -20,6 +20,58 @@ interface Surface {
   authenticated?: boolean;
   /** Puts the page into the state to capture once it is ready. */
   prepare?: (page: Page) => Promise<void>;
+  /** A phone-width capture; the default is the 1440×900 desktop. */
+  mobile?: boolean;
+}
+
+/**
+ * The overview's storage plot loads on intersection and paints after its
+ * React wrapper; a screenshot taken earlier catches an empty or moving canvas.
+ */
+async function waitForStoragePlot(page: Page) {
+  // This plot loads on intersection and paints after its React wrapper.
+  // A full-page screenshot can otherwise accept an empty canvas.
+  await page.getByTestId("storage-by-format-chart").scrollIntoViewIfNeeded();
+  const canvas = page.getByTestId("ant-design-pie-ready").locator("canvas");
+  await expect(canvas).toBeVisible();
+  await expect
+    .poll(() =>
+      canvas.evaluate((element) => {
+        const plot = element as HTMLCanvasElement;
+        const context = plot.getContext("2d");
+        if (!context || !plot.width || !plot.height) return false;
+        const pixels = context.getImageData(0, 0, plot.width, plot.height).data;
+        // The fixture has categorical slices; neutral canvas/background
+        // pixels do not establish that those data have been painted.
+        for (let offset = 0; offset < pixels.length; offset += 4) {
+          if (
+            pixels[offset + 3] > 0 &&
+            Math.max(pixels[offset], pixels[offset + 1], pixels[offset + 2]) -
+              Math.min(pixels[offset], pixels[offset + 1], pixels[offset + 2]) >
+              32
+          ) {
+            return true;
+          }
+        }
+        return false;
+      }),
+    )
+    .toBe(true);
+  // Painted is not settled: wait until the plot stops changing between
+  // two reads, so a late layout pass cannot move it under the screenshot.
+  await expect
+    .poll(async () => {
+      const before = await canvas.evaluate((element) =>
+        (element as HTMLCanvasElement).toDataURL(),
+      );
+      await page.waitForTimeout(200);
+      const after = await canvas.evaluate((element) =>
+        (element as HTMLCanvasElement).toDataURL(),
+      );
+      return before === after;
+    })
+    .toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
 }
 
 const surfaces: Surface[] = [
@@ -39,52 +91,7 @@ const surfaces: Surface[] = [
     name: "dashboard",
     path: "/",
     ready: (page) => page.getByText("maven-releases").first(),
-    prepareScreenshot: async (page) => {
-      // This plot loads on intersection and paints after its React wrapper.
-      // A full-page screenshot can otherwise accept an empty canvas.
-      await page
-        .getByTestId("storage-by-format-chart")
-        .scrollIntoViewIfNeeded();
-      const canvas = page.getByTestId("ant-design-pie-ready").locator("canvas");
-      await expect(canvas).toBeVisible();
-      await expect
-        .poll(() =>
-          canvas.evaluate((element) => {
-            const plot = element as HTMLCanvasElement;
-            const context = plot.getContext("2d");
-            if (!context || !plot.width || !plot.height) return false;
-            const pixels = context.getImageData(
-              0,
-              0,
-              plot.width,
-              plot.height,
-            ).data;
-            // The fixture has categorical slices; neutral canvas/background
-            // pixels do not establish that those data have been painted.
-            for (let offset = 0; offset < pixels.length; offset += 4) {
-              if (
-                pixels[offset + 3] > 0 &&
-                Math.max(
-                  pixels[offset],
-                  pixels[offset + 1],
-                  pixels[offset + 2],
-                ) -
-                  Math.min(
-                    pixels[offset],
-                    pixels[offset + 1],
-                    pixels[offset + 2],
-                  ) >
-                  32
-              ) {
-                return true;
-              }
-            }
-            return false;
-          }),
-        )
-        .toBe(true);
-      await page.evaluate(() => window.scrollTo(0, 0));
-    },
+    prepareScreenshot: waitForStoragePlot,
   },
   {
     name: "repositories",
@@ -141,6 +148,8 @@ const surfaces: Surface[] = [
     path: "/",
     ready: (page) => page.getByText("maven-releases").first(),
     prepare: async (page) => {
+      // The overview stays visible behind the palette; let its plot settle.
+      await waitForStoragePlot(page);
       await page.keyboard.press("ControlOrMeta+k");
       await page.getByRole("combobox", { name: "命令面板" }).fill("maven");
       await expect(
@@ -152,6 +161,27 @@ const surfaces: Surface[] = [
     name: "system",
     path: "/system",
     ready: (page) => page.getByText("gateway-0").first(),
+  },
+  // Phone width (390×844): the surfaces most likely to be opened on a phone.
+  {
+    name: "login-mobile",
+    path: "/login",
+    authenticated: false,
+    mobile: true,
+    ready: (page) => page.getByRole("button", { name: /登录|Sign in/ }),
+  },
+  {
+    name: "public-browse-mobile",
+    path: "/browse",
+    authenticated: false,
+    mobile: true,
+    ready: (page) => page.getByText("maven-releases").first(),
+  },
+  {
+    name: "repository-detail-mobile",
+    path: "/repositories/repo-maven-releases",
+    mobile: true,
+    ready: (page) => page.getByText("com.acme:demo-service").first(),
   },
   {
     name: "site-settings",
@@ -171,6 +201,8 @@ for (const theme of themes) {
   test.describe(theme, () => {
     for (const surface of surfaces) {
       test(surface.name, async ({ page }) => {
+        if (surface.mobile)
+          await page.setViewportSize({ width: 390, height: 844 });
         await page.clock.setFixedTime(new Date(FIXED_NOW));
         await page.addInitScript((themeId) => {
           localStorage.setItem("ag.console.theme.id", themeId);

@@ -127,6 +127,11 @@ export function AuditFilters({
       <Collapse
         ghost
         className="border-t border-line"
+        defaultActiveKey={
+          filters.operation || filters.actor || filters.group || filters.format
+            ? ["advanced"]
+            : []
+        }
         items={[
           {
             key: "advanced",
