@@ -8,41 +8,14 @@ import {
   UsageSnippetBlock,
 } from "../../components/ui/PublicBrowsePrimitives";
 import { usePreferences } from "../../lib/preferences";
-import { useAuth } from "../../lib/auth";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { npmUsage } from "../../lib/usage";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
 import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
-
-interface NpmVersionManifest {
-  name: string;
-  version: string;
-  description?: string;
-  license?: string | { type?: string };
-  dependencies?: Record<string, string>;
-  dist?: {
-    tarball?: string;
-    integrity?: string;
-    shasum?: string;
-  };
-  _artifactGateway?: {
-    digest?: string;
-    publisher?: string;
-    size?: number;
-    source?: "hosted" | "proxy";
-    cacheStatus?: "metadata" | "cached";
-    cachedAt?: string;
-  };
-}
-
-interface NpmPackument {
-  name: string;
-  "dist-tags": Record<string, string>;
-  versions: Record<string, NpmVersionManifest>;
-  time?: Record<string, string>;
-}
+import { errorText } from "../../messages/translate";
+import { useNpmPackument } from "./protocolDetailQueries";
 
 export function NpmPackageDetail({
   repositoryId,
@@ -64,51 +37,10 @@ export function NpmPackageDetail({
   canQuarantine?: boolean;
 }) {
   const { locale, t } = usePreferences();
-  const { token } = useAuth();
-  const [packument, setPackument] = useState<NpmPackument | null>(null);
+  const packumentQuery = useNpmPackument(repoName, packageName);
+  const packument = packumentQuery.data ?? null;
   const [selectedVersion, setSelectedVersion] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const { copiedValue, copy } = useClipboardAction(1400);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError("");
-    void fetch(
-      `/npm/${encodeURIComponent(repoName)}/${encodeURIComponent(packageName)}`,
-      {
-        credentials: "include",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      },
-    )
-      .then(async (response) => {
-        if (!response.ok)
-          throw new Error(
-            t("artifactDetail.failedToLoadNpmPackage", {
-              status: response.status,
-            }),
-          );
-        return response.json() as Promise<NpmPackument>;
-      })
-      .then((document) => {
-        if (cancelled) return;
-        setPackument(document);
-        setLoading(false);
-      })
-      .catch((requestError: unknown) => {
-        if (cancelled) return;
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : t("artifactDetail.failedToLoadNpmPackage2"),
-        );
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [packageName, repoName, t, token]);
 
   useEffect(() => {
     if (!packument) return;
@@ -136,8 +68,18 @@ export function NpmPackageDetail({
     });
   }, [packument]);
 
-  if (loading) return <Loading />;
-  if (error) return <ErrorBanner error={error} />;
+  if (packumentQuery.isPending) return <Loading />;
+  if (packumentQuery.isError)
+    return (
+      <ErrorBanner
+        error={errorText(
+          packumentQuery.error,
+          t,
+          "artifactDetail.failedToLoadNpmPackage2",
+        )}
+        onRetry={() => void packumentQuery.refetch()}
+      />
+    );
   if (!packument || !selectedVersion) return null;
 
   const manifest = packument.versions[selectedVersion];

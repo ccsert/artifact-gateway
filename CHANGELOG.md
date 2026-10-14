@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- npm, PyPI, Go and Cargo package details read their protocol documents through the shared query layer: a superseded read is cancelled and can never replace the current package, a gateway failure is retried once while a refusal is final and never ends the session, the error offers Retry, and switching the interface language no longer re-reads the package. A unit test now fails when a component that runs effects calls `fetch` outside the documented exceptions (#284).
+
 - Service account details link to the account's repository grants and recent audit events (`/access?principal=…`, `/audits?actor=…`), so a credential rotation can be verified without copying the principal between pages; both pages open filtered to the linked principal. The visual baseline adds phone-width captures of sign-in, public browse and repository detail, and waits for the overview plot to settle so the command palette capture is stable.
 
 - Group member editing waits for the complete member list and its write version, reports read failures with Retry, and cancels closed reads. Group dialogs finish their close animation before unmounting; cancelling deletion restores focus to the row menu. Enter opens row-menu dialogs without accidentally activating their close button.

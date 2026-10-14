@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button } from "antd";
 import { CopyOutlined, DownloadOutlined } from "@ant-design/icons";
-import { useAuth } from "../../lib/auth";
 import { formatBytes, formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { goUsage } from "../../lib/usage";
@@ -9,36 +8,20 @@ import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
 import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
+import { errorText } from "../../messages/translate";
+import {
+  escapeGoValue,
+  goModuleBase,
+  useGoModuleDigest,
+  useGoModuleInfo,
+  useGoModuleVersions,
+} from "./protocolDetailQueries";
 import { ErrorBanner, Loading } from "../../components/ui/Feedback";
 import {
   MetadataItem,
   SearchableVersionSelect,
   UsageSnippetBlock,
 } from "../../components/ui/PublicBrowsePrimitives";
-
-interface GoModuleInfo {
-  Version: string;
-  Time: string;
-}
-
-function escapeGoValue(value: string): string {
-  return value
-    .split("")
-    .map((character) =>
-      character >= "A" && character <= "Z"
-        ? `!${character.toLowerCase()}`
-        : character,
-    )
-    .join("");
-}
-
-function goModuleBase(repoName: string, modulePath: string): string {
-  const escaped = escapeGoValue(modulePath)
-    .split("/")
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-  return `/go/${encodeURIComponent(repoName)}/${escaped}`;
-}
 
 export function GoModuleDetail({
   repositoryId,
@@ -60,127 +43,33 @@ export function GoModuleDetail({
   canQuarantine?: boolean;
 }) {
   const { locale, t } = usePreferences();
-  const { token } = useAuth();
-  const [versions, setVersions] = useState<string[]>([]);
+  const versionsQuery = useGoModuleVersions(repoName, modulePath);
+  const versionList = versionsQuery.data;
+  const versions = useMemo(() => versionList ?? [], [versionList]);
   const [selectedVersion, setSelectedVersion] = useState("");
-  const [info, setInfo] = useState<GoModuleInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [infoLoading, setInfoLoading] = useState(false);
-  const [versionDigest, setVersionDigest] = useState<string | undefined>();
-  const [error, setError] = useState("");
+  // A deep-linked version wins; otherwise keep the pick while it still exists.
+  useEffect(() => {
+    if (!versionList) return;
+    setSelectedVersion((current) =>
+      initialVersion && versionList.includes(initialVersion)
+        ? initialVersion
+        : current && versionList.includes(current)
+          ? current
+          : (versionList[0] ?? ""),
+    );
+  }, [initialVersion, versionList]);
+  const infoQuery = useGoModuleInfo(repoName, modulePath, selectedVersion);
+  const info = infoQuery.data ?? null;
+  const infoLoading = infoQuery.isFetching;
+  const versionDigest =
+    useGoModuleDigest(repoName, modulePath, selectedVersion).data ?? undefined;
+  const error = versionsQuery.isError
+    ? errorText(versionsQuery.error, t, "artifactDetail.failedToLoadGoVersions")
+    : infoQuery.isError
+      ? errorText(infoQuery.error, t, "artifactDetail.failedToLoadVersionInfo2")
+      : "";
   const { copiedValue, copy } = useClipboardAction(1400);
-  const base = useMemo(
-    () => goModuleBase(repoName, modulePath),
-    [modulePath, repoName],
-  );
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError("");
-    void fetch(`${base}/@v/list`, {
-      credentials: "include",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-      .then(async (response) => {
-        if (!response.ok)
-          throw new Error(
-            t("artifactDetail.failedToLoadGoModuleVersions", {
-              status: response.status,
-            }),
-          );
-        return response.text();
-      })
-      .then((body) => {
-        if (cancelled) return;
-        const next = body
-          .split(/\s+/)
-          .map((version) => version.trim())
-          .filter(Boolean)
-          .reverse();
-        setVersions(next);
-        setSelectedVersion((current) =>
-          initialVersion && next.includes(initialVersion)
-            ? initialVersion
-            : current && next.includes(current)
-              ? current
-              : (next[0] ?? ""),
-        );
-        setLoading(false);
-      })
-      .catch((requestError: unknown) => {
-        if (cancelled) return;
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : t("artifactDetail.failedToLoadGoVersions"),
-        );
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [base, initialVersion, t, token]);
-
-  useEffect(() => {
-    if (!selectedVersion) return;
-    let cancelled = false;
-    setInfoLoading(true);
-    const escapedVersion = encodeURIComponent(escapeGoValue(selectedVersion));
-    void fetch(`${base}/@v/${escapedVersion}.info`, {
-      credentials: "include",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-      .then(async (response) => {
-        if (!response.ok)
-          throw new Error(
-            t("artifactDetail.failedToLoadVersionInfo", {
-              status: response.status,
-            }),
-          );
-        return response.json() as Promise<GoModuleInfo>;
-      })
-      .then((payload) => {
-        if (!cancelled) setInfo(payload);
-      })
-      .catch((requestError: unknown) => {
-        if (!cancelled)
-          setError(
-            requestError instanceof Error
-              ? requestError.message
-              : t("artifactDetail.failedToLoadVersionInfo2"),
-          );
-      })
-      .finally(() => {
-        if (!cancelled) setInfoLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [base, selectedVersion, t, token]);
-
-  useEffect(() => {
-    if (!selectedVersion) {
-      setVersionDigest(undefined);
-      return;
-    }
-    let cancelled = false;
-    setVersionDigest(undefined);
-    const escapedVersion = encodeURIComponent(escapeGoValue(selectedVersion));
-    void fetch(`${base}/@v/${escapedVersion}.zip`, {
-      method: "HEAD",
-      credentials: "include",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-      .then((response) => {
-        if (cancelled || !response.ok) return;
-        const etag = response.headers.get("ETag")?.replaceAll('"', "") ?? "";
-        if (/^[a-f0-9]{64}$/.test(etag)) setVersionDigest(`sha256:${etag}`);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [base, selectedVersion, token]);
+  const base = goModuleBase(repoName, modulePath);
 
   const snippets = useMemo(
     () =>
@@ -195,8 +84,11 @@ export function GoModuleDetail({
       }))
     : [];
 
-  if (loading) return <Loading />;
-  if (error && versions.length === 0) return <ErrorBanner error={error} />;
+  if (versionsQuery.isPending) return <Loading />;
+  if (error && versions.length === 0)
+    return (
+      <ErrorBanner error={error} onRetry={() => void versionsQuery.refetch()} />
+    );
 
   return (
     <div className="space-y-4 px-1 py-2">
@@ -235,8 +127,6 @@ export function GoModuleDetail({
             notFoundContent={t("artifactDetail.noMatchingVersions")}
             onChange={(version) => {
               setSelectedVersion(version);
-              setInfo(null);
-              setError("");
               onVersionChange?.(version);
             }}
           />

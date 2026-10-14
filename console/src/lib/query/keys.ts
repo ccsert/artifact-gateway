@@ -138,3 +138,30 @@ export const publicKeys = {
   artifactLookup: (repositoryId: string, coordinate: string) =>
     [...publicKeys.all, "artifact-lookup", repositoryId, coordinate] as const,
 };
+
+/**
+ * Reads of a format's own client protocol (npm packument, PyPI Simple JSON,
+ * Go module proxy, Cargo sparse index), keyed by repository name and package.
+ */
+export const protocolKeys = {
+  all: ["protocol"] as const,
+  npmPackument: (repoName: string, packageName: string) =>
+    [...protocolKeys.all, "npm", repoName, packageName] as const,
+  pypiProject: (repoName: string, project: string) =>
+    [...protocolKeys.all, "pypi", repoName, project] as const,
+  goVersions: (repoName: string, modulePath: string) =>
+    [...protocolKeys.all, "go", repoName, modulePath, "list"] as const,
+  goInfo: (repoName: string, modulePath: string, version: string) =>
+    [...protocolKeys.all, "go", repoName, modulePath, version, "info"] as const,
+  goDigest: (repoName: string, modulePath: string, version: string) =>
+    [
+      ...protocolKeys.all,
+      "go",
+      repoName,
+      modulePath,
+      version,
+      "digest",
+    ] as const,
+  cargoIndex: (repoName: string, crateName: string) =>
+    [...protocolKeys.all, "cargo", repoName, crateName] as const,
+};

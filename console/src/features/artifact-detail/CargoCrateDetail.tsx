@@ -11,21 +11,8 @@ import {
   SearchableVersionSelect,
   UsageSnippetBlock,
 } from "../../components/ui/PublicBrowsePrimitives";
-
-interface CargoIndexEntry {
-  name: string;
-  vers: string;
-  cksum: string;
-  yanked: boolean;
-}
-
-function sparsePath(name: string): string {
-  const normalized = name.toLowerCase();
-  if (normalized.length === 1) return `1/${normalized}`;
-  if (normalized.length === 2) return `2/${normalized}`;
-  if (normalized.length === 3) return `3/${normalized[0]}/${normalized}`;
-  return `${normalized.slice(0, 2)}/${normalized.slice(2, 4)}/${normalized}`;
-}
+import { errorText } from "../../messages/translate";
+import { useCargoIndex } from "./protocolDetailQueries";
 
 export function CargoCrateDetail({
   repoName,
@@ -40,68 +27,32 @@ export function CargoCrateDetail({
 }) {
   const { token } = useAuth();
   const { t } = usePreferences();
-  const [versions, setVersions] = useState<CargoIndexEntry[]>([]);
+  const indexQuery = useCargoIndex(repoName, crateName);
+  const entries = indexQuery.data;
+  const versions = useMemo(() => entries ?? [], [entries]);
   const [selectedVersion, setSelectedVersion] = useState("");
-  const [loading, setLoading] = useState(true);
+  // A deep-linked version wins; otherwise keep the pick while it still exists.
+  useEffect(() => {
+    if (!entries) return;
+    setSelectedVersion((current) =>
+      initialVersion && entries.some((entry) => entry.vers === initialVersion)
+        ? initialVersion
+        : current && entries.some((entry) => entry.vers === current)
+          ? current
+          : (entries[0]?.vers ?? ""),
+    );
+  }, [entries, initialVersion]);
   const [downloading, setDownloading] = useState(false);
-  const [error, setError] = useState("");
+  const [downloadError, setDownloadError] = useState("");
+  const error = indexQuery.isError
+    ? errorText(
+        indexQuery.error,
+        t,
+        "artifactDetail.failedToLoadCargoVersions2",
+      )
+    : downloadError;
   const { copiedValue, copy } = useClipboardAction(1400);
   const base = `/cargo/${encodeURIComponent(repoName)}`;
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError("");
-    void fetch(`${base}/${sparsePath(crateName)}`, {
-      credentials: "include",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-      .then(async (response) => {
-        if (!response.ok)
-          throw new Error(
-            t("artifactDetail.failedToLoadCargoVersions", {
-              status: response.status,
-            }),
-          );
-        return response.text();
-      })
-      .then((body) => {
-        if (cancelled) return;
-        const entries = body
-          .split("\n")
-          .filter(Boolean)
-          .map((line) => JSON.parse(line) as CargoIndexEntry)
-          .filter(
-            (entry) => entry.name.toLowerCase() === crateName.toLowerCase(),
-          )
-          .sort((left, right) =>
-            right.vers.localeCompare(left.vers, undefined, { numeric: true }),
-          );
-        setVersions(entries);
-        setSelectedVersion((current) =>
-          initialVersion &&
-          entries.some((entry) => entry.vers === initialVersion)
-            ? initialVersion
-            : current && entries.some((entry) => entry.vers === current)
-              ? current
-              : (entries[0]?.vers ?? ""),
-        );
-      })
-      .catch((requestError: unknown) => {
-        if (!cancelled)
-          setError(
-            requestError instanceof Error
-              ? requestError.message
-              : t("artifactDetail.failedToLoadCargoVersions2"),
-          );
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [base, crateName, initialVersion, t, token]);
 
   const selected = versions.find((entry) => entry.vers === selectedVersion);
   const downloadURL = selected
@@ -125,7 +76,7 @@ export function CargoCrateDetail({
   const download = async () => {
     if (!selected) return;
     setDownloading(true);
-    setError("");
+    setDownloadError("");
     try {
       const response = await fetch(downloadURL, {
         credentials: "include",
@@ -140,7 +91,7 @@ export function CargoCrateDetail({
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(temporaryURL), 1000);
     } catch (requestError) {
-      setError(
+      setDownloadError(
         requestError instanceof Error
           ? requestError.message
           : t("artifactDetail.downloadFailed"),
@@ -150,8 +101,11 @@ export function CargoCrateDetail({
     }
   };
 
-  if (loading) return <Loading />;
-  if (error && versions.length === 0) return <ErrorBanner error={error} />;
+  if (indexQuery.isPending) return <Loading />;
+  if (error && versions.length === 0)
+    return (
+      <ErrorBanner error={error} onRetry={() => void indexQuery.refetch()} />
+    );
 
   return (
     <div className="space-y-4 px-1 py-2">
