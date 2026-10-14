@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Console review close-out (#317, #319): group rows use one Edit members button plus a menu (resolution order, capacity, settings, delete) that returns focus to the row when a dialog closes, and the meaningless resource-version column is gone; accounts, users, API keys and credentials read "Enabled" instead of the repositories' "Active"; labels below the 12px floor are raised, with unit tests guarding the type floor and AA contrast of both Gateway themes. The design review is archived under `.impeccable/critique/`.
+
 - Console user filters follow same-page navigation and browser history without an old search overwriting the URL, and start on the first page after a filter change. Date picker months and weekdays follow the Console language, and English scheduled task labels and row actions fit their desktop table columns.
 
 - Console display text now lives entirely in per-feature message dictionaries: the inline `text("中文", "English")` calls are gone, and unit tests fail on a missing or empty translation, mismatched placeholders, a key defined twice or used nowhere, a glossary synonym (`src/messages/glossary.ts`), or Chinese text written outside the dictionaries. That check translated usage snippet labels, untagged OCI versions, reader errors, audit CSV headers and identity labels that were Chinese-only (#276).

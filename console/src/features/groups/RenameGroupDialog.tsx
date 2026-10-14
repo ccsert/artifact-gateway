@@ -1,23 +1,23 @@
 import { useState } from "react";
-import { SettingOutlined } from "@ant-design/icons";
 import { Button, Input, Space, Switch } from "antd";
 import { replaceGroup } from "../../client";
 import type { Group } from "../../client";
 import { Field } from "../../components/ui/Layout";
 import { ErrorBanner } from "../../components/ui/Feedback";
-import { Modal, useDisclosure } from "../../components/ui/Modal";
+import { Modal } from "../../components/ui/Modal";
 import { usePreferences } from "../../lib/preferences";
 
 /** Rename a group and change its anonymous read access. */
 export function RenameGroupDialog({
   group,
+  onClose,
   onSaved,
 }: {
   group: Group;
+  onClose: () => void;
   onSaved: () => void;
 }) {
   const { t } = usePreferences();
-  const dialog = useDisclosure();
   const [name, setName] = useState(group.name);
   const [anonymousRead, setAnonymousRead] = useState(group.anonymousRead);
   const [busy, setBusy] = useState(false);
@@ -36,7 +36,7 @@ export function RenameGroupDialog({
         setError(err);
         return;
       }
-      dialog.hide();
+      onClose();
       onSaved();
     } catch (nextError) {
       setError(nextError);
@@ -47,26 +47,14 @@ export function RenameGroupDialog({
 
   return (
     <>
-      <Button
-        size="small"
-        icon={<SettingOutlined />}
-        onClick={() => {
-          setName(group.name);
-          setAnonymousRead(group.anonymousRead);
-          setError(null);
-          dialog.show();
-        }}
-      >
-        {t("groups.settings")}
-      </Button>
       <Modal
-        open={dialog.open}
+        open
         title={t("groups.groupSettings", { name: group.name })}
-        onClose={dialog.hide}
+        onClose={onClose}
         busy={busy}
         footer={
           <Space>
-            <Button onClick={dialog.hide} disabled={busy}>
+            <Button onClick={onClose} disabled={busy}>
               {t("groups.cancel")}
             </Button>
             <Button

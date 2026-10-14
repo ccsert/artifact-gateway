@@ -204,7 +204,7 @@ export function UserDetailsDrawer({
             {locked ? (
               <Badge tone="warning">{t("identity.locked")}</Badge>
             ) : (
-              <StateBadge state={user.state} />
+              <StateBadge state={user.state} subject="identity" />
             )}
           </Space>
         }

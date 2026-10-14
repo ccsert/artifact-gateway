@@ -1,25 +1,28 @@
-import { useState } from "react";
-import { EditOutlined } from "@ant-design/icons";
+import { useEffect, useState } from "react";
 import { Button, Space } from "antd";
 import { listGroupMembers, replaceGroupMembers } from "../../client";
 import type { Group, Member, Repository } from "../../client";
 import { ErrorBanner } from "../../components/ui/Feedback";
-import { Modal, useDisclosure } from "../../components/ui/Modal";
+import { Modal } from "../../components/ui/Modal";
 import { MemberOrderPicker } from "./MemberOrderPicker";
 import { usePreferences } from "../../lib/preferences";
 
-/** Choose and order a group's member repositories. */
+/**
+ * Choose and order a group's member repositories. Mounted while open: it
+ * reads the current members and their version when it appears.
+ */
 export function MembersDialog({
   group,
   repos,
+  onClose,
   onSaved,
 }: {
   group: Group;
   repos: Repository[];
+  onClose: () => void;
   onSaved: () => void;
 }) {
   const { t } = usePreferences();
-  const dialog = useDisclosure();
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [version, setVersion] = useState(group.version);
   const [busy, setBusy] = useState(false);
@@ -29,19 +32,23 @@ export function MembersDialog({
     (r) => r.format === group.format && r.state === "active",
   );
 
-  const open = async () => {
-    setError(null);
-    dialog.show();
-    const { data, response } = await listGroupMembers({
-      path: { groupId: group.id },
-    });
-    if (data) {
-      const sorted = [...data].sort((a, b) => a.position - b.position);
-      setMemberIds(sorted.map((m) => m.repositoryId));
-    }
-    const etag = response?.headers.get("ETag");
-    if (etag) setVersion(etag.replaceAll('"', ""));
-  };
+  useEffect(() => {
+    let current = true;
+    void listGroupMembers({ path: { groupId: group.id } }).then(
+      ({ data, response }) => {
+        if (!current) return;
+        if (data) {
+          const sorted = [...data].sort((a, b) => a.position - b.position);
+          setMemberIds(sorted.map((m) => m.repositoryId));
+        }
+        const etag = response?.headers.get("ETag");
+        if (etag) setVersion(etag.replaceAll('"', ""));
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [group.id]);
 
   const save = async () => {
     setBusy(true);
@@ -60,7 +67,7 @@ export function MembersDialog({
         setError(err);
         return;
       }
-      dialog.hide();
+      onClose();
       onSaved();
     } catch (nextError) {
       setError(nextError);
@@ -71,17 +78,14 @@ export function MembersDialog({
 
   return (
     <>
-      <Button size="small" icon={<EditOutlined />} onClick={open}>
-        {t("groups.editMembers")}
-      </Button>
       <Modal
-        open={dialog.open}
+        open
         title={t("groups.editMembers2", { name: group.name })}
-        onClose={dialog.hide}
+        onClose={onClose}
         busy={busy}
         footer={
           <Space>
-            <Button onClick={dialog.hide} disabled={busy}>
+            <Button onClick={onClose} disabled={busy}>
               {t("groups.cancel")}
             </Button>
             <Button type="primary" onClick={save} loading={busy}>

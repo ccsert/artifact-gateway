@@ -86,7 +86,9 @@ for (const width of [1440, 390]) {
     });
     await authenticateAsAdmin(page);
     await page.goto("/groups");
-    const trigger = page.getByRole("button", { name: "解析顺序", exact: true });
+    const trigger = page.getByRole("button", {
+      name: "release-group 的更多操作",
+    });
     await expect(trigger).toBeVisible();
     const metric = await page.locator(".ag-metric-strip").boundingBox();
     const primary = await page.locator(".ag-page-primary").boundingBox();
@@ -94,6 +96,7 @@ for (const width of [1440, 390]) {
     expect(pageGap).toBeGreaterThanOrEqual(24);
     expect(pageGap).toBeLessThanOrEqual(26);
     await trigger.click();
+    await page.getByRole("menuitem", { name: "解析顺序" }).click();
     const dialog = page.getByRole("dialog", {
       name: "解析顺序：release-group",
     });

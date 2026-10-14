@@ -145,7 +145,7 @@ export function UsersPage() {
             </Badge>
           </Space>
         ) : (
-          <StateBadge state={user.state} />
+          <StateBadge state={user.state} subject="identity" />
         ),
     },
     {

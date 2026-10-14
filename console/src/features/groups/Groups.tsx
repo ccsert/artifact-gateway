@@ -21,7 +21,11 @@ import { CreateGroupDialog } from "./CreateGroupDialog";
 import { useAccessRepositories } from "../access-control/accessQueries";
 import { useFormatProfiles } from "../repository/repositoryQueries";
 import { useGroupPages, useInvalidateGroups } from "./groupQueries";
-import { groupColumns } from "./groupColumns";
+import { groupColumns, type GroupAction } from "./groupColumns";
+import { CapacityDialog } from "./GroupCapacityDialog";
+import { MembersDialog } from "./GroupMembersDialog";
+import { GroupResolutionDialog } from "./pages/GroupResolutionDialog";
+import { RenameGroupDialog } from "./RenameGroupDialog";
 
 const GROUP_FILTERS = { q: "", format: "all" as Format | "all" };
 
@@ -69,11 +73,31 @@ export function GroupsPage() {
     0,
   );
   const publicGroups = groups.filter((group) => group.anonymousRead).length;
+  // Closing a dialog returns focus to what opened it: the row's button, or
+  // its More actions button when the dialog came from the row menu.
+  const [action, setAction] = useState<{
+    kind: GroupAction;
+    group: Group;
+    returnTo: HTMLElement | null;
+  } | null>(null);
+  const closeAction = () => {
+    const target = action?.returnTo;
+    setAction(null);
+    window.requestAnimationFrame(() => target?.focus());
+  };
   const columns = groupColumns({
-    repos,
     repoName,
     repoById,
-    onSaved: load,
+    onAction: (kind, group) => {
+      const active = document.activeElement as HTMLElement | null;
+      const returnTo =
+        !active || active.closest(".ant-dropdown")
+          ? document.querySelector<HTMLElement>(
+              `[data-group-actions="${CSS.escape(group.id)}"]`,
+            )
+          : active;
+      setAction({ kind, group, returnTo });
+    },
     onDelete: setToDelete,
     t,
   });
@@ -169,7 +193,7 @@ export function GroupsPage() {
               dataSource={visibleGroups}
               columns={columns}
               pagination={false}
-              scroll={{ x: 1200 }}
+              scroll={{ x: 1000 }}
             />
           )}
           <Pagination
@@ -179,6 +203,27 @@ export function GroupsPage() {
           />
         </FilterCard>
       </ListStates>
+      {action?.kind === "members" && (
+        <MembersDialog
+          group={action.group}
+          repos={repos}
+          onClose={closeAction}
+          onSaved={() => void load()}
+        />
+      )}
+      {action?.kind === "settings" && (
+        <RenameGroupDialog
+          group={action.group}
+          onClose={closeAction}
+          onSaved={() => void load()}
+        />
+      )}
+      {action?.kind === "resolution" && (
+        <GroupResolutionDialog group={action.group} onClose={closeAction} />
+      )}
+      {action?.kind === "capacity" && (
+        <CapacityDialog group={action.group} onClose={closeAction} />
+      )}
       <ConfirmDanger
         target={toDelete}
         title={t("groups.deleteGroup2")}

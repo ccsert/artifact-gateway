@@ -178,7 +178,10 @@ describe("GroupsPage dialogs", () => {
     const fail = pendingSave(vi.mocked(replaceGroup));
 
     renderPage();
-    await user.click(await screen.findByRole("button", { name: /设\s*置/ }));
+    await user.click(
+      await screen.findByRole("button", { name: /的更多操作$/ }),
+    );
+    await user.click(await screen.findByRole("menuitem", { name: "设置" }));
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: /保\s*存/ }));
 
@@ -226,8 +229,9 @@ describe("GroupsPage dialogs", () => {
 
     renderPage();
     await user.click(
-      await screen.findByRole("button", { name: "删除分组 oci-mirror" }),
+      await screen.findByRole("button", { name: "oci-mirror 的更多操作" }),
     );
+    await user.click(await screen.findByRole("menuitem", { name: "删除分组" }));
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: /^删\s*除$/ }));
 

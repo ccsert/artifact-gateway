@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   cleanup,
   render,
@@ -50,12 +51,27 @@ const plan: GroupResolution = {
     },
   ],
 };
+/** Opens the dialog the way the groups page does: mounted while open. */
+function Harness() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        解析顺序
+      </button>
+      {open && (
+        <GroupResolutionDialog group={group} onClose={() => setOpen(false)} />
+      )}
+    </>
+  );
+}
+
 function showDialog() {
   render(
     <MemoryRouter>
       <TestQueryProvider>
         <PreferencesProvider>
-          <GroupResolutionDialog group={group} />
+          <Harness />
         </PreferencesProvider>
       </TestQueryProvider>
     </MemoryRouter>,

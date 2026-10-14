@@ -1398,7 +1398,7 @@ button:not(:disabled):active,
 
 .ag-theme-menu-item small {
   color: var(--ag-content-tertiary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ag-theme-menu-swatch {
@@ -1468,7 +1468,7 @@ button:not(:disabled):active,
 .ag-theme-option-mode {
   flex: 0 0 auto;
   color: var(--ag-content-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 18px;
 }
 
@@ -1485,7 +1485,7 @@ button:not(:disabled):active,
   border-radius: 999px;
   background: var(--ag-surface-container);
   color: var(--ag-content-tertiary);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 17px;
 }
 
@@ -1579,7 +1579,7 @@ button:not(:disabled):active,
 
 .ag-theme-package-details dt {
   color: var(--ag-content-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 18px;
 }
 

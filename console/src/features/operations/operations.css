@@ -39,7 +39,7 @@
 }
 .ag-operation-details-meta dt {
   color: var(--ag-content-tertiary);
-  font-size: 11px;
+  font-size: 12px;
 }
 .ag-operation-details-meta dd {
   margin: 4px 0 0;
@@ -169,7 +169,7 @@
 .ag-diagnostic-identity-group h3 {
   margin: 0 0 10px;
   color: var(--ag-content-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 .ag-diagnostic-identity-group dl {

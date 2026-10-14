@@ -9,7 +9,7 @@ import {
 import { Button, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { ServiceAccount, ServiceAccountCredential } from "../../client";
-import { Badge, StateBadge } from "../../components/ui/Badge";
+import { StateBadge } from "../../components/ui/Badge";
 import {
   ConsoleTable,
   CopyableValue,
@@ -71,7 +71,7 @@ export function ServiceAccountDetail({
       key: "state",
       width: 120,
       render: (_value, credential) => (
-        <StateBadge state={credentialState(credential)} />
+        <StateBadge state={credentialState(credential)} subject="identity" />
       ),
     },
     {
@@ -131,11 +131,7 @@ export function ServiceAccountDetail({
                 <h2 className="text-base font-semibold text-fg-strong">
                   {account.name}
                 </h2>
-                <Badge
-                  tone={account.state === "active" ? "success" : "neutral"}
-                >
-                  {account.state}
-                </Badge>
+                <StateBadge state={account.state} subject="identity" />
               </div>
               <p className="mt-1 text-xs text-fg-tertiary">
                 {account.description || t("identity.noPurposeDocumented")}

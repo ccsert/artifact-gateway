@@ -1,31 +1,28 @@
 import type { Translate } from "../../lib/preferences";
 import type { Repository } from "../../client";
-import { FolderOpenOutlined, DeleteOutlined } from "@ant-design/icons";
-import { Button } from "antd";
+import { MoreOutlined } from "@ant-design/icons";
+import { Button, Dropdown } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { Link } from "react-router-dom";
 import type { Group } from "../../client";
 import { Badge, FormatBadge } from "../../components/ui/Badge";
 import { CopyableValue } from "../../components/ui/ConsolePrimitives";
 import { formatDescriptor, supportsDirectoryBrowse } from "../../formats";
-import { GroupResolutionDialog } from "./pages/GroupResolutionDialog";
 
-import { CapacityDialog } from "./GroupCapacityDialog";
-import { MembersDialog } from "./GroupMembersDialog";
-import { RenameGroupDialog } from "./RenameGroupDialog";
+/** A dialog a group row opens; the page renders the one that is active. */
+export type GroupAction = "members" | "resolution" | "capacity" | "settings";
 
 /** The group table: name and endpoint, format, access, members and actions. */
 export function groupColumns({
-  repos,
   repoName,
   repoById,
-  onSaved,
+  onAction,
   onDelete,
   t,
 }: {
-  repos: Repository[];
   repoName: (repositoryId: string) => string;
   repoById: (repositoryId: string) => Repository | undefined;
-  onSaved: () => void;
+  onAction: (action: GroupAction, group: Group) => void;
   onDelete: (group: Group) => void;
   t: Translate;
 }): ColumnsType<Group> {
@@ -71,8 +68,9 @@ export function groupColumns({
     },
     {
       title: t("groups.membersConfiguredOrder"),
+      // Members take the width the other columns leave.
       key: "members",
-      width: 440,
+
       render: (_value, group) => (
         <div className="flex flex-wrap gap-1">
           {[...(group.members ?? [])]
@@ -100,42 +98,60 @@ export function groupColumns({
       ),
     },
     {
-      title: t("groups.version"),
-      dataIndex: "version",
-      key: "version",
-      width: 90,
-      render: (version: string) => (
-        <span className="font-mono text-xs text-fg-tertiary">v{version}</span>
-      ),
-    },
-    {
       title: t("groups.actions"),
       key: "actions",
-      width: 280,
+      fixed: "right",
+      width: 150,
       align: "right",
       render: (_value, group) => (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {supportsDirectoryBrowse(group.format, "group") && (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            size="small"
+            type="text"
+            onClick={() => onAction("members", group)}
+          >
+            {t("groups.editMembers")}
+          </Button>
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: [
+                ...(supportsDirectoryBrowse(group.format, "group")
+                  ? [
+                      {
+                        key: "browse",
+                        label: (
+                          <Link to={`/groups/${group.id}/browse`}>
+                            {t("groups.browseDirectory")}
+                          </Link>
+                        ),
+                      },
+                    ]
+                  : []),
+                { key: "resolution", label: t("groups.resolutionOrder") },
+                { key: "capacity", label: t("groups.capacity") },
+                { key: "settings", label: t("groups.settings") },
+                { type: "divider" as const },
+                {
+                  key: "delete",
+                  danger: true,
+                  label: t("groups.deleteGroupAction"),
+                },
+              ],
+              onClick: ({ key }) => {
+                if (key === "delete") onDelete(group);
+                else if (key !== "browse") onAction(key as GroupAction, group);
+              },
+            }}
+          >
             <Button
               size="small"
-              href={`/groups/${group.id}/browse`}
-              icon={<FolderOpenOutlined />}
-            >
-              {t("groups.browseDirectory")}
-            </Button>
-          )}
-          <GroupResolutionDialog group={group} />
-          <RenameGroupDialog group={group} onSaved={onSaved} />
-          <MembersDialog group={group} repos={repos} onSaved={onSaved} />
-          <CapacityDialog group={group} />
-          <Button
-            type="text"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            aria-label={t("groups.deleteGroup", { name: group.name })}
-            onClick={() => onDelete(group)}
-          />
+              type="text"
+              icon={<MoreOutlined />}
+              data-group-actions={group.id}
+              aria-label={t("groups.moreActionsFor", { name: group.name })}
+            />
+          </Dropdown>
         </div>
       ),
     },
