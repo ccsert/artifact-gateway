@@ -30,13 +30,17 @@ export function GrantsPanel({
   const { t } = usePreferences();
   // `?principal=` opens the grants of one principal (linked from a service
   // account); a later change of that parameter replaces the filter.
+  // A link names an exact principal; typing keeps the partial-search behavior.
   const [params] = useSearchParams();
   const urlPrincipal = params.get("principal") ?? "";
-  const [principalFilter, setPrincipalFilter] = useState(urlPrincipal);
+  const [principalFilter, setPrincipalFilter] = useState({
+    value: urlPrincipal,
+    exact: Boolean(urlPrincipal),
+  });
   const [seededPrincipal, setSeededPrincipal] = useState(urlPrincipal);
   if (seededPrincipal !== urlPrincipal) {
     setSeededPrincipal(urlPrincipal);
-    setPrincipalFilter(urlPrincipal);
+    setPrincipalFilter({ value: urlPrincipal, exact: Boolean(urlPrincipal) });
   }
   const [repoFilter, setRepoFilter] = useState("");
   const [scopeFilter, setScopeFilter] = useState<
@@ -46,10 +50,12 @@ export function GrantsPanel({
   const filtered = grants
     .filter(
       (row) =>
-        (!principalFilter ||
-          row.principal
-            .toLowerCase()
-            .includes(principalFilter.toLowerCase())) &&
+        (!principalFilter.value ||
+          (principalFilter.exact
+            ? row.principal === principalFilter.value
+            : row.principal
+                .toLowerCase()
+                .includes(principalFilter.value.toLowerCase()))) &&
         (!repoFilter ||
           row.repositoryName.toLowerCase().includes(repoFilter.toLowerCase())),
     )
@@ -58,7 +64,7 @@ export function GrantsPanel({
         scopeFilter === "all" || scopeLabel(row.scopes, t).key === scopeFilter,
     );
   const hasFilters = Boolean(
-    principalFilter || repoFilter || scopeFilter !== "all",
+    principalFilter.value || repoFilter || scopeFilter !== "all",
   );
   const columns: ColumnsType<GrantRow> = [
     {
@@ -148,7 +154,7 @@ export function GrantsPanel({
             icon={<ClearOutlined />}
             disabled={!hasFilters}
             onClick={() => {
-              setPrincipalFilter("");
+              setPrincipalFilter({ value: "", exact: false });
               setRepoFilter("");
               setScopeFilter("all");
             }}
@@ -161,8 +167,10 @@ export function GrantsPanel({
           <Input
             allowClear
             placeholder={t("access.usernameApiKeyOrActor")}
-            value={principalFilter}
-            onChange={(event) => setPrincipalFilter(event.target.value)}
+            value={principalFilter.value}
+            onChange={(event) =>
+              setPrincipalFilter({ value: event.target.value, exact: false })
+            }
           />
         </FilterField>
         <FilterField label={t("access.repository")} className="min-w-[220px]">

@@ -142,6 +142,7 @@ export function AuditsPage() {
       />
       <Card>
         <AuditFilters
+          key={urlActor}
           filters={filters}
           onChange={updateFilters}
           repositoryOptions={repositoryOptions}
