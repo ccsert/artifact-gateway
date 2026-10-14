@@ -2,12 +2,11 @@ import { useMemo, useState } from "react";
 import {
   DeleteOutlined,
   EditOutlined,
-  HistoryOutlined,
+  MoreOutlined,
   PlusOutlined,
   ReloadOutlined,
-  RocketOutlined,
 } from "@ant-design/icons";
-import { Button, Popconfirm, Space, Switch, Tooltip } from "antd";
+import { Button, Dropdown, Space, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   deleteScheduledTask,
@@ -19,6 +18,8 @@ import { Badge, StateBadge } from "../../components/ui/Badge";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { Card, CardHeader } from "../../components/ui/Layout";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
+import { ConfirmDanger } from "../../components/ui/Modal";
+import { unwrap } from "../../lib/query/client";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { formatTaskInterval } from "./scheduledTaskModel";
@@ -118,22 +119,12 @@ export function ScheduledTasksPanel() {
     }
   };
 
+  const [toDelete, setToDelete] = useState<ScheduledTask | null>(null);
   const remove = async (task: ScheduledTask) => {
-    setBusyId(task.id);
     setActionError(null);
-    try {
-      const result = await deleteScheduledTask({ path: { taskId: task.id } });
-      if (result.error) {
-        setActionError(result.error);
-        return;
-      }
-      if (expandedTask === task.id) setExpandedTask(null);
-      await invalidate();
-    } catch (nextError) {
-      setActionError(nextError);
-    } finally {
-      setBusyId(null);
-    }
+    await unwrap(deleteScheduledTask({ path: { taskId: task.id } }));
+    if (expandedTask === task.id) setExpandedTask(null);
+    await invalidate();
   };
 
   const toggleHistory = (task: ScheduledTask) =>
@@ -143,7 +134,6 @@ export function ScheduledTasksPanel() {
     {
       title: t("operations.task"),
       key: "task",
-      width: 260,
       render: (_, task) => (
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-fg-strong">
@@ -162,7 +152,7 @@ export function ScheduledTasksPanel() {
       title: t("operations.action"),
       dataIndex: "kind",
       key: "kind",
-      width: 170,
+      width: 120,
       render: (kind: ScheduledTask["kind"]) => (
         <Badge
           tone={
@@ -178,7 +168,7 @@ export function ScheduledTasksPanel() {
     {
       title: t("operations.target"),
       key: "target",
-      width: 180,
+      width: 140,
       render: (_, task) => {
         const repository = task.repositoryId
           ? repositoryById.get(task.repositoryId)
@@ -196,31 +186,25 @@ export function ScheduledTasksPanel() {
       },
     },
     {
-      title: t("operations.interval"),
-      dataIndex: "intervalMinutes",
-      key: "interval",
-      width: 130,
-      render: (minutes: number) => (
-        <span className="whitespace-nowrap text-xs text-fg-secondary">
-          {formatTaskInterval(minutes, t)}
-        </span>
-      ),
-    },
-    {
-      title: t("operations.nextRun"),
-      dataIndex: "nextRunAt",
-      key: "nextRunAt",
+      // How often, and when next: one column, so the row fits at 1440px.
+      title: t("operations.schedule"),
+      key: "schedule",
       width: 180,
-      render: (value: string, task) => (
+      render: (_, task) => (
         <div className="whitespace-nowrap text-xs text-fg-secondary">
-          {task.enabled ? formatDate(value, locale) : "—"}
+          {formatTaskInterval(task.intervalMinutes, t)}
+          <div className="mt-1 text-fg-disabled">
+            {task.enabled
+              ? formatDate(task.nextRunAt, locale)
+              : t("operations.paused")}
+          </div>
         </div>
       ),
     },
     {
       title: t("operations.lastDispatch"),
       key: "lastRun",
-      width: 180,
+      width: 160,
       render: (_, task) => (
         <div className="text-xs text-fg-secondary">
           {task.lastRunState ? (
@@ -240,7 +224,7 @@ export function ScheduledTasksPanel() {
       title: t("operations.enabled2"),
       dataIndex: "enabled",
       key: "enabled",
-      width: 90,
+      width: 72,
       render: (enabled: boolean, task) => (
         <Switch
           size="small"
@@ -255,55 +239,57 @@ export function ScheduledTasksPanel() {
       title: t("operations.actions"),
       key: "actions",
       fixed: "right",
-      width: 170,
+      width: 220,
       render: (_, task) => (
-        <Space size="small">
-          <Tooltip title={t("operations.runNow")}>
-            <Button
-              size="small"
-              icon={<RocketOutlined />}
-              aria-label={t("operations.runNow")}
-              loading={busyId === task.id}
-              onClick={() => void runNow(task)}
-            />
-          </Tooltip>
-          <Tooltip title={t("operations.dispatchHistory")}>
-            <Button
-              size="small"
-              type={expandedTask === task.id ? "primary" : "default"}
-              icon={<HistoryOutlined />}
-              aria-label={t("operations.dispatchHistory")}
-              onClick={() => toggleHistory(task)}
-            />
-          </Tooltip>
-          <Tooltip title={t("operations.edit")}>
-            <Button
-              size="small"
-              icon={<EditOutlined />}
-              aria-label={t("operations.edit")}
-              onClick={() => openEdit(task)}
-            />
-          </Tooltip>
-          <Popconfirm
-            title={t("operations.deleteThisScheduledTask")}
-            description={t(
-              "operations.dispatchHistoryIsRemovedAlreadySubmittedJobsAre",
-            )}
-            okText={t("operations.delete")}
-            cancelText={t("operations.cancel")}
-            okButtonProps={{ danger: true }}
-            onConfirm={() => remove(task)}
+        <Space size={4}>
+          <Button
+            size="small"
+            type="text"
+            loading={busyId === task.id}
+            onClick={() => void runNow(task)}
           >
-            <Tooltip title={t("operations.delete")}>
-              <Button
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                aria-label={t("operations.delete")}
-                loading={busyId === task.id}
-              />
-            </Tooltip>
-          </Popconfirm>
+            {t("operations.runNow")}
+          </Button>
+          <Button
+            size="small"
+            type="text"
+            aria-expanded={expandedTask === task.id}
+            onClick={() => toggleHistory(task)}
+          >
+            {t("operations.dispatchHistory")}
+          </Button>
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: [
+                {
+                  key: "edit",
+                  icon: <EditOutlined />,
+                  label: t("operations.edit"),
+                },
+                { type: "divider" },
+                {
+                  key: "delete",
+                  danger: true,
+                  icon: <DeleteOutlined />,
+                  label: t("operations.deleteScheduledTask"),
+                },
+              ],
+              onClick: ({ key }) => {
+                if (key === "edit") openEdit(task);
+                if (key === "delete") setToDelete(task);
+              },
+            }}
+          >
+            <Button
+              size="small"
+              type="text"
+              icon={<MoreOutlined />}
+              aria-label={t("operations.moreActionsForTask", {
+                name: task.name,
+              })}
+            />
+          </Dropdown>
         </Space>
       ),
     },
@@ -351,7 +337,7 @@ export function ScheduledTasksPanel() {
             dataSource={tasks}
             columns={columns}
             pagination={false}
-            scroll={{ x: 1360, y: 500 }}
+            scroll={{ x: 1080, y: 500 }}
             expandable={{
               showExpandColumn: false,
               expandedRowKeys: expandedTask ? [expandedTask] : [],
@@ -360,6 +346,24 @@ export function ScheduledTasksPanel() {
           />
         )}
       </Card>
+      <ConfirmDanger
+        target={toDelete}
+        title={t("operations.deleteScheduledTask")}
+        message={(task) => (
+          <>
+            <p>
+              {t("operations.deleteScheduledTaskNamed", { name: task.name })}
+            </p>
+            <p className="mt-2 text-xs text-fg-tertiary">
+              {t("operations.dispatchHistoryIsRemovedAlreadySubmittedJobsAre")}
+            </p>
+          </>
+        )}
+        confirmLabel={t("operations.delete")}
+        onConfirm={remove}
+        onClose={() => setToDelete(null)}
+        onError={setActionError}
+      />
       {editor && (
         <TaskEditorDialog
           key={editor.session}

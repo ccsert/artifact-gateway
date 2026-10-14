@@ -28,9 +28,7 @@ export function RepositorySnippetBlock({
   return (
     <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2">
       <div className="mb-1 flex items-center justify-between gap-3">
-        <span className="text-xs uppercase tracking-wider text-fg-tertiary">
-          {label}
-        </span>
+        <span className="text-xs text-fg-tertiary">{label}</span>
         <CopyButton text={code} />
       </div>
       <code className="block whitespace-pre-wrap break-all font-mono text-xs leading-5 text-[var(--ag-content-secondary)]">

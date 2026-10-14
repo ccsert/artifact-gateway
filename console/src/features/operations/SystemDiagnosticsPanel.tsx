@@ -138,10 +138,17 @@ export function SystemDiagnosticsPanel() {
           {
             label: t("operations.dependenciesReady"),
             value: diagnostics.dependencies.length - unavailable,
-            hint: t("operations.checks", {
-              length: diagnostics.dependencies.length,
-            }),
-            tone: unavailable ? "danger" : "success",
+            // Nothing checked is not the same as everything healthy.
+            hint: diagnostics.dependencies.length
+              ? t("operations.checks", {
+                  length: diagnostics.dependencies.length,
+                })
+              : t("operations.noDependencyChecksReported"),
+            tone: unavailable
+              ? "danger"
+              : diagnostics.dependencies.length
+                ? "success"
+                : "default",
           },
           {
             label: t("operations.onlineNodes"),

@@ -76,7 +76,7 @@ export function buildStorageChartData(
   return formats
     .map((format) => ({
       format,
-      label: format.toUpperCase(),
+      label: format,
       bytes: Math.max(0, bytesByFormat[format] ?? 0),
     }))
     .filter((datum) => datum.bytes > 0);
@@ -250,9 +250,7 @@ export function StorageByFormatChart({
             <span className="text-lg font-semibold tabular-nums text-fg-strong">
               {formatBytes(totalBytes)}
             </span>
-            <span className="text-xs uppercase tracking-wider text-fg-tertiary">
-              {t("ui.total")}
-            </span>
+            <span className="text-xs text-fg-tertiary">{t("ui.total")}</span>
           </div>
         </div>
       </StoragePlotBoundary>

@@ -164,7 +164,7 @@ export function ServiceAccountDetail({
           </Space>
         </div>
         <div className="mt-4 rounded-lg border border-line bg-surface-translucent px-3 py-2.5">
-          <div className="text-xs font-medium uppercase tracking-wider text-fg-disabled">
+          <div className="text-xs font-medium text-fg-disabled">
             {t("identity.stableGrantPrincipal")}
           </div>
           <CopyableValue

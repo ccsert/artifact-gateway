@@ -22,7 +22,7 @@ export function auditColumns(
     {
       title: t("audit.time"),
       key: "occurredAt",
-      width: 180,
+      width: 170,
       render: (_, row) => (
         <span className="whitespace-nowrap font-mono text-xs text-fg-secondary">
           {formatDate(row.record.occurredAt, locale)}
@@ -32,7 +32,7 @@ export function auditColumns(
     {
       title: t("audit.operation"),
       key: "operation",
-      width: 190,
+      width: 170,
       render: (_, row) => (
         <span
           className="block max-w-52 truncate text-xs text-fg"
@@ -47,7 +47,7 @@ export function auditColumns(
     {
       title: t("audit.outcome"),
       key: "outcome",
-      width: 170,
+      width: 110,
       render: (_, row) => (
         <span title={row.record.outcome}>
           <StatusText tone={statusTone(auditOutcomeTone(row.record.outcome))}>
@@ -61,7 +61,7 @@ export function auditColumns(
     {
       title: t("audit.repositoryGroup"),
       key: "repository",
-      width: 180,
+      width: 160,
       render: (_, row) => (
         <span className="block max-w-40 truncate font-mono text-xs text-fg-secondary">
           {row.record.repository ?? row.record.groupName ?? "—"}
@@ -71,14 +71,14 @@ export function auditColumns(
     {
       title: t("audit.format"),
       key: "format",
-      width: 110,
+      width: 100,
       render: (_, row) =>
         row.record.format ? <FormatBadge format={row.record.format} /> : "—",
     },
     {
       title: t("audit.status"),
       key: "status",
-      width: 90,
+      width: 70,
       render: (_, row) => (
         <span className="font-mono text-xs text-fg-secondary">
           {row.record.status ?? "—"}
@@ -88,7 +88,7 @@ export function auditColumns(
     {
       title: t("audit.traffic"),
       key: "bytes",
-      width: 110,
+      width: 90,
       render: (_, row) => (
         <span className="text-xs text-fg-secondary">
           {formatBytes(row.record.bytes)}
@@ -98,10 +98,10 @@ export function auditColumns(
     {
       title: t("audit.actor"),
       key: "actor",
-      width: 170,
+      // The remaining width goes to the actor, the longest value in a row.
       render: (_, row) => (
         <span
-          className="block max-w-32 truncate text-xs text-fg-tertiary"
+          className="block truncate text-xs text-fg-tertiary"
           title={row.record.actor}
         >
           {row.record.actor ?? "—"}

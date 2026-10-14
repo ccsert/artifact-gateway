@@ -489,8 +489,11 @@ describe("AccessControlPage", () => {
     );
 
     expect(await screen.findByText("用户 · alice")).toBeInTheDocument();
-    expect(screen.getByText(/服务账号 · 11111111/)).toBeInTheDocument();
-    expect(screen.getByText(/API Key · legacy-p…/)).toBeInTheDocument();
+    // Identifiers are shown whole under their kind, not cut to a prefix.
+    expect(
+      screen.getByText("11111111-1111-4111-8111-111111111111"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("legacy-publisher")).toBeInTheDocument();
     expect(screen.getByText("OIDC / 自定义")).toBeInTheDocument();
     expect(screen.getByText("制品情报")).toBeInTheDocument();
     expect(screen.getByText("高权限")).toBeInTheDocument();

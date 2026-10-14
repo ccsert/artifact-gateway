@@ -9,12 +9,7 @@ export function LoginBrandPanel() {
     <aside className="ag-login-brand-panel">
       <div className="ag-login-brand-lockup">
         <SiteBrandMark className="flex h-11 w-11 items-center justify-center rounded-lg text-base font-bold text-on-identity" />
-        <div>
-          <div className="text-sm font-semibold text-fg-strong">Console</div>
-          <div className="mt-0.5 font-mono text-xs uppercase tracking-wider text-[var(--ag-content-secondary)]">
-            Native Hosted API v2
-          </div>
-        </div>
+        <div className="text-sm font-semibold text-fg-strong">Console</div>
       </div>
 
       <div className="ag-login-brand-copy">
@@ -32,8 +27,9 @@ export function LoginBrandPanel() {
           <div className="text-xs font-medium text-fg">
             {t("auth.protectedAccess")}
           </div>
-          <div className="mt-1 font-mono text-xs text-fg-tertiary">
-            OIDC · Local session · Bearer token
+          <div className="mt-1 text-xs text-fg-tertiary">
+            {t("auth.ssoMode")} · {t("auth.passwordMode")} ·{" "}
+            {t("auth.tokenMode")}
           </div>
         </div>
       </div>

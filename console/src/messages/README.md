@@ -40,6 +40,8 @@ shows it (仓库, 制品, 晋升, 墓碑, 隔离, …) and lists the synonyms to
 
 - a key is missing from either locale, is empty, or its placeholders differ;
 - one key is defined in two dictionaries (the later spread would win);
+- no source file uses a key (keys built at run time from a template prefix,
+  such as `account.kind.${kind}`, count as used);
 - a Chinese message uses a synonym the glossary avoids;
 - a string, template or JSX text outside `src/messages` contains Chinese,
   that is, display text that bypassed the dictionaries. Language names

@@ -174,9 +174,7 @@
   color: var(--ag-content-tertiary);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.04em;
   line-height: 20px;
-  text-transform: uppercase;
 }
 .ag-site-preview-label > .anticon {
   color: var(--ag-content-tertiary);

@@ -85,7 +85,7 @@ export function ProxyMavenCacheDetail({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-lg border border-line px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
+          <div className="text-xs text-fg-tertiary">
             {t("repository.primarySize")}
           </div>
           <div className="mt-0.5 text-xs font-semibold text-fg-strong">
@@ -93,7 +93,7 @@ export function ProxyMavenCacheDetail({
           </div>
         </div>
         <div className="rounded-lg border border-line px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
+          <div className="text-xs text-fg-tertiary">
             {t("repository.files")}
           </div>
           <div className="mt-0.5 text-xs font-semibold text-fg-strong">
@@ -102,7 +102,7 @@ export function ProxyMavenCacheDetail({
         </div>
         {meta.publisher && (
           <div className="rounded-lg border border-line px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
+            <div className="text-xs text-fg-tertiary">
               {t("repository.member")}
             </div>
             <div
@@ -149,7 +149,7 @@ export function ProxyMavenCacheDetail({
       )}
 
       <div className="rounded-lg border border-line bg-surface-translucent">
-        <div className="border-b border-line px-3 py-2 text-xs uppercase tracking-wider text-fg-tertiary">
+        <div className="border-b border-line px-3 py-2 text-xs text-fg-tertiary">
           {t("repository.fileDetails")}
         </div>
         <div className="divide-y divide-line">

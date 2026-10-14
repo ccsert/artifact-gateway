@@ -1,7 +1,11 @@
 import { CopyableValue } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 
-/** A grant principal as people read it: kind, name, and the exact actor. */
+/**
+ * A grant principal as people read it: its kind on the first line, the exact
+ * actor below. Identifiers are shown whole and only cut by the column edge,
+ * with a copy action, so two similar ids can still be told apart.
+ */
 export function Principal({ value }: { value: string }) {
   const { t } = usePreferences();
   if (value.startsWith("user:")) {
@@ -14,17 +18,12 @@ export function Principal({ value }: { value: string }) {
       </div>
     );
   }
-  if (value.startsWith("service-account:")) {
-    const id = value.slice("service-account:".length);
-    return (
-      <CopyableValue
-        value={value}
-        label={`${t("access.serviceAccount")} · ${id.slice(0, 8)}${id.length > 8 ? "…" : ""}`}
-        className="text-xs text-fg"
-      />
-    );
-  }
-  if (!value.startsWith("api-key:")) {
+  const kind = value.startsWith("service-account:")
+    ? t("access.serviceAccount")
+    : value.startsWith("api-key:")
+      ? "API Key"
+      : null;
+  if (!kind) {
     return (
       <div>
         <div className="text-xs font-medium text-fg">
@@ -34,12 +33,14 @@ export function Principal({ value }: { value: string }) {
       </div>
     );
   }
-  const id = value.slice("api-key:".length);
   return (
-    <CopyableValue
-      value={value}
-      label={`API Key · ${id.slice(0, 8)}${id.length > 8 ? "…" : ""}`}
-      className="text-xs text-fg"
-    />
+    <div className="min-w-0">
+      <div className="text-xs font-medium text-fg">{kind}</div>
+      <CopyableValue
+        value={value}
+        label={value.slice(value.indexOf(":") + 1)}
+        className="max-w-full text-xs text-fg-disabled"
+      />
+    </div>
   );
 }

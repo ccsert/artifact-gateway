@@ -2,10 +2,7 @@ import type { ShellMessageKey } from "./shell.zh-CN";
 
 export const shellEnUS: Record<ShellMessageKey, string> = {
   "common.cancel": "Cancel",
-  "common.save": "Save",
   "common.loading": "Loading…",
-  "common.theme.light": "Switch to light mode",
-  "common.theme.dark": "Switch to dark mode",
   "common.theme.select": "Choose theme",
   "common.theme.current": "Current theme: {name}",
   "common.language": "Language",
@@ -51,8 +48,6 @@ export const shellEnUS: Record<ShellMessageKey, string> = {
   "nav.collapse": "Collapse navigation",
   "nav.open": "Open navigation",
   "nav.close": "Close navigation",
-  "header.search": "Search artifacts across repositories…",
-  "auth.loginTitle": "Console Sign In",
   "auth.welcome": "Sign in to the console",
   "auth.signInHint": "Choose an authentication method to continue.",
   "auth.controlPlane": "Artifact infrastructure console",
@@ -91,7 +86,6 @@ export const shellEnUS: Record<ShellMessageKey, string> = {
   "auth.networkError": "Network error. Try again.",
   "auth.invalidToken": "The token is invalid or expired.",
   "auth.ssoFailed": "Enterprise sign in did not complete. Try again.",
-  "auth.ssoUnavailable": "The identity provider is temporarily unavailable.",
   "auth.logout": "Sign out",
   "auth.awaitingAuthorization": "Awaiting administrator approval",
   "auth.awaitingAuthorizationDescription":
@@ -124,4 +118,6 @@ export const shellEnUS: Record<ShellMessageKey, string> = {
   "shell.viewDiagnosticsForTheConnectedNode":
     "View diagnostics for the connected node",
   "shell.connectedNode": "Connected node",
+  "auth.usernamePlaceholder": "Enter your username",
+  "auth.passwordPlaceholder": "Enter your password",
 };

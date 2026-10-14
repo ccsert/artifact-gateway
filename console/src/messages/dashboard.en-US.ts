@@ -57,4 +57,6 @@ export const dashboardEnUS: Record<DashboardMessageKey, string> = {
   "dashboard.storageByFormatIsUnavailable": "Storage by format is unavailable",
   "dashboard.recentAuditEventsAreUnavailable":
     "Recent audit events are unavailable",
+  "dashboard.largestRepository": "Largest: {name} · {size}",
+  "dashboard.formatsCovered": "{count} formats",
 };

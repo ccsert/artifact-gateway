@@ -21,7 +21,7 @@ export function APTSigningStatePanel({
   return (
     <div className="space-y-4">
       <div className="border-b border-line pb-4">
-        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ag-content-tertiary)]">
+        <div className="text-xs font-semibold text-[var(--ag-content-tertiary)]">
           {t("repository.aPTPublicationTrust")}
         </div>
         <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-fg-strong">

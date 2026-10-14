@@ -55,7 +55,7 @@ export function ProxyMavenUsage({
     <div className="mb-5 space-y-3 rounded-lg border border-line bg-surface-translucent p-4">
       <div className="grid gap-3 lg:grid-cols-4">
         <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
+          <div className="text-xs text-fg-tertiary">
             {t("repository.upstream")}
           </div>
           <div
@@ -66,7 +66,7 @@ export function ProxyMavenUsage({
           </div>
         </div>
         <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
+          <div className="text-xs text-fg-tertiary">
             {t("repository.health")}
           </div>
           <div
@@ -80,9 +80,7 @@ export function ProxyMavenUsage({
           </div>
         </div>
         <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-            Circuit
-          </div>
+          <div className="text-xs text-fg-tertiary">Circuit</div>
           <div
             className={`mt-1 text-xs font-semibold ${health?.circuitOpen ? "text-[var(--ag-status-danger)]" : "text-[var(--ag-status-success)]"}`}
           >
@@ -90,7 +88,7 @@ export function ProxyMavenUsage({
           </div>
         </div>
         <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
+          <div className="text-xs text-fg-tertiary">
             {t("repository.cache")}
           </div>
           <div className="mt-1 text-xs font-semibold text-fg-strong">

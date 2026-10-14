@@ -32,9 +32,7 @@ function Snippet({ snippet }: { snippet: UsageSnippet }) {
   return (
     <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wider text-fg-tertiary">
-          {snippet.label}
-        </span>
+        <span className="text-xs text-fg-tertiary">{snippet.label}</span>
         <CopyButton text={snippet.code} />
       </div>
       <code className="block whitespace-pre-wrap break-all font-mono text-xs leading-5 text-[var(--ag-content-secondary)]">
@@ -110,7 +108,7 @@ export function ArtifactDetailView({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {meta.publisher && (
           <div className="rounded-lg border border-line px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
+            <div className="text-xs text-fg-tertiary">
               {t("artifactDetail.publisher")}
             </div>
             <div
@@ -123,7 +121,7 @@ export function ArtifactDetailView({
         )}
         {meta.size !== undefined && (
           <div className="rounded-lg border border-line px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
+            <div className="text-xs text-fg-tertiary">
               {t("artifactDetail.size")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-fg-strong">
@@ -133,7 +131,7 @@ export function ArtifactDetailView({
         )}
         {meta.createdAt && (
           <div className="rounded-lg border border-line px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
+            <div className="text-xs text-fg-tertiary">
               {timestampLabel ?? t("artifactDetail.published")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-fg-strong">
@@ -143,7 +141,7 @@ export function ArtifactDetailView({
         )}
         {meta.contentType && (
           <div className="rounded-lg border border-line px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
+            <div className="text-xs text-fg-tertiary">
               {t("artifactDetail.contentType")}
             </div>
             <div
@@ -156,7 +154,7 @@ export function ArtifactDetailView({
         )}
         {meta.state && (
           <div className="rounded-lg border border-line px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
+            <div className="text-xs text-fg-tertiary">
               {t("artifactDetail.state")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-fg-strong">
@@ -167,7 +165,7 @@ export function ArtifactDetailView({
       </div>
       {meta.digest && (
         <div className="rounded-lg border border-line px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
+          <div className="text-xs text-fg-tertiary">
             {t("artifactDetail.digest")}
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-2">

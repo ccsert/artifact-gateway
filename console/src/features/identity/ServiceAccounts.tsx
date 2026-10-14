@@ -210,7 +210,7 @@ export function ServiceAccountsPage() {
       ) : (
         <div className="ag-page-primary ag-service-account-workspace grid items-start gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
           <Card bodyClassName="p-2">
-            <div className="px-2 pb-2 pt-1 text-xs font-medium uppercase tracking-wider text-fg-disabled">
+            <div className="px-2 pb-2 pt-1 text-xs font-medium text-fg-disabled">
               {t("identity.machinePrincipals")}
             </div>
             <div className="space-y-1">

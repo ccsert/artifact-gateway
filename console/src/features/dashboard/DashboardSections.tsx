@@ -36,6 +36,18 @@ export function DashboardMetrics({
   const { locale, t } = usePreferences();
   const statistics = statisticsResource.data;
   const groups = groupsResource.data;
+  // Every figure from the statistics read says the same thing while it is
+  // missing, so the cards keep one height.
+  const statisticsHint = statisticsResource.loading
+    ? t("dashboard.loadingRepositoryStatistics")
+    : t("dashboard.repositoryStatisticsUnavailable");
+  const largest = statistics?.repositories.reduce<
+    (typeof statistics.repositories)[number] | undefined
+  >(
+    (top, repository) =>
+      !top || repository.usedBytes > top.usedBytes ? repository : top,
+    undefined,
+  );
   return (
     <MetricStrip
       items={[
@@ -48,9 +60,7 @@ export function DashboardMetrics({
             ? t("dashboard.denied", {
                 number: formatNumber(statistics.totals.denied[window], locale),
               })
-            : statisticsResource.loading
-              ? t("dashboard.loadingRepositoryStatistics")
-              : t("dashboard.repositoryStatisticsUnavailable"),
+            : statisticsHint,
         },
         {
           label: t("dashboard.totalObjects"),
@@ -62,10 +72,25 @@ export function DashboardMetrics({
         {
           label: t("dashboard.storageUsed"),
           value: statistics ? formatBytes(statistics.totals.usedBytes) : "—",
+          hint: largest
+            ? t("dashboard.largestRepository", {
+                name: largest.name,
+                size: formatBytes(largest.usedBytes),
+              })
+            : statisticsHint,
         },
         {
           label: t("dashboard.repositories"),
           value: statistics?.repositories.length ?? "—",
+          hint: statistics
+            ? t("dashboard.formatsCovered", {
+                count: new Set(
+                  statistics.repositories.map(
+                    (repository) => repository.format,
+                  ),
+                ).size,
+              })
+            : statisticsHint,
         },
         {
           label: t("dashboard.groups"),

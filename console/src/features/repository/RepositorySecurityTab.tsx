@@ -67,7 +67,7 @@ export function RepositorySecurityTab({
   return (
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(320px,0.78fr)_minmax(0,1.55fr)]">
       <div className="border-b border-line pb-4 xl:col-span-2">
-        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ag-content-tertiary)]">
+        <div className="text-xs font-semibold text-[var(--ag-content-tertiary)]">
           {t("repository.repositoryGuardrails")}
         </div>
         <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-fg-strong">

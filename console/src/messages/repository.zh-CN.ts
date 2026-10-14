@@ -78,8 +78,6 @@ export const repositoryZhCN = {
     "逗号分隔的主机名；Raw、Conan、npm、PyPI、Go、Cargo 和 APT 代理必填。PyPI 通常还需允许 files.pythonhosted.org；Cargo 通常还需 static.crates.io。",
   "repository.name": "名称",
   "repository.capacity": "容量",
-  "repository.configuration": "配置",
-  "repository.delete": "删除 {name}",
   "repository.deleting": "删除中",
   "repository.repositories": "仓库",
   "repository.aUnifiedViewOfHostedAndProxyRepositories":
@@ -1015,6 +1013,9 @@ export const repositoryZhCN = {
     "通过 {format} 客户端推送制品后会显示在这里",
   "repository.allowedHostsRequired": "允许主机 allowedHosts（必填）",
   "repository.allowedHostsOptional": "允许主机 allowedHosts（可选）",
+  "repository.moreActionsFor": "{name} 的更多操作",
+  "repository.copyRepositoryId": "复制仓库 ID",
+  "repository.deleteRepositoryAction": "删除仓库",
 };
 
 export type RepositoryMessageKey = keyof typeof repositoryZhCN;

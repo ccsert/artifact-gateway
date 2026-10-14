@@ -1,6 +1,6 @@
 import type { Translate } from "../../lib/preferences";
-import { DeleteOutlined } from "@ant-design/icons";
-import { Button } from "antd";
+import { MoreOutlined } from "@ant-design/icons";
+import { Button, Dropdown } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link } from "react-router-dom";
 import type { Repository } from "../../client";
@@ -10,8 +10,7 @@ import {
   RepositoryTypeBadge,
   StateBadge,
 } from "../../components/ui/Badge";
-import { formatBytes } from "../../lib/format";
-import { CopyableValue } from "../../components/ui/ConsolePrimitives";
+import { UsageMeter } from "../../components/ui/UsageMeter";
 import type { RepositoryCapacity } from "../../client";
 
 /** The repository catalog's columns; administrators also see capacity and actions. */
@@ -19,11 +18,13 @@ export function repositoryListColumns({
   capacities,
   isAdmin,
   setToDelete,
+  onCopyId,
   t,
 }: {
   capacities: Record<string, RepositoryCapacity>;
   isAdmin: boolean;
   setToDelete: (repository: Repository) => void;
+  onCopyId: (id: string) => void;
   t: Translate;
 }): ColumnsType<Repository> {
   const columns: ColumnsType<Repository> = [
@@ -69,7 +70,7 @@ export function repositoryListColumns({
     {
       title: t("repository.capacity"),
       key: "capacity",
-      width: 140,
+      width: 170,
       defaultSortOrder: "descend",
       sorter: (left, right) =>
         (capacities[left.id]?.usedBytes ?? 0) -
@@ -77,53 +78,32 @@ export function repositoryListColumns({
       render: (_value, repository) => {
         const capacity = capacities[repository.id];
         return capacity ? (
-          <div>
-            <div className="font-mono text-xs text-fg-secondary">
-              {formatBytes(capacity.usedBytes)}
-            </div>
-            {capacity.quotaBytes > 0 && (
-              <div className="mt-1 text-xs text-fg-disabled">
-                / {formatBytes(capacity.quotaBytes)}
-              </div>
-            )}
-          </div>
+          <UsageMeter
+            usedBytes={capacity.usedBytes}
+            quotaBytes={capacity.quotaBytes}
+          />
         ) : (
           <span className="text-xs text-fg-disabled">—</span>
         );
       },
     },
     {
-      title: t("repository.configuration"),
-      key: "configuration",
-      width: 230,
+      // Only a proxy has something to show here; a hosted repository's
+      // resource version means nothing to the reader.
+      title: t("repository.upstream"),
+      key: "upstream",
       ellipsis: true,
-      render: (_value, repository) => (
-        <span
-          className="font-mono text-xs text-fg-tertiary"
-          title={
-            repository.type === "proxy"
-              ? repository.endpoint
-              : `v${repository.version}`
-          }
-        >
-          {repository.type === "proxy"
-            ? repository.endpoint
-            : `v${repository.version}`}
-        </span>
-      ),
-    },
-    {
-      title: "ID",
-      dataIndex: "id",
-      key: "id",
-      width: 145,
-      render: (id: string) => (
-        <CopyableValue
-          value={id}
-          label={`${id.slice(0, 8)}…`}
-          className="text-xs text-fg-tertiary"
-        />
-      ),
+      render: (_value, repository) =>
+        repository.type === "proxy" && repository.endpoint ? (
+          <span
+            className="font-mono text-xs text-fg-tertiary"
+            title={repository.endpoint}
+          >
+            {repository.endpoint}
+          </span>
+        ) : (
+          <span className="text-xs text-fg-disabled">—</span>
+        ),
     },
     {
       title: t("repository.actions"),
@@ -132,31 +112,51 @@ export function repositoryListColumns({
       width: 82,
       align: "right",
       render: (_value, repository) =>
-        repository.state === "active" ? (
-          <Button
-            type="text"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            className="opacity-40 transition-opacity group-hover:opacity-100 focus:opacity-100"
-            aria-label={t("repository.delete", { name: repository.name })}
-            onClick={() => setToDelete(repository)}
-          />
-        ) : repository.state === "deleting" ? (
+        repository.state === "deleting" ? (
           <Badge tone="warning">{t("repository.deleting")}</Badge>
         ) : (
-          <span className="text-xs text-fg-disabled">—</span>
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: [
+                { key: "copy-id", label: t("repository.copyRepositoryId") },
+                ...(repository.state === "active"
+                  ? [
+                      { type: "divider" as const },
+                      {
+                        key: "delete",
+                        danger: true,
+                        label: t("repository.deleteRepositoryAction"),
+                      },
+                    ]
+                  : []),
+              ],
+              onClick: ({ key }) => {
+                if (key === "copy-id") onCopyId(repository.id);
+                if (key === "delete") setToDelete(repository);
+              },
+            }}
+          >
+            <Button
+              type="text"
+              size="small"
+              icon={<MoreOutlined />}
+              aria-label={t("repository.moreActionsFor", {
+                name: repository.name,
+              })}
+            />
+          </Dropdown>
         ),
     },
   ];
-  // Readers see the catalog; capacity, configuration and actions are
+  // Readers see the catalog; capacity, upstreams and actions are
   // administrative.
   return isAdmin
     ? columns
     : columns.filter(
         (column) =>
           column.key !== "capacity" &&
-          column.key !== "configuration" &&
+          column.key !== "upstream" &&
           column.key !== "actions",
       );
 }

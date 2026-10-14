@@ -62,4 +62,5 @@ export const uiEnUS: Record<UiMessageKey, string> = {
   "ui.total": "Total",
   "ui.formatLegend": "Format legend",
   "ui.clearFilters": "Clear filters",
+  "ui.quotaUsage": "{used} of {quota} used ({percent}%)",
 };

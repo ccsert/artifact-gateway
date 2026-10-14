@@ -96,13 +96,11 @@ export const operationsZhCN = {
   "operations.repositoryRetention": "仓库保留",
   "operations.target": "目标",
   "operations.globalAuditLog": "全局审计日志",
-  "operations.interval": "周期",
   "operations.lastDispatch": "最近投递",
   "operations.enabled2": "启用",
   "operations.enableScheduledTask": "启用计划任务",
   "operations.runNow": "立即执行",
   "operations.edit": "编辑",
-  "operations.deleteThisScheduledTask": "删除此计划任务？",
   "operations.dispatchHistoryIsRemovedAlreadySubmittedJobsAre":
     "投递历史会一并删除，已经生成的后台任务不受影响。",
   "operations.delete": "删除",
@@ -426,6 +424,11 @@ export const operationsZhCN = {
   "operations.everyHours": "每 {hours} 小时",
   "operations.endCannotBeMoreThan5MinutesFromNow":
     "结束时间不能超过当前时间 5 分钟。",
+  "operations.schedule": "调度",
+  "operations.moreActionsForTask": "{name} 的更多操作",
+  "operations.deleteScheduledTask": "删除计划",
+  "operations.deleteScheduledTaskNamed": "删除计划任务 {name}？",
+  "operations.paused": "已停用",
 };
 
 export type OperationsMessageKey = keyof typeof operationsZhCN;

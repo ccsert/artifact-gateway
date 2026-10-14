@@ -2,9 +2,6 @@ import type { PublicBrowseMessageKey } from "./public-browse.zh-CN";
 
 export const publicBrowseEnUS: Record<PublicBrowseMessageKey, string> = {
   "public.browseTitle": "Public Artifact Browser",
-  "public.catalogTitle": "Public artifacts",
-  "public.description":
-    "Only repositories with anonymous reads enabled are shown. Writes and management still require sign-in.",
   "public.managementLogin": "Management sign in",
   "public.managementConsole": "Open management console",
   "publicBrowse.loadingPublicRepositories": "Loading public repositories…",

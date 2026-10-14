@@ -1,8 +1,5 @@
 export const publicBrowseZhCN = {
   "public.browseTitle": "公开制品浏览",
-  "public.catalogTitle": "公开制品",
-  "public.description":
-    "仅显示已启用匿名读取的仓库内容；写入与管理操作仍需登录。",
   "public.managementLogin": "管理登录",
   "public.managementConsole": "进入管理端",
   "publicBrowse.loadingPublicRepositories": "正在读取公开仓库…",

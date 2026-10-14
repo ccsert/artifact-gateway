@@ -1,10 +1,7 @@
 /** Messages of the Console shell: navigation, sign-in and preferences. */
 export const shellZhCN = {
   "common.cancel": "取消",
-  "common.save": "保存",
   "common.loading": "正在加载…",
-  "common.theme.light": "切换到亮色模式",
-  "common.theme.dark": "切换到暗色模式",
   "common.theme.select": "选择主题",
   "common.theme.current": "当前主题：{name}",
   "common.language": "语言",
@@ -50,8 +47,6 @@ export const shellZhCN = {
   "nav.collapse": "收起导航",
   "nav.open": "打开导航",
   "nav.close": "关闭导航",
-  "header.search": "跨仓库搜索制品…",
-  "auth.loginTitle": "Console 登录",
   "auth.welcome": "登录控制台",
   "auth.signInHint": "选择身份验证方式以继续。",
   "auth.controlPlane": "制品基础设施控制台",
@@ -85,7 +80,6 @@ export const shellZhCN = {
   "auth.networkError": "网络错误，请重试。",
   "auth.invalidToken": "令牌无效或已过期，请检查后重试。",
   "auth.ssoFailed": "企业登录未完成，请重试。",
-  "auth.ssoUnavailable": "身份提供方暂时不可用。",
   "auth.logout": "退出",
   "auth.awaitingAuthorization": "等待管理员授权",
   "auth.awaitingAuthorizationDescription":
@@ -116,6 +110,8 @@ export const shellZhCN = {
   "shell.versionUnknown": "版本未知",
   "shell.viewDiagnosticsForTheConnectedNode": "查看当前连接节点的系统诊断",
   "shell.connectedNode": "当前节点",
+  "auth.usernamePlaceholder": "输入用户名",
+  "auth.passwordPlaceholder": "输入密码",
 } as const;
 
 export type ShellMessageKey = keyof typeof shellZhCN;

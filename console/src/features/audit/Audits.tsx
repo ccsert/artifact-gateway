@@ -208,7 +208,7 @@ export function AuditsPage() {
             columns={auditColumns(t, locale)}
             pagination={false}
             scroll={{
-              x: 1200,
+              x: 1080,
               y: "clamp(240px, calc(100vh - 610px), 520px)",
             }}
             rowClassName="cursor-pointer"

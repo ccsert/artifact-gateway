@@ -44,7 +44,6 @@ export const identityZhCN = {
   "identity.noElevatedKeys": "暂无高权限密钥",
   "identity.revokedExpired": "已吊销 / 过期",
   "identity.retainedForAuditHistory": "保留历史审计记录",
-  "identity.clearFilters": "清除筛选",
   "identity.search": "搜索",
   "identity.searchNamesOrRoles": "搜索名称或角色…",
   "identity.allStatuses": "全部状态",

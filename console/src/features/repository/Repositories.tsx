@@ -16,6 +16,7 @@ import {
   FilterBar,
   FilterField,
   MetricStrip,
+  useClipboardAction,
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 import { useAuth } from "../../lib/auth";
@@ -125,10 +126,12 @@ export function RepositoriesPage() {
     (sum, value) => sum + value.usedBytes,
     0,
   );
+  const { copy } = useClipboardAction();
   const visibleColumns = repositoryListColumns({
     capacities,
     isAdmin,
     setToDelete,
+    onCopyId: (id) => void copy(id),
     t,
   });
   const formatOptions = isAdmin

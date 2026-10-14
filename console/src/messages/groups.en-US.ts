@@ -80,7 +80,6 @@ export const groupsEnUS: Record<GroupsMessageKey, string> = {
   "groups.allEntryPointsArePrivate": "All entry points are private",
   "groups.formats": "Formats",
   "groups.resolvedByMatchingFormat": "Resolved by matching format",
-  "groups.clearFilters": "Clear filters",
   "groups.search": "Search",
   "groups.searchGroupNames": "Search group names…",
   "groups.allFormats": "All formats",

@@ -121,6 +121,22 @@ describe("message dictionaries", () => {
     expect(misnamed).toEqual([]);
   });
 
+  it("only keep messages some source file uses", () => {
+    const source = sourceFiles(root)
+      .map((path) => readFileSync(path, "utf8"))
+      .join("\n");
+    // Keys built at run time, such as `account.kind.${kind}`.
+    const prefixes = [...source.matchAll(/`([a-zA-Z]+\.[A-Za-z.]*)\$\{/g)].map(
+      (match) => match[1],
+    );
+    const unused = Object.keys(zhCN).filter(
+      (key) =>
+        !source.includes(`"${key}"`) &&
+        !prefixes.some((prefix) => key.startsWith(prefix)),
+    );
+    expect(unused).toEqual([]);
+  });
+
   it("keeps display text out of components", () => {
     const literals = sourceFiles(root)
       .filter((path) => !exemptFiles.has(relative(root, path)))

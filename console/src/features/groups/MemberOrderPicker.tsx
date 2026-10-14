@@ -50,7 +50,7 @@ export function MemberOrderPicker({
     <div className="grid grid-cols-2 gap-3">
       {/* 候选 */}
       <div>
-        <div className="mb-1.5 text-xs uppercase tracking-wider text-fg-tertiary">
+        <div className="mb-1.5 text-xs text-fg-tertiary">
           {t("groups.available", { length: available.length })}
         </div>
         <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-line p-1.5">
@@ -79,7 +79,7 @@ export function MemberOrderPicker({
       </div>
       {/* 已选（有序） */}
       <div>
-        <div className="mb-1.5 text-xs uppercase tracking-wider text-fg-tertiary">
+        <div className="mb-1.5 text-xs text-fg-tertiary">
           {t("groups.configuredOrderWithinEachType", {
             length: memberIds.length,
           })}

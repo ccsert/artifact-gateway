@@ -334,7 +334,7 @@ describe("PublicBrowsePage APT browse", () => {
     expect(screen.queryByText("platform-images")).not.toBeInTheDocument();
 
     fireEvent.change(search, { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "OCI" }));
+    fireEvent.click(screen.getByRole("button", { name: "oci" }));
     expect(screen.getByText("platform-images")).toBeInTheDocument();
     expect(screen.queryByText("maven-public")).not.toBeInTheDocument();
   });

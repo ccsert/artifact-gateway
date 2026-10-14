@@ -75,7 +75,6 @@ export const groupsZhCN = {
   "groups.allEntryPointsArePrivate": "全部为私有入口",
   "groups.formats": "覆盖格式",
   "groups.resolvedByMatchingFormat": "按同格式仓库解析",
-  "groups.clearFilters": "清除筛选",
   "groups.search": "搜索",
   "groups.searchGroupNames": "搜索分组名称…",
   "groups.allFormats": "全部格式",

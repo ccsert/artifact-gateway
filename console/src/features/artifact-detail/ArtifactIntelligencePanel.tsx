@@ -73,7 +73,7 @@ export function ArtifactIntelligencePanel({
     >
       <div className="grid gap-4 lg:grid-cols-4">
         <div>
-          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-fg-tertiary">
+          <div className="mb-2 text-xs font-medium text-fg-tertiary">
             {t("artifactDetail.signatures")}
           </div>
           <div className="text-sm text-fg">
@@ -95,9 +95,7 @@ export function ArtifactIntelligencePanel({
           ))}
         </div>
         <div>
-          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-fg-tertiary">
-            SBOM
-          </div>
+          <div className="mb-2 text-xs font-medium text-fg-tertiary">SBOM</div>
           <div className="text-sm text-fg">
             {metadata.sboms.length > 0
               ? t("artifactDetail.documentS", { length: metadata.sboms.length })
@@ -114,7 +112,7 @@ export function ArtifactIntelligencePanel({
           ))}
         </div>
         <div>
-          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-fg-tertiary">
+          <div className="mb-2 text-xs font-medium text-fg-tertiary">
             {t("artifactDetail.provenance")}
           </div>
           {metadata.provenance ? (
@@ -140,7 +138,7 @@ export function ArtifactIntelligencePanel({
           )}
         </div>
         <div>
-          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-fg-tertiary">
+          <div className="mb-2 text-xs font-medium text-fg-tertiary">
             {t("artifactDetail.vulnerabilities")}
           </div>
           {vulnerability ? (

@@ -80,8 +80,6 @@ export const repositoryEnUS: Record<RepositoryMessageKey, string> = {
     "Comma-separated hostnames; required for Raw, Conan, npm, PyPI, Go, Cargo, and APT proxies. PyPI normally also requires files.pythonhosted.org; Cargo normally also requires static.crates.io.",
   "repository.name": "Name",
   "repository.capacity": "Capacity",
-  "repository.configuration": "Configuration",
-  "repository.delete": "Delete {name}",
   "repository.deleting": "Deleting",
   "repository.repositories": "Repositories",
   "repository.aUnifiedViewOfHostedAndProxyRepositories":
@@ -1051,4 +1049,7 @@ export const repositoryEnUS: Record<RepositoryMessageKey, string> = {
     "Push artifacts with the {format} client to display them here.",
   "repository.allowedHostsRequired": "Allowed hosts (required)",
   "repository.allowedHostsOptional": "Allowed hosts (optional)",
+  "repository.moreActionsFor": "More actions for {name}",
+  "repository.copyRepositoryId": "Copy repository ID",
+  "repository.deleteRepositoryAction": "Delete repository",
 };

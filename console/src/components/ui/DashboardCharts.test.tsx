@@ -41,7 +41,7 @@ describe("DashboardCharts", () => {
     );
     expect(await screen.findByText("存储图表加载失败")).toBeVisible();
     expect(screen.getByRole("list", { name: "格式图例" })).toHaveTextContent(
-      "OCI",
+      "oci",
     );
     expect(
       screen.getByText("容量数据仍可查看，请刷新页面重试图表。"),
@@ -91,7 +91,7 @@ describe("DashboardCharts", () => {
     expect(screen.getByRole("img")).toHaveAccessibleName(
       "各制品格式的存储占比，合计 2.0 KiB",
     );
-    expect(screen.getByText("APT")).toBeVisible();
+    expect(screen.getByText("apt")).toBeVisible();
     expect(screen.getByText("25%")).toBeVisible();
     expect(chartSpies.pie).toHaveBeenCalledWith(
       expect.objectContaining({

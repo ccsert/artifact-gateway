@@ -49,6 +49,8 @@ export const dashboardZhCN = {
   "dashboard.repositoryActivityIsUnavailable": "仓库活动暂时无法显示",
   "dashboard.storageByFormatIsUnavailable": "存储占用暂时无法显示",
   "dashboard.recentAuditEventsAreUnavailable": "最近审计事件暂时无法显示",
+  "dashboard.largestRepository": "最大：{name} · {size}",
+  "dashboard.formatsCovered": "覆盖 {count} 种格式",
 };
 
 export type DashboardMessageKey = keyof typeof dashboardZhCN;

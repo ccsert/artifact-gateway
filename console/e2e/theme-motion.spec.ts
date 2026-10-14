@@ -66,8 +66,8 @@ test("reduced motion switches the complete palette atomically", async ({
   await page.emulateMedia({ reducedMotion: "reduce" });
   await mockThemeSurface(page);
   await page.goto("/login");
-  await page.getByPlaceholder("alice").fill("theme-motion-qa");
-  await page.getByPlaceholder("••••••••").fill("local-only");
+  await page.getByPlaceholder("输入用户名").fill("theme-motion-qa");
+  await page.getByPlaceholder("输入密码").fill("local-only");
   const expected = resolveConsoleTheme(
     defaultConsoleThemes.find((theme) => theme.id === "gateway-light")!,
   ).cssVariables;

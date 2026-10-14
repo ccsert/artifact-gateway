@@ -86,9 +86,10 @@ test("a scheduled task is created, paused, run, and deleted", async ({
   await row.getByRole("button", { name: "立即执行" }).click();
   await expect(page.getByText("手动", { exact: true }).first()).toBeVisible();
 
-  await row.getByRole("button", { name: "删除" }).click();
+  await row.getByRole("button", { name: `${name} 的更多操作` }).click();
+  await page.getByRole("menuitem", { name: "删除计划" }).click();
   await page
-    .locator(".ant-popconfirm:visible")
+    .getByRole("dialog")
     .getByRole("button", { name: /^删\s*除$/ })
     .click();
   await expect(row).toHaveCount(0);

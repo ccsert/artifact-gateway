@@ -98,13 +98,11 @@ export const operationsEnUS: Record<OperationsMessageKey, string> = {
   "operations.repositoryRetention": "Repository retention",
   "operations.target": "Target",
   "operations.globalAuditLog": "Global audit log",
-  "operations.interval": "Interval",
   "operations.lastDispatch": "Last dispatch",
   "operations.enabled2": "Enabled",
   "operations.enableScheduledTask": "Enable scheduled task",
   "operations.runNow": "Run now",
   "operations.edit": "Edit",
-  "operations.deleteThisScheduledTask": "Delete this scheduled task?",
   "operations.dispatchHistoryIsRemovedAlreadySubmittedJobsAre":
     "Dispatch history is removed; already submitted jobs are unaffected.",
   "operations.delete": "Delete",
@@ -450,4 +448,9 @@ export const operationsEnUS: Record<OperationsMessageKey, string> = {
   "operations.everyHours": "Every {hours} hours",
   "operations.endCannotBeMoreThan5MinutesFromNow":
     "End cannot be more than 5 minutes from now.",
+  "operations.schedule": "Schedule",
+  "operations.moreActionsForTask": "More actions for {name}",
+  "operations.deleteScheduledTask": "Delete schedule",
+  "operations.deleteScheduledTaskNamed": "Delete the scheduled task {name}?",
+  "operations.paused": "Paused",
 };

@@ -46,7 +46,6 @@ export const identityEnUS: Record<IdentityMessageKey, string> = {
   "identity.noElevatedKeys": "No elevated keys",
   "identity.revokedExpired": "Revoked / expired",
   "identity.retainedForAuditHistory": "Retained for audit history",
-  "identity.clearFilters": "Clear filters",
   "identity.search": "Search",
   "identity.searchNamesOrRoles": "Search names or roles…",
   "identity.allStatuses": "All statuses",

@@ -220,6 +220,25 @@ describe("SystemDiagnosticsPanel", () => {
     expect(screen.getByText("已复制")).toBeInTheDocument();
   });
 
+  it("reports no dependency checks as neutral, not healthy", async () => {
+    mockGetDiagnostics.mockResolvedValue({
+      data: { ...diagnostics, dependencies: [] },
+    } as never);
+    renderPanel();
+
+    const summary = within(
+      await screen.findByRole("group", { name: "页面摘要" }),
+    );
+    const dependencyMetric = summary.getByText("依赖可用")
+      .parentElement as HTMLElement;
+    expect(
+      within(dependencyMetric).getByText("没有依赖检查结果"),
+    ).toBeVisible();
+    expect(within(dependencyMetric).getByText("0").className).not.toContain(
+      "status-success",
+    );
+  });
+
   it("treats unconfigured dependencies as unavailable", async () => {
     mockGetDiagnostics.mockResolvedValue({
       data: {
