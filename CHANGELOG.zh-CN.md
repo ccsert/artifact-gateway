@@ -8,6 +8,12 @@
 
 ## Unreleased
 
+- Console 的界面文案全部迁入按功能拆分的消息字典，内联 `text("中文", "English")` 调用归零；单元测试会在缺失或空翻译、占位符不一致、key 重复定义或无人使用、使用术语表（`src/messages/glossary.ts`）规定避免的同义词，以及字典之外出现中文文案时失败。借此补齐了原本只有中文的用法片段标题、无标签 OCI 版本、读取错误、审计 CSV 表头与身份标签（#276）。
+
+- Console 页面只在 `src/app/routes.tsx` 声明一次，路由、侧栏、命令面板与访问重定向都由它派生。新增共享原语（`ListPage`、`ListStates`、`FilterCard`、`useUrlFilters`、`FormModal`、`ConfirmDanger`、`DetailDrawer`）统一列表状态、URL 保存的筛选和写请求在途锁定；API 密钥、分组和用户页面已采用，筛选条件刷新后保留（#274）。仅属于单个页面的样式随页面按需加载，不再放在全局样式表中（#273）。
+
+- 关闭 Console 视觉审查遗留项（#317）：仓库列表以用量条展示配额、新增上游列，并用行菜单替代常驻删除图标；计划任务在 1440px 下完整显示且操作带文字；审计访问主体与服务账号主体不再被过早截断；没有依赖检查结果时显示为中性；总览指标卡高度一致；表头和中文标签不再强制大写或加字距，格式标识统一小写；登录页使用描述性占位符并去掉内部 API 命名。
+
 - CLI 凭据绑定正确区分 IPv6 authority，临时覆盖 server 时不会复用其他目标的 profile token；profile/login 输出去除 URL 秘密，并发 profile 写操作串行化完整配置事务，避免丢失更新。
 
 - `agctl` 客户端迎来第一组命令面：`agctl auth login|logout|whoami|change-password` 与 `agctl config profile add|list|use|remove`。login 用有界 stdin 中的本地用户名与密码换取会话 token，且只存入显式选择的 0600 profile，绑定其他服务器的 profile 会被拒绝；`mustChangePassword` 账号会被引导到 `change-password` 而不会被自动改密，密码、token 与一次性秘密永不打印。logout 请求服务端结束会话、探测凭据是否仍可认证，并遗忘匹配的已存 token；机器凭据或静态 token 会被如实报告为"仍可认证"而不是"已撤销"。无法无副作用地预演的写命令会在任何变更之前以用法错误拒绝 `--dry-run`。更换 profile 的 server 时会丢弃已存 token，除非随更新提供新凭据，凭据绝不会被发往其他部署。profile 以 0600 原子写入，宽松权限的文件被拒绝。
