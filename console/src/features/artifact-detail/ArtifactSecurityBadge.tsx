@@ -1,7 +1,6 @@
+import type { Translate } from "../../lib/preferences";
 import type { ArtifactIntelligenceSummary } from "../../client";
 import { Badge } from "../../components/ui/Badge";
-
-type Localize = (zh: string, en: string) => string;
 
 export function artifactSecurityFindings(
   summary: ArtifactIntelligenceSummary,
@@ -17,30 +16,30 @@ export function artifactSecurityFindings(
 
 export function ArtifactSecurityBadge({
   summary,
-  text,
+  t,
 }: {
   summary?: ArtifactIntelligenceSummary;
-  text: Localize;
+  t: Translate;
 }) {
   if (!summary)
-    return <Badge tone="neutral">{text("未扫描", "Not scanned")}</Badge>;
+    return <Badge tone="neutral">{t("artifactDetail.notScanned")}</Badge>;
   if (summary.vulnerabilityStatus === "affected") {
     return (
       <Badge tone="danger">
-        {text("有风险", "Affected")} · {artifactSecurityFindings(summary)}
+        {t("artifactDetail.affected2")} · {artifactSecurityFindings(summary)}
       </Badge>
     );
   }
   if (summary.vulnerabilityStatus === "clean") {
-    return <Badge tone="success">{text("通过", "Clean")}</Badge>;
+    return <Badge tone="success">{t("artifactDetail.clean2")}</Badge>;
   }
   if (summary.vulnerabilityStatus === "error") {
-    return <Badge tone="warning">{text("扫描错误", "Scan error")}</Badge>;
+    return <Badge tone="warning">{t("artifactDetail.scanError")}</Badge>;
   }
   return (
     <Badge tone="info">
       {summary.signatureCount + summary.sbomCount + summary.licenseCount}{" "}
-      {text("项证据", "evidence")}
+      {t("artifactDetail.evidence")}
     </Badge>
   );
 }

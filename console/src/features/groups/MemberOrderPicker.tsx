@@ -30,7 +30,7 @@ export function MemberOrderPicker({
   memberIds: string[];
   onChange: (ids: string[]) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const repoOf = (id: string) => candidates.find((r) => r.id === id);
   const repoName = (id: string) => repoOf(id)?.name ?? id.slice(0, 8) + "…";
   const available = candidates.filter((r) => !memberIds.includes(r.id));
@@ -50,16 +50,13 @@ export function MemberOrderPicker({
     <div className="grid grid-cols-2 gap-3">
       {/* 候选 */}
       <div>
-        <div className="mb-1.5 text-xs uppercase tracking-wider text-fg-tertiary">
-          {text(
-            `可添加（${available.length}）`,
-            `Available (${available.length})`,
-          )}
+        <div className="mb-1.5 text-xs text-fg-tertiary">
+          {t("groups.available", { length: available.length })}
         </div>
         <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-line p-1.5">
           {available.length === 0 && (
             <div className="px-2 py-4 text-center text-xs text-fg-disabled">
-              {text("全部已加入", "All added")}
+              {t("groups.allAdded")}
             </div>
           )}
           {available.map((r) => (
@@ -82,16 +79,15 @@ export function MemberOrderPicker({
       </div>
       {/* 已选（有序） */}
       <div>
-        <div className="mb-1.5 text-xs uppercase tracking-wider text-fg-tertiary">
-          {text(
-            `配置顺序（${memberIds.length}，同类型内生效）`,
-            `Configured order (${memberIds.length}, within each type)`,
-          )}
+        <div className="mb-1.5 text-xs text-fg-tertiary">
+          {t("groups.configuredOrderWithinEachType", {
+            length: memberIds.length,
+          })}
         </div>
         <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-line p-1.5">
           {memberIds.length === 0 && (
             <div className="px-2 py-4 text-center text-xs text-fg-disabled">
-              {text("从左侧点击添加成员", "Add members from the left")}
+              {t("groups.addMembersFromTheLeft")}
             </div>
           )}
           {memberIds.map((id, i) => (
@@ -109,32 +105,32 @@ export function MemberOrderPicker({
               >
                 {repoName(id)}
               </span>
-              <Tooltip title={text("上移", "Move up")}>
+              <Tooltip title={t("groups.moveUp")}>
                 <Button
                   type="text"
                   size="small"
-                  aria-label={text("上移", "Move up")}
+                  aria-label={t("groups.moveUp")}
                   icon={<ArrowUpOutlined />}
                   onClick={() => move(i, -1)}
                   disabled={i === 0}
                 />
               </Tooltip>
-              <Tooltip title={text("下移", "Move down")}>
+              <Tooltip title={t("groups.moveDown")}>
                 <Button
                   type="text"
                   size="small"
-                  aria-label={text("下移", "Move down")}
+                  aria-label={t("groups.moveDown")}
                   icon={<ArrowDownOutlined />}
                   onClick={() => move(i, 1)}
                   disabled={i === memberIds.length - 1}
                 />
               </Tooltip>
-              <Tooltip title={text("移除", "Remove")}>
+              <Tooltip title={t("groups.remove")}>
                 <Button
                   type="text"
                   size="small"
                   danger
-                  aria-label={text("移除", "Remove")}
+                  aria-label={t("groups.remove")}
                   icon={<CloseOutlined />}
                   onClick={() => remove(id)}
                 />

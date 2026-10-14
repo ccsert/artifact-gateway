@@ -1,3 +1,4 @@
+import type { MessageKey } from "../../messages";
 import { CheckCircleOutlined, WarningOutlined } from "@ant-design/icons";
 import { Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -17,11 +18,12 @@ import {
   scannerStatusLabels,
   scannerStatusTone,
 } from "./diagnosticsScanner";
+import "./operations.css";
 
-const dependencyLabels: Record<string, [string, string]> = {
-  postgresql: ["PostgreSQL", "PostgreSQL"],
-  "object-storage": ["对象存储", "Object storage"],
-  runtime: ["运行依赖", "Runtime dependencies"],
+const dependencyLabels: Record<string, MessageKey> = {
+  postgresql: "operations.postgresql",
+  "object-storage": "operations.objectStorage",
+  runtime: "operations.runtimeDependencies",
 };
 
 export function DiagnosticsDependenciesCard({
@@ -29,17 +31,17 @@ export function DiagnosticsDependenciesCard({
 }: {
   diagnostics: Diagnostics;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const scanner = diagnostics.scanner;
   const scannerStatusLabel = scanner
     ? scannerStatusLabels[scanner.status]
     : null;
   const scannerDetail = scanner
-    ? scannerOperationalDetail(scanner, text, locale)
+    ? scannerOperationalDetail(scanner, t, locale)
     : "";
   return (
     <Card className="ag-diagnostics-dependencies-card">
-      <CardHeader title={text("依赖与扫描器", "Dependencies and scanner")} />
+      <CardHeader title={t("operations.dependenciesAndScanner")} />
       <div className="divide-y divide-line">
         {diagnostics.dependencies.map((dependency: DiagnosticDependency) => {
           const labels = dependencyLabels[dependency.name];
@@ -48,7 +50,7 @@ export function DiagnosticsDependenciesCard({
             <div key={dependency.name} className="ag-diagnostic-status-row">
               <div className="min-w-0">
                 <div className="text-sm text-fg">
-                  {labels ? text(labels[0], labels[1]) : dependency.name}
+                  {labels ? t(labels) : dependency.name}
                 </div>
                 <div className="mt-1 break-words text-xs leading-5 text-fg-tertiary">
                   {dependency.detail}
@@ -64,10 +66,10 @@ export function DiagnosticsDependenciesCard({
                 {reachable ? <CheckCircleOutlined /> : <WarningOutlined />}
                 <span className="ml-2">
                   {reachable
-                    ? text("可用", "Reachable")
+                    ? t("operations.reachable")
                     : dependency.status === "not_configured"
-                      ? text("未配置", "Not configured")
-                      : text("不可用", "Unreachable")}
+                      ? t("operations.notConfigured")
+                      : t("operations.unreachable2")}
                 </span>
               </span>
             </div>
@@ -75,7 +77,7 @@ export function DiagnosticsDependenciesCard({
         })}
         {diagnostics.dependencies.length === 0 && (
           <div className="px-5 py-5 text-sm text-fg-tertiary">
-            {text("没有依赖检查结果", "No dependency checks reported")}
+            {t("operations.noDependencyChecksReported")}
           </div>
         )}
         {scanner && scannerStatusLabel && (
@@ -83,7 +85,7 @@ export function DiagnosticsDependenciesCard({
             <div className="min-w-0">
               <div className="flex min-w-0 flex-wrap items-baseline gap-2 text-sm text-fg">
                 <span>
-                  {text("制品扫描器", "Artifact scanner")} · {scanner.name}
+                  {t("operations.artifactScanner")} · {scanner.name}
                 </span>
                 {scanner.version && (
                   <span className="font-mono text-xs text-fg-tertiary">
@@ -97,7 +99,7 @@ export function DiagnosticsDependenciesCard({
               {scanner.formats.length > 0 && (
                 <Tooltip title={scanner.formats.join(" · ")}>
                   <div className="mt-1 break-words font-mono text-xs leading-5 text-fg-disabled">
-                    {text("覆盖格式", "Formats")}: {scanner.formats.join(" · ")}
+                    {t("operations.formats")}: {scanner.formats.join(" · ")}
                   </div>
                 </Tooltip>
               )}
@@ -110,9 +112,7 @@ export function DiagnosticsDependenciesCard({
               ) : (
                 <WarningOutlined />
               )}
-              <span className="ml-2">
-                {text(scannerStatusLabel[0], scannerStatusLabel[1])}
-              </span>
+              <span className="ml-2">{t(scannerStatusLabel)}</span>
             </span>
           </div>
         )}
@@ -126,10 +126,10 @@ export function DiagnosticsQueueCard({
 }: {
   diagnostics: Diagnostics;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const queueColumns: ColumnsType<DiagnosticQueueStat> = [
     {
-      title: text("任务类型", "Job type"),
+      title: t("operations.jobType"),
       dataIndex: "kind",
       key: "kind",
       width: 150,
@@ -138,7 +138,7 @@ export function DiagnosticsQueueCard({
       ),
     },
     {
-      title: text("格式", "Format"),
+      title: t("operations.format"),
       dataIndex: "format",
       key: "format",
       width: 110,
@@ -146,21 +146,21 @@ export function DiagnosticsQueueCard({
       render: (format: string) => <FormatBadge format={format} />,
     },
     {
-      title: text("状态", "Status"),
+      title: t("operations.status"),
       dataIndex: "state",
       key: "state",
       width: 120,
       render: (state: string) => <StateBadge state={state} />,
     },
     {
-      title: text("数量", "Count"),
+      title: t("operations.count"),
       dataIndex: "count",
       key: "count",
       width: 80,
       align: "right",
     },
     {
-      title: text("最早入队", "Oldest queued"),
+      title: t("operations.oldestQueued"),
       dataIndex: "oldestCreatedAt",
       key: "oldestCreatedAt",
       width: 190,
@@ -175,7 +175,7 @@ export function DiagnosticsQueueCard({
 
   return (
     <Card className="ag-diagnostics-queue-card">
-      <CardHeader title={text("后台队列", "Background queues")} />
+      <CardHeader title={t("operations.backgroundQueues")} />
       <ConsoleTable<DiagnosticQueueStat>
         rowKey={(queue) => `${queue.kind}-${queue.format}-${queue.state}`}
         dataSource={diagnostics.queues}
@@ -184,11 +184,8 @@ export function DiagnosticsQueueCard({
           emptyText: (
             <EmptyState
               compact
-              title={text("当前没有活跃队列", "No active queue entries")}
-              hint={text(
-                "后台任务启动后会占用队列，这里会实时显示。",
-                "Background jobs appear here as soon as they occupy a queue.",
-              )}
+              title={t("operations.noActiveQueueEntries")}
+              hint={t("operations.backgroundJobsAppearHereAsSoonAsThey")}
             />
           ),
         }}

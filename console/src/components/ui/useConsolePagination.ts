@@ -6,7 +6,7 @@ export const CONSOLE_PAGE_SIZE_OPTIONS = [20, 50, 100];
 
 /** Known totals only. Cursor lists keep the shared load-more footer. */
 export function useConsolePagination(): TablePaginationConfig {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return {
     placement: ["bottomEnd"],
     size: "middle",
@@ -15,9 +15,6 @@ export function useConsolePagination(): TablePaginationConfig {
     showSizeChanger: true,
     hideOnSinglePage: false,
     showTotal: (total, range) =>
-      text(
-        `第 ${range[0]}-${range[1]} 项，共 ${total} 项`,
-        `${range[0]}-${range[1]} of ${total} items`,
-      ),
+      t("ui.ofItems", { start: range[0], end: range[1], total }),
   };
 }

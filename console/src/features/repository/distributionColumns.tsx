@@ -1,10 +1,9 @@
+import type { Translate } from "../../lib/preferences";
 import { Button, Popconfirm, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { ReplicationPlan, ReplicationPlanDetail } from "../../client";
 import { StateBadge } from "../../components/ui/Badge";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
-
-type Localize = (chinese: string, english: string) => string;
 
 /** Replication plans, with cancel and detail actions. */
 export function replicationPlanColumns({
@@ -12,19 +11,19 @@ export function replicationPlanColumns({
   repoName,
   cancelPlan,
   showDetail,
-  text,
+  t,
 }: {
   suiteTarget: boolean;
   repoName: (repositoryId: string) => string;
   cancelPlan: (planId: string) => unknown;
   showDetail: (planId: string) => unknown;
-  text: Localize;
+  t: Translate;
 }): ColumnsType<ReplicationPlan> {
   return [
     ...(suiteTarget
       ? [
           {
-            title: text("目标套件", "Target suite"),
+            title: t("repository.targetSuite2"),
             dataIndex: "aptTargetSuite",
             key: "aptTargetSuite",
             width: 140,
@@ -43,7 +42,7 @@ export function replicationPlanColumns({
       ),
     },
     {
-      title: text("目标仓库", "Target repository"),
+      title: t("repository.targetRepository"),
       dataIndex: "targetRepositoryId",
       key: "targetRepositoryId",
       width: 220,
@@ -52,14 +51,14 @@ export function replicationPlanColumns({
       ),
     },
     {
-      title: text("状态", "Status"),
+      title: t("repository.status"),
       dataIndex: "state",
       key: "state",
       width: 130,
       render: (value: string) => <StateBadge state={value} />,
     },
     {
-      title: text("创建时间", "Created"),
+      title: t("repository.created"),
       dataIndex: "createdAt",
       key: "createdAt",
       width: 180,
@@ -70,7 +69,7 @@ export function replicationPlanColumns({
       ),
     },
     {
-      title: text("完成时间", "Completed"),
+      title: t("repository.completed"),
       dataIndex: "completedAt",
       key: "completedAt",
       width: 180,
@@ -81,29 +80,28 @@ export function replicationPlanColumns({
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("repository.actions"),
       key: "actions",
       fixed: "right",
       width: 180,
       render: (_, plan) => (
         <Space size="small">
           <Button size="small" onClick={() => showDetail(plan.id)}>
-            {text("进度", "Progress")}
+            {t("repository.progress")}
           </Button>
           {(plan.state === "pending" || plan.state === "failed") && (
             <Popconfirm
-              title={text("确认取消复制计划？", "Cancel replication plan?")}
-              description={text(
-                "取消后工作进程将不再重试，已复制的字节不会自动删除。",
-                "Workers will not retry after cancellation. Bytes already copied are not deleted automatically.",
+              title={t("repository.cancelReplicationPlan")}
+              description={t(
+                "repository.workersWillNotRetryAfterCancellationBytesAlready",
               )}
-              okText={text("确认取消", "Cancel plan")}
-              cancelText={text("返回", "Back")}
+              okText={t("repository.cancelPlan")}
+              cancelText={t("repository.back")}
               okButtonProps={{ danger: true }}
               onConfirm={() => cancelPlan(plan.id)}
             >
               <Button size="small" danger>
-                {text("取消", "Cancel")}
+                {t("repository.cancel")}
               </Button>
             </Popconfirm>
           )}
@@ -114,10 +112,10 @@ export function replicationPlanColumns({
 }
 
 /** One plan's per-artifact checkpoints. */
-export function replicationCheckpointColumns(text: Localize) {
+export function replicationCheckpointColumns(t: Translate) {
   const columns: ColumnsType<ReplicationPlanDetail["checkpoints"][number]> = [
     {
-      title: text("对象", "Object"),
+      title: t("repository.object"),
       dataIndex: "objectKey",
       key: "objectKey",
       width: 280,
@@ -131,7 +129,7 @@ export function replicationCheckpointColumns(text: Localize) {
       ),
     },
     {
-      title: text("摘要", "Digest"),
+      title: t("repository.digest"),
       dataIndex: "digest",
       key: "digest",
       width: 180,
@@ -142,7 +140,7 @@ export function replicationCheckpointColumns(text: Localize) {
       ),
     },
     {
-      title: text("大小", "Size"),
+      title: t("repository.size"),
       dataIndex: "size",
       key: "size",
       width: 120,
@@ -151,7 +149,7 @@ export function replicationCheckpointColumns(text: Localize) {
       ),
     },
     {
-      title: text("进度", "Progress"),
+      title: t("repository.progress"),
       key: "progress",
       width: 110,
       render: (_, checkpoint) => (
@@ -163,14 +161,14 @@ export function replicationCheckpointColumns(text: Localize) {
       ),
     },
     {
-      title: text("状态", "Status"),
+      title: t("repository.status"),
       dataIndex: "state",
       key: "state",
       width: 130,
       render: (value: string) => <StateBadge state={value} />,
     },
     {
-      title: text("重试", "Attempts"),
+      title: t("repository.attempts"),
       dataIndex: "attempts",
       key: "attempts",
       width: 90,

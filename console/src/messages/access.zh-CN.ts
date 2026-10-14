@@ -194,6 +194,68 @@ export const accessZhCN = {
   "access.scopeWrite": "写入",
   "access.scopeRead": "读取",
   "access.scopeUnknown": "未配置",
+  "access.administratorIdentity": "管理员身份",
+  "access.legacyStaticPolicy": "旧版静态策略",
+  "access.anonymousAccessPolicy": "匿名访问策略",
+  "access.repositoryGrant": "仓库授权",
+  "access.notSpecified": "未说明",
+  "access.allowedByAdministratorIdentity": "管理员身份直接放行",
+  "access.allowedByTheGlobalAdminRole": "全局 admin 角色允许此操作",
+  "access.aMemberLevelCarriesNoImplicitCapabilityRepository":
+    "成员等级不含隐式权限，由仓库授权决定",
+  "access.principalPermissionAndResourceScopeAllMatch":
+    "主体、权限级别和资源范围均匹配",
+  "access.noRepositoryRuleMatchesThePrincipalPermissionAnd":
+    "没有同时匹配主体、权限和资源范围的仓库规则",
+  "access.repositoryGrantsCouldNotBeLoadedAccessIs":
+    "读取仓库授权失败，已拒绝访问",
+  "access.matchedALegacyReadRule": "匹配旧版读取规则",
+  "access.matchedALegacyWriteRule": "匹配旧版写入规则",
+  "access.globalAnonymousReadsAreDisabled": "全局匿名读取未启用",
+  "access.anonymousReadsAreDisabledForThisRepository": "当前仓库未允许匿名读取",
+  "access.anonymousReadsAreEnabledGloballyAndForThis":
+    "全局和仓库均允许匿名读取",
+  "access.theRepositoryIsNotCurrentlyActive": "仓库当前不处于可访问状态",
+  "access.allowed": "允许",
+  "access.denied": "拒绝",
+  "access.anonymousReads": "匿名读取",
+  "access.artifactIdOptional": "artifactId（可选）",
+  "access.namespaceTeam": "命名空间 · team",
+  "access.imageNameOptional": "镜像名（可选）",
+  "access.name": "包名",
+  "access.versionOptional": "版本（可选）",
+  "access.userOptional": "用户（可选）",
+  "access.channelOptional": "频道（可选）",
+  "access.scopeTeam": "scope · @team",
+  "access.packageOptional": "包名（可选）",
+  "access.pathPrefixReleases": "路径前缀 · releases/",
+  "access.projectPrefixGateway": "项目名前缀 · gateway-",
+  "access.modulePathPrefixExampleComTeam": "模块路径前缀 · example.com/team/",
+  "access.repositoryPathPrefixDistsBookworm": "仓库路径前缀 · dists/bookworm/",
+  "access.limitByPrefix": "限定范围",
+  "access.canonicalPrefix": "实际前缀",
+  "access.readWriteAdminIntelligence": "读取 + 写入 + 管理 + 制品情报",
+  "access.readWrite": "读取 + 写入",
+  "access.noGlobalRoleRepositoryGrantsDecideAccess":
+    "无全局角色，由仓库授权决定",
+  "access.mustExactlyMatchTheAuthenticatedActor":
+    "必须与认证完成后产生的 actor 完全一致",
+  "access.selectAUserAPIKeyServiceAccountOr":
+    "选择用户、API Key、服务账号或外部身份",
+  "access.users": "用户",
+  "access.serviceAccounts": "服务账号",
+  "access.externalIdentities": "外部身份",
+  "access.principalIdentifier": "主体标识",
+  "access.completeActorForExampleOidcGitlabTeamRelease":
+    "完整 actor，例如 oidc:gitlab:team/release",
+  "access.permission2": "权限级别",
+  "access.savedPermissionSnapshot": "已保存的权限快照",
+  "access.builtInPermissions": "内置权限",
+  "access.adminGrantDelete2": "管理 · 授权 / 删除",
+  "access.artifactIntelligenceSecurityMetadata": "制品情报 · 安全元数据",
+  "access.customRoles": "自定义角色",
+  "access.grantedByThisRule": "本规则授予",
+  "access.resourceScope": "资源范围",
 } as const;
 
 export type AccessMessageKey = keyof typeof accessZhCN;

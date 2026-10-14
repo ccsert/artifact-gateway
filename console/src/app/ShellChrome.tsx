@@ -59,15 +59,15 @@ export function CommandTrigger({
 }
 
 export function ConnectedVersion() {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const build = useConnectedBuild();
 
   const version =
     build?.version && build.version !== "unknown"
       ? build.version === "dev"
-        ? text("开发构建", "Development build")
+        ? t("shell.developmentBuild")
         : build.version
-      : text("版本未知", "Version unknown");
+      : t("shell.versionUnknown");
   const revision =
     build?.revision && build.revision !== "unknown"
       ? ` · ${build.revision.slice(0, 12)}`
@@ -77,12 +77,9 @@ export function ConnectedVersion() {
     <Link
       to="/system?tab=diagnostics"
       className="ag-sider-meta text-xs leading-4 text-fg-tertiary hover:text-fg"
-      title={text(
-        "查看当前连接节点的系统诊断",
-        "View diagnostics for the connected node",
-      )}
+      title={t("shell.viewDiagnosticsForTheConnectedNode")}
     >
-      {text("当前节点", "Connected node")} · {version}
+      {t("shell.connectedNode")} · {version}
       {revision}
     </Link>
   );

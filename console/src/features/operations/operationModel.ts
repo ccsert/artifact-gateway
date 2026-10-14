@@ -1,3 +1,5 @@
+import type { MessageKey } from "../../messages";
+import type { Translate } from "../../lib/preferences";
 import type {
   LifecycleJob,
   ListAuditRetentionJobsResponse,
@@ -22,21 +24,19 @@ export type OperationRow = {
   lastError?: string;
   details?: LifecycleJob["details"];
 };
-
-export type Localize = (chinese: string, english: string) => string;
 export type JobAction = "run" | "retry" | "cancel";
 
 export function operationRowKey(row: OperationRow) {
   return `${row.kind}-${row.id}`;
 }
 
-export const KIND_LABELS: Record<string, [string, string]> = {
-  retention: ["制品保留", "Artifact retention"],
-  promotion: ["制品晋级", "Artifact promotion"],
-  replication: ["仓库复制", "Repository replication"],
-  reclaim: ["对象回收", "Object reclamation"],
-  intelligence: ["情报同步", "Intelligence sync"],
-  "audit-retention": ["审计保留", "Audit retention"],
+export const KIND_LABELS: Record<string, MessageKey> = {
+  retention: "operations.artifactRetention",
+  promotion: "operations.artifactPromotion",
+  replication: "operations.repositoryReplication",
+  reclaim: "operations.objectReclamation",
+  intelligence: "operations.intelligenceSync",
+  "audit-retention": "operations.auditRetention",
 };
 
 /** Active jobs keep the history polling; settled ones do not. */
@@ -46,7 +46,7 @@ export const ACTIVE_JOB_STATES = ["pending", "running", "retrying"];
 export function toOperationRows(
   lifecycleRecords: ListLifecycleJobsResponse,
   auditRetention: ListAuditRetentionJobsResponse,
-  text: Localize,
+  t: Translate,
 ): OperationRow[] {
   const lifecycle: OperationRow[] = lifecycleRecords.map((record) => {
     const job: LifecycleJob = record.job;
@@ -67,7 +67,7 @@ export function toOperationRows(
       progressCurrent: job.progressCurrent,
       progressTotal: job.progressTotal,
       progressMessage: isHistoricalJob
-        ? text("历史任务", "Historical job")
+        ? t("operations.historicalJob")
         : job.progressMessage,
       lastError: job.lastError,
       details: job.details,

@@ -1,3 +1,5 @@
+import type { MessageKey } from "../../messages";
+import type { Translate } from "../../lib/preferences";
 import { type ReactNode } from "react";
 import {
   AppstoreOutlined,
@@ -17,18 +19,15 @@ export interface RepositoryTreeDataNode extends TreeDataNode {
   children?: RepositoryTreeDataNode[];
 }
 
-export function nodeKindLabel(
-  kind: BrowseNode["kind"],
-  text: (zh: string, en: string) => string,
-) {
-  const labels: Record<BrowseNode["kind"], [string, string]> = {
-    directory: ["目录", "Directory"],
-    namespace: ["命名空间", "Namespace"],
-    component: ["组件", "Component"],
-    version: ["版本", "Version"],
-    asset: ["资产", "Asset"],
+export function nodeKindLabel(kind: BrowseNode["kind"], t: Translate) {
+  const labels: Record<BrowseNode["kind"], MessageKey> = {
+    directory: "repository.directory",
+    namespace: "repository.namespace",
+    component: "repository.component",
+    version: "repository.version",
+    asset: "repository.asset",
   };
-  return text(...labels[kind]);
+  return t(labels[kind]);
 }
 
 export function nodeIcon(

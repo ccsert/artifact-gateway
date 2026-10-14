@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import { type ReactNode } from "react";
 import { Switch } from "antd";
 import type { Repository, SecurityPolicy } from "../../client";
@@ -48,66 +49,48 @@ export function draftFromPolicy(policy: SecurityPolicy): SecurityPolicyDraft {
 
 export function quarantineReadScope(
   format: Repository["format"],
-  text: (zh: string, en: string) => string,
+  t: Translate,
 ): { boundary: string; metadata: string } {
   switch (format) {
     case "raw":
       return {
-        boundary: text("路径及校验 sidecar", "Path and checksum sidecars"),
-        metadata: text("从目录列表隐藏", "Hidden from directory listings"),
+        boundary: t("repository.pathAndChecksumSidecars"),
+        metadata: t("repository.hiddenFromDirectoryListings"),
       };
     case "maven":
       return {
-        boundary: text("坐标内的制品资产", "Assets within the coordinate"),
-        metadata: text("从生成元数据隐藏", "Hidden from generated metadata"),
+        boundary: t("repository.assetsWithinTheCoordinate"),
+        metadata: t("repository.hiddenFromGeneratedMetadata"),
       };
     case "oci":
       return {
-        boundary: text(
-          "manifest 与描述符闭包",
-          "Manifest and descriptor closure",
-        ),
-        metadata: text(
-          "从 tag、catalog、referrer 隐藏",
-          "Hidden from tags, catalog, and referrers",
-        ),
+        boundary: t("repository.manifestAndDescriptorClosure"),
+        metadata: t("repository.hiddenFromTagsCatalogAndReferrers"),
       };
     case "npm":
       return {
         boundary: "package@version",
-        metadata: text(
-          "从 packument 与 dist-tag 隐藏",
-          "Hidden from packuments and dist-tags",
-        ),
+        metadata: t("repository.hiddenFromPackumentsAndDistTags"),
       };
     case "pypi":
       return {
         boundary: "project@version",
-        metadata: text("从 Simple 元数据隐藏", "Hidden from Simple metadata"),
+        metadata: t("repository.hiddenFromSimpleMetadata"),
       };
     case "conan":
       return {
-        boundary: text("recipe revision 闭包", "Recipe revision closure"),
-        metadata: text(
-          "从 revision 元数据隐藏",
-          "Hidden from revision metadata",
-        ),
+        boundary: t("repository.recipeRevisionClosure"),
+        metadata: t("repository.hiddenFromRevisionMetadata"),
       };
     case "go":
       return {
-        boundary: text(
-          "module@version 全部表示",
-          "Every module@version representation",
-        ),
-        metadata: text(
-          "从 @v/list 与 @latest 隐藏",
-          "Hidden from @v/list and @latest",
-        ),
+        boundary: t("repository.everyModuleVersionRepresentation"),
+        metadata: t("repository.hiddenFromVListAndLatest"),
       };
     default:
       return {
-        boundary: text("制品身份", "Artifact identity"),
-        metadata: text("从发现元数据隐藏", "Hidden from discovery metadata"),
+        boundary: t("repository.artifactIdentity"),
+        metadata: t("repository.hiddenFromDiscoveryMetadata"),
       };
   }
 }

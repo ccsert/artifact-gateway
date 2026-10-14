@@ -1,8 +1,15 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreferencesProvider } from "../../lib/preferences";
-import { ConfirmDialog, Modal } from "./Modal";
+import { ConfirmDanger, ConfirmDialog, FormModal, Modal } from "./Modal";
 
 afterEach(() => {
   cleanup();
@@ -115,5 +122,106 @@ describe("ConfirmDialog", () => {
 
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument();
+  });
+});
+
+describe("FormModal", () => {
+  it("submits on Enter, locks while saving and shows a failure above the fields", async () => {
+    const user = userEvent.setup();
+    let reject: (error: unknown) => void = () => {};
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<void>((_, nextReject) => {
+          reject = nextReject;
+        }),
+    );
+    const onClose = vi.fn();
+    renderDialog(
+      <FormModal
+        open
+        title="新建密钥"
+        submitLabel="创建"
+        onSubmit={onSubmit}
+        onClose={onClose}
+      >
+        <input aria-label="名称" />
+      </FormModal>,
+    );
+
+    await user.type(await screen.findByLabelText("名称"), "ci{Enter}");
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: /取\s*消/ })).toBeDisabled();
+    clickMask();
+    expect(onClose).not.toHaveBeenCalled();
+
+    await act(async () => reject(new Error("network down")));
+    expect(await screen.findByText("network down")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /取\s*消/ })).toBeEnabled();
+  });
+
+  it("does not submit an incomplete form", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn(async () => {});
+    renderDialog(
+      <FormModal
+        open
+        title="新建密钥"
+        submitLabel="创建"
+        canSubmit={false}
+        onSubmit={onSubmit}
+        onClose={() => {}}
+      >
+        <input aria-label="名称" />
+      </FormModal>,
+    );
+    await user.type(await screen.findByLabelText("名称"), "{Enter}");
+    expect(screen.getByRole("button", { name: /创\s*建/ })).toBeDisabled();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe("ConfirmDanger", () => {
+  it("runs the action on its target, then closes and reports completion", async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn(async () => {});
+    const onClose = vi.fn();
+    const onDone = vi.fn();
+    renderDialog(
+      <ConfirmDanger
+        target={{ name: "ci-deploy" }}
+        title="吊销密钥"
+        message={(key) => `吊销 ${key.name}？`}
+        confirmLabel="吊销"
+        onConfirm={onConfirm}
+        onClose={onClose}
+        onDone={onDone}
+      />,
+    );
+    expect(await screen.findByText("吊销 ci-deploy？")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^吊\s*销$/ }));
+    expect(onConfirm).toHaveBeenCalledWith({ name: "ci-deploy" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the dialog open with the failure when no handler takes it", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderDialog(
+      <ConfirmDanger
+        target={{ name: "ci-deploy" }}
+        title="吊销密钥"
+        message={(key) => `吊销 ${key.name}？`}
+        confirmLabel="吊销"
+        onConfirm={async () => {
+          throw new Error("network down");
+        }}
+        onClose={onClose}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: /^吊\s*销$/ }));
+    expect(await screen.findByText("network down")).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /取\s*消/ })).toBeEnabled();
   });
 });

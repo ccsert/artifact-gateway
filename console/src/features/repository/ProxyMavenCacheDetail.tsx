@@ -43,7 +43,7 @@ export function ProxyMavenCacheDetail({
   repoName: string;
   meta: ArtifactRow;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const parsed = meta.files?.[0]
     ? parseMavenCachePath(meta.files[0].path)
     : null;
@@ -85,16 +85,16 @@ export function ProxyMavenCacheDetail({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-lg border border-line px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-            {text("主文件大小", "Primary size")}
+          <div className="text-xs text-fg-tertiary">
+            {t("repository.primarySize")}
           </div>
           <div className="mt-0.5 text-xs font-semibold text-fg-strong">
             {formatBytes(meta.size)}
           </div>
         </div>
         <div className="rounded-lg border border-line px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-            {text("文件数", "Files")}
+          <div className="text-xs text-fg-tertiary">
+            {t("repository.files")}
           </div>
           <div className="mt-0.5 text-xs font-semibold text-fg-strong">
             {meta.fileCount ?? meta.files?.length ?? 0}
@@ -102,8 +102,8 @@ export function ProxyMavenCacheDetail({
         </div>
         {meta.publisher && (
           <div className="rounded-lg border border-line px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-              {text("成员", "Member")}
+            <div className="text-xs text-fg-tertiary">
+              {t("repository.member")}
             </div>
             <div
               className="mt-0.5 truncate font-mono text-xs text-fg-strong"
@@ -124,19 +124,19 @@ export function ProxyMavenCacheDetail({
               └─ {parsed.version}
             </div>
             <div className="pl-12 text-fg-tertiary">
-              {text("主文件：", "Primary files: ")}
+              {t("repository.primaryFiles")}
               {meta.primaryFiles?.join(", ") || "—"}
             </div>
           </div>
           <details className="group">
             <summary className="cursor-pointer text-sm font-medium text-[var(--ag-content-primary)] hover:text-[var(--ag-link-hover)]">
-              {text("Maven 坐标用法", "Maven coordinate usage")}{" "}
+              {t("repository.mavenCoordinateUsage")}{" "}
               <span className="text-xs text-fg-disabled group-open:hidden">
-                {text("（展开）", "(expand)")}
+                {t("repository.expand")}
               </span>
             </summary>
             <div className="mt-2 grid gap-2 lg:grid-cols-3">
-              {mavenUsage(repoName, parsed.coordinate).map((snippet) => (
+              {mavenUsage(t, repoName, parsed.coordinate).map((snippet) => (
                 <SnippetBlock
                   key={snippet.label}
                   label={snippet.label}
@@ -149,18 +149,17 @@ export function ProxyMavenCacheDetail({
       )}
 
       <div className="rounded-lg border border-line bg-surface-translucent">
-        <div className="border-b border-line px-3 py-2 text-xs uppercase tracking-wider text-fg-tertiary">
-          {text("文件明细", "File details")}
+        <div className="border-b border-line px-3 py-2 text-xs text-fg-tertiary">
+          {t("repository.fileDetails")}
         </div>
         <div className="divide-y divide-line">
           {primary.map(renderFile)}
           {sidecars.length > 0 && (
             <details className="group">
               <summary className="cursor-pointer px-3 py-2 text-xs text-[var(--ag-content-tertiary)] hover:text-[var(--ag-content-secondary)]">
-                {text(
-                  `校验 / 签名文件（${sidecars.length}）`,
-                  `Checksums / signatures (${sidecars.length})`,
-                )}
+                {t("repository.checksumsSignatures", {
+                  length: sidecars.length,
+                })}
               </summary>
               <div className="divide-y divide-line border-t border-line">
                 {sidecars.map(renderFile)}

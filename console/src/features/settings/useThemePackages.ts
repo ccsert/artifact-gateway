@@ -35,7 +35,7 @@ export function useThemePackages({
   setDraft: (update: (current: SiteSettingsDraft) => SiteSettingsDraft) => void;
 }) {
   const { message } = App.useApp();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [themePackageError, setThemePackageError] = useState<unknown>(null);
   const [pendingThemePackage, setPendingThemePackage] =
     useState<PendingThemePackage | null>(null);
@@ -48,12 +48,7 @@ export function useThemePackages({
     setPendingThemePackage(null);
     if (file.size <= 0 || file.size > maxThemePackageBytes) {
       setThemePackageError(
-        new Error(
-          text(
-            "主题包必须是 1 字节到 256 KiB 的 JSON 文件",
-            "The theme package must be a JSON file between 1 byte and 256 KiB",
-          ),
-        ),
+        new Error(t("settings.theThemePackageMustBeAJSONFile")),
       );
       return;
     }
@@ -66,12 +61,7 @@ export function useThemePackages({
           await readAsText(file),
         ) as ConsoleThemePackage;
       } catch {
-        throw new Error(
-          text(
-            "主题包不是有效的 JSON 文件",
-            "The theme package is not valid JSON",
-          ),
-        );
+        throw new Error(t("settings.theThemePackageIsNotValidJSON"));
       }
       const { data, error } = await validateConsoleThemePackage({
         body: themePackage,
@@ -141,18 +131,9 @@ export function useThemePackages({
       void message.success(
         validation.status === "available"
           ? stageForEnable
-            ? text(
-                "主题已安装并加入启用列表；请保存并应用后对用户生效",
-                "Theme installed and added to the enabled set; save and apply to make it available to users",
-              )
-            : text(
-                "主题已安装；启用主题已达到 32 个上限，请先停用其他主题",
-                "Theme installed; the 32-theme enabled limit has been reached, so disable another theme first",
-              )
-          : text(
-              "主题包已替换；已启用主题将在重新载入设置时使用新版本",
-              "Theme package replaced; enabled themes will use the new version when settings reload",
-            ),
+            ? t("settings.themeInstalledAndAddedToTheEnabledSet")
+            : t("settings.themeInstalledThe32ThemeEnabledLimitHas")
+          : t("settings.themePackageReplacedEnabledThemesWillUseThe"),
       );
     } catch (error) {
       setThemePackageError(error);
@@ -190,7 +171,7 @@ export function useThemePackages({
           (themeID) => themeID !== theme.id,
         ),
       }));
-      void message.success(text("已删除上传主题", "Uploaded theme deleted"));
+      void message.success(t("settings.uploadedThemeDeleted"));
     } catch (error) {
       setThemePackageError(error);
     } finally {

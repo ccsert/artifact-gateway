@@ -22,7 +22,7 @@ export function RuntimeLogRow({
   copied: boolean;
   onCopy: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <div className="ag-runtime-log-row" data-sequence={entry.sequence}>
       <span className="ag-runtime-log-time">
@@ -51,7 +51,7 @@ export function RuntimeLogRow({
         icon={<CopyOutlined />}
         onClick={onCopy}
       >
-        {copied ? text("已复制", "Copied") : text("复制", "Copy")}
+        {copied ? t("operations.copied") : t("operations.copy")}
       </Button>
       <div className="ag-runtime-log-detail">
         {logText(

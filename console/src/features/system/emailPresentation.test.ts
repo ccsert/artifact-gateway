@@ -1,3 +1,4 @@
+import { createTranslator } from "../../messages/translate";
 import { describe, expect, it } from "vitest";
 import { quotaLabel } from "./quotaAlertPresentation";
 import {
@@ -47,7 +48,7 @@ describe("email input and isolated preview", () => {
 it.each(["constructor", "__proto__", "toString", "unknown-private-raw"])(
   "uses a fixed fallback for unknown server codes: %s",
   (code) => {
-    const text = (_zh: string, en: string) => en;
+    const text = createTranslator("en-US");
     expect(
       safeEmailError({ code, message: "private-raw" }, text, "test"),
     ).toContain("request failed");
@@ -57,7 +58,7 @@ it.each(["constructor", "__proto__", "toString", "unknown-private-raw"])(
 
 it("asks test conflicts to refresh and reconfirm without claiming an address was cleared", () => {
   for (const language of ["zh", "en"]) {
-    const text = (zh: string, en: string) => (language === "zh" ? zh : en);
+    const text = createTranslator(language === "zh" ? "zh-CN" : "en-US");
     const message = safeEmailError({ code: "version_conflict" }, text, "test");
     expect(message).not.toMatch(
       /敏感地址已清除|address was cleared|重新编辑|edit again/,
@@ -85,7 +86,7 @@ it.each(["read", "save", "preview"] as const)(
       "invalid_request",
     ]) {
       for (const language of ["zh", "en"]) {
-        const text = (zh: string, en: string) => (language === "zh" ? zh : en);
+        const text = createTranslator(language === "zh" ? "zh-CN" : "en-US");
         const message = safeEmailError(
           { code, message: "private-response-marker" },
           text,

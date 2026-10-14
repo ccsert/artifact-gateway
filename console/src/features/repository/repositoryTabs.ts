@@ -1,3 +1,4 @@
+import type { MessageKey } from "../../messages";
 import type { Repository } from "../../client";
 import {
   supportsRepositoryFeature,
@@ -37,21 +38,19 @@ export type RepositoryTabGroup =
 
 export const REPOSITORY_TAB_GROUPS: {
   key: RepositoryTabGroup;
-  label: string;
-  labelEn: string;
+  label: MessageKey;
 }[] = [
-  { key: "artifacts", label: "制品", labelEn: "Artifacts" },
-  { key: "governance", label: "治理与安全", labelEn: "Governance" },
-  { key: "distribution", label: "分发", labelEn: "Distribution" },
-  { key: "settings", label: "设置", labelEn: "Settings" },
+  { key: "artifacts", label: "repository.tabArtifacts" },
+  { key: "governance", label: "repository.tabGovernance" },
+  { key: "distribution", label: "repository.tabDistribution" },
+  { key: "settings", label: "repository.tabSettings" },
 ];
 
 export type RepositoryTabDefinition = {
   key: Tab;
   /** Tabs are listed in group order; the first available one opens the group. */
   group: RepositoryTabGroup;
-  label: string;
-  labelEn: string;
+  label: MessageKey;
   authority: RepositoryTabAuthority;
   feature?: RepositoryFormatFeature;
 };
@@ -60,98 +59,85 @@ export const TABS: RepositoryTabDefinition[] = [
   {
     key: "artifacts",
     group: "artifacts",
-    label: "浏览",
-    labelEn: "Browse",
+    label: "repository.tabBrowse",
     authority: "read",
   },
   {
     key: "usage",
     group: "artifacts",
-    label: "使用统计",
-    labelEn: "Usage",
+    label: "repository.tabUsage",
     authority: "read",
   },
   {
     key: "publish",
     group: "artifacts",
-    label: "发布",
-    labelEn: "Publish",
+    label: "repository.tabPublish",
     authority: "write",
     feature: "publish",
   },
   {
     key: "grants",
     group: "governance",
-    label: "访问授权",
-    labelEn: "Access grants",
+    label: "repository.tabAccessGrants",
     authority: "administer",
   },
   {
     key: "retention",
     group: "governance",
-    label: "保留策略",
-    labelEn: "Retention",
+    label: "repository.tabRetention",
     authority: "administer",
     feature: "retention",
   },
   {
     key: "scanning",
     group: "governance",
-    label: "制品扫描",
-    labelEn: "Scanning",
+    label: "repository.tabScanning",
     authority: "intelligence",
   },
   {
     key: "security",
     group: "governance",
-    label: "安全准入",
-    labelEn: "Security admission",
+    label: "repository.tabSecurityAdmission",
     authority: "administer",
     feature: "security",
   },
   {
     key: "tombstones",
     group: "governance",
-    label: "墓碑",
-    labelEn: "Tombstones",
+    label: "repository.tabTombstones",
     authority: "administer",
     feature: "tombstones",
   },
   {
     key: "distribute",
     group: "distribution",
-    label: "晋升 / 复制",
-    labelEn: "Promote / replicate",
+    label: "repository.tabPromoteReplicate",
     authority: "administer",
     feature: "distribute",
   },
   {
     key: "apt-snapshots",
     group: "distribution",
-    label: "签名快照",
-    labelEn: "Signed snapshots",
+    label: "repository.tabSignedSnapshots",
     authority: "administer",
     feature: "apt-snapshots",
   },
   {
     key: "settings",
     group: "settings",
-    label: "基本设置",
-    labelEn: "General",
+    label: "repository.tabGeneral",
     authority: "administer",
   },
   {
     key: "capacity",
     group: "settings",
-    label: "容量",
-    labelEn: "Capacity",
+    label: "repository.tabCapacity",
     authority: "administer",
   },
   {
     key: "jobs",
     group: "settings",
-    label: "生命周期任务",
-    labelEn: "Lifecycle jobs",
+    label: "repository.tabLifecycleJobs",
     authority: "administer",
     feature: "jobs",
   },

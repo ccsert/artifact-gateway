@@ -47,7 +47,7 @@ export function RuntimeLogFilters({
   onRefresh: () => void;
   setQuery: Dispatch<SetStateAction<LogQuery>>;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const lastAuditLink = useRef(`${auditRequestId}\n${auditTraceId}`);
   const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [timeRange, setTimeRange] = useState<RuntimeLogTimeRange>(3600);
@@ -112,49 +112,49 @@ export function RuntimeLogFilters({
     <div
       className="ag-runtime-log-filters"
       role="search"
-      aria-label={text("日志筛选", "Log filters")}
+      aria-label={t("operations.logFilters")}
     >
       <div className="ag-runtime-log-filter-main">
         <FilterField
-          label={text("关键词", "Keyword")}
+          label={t("operations.keyword")}
           className="ag-runtime-log-keyword"
         >
           <Input
             prefix={<SearchOutlined />}
             value={keyword}
             allowClear
-            placeholder={text("搜索日志内容", "Search log content")}
+            placeholder={t("operations.searchLogContent")}
             onChange={(event) => setKeyword(event.target.value)}
             onPressEnter={search}
           />
         </FilterField>
-        <FilterField label={text("时间范围", "Time range")}>
+        <FilterField label={t("operations.timeRange")}>
           <Select
             virtual={false}
             className="w-full"
-            aria-label={text("时间范围", "Time range")}
+            aria-label={t("operations.timeRange")}
             value={timeRange}
             onChange={(value) => {
               setTimeRange(value);
               setWindowError(null);
             }}
             options={[
-              { value: 900, label: text("最近 15 分钟", "Last 15 minutes") },
-              { value: 3600, label: text("最近 1 小时", "Last hour") },
-              { value: 86400, label: text("最近 24 小时", "Last 24 hours") },
-              { value: "custom", label: text("自定义", "Custom") },
+              { value: 900, label: t("operations.last15Minutes") },
+              { value: 3600, label: t("operations.lastHour") },
+              { value: 86400, label: t("operations.last24Hours") },
+              { value: "custom", label: t("operations.custom") },
             ]}
           />
         </FilterField>
-        <FilterField label={text("级别", "Level")}>
+        <FilterField label={t("operations.level")}>
           <Select
             virtual={false}
             className="w-full"
-            aria-label={text("级别", "Level")}
+            aria-label={t("operations.level")}
             value={level}
             onChange={setLevel}
             options={[
-              { value: "", label: text("全部级别", "All levels") },
+              { value: "", label: t("operations.allLevels") },
               ...["ERROR", "WARN", "INFO", "DEBUG"].map((value) => ({
                 value,
                 label: value,
@@ -165,9 +165,7 @@ export function RuntimeLogFilters({
       </div>
       {timeRange === "custom" ? (
         <div className="ag-runtime-log-custom-range">
-          <FilterField
-            label={text("起止时间（本地时区）", "Start and end (local time)")}
-          >
+          <FilterField label={t("operations.startAndEndLocalTime")}>
             <DatePicker.RangePicker
               className="w-full"
               showTime
@@ -175,10 +173,7 @@ export function RuntimeLogFilters({
               classNames={{ popup: { root: "ag-runtime-log-calendar" } }}
               value={range}
               status={windowError ? "error" : undefined}
-              placeholder={[
-                text("开始日期", "Start date"),
-                text("结束日期", "End date"),
-              ]}
+              placeholder={[t("operations.startDate"), t("operations.endDate")]}
               onChange={(value) => {
                 setRange(value as [Dayjs, Dayjs] | null);
                 setWindowError(null);
@@ -187,23 +182,17 @@ export function RuntimeLogFilters({
             />
           </FilterField>
           <span className="ag-runtime-log-hint">
-            {text(
-              "最多 24 小时，结束时间不能超过当前时间 5 分钟。",
-              "At most 24 hours; end no later than 5 minutes from now.",
-            )}
+            {t("operations.atMost24HoursEndNoLaterThan")}
           </span>
         </div>
       ) : null}
       <div className="ag-runtime-log-filter-secondary">
-        <FilterField label={text("组件", "Component")}>
+        <FilterField label={t("operations.component")}>
           <AutoComplete
             value={component}
             onChange={setComponent}
             options={components.map((value) => ({ value }))}
-            placeholder={text(
-              "全部组件，可输入精确名称",
-              "All components; enter exact name",
-            )}
+            placeholder={t("operations.allComponentsEnterExactName")}
             className="w-full"
           />
         </FilterField>
@@ -211,7 +200,7 @@ export function RuntimeLogFilters({
           <Input
             value={requestId}
             allowClear
-            placeholder={text("按请求定位", "Find a request")}
+            placeholder={t("operations.findARequest")}
             onChange={(event) => setRequestId(event.target.value)}
             onPressEnter={search}
           />
@@ -223,7 +212,7 @@ export function RuntimeLogFilters({
           aria-controls="runtime-log-more-filters"
           onClick={() => setMoreFilters(!moreFilters)}
         >
-          {text("更多筛选", "More filters")}
+          {t("operations.moreFilters")}
           {instanceId || traceId
             ? " · " + (Number(Boolean(instanceId)) + Number(Boolean(traceId)))
             : ""}
@@ -235,11 +224,11 @@ export function RuntimeLogFilters({
           id="runtime-log-more-filters"
           className="ag-runtime-log-filter-more"
         >
-          <FilterField label={text("节点", "Instance")}>
+          <FilterField label={t("operations.instance")}>
             <Input
               value={instanceId}
               allowClear
-              placeholder={text("当前进程", "Current process")}
+              placeholder={t("operations.currentProcess")}
               onChange={(event) => setInstanceId(event.target.value)}
               onPressEnter={search}
             />
@@ -248,7 +237,7 @@ export function RuntimeLogFilters({
             <Input
               value={traceId}
               allowClear
-              placeholder={text("按链路关联", "Correlate a trace")}
+              placeholder={t("operations.correlateATrace")}
               onChange={(event) => setTraceId(event.target.value)}
               onPressEnter={search}
             />
@@ -259,48 +248,36 @@ export function RuntimeLogFilters({
         <Alert
           type="warning"
           showIcon
-          title={text("请调整时间范围", "Adjust the time range")}
-          description={text(
-            {
-              required: "请选择完整的开始和结束时间。",
-              order: "开始时间不能晚于结束时间。",
-              duration: "时间范围不能超过 24 小时。",
-              future: "结束时间不能超过当前时间 5 分钟。",
-            }[windowError],
-            {
-              required: "Choose both start and end times.",
-              order: "Start must not be after end.",
-              duration: "Time range cannot exceed 24 hours.",
-              future: "End cannot be more than 5 minutes from now.",
-            }[windowError],
+          title={t("operations.adjustTheTimeRange")}
+          description={t(
+            (
+              {
+                required: "operations.chooseBothStartAndEndTimes",
+                order: "operations.startMustNotBeAfterEnd",
+                duration: "operations.timeRangeCannotExceed24Hours",
+                future: "operations.endCannotBeMoreThan5MinutesFromNow",
+              } as const
+            )[windowError],
           )}
         />
       ) : null}
       <div className="ag-runtime-log-filter-actions">
         <span className="ag-runtime-log-hint">
           {timeRange === "custom"
-            ? text(
-                "固定时间快照；选择最近范围可跟随新日志。",
-                "Fixed snapshot; choose a recent range to follow new logs.",
-              )
-            : text(
-                "最近范围随每次查询和跟随自动更新。",
-                "Recent ranges update on every query and follow read.",
-              )}
+            ? t("operations.fixedSnapshotChooseARecentRangeToFollow")
+            : t("operations.recentRangesUpdateOnEveryQueryAndFollow")}
         </span>
         <Space wrap>
-          <Button onClick={clearFilters}>
-            {text("清除筛选", "Clear filters")}
-          </Button>
+          <Button onClick={clearFilters}>{t("operations.clearFilters")}</Button>
           <Button
             icon={<ReloadOutlined />}
             loading={loading}
             onClick={onRefresh}
           >
-            {text("刷新快照", "Refresh snapshot")}
+            {t("operations.refreshSnapshot")}
           </Button>
           <Button icon={<SearchOutlined />} type="primary" onClick={search}>
-            {text("查询", "Search")}
+            {t("operations.search")}
           </Button>
         </Space>
       </div>

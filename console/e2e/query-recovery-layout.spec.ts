@@ -383,8 +383,13 @@ for (const width of [1440, 390]) {
     await page.goto("/repositories");
     await page
       .getByRole("button", {
-        name: `${en ? "Delete" : "删除"} ${repository.name}`,
+        name: en
+          ? `More actions for ${repository.name}`
+          : `${repository.name} 的更多操作`,
       })
+      .click();
+    await page
+      .getByRole("menuitem", { name: en ? "Delete repository" : "删除仓库" })
       .click();
     const dialog = page.getByRole("dialog");
     await waitForModalOpen(dialog);

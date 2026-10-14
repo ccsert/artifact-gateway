@@ -4,22 +4,30 @@ import { Button, Input, Select } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { revokeApiKey } from "../../client";
 import type { ApiKey, CreatedApiKey } from "../../client";
-import { PageHeader, Card } from "../../components/ui/Layout";
-import { Loading, ErrorBanner, EmptyState } from "../../components/ui/Feedback";
+import { EmptyState } from "../../components/ui/Feedback";
 import { StateBadge, Badge } from "../../components/ui/Badge";
-import { ConfirmDialog } from "../../components/ui/Modal";
+import { FilterCard, ListPage, ListStates } from "../../components/ui/ListPage";
+import { ConfirmDanger } from "../../components/ui/Modal";
 import { OneTimeTokenDialog } from "../../components/ui/OneTimeTokenDialog";
+import { useUrlFilters } from "../../components/ui/useUrlFilters";
 import { formatDate } from "../../lib/format";
+import { unwrap } from "../../lib/query/client";
 import {
   ConsoleTable,
   CopyableValue,
-  FilterBar,
   FilterField,
   MetricStrip,
 } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 import { ApiKeyCreateDialog } from "./ApiKeyCreateDialog";
 import { useApiKeys, useInvalidateApiKeys } from "./apiKeyQueries";
+
+type KeyState = "active" | "expired" | "revoked";
+
+const KEY_FILTERS = { q: "", state: "active" as "all" | KeyState };
+const KEY_FILTER_VALUES = {
+  state: ["all", "active", "expired", "revoked"] as const,
+};
 
 export function ApiKeysPage() {
   const { locale, t } = usePreferences();
@@ -30,40 +38,17 @@ export function ApiKeysPage() {
   const error = mutationError ?? keysQuery.error ?? null;
   const [reveal, setReveal] = useState<CreatedApiKey | null>(null);
   const [toRevoke, setToRevoke] = useState<ApiKey | null>(null);
-  const [revoking, setRevoking] = useState(false);
-  const [filter, setFilter] = useState("");
-  const [stateFilter, setStateFilter] = useState<
-    "all" | "active" | "expired" | "revoked"
-  >("active");
+  const filters = useUrlFilters(KEY_FILTERS, KEY_FILTER_VALUES);
+  const { q: filter, state: stateFilter } = filters.values;
 
   const load = () => {
     setError(null);
     void invalidateKeys();
   };
 
-  const confirmRevoke = async () => {
-    if (!toRevoke) return;
-    setRevoking(true);
-    try {
-      const { error: err } = await revokeApiKey({
-        path: { apiKeyId: toRevoke.id },
-      });
-      if (!err) {
-        setToRevoke(null);
-        load();
-      } else {
-        setError(err);
-      }
-    } catch (nextError) {
-      setError(nextError);
-    } finally {
-      setRevoking(false);
-    }
-  };
-
   const isExpired = (key: ApiKey) =>
     !!key.expiresAt && new Date(key.expiresAt).getTime() <= Date.now();
-  const keyState = (key: ApiKey) =>
+  const keyState = (key: ApiKey): KeyState =>
     key.revokedAt ? "revoked" : isExpired(key) ? "expired" : "active";
   const visibleKeys = (keys ?? []).filter(
     (key) =>
@@ -174,68 +159,50 @@ export function ApiKeysPage() {
   ];
 
   return (
-    <div className="ag-page-stack">
-      <PageHeader
-        title={t("identity.apiKeys")}
-        description={t(
-          "identity.manageMemberAndAdminCredentialsForManagementApis",
-        )}
-        actions={<ApiKeyCreateDialog onCreated={setReveal} />}
-      />
-      {error !== null && !keys ? (
-        <ErrorBanner error={error} onRetry={load} />
-      ) : !keys ? (
-        <Loading />
-      ) : keys.length === 0 ? (
-        <Card>
-          <EmptyState
-            title={t("identity.noApiKeys")}
-            hint={t("identity.createAKeyForScriptsAndCiToCall")}
-          />
-        </Card>
-      ) : (
-        <>
-          {error !== null ? <ErrorBanner error={error} onRetry={load} /> : null}
-          <MetricStrip
-            items={[
-              {
-                label: t("identity.activeKeys"),
-                value: activeKeys.length,
-                hint: t("identity.canCallManagementApis"),
-                tone: "success",
-              },
-              {
-                label: t("identity.adminKeys"),
-                value: adminKeys.length,
-                hint: adminKeys.length
-                  ? t("identity.rotateAndReviewRegularly")
-                  : t("identity.noElevatedKeys"),
-                tone: adminKeys.length ? "danger" : "default",
-              },
-              {
-                label: t("identity.revokedExpired"),
-                value: keys.length - activeKeys.length,
-                hint: t("identity.retainedForAuditHistory"),
-              },
-            ]}
-          />
-          <Card>
-            <FilterBar
-              className="border-x-0 border-t-0 rounded-none"
-              actions={
-                filter || stateFilter !== "active" ? (
-                  <Button
-                    type="text"
-                    onClick={() => {
-                      setFilter("");
-                      setStateFilter("active");
-                    }}
-                  >
-                    {t("identity.clearFilters")}
-                  </Button>
-                ) : undefined
-              }
-            >
+    <ListPage
+      title={t("identity.apiKeys")}
+      description={t(
+        "identity.manageMemberAndAdminCredentialsForManagementApis",
+      )}
+      actions={<ApiKeyCreateDialog onCreated={setReveal} />}
+    >
+      <ListStates
+        rows={keys}
+        error={error}
+        onRetry={load}
+        empty={{
+          title: t("identity.noApiKeys"),
+          hint: t("identity.createAKeyForScriptsAndCiToCall"),
+        }}
+      >
+        <MetricStrip
+          items={[
+            {
+              label: t("identity.activeKeys"),
+              value: activeKeys.length,
+              hint: t("identity.canCallManagementApis"),
+              tone: "success",
+            },
+            {
+              label: t("identity.adminKeys"),
+              value: adminKeys.length,
+              hint: adminKeys.length
+                ? t("identity.rotateAndReviewRegularly")
+                : t("identity.noElevatedKeys"),
+              tone: adminKeys.length ? "danger" : "default",
+            },
+            {
+              label: t("identity.revokedExpired"),
+              value: (keys?.length ?? 0) - activeKeys.length,
+              hint: t("identity.retainedForAuditHistory"),
+            },
+          ]}
+        />
+        <FilterCard
+          active={filters.active}
+          onClear={filters.reset}
+          filters={
+            <>
               <FilterField
                 label={t("identity.search")}
                 className="min-w-[280px]"
@@ -245,7 +212,7 @@ export function ApiKeysPage() {
                   prefix={<SearchOutlined />}
                   placeholder={t("identity.searchNamesOrRoles")}
                   value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
+                  onChange={(e) => filters.set({ q: e.target.value })}
                 />
               </FilterField>
               <FilterField
@@ -255,7 +222,7 @@ export function ApiKeysPage() {
                 <Select<typeof stateFilter>
                   className="w-full"
                   value={stateFilter}
-                  onChange={setStateFilter}
+                  onChange={(state) => filters.set({ state })}
                   options={[
                     { value: "all", label: t("identity.allStatuses") },
                     { value: "active", label: t("identity.active") },
@@ -264,24 +231,25 @@ export function ApiKeysPage() {
                   ]}
                 />
               </FilterField>
-            </FilterBar>
-            {visibleKeys.length === 0 ? (
-              <EmptyState
-                title={t("identity.noMatchingKeys")}
-                hint={t("identity.adjustTheFiltersAndTryAgain")}
-              />
-            ) : (
-              <ConsoleTable<ApiKey>
-                rowKey="id"
-                dataSource={visibleKeys}
-                columns={columns}
-                pagination={false}
-                scroll={{ x: 1250 }}
-              />
-            )}
-          </Card>
-        </>
-      )}
+            </>
+          }
+        >
+          {visibleKeys.length === 0 ? (
+            <EmptyState
+              title={t("identity.noMatchingKeys")}
+              hint={t("identity.adjustTheFiltersAndTryAgain")}
+            />
+          ) : (
+            <ConsoleTable<ApiKey>
+              rowKey="id"
+              dataSource={visibleKeys}
+              columns={columns}
+              pagination={false}
+              scroll={{ x: 1250 }}
+            />
+          )}
+        </FilterCard>
+      </ListStates>
       {reveal && (
         <OneTimeTokenDialog
           title={t("identity.apiKeyCreatedSaveTheTokenNow")}
@@ -297,22 +265,24 @@ export function ApiKeysPage() {
           }}
         />
       )}
-      <ConfirmDialog
-        open={!!toRevoke}
+      <ConfirmDanger
+        target={toRevoke}
         title={t("identity.revokeApiKey")}
-        message={
+        message={(key) => (
           <>
             {t("identity.revokeKey2")}{" "}
-            <span className="font-mono text-fg-strong">{toRevoke?.name}</span>{" "}
+            <span className="font-mono text-fg-strong">{key.name}</span>{" "}
             {t("identity.itsTokenBecomesInvalidImmediately")}
           </>
-        }
+        )}
         confirmLabel={t("identity.revoke")}
-        danger
-        busy={revoking}
-        onConfirm={confirmRevoke}
+        onConfirm={(key) =>
+          unwrap(revokeApiKey({ path: { apiKeyId: key.id } })).then(() => {})
+        }
         onClose={() => setToRevoke(null)}
+        onDone={load}
+        onError={setError}
       />
-    </div>
+    </ListPage>
   );
 }

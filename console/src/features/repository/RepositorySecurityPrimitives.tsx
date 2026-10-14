@@ -18,7 +18,7 @@ export function PolicyCard({
     <Card className="min-w-0">
       <div className="flex flex-wrap items-start justify-between gap-5 border-b border-line px-6 py-5">
         <div className="min-w-0 max-w-3xl">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-fg-disabled">
+          <div className="text-xs font-semibold text-fg-disabled">
             {eyebrow}
           </div>
           <h3 className="mt-1.5 text-base font-semibold text-fg-strong">

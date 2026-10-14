@@ -42,7 +42,7 @@ export function SubscriptionEditorDialog({
   subscription: WebhookSubscription | null;
   onClose: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const invalidate = useInvalidateWebhooks();
   const [form, setForm] = useState<SubscriptionForm>(() => formFor(editing));
   const [saving, setSaving] = useState(false);
@@ -98,49 +98,48 @@ export function SubscriptionEditorDialog({
       open={open}
       title={
         editing
-          ? text("编辑 Webhook 订阅", "Edit webhook subscription")
-          : text("新建 Webhook 订阅", "New webhook subscription")
+          ? t("operations.editWebhookSubscription")
+          : t("operations.newWebhookSubscription")
       }
       onClose={onClose}
       busy={saving}
       footer={
         <Space>
           <Button
-            aria-label={text("取消", "Cancel")}
+            aria-label={t("operations.cancel")}
             onClick={onClose}
             disabled={saving}
           >
-            {text("取消", "Cancel")}
+            {t("operations.cancel")}
           </Button>
           <Button
             type="primary"
-            aria-label={editing ? text("保存", "Save") : text("创建", "Create")}
+            aria-label={editing ? t("operations.save") : t("operations.create")}
             disabled={!valid}
             loading={saving}
             onClick={() => void save()}
           >
-            {editing ? text("保存", "Save") : text("创建", "Create")}
+            {editing ? t("operations.save") : t("operations.create")}
           </Button>
         </Space>
       }
     >
       <div className="space-y-4">
         {saveError ? <ErrorBanner error={saveError} /> : null}
-        <Field label={text("订阅名称", "Subscription name")}>
+        <Field label={t("operations.subscriptionName")}>
           <Input
             value={form.name}
             maxLength={100}
-            placeholder={text("例如：安全自动化", "e.g. Security automation")}
+            placeholder={t("operations.eGSecurityAutomation")}
             onChange={(event) =>
               setForm((current) => ({ ...current, name: event.target.value }))
             }
           />
         </Field>
         <Field
-          label={text("HTTPS 接收地址", "HTTPS endpoint")}
-          hint={text(
-            "生产投递会拒绝私网、环回和重定向目标。",
-            "Production delivery rejects private, loopback, and redirect targets.",
+          label={t("operations.hTTPSEndpoint")}
+          hint={t(
+            "operations.productionDeliveryRejectsPrivateLoopbackAndRedirectTargets",
           )}
         >
           <Input
@@ -156,10 +155,9 @@ export function SubscriptionEditorDialog({
         </Field>
         <Field
           group
-          label={text("订阅事件", "Events")}
-          hint={text(
-            "支持制品隔离、解除隔离，以及 Cargo 晋级和复制的最终结果。",
-            "Supports artifact quarantine and release, plus final Cargo promotion and replication outcomes.",
+          label={t("operations.events")}
+          hint={t(
+            "operations.supportsArtifactQuarantineAndReleasePlusFinalCargo",
           )}
         >
           <Select<WebhookEventType[]>
@@ -195,23 +193,17 @@ export function SubscriptionEditorDialog({
           />
         </Field>
         <Field
-          label={text("HMAC 签名密钥", "HMAC signing secret")}
+          label={t("operations.hMACSigningSecret")}
           hint={
             editing
-              ? text(
-                  "留空则保留现有密钥；填写会立即轮换。",
-                  "Leave blank to keep the current secret; entering one rotates it immediately.",
-                )
-              : text(
-                  "至少 32 个字符；保存后不会再次显示。",
-                  "At least 32 characters; it is never shown again after saving.",
-                )
+              ? t("operations.leaveBlankToKeepTheCurrentSecretEntering")
+              : t("operations.atLeast32CharactersItIsNeverShown")
           }
         >
           <Input.Password
             value={form.secret}
             autoComplete="new-password"
-            placeholder={text("至少 32 个字符", "At least 32 characters")}
+            placeholder={t("operations.atLeast32Characters")}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
@@ -220,7 +212,7 @@ export function SubscriptionEditorDialog({
             }
           />
         </Field>
-        <Field label={text("状态", "Status")}>
+        <Field label={t("operations.status")}>
           <div className="flex h-8 items-center gap-2">
             <Switch
               value={form.enabled}
@@ -230,8 +222,8 @@ export function SubscriptionEditorDialog({
             />
             <span className="text-xs text-fg-secondary">
               {form.enabled
-                ? text("接收新事件", "Receive new events")
-                : text("暂停生成新投递", "Pause new deliveries")}
+                ? t("operations.receiveNewEvents")
+                : t("operations.pauseNewDeliveries")}
             </span>
           </div>
         </Field>

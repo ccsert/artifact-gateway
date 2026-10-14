@@ -27,10 +27,11 @@ import {
 } from "./siteSettingsModel";
 import { ThemePackageReviewDialog } from "./ThemePackageReviewDialog";
 import { useThemePackages } from "./useThemePackages";
+import "./settings.css";
 
 export function SiteSettingsPage() {
   const { message } = App.useApp();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const { applySettings } = useSiteSettings();
   const settingsQuery = useSiteSettingsQuery({ fresh: true });
   const settings = settingsQuery.data ?? null;
@@ -92,7 +93,7 @@ export function SiteSettingsPage() {
       }
       setSettings(data);
       setEdited(null);
-      void message.success(text("站点设置已生效", "Site settings are live"));
+      void message.success(t("settings.siteSettingsAreLive"));
     } catch (error) {
       setMutationError(error);
     } finally {
@@ -102,28 +103,18 @@ export function SiteSettingsPage() {
 
   const selectLogo = async (file: File) => {
     if (!supportedLogoTypes.has(file.type)) {
-      void message.error(
-        text(
-          "仅支持 PNG、JPEG 或 WebP 图片",
-          "Only PNG, JPEG, or WebP images are supported",
-        ),
-      );
+      void message.error(t("settings.onlyPNGJPEGOrWebPImagesAreSupported"));
       return;
     }
     if (file.size > maxLogoBytes) {
-      void message.error(
-        text(
-          "Logo 文件不能超过 192 KiB",
-          "The logo must be no larger than 192 KiB",
-        ),
-      );
+      void message.error(t("settings.theLogoMustBeNoLargerThan192"));
       return;
     }
     try {
       const logoUrl = await readAsDataURL(file);
       setDraft((current) => ({ ...current, logoUrl }));
     } catch {
-      void message.error(text("读取 Logo 失败", "Could not read the logo"));
+      void message.error(t("settings.couldNotReadTheLogo"));
     }
   };
 
@@ -149,7 +140,7 @@ export function SiteSettingsPage() {
   if (!settings) {
     return (
       <div className="ag-page-stack">
-        <PageHeader title={text("站点设置", "Site settings")} />
+        <PageHeader title={t("settings.siteSettings")} />
         <ErrorBanner error={initialError} onRetry={load} />
       </div>
     );
@@ -158,11 +149,8 @@ export function SiteSettingsPage() {
   return (
     <div className="ag-page-stack">
       <PageHeader
-        title={text("站点设置", "Site settings")}
-        description={text(
-          "统一管理登录页、公开目录和控制台导航中的站点名称与品牌标识。",
-          "Manage the site name and brand identity used by sign-in, public browse, and Console navigation.",
-        )}
+        title={t("settings.siteSettings")}
+        description={t("settings.manageTheSiteNameAndBrandIdentityUsed")}
       />
       {initialError !== null && (
         <ErrorBanner error={initialError} onRetry={load} />
@@ -178,18 +166,13 @@ export function SiteSettingsPage() {
         >
           <div className="ag-site-settings-section-heading">
             <div>
-              <h2>{text("品牌信息", "Brand identity")}</h2>
-              <p>
-                {text(
-                  "保存后将立即同步到当前会话，并供未登录页面公开读取。",
-                  "Changes apply to this session immediately and are publicly readable before sign-in.",
-                )}
-              </p>
+              <h2>{t("settings.brandIdentity")}</h2>
+              <p>{t("settings.changesApplyToThisSessionImmediatelyAndAre")}</p>
             </div>
           </div>
 
           <div className="ag-site-settings-field">
-            <label htmlFor="site-name">{text("站点名称", "Site name")}</label>
+            <label htmlFor="site-name">{t("settings.siteName")}</label>
             <Input
               id="site-name"
               value={draft.siteName}
@@ -204,17 +187,12 @@ export function SiteSettingsPage() {
               }
             />
             <small>
-              {text(
-                "显示在导航、登录页、公开目录和浏览器标题中。",
-                "Shown in navigation, sign-in, public browse, and the browser title.",
-              )}
+              {t("settings.shownInNavigationSignInPublicBrowseAnd")}
             </small>
           </div>
 
           <div className="ag-site-settings-field">
-            <label htmlFor="site-brand-mark">
-              {text("品牌标识", "Brand mark")}
-            </label>
+            <label htmlFor="site-brand-mark">{t("settings.brandMark")}</label>
             <Input
               id="site-brand-mark"
               value={draft.brandMark}
@@ -228,24 +206,17 @@ export function SiteSettingsPage() {
                 }))
               }
             />
-            <small>
-              {text(
-                "1–8 个字符；未设置 Logo 或 Logo 加载失败时作为回退。",
-                "1–8 characters; used when no logo is set or the image cannot load.",
-              )}
-            </small>
+            <small>{t("settings.18CharactersUsedWhenNoLogoIs")}</small>
           </div>
 
           <div className="ag-site-settings-field">
-            <label htmlFor="site-logo-url">
-              {text("站点 Logo", "Site logo")}
-            </label>
+            <label htmlFor="site-logo-url">{t("settings.siteLogo")}</label>
             <div className="ag-site-logo-input-row">
               <Input
                 id="site-logo-url"
                 value={draft.logoUrl}
                 allowClear
-                placeholder="/assets/logo.webp 或 https://…"
+                placeholder={t("settings.logoUrlPlaceholder")}
                 onChange={(event) =>
                   setDraft((current) => ({
                     ...current,
@@ -264,39 +235,29 @@ export function SiteSettingsPage() {
               >
                 <Button
                   icon={<UploadOutlined />}
-                  aria-label={text("上传 Logo", "Upload logo")}
+                  aria-label={t("settings.uploadLogo")}
                 >
-                  {text("上传", "Upload")}
+                  {t("settings.upload")}
                 </Button>
               </Upload>
               {draft.logoUrl && (
                 <Button
                   icon={<DeleteOutlined />}
-                  aria-label={text("移除 Logo", "Remove logo")}
+                  aria-label={t("settings.removeLogo")}
                   onClick={() =>
                     setDraft((current) => ({ ...current, logoUrl: "" }))
                   }
                 />
               )}
             </div>
-            <small>
-              {text(
-                "支持同源路径、HTTPS 地址，或上传不超过 192 KiB 的 PNG、JPEG、WebP。建议使用透明背景的方形图。",
-                "Use a same-origin path, HTTPS URL, or upload a PNG, JPEG, or WebP up to 192 KiB. A square image with a transparent background works best.",
-              )}
-            </small>
+            <small>{t("settings.useASameOriginPathHTTPSURLOr")}</small>
           </div>
 
           <section className="ag-site-theme-settings">
             <div className="ag-site-settings-section-heading ag-site-settings-section-heading-action">
               <div>
-                <h2>{text("Console 主题", "Console themes")}</h2>
-                <p>
-                  {text(
-                    "启用用户可以选择的主题，并指定首次访问时使用的默认主题。主题颜色统一由 Ant Design token 解析。",
-                    "Enable the themes users may choose and select the default for first-time visitors. All theme colors are resolved from Ant Design tokens.",
-                  )}
-                </p>
+                <h2>{t("settings.consoleThemes")}</h2>
+                <p>{t("settings.enableTheThemesUsersMayChooseAndSelect")}</p>
               </div>
               <Upload
                 accept=".json,application/json"
@@ -310,9 +271,9 @@ export function SiteSettingsPage() {
                 <Button
                   icon={<UploadOutlined />}
                   loading={packages.validatingThemePackage}
-                  aria-label={text("上传主题包", "Upload theme package")}
+                  aria-label={t("settings.uploadThemePackage")}
                 >
-                  {text("上传主题包", "Upload theme package")}
+                  {t("settings.uploadThemePackage")}
                 </Button>
               </Upload>
             </div>
@@ -320,7 +281,7 @@ export function SiteSettingsPage() {
               packages.pendingThemePackage === null && (
                 <ErrorBanner
                   error={packages.themePackageError}
-                  title={text("主题包处理失败", "Theme package failed")}
+                  title={t("settings.themePackageFailed")}
                 />
               )}
             <div className="ag-theme-option-grid">
@@ -354,31 +315,28 @@ export function SiteSettingsPage() {
               })}
             </div>
             <p className="ag-theme-package-hint">
-              {text(
-                "上传符合 themes/console-theme.schema.json 的 Theme Package v1 即可动态安装；主题包只允许受限颜色 token，不会执行 CSS、脚本或外部资源。运维目录主题仍可通过 gateway theme 命令管理。",
-                "Upload a Theme Package v1 matching themes/console-theme.schema.json to install it dynamically. Packages contain bounded color tokens only—no CSS, scripts, or external assets. Operator directory themes remain available through gateway theme commands.",
-              )}
+              {t("settings.uploadAThemePackageV1MatchingThemesConsole")}
             </p>
           </section>
 
           <div className="ag-site-settings-actions">
             <Button
               icon={<UndoOutlined />}
-              aria-label={text("撤销更改", "Discard changes")}
+              aria-label={t("settings.discardChanges")}
               disabled={!dirty}
               onClick={() => setEdited(null)}
             >
-              {text("撤销更改", "Discard changes")}
+              {t("settings.discardChanges")}
             </Button>
             <Button
               type="primary"
               htmlType="submit"
               icon={<SaveOutlined />}
-              aria-label={text("保存并应用", "Save and apply")}
+              aria-label={t("settings.saveAndApply")}
               loading={saving}
               disabled={!dirty || !valid}
             >
-              {text("保存并应用", "Save and apply")}
+              {t("settings.saveAndApply")}
             </Button>
           </div>
         </form>

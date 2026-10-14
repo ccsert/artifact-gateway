@@ -32,7 +32,7 @@ export function ConanArtifactDetail({
   onDeleted?: () => void;
   canQuarantine?: boolean;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const reference = meta.coordinate.trim().replace(/\/$/, "").split("#", 1)[0];
   const queryClient = useQueryClient();
   const recipesQuery = useConanRecipeRevisions(repoId, reference, managed);
@@ -81,18 +81,12 @@ export function ConanArtifactDetail({
     actionError ||
     (recipesQuery.error
       ? requestErrorMessage(
-          text(
-            "读取 Conan recipe revisions 失败",
-            "Failed to load Conan recipe revisions",
-          ),
+          t("artifactDetail.failedToLoadConanRecipeRevisions"),
           recipesQuery.error,
         )
       : packagesQuery.error
         ? requestErrorMessage(
-            text(
-              "读取 Conan package revisions 失败",
-              "Failed to load Conan package revisions",
-            ),
+            t("artifactDetail.failedToLoadConanPackageRevisions"),
             packagesQuery.error,
           )
         : "");
@@ -143,10 +137,7 @@ export function ConanArtifactDetail({
     if (requestError)
       setError(
         requestErrorMessage(
-          text(
-            "删除 Conan package revision 失败",
-            "Failed to delete Conan package revision",
-          ),
+          t("artifactDetail.failedToDeleteConanPackageRevision"),
           requestError,
         ),
       );
@@ -187,7 +178,7 @@ export function ConanArtifactDetail({
           <div className="space-y-4">
             {error && <ErrorBanner error={error} />}
             <VersionList
-              title={text("Recipe revisions", "Recipe revisions")}
+              title={t("artifactDetail.recipeRevisions")}
               items={recipeRevisions.map((item) => ({
                 label: item.revision,
                 hint: `${item.digest.slice(0, 18)} · ${formatDate(item.createdAt, locale)}`,
@@ -201,7 +192,7 @@ export function ConanArtifactDetail({
             {packageRevisions.length > 0 && (
               <div className="overflow-hidden rounded-lg border border-line">
                 <div className="border-b border-line px-3 py-2 text-sm font-medium text-fg">
-                  {text("Package revisions", "Package revisions")}
+                  {t("artifactDetail.packageRevisions")}
                 </div>
                 {packageRevisions.map((item) => {
                   const packageKey = `${item.recipeRevision}:${item.packageId}:${item.revision}`;
@@ -231,21 +222,19 @@ export function ConanArtifactDetail({
                           }
                         >
                           {selected
-                            ? text("查看 Recipe", "View recipe")
-                            : text("查看详情", "Inspect")}
+                            ? t("artifactDetail.viewRecipe")
+                            : t("artifactDetail.inspect")}
                         </Button>
                         {canDelete && (
                           <Popconfirm
-                            title={text(
-                              "删除 package revision？",
-                              "Delete this package revision?",
+                            title={t(
+                              "artifactDetail.deleteThisPackageRevision",
                             )}
-                            description={text(
-                              "删除后该二进制包 revision 将不可见。",
-                              "This binary package revision will no longer be visible.",
+                            description={t(
+                              "artifactDetail.thisBinaryPackageRevisionWillNoLongerBe",
                             )}
-                            okText={text("删除", "Delete")}
-                            cancelText={text("取消", "Cancel")}
+                            okText={t("artifactDetail.delete")}
+                            cancelText={t("artifactDetail.cancel")}
                             okButtonProps={{ danger: true }}
                             onConfirm={() => void deletePackage(item)}
                           >
@@ -255,7 +244,7 @@ export function ConanArtifactDetail({
                               icon={<DeleteOutlined />}
                               loading={deletingItem}
                             >
-                              {text("删除", "Delete")}
+                              {t("artifactDetail.delete")}
                             </Button>
                           </Popconfirm>
                         )}

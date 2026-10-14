@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import type {
   ApiKey,
   AuthorizationRole,
@@ -11,15 +12,6 @@ import {
   isActiveApiKeyPrincipal,
   isActiveUserPrincipal,
 } from "../../lib/accessPrincipals";
-
-/**
- * Shared, JSX-free draft data for the repository grant editor and the
- * authorization-template editor, so a third grant editor does not need its own
- * copy of these mappings.
- */
-
-/** Bilingual copy callback from `usePreferences().text`. */
-type Localize = (chinese: string, english: string) => string;
 
 export type GrantLevel = "read" | "write" | "admin" | "intelligence";
 
@@ -120,20 +112,17 @@ export function permissionSelection(
 
 export function grantedCapabilitiesLabel(
   scopes: Grant["scopes"],
-  text: Localize,
+  t: Translate,
 ): string {
   if (scopes.includes("repositories:admin"))
-    return text(
-      "读取 + 写入 + 管理 + 制品情报",
-      "Read + write + admin + intelligence",
-    );
+    return t("access.readWriteAdminIntelligence");
   const capabilities: string[] = scopes.includes("repositories:write")
-    ? [text("读取 + 写入", "Read + write")]
+    ? [t("access.readWrite")]
     : scopes.includes("repositories:read")
-      ? [text("读取", "Read")]
+      ? [t("access.scopeRead")]
       : [];
   if (scopes.includes("repositories:intelligence"))
-    capabilities.push(text("制品情报", "Artifact intelligence"));
+    capabilities.push(t("access.scopeIntelligence"));
   return capabilities.join(" + ");
 }
 
@@ -141,30 +130,27 @@ export function principalOptions(
   users: User[],
   apiKeys: ApiKey[],
   serviceAccounts: ServiceAccount[],
-  text: Localize,
+  t: Translate,
 ): PrincipalOption[] {
   return [
     ...users.filter(isActiveUserPrincipal).map((user) => ({
       value: `user:${user.name}`,
-      label: `${text("用户", "User")} · ${user.name}`,
-      detail: `${text("全局角色", "Global role")} ${user.role}`,
+      label: `${t("access.user")} · ${user.name}`,
+      detail: `${t("access.globalRole")} ${user.role}`,
     })),
     ...apiKeys
       .filter((key) => isActiveApiKeyPrincipal(key))
       .map((key) => ({
         value: `api-key:${key.id}`,
         label: `API Key · ${key.name}`,
-        detail: `${text("全局角色", "Global role")} ${key.roles.join(", ")}`,
+        detail: `${t("access.globalRole")} ${key.roles.join(", ")}`,
       })),
     ...serviceAccounts
       .filter((account) => account.state === "active")
       .map((account) => ({
         value: `service-account:${account.id}`,
-        label: `${text("服务账号", "Service account")} · ${account.name}`,
-        detail: text(
-          "无全局角色，由仓库授权决定",
-          "No global role; repository grants decide access",
-        ),
+        label: `${t("access.serviceAccount")} · ${account.name}`,
+        detail: t("access.noGlobalRoleRepositoryGrantsDecideAccess"),
       })),
   ];
 }

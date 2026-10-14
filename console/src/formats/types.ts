@@ -1,6 +1,5 @@
+import type { MessageKey } from "../messages";
 import type { Format, Repository } from "../client";
-
-type Localized = readonly [chinese: string, english: string];
 
 export type RepositoryFormatFeature =
   | "publish"
@@ -33,9 +32,11 @@ export interface FormatDescriptor {
     >
   >;
   /** Title of the artifact column in a repository's artifact table. */
-  artifactColumn: Localized;
+  artifactColumn: MessageKey;
   /** Hint for the repository artifact search box. */
-  searchPlaceholder: Localized;
+  searchPlaceholder: MessageKey;
+  /** The same hint for a server-side "contains" search, where one exists. */
+  searchKeywordPlaceholder?: MessageKey;
   /** The ordinary list has service-side prefix/contains filtering. */
   serverKeywordSearch: boolean;
   /**
@@ -81,7 +82,7 @@ export interface FormatDescriptor {
   /** Hosted repositories accept file uploads from the Console (Raw). */
   consoleUpload: boolean;
   /** What an empty repository of each type should do to show content. */
-  emptyHint: Partial<Record<"hosted" | "proxy", Localized>>;
+  emptyHint: Partial<Record<"hosted" | "proxy", MessageKey>>;
   /** Hosted repositories offer the strict publication setting (Maven). */
   strictPublicationSetting: boolean;
   /** Proxy repositories can authenticate to their upstream (Go). */

@@ -2,12 +2,11 @@ import { useMemo, useState } from "react";
 import {
   DeleteOutlined,
   EditOutlined,
-  HistoryOutlined,
+  MoreOutlined,
   PlusOutlined,
   ReloadOutlined,
-  RocketOutlined,
 } from "@ant-design/icons";
-import { Button, Popconfirm, Space, Switch, Tooltip } from "antd";
+import { Button, Dropdown, Space, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   deleteScheduledTask,
@@ -19,6 +18,8 @@ import { Badge, StateBadge } from "../../components/ui/Badge";
 import { EmptyState, ErrorBanner, Loading } from "../../components/ui/Feedback";
 import { Card, CardHeader } from "../../components/ui/Layout";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
+import { ConfirmDanger } from "../../components/ui/Modal";
+import { unwrap } from "../../lib/query/client";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
 import { formatTaskInterval } from "./scheduledTaskModel";
@@ -32,7 +33,7 @@ import { TaskRunHistory } from "./TaskRunHistory";
 
 /** Recurring retention dispatches, with each task's dispatch history. */
 export function ScheduledTasksPanel() {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const tasksQuery = useScheduledTasks();
   const repositoriesQuery = useRetentionRepositories();
   const tasks = tasksQuery.data ?? null;
@@ -118,22 +119,12 @@ export function ScheduledTasksPanel() {
     }
   };
 
+  const [toDelete, setToDelete] = useState<ScheduledTask | null>(null);
   const remove = async (task: ScheduledTask) => {
-    setBusyId(task.id);
     setActionError(null);
-    try {
-      const result = await deleteScheduledTask({ path: { taskId: task.id } });
-      if (result.error) {
-        setActionError(result.error);
-        return;
-      }
-      if (expandedTask === task.id) setExpandedTask(null);
-      await invalidate();
-    } catch (nextError) {
-      setActionError(nextError);
-    } finally {
-      setBusyId(null);
-    }
+    await unwrap(deleteScheduledTask({ path: { taskId: task.id } }));
+    if (expandedTask === task.id) setExpandedTask(null);
+    await invalidate();
   };
 
   const toggleHistory = (task: ScheduledTask) =>
@@ -141,9 +132,8 @@ export function ScheduledTasksPanel() {
 
   const columns: ColumnsType<ScheduledTask> = [
     {
-      title: text("任务", "Task"),
+      title: t("operations.task"),
       key: "task",
-      width: 260,
       render: (_, task) => (
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-fg-strong">
@@ -153,16 +143,16 @@ export function ScheduledTasksPanel() {
             className="mt-1 truncate text-xs text-fg-tertiary"
             title={task.description}
           >
-            {task.description || text("无备注", "No description")}
+            {task.description || t("operations.noDescription")}
           </div>
         </div>
       ),
     },
     {
-      title: text("动作", "Action"),
+      title: t("operations.action"),
       dataIndex: "kind",
       key: "kind",
-      width: 170,
+      width: locale === "en-US" ? 190 : 120,
       render: (kind: ScheduledTask["kind"]) => (
         <Badge
           tone={
@@ -170,22 +160,22 @@ export function ScheduledTasksPanel() {
           }
         >
           {kind === "audit-retention"
-            ? text("审计保留", "Audit retention")
-            : text("仓库保留", "Repository retention")}
+            ? t("operations.auditRetention")
+            : t("operations.repositoryRetention")}
         </Badge>
       ),
     },
     {
-      title: text("目标", "Target"),
+      title: t("operations.target"),
       key: "target",
-      width: 180,
+      width: 140,
       render: (_, task) => {
         const repository = task.repositoryId
           ? repositoryById.get(task.repositoryId)
           : undefined;
         return (
           <div className="text-xs text-fg-secondary">
-            {repository?.name ?? text("全局审计日志", "Global audit log")}
+            {repository?.name ?? t("operations.globalAuditLog")}
             {repository && (
               <div className="mt-1 font-mono text-xs text-fg-disabled">
                 {repository.format}
@@ -196,31 +186,25 @@ export function ScheduledTasksPanel() {
       },
     },
     {
-      title: text("周期", "Interval"),
-      dataIndex: "intervalMinutes",
-      key: "interval",
-      width: 130,
-      render: (minutes: number) => (
-        <span className="whitespace-nowrap text-xs text-fg-secondary">
-          {formatTaskInterval(minutes, text)}
-        </span>
-      ),
-    },
-    {
-      title: text("下次执行", "Next run"),
-      dataIndex: "nextRunAt",
-      key: "nextRunAt",
+      // How often, and when next: one column, so the row fits at 1440px.
+      title: t("operations.schedule"),
+      key: "schedule",
       width: 180,
-      render: (value: string, task) => (
+      render: (_, task) => (
         <div className="whitespace-nowrap text-xs text-fg-secondary">
-          {task.enabled ? formatDate(value, locale) : "—"}
+          {formatTaskInterval(task.intervalMinutes, t)}
+          <div className="mt-1 text-fg-disabled">
+            {task.enabled
+              ? formatDate(task.nextRunAt, locale)
+              : t("operations.paused")}
+          </div>
         </div>
       ),
     },
     {
-      title: text("最近投递", "Last dispatch"),
+      title: t("operations.lastDispatch"),
       key: "lastRun",
-      width: 180,
+      width: 160,
       render: (_, task) => (
         <div className="text-xs text-fg-secondary">
           {task.lastRunState ? (
@@ -237,74 +221,75 @@ export function ScheduledTasksPanel() {
       ),
     },
     {
-      title: text("启用", "Enabled"),
+      title: t("operations.enabled2"),
       dataIndex: "enabled",
       key: "enabled",
-      width: 90,
+      width: 72,
       render: (enabled: boolean, task) => (
         <Switch
           size="small"
           value={enabled}
           loading={busyId === task.id}
-          aria-label={text("启用计划任务", "Enable scheduled task")}
+          aria-label={t("operations.enableScheduledTask")}
           onChange={(value) => void updateEnabled(task, value)}
         />
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("operations.actions"),
       key: "actions",
       fixed: "right",
-      width: 170,
+      width: locale === "en-US" ? 260 : 220,
       render: (_, task) => (
-        <Space size="small">
-          <Tooltip title={text("立即执行", "Run now")}>
-            <Button
-              size="small"
-              icon={<RocketOutlined />}
-              aria-label={text("立即执行", "Run now")}
-              loading={busyId === task.id}
-              onClick={() => void runNow(task)}
-            />
-          </Tooltip>
-          <Tooltip title={text("投递历史", "Dispatch history")}>
-            <Button
-              size="small"
-              type={expandedTask === task.id ? "primary" : "default"}
-              icon={<HistoryOutlined />}
-              aria-label={text("投递历史", "Dispatch history")}
-              onClick={() => toggleHistory(task)}
-            />
-          </Tooltip>
-          <Tooltip title={text("编辑", "Edit")}>
-            <Button
-              size="small"
-              icon={<EditOutlined />}
-              aria-label={text("编辑", "Edit")}
-              onClick={() => openEdit(task)}
-            />
-          </Tooltip>
-          <Popconfirm
-            title={text("删除此计划任务？", "Delete this scheduled task?")}
-            description={text(
-              "投递历史会一并删除，已经生成的后台任务不受影响。",
-              "Dispatch history is removed; already submitted jobs are unaffected.",
-            )}
-            okText={text("删除", "Delete")}
-            cancelText={text("取消", "Cancel")}
-            okButtonProps={{ danger: true }}
-            onConfirm={() => remove(task)}
+        <Space size={4}>
+          <Button
+            size="small"
+            type="text"
+            loading={busyId === task.id}
+            onClick={() => void runNow(task)}
           >
-            <Tooltip title={text("删除", "Delete")}>
-              <Button
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                aria-label={text("删除", "Delete")}
-                loading={busyId === task.id}
-              />
-            </Tooltip>
-          </Popconfirm>
+            {t("operations.runNow")}
+          </Button>
+          <Button
+            size="small"
+            type="text"
+            aria-expanded={expandedTask === task.id}
+            onClick={() => toggleHistory(task)}
+          >
+            {t("operations.dispatchHistory")}
+          </Button>
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: [
+                {
+                  key: "edit",
+                  icon: <EditOutlined />,
+                  label: t("operations.edit"),
+                },
+                { type: "divider" },
+                {
+                  key: "delete",
+                  danger: true,
+                  icon: <DeleteOutlined />,
+                  label: t("operations.deleteScheduledTask"),
+                },
+              ],
+              onClick: ({ key }) => {
+                if (key === "edit") openEdit(task);
+                if (key === "delete") setToDelete(task);
+              },
+            }}
+          >
+            <Button
+              size="small"
+              type="text"
+              icon={<MoreOutlined />}
+              aria-label={t("operations.moreActionsForTask", {
+                name: task.name,
+              })}
+            />
+          </Dropdown>
         </Space>
       ),
     },
@@ -315,7 +300,7 @@ export function ScheduledTasksPanel() {
       {error ? <ErrorBanner error={error} onRetry={load} /> : null}
       <Card>
         <CardHeader
-          title={text("计划任务", "Scheduled tasks")}
+          title={t("operations.scheduledTasks")}
           extra={
             <Space>
               <Button
@@ -323,14 +308,14 @@ export function ScheduledTasksPanel() {
                 loading={loading}
                 onClick={() => void load()}
               >
-                {text("刷新", "Refresh")}
+                {t("operations.refresh")}
               </Button>
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={openCreate}
               >
-                {text("新建计划", "New schedule")}
+                {t("operations.newSchedule")}
               </Button>
             </Space>
           }
@@ -339,15 +324,12 @@ export function ScheduledTasksPanel() {
           // A first load in flight is the only case that shows a placeholder:
           // once it fails, the banner above is the whole answer.
           error ? null : (
-            <Loading label={text("加载计划任务…", "Loading schedules…")} />
+            <Loading label={t("operations.loadingSchedules")} />
           )
         ) : tasks.length === 0 ? (
           <EmptyState
-            title={text("还没有计划任务", "No scheduled tasks yet")}
-            hint={text(
-              "创建计划，将现有的仓库或审计保留策略按固定周期投递到后台任务队列。",
-              "Create a schedule to dispatch existing repository or audit retention policies on a fixed interval.",
-            )}
+            title={t("operations.noScheduledTasksYet")}
+            hint={t("operations.createAScheduleToDispatchExistingRepositoryOr")}
           />
         ) : (
           <ConsoleTable<ScheduledTask>
@@ -355,7 +337,7 @@ export function ScheduledTasksPanel() {
             dataSource={tasks}
             columns={columns}
             pagination={false}
-            scroll={{ x: 1360, y: 500 }}
+            scroll={{ x: 1080, y: 500 }}
             expandable={{
               showExpandColumn: false,
               expandedRowKeys: expandedTask ? [expandedTask] : [],
@@ -364,6 +346,24 @@ export function ScheduledTasksPanel() {
           />
         )}
       </Card>
+      <ConfirmDanger
+        target={toDelete}
+        title={t("operations.deleteScheduledTask")}
+        message={(task) => (
+          <>
+            <p>
+              {t("operations.deleteScheduledTaskNamed", { name: task.name })}
+            </p>
+            <p className="mt-2 text-xs text-fg-tertiary">
+              {t("operations.dispatchHistoryIsRemovedAlreadySubmittedJobsAre")}
+            </p>
+          </>
+        )}
+        confirmLabel={t("operations.delete")}
+        onConfirm={remove}
+        onClose={() => setToDelete(null)}
+        onError={setActionError}
+      />
       {editor && (
         <TaskEditorDialog
           key={editor.session}

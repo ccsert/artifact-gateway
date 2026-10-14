@@ -19,7 +19,7 @@ export function ProxyMavenWarmCard({
   token: string;
   onWarmed: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const refreshHealth = useInvalidateProxyHealth(repoId);
   const [warmInput, setWarmInput] = useState(
     "org.springframework.boot:spring-boot:3.4.4:pom",
@@ -42,10 +42,7 @@ export function ProxyMavenWarmCard({
     const path = mavenWarmPath(warmInput);
     if (!path) {
       setWarmError(
-        text(
-          "请输入 Maven GAV（groupId:artifactId:version[:extension[:classifier]]）或仓库路径。",
-          "Enter a Maven GAV (groupId:artifactId:version[:extension[:classifier]]) or a repository path.",
-        ),
+        t("repository.enterAMavenGAVGroupIdArtifactIdVersionExtension"),
       );
       return;
     }
@@ -64,7 +61,7 @@ export function ProxyMavenWarmCard({
       setWarmError(
         error instanceof Error
           ? error.message
-          : text("预热请求失败", "Cache warm-up request failed"),
+          : t("repository.cacheWarmUpRequestFailed"),
       );
     } finally {
       setWarming(false);
@@ -74,12 +71,7 @@ export function ProxyMavenWarmCard({
   const refresh = async () => {
     const value = warmInput.trim();
     if (!value) {
-      setRefreshError(
-        text(
-          "请输入 Maven GAV 或缓存路径。",
-          "Enter a Maven GAV or cache path.",
-        ),
-      );
+      setRefreshError(t("repository.enterAMavenGAVOrCachePath"));
       return;
     }
     setRefreshing(true);
@@ -94,7 +86,7 @@ export function ProxyMavenWarmCard({
         body,
       });
       if (error || !result)
-        throw new Error(text("刷新缓存失败", "Failed to refresh cache"));
+        throw new Error(t("repository.failedToRefreshCache"));
       setRefreshResult(result);
       onWarmed();
       void refreshHealth();
@@ -102,7 +94,7 @@ export function ProxyMavenWarmCard({
       setRefreshError(
         error instanceof Error
           ? error.message
-          : text("刷新缓存失败", "Failed to refresh cache"),
+          : t("repository.failedToRefreshCache"),
       );
     } finally {
       setRefreshing(false);
@@ -112,7 +104,7 @@ export function ProxyMavenWarmCard({
   return (
     <div className="rounded-lg border border-line bg-surface-translucent px-3 py-3">
       <div className="mb-2 text-sm font-medium text-fg">
-        {text("预热缓存", "Warm cache")}
+        {t("repository.warmCache")}
       </div>
       <div className="flex flex-wrap gap-2">
         <Input
@@ -122,17 +114,17 @@ export function ProxyMavenWarmCard({
           onChange={(e) => setWarmInput(e.target.value)}
         />
         <Button onClick={warm} loading={warming} disabled={!warmInput.trim()}>
-          {text("预热", "Warm")}
+          {t("repository.warm")}
         </Button>
         <Button
           onClick={refresh}
           loading={refreshing}
           disabled={!warmInput.trim()}
         >
-          {text("强制刷新", "Force refresh")}
+          {t("repository.forceRefresh")}
         </Button>
         <Button onClick={() => void refreshHealth()}>
-          {text("检查上游", "Check upstream")}
+          {t("repository.checkUpstream")}
         </Button>
       </div>
       {warmError && (
@@ -156,7 +148,7 @@ export function ProxyMavenWarmCard({
         <div
           className={`mt-2 text-xs ${refreshResult.refreshed ? "text-[var(--ag-status-success)]" : "text-[var(--ag-status-danger)]"}`}
         >
-          {text("刷新", "Refresh")} HTTP {refreshResult.status}
+          {t("repository.refresh")} HTTP {refreshResult.status}
           {refreshResult.size !== undefined
             ? ` · ${formatBytes(refreshResult.size)}`
             : ""}

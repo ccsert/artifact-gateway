@@ -1,10 +1,7 @@
 /** Messages of the Console shell: navigation, sign-in and preferences. */
 export const shellZhCN = {
   "common.cancel": "取消",
-  "common.save": "保存",
   "common.loading": "正在加载…",
-  "common.theme.light": "切换到亮色模式",
-  "common.theme.dark": "切换到暗色模式",
   "common.theme.select": "选择主题",
   "common.theme.current": "当前主题：{name}",
   "common.language": "语言",
@@ -50,8 +47,6 @@ export const shellZhCN = {
   "nav.collapse": "收起导航",
   "nav.open": "打开导航",
   "nav.close": "关闭导航",
-  "header.search": "跨仓库搜索制品…",
-  "auth.loginTitle": "Console 登录",
   "auth.welcome": "登录控制台",
   "auth.signInHint": "选择身份验证方式以继续。",
   "auth.controlPlane": "制品基础设施控制台",
@@ -85,7 +80,6 @@ export const shellZhCN = {
   "auth.networkError": "网络错误，请重试。",
   "auth.invalidToken": "令牌无效或已过期，请检查后重试。",
   "auth.ssoFailed": "企业登录未完成，请重试。",
-  "auth.ssoUnavailable": "身份提供方暂时不可用。",
   "auth.logout": "退出",
   "auth.awaitingAuthorization": "等待管理员授权",
   "auth.awaitingAuthorizationDescription":
@@ -97,6 +91,27 @@ export const shellZhCN = {
   "auth.clearToken": "清除令牌",
   "auth.tokenDialogHint": "管理 API 使用 Bearer 认证，令牌仅保存在浏览器中。",
   "auth.saveToken": "保存",
+  "shell.pageResourcesFailedToLoad": "页面资源加载失败",
+  "shell.pageFailedToLoad": "页面加载失败",
+  "shell.pageResourcesMayHaveChangedOrTheDevelopment":
+    "页面资源可能已更新，或开发服务正在重建依赖。请重新加载；若仍失败，请重启本地 Console。",
+  "shell.thePageCouldNotFinishLoadingReloadIt":
+    "页面未能完成加载。请先重新加载；如果问题持续，可以前往公开制品浏览。",
+  "shell.technicalDetails": "技术详情",
+  "shell.reload": "重新加载",
+  "shell.browsePublicArtifacts": "浏览公开制品",
+  "shell.couldNotLoadRepositories": "仓库列表加载失败",
+  "shell.loadingRepositories": "正在加载仓库…",
+  "shell.noPageOrRepositoryMatches": "没有匹配“{query}”的页面或仓库。",
+  "shell.select": "选择",
+  "shell.open": "打开",
+  "shell.close": "关闭",
+  "shell.developmentBuild": "开发构建",
+  "shell.versionUnknown": "版本未知",
+  "shell.viewDiagnosticsForTheConnectedNode": "查看当前连接节点的系统诊断",
+  "shell.connectedNode": "当前节点",
+  "auth.usernamePlaceholder": "输入用户名",
+  "auth.passwordPlaceholder": "输入密码",
 } as const;
 
 export type ShellMessageKey = keyof typeof shellZhCN;

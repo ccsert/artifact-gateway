@@ -58,7 +58,7 @@ export function MavenGroupTable({
   onCopyPageLink,
   onCopyUsage,
 }: MavenGroupTableProps) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const tableRows: MavenTableRow[] = groups.map((group) => {
     const latest = group.versions[0];
     const urlVersion = group.versions.find(
@@ -94,6 +94,7 @@ export function MavenGroupTable({
       selectedKey,
       selectedVersion,
       snippets: usageFor(
+        t,
         repository.format,
         repository.name,
         selectedVersion.coordinate,
@@ -108,7 +109,7 @@ export function MavenGroupTable({
 
   const columns: ColumnsType<MavenTableRow> = [
     {
-      title: text("制品", "Artifact"),
+      title: t("publicBrowse.artifact"),
       dataIndex: "key",
       key: "key",
       render: (value: string) => (
@@ -116,7 +117,7 @@ export function MavenGroupTable({
       ),
     },
     {
-      title: text("最新版本", "Latest version"),
+      title: t("publicBrowse.latestVersion"),
       key: "latest",
       width: 180,
       render: (_, row) => (
@@ -126,7 +127,7 @@ export function MavenGroupTable({
       ),
     },
     {
-      title: text("版本数", "Versions"),
+      title: t("publicBrowse.versions2"),
       key: "versionCount",
       width: 100,
       render: (_, row) => (
@@ -136,7 +137,7 @@ export function MavenGroupTable({
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("publicBrowse.actions"),
       key: "actions",
       fixed: "right",
       width: 130,
@@ -153,8 +154,8 @@ export function MavenGroupTable({
             }
           >
             {row.expanded
-              ? text("收起", "Collapse")
-              : text("选择版本", "Select version")}
+              ? t("publicBrowse.collapse")
+              : t("publicBrowse.selectVersion")}
           </Button>
         </div>
       ),
@@ -170,7 +171,7 @@ export function MavenGroupTable({
       <div className="grid gap-5 px-2 py-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
         <div>
           <label className="mb-1.5 block text-xs font-medium text-fg-tertiary">
-            {text("选择版本", "Select version")}{" "}
+            {t("publicBrowse.selectVersion")}{" "}
             <span className="font-normal text-fg-disabled">
               ({row.group.versions.length})
             </span>
@@ -184,13 +185,10 @@ export function MavenGroupTable({
               }`,
             }))}
             onChange={(value) => onSelectVersion(row.group, value)}
-            placeholder={text("搜索并选择 Maven 版本", "Search Maven versions")}
+            placeholder={t("publicBrowse.searchMavenVersions")}
           />
           <p className="mt-2 text-xs leading-5 text-fg-disabled">
-            {text(
-              "在选择器中输入版本号或 SNAPSHOT 构建号即可定位，不会铺开全部版本。",
-              "Search by version or SNAPSHOT build number without expanding the full list.",
-            )}
+            {t("publicBrowse.searchByVersionOrSNAPSHOTBuildNumberWithout")}
           </p>
         </div>
         <div className="min-w-0">
@@ -209,7 +207,7 @@ export function MavenGroupTable({
               icon={<LinkOutlined />}
               href={href}
             >
-              {text("打开版本页", "Open version")}
+              {t("publicBrowse.openVersionPage")}
             </Button>
             <Button
               type="link"
@@ -217,8 +215,8 @@ export function MavenGroupTable({
               onClick={() => onCopyPageLink(href)}
             >
               {copiedCoordinate === href
-                ? text("链接已复制", "Link copied")
-                : text("复制链接", "Copy link")}
+                ? t("publicBrowse.linkCopied")
+                : t("publicBrowse.copyLink")}
             </Button>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-fg-disabled">
@@ -233,29 +231,29 @@ export function MavenGroupTable({
           </div>
           <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-line py-3 text-xs sm:grid-cols-4">
             <MetadataItem
-              label={text("发布时间", "Published")}
+              label={t("publicBrowse.published")}
               value={formatDate(row.selectedVersion.createdAt, locale)}
             />
             <MetadataItem
-              label={text("发布者", "Publisher")}
+              label={t("publicBrowse.publisher")}
               value={
-                row.selectedVersion.publisher ?? text("未记录", "Not recorded")
+                row.selectedVersion.publisher ?? t("publicBrowse.notRecorded")
               }
               mono
             />
             <MetadataItem
-              label={text("校验摘要", "Digest")}
+              label={t("publicBrowse.checksum")}
               value={
-                row.selectedVersion.digest ?? text("未记录", "Not recorded")
+                row.selectedVersion.digest ?? t("publicBrowse.notRecorded")
               }
               mono
             />
             <MetadataItem
-              label={text("构建类型", "Build type")}
+              label={t("publicBrowse.buildType")}
               value={
                 row.selectedVersion.buildNumber
                   ? `SNAPSHOT #${row.selectedVersion.buildNumber}`
-                  : text("发布版本", "Release")
+                  : t("publicBrowse.release")
               }
             />
           </div>

@@ -66,7 +66,7 @@ export function RepositoryArtifactSelect({
     option: RepositoryArtifactIdentity,
   ) => RepositoryArtifactStatus | undefined;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [query, setQuery] = useState("");
   const searchTimer = useRef<number | undefined>(undefined);
   // Typing settles for a moment before it searches; clearing searches at once.
@@ -135,11 +135,7 @@ export function RepositoryArtifactSelect({
         disabled={!enabled || disabled}
         loading={searching}
         placeholder={
-          placeholder ??
-          text(
-            "输入包名、路径或坐标进行搜索",
-            "Search by package, path, or coordinate",
-          )
+          placeholder ?? t("repository.searchByPackagePathOrCoordinate")
         }
         showSearch={{ filterOption: false, onSearch: search }}
         options={selectableOptions.map((option) => ({
@@ -179,8 +175,8 @@ export function RepositoryArtifactSelect({
         }}
         notFoundContent={
           searching
-            ? text("正在搜索…", "Searching…")
-            : text("没有可直接选择的制品", "No selectable artifacts")
+            ? t("repository.searching")
+            : t("repository.noSelectableArtifacts")
         }
         onChange={(key) => {
           const option = selectableOptions.find(
@@ -198,10 +194,7 @@ export function RepositoryArtifactSelect({
       />
       {searchError !== null && (
         <p className="mt-1 text-xs text-[var(--ag-status-danger)]" role="alert">
-          {text(
-            "制品搜索失败，请修改关键词后重试。",
-            "Artifact search failed. Change the query and try again.",
-          )}
+          {t("repository.artifactSearchFailedChangeTheQueryAndTry")}
         </p>
       )}
     </>

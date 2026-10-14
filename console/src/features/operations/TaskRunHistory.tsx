@@ -10,31 +10,31 @@ import { useTaskRuns } from "./scheduledTaskQueries";
 
 /** One task's dispatch history, read when its row is expanded. */
 export function TaskRunHistory({ task }: { task: ScheduledTask }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const runsQuery = useTaskRuns(task.id);
   const runs = runsQuery.data ?? [];
   const loading = runsQuery.isFetching;
   const columns: ColumnsType<ScheduledTaskRun> = [
     {
-      title: text("触发方式", "Trigger"),
+      title: t("operations.trigger"),
       dataIndex: "trigger",
       width: 120,
       render: (value: ScheduledTaskRun["trigger"]) => (
         <span className="text-xs text-fg-secondary">
           {value === "manual"
-            ? text("手动", "Manual")
-            : text("计划", "Scheduled")}
+            ? t("operations.manual")
+            : t("operations.scheduled")}
         </span>
       ),
     },
     {
-      title: text("投递状态", "Dispatch status"),
+      title: t("operations.dispatchStatus"),
       dataIndex: "state",
       width: 130,
       render: (value: string) => <StateBadge state={value} />,
     },
     {
-      title: text("触发时间", "Triggered"),
+      title: t("operations.triggered"),
       dataIndex: "scheduledAt",
       width: 180,
       render: (value: string) => (
@@ -44,7 +44,7 @@ export function TaskRunHistory({ task }: { task: ScheduledTask }) {
       ),
     },
     {
-      title: text("下游任务", "Downstream job"),
+      title: t("operations.downstreamJob"),
       key: "target",
       width: 300,
       render: (_, run) => (
@@ -59,7 +59,7 @@ export function TaskRunHistory({ task }: { task: ScheduledTask }) {
       ),
     },
     {
-      title: text("失败原因", "Failure reason"),
+      title: t("operations.failureReason"),
       dataIndex: "lastError",
       render: (value?: string) => (
         <span
@@ -84,7 +84,7 @@ export function TaskRunHistory({ task }: { task: ScheduledTask }) {
       <div className="mb-3 flex items-center gap-2">
         <HistoryOutlined className="text-fg-tertiary!" />
         <span className="text-xs font-medium text-fg-secondary">
-          {text("投递历史", "Dispatch history")} · {task.name}
+          {t("operations.dispatchHistory")} · {task.name}
         </span>
       </div>
       <ConsoleTable<ScheduledTaskRun>
@@ -98,11 +98,8 @@ export function TaskRunHistory({ task }: { task: ScheduledTask }) {
           emptyText: (
             <EmptyState
               compact
-              title={text("尚无投递记录", "No dispatch history")}
-              hint={text(
-                "计划触发后，每次投递的结果都会记录在这里。",
-                "Each dispatch is recorded here once the schedule fires.",
-              )}
+              title={t("operations.noDispatchHistory")}
+              hint={t("operations.eachDispatchIsRecordedHereOnceTheSchedule")}
             />
           ),
         }}

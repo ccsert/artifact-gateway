@@ -18,6 +18,7 @@ import { APTPackagesPanel } from "./APTPackagesPanel";
 import { APTReviewDialog } from "./APTReviewDialog";
 import { type Review } from "./aptModel";
 import { useAptLifecycleState } from "./repositoryQueries";
+import "./apt.css";
 
 /** One suite's packages, snapshots, retention and archive operations. */
 export function APTSuiteOperations({
@@ -27,11 +28,11 @@ export function APTSuiteOperations({
   repo: Repository;
   suite: string;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const stateQuery = useAptLifecycleState(
     repo.id,
     suite,
-    text("快照响应为空", "Snapshot response is empty"),
+    t("repository.snapshotResponseIsEmpty"),
   );
   const state = stateQuery.data ?? null;
   const error = stateQuery.error;
@@ -85,15 +86,11 @@ export function APTSuiteOperations({
       if (version !== generation.current) return;
       if (response.error || !response.data)
         throw (
-          response.error ??
-          new Error(text("预览响应为空", "Preview response is empty"))
+          response.error ?? new Error(t("repository.previewResponseIsEmpty"))
         );
       if (response.data.expectedSnapshotId !== request.expectedSnapshotId)
         throw new Error(
-          text(
-            "快照已变化，请刷新后重新预览。",
-            "The snapshot changed. Refresh and preview again.",
-          ),
+          t("repository.theSnapshotChangedRefreshAndPreviewAgain"),
         );
       setReview({
         request: {
@@ -122,27 +119,19 @@ export function APTSuiteOperations({
         ) {
           setReview(null);
           throw new Error(
-            text(
-              "快照或候选集已变化，或成员受治理限制。请刷新并重新预览；未自动重试。",
-              "The snapshot or candidates changed, or governance blocked a member. Refresh and preview again; no automatic retry was made.",
-            ),
+            t("repository.theSnapshotOrCandidatesChangedOrGovernanceBlocked"),
           );
         }
         throw response.error;
       }
       if (!response.data)
-        throw new Error(
-          text(
-            "未收到应用结果，可使用相同请求重试。",
-            "No apply result was received. Retry the same request.",
-          ),
-        );
+        throw new Error(t("repository.noApplyResultWasReceivedRetryTheSame"));
       setReview(null);
       setNotice(
-        text(
-          `已发布 ${suite} 快照 #${response.data.sequence}`,
-          `Published ${suite} snapshot #${response.data.sequence}`,
-        ),
+        t("repository.publishedSnapshot", {
+          suite,
+          sequence: response.data.sequence,
+        }),
       );
       await load();
     });
@@ -155,9 +144,8 @@ export function APTSuiteOperations({
       });
       if (response.error) throw response.error;
       setNotice(
-        text(
-          "快照引用已清理；无引用对象由后台异步回收。",
-          "Snapshot references pruned; unreferenced objects are reclaimed asynchronously.",
+        t(
+          "repository.snapshotReferencesPrunedUnreferencedObjectsAreReclaimedAsynchronously",
         ),
       );
       await load();
@@ -193,7 +181,7 @@ export function APTSuiteOperations({
           disabled={busy}
           onClick={() => void load()}
         >
-          {text("刷新快照", "Refresh snapshots")}
+          {t("repository.refreshSnapshots")}
         </Button>
       </div>
       {error !== null && <ErrorBanner error={error} onRetry={load} />}
@@ -215,10 +203,9 @@ export function APTSuiteOperations({
             items={[
               {
                 key: "packages",
-                label: text(
-                  `软件包 (${state.packages.length})`,
-                  `Packages (${state.packages.length})`,
-                ),
+                label: t("repository.packages", {
+                  length: state.packages.length,
+                }),
                 children: (
                   <APTPackagesPanel
                     packages={state.packages}
@@ -249,10 +236,9 @@ export function APTSuiteOperations({
               },
               {
                 key: "recovery",
-                label: text(
-                  `恢复记录 (${state.deletions.length})`,
-                  `Recovery (${state.deletions.length})`,
-                ),
+                label: t("repository.recovery", {
+                  length: state.deletions.length,
+                }),
                 children: (
                   <APTRecoveryList
                     deletions={state.deletions}
@@ -266,10 +252,9 @@ export function APTSuiteOperations({
               },
               {
                 key: "history",
-                label: text(
-                  `快照历史 (${state.snapshots.length})`,
-                  `Snapshots (${state.snapshots.length})`,
-                ),
+                label: t("repository.snapshots", {
+                  length: state.snapshots.length,
+                }),
                 children: (
                   <APTSnapshotHistory
                     snapshots={state.snapshots}
@@ -280,7 +265,7 @@ export function APTSuiteOperations({
               },
               {
                 key: "archive",
-                label: text("灾备归档", "Disaster recovery"),
+                label: t("repository.disasterRecovery"),
                 children: (
                   <APTArchiveOperations
                     repo={repo}
@@ -292,7 +277,7 @@ export function APTSuiteOperations({
               },
               {
                 key: "distribution",
-                label: text("晋升 / 复制", "Promote / replicate"),
+                label: t("repository.promoteReplicate"),
                 children: (
                   <RepositoryDistributionTab
                     key={current?.id ?? "empty"}

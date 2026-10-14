@@ -1,3 +1,4 @@
+import type { Translate } from "../../lib/preferences";
 import type { ColumnsType } from "antd/es/table";
 import type { Repository } from "../../client";
 import { Badge } from "../../components/ui/Badge";
@@ -6,8 +7,6 @@ import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { decodeRawPathForDisplay } from "../../lib/rawPath";
 import { ArtifactSecurityBadge } from "../artifact-detail/ArtifactSecurityBadge";
 import type { ArtifactRow } from "./artifactRow";
-
-type Localize = (chinese: string, english: string) => string;
 
 /**
  * The artifact table's columns for one repository: name-listed formats,
@@ -19,27 +18,27 @@ export function artifactColumns({
   repo,
   proxyMaven,
   showSecurityColumn,
-  text,
+  t,
 }: {
   descriptor: FormatDescriptor | undefined;
   repo: Repository;
   proxyMaven: boolean;
   showSecurityColumn: boolean;
-  text: Localize;
+  t: Translate;
 }): ColumnsType<ArtifactRow> {
   const securityColumn: ColumnsType<ArtifactRow>[number] = {
-    title: text("安全", "Security"),
+    title: t("repository.security"),
     key: "intelligence",
     width: 150,
     render: (_, record) => (
-      <ArtifactSecurityBadge summary={record.intelligence} text={text} />
+      <ArtifactSecurityBadge summary={record.intelligence} t={t} />
     ),
   };
 
   return descriptor?.nameListing
     ? [
         {
-          title: text("名称", "Name"),
+          title: t("repository.name"),
           dataIndex: "coordinate",
           key: "coordinate",
           ellipsis: true,
@@ -56,7 +55,7 @@ export function artifactColumns({
     : proxyMaven
       ? [
           {
-            title: text("Maven 坐标", "Maven coordinate"),
+            title: t("repository.mavenCoordinate"),
             dataIndex: "coordinate",
             key: "coordinate",
             ellipsis: true,
@@ -70,20 +69,19 @@ export function artifactColumns({
             ),
           },
           {
-            title: text("文件", "Files"),
+            title: t("repository.files2"),
             key: "fileCount",
             width: 120,
             render: (_, record) => (
               <Badge tone="neutral">
-                {text(
-                  `${record.fileCount ?? record.files?.length ?? 0} 个文件`,
-                  `${record.fileCount ?? record.files?.length ?? 0} files`,
-                )}
+                {t("repository.files3", {
+                  count: record.fileCount ?? record.files?.length ?? 0,
+                })}
               </Badge>
             ),
           },
           {
-            title: text("主文件大小", "Primary size"),
+            title: t("repository.primarySize"),
             key: "size",
             width: 140,
             render: (_, record) => (
@@ -93,7 +91,7 @@ export function artifactColumns({
             ),
           },
           {
-            title: text("类型", "Type"),
+            title: t("repository.type"),
             dataIndex: "contentType",
             key: "contentType",
             width: 180,
@@ -106,7 +104,7 @@ export function artifactColumns({
       : descriptor?.assetColumns
         ? [
             {
-              title: text("APT 路径", "APT path"),
+              title: t("repository.aPTPath"),
               dataIndex: "coordinate",
               key: "coordinate",
               ellipsis: true,
@@ -120,7 +118,7 @@ export function artifactColumns({
               ),
             },
             {
-              title: text("内容类型", "Content type"),
+              title: t("repository.contentType"),
               dataIndex: "contentType",
               key: "contentType",
               width: 220,
@@ -130,7 +128,7 @@ export function artifactColumns({
               ),
             },
             {
-              title: text("大小", "Size"),
+              title: t("repository.size"),
               dataIndex: "size",
               key: "size",
               width: 120,
@@ -141,7 +139,7 @@ export function artifactColumns({
               ),
             },
             {
-              title: text("摘要", "Digest"),
+              title: t("repository.digest"),
               dataIndex: "digest",
               key: "digest",
               width: 180,
@@ -158,8 +156,8 @@ export function artifactColumns({
             {
               title:
                 repo.type === "proxy"
-                  ? text("首次缓存", "First cached")
-                  : text("已发布", "Published"),
+                  ? t("repository.firstCached")
+                  : t("repository.published"),
               dataIndex: "createdAt",
               key: "createdAt",
               width: 180,
@@ -173,7 +171,7 @@ export function artifactColumns({
         : descriptor?.versionColumns
           ? [
               {
-                title: text(...descriptor.artifactColumn),
+                title: t(descriptor.artifactColumn),
                 dataIndex: "coordinate",
                 key: "coordinate",
                 ellipsis: true,
@@ -187,22 +185,21 @@ export function artifactColumns({
                 ),
               },
               {
-                title: text("版本", "Versions"),
+                title: t("repository.versions"),
                 key: "versionCount",
                 width: 120,
                 render: (_, record) => (
                   <Badge tone="neutral">
                     {record.versionCount !== undefined
-                      ? text(
-                          `${record.versionCount} 个版本`,
-                          `${record.versionCount} versions`,
-                        )
-                      : text("展开查看", "Open to inspect")}
+                      ? t("repository.versions2", {
+                          versionCount: record.versionCount,
+                        })
+                      : t("repository.openToInspect")}
                   </Badge>
                 ),
               },
               {
-                title: text("最新版本", "Latest version"),
+                title: t("repository.latestVersion"),
                 dataIndex: "latestVersion",
                 key: "latestVersion",
                 width: 160,
@@ -213,7 +210,7 @@ export function artifactColumns({
                 ),
               },
               {
-                title: text("更新时间", "Updated"),
+                title: t("repository.updated"),
                 dataIndex: "createdAt",
                 key: "createdAt",
                 width: 180,
@@ -227,7 +224,7 @@ export function artifactColumns({
             ]
           : [
               {
-                title: text("文件路径", "File path"),
+                title: t("repository.filePath"),
                 dataIndex: "coordinate",
                 key: "coordinate",
                 ellipsis: true,
@@ -244,7 +241,7 @@ export function artifactColumns({
                 },
               },
               {
-                title: text("摘要", "Digest"),
+                title: t("repository.digest"),
                 dataIndex: "digest",
                 key: "digest",
                 width: 180,
@@ -259,7 +256,7 @@ export function artifactColumns({
                 ),
               },
               {
-                title: text("大小", "Size"),
+                title: t("repository.size"),
                 dataIndex: "size",
                 key: "size",
                 width: 120,
@@ -270,7 +267,7 @@ export function artifactColumns({
                 ),
               },
               {
-                title: text("最后更新时间", "Last updated"),
+                title: t("repository.lastUpdated"),
                 dataIndex: "createdAt",
                 key: "createdAt",
                 width: 180,

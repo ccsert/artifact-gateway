@@ -22,7 +22,7 @@ export function RepositoryCapacityTab({ repo }: { repo: Repository }) {
 }
 
 function RepositoryCapacityContent({ repo }: { repo: Repository }) {
-  const { resolvedTheme, text } = usePreferences();
+  const { resolvedTheme, t } = usePreferences();
   const queryClient = useQueryClient();
   const capacityQuery = useRepositoryCapacity(repo.id);
   const capacity = capacityQuery.data ?? null;
@@ -49,7 +49,7 @@ function RepositoryCapacityContent({ repo }: { repo: Repository }) {
         setSaveError(err);
         return;
       }
-      setNotice(text("配额已更新", "Quota updated"));
+      setNotice(t("repository.quotaUpdated"));
       setQuotaGiB(null);
       void queryClient.invalidateQueries({
         queryKey: repositoryKeys.capacity(repo.id),
@@ -64,7 +64,7 @@ function RepositoryCapacityContent({ repo }: { repo: Repository }) {
   if (error !== null && !capacity)
     return isNotFound(error) ? (
       <RepositoryFeatureUnavailable
-        feature={text("容量管理", "Capacity management")}
+        feature={t("repository.capacityManagement")}
       />
     ) : (
       <ErrorBanner error={error} onRetry={load} />
@@ -88,29 +88,29 @@ function RepositoryCapacityContent({ repo }: { repo: Repository }) {
         items={[
           {
             label: proxy
-              ? text("缓存用量", "Cache usage")
-              : text("已用空间", "Used space"),
+              ? t("repository.cacheUsage")
+              : t("repository.usedSpace"),
             value: formatBytes(capacity.usedBytes),
           },
           {
             label: proxy
-              ? text("缓存对象", "Cached objects")
-              : text("对象数量", "Object count"),
+              ? t("repository.cachedObjects")
+              : t("repository.objectCount"),
             value: formatNumber(capacity.objectCount),
           },
           {
-            label: text("配额", "Quota"),
+            label: t("repository.quota"),
             value:
               capacity.quotaBytes > 0
                 ? formatBytes(capacity.quotaBytes)
-                : text("无限制", "Unlimited"),
+                : t("repository.unlimited"),
           },
         ]}
       />
       {capacity.quotaBytes > 0 && (
         <div>
           <div className="mb-1.5 flex justify-between text-xs text-fg-tertiary">
-            <span>{text("使用率", "Utilization")}</span>
+            <span>{t("repository.utilization")}</span>
             <span>{pct.toFixed(1)}%</span>
           </div>
           <Progress
@@ -126,12 +126,7 @@ function RepositoryCapacityContent({ repo }: { repo: Repository }) {
         </div>
       )}
       <div className="flex max-w-lg items-end gap-2">
-        <Field
-          label={text(
-            "配额 (GiB，0 表示无限制)",
-            "Quota (GiB, 0 for unlimited)",
-          )}
-        >
+        <Field label={t("repository.quotaGiB0ForUnlimited")}>
           <Space.Compact block>
             <InputNumber
               min={0}
@@ -144,7 +139,7 @@ function RepositoryCapacityContent({ repo }: { repo: Repository }) {
           </Space.Compact>
         </Field>
         <Button type="primary" onClick={save} loading={saving}>
-          {text("更新配额", "Update quota")}
+          {t("repository.updateQuota")}
         </Button>
       </div>
     </div>

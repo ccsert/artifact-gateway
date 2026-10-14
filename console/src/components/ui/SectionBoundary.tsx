@@ -28,13 +28,11 @@ function SectionFallback({
   title?: string;
   onRetry: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <div className="ag-section-fallback">
       <ErrorBanner
-        title={
-          title ?? text("此区域暂时无法显示", "This section is unavailable")
-        }
+        title={title ?? t("ui.thisSectionIsUnavailable")}
         error={error}
         onRetry={onRetry}
       />

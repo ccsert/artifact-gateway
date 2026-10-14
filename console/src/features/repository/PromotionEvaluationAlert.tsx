@@ -12,48 +12,40 @@ export function PromotionEvaluationAlert({
   evaluation: SecurityPolicyEvaluation;
   artifactQuarantined: boolean;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <Alert
       type={evaluation.allowed ? "success" : "warning"}
       showIcon
-      title={text(
+      title={
         artifactQuarantined
-          ? "制品已隔离，无法晋升或复制"
+          ? t("repository.artifactIsQuarantinedAndCannotBePromotedOr")
           : evaluation.allowed
-            ? "安全策略允许晋升"
-            : "安全策略阻止晋升",
-        artifactQuarantined
-          ? "Artifact is quarantined and cannot be promoted or replicated"
-          : evaluation.allowed
-            ? "Security policy allows promotion"
-            : "Security policy blocks promotion",
-      )}
+            ? t("repository.securityPolicyAllowsPromotion")
+            : t("repository.securityPolicyBlocksPromotion")
+      }
       description={
         <div className="space-y-2 text-xs">
           {artifactQuarantined && (
             <p>
-              {text(
-                "请先在制品详情中解除隔离，然后重新评估准入。",
-                "Release the artifact from its details, then evaluate admission again.",
-              )}
+              {t("repository.releaseTheArtifactFromItsDetailsThenEvaluate")}
             </p>
           )}
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-fg-tertiary">
             <span>
-              {text("策略版本", "Policy version")}: {evaluation.policyVersion}
+              {t("repository.policyVersion")}: {evaluation.policyVersion}
             </span>
             <span>
-              {text("策略状态", "Enforcement")}:{" "}
+              {t("repository.enforcement")}:{" "}
               {evaluation.enforced
-                ? text("已启用", "enabled")
-                : text("未启用", "disabled")}
+                ? t("repository.enabled2")
+                : t("repository.disabled2")}
             </span>
             <span>
-              {text("制品情报", "Artifact intelligence")}:{" "}
+              {t("repository.artifactIntelligence")}:{" "}
               {evaluation.intelligencePresent
-                ? text("已找到", "found")
-                : text("未找到", "not found")}
+                ? t("repository.found")
+                : t("repository.notFound")}
             </span>
           </div>
           {evaluation.reasons.length > 0 && (
@@ -63,7 +55,7 @@ export function PromotionEvaluationAlert({
                   className="rounded border border-current/20 px-2 py-1 font-mono"
                   key={reason}
                 >
-                  {securityReason(reason, text)}
+                  {securityReason(reason, t)}
                 </span>
               ))}
             </div>

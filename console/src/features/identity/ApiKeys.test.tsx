@@ -7,6 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApiKey, listApiKeys, revokeApiKey } from "../../client";
 import { AntdProvider } from "../../app/AntdProvider";
@@ -34,13 +35,15 @@ function clickMask() {
 
 function renderPage() {
   return render(
-    <TestQueryProvider>
-      <PreferencesProvider>
-        <AntdProvider>
-          <ApiKeysPage />
-        </AntdProvider>
-      </PreferencesProvider>
-    </TestQueryProvider>,
+    <MemoryRouter>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            <ApiKeysPage />
+          </AntdProvider>
+        </PreferencesProvider>
+      </TestQueryProvider>
+    </MemoryRouter>,
   );
 }
 

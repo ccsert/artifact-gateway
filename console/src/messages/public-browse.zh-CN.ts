@@ -1,8 +1,5 @@
 export const publicBrowseZhCN = {
   "public.browseTitle": "公开制品浏览",
-  "public.catalogTitle": "公开制品",
-  "public.description":
-    "仅显示已启用匿名读取的仓库内容；写入与管理操作仍需登录。",
   "public.managementLogin": "管理登录",
   "public.managementConsole": "进入管理端",
   "publicBrowse.loadingPublicRepositories": "正在读取公开仓库…",
@@ -111,6 +108,37 @@ export const publicBrowseZhCN = {
   "publicBrowse.registerACargoRegistry": "注册 Cargo 仓库源",
   "publicBrowse.registerAnAptSource": "注册 APT 软件源",
   "publicBrowse.registerARawSource": "注册 Raw 源地址",
+  "publicBrowse.selectPackageVersion": "选择包版本",
+  "publicBrowse.searchConanPackageVersions": "搜索并选择 Conan 包版本",
+  "publicBrowse.versionsAreGroupedUnderTheSameNameUser":
+    "同一 name@user/channel 下收拢不同版本；选定版本后再查看 recipe revision。",
+  "publicBrowse.enterRevisionOrDigest": "输入 revision 或 digest",
+  "publicBrowse.loadingRevisions": "正在读取 revision…",
+  "publicBrowse.noMatchingRevisions": "没有匹配 revision",
+  "publicBrowse.searchRecipeRevisions": "搜索并选择 recipe revision",
+  "publicBrowse.loadMoreRevisions": "再加载 {VERSION_PAGE_SIZE} 个 revision",
+  "publicBrowse.selectARecipeRevisionToViewDetailsAnd":
+    "选择一个 recipe revision 查看详情与使用方式。",
+  "publicBrowse.conanPackage": "Conan 包",
+  "publicBrowse.latestVersion": "最新版本",
+  "publicBrowse.versions2": "版本数",
+  "publicBrowse.currentRevision": "当前 revision",
+  "publicBrowse.copyConanPackageIdentifier": "复制 Conan 包标识",
+  "publicBrowse.copy2": "复制",
+  "publicBrowse.artifact": "制品",
+  "publicBrowse.searchMavenVersions": "搜索并选择 Maven 版本",
+  "publicBrowse.searchByVersionOrSNAPSHOTBuildNumberWithout":
+    "在选择器中输入版本号或 SNAPSHOT 构建号即可定位，不会铺开全部版本。",
+  "publicBrowse.buildType": "构建类型",
+  "publicBrowse.release": "发布版本",
+  "publicBrowse.artifactBrowser": "制品浏览",
+  "publicBrowse.failedToReadPublicRepositories": "读取公开仓库失败 ({status})",
+  "publicBrowse.failedToReadOciVersions": "读取 OCI 版本失败",
+  "publicBrowse.failedToReadOciTags": "读取 OCI 标签失败",
+  "publicBrowse.failedToReadOciTagsStatus": "读取 OCI 标签失败 ({status})",
+  "publicBrowse.failedToReadOciManifest": "读取 OCI manifest 失败",
+  "publicBrowse.failedToReadConanRevisions": "读取 Conan revisions 失败",
+  "publicBrowse.untaggedDigest": "无标签 · {digest}",
 } as const;
 
 export type PublicBrowseMessageKey = keyof typeof publicBrowseZhCN;

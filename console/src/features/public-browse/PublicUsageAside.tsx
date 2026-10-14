@@ -16,14 +16,14 @@ export function PublicUsageAside({
   copiedCoordinate: string | null;
   onCopyUsage: (snippet: UsageSnippet) => unknown;
 }) {
-  const { t, text } = usePreferences();
+  const { t } = usePreferences();
   const usageLabel = publicUsageLabel(selectedRepository.format, t);
   const globalUsage = publicRepositoryUsage({
     format: selectedRepository.format,
     repositoryName: selectedRepository.name,
     origin: window.location.origin,
     host: window.location.host,
-    text,
+    t,
   });
   const copyUsage = onCopyUsage;
   return (

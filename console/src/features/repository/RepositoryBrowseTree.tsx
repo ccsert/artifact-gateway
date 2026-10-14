@@ -40,7 +40,7 @@ export function RepositoryBrowseTree({
   onGroupRefresh?: (page: GroupBrowsePage) => void;
   onOpenInList: (node: BrowseNode) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const requestVersion = useRef(0);
   const pending = useRef(new Map<string, Promise<void>>());
   const retryAction = useRef<(() => Promise<void>) | null>(null);
@@ -83,7 +83,7 @@ export function RepositoryBrowseTree({
         {node.sources && node.sources.length > 1 && (
           <span
             className="ag-repository-tree-node-meta"
-            title={text("多个本地来源", "Multiple local sources")}
+            title={t("repository.multipleLocalSources")}
           >
             <BranchesOutlined aria-hidden /> {node.sources.length}
           </span>
@@ -95,7 +95,7 @@ export function RepositoryBrowseTree({
         )}
       </span>
     ),
-    [text],
+    [t],
   );
 
   const toTreeNodes = useCallback(
@@ -114,7 +114,7 @@ export function RepositoryBrowseTree({
       if (nextPageToken) {
         nodes.push({
           key: `more:${parentId ?? "root"}:${nextPageToken}`,
-          title: text("加载更多", "Load more"),
+          title: t("repository.loadMore"),
           isLeaf: true,
           loadMore: true,
           parentId,
@@ -124,7 +124,7 @@ export function RepositoryBrowseTree({
       }
       return nodes;
     },
-    [nodeTitle, text],
+    [nodeTitle, t],
   );
 
   const loadRoot = useCallback(
@@ -142,8 +142,7 @@ export function RepositoryBrowseTree({
         if (version !== requestVersion.current) return;
         if (response.error || !response.data) {
           setError(
-            response.error ??
-              new Error(text("读取目录失败", "Failed to load directory")),
+            response.error ?? new Error(t("repository.failedToLoadDirectory")),
           );
           return;
         }
@@ -168,7 +167,7 @@ export function RepositoryBrowseTree({
         }
       }
     },
-    [onGroupRefresh, requestPage, text, toTreeNodes],
+    [onGroupRefresh, requestPage, t, toTreeNodes],
   );
 
   useEffect(() => {
@@ -206,8 +205,7 @@ export function RepositoryBrowseTree({
         if (version !== requestVersion.current) return;
         if (response.error || !response.data) {
           throw (
-            response.error ??
-            new Error(text("读取目录失败", "Failed to load directory"))
+            response.error ?? new Error(t("repository.failedToLoadDirectory"))
           );
         }
         const page = toTreeNodes(
@@ -264,7 +262,7 @@ export function RepositoryBrowseTree({
   };
 
   if (loading) {
-    return <Loading label={text("正在读取目录…", "Loading directory…")} />;
+    return <Loading label={t("repository.loadingDirectory")} />;
   }
 
   if (treeData.length === 0 && error !== null) {
@@ -275,22 +273,13 @@ export function RepositoryBrowseTree({
     return (
       <EmptyState
         compact
-        title={text("暂无可浏览制品", "No browseable artifacts")}
+        title={t("repository.noBrowseableArtifacts")}
         hint={
           repo.type === "group"
-            ? text(
-                "当前可读取的成员尚无已发布制品或有效缓存。",
-                "Readable members have no published artifacts or live cache entries yet.",
-              )
+            ? t("repository.readableMembersHaveNoPublishedArtifactsOrLive")
             : repo.type === "proxy"
-              ? text(
-                  "Proxy 目录只展示已经获取并记录的缓存资产。",
-                  "Proxy directories show only fetched and recorded cache assets.",
-                )
-              : text(
-                  "发布 Maven 制品或上传 Raw 文件后，目录会按格式语义自动生成。",
-                  "Publish Maven artifacts or upload Raw files to populate the format-aware directory.",
-                )
+              ? t("repository.proxyDirectoriesShowOnlyFetchedAndRecordedCache")
+              : t("repository.publishMavenArtifactsOrUploadRawFilesTo")
         }
       />
     );
@@ -305,23 +294,17 @@ export function RepositoryBrowseTree({
       )}
       <section
         className="ag-repository-tree-pane"
-        aria-label={text("仓库目录", "Repository directory")}
+        aria-label={t("repository.repositoryDirectory")}
       >
         <div className="ag-repository-tree-heading">
           <div>
-            <h3>{text("制品目录", "Artifact directory")}</h3>
+            <h3>{t("repository.artifactDirectory")}</h3>
             <p>
               {repo.type === "group"
-                ? text(
-                    "成员制品与已知缓存",
-                    "Member publications and known cache",
-                  )
+                ? t("repository.memberPublicationsAndKnownCache")
                 : repo.type === "proxy"
-                  ? text("只显示已缓存资产", "Cached assets only")
-                  : text(
-                      "按目录逐层浏览制品",
-                      "Explore artifacts by directory",
-                    )}
+                  ? t("repository.cachedAssetsOnly")
+                  : t("repository.exploreArtifactsByDirectory")}
             </p>
           </div>
           <div className="ag-repository-tree-tools">
@@ -330,19 +313,19 @@ export function RepositoryBrowseTree({
               size="small"
               icon={<ShrinkOutlined />}
               disabled={expandedKeys.length === 0}
-              aria-label={text("收起全部目录", "Collapse all directories")}
-              title={text("收起全部目录", "Collapse all directories")}
+              aria-label={t("repository.collapseAllDirectories")}
+              title={t("repository.collapseAllDirectories")}
               onClick={() => setExpandedKeys([])}
             />
             <Button
               type="text"
               size="small"
               icon={<ReloadOutlined aria-hidden />}
-              aria-label={text("刷新", "Refresh")}
+              aria-label={t("repository.refresh")}
               loading={refreshing}
               onClick={() => void loadRoot(true)}
             >
-              {text("刷新", "Refresh")}
+              {t("repository.refresh")}
             </Button>
           </div>
         </div>
@@ -367,7 +350,7 @@ export function RepositoryBrowseTree({
           <Tree.DirectoryTree<RepositoryTreeDataNode>
             key={treeEpoch}
             className="ag-repository-tree"
-            aria-label={text("制品目录树", "Artifact directory tree")}
+            aria-label={t("repository.artifactDirectoryTree")}
             blockNode
             expandAction="click"
             loadData={loadChildren}
@@ -381,13 +364,10 @@ export function RepositoryBrowseTree({
           />
         </ConfigProvider>
         <div className="ag-repository-tree-footer">
-          {text(
-            `已加载 ${loadedNodeCount(treeData)} 项`,
-            `${loadedNodeCount(treeData)} entries loaded`,
-          )}
-          <span>
-            {text("展开目录加载更多", "Expand directories to load more")}
-          </span>
+          {t("repository.entriesLoaded", {
+            loadedNodeCount: loadedNodeCount(treeData),
+          })}
+          <span>{t("repository.expandDirectoriesToLoadMore")}</span>
         </div>
       </section>
       <BrowseNodePanel

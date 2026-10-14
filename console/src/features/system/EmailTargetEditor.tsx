@@ -34,7 +34,7 @@ export function EmailTargetEditor({
   onSaved: () => void;
   onAuthBlocked: (error: unknown) => void;
 }) {
-  const { text, locale: uiLocale } = usePreferences();
+  const { t, locale: uiLocale } = usePreferences();
   const [current, setCurrent] = useState(target);
   const [name, setName] = useState(target?.name ?? "");
   const [locale, setLocale] = useState<"en" | "zh-CN">(
@@ -46,21 +46,15 @@ export function EmailTargetEditor({
   const errors = attempted ? emailTargetErrors(name, recipient, !current) : {};
   const nameError =
     errors.name === "required"
-      ? text("请输入目标名称。", "Enter a target name.")
+      ? t("system.enterATargetName")
       : errors.name
-        ? text(
-            "名称须为 1–128 字，不能包含换行或空字符。",
-            "Use a 1–128 character name without line breaks or null characters.",
-          )
+        ? t("system.useA1128CharacterNameWithoutLine")
         : undefined;
   const recipientError =
     errors.recipient === "required"
-      ? text("请输入单个收件人邮箱地址。", "Enter one recipient email address.")
+      ? t("system.enterOneRecipientEmailAddress")
       : errors.recipient
-        ? text(
-            "请输入单个有效邮箱，不含显示名、分隔符或换行。",
-            "Enter one valid mailbox without a display name, separators, or line breaks.",
-          )
+        ? t("system.enterOneValidMailboxWithoutADisplayName")
         : undefined;
   const action = useQuotaAction(onAuthBlocked);
   const reload = useQuotaAction(onAuthBlocked);
@@ -69,17 +63,17 @@ export function EmailTargetEditor({
   return (
     <div className="ag-page-stack">
       {Boolean(action.error) && !acknowledged && (
-        <ErrorBanner error={safeEmailError(action.error, text, "save")} />
+        <ErrorBanner error={safeEmailError(action.error, t, "save")} />
       )}
       {Boolean(reload.error) && (
-        <ErrorBanner error={safeEmailError(reload.error, text, "read")} />
+        <ErrorBanner error={safeEmailError(reload.error, t, "read")} />
       )}
       <Card>
         <CardHeader
           title={
             current
-              ? text("编辑邮件目标", "Edit email target")
-              : text("新建停用邮件目标", "Create disabled email target")
+              ? t("system.editEmailTarget")
+              : t("system.createDisabledEmailTarget")
           }
         />
         <form
@@ -132,24 +126,21 @@ export function EmailTargetEditor({
           <Field
             id={`${baseId}-name`}
             error={nameError}
-            label={text("目标名称", "Target name")}
-            hint={text(
-              "使用团队或用途名称，不要把邮箱地址写入名称。",
-              "Use a team or purpose name; do not put a mailbox in the name.",
-            )}
+            label={t("system.targetName")}
+            hint={t("system.useATeamOrPurposeNameDoNot")}
           >
             <Input
               {...fieldFeedback(`${baseId}-name`, nameError, true)}
-              aria-label={text("目标名称", "Target name")}
+              aria-label={t("system.targetName")}
               value={name}
               disabled={action.busy || reload.busy}
               autoComplete="off"
               onChange={(e) => setName(e.target.value)}
             />
           </Field>
-          <Field label={text("邮件语言", "Email language")}>
+          <Field label={t("system.emailLanguage")}>
             <Select
-              aria-label={text("邮件语言", "Email language")}
+              aria-label={t("system.emailLanguage")}
               value={locale}
               disabled={action.busy || reload.busy}
               onChange={setLocale}
@@ -162,22 +153,16 @@ export function EmailTargetEditor({
           <Field
             id={`${baseId}-recipient`}
             error={recipientError}
-            label={text("收件人地址", "Recipient address")}
+            label={t("system.recipientAddress")}
             hint={
               current
-                ? text(
-                    "旧地址只写不可读。留空保留，输入新地址替换；取消或冲突会清除输入。",
-                    "The existing address is write-only. Leave empty to retain it or enter a replacement; cancel or conflict clears the input.",
-                  )
-                : text(
-                    "只保存一个收件人，地址不会回显。新目标默认停用。",
-                    "One recipient only; its address is never returned. New targets are disabled.",
-                  )
+                ? t("system.theExistingAddressIsWriteOnlyLeaveEmpty")
+                : t("system.oneRecipientOnlyItsAddressIsNeverReturned")
             }
           >
             <Input
               {...fieldFeedback(`${baseId}-recipient`, recipientError, true)}
-              aria-label={text("收件人地址", "Recipient address")}
+              aria-label={t("system.recipientAddress")}
               value={recipient}
               disabled={action.busy || reload.busy || conflict}
               autoComplete="off"
@@ -187,24 +172,22 @@ export function EmailTargetEditor({
           </Field>
           <p className="text-sm text-fg-tertiary">
             {current
-              ? text(
-                  `当前目标${current.enabled ? "已启用" : "已停用"}；保存保留该状态，不发送测试。`,
-                  `The target is ${current.enabled ? "enabled" : "disabled"}; saving retains this state and sends no test.`,
+              ? t(
+                  current.enabled
+                    ? "system.theTargetIsEnabledSavingRetainsThisState"
+                    : "system.theTargetIsDisabledSavingRetainsThisState",
                 )
-              : text(
-                  "保存不会启用目标或发送邮件。",
-                  "Saving does not enable the target or send mail.",
-                )}
+              : t("system.savingDoesNotEnableTheTargetOrSend")}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
-              aria-label={text("取消", "Cancel")}
+              aria-label={t("system.cancel")}
               onClick={() => {
                 setRecipient("");
                 onCancel();
               }}
             >
-              {text("取消", "Cancel")}
+              {t("system.cancel")}
             </Button>
             {conflict && current && (
               <Button
@@ -227,10 +210,7 @@ export function EmailTargetEditor({
                   )
                 }
               >
-                {text(
-                  "刷新最新目标并重新编辑",
-                  "Refresh latest target and edit again",
-                )}
+                {t("system.refreshLatestTargetAndEditAgain")}
               </Button>
             )}
             <Button
@@ -240,8 +220,8 @@ export function EmailTargetEditor({
               disabled={!writable || conflict || reload.busy}
             >
               {current
-                ? text("保存目标", "Save target")
-                : text("保存停用目标", "Save disabled target")}
+                ? t("system.saveTarget")
+                : t("system.saveDisabledTarget")}
             </Button>
           </div>
         </form>

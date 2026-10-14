@@ -29,7 +29,7 @@ export function useDistributionRequest({
   setNotice: (notice: string) => void;
   onSubmitted: () => Promise<unknown>;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   // APT promotes and replicates into a named distribution suite.
   const suiteTarget = Boolean(formatDescriptor(repo.format)?.distributionSuite);
   const [targetId, setTargetId] = useState("");
@@ -101,14 +101,8 @@ export function useDistributionRequest({
       submission.current = null;
       setNotice(
         kind === "promote"
-          ? text(
-              "晋升任务已提交，请在目标仓库的「生命周期任务」查看进度",
-              "Promotion submitted. Track it on the target repository's Lifecycle jobs tab.",
-            )
-          : text(
-              "复制计划已创建，下方查看进度",
-              "Replication plan created. Track its progress below.",
-            ),
+          ? t("repository.promotionSubmittedTrackItOnTheTargetRepository")
+          : t("repository.replicationPlanCreatedTrackItsProgressBelow"),
       );
       setCoordinate("");
       setDigest("");

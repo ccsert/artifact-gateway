@@ -27,13 +27,13 @@ export function SearchHitDetail({
   selectedVersion: string | null;
   setSelectedVersion: (key: string | null) => void;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
 
   const row = tableRow.row;
   if (!formatDescriptor(row.format)) {
     return (
       <RepositoryFeatureUnavailable
-        feature={text("制品详情", "Artifact detail")}
+        feature={t("search.artifactDetail")}
         unsupportedFormat={row.format}
       />
     );
@@ -50,13 +50,10 @@ export function SearchHitDetail({
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <div className="text-sm font-medium text-fg">
-              {text("版本与构建", "Versions and builds")}
+              {t("search.versionsAndBuilds")}
             </div>
             <div className="mt-1 text-xs text-fg-tertiary">
-              {text(
-                "选择版本查看 POM、digest 和发布信息",
-                "Select a version to view its POM, digest, and publication details",
-              )}
+              {t("search.selectAVersionToViewItsPOMDigest")}
             </div>
           </div>
           <Button
@@ -64,7 +61,7 @@ export function SearchHitDetail({
             icon={<LinkOutlined />}
             onClick={() => openHit(tableRow.representative)}
           >
-            {text("打开最新版本", "Open latest version")}
+            {t("search.openLatestVersion")}
           </Button>
         </div>
         <div className="max-h-64 overflow-y-auto rounded-md border border-line">
@@ -87,16 +84,11 @@ export function SearchHitDetail({
                   <div className="mt-0.5 text-xs text-fg-tertiary">
                     {formatDate(versionHit.createdAt, locale)} ·{" "}
                     {formatBytes(versionHit.size)} ·{" "}
-                    {versionHit.publisher ??
-                      text("发布者未记录", "Publisher not recorded")}
+                    {versionHit.publisher ?? t("search.publisherNotRecorded")}
                   </div>
                 </button>
                 <Space size={2}>
-                  <Tooltip
-                    title={
-                      versionHit.digest ?? text("暂无 digest", "No digest")
-                    }
-                  >
+                  <Tooltip title={versionHit.digest ?? t("search.noDigest")}>
                     <span>
                       {versionHit.digest ? (
                         <CopyableValue
@@ -105,7 +97,7 @@ export function SearchHitDetail({
                         />
                       ) : (
                         <span className="text-xs text-fg-disabled">
-                          {text("无 digest", "No digest")}
+                          {t("search.noDigest2")}
                         </span>
                       )}
                     </span>
@@ -114,10 +106,9 @@ export function SearchHitDetail({
                     type="text"
                     size="small"
                     icon={<LinkOutlined />}
-                    aria-label={text(
-                      `打开 ${versionHit.coordinate}`,
-                      `Open ${versionHit.coordinate}`,
-                    )}
+                    aria-label={t("search.open", {
+                      coordinate: versionHit.coordinate,
+                    })}
                     onClick={() => openHit(versionHit)}
                   />
                 </Space>
@@ -132,26 +123,26 @@ export function SearchHitDetail({
           items={[
             {
               key: "publisher",
-              label: text("发布者", "Publisher"),
-              children: hit.publisher ?? text("未记录", "Not recorded"),
+              label: t("search.publisher"),
+              children: hit.publisher ?? t("search.notRecorded"),
             },
             {
               key: "createdAt",
-              label: text("发布时间", "Published"),
+              label: t("search.published"),
               children: formatDate(hit.createdAt, locale),
             },
             {
               key: "size",
-              label: text("大小", "Size"),
+              label: t("search.size"),
               children: formatBytes(hit.size),
             },
             {
               key: "matchKind",
-              label: text("匹配依据", "Matched by"),
+              label: t("search.matchedBy"),
               children:
                 hit.matchKind === "digest"
-                  ? text("SHA-256 摘要", "SHA-256 digest")
-                  : text("制品坐标", "Artifact coordinate"),
+                  ? t("search.sHA256Digest")
+                  : t("search.artifactCoordinate2"),
             },
           ]}
         />
@@ -185,7 +176,7 @@ export function SearchHitDetail({
             icon={<LinkOutlined />}
             onClick={() => openHit(hit)}
           >
-            {text("在仓库中打开此版本", "Open this version in repository")}
+            {t("search.openThisVersionInRepository")}
           </Button>
         </div>
       </div>
@@ -205,22 +196,22 @@ export function SearchHitDetail({
         items={[
           {
             key: "repository",
-            label: text("仓库", "Repository"),
+            label: t("search.repository"),
             children: row.repositoryName,
           },
           {
             key: "publisher",
-            label: text("发布者", "Publisher"),
-            children: row.publisher ?? text("未记录", "Not recorded"),
+            label: t("search.publisher"),
+            children: row.publisher ?? t("search.notRecorded"),
           },
           {
             key: "contentType",
-            label: text("内容类型", "Content type"),
-            children: row.contentType ?? text("未记录", "Not recorded"),
+            label: t("search.contentType"),
+            children: row.contentType ?? t("search.notRecorded"),
           },
           {
             key: "createdAt",
-            label: text("发布时间", "Published"),
+            label: t("search.published"),
             children: formatDate(row.createdAt, locale),
           },
         ]}
@@ -233,8 +224,8 @@ export function SearchHitDetail({
               tone={row.matchKind === "digest" ? "visualization-1" : "neutral"}
             >
               {row.matchKind === "digest"
-                ? text("精确匹配", "Exact match")
-                : text("校验信息", "Checksum")}
+                ? t("search.exactMatch")
+                : t("search.checksum")}
             </Badge>
           </div>
           <CopyableValue
@@ -262,7 +253,7 @@ export function SearchHitDetail({
           icon={<LinkOutlined />}
           onClick={() => openHit(row)}
         >
-          {text("在仓库中打开", "Open in repository")}
+          {t("search.openInRepository2")}
         </Button>
       </div>
     </div>

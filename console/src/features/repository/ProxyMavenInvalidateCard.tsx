@@ -12,7 +12,7 @@ export function ProxyMavenInvalidateCard({
   repoId: string;
   onWarmed: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [invalidateInput, setInvalidateInput] = useState("");
   const [invalidateScope, setInvalidateScope] = useState<
     "path" | "version" | "component" | "repository"
@@ -28,9 +28,7 @@ export function ProxyMavenInvalidateCard({
   const invalidate = async () => {
     const value = invalidateInput.trim();
     if (invalidateScope !== "repository" && !value) {
-      setInvalidateError(
-        text("请输入失效目标。", "Enter an invalidation target."),
-      );
+      setInvalidateError(t("repository.enterAnInvalidationTarget"));
       return;
     }
     setInvalidating(true);
@@ -47,14 +45,14 @@ export function ProxyMavenInvalidateCard({
         body,
       });
       if (error || !result)
-        throw new Error(text("失效缓存失败", "Failed to invalidate cache"));
+        throw new Error(t("repository.failedToInvalidateCache"));
       setInvalidateResult(result.invalidated);
       onWarmed();
     } catch (error) {
       setInvalidateError(
         error instanceof Error
           ? error.message
-          : text("失效缓存失败", "Failed to invalidate cache"),
+          : t("repository.failedToInvalidateCache"),
       );
     } finally {
       setInvalidating(false);
@@ -64,12 +62,7 @@ export function ProxyMavenInvalidateCard({
   const clearNegative = async () => {
     const path = invalidateInput.trim() ? mavenWarmPath(invalidateInput) : null;
     if (invalidateInput.trim() && !path) {
-      setNegativeError(
-        text(
-          "请输入 Maven GAV 或缓存路径。",
-          "Enter a Maven GAV or cache path.",
-        ),
-      );
+      setNegativeError(t("repository.enterAMavenGAVOrCachePath"));
       return;
     }
     setClearingNegative(true);
@@ -81,16 +74,14 @@ export function ProxyMavenInvalidateCard({
         body: { ...(path ? { path } : {}), prefix: invalidatePrefix },
       });
       if (error || !result)
-        throw new Error(
-          text("清理负缓存失败", "Failed to clear negative cache"),
-        );
+        throw new Error(t("repository.failedToClearNegativeCache"));
       setNegativeResult(result.cleared);
       onWarmed();
     } catch (error) {
       setNegativeError(
         error instanceof Error
           ? error.message
-          : text("清理负缓存失败", "Failed to clear negative cache"),
+          : t("repository.failedToClearNegativeCache"),
       );
     } finally {
       setClearingNegative(false);
@@ -100,17 +91,17 @@ export function ProxyMavenInvalidateCard({
   return (
     <div className="rounded-lg border border-line bg-surface-translucent px-3 py-3">
       <div className="mb-2 text-sm font-medium text-fg">
-        {text("失效缓存", "Invalidate cache")}
+        {t("repository.invalidateCache")}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Select
           className="w-28"
           value={invalidateScope}
           options={[
-            { value: "path", label: text("路径", "Path") },
-            { value: "version", label: text("版本", "Version") },
-            { value: "component", label: text("组件", "Component") },
-            { value: "repository", label: text("全部", "Repository") },
+            { value: "path", label: t("repository.path") },
+            { value: "version", label: t("repository.version") },
+            { value: "component", label: t("repository.component") },
+            { value: "repository", label: t("repository.repository") },
           ]}
           onChange={(value: typeof invalidateScope) =>
             setInvalidateScope(value)
@@ -134,7 +125,7 @@ export function ProxyMavenInvalidateCard({
             checked={invalidatePrefix}
             onChange={(e) => setInvalidatePrefix(e.target.checked)}
           >
-            {text("按前缀", "By prefix")}
+            {t("repository.byPrefix")}
           </Checkbox>
         )}
         <Button
@@ -142,16 +133,15 @@ export function ProxyMavenInvalidateCard({
           loading={invalidating}
           disabled={invalidateScope !== "repository" && !invalidateInput.trim()}
         >
-          {text("失效", "Invalidate")}
+          {t("repository.invalidate")}
         </Button>
         <Button onClick={clearNegative} loading={clearingNegative}>
-          {text("清理负缓存", "Clear negative cache")}
+          {t("repository.clearNegativeCache")}
         </Button>
       </div>
       <div className="mt-1 text-xs text-fg-disabled">
-        {text(
-          "版本、组件和全部会按对应 Maven 缓存前缀失效；只删除缓存索引，字节对象由 Orphan Collector 延迟回收。",
-          "Version, component, and repository invalidations use their Maven cache prefixes. Only cache indexes are removed; byte objects are reclaimed later by the orphan collector.",
+        {t(
+          "repository.versionComponentAndRepositoryInvalidationsUseTheirMaven",
         )}
       </div>
       {invalidateError && (
@@ -161,10 +151,7 @@ export function ProxyMavenInvalidateCard({
       )}
       {invalidateResult !== null && (
         <div className="mt-2 text-xs text-[var(--ag-status-success)]">
-          {text(
-            `已失效 ${invalidateResult} 个缓存条目。`,
-            `${invalidateResult} cache entries invalidated.`,
-          )}
+          {t("repository.cacheEntriesInvalidated", { invalidateResult })}
         </div>
       )}
       {negativeError && (
@@ -174,10 +161,7 @@ export function ProxyMavenInvalidateCard({
       )}
       {negativeResult !== null && (
         <div className="mt-2 text-xs text-[var(--ag-status-success)]">
-          {text(
-            `已清理 ${negativeResult} 个负-cache 条目。`,
-            `${negativeResult} negative-cache entries cleared.`,
-          )}
+          {t("repository.negativeCacheEntriesCleared", { negativeResult })}
         </div>
       )}
     </div>

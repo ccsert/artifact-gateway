@@ -45,7 +45,7 @@ async function readStatistics(
 }
 
 export function DashboardPage() {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const navigate = useNavigate();
   const groupsResource = useDashboardResource(
     dashboardKeys.groups(),
@@ -70,21 +70,18 @@ export function DashboardPage() {
   return (
     <div className="ag-page-stack">
       <PageHeader
-        title={text("总览", "Overview")}
-        description={text(
-          "Artifact Gateway 运行状态一览",
-          "Artifact Gateway runtime at a glance",
-        )}
+        title={t("dashboard.overview")}
+        description={t("dashboard.artifactGatewayRuntimeAtAGlance")}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Segmented
-              aria-label={text("统计窗口", "Statistics window")}
+              aria-label={t("dashboard.statisticsWindow")}
               value={window}
               onChange={(value) => setWindow(value as StatisticsWindow)}
               options={[
-                { label: text("1 天", "1 day"), value: "oneDay" },
-                { label: text("7 天", "7 days"), value: "sevenDays" },
-                { label: text("30 天", "30 days"), value: "thirtyDays" },
+                { label: t("dashboard.1Day"), value: "oneDay" },
+                { label: t("dashboard.7Days"), value: "sevenDays" },
+                { label: t("dashboard.30Days"), value: "thirtyDays" },
               ]}
             />
             <Button
@@ -92,14 +89,14 @@ export function DashboardPage() {
               icon={<DatabaseOutlined />}
               onClick={() => navigate("/repositories")}
             >
-              {text("管理仓库", "Manage repositories")}
+              {t("dashboard.manageRepositories")}
             </Button>
           </div>
         }
       />
       {statisticsResource.error ? (
         <ErrorBanner
-          title={text("仓库统计加载失败", "Repository statistics unavailable")}
+          title={t("dashboard.repositoryStatisticsUnavailable2")}
           error={statisticsResource.error}
           onRetry={statisticsResource.reload}
           tone={statistics ? "warning" : "error"}
@@ -107,14 +104,14 @@ export function DashboardPage() {
       ) : null}
       {groupsResource.error ? (
         <ErrorBanner
-          title={text("分组统计加载失败", "Group statistics unavailable")}
+          title={t("dashboard.groupStatisticsUnavailable2")}
           error={groupsResource.error}
           onRetry={groupsResource.reload}
           tone={groups ? "warning" : "error"}
         />
       ) : null}
       <SectionBoundary
-        title={text("运行统计暂时无法显示", "Runtime summary is unavailable")}
+        title={t("dashboard.runtimeSummaryIsUnavailable")}
         recoveryKeys={[statisticsResource.data, groupsResource.data]}
         onReset={() =>
           Promise.all([statisticsResource.reload(), groupsResource.reload()])
@@ -127,10 +124,7 @@ export function DashboardPage() {
         />
       </SectionBoundary>
       <SectionBoundary
-        title={text(
-          "仓库活动暂时无法显示",
-          "Repository activity is unavailable",
-        )}
+        title={t("dashboard.repositoryActivityIsUnavailable")}
         recoveryKeys={[statisticsResource.data]}
         onReset={statisticsResource.reload}
       >
@@ -141,20 +135,14 @@ export function DashboardPage() {
       </SectionBoundary>
       <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-2">
         <SectionBoundary
-          title={text(
-            "存储占用暂时无法显示",
-            "Storage by format is unavailable",
-          )}
+          title={t("dashboard.storageByFormatIsUnavailable")}
           recoveryKeys={[statisticsResource.data]}
           onReset={statisticsResource.reload}
         >
           <StorageByFormat statisticsResource={statisticsResource} />
         </SectionBoundary>
         <SectionBoundary
-          title={text(
-            "最近审计事件暂时无法显示",
-            "Recent audit events are unavailable",
-          )}
+          title={t("dashboard.recentAuditEventsAreUnavailable")}
           recoveryKeys={[auditsResource.data]}
           onReset={auditsResource.reload}
         >

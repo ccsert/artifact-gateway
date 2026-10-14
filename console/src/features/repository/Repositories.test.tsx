@@ -100,8 +100,9 @@ describe("RepositoriesPage role-scoped catalog", () => {
       </TestQueryProvider>,
     );
     await user.click(
-      await screen.findByRole("button", { name: "删除 retry-delete" }),
+      await screen.findByRole("button", { name: "retry-delete 的更多操作" }),
     );
+    await user.click(await screen.findByRole("menuitem", { name: "删除仓库" }));
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: /^删\s*除$/ }));
     expect(await screen.findByText("Deletion unavailable")).toBeVisible();
@@ -154,7 +155,7 @@ describe("RepositoriesPage role-scoped catalog", () => {
       screen.queryByRole("button", { name: "新建仓库" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /删除 release-files/ }),
+      screen.queryByRole("button", { name: /release-files 的更多操作/ }),
     ).not.toBeInTheDocument();
     expect(vi.mocked(listRepositoryCapacities)).not.toHaveBeenCalled();
     expect(vi.mocked(listFormatProfiles)).not.toHaveBeenCalled();
@@ -279,8 +280,9 @@ describe("RepositoriesPage role-scoped catalog", () => {
     );
 
     await user.click(
-      await screen.findByRole("button", { name: "删除 release-files" }),
+      await screen.findByRole("button", { name: "release-files 的更多操作" }),
     );
+    await user.click(await screen.findByRole("menuitem", { name: "删除仓库" }));
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: /^删\s*除$/ }));
 

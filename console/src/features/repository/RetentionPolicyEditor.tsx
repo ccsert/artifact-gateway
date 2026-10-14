@@ -30,7 +30,7 @@ export function RetentionPolicyEditor({
   onSaved: () => unknown;
 }) {
   const { token } = useAuth();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [enabled, setEnabled] = useState(policy.enabled ?? false);
   const [keepDays, setKeepDays] = useState(policy.keepDays);
   const [snapshotKeepDays, setSnapshotKeepDays] = useState(
@@ -64,23 +64,18 @@ export function RetentionPolicyEditor({
     loadMoreDryRun,
     execute,
     exportDryRun,
-  } = useRetentionDryRun({ repo, token, text, setSaveError, setNotice });
+  } = useRetentionDryRun({ repo, token, t, setSaveError, setNotice });
   const retentionModel =
     formatDescriptor(repo.format)?.retentionModel ?? "versions";
   const isMaven = retentionModel === "snapshots";
   const isRaw = retentionModel === "paths";
-  const copy = retentionFormatCopy(repo.format, text);
+  const copy = retentionFormatCopy(repo.format, t);
 
   const save = async () => {
     if (!policy) return;
     if (!isRaw && maximumVersions > 0 && maximumVersions < minimumVersions) {
       setSaveError(
-        new Error(
-          text(
-            "最多保留版本数必须为 0，或不小于最少保留版本数",
-            "Maximum versions must be 0 or greater than or equal to minimum versions.",
-          ),
-        ),
+        new Error(t("repository.maximumVersionsMustBe0OrGreaterThan")),
       );
       return;
     }
@@ -111,7 +106,7 @@ export function RetentionPolicyEditor({
         setSaveError(err);
         return;
       }
-      setNotice(text("策略已保存", "Policy saved"));
+      setNotice(t("repository.policySaved"));
       clearDryRun();
       void onSaved();
     } catch (nextError) {
@@ -131,29 +126,23 @@ export function RetentionPolicyEditor({
         <Notice
           tone="info"
           closable={false}
-          title={text("Raw 按路径资产清理", "Raw cleanup by path asset")}
-          description={text(
-            "Raw 没有版本分组，因此不应用最少或最多版本数；期限按资产最后更新时间计算。",
-            "Raw assets are not version-grouped, so minimum and maximum versions do not apply. Age is calculated from the last update.",
-          )}
+          title={t("repository.rawCleanupByPathAsset")}
+          description={t("repository.rawAssetsAreNotVersionGroupedSoMinimum")}
         />
       )}
       <div className="flex items-center justify-between border-b border-line pb-4">
         <div>
           <div className="text-sm font-medium text-fg">
-            {text("自动清理", "Automatic cleanup")}
+            {t("repository.automaticCleanup")}
           </div>
           <div className="mt-1 text-xs text-fg-tertiary">
-            {text(
-              "关闭时不会创建定时或手动清理任务，已有墓碑不受影响。",
-              "When disabled, no scheduled or manual cleanup task is created. Existing tombstones are unaffected.",
-            )}
+            {t("repository.whenDisabledNoScheduledOrManualCleanupTask")}
           </div>
         </div>
         <Switch
           checked={enabled}
-          checkedChildren={text("已启用", "Enabled")}
-          unCheckedChildren={text("已停用", "Disabled")}
+          checkedChildren={t("repository.enabled")}
+          unCheckedChildren={t("repository.disabled")}
           onChange={setEnabled}
         />
       </div>
@@ -170,16 +159,13 @@ export function RetentionPolicyEditor({
               value={keepDays}
               onChange={(value) => setKeepDays(value ?? 0)}
             />
-            <Space.Addon>{text("天", "days")}</Space.Addon>
+            <Space.Addon>{t("repository.days")}</Space.Addon>
           </Space.Compact>
         </Field>
         {isMaven && (
           <Field
-            label={text("快照版本保留天数", "Snapshot retention days")}
-            hint={text(
-              "Maven SNAPSHOT 可使用独立于发布版本的保留期限。",
-              "Maven SNAPSHOT versions can use a retention period separate from releases.",
-            )}
+            label={t("repository.snapshotRetentionDays")}
+            hint={t("repository.mavenSNAPSHOTVersionsCanUseARetentionPeriod")}
           >
             <Space.Compact block>
               <InputNumber
@@ -190,7 +176,7 @@ export function RetentionPolicyEditor({
                 value={snapshotKeepDays}
                 onChange={(value) => setSnapshotKeepDays(value ?? 0)}
               />
-              <Space.Addon>{text("天", "days")}</Space.Addon>
+              <Space.Addon>{t("repository.days")}</Space.Addon>
             </Space.Compact>
           </Field>
         )}
@@ -205,7 +191,7 @@ export function RetentionPolicyEditor({
                 value={minimumVersions}
                 onChange={(value) => setMinimumVersions(value ?? 0)}
               />
-              <Space.Addon>{text("个", "items")}</Space.Addon>
+              <Space.Addon>{t("repository.items")}</Space.Addon>
             </Space.Compact>
           </Field>
         )}
@@ -220,15 +206,14 @@ export function RetentionPolicyEditor({
                 value={maximumVersions}
                 onChange={(value) => setMaximumVersions(value ?? 0)}
               />
-              <Space.Addon>{text("个", "items")}</Space.Addon>
+              <Space.Addon>{t("repository.items")}</Space.Addon>
             </Space.Compact>
           </Field>
         )}
         <Field
-          label={text("下载保护天数", "Download protection days")}
-          hint={text(
-            "窗口内被下载过的制品即使到期也跳过清理；0 表示关闭。依据生命周期下载统计。",
-            "Artifacts downloaded within the window skip cleanup even when expired; 0 disables it. Based on lifecycle download usage.",
+          label={t("repository.downloadProtectionDays")}
+          hint={t(
+            "repository.artifactsDownloadedWithinTheWindowSkipCleanupEven",
           )}
         >
           <Space.Compact block>
@@ -240,7 +225,7 @@ export function RetentionPolicyEditor({
               value={keepDownloadedDays}
               onChange={(value) => setKeepDownloadedDays(value ?? 0)}
             />
-            <Space.Addon>{text("天", "days")}</Space.Addon>
+            <Space.Addon>{t("repository.days")}</Space.Addon>
           </Space.Compact>
         </Field>
       </div>
@@ -270,28 +255,30 @@ export function RetentionPolicyEditor({
       </div>
       <Space>
         <Button type="primary" onClick={save} loading={saving}>
-          {text("保存策略", "Save policy")}
+          {t("repository.savePolicy")}
         </Button>
         <Button onClick={runDryRun} loading={dryRunning} disabled={!enabled}>
-          {text("试运行", "Dry run")}
+          {t("repository.dryRun")}
         </Button>
         {dryRun && dryRun.candidates.length > 0 && (
           <Popconfirm
-            title={text("确认执行保留清理？", "Run retention cleanup?")}
-            description={text(
-              `将清理全部 ${dryRun.totalCandidates} 个候选${copy.candidateName}；执行前会再次校验策略版本。`,
-              `This will clean all ${dryRun.totalCandidates} candidate ${copy.candidateName}. The policy version is checked again before execution.`,
+            title={t("repository.runRetentionCleanup")}
+            description={t(
+              "repository.thisWillCleanAllCandidateThePolicyVersion",
+              {
+                totalCandidates: dryRun.totalCandidates,
+                candidateName: copy.candidateName,
+              },
             )}
-            okText={text("执行清理", "Run cleanup")}
-            cancelText={text("取消", "Cancel")}
+            okText={t("repository.runCleanup")}
+            cancelText={t("repository.cancel")}
             okButtonProps={{ danger: true, loading: executing }}
             onConfirm={execute}
           >
             <Button danger loading={executing} disabled={!enabled}>
-              {text(
-                `执行清理（${dryRun.totalCandidates} 个）`,
-                `Run cleanup (${dryRun.totalCandidates})`,
-              )}
+              {t("repository.runCleanup2", {
+                totalCandidates: dryRun.totalCandidates,
+              })}
             </Button>
           </Popconfirm>
         )}

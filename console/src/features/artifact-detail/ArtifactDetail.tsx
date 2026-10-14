@@ -11,12 +11,10 @@ import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
 import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 
 function CopyButton({ text }: { text: string }) {
-  const { text: localizedText } = usePreferences();
+  const { t } = usePreferences();
   const { copiedValue, copy } = useClipboardAction();
   const copied = copiedValue === text;
-  const label = copied
-    ? localizedText("已复制", "Copied")
-    : localizedText("复制", "Copy");
+  const label = copied ? t("ui.copied") : t("ui.copy");
   return (
     <Tooltip title={label}>
       <Button
@@ -34,9 +32,7 @@ function Snippet({ snippet }: { snippet: UsageSnippet }) {
   return (
     <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wider text-fg-tertiary">
-          {snippet.label}
-        </span>
+        <span className="text-xs text-fg-tertiary">{snippet.label}</span>
         <CopyButton text={snippet.code} />
       </div>
       <code className="block whitespace-pre-wrap break-all font-mono text-xs leading-5 text-[var(--ag-content-secondary)]">
@@ -83,8 +79,8 @@ export function ArtifactDetailView({
   canQuarantine?: boolean;
   showQuarantine?: boolean;
 }) {
-  const { locale, text } = usePreferences();
-  const snippets = usageFor(format, repoName, meta.coordinate, tag);
+  const { locale, t } = usePreferences();
+  const snippets = usageFor(t, format, repoName, meta.coordinate, tag);
 
   return (
     <div className="space-y-4">
@@ -112,8 +108,8 @@ export function ArtifactDetailView({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {meta.publisher && (
           <div className="rounded-lg border border-line px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-              {text("发布者", "Publisher")}
+            <div className="text-xs text-fg-tertiary">
+              {t("artifactDetail.publisher")}
             </div>
             <div
               className="mt-0.5 truncate font-mono text-xs text-fg-strong"
@@ -125,8 +121,8 @@ export function ArtifactDetailView({
         )}
         {meta.size !== undefined && (
           <div className="rounded-lg border border-line px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-              {text("大小", "Size")}
+            <div className="text-xs text-fg-tertiary">
+              {t("artifactDetail.size")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-fg-strong">
               {formatBytes(meta.size)}
@@ -135,8 +131,8 @@ export function ArtifactDetailView({
         )}
         {meta.createdAt && (
           <div className="rounded-lg border border-line px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-              {timestampLabel ?? text("发布时间", "Published")}
+            <div className="text-xs text-fg-tertiary">
+              {timestampLabel ?? t("artifactDetail.published")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-fg-strong">
               {formatDate(meta.createdAt, locale)}
@@ -145,8 +141,8 @@ export function ArtifactDetailView({
         )}
         {meta.contentType && (
           <div className="rounded-lg border border-line px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-              {text("内容类型", "Content type")}
+            <div className="text-xs text-fg-tertiary">
+              {t("artifactDetail.contentType")}
             </div>
             <div
               className="mt-0.5 truncate font-mono text-xs text-fg-strong"
@@ -158,8 +154,8 @@ export function ArtifactDetailView({
         )}
         {meta.state && (
           <div className="rounded-lg border border-line px-3 py-2">
-            <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-              {text("状态", "State")}
+            <div className="text-xs text-fg-tertiary">
+              {t("artifactDetail.state")}
             </div>
             <div className="mt-0.5 text-xs font-semibold text-fg-strong">
               {meta.state}
@@ -169,8 +165,8 @@ export function ArtifactDetailView({
       </div>
       {meta.digest && (
         <div className="rounded-lg border border-line px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-            {text("摘要 (digest)", "Digest")}
+          <div className="text-xs text-fg-tertiary">
+            {t("artifactDetail.digest")}
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-2">
             <code
@@ -194,7 +190,7 @@ export function ArtifactDetailView({
           items={[
             {
               key: "usage",
-              label: text("使用方法", "Usage"),
+              label: t("artifactDetail.usage2"),
               children: (
                 <div className="space-y-2">
                   {snippets.map((s) => (
@@ -251,7 +247,7 @@ export function VersionList({
   current?: string;
   onSelect?: (label: string) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const sorted = [...items].sort((x, y) => compareVersions(x.label, y.label));
 
   if (items.length === 0) return null;
@@ -276,7 +272,7 @@ export function VersionList({
             ? current
             : undefined
         }
-        placeholder={text("搜索并选择版本", "Search and select a version")}
+        placeholder={t("artifactDetail.searchAndSelectAVersion")}
         options={sorted.map((item) => ({
           value: item.label,
           label: item.label,
@@ -297,7 +293,7 @@ export function VersionList({
           );
         }}
         onChange={(value) => onSelect?.(value)}
-        notFoundContent={text("没有匹配版本", "No matching versions")}
+        notFoundContent={t("artifactDetail.noMatchingVersions")}
         listHeight={280}
       />
     </div>

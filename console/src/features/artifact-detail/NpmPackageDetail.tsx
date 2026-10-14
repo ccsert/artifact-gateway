@@ -63,7 +63,7 @@ export function NpmPackageDetail({
   onVersionChange?: (version: string) => void;
   canQuarantine?: boolean;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const { token } = useAuth();
   const [packument, setPackument] = useState<NpmPackument | null>(null);
   const [selectedVersion, setSelectedVersion] = useState("");
@@ -85,10 +85,9 @@ export function NpmPackageDetail({
       .then(async (response) => {
         if (!response.ok)
           throw new Error(
-            text(
-              `读取 npm 包失败 (${response.status})`,
-              `Failed to load npm package (${response.status})`,
-            ),
+            t("artifactDetail.failedToLoadNpmPackage", {
+              status: response.status,
+            }),
           );
         return response.json() as Promise<NpmPackument>;
       })
@@ -102,14 +101,14 @@ export function NpmPackageDetail({
         setError(
           requestError instanceof Error
             ? requestError.message
-            : text("读取 npm 包失败", "Failed to load npm package"),
+            : t("artifactDetail.failedToLoadNpmPackage2"),
         );
         setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [packageName, repoName, text, token]);
+  }, [packageName, repoName, t, token]);
 
   useEffect(() => {
     if (!packument) return;
@@ -174,7 +173,7 @@ export function NpmPackageDetail({
       />
       <div>
         <label className="mb-1.5 block text-xs font-medium text-fg-tertiary">
-          {text("选择版本", "Select version")} ({versions.length})
+          {t("artifactDetail.selectVersion")} ({versions.length})
         </label>
         <SearchableVersionSelect
           value={selectedVersion}
@@ -189,7 +188,7 @@ export function NpmPackageDetail({
             setSelectedVersion(version);
             onVersionChange?.(version);
           }}
-          placeholder={text("搜索并选择 npm 版本", "Search npm versions")}
+          placeholder={t("artifactDetail.searchNpmVersions")}
         />
         {manifest?.description ? (
           <p className="mt-3 text-xs leading-5 text-fg-tertiary">
@@ -213,35 +212,35 @@ export function NpmPackageDetail({
           {artifactMetadata?.cacheStatus ? (
             <Tag color={metadataOnly ? "default" : "success"} variant="filled">
               {metadataOnly
-                ? text("仅元数据", "Metadata only")
-                : text("已缓存", "Cached")}
+                ? t("artifactDetail.metadataOnly")
+                : t("artifactDetail.cached")}
             </Tag>
           ) : null}
         </div>
         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-line py-3 text-xs sm:grid-cols-4">
           <MetadataItem
-            label={text("发布时间", "Published")}
+            label={t("artifactDetail.published")}
             value={formatDate(publishedAt, locale)}
           />
           <MetadataItem
-            label={text("发布者", "Publisher")}
+            label={t("artifactDetail.publisher")}
             value={
               artifactMetadata?.publisher ??
               publisher ??
-              text("未记录", "Not recorded")
+              t("artifactDetail.notRecorded")
             }
             mono
           />
           <MetadataItem
-            label={text("包大小", "Package size")}
+            label={t("artifactDetail.packageSize")}
             value={
               metadataOnly
-                ? text("下载后统计", "Available after download")
+                ? t("artifactDetail.availableAfterDownload")
                 : formatBytes(artifactMetadata?.size ?? size)
             }
           />
           <MetadataItem
-            label={text("依赖 / 许可证", "Dependencies / license")}
+            label={t("artifactDetail.dependenciesLicense")}
             value={`${dependencyCount} / ${license ?? "—"}`}
           />
         </div>
@@ -250,14 +249,14 @@ export function NpmPackageDetail({
             label="SHA-256 digest"
             value={
               metadataOnly
-                ? text("下载后计算", "Computed after download")
-                : (artifactMetadata?.digest ?? text("未记录", "Not recorded"))
+                ? t("artifactDetail.computedAfterDownload")
+                : (artifactMetadata?.digest ?? t("artifactDetail.notRecorded"))
             }
             mono
           />
           <MetadataItem
             label="SHA-512 integrity"
-            value={manifest?.dist?.integrity ?? text("未记录", "Not recorded")}
+            value={manifest?.dist?.integrity ?? t("artifactDetail.notRecorded")}
             mono
           />
           <MetadataItem
@@ -269,14 +268,14 @@ export function NpmPackageDetail({
         {artifactMetadata?.source === "proxy" ? (
           <p className="mt-3 text-xs text-fg-tertiary">
             {metadataOnly
-              ? text(
-                  "该版本已从上游发现；首次安装会校验完整性并缓存 tarball。",
-                  "This version was discovered upstream. The first install verifies and caches its tarball.",
+              ? t(
+                  "artifactDetail.thisVersionWasDiscoveredUpstreamTheFirstInstall",
                 )
-              : text(
-                  `制品已缓存${artifactMetadata.cachedAt ? ` · ${formatDate(artifactMetadata.cachedAt, locale)}` : ""}`,
-                  `Artifact cached${artifactMetadata.cachedAt ? ` · ${formatDate(artifactMetadata.cachedAt, locale)}` : ""}`,
-                )}
+              : t("artifactDetail.artifactCached", {
+                  cachedAt: artifactMetadata.cachedAt
+                    ? ` · ${formatDate(artifactMetadata.cachedAt, locale)}`
+                    : "",
+                })}
           </p>
         ) : null}
         <div className="mt-3 grid gap-3 sm:grid-cols-2">

@@ -26,21 +26,18 @@ import { QuotaRuleDetail } from "./QuotaRuleDetail";
 
 export function QuotaAlertsPanel() {
   const { identity } = useAuth();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   if (!platformCapabilities(identity).platformAdmin)
     return (
       <EmptyState
-        title={text(
-          "仅平台管理员可管理配额告警",
-          "Only platform administrators can manage quota alerts",
-        )}
+        title={t("system.onlyPlatformAdministratorsCanManageQuotaAlerts")}
       />
     );
   return <AuthorizedQuotaAlerts />;
 }
 
 function AuthorizedQuotaAlerts() {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [selected, setSelected] = useState<string>();
   const [editor, setEditor] = useState<{ rule?: RepositoryQuotaAlertRule }>();
   const [saved, setSaved] = useState<false | "saved" | "deleted">(false);
@@ -76,7 +73,7 @@ function AuthorizedQuotaAlerts() {
   if (!snapshot.data)
     return snapshot.error ? (
       <ErrorBanner
-        error={safeQuotaError(snapshot.error, text)}
+        error={safeQuotaError(snapshot.error, t)}
         onRetry={() => void refreshExplicitly()}
       />
     ) : (
@@ -100,13 +97,10 @@ function AuthorizedQuotaAlerts() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-fg-strong">
-            {text("仓库配额告警", "Repository quota alerts")}
+            {t("system.repositoryQuotaAlerts")}
           </h2>
           <p className="mt-1 text-sm text-fg-tertiary">
-            {text(
-              "观察仓库逻辑用量，不表示 S3、NAS 或本地挂载物理容量。",
-              "Observes logical repository usage, not the physical capacity of S3, NAS, or local mounts.",
-            )}
+            {t("system.observesLogicalRepositoryUsageNotThePhysicalCapacity")}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -115,7 +109,7 @@ function AuthorizedQuotaAlerts() {
             loading={snapshot.loading}
             onClick={() => void refreshExplicitly()}
           >
-            {text("刷新", "Refresh")}
+            {t("system.refresh")}
           </Button>
           {!editor && !selected && (
             <Button
@@ -126,7 +120,7 @@ function AuthorizedQuotaAlerts() {
                 setEditor({});
               }}
             >
-              {text("创建规则", "Create rule")}
+              {t("system.createRule")}
             </Button>
           )}
         </div>
@@ -134,21 +128,20 @@ function AuthorizedQuotaAlerts() {
       {Boolean(snapshot.error) && (
         <ErrorBanner
           tone="warning"
-          title={text("当前显示上次读取的数据", "Showing previously read data")}
-          error={safeQuotaError(snapshot.error, text)}
+          title={t("system.showingPreviouslyReadData")}
+          error={safeQuotaError(snapshot.error, t)}
           onRetry={() => void refreshExplicitly()}
         />
       )}
       {Boolean(authBlocked) && (
         <ErrorBanner
-          error={safeQuotaError(authBlocked, text)}
+          error={safeQuotaError(authBlocked, t)}
           onRetry={() => void refreshExplicitly()}
         />
       )}
       {snapshot.readAt && (
         <p className="text-xs text-fg-tertiary">
-          {text("读取时间", "Read at")}:{" "}
-          {new Date(snapshot.readAt).toLocaleString()}
+          {t("system.readAt")}: {new Date(snapshot.readAt).toLocaleString()}
         </p>
       )}
       {saved && (
@@ -156,11 +149,8 @@ function AuthorizedQuotaAlerts() {
           tone="success"
           title={
             saved === "deleted"
-              ? text(
-                  "规则已删除，历史仍可查看",
-                  "Rule deleted; history remains available",
-                )
-              : text("规则已保存", "Rule saved")
+              ? t("system.ruleDeletedHistoryRemainsAvailable")
+              : t("system.ruleSaved")
           }
           onClose={() => setSaved(false)}
         />
@@ -168,21 +158,15 @@ function AuthorizedQuotaAlerts() {
       {!capability.enabled && (
         <Notice
           tone="info"
-          title={quotaLabel(capability.reason, text)}
-          description={text(
-            "可以保存停用规则；管理员完成邮件通道及加密配置后才能启用。",
-            "Disabled rules can be saved. An administrator must configure the email channel and encryption before enabling them.",
-          )}
+          title={quotaLabel(capability.reason, t)}
+          description={t("system.disabledRulesCanBeSavedAnAdministratorMust")}
         />
       )}
       {targets.length === 0 && (
         <Notice
           tone="info"
-          title={text("尚无邮件目标", "No email targets")}
-          description={text(
-            "在系统运行的“邮件通知”页签新建目标，再返回此页配置规则。",
-            "Create a target in the System runtime Email notifications tab, then return here to configure a rule.",
-          )}
+          title={t("system.noEmailTargets")}
+          description={t("system.createATargetInTheSystemRuntimeEmail")}
         />
       )}
       {editor ? (
@@ -208,7 +192,7 @@ function AuthorizedQuotaAlerts() {
                 setSaved(false);
               }}
             >
-              {text("返回规则列表", "Back to rules")}
+              {t("system.backToRules")}
             </Button>
           </div>
           <QuotaRuleDetail
@@ -238,11 +222,8 @@ function AuthorizedQuotaAlerts() {
         <Card>
           {rules.length === 0 ? (
             <EmptyState
-              title={text("尚无配额告警规则", "No quota alert rules")}
-              hint={text(
-                "新规则默认停用，创建不会发送测试邮件。",
-                "New rules are disabled by default. Creating one sends no test email.",
-              )}
+              title={t("system.noQuotaAlertRules")}
+              hint={t("system.newRulesAreDisabledByDefaultCreatingOne")}
             />
           ) : (
             <ul className="divide-y divide-line">
@@ -258,22 +239,19 @@ function AuthorizedQuotaAlerts() {
                       )?.name ?? rule.repositoryId}
                     </h3>
                     <p className="mt-2 text-xs text-fg-tertiary">
-                      {text("警告", "Warning")}{" "}
+                      {t("system.warning")}{" "}
                       {percent(rule.policy.warningBasisPoints)} ·{" "}
-                      {text("严重", "Critical")}{" "}
+                      {t("system.critical")}{" "}
                       {percent(rule.policy.criticalBasisPoints)} ·{" "}
-                      {text("恢复低于", "Recovery below")}{" "}
+                      {t("system.recoveryBelow")}{" "}
                       {percent(rule.policy.recoveryBelowBasisPoints)}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge>
                       {rule.enabled && !rule.deleted
-                        ? text("已启用", "Enabled")
-                        : quotaLabel(
-                            rule.deleted ? "deleted" : "disabled",
-                            text,
-                          )}
+                        ? t("system.enabled")
+                        : quotaLabel(rule.deleted ? "deleted" : "disabled", t)}
                     </Badge>
                     <Badge
                       tone={
@@ -284,21 +262,23 @@ function AuthorizedQuotaAlerts() {
                             : "neutral"
                       }
                     >
-                      {quotaLabel(rule.state.severity, text)}
+                      {quotaLabel(rule.state.severity, t)}
                     </Badge>
-                    <Badge>{quotaLabel(rule.state.dataState, text)}</Badge>
+                    <Badge>{quotaLabel(rule.state.dataState, t)}</Badge>
                     <Button
                       size="small"
-                      aria-label={text(
-                        `查看 ${repositories.items.find((r) => r.id === rule.repositoryId)?.name ?? rule.repositoryId}`,
-                        `View ${repositories.items.find((r) => r.id === rule.repositoryId)?.name ?? rule.repositoryId}`,
-                      )}
+                      aria-label={t("system.view", {
+                        name:
+                          repositories.items.find(
+                            (r) => r.id === rule.repositoryId,
+                          )?.name ?? rule.repositoryId,
+                      })}
                       onClick={() => {
                         setSelected(rule.id);
                         setSaved(false);
                       }}
                     >
-                      {text("查看", "View")}
+                      {t("system.view2")}
                     </Button>
                   </div>
                 </li>

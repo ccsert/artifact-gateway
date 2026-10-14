@@ -1,4 +1,11 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -61,15 +68,34 @@ const alice: User = {
   version: "4",
 };
 
-function renderPage() {
+function NavigationProbe({ destination }: { destination: string }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (
+    <>
+      <button onClick={() => navigate(destination)}>Open filtered users</button>
+      <button onClick={() => navigate(-1)}>Back</button>
+      <button onClick={() => navigate(1)}>Forward</button>
+      <output data-testid="location-search">{location.search}</output>
+    </>
+  );
+}
+
+function renderPage({
+  entry = "/users",
+  destination,
+}: { entry?: string; destination?: string } = {}) {
   return render(
-    <TestQueryProvider>
-      <PreferencesProvider>
-        <AntdProvider>
-          <UsersPage />
-        </AntdProvider>
-      </PreferencesProvider>
-    </TestQueryProvider>,
+    <MemoryRouter initialEntries={[entry]}>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            {destination && <NavigationProbe destination={destination} />}
+            <UsersPage />
+          </AntdProvider>
+        </PreferencesProvider>
+      </TestQueryProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -79,6 +105,103 @@ afterEach(() => {
 });
 
 describe("UsersPage", () => {
+  it.each([
+    ["role", "admin", "admin", 0],
+    ["state", "disabled", "已停用", 1],
+  ] as const)(
+    "keeps a pending search when the %s control changes",
+    async (key, value, label, index) => {
+      mockListUsers.mockResolvedValue({
+        data: { items: [alice], total: 1, limit: 20, offset: 0 },
+      } as never);
+      renderPage();
+      await screen.findByText("Alice Chen");
+      const search = screen.getByPlaceholderText("搜索用户名、显示名或邮箱…");
+      fireEvent.change(search, { target: { value: "alice" } });
+      fireEvent.mouseDown(screen.getAllByRole("combobox")[index]);
+      fireEvent.click(
+        screen.getByText(label, {
+          selector: ".ant-select-item-option-content",
+        }),
+      );
+      expect(search).toHaveValue("alice");
+      await waitFor(() => {
+        const query = mockListUsers.mock.calls.at(-1)?.[0]?.query;
+        expect(query?.search).toBe("alice");
+        expect(query?.[key]).toBe(value);
+      });
+    },
+  );
+
+  it("keeps same-page search navigation and history synchronized", async () => {
+    mockListUsers.mockResolvedValue({
+      data: { items: [alice], total: 1, limit: 20, offset: 0 },
+    } as never);
+    const user = userEvent.setup();
+    renderPage({ entry: "/users?q=alice", destination: "/users?q=bob" });
+    await screen.findByText("Alice Chen");
+    const search = screen.getByPlaceholderText("搜索用户名、显示名或邮箱…");
+
+    await user.click(
+      screen.getByRole("button", { name: "Open filtered users" }),
+    );
+    expect(search).toHaveValue("bob");
+    await new Promise((resolve) => window.setTimeout(resolve, 350));
+    expect(screen.getByTestId("location-search")).toHaveTextContent("?q=bob");
+    expect(mockListUsers.mock.calls.at(-1)?.[0]?.query?.search).toBe("bob");
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(search).toHaveValue("alice");
+    await user.click(screen.getByRole("button", { name: "Forward" }));
+    expect(search).toHaveValue("bob");
+  });
+
+  it("discards a pending search draft when navigation clears the filters", async () => {
+    mockListUsers.mockResolvedValue({
+      data: { items: [alice], total: 1, limit: 20, offset: 0 },
+    } as never);
+    const user = userEvent.setup();
+    renderPage({ entry: "/users?q=alice", destination: "/users" });
+    await screen.findByText("Alice Chen");
+    const search = screen.getByPlaceholderText("搜索用户名、显示名或邮箱…");
+    await user.type(search, "-draft");
+    await user.click(
+      screen.getByRole("button", { name: "Open filtered users" }),
+    );
+    expect(search).toHaveValue("");
+    await new Promise((resolve) => window.setTimeout(resolve, 350));
+    expect(screen.getByTestId("location-search")).toBeEmptyDOMElement();
+    expect(mockListUsers.mock.calls.at(-1)?.[0]?.query?.search).toBeUndefined();
+  });
+
+  it.each([
+    ["role", "admin"],
+    ["state", "disabled"],
+    ["q", "bob"],
+  ] as const)(
+    "resets pagination when the URL %s filter changes",
+    async (key, value) => {
+      mockListUsers.mockResolvedValue({
+        data: { items: [alice], total: 100, limit: 20, offset: 0 },
+      } as never);
+      const user = userEvent.setup();
+      renderPage({ destination: `/users?${key}=${value}` });
+      await screen.findByText("Alice Chen");
+      await user.click(screen.getByTitle("2"));
+      await waitFor(() =>
+        expect(mockListUsers.mock.calls.at(-1)?.[0]?.query?.offset).toBe(20),
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Open filtered users" }),
+      );
+      await waitFor(() => {
+        const query = mockListUsers.mock.calls.at(-1)?.[0]?.query;
+        expect(query?.[key === "q" ? "search" : key]).toBe(value);
+        expect(query?.offset).toBe(0);
+      });
+    },
+  );
+
   it("shows newly registered SSO users as pending without a local password", async () => {
     mockListUsers.mockResolvedValue({
       data: {

@@ -14,9 +14,10 @@ import { usePreferences } from "../../../lib/preferences";
 import { useGroupResolution } from "../groupQueries";
 import { useQueryClient } from "@tanstack/react-query";
 import { groupKeys } from "../../../lib/query/keys";
+import "../group-pages.css";
 
 export function GroupResolutionDialog({ group }: { group: Group }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [open, setOpen] = useState(false);
   const planQuery = useGroupResolution(group.id, open);
   const plan = planQuery.data ?? null;
@@ -40,37 +41,31 @@ export function GroupResolutionDialog({ group }: { group: Group }) {
         icon={<OrderedListOutlined aria-hidden />}
         onClick={() => setOpen(true)}
       >
-        {text("解析顺序", "Resolution order")}
+        {t("groups.resolutionOrder")}
       </Button>
       <Modal
         open={open}
         onClose={() => close()}
-        title={text(
-          `解析顺序：${group.name}`,
-          `Resolution order: ${group.name}`,
-        )}
+        title={t("groups.resolutionOrder2", { name: group.name })}
         footer={
           <Space>
             <Button
-              aria-label={text("刷新", "Refresh")}
+              aria-label={t("groups.refresh")}
               icon={<ReloadOutlined aria-hidden />}
               loading={loading}
               onClick={() => void load()}
             >
-              {text("刷新", "Refresh")}
+              {t("groups.refresh")}
             </Button>
-            <Button aria-label={text("关闭", "Close")} onClick={() => close()}>
-              {text("关闭", "Close")}
+            <Button aria-label={t("groups.close")} onClick={() => close()}>
+              {t("groups.close")}
             </Button>
           </Space>
         }
       >
         <div className="ag-page-stack ag-group-resolution">
           <p className="text-sm text-fg-secondary">
-            {text(
-              "Hosted 优先，同类型成员按配置位置排序。这里展示候选顺序，具体命中还取决于制品、读取权限和协议规则。",
-              "Hosted members come first; members of the same type follow their configured positions. These are candidates, while actual hits depend on the artifact, read permissions and protocol rules.",
-            )}
+            {t("groups.hostedMembersComeFirstMembersOfTheSame2")}
           </p>
           {error !== null && (
             <ErrorBanner error={error} onRetry={() => void load()} />
@@ -82,24 +77,18 @@ export function GroupResolutionDialog({ group }: { group: Group }) {
               <>
                 {plan.excludedMemberCount > 0 && (
                   <p className="text-sm text-fg-secondary">
-                    {text(
-                      `${plan.excludedMemberCount} 个配置成员当前未参与解析。`,
-                      `${plan.excludedMemberCount} configured member(s) are currently excluded from resolution.`,
+                    {t(
+                      "groups.configuredMemberSAreCurrentlyExcludedFromResolution",
+                      { excludedMemberCount: plan.excludedMemberCount },
                     )}
                   </p>
                 )}
                 {plan.members.length === 0 ? (
-                  <EmptyState
-                    compact
-                    title={text("暂无可参与解析的成员", "No eligible members")}
-                  />
+                  <EmptyState compact title={t("groups.noEligibleMembers")} />
                 ) : (
                   <ol
                     className="flex flex-col gap-3"
-                    aria-label={text(
-                      "实际候选顺序",
-                      "Effective candidate order",
-                    )}
+                    aria-label={t("groups.effectiveCandidateOrder")}
                   >
                     {plan.members.map((member) => (
                       <li
@@ -120,10 +109,9 @@ export function GroupResolutionDialog({ group }: { group: Group }) {
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge>{member.type}</Badge>
                             <span className="text-xs text-fg-tertiary">
-                              {text(
-                                `配置位置 ${member.configuredPosition + 1}`,
-                                `Configured position ${member.configuredPosition + 1}`,
-                              )}
+                              {t("groups.configuredPosition", {
+                                position: member.configuredPosition + 1,
+                              })}
                             </span>
                           </div>
                         </div>

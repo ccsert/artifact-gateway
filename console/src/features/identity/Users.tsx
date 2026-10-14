@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   LockOutlined,
   MoreOutlined,
@@ -10,10 +11,10 @@ import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import type { User } from "../../client";
 import { Badge, StateBadge } from "../../components/ui/Badge";
 import { EmptyState, ErrorBanner } from "../../components/ui/Feedback";
-import { Card, PageHeader } from "../../components/ui/Layout";
+import { FilterCard, ListPage } from "../../components/ui/ListPage";
+import { useUrlFilters } from "../../components/ui/useUrlFilters";
 import {
   ConsoleTable,
-  FilterBar,
   FilterField,
 } from "../../components/ui/ConsolePrimitives";
 import { formatDate } from "../../lib/format";
@@ -27,31 +28,56 @@ import { useUserChanged, useUserPage } from "./userQueries";
 type Role = User["role"];
 type UserState = User["state"];
 
+const USER_FILTERS = {
+  q: "",
+  role: "" as Role | "",
+  state: "" as UserState | "",
+};
+const USER_FILTER_VALUES = {
+  role: ["", "none", "member", "admin"] as const,
+  state: ["", "active", "disabled"] as const,
+};
+
 export function UsersPage() {
   const { locale, t } = usePreferences();
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [role, setRole] = useState<Role | undefined>();
-  const [state, setState] = useState<UserState | undefined>();
+  const filters = useUrlFilters(USER_FILTERS, USER_FILTER_VALUES);
+  const search = filters.values.q;
+  const role = filters.values.role || undefined;
+  const state = filters.values.state || undefined;
+  const location = useLocation();
+  // The box answers every keystroke; the list follows once typing pauses.
+  const [searchInput, setSearchInput] = useState(search);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(CONSOLE_PAGE_SIZE);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [filterLocationKey, setFilterLocationKey] = useState(location.key);
+  const navigating = filterLocationKey !== location.key;
+  // A same-page navigation replaces the draft before debounce effects run.
+  // It also resets the offset, including history and sidebar navigation.
+  if (navigating) {
+    setFilterLocationKey(location.key);
+    setSearchInput(search);
+    setPage(1);
+  }
 
+  const setFilters = filters.set;
   useEffect(() => {
+    const next = searchInput.trim();
+    if (next === search) return;
     const timer = window.setTimeout(() => {
-      setSearch(searchInput.trim());
+      setFilters({ q: next });
       setPage(1);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [searchInput]);
+  }, [search, searchInput, setFilters]);
 
   const usersQuery = useUserPage({
     search: search || undefined,
     role,
     state,
     limit: pageSize,
-    offset: (page - 1) * pageSize,
+    offset: navigating ? 0 : (page - 1) * pageSize,
   });
   const users = usersQuery.data?.items ?? [];
   const total = usersQuery.data?.total ?? 0;
@@ -75,9 +101,7 @@ export function UsersPage() {
 
   const clearFilters = () => {
     setSearchInput("");
-    setSearch("");
-    setRole(undefined);
-    setState(undefined);
+    filters.reset();
     setPage(1);
   };
 
@@ -202,7 +226,7 @@ export function UsersPage() {
   ];
 
   const pagination: TablePaginationConfig = {
-    current: page,
+    current: navigating ? 1 : page,
     pageSize,
     total,
     onChange: (nextPage, nextPageSize) => {
@@ -211,81 +235,77 @@ export function UsersPage() {
     },
   };
 
-  const filtersActive = Boolean(searchInput || role || state);
+  const filtersActive = Boolean(searchInput) || filters.active;
 
   return (
-    <div className="ag-page-stack">
-      <PageHeader
-        title={t("identity.users")}
-        description={t("identity.manageLocalAndSsoAccountsSignInStatusRoles")}
-        actions={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setCreateOpen(true)}
-          >
-            {t("identity.newUser")}
-          </Button>
-        }
-      />
-
+    <ListPage
+      title={t("identity.users")}
+      description={t("identity.manageLocalAndSsoAccountsSignInStatusRoles")}
+      actions={
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => setCreateOpen(true)}
+        >
+          {t("identity.newUser")}
+        </Button>
+      }
+    >
       {error ? <ErrorBanner error={error} onRetry={load} /> : null}
 
-      <Card>
-        <FilterBar
-          className="rounded-none border-x-0 border-t-0"
-          actions={
-            filtersActive ? (
-              <Button type="text" onClick={clearFilters}>
-                {t("identity.clearFilters")}
-              </Button>
-            ) : undefined
-          }
-        >
-          <FilterField label={t("identity.search")} className="w-[320px]">
-            <Input
-              allowClear
-              prefix={<SearchOutlined />}
-              placeholder={t("identity.searchUsernameDisplayNameOrEmail")}
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-            />
-          </FilterField>
-          <FilterField label={t("identity.role")} className="w-[160px]">
-            <Select<Role>
-              allowClear
-              className="w-full"
-              placeholder={t("identity.allRoles")}
-              value={role}
-              onChange={(value) => {
-                setRole(value);
-                setPage(1);
-              }}
-              options={[
-                { value: "none", label: t("identity.awaitingApproval") },
-                { value: "member", label: "member" },
-                { value: "admin", label: "admin" },
-              ]}
-            />
-          </FilterField>
-          <FilterField label={t("identity.accountState")} className="w-[170px]">
-            <Select<UserState>
-              allowClear
-              className="w-full"
-              placeholder={t("identity.allStates")}
-              value={state}
-              onChange={(value) => {
-                setState(value);
-                setPage(1);
-              }}
-              options={[
-                { value: "active", label: t("identity.active") },
-                { value: "disabled", label: t("identity.disabled") },
-              ]}
-            />
-          </FilterField>
-        </FilterBar>
-
+      <FilterCard
+        active={filtersActive}
+        onClear={clearFilters}
+        filters={
+          <>
+            <FilterField label={t("identity.search")} className="w-[320px]">
+              <Input
+                allowClear
+                prefix={<SearchOutlined />}
+                placeholder={t("identity.searchUsernameDisplayNameOrEmail")}
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+              />
+            </FilterField>
+            <FilterField label={t("identity.role")} className="w-[160px]">
+              <Select<Role>
+                allowClear
+                className="w-full"
+                placeholder={t("identity.allRoles")}
+                value={role}
+                onChange={(value) => {
+                  filters.set({ q: searchInput.trim(), role: value ?? "" });
+                  setPage(1);
+                }}
+                options={[
+                  { value: "none", label: t("identity.awaitingApproval") },
+                  { value: "member", label: "member" },
+                  { value: "admin", label: "admin" },
+                ]}
+              />
+            </FilterField>
+            <FilterField
+              label={t("identity.accountState")}
+              className="w-[170px]"
+            >
+              <Select<UserState>
+                allowClear
+                className="w-full"
+                placeholder={t("identity.allStates")}
+                value={state}
+                onChange={(value) => {
+                  filters.set({ q: searchInput.trim(), state: value ?? "" });
+                  setPage(1);
+                }}
+                options={[
+                  { value: "active", label: t("identity.active") },
+                  { value: "disabled", label: t("identity.disabled") },
+                ]}
+              />
+            </FilterField>
+          </>
+        }
+      >
         <ConsoleTable<User>
           rowKey="id"
           dataSource={users}
@@ -314,7 +334,7 @@ export function UsersPage() {
             onClick: () => setSelectedUser(user),
           })}
         />
-      </Card>
+      </FilterCard>
 
       <UserCreateDialog
         open={createOpen}
@@ -331,6 +351,6 @@ export function UsersPage() {
         onChanged={updateVisibleUser}
         onDeleted={handleDeleted}
       />
-    </div>
+    </ListPage>
   );
 }

@@ -1,3 +1,4 @@
+import { createTranslator } from "../../messages/translate";
 import { describe, expect, it } from "vitest";
 import type { AuthorizationRole } from "../../client";
 import {
@@ -14,7 +15,7 @@ import {
   type GrantLevel,
 } from "./grantDraft";
 
-const text = (_chinese: string, english: string) => english;
+const text = createTranslator("en-US");
 
 function role(
   id: string,
@@ -130,9 +131,12 @@ describe("grantedCapabilitiesLabel", () => {
     expect(grantedCapabilitiesLabel(["repositories:admin"], text)).toBe(
       "Read + write + admin + intelligence",
     );
-    expect(grantedCapabilitiesLabel(["repositories:admin"], (zh) => zh)).toBe(
-      "读取 + 写入 + 管理 + 制品情报",
-    );
+    expect(
+      grantedCapabilitiesLabel(
+        ["repositories:admin"],
+        createTranslator("zh-CN"),
+      ),
+    ).toBe("读取 + 写入 + 管理 + 制品情报");
   });
 
   it("combines read/write with the independent intelligence scope", () => {

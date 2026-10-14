@@ -13,7 +13,7 @@ export function UpstreamAuthFields({
   repo: Repository;
   draft: ProxySettingsDraft;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const {
     upstreamScheme,
     setUpstreamScheme,
@@ -25,13 +25,10 @@ export function UpstreamAuthFields({
   return (
     <div className="rounded-lg border border-line bg-surface-translucent px-4 py-3">
       <div className="text-sm font-medium text-fg">
-        {text("上游认证", "Upstream authentication")}
+        {t("repository.upstreamAuthentication")}
       </div>
       <div className="mt-1 text-xs leading-5 text-fg-tertiary">
-        {text(
-          "当上游 Go 模块代理或代码托管要求认证时，为拉取请求附带凭据。凭据只发送给上游端点主机；跨主机重定向会剥离凭据。",
-          "Attach a credential to upstream fetches when the Go module proxy or code host requires authentication. The credential is sent only to the upstream endpoint host and is stripped on any cross-host redirect.",
-        )}
+        {t("repository.attachACredentialToUpstreamFetchesWhenThe")}
       </div>
       <Radio.Group
         className="mt-3 flex flex-col gap-2"
@@ -39,36 +36,23 @@ export function UpstreamAuthFields({
         onChange={(e) => setUpstreamScheme(e.target.value)}
       >
         <Radio value="none">
-          <span className="text-sm text-fg">
-            {text("匿名访问", "Anonymous")}
-          </span>
+          <span className="text-sm text-fg">{t("repository.anonymous")}</span>
           <span className="ml-2 text-xs text-fg-tertiary">
             {repo.upstreamAuth?.credentialsConfigured
-              ? text(
-                  "不附带凭据，并清除已存储的凭据",
-                  "Send no credential and clear the stored one",
-                )
-              : text("不附带任何凭据", "Send no credential")}
+              ? t("repository.sendNoCredentialAndClearTheStoredOne")
+              : t("repository.sendNoCredential")}
           </span>
         </Radio>
         <Radio value="basic">
-          <span className="text-sm text-fg">{text("基本认证", "Basic")}</span>
+          <span className="text-sm text-fg">{t("repository.basic")}</span>
           <span className="ml-2 text-xs text-fg-tertiary">
-            {text(
-              "发送 HTTP Basic 用户名与密码",
-              "Send an HTTP Basic username and password",
-            )}
+            {t("repository.sendAnHTTPBasicUsernameAndPassword")}
           </span>
         </Radio>
         <Radio value="bearer">
-          <span className="text-sm text-fg">
-            {text("Bearer 令牌", "Bearer token")}
-          </span>
+          <span className="text-sm text-fg">{t("repository.bearerToken")}</span>
           <span className="ml-2 text-xs text-fg-tertiary">
-            {text(
-              "发送 Authorization: Bearer 令牌",
-              "Send Authorization: Bearer <token>",
-            )}
+            {t("repository.sendAuthorizationBearerToken")}
           </span>
         </Radio>
       </Radio.Group>
@@ -80,7 +64,7 @@ export function UpstreamAuthFields({
         >
           <div className="flex flex-wrap gap-3">
             {upstreamScheme === "basic" && (
-              <Field label={text("上游用户名", "Upstream username")}>
+              <Field label={t("repository.upstreamUsername")}>
                 <Input
                   className="w-64"
                   placeholder="gateway"
@@ -92,23 +76,17 @@ export function UpstreamAuthFields({
             <Field
               label={
                 upstreamScheme === "basic"
-                  ? text("上游密码", "Upstream password")
-                  : text("上游令牌", "Upstream token")
+                  ? t("repository.upstreamPassword")
+                  : t("repository.upstreamToken")
               }
-              hint={text(
-                "AES-256-GCM 加密落库，留空则保留已存凭据。切换认证方式时必须重新填写。",
-                "Stored encrypted with AES-256-GCM. Leave blank to keep the current credential; changing the scheme requires resubmitting it.",
-              )}
+              hint={t("repository.storedEncryptedWithAES256GCMLeaveBlank")}
             >
               <Input.Password
                 className="w-64"
                 placeholder={
                   repo.upstreamAuth?.credentialsConfigured
-                    ? text(
-                        "已配置，输入以替换",
-                        "Configured; enter a value to replace it",
-                      )
-                    : text("未配置", "Not configured")
+                    ? t("repository.configuredEnterAValueToReplaceIt")
+                    : t("repository.notConfigured")
                 }
                 value={upstreamSecret}
                 onChange={(e) => setUpstreamSecret(e.target.value)}

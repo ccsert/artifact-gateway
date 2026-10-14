@@ -5,6 +5,7 @@ import { Modal } from "../../components/ui/Modal";
 import { usePreferences } from "../../lib/preferences";
 
 import { packageName, type Review } from "./aptModel";
+import "./apt.css";
 
 /** The change a preview found, applied as a newly signed snapshot. */
 export function APTReviewDialog({
@@ -26,17 +27,17 @@ export function APTReviewDialog({
   onCancel: () => void;
   onApply: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <Modal
       open={!!review}
-      title={text("审阅快照变更", "Review snapshot change")}
+      title={t("repository.reviewSnapshotChange")}
       onClose={onCancel}
       busy={busy}
       footer={
         <Space>
           <Button disabled={busy} onClick={onCancel}>
-            {text("取消", "Cancel")}
+            {t("repository.cancel")}
           </Button>
           <Button
             color={review?.request.action === "restore" ? "primary" : "danger"}
@@ -45,7 +46,7 @@ export function APTReviewDialog({
             disabled={!review || changedCount === 0}
             onClick={onApply}
           >
-            {text("应用并签署新快照", "Apply and sign new snapshot")}
+            {t("repository.applyAndSignNewSnapshot")}
           </Button>
         </Space>
       }
@@ -54,39 +55,35 @@ export function APTReviewDialog({
         <div className="ag-page-stack">
           {actionError !== null && <ErrorBanner error={actionError} />}
           <p className="ag-apt-wrap">
-            {text("基于快照", "Based on snapshot")}{" "}
+            {t("repository.basedOnSnapshot")}{" "}
             <code>{review.plan.expectedSnapshotId}</code>
           </p>
           <Alert
             type="warning"
             showIcon
-            title={text(
-              `移除 ${review.plan.removeSessionIds.length} 个，恢复 ${review.plan.restoreIds.length} 个，完成后 ${review.plan.remainingPackages} 个软件包`,
-              `Remove ${review.plan.removeSessionIds.length}, restore ${review.plan.restoreIds.length}; ${review.plan.remainingPackages} packages remain`,
-            )}
-            description={text(
-              `删除后可恢复 ${review.plan.recoveryDays} 天。提交会生成新索引和签名，当前快照发生变化时必须重新预览。`,
-              `Deleted packages can be recovered for ${review.plan.recoveryDays} days. Submission creates new indices and signatures; a changed current snapshot requires a fresh preview.`,
+            title={t("repository.removeRestorePackagesRemain", {
+              length: review.plan.removeSessionIds.length,
+              length2: review.plan.restoreIds.length,
+              remainingPackages: review.plan.remainingPackages,
+            })}
+            description={t(
+              "repository.deletedPackagesCanBeRecoveredForDaysSubmission",
+              { recoveryDays: review.plan.recoveryDays },
             )}
           />
           {changedCount === 0 ? (
-            <p>
-              {text(
-                "没有符合条件的变更，无需应用。",
-                "No matching changes; there is nothing to apply.",
-              )}
-            </p>
+            <p>{t("repository.noMatchingChangesThereIsNothingToApply")}</p>
           ) : (
             <ul className="ag-apt-change-list">
               {removed.map((item) => (
                 <li key={item.publicationSessionId}>
-                  {text("移除", "Remove")} · {packageName(item)}{" "}
+                  {t("repository.remove")} · {packageName(item)}{" "}
                   <code>{item.poolPath}</code>
                 </li>
               ))}
               {restored.map((item) => (
                 <li key={item.id}>
-                  {text("恢复", "Restore")} · {packageName(item.package)}{" "}
+                  {t("repository.restore")} · {packageName(item.package)}{" "}
                   <code>{item.package.poolPath}</code>
                 </li>
               ))}

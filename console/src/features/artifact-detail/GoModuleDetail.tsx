@@ -59,7 +59,7 @@ export function GoModuleDetail({
   onVersionChange?: (version: string) => void;
   canQuarantine?: boolean;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const { token } = useAuth();
   const [versions, setVersions] = useState<string[]>([]);
   const [selectedVersion, setSelectedVersion] = useState("");
@@ -84,10 +84,9 @@ export function GoModuleDetail({
       .then(async (response) => {
         if (!response.ok)
           throw new Error(
-            text(
-              `读取 Go 模块版本失败 (${response.status})`,
-              `Failed to load Go module versions (${response.status})`,
-            ),
+            t("artifactDetail.failedToLoadGoModuleVersions", {
+              status: response.status,
+            }),
           );
         return response.text();
       })
@@ -113,14 +112,14 @@ export function GoModuleDetail({
         setError(
           requestError instanceof Error
             ? requestError.message
-            : text("读取 Go 模块版本失败", "Failed to load Go versions"),
+            : t("artifactDetail.failedToLoadGoVersions"),
         );
         setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [base, initialVersion, text, token]);
+  }, [base, initialVersion, t, token]);
 
   useEffect(() => {
     if (!selectedVersion) return;
@@ -134,10 +133,9 @@ export function GoModuleDetail({
       .then(async (response) => {
         if (!response.ok)
           throw new Error(
-            text(
-              `读取版本信息失败 (${response.status})`,
-              `Failed to load version info (${response.status})`,
-            ),
+            t("artifactDetail.failedToLoadVersionInfo", {
+              status: response.status,
+            }),
           );
         return response.json() as Promise<GoModuleInfo>;
       })
@@ -149,7 +147,7 @@ export function GoModuleDetail({
           setError(
             requestError instanceof Error
               ? requestError.message
-              : text("读取版本信息失败", "Failed to load version info"),
+              : t("artifactDetail.failedToLoadVersionInfo2"),
           );
       })
       .finally(() => {
@@ -158,7 +156,7 @@ export function GoModuleDetail({
     return () => {
       cancelled = true;
     };
-  }, [base, selectedVersion, text, token]);
+  }, [base, selectedVersion, t, token]);
 
   useEffect(() => {
     if (!selectedVersion) {
@@ -224,7 +222,7 @@ export function GoModuleDetail({
       <div className="grid gap-4 lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
         <div>
           <div className="mb-1 text-xs font-medium text-fg-tertiary">
-            {text("选择模块版本", "Select module version")}
+            {t("artifactDetail.selectModuleVersion")}
           </div>
           <SearchableVersionSelect
             value={selectedVersion}
@@ -233,8 +231,8 @@ export function GoModuleDetail({
               label: version,
             }))}
             loading={infoLoading}
-            placeholder={text("搜索版本", "Search versions")}
-            notFoundContent={text("没有匹配版本", "No matching versions")}
+            placeholder={t("artifactDetail.searchVersions")}
+            notFoundContent={t("artifactDetail.noMatchingVersions")}
             onChange={(version) => {
               setSelectedVersion(version);
               setInfo(null);
@@ -245,21 +243,21 @@ export function GoModuleDetail({
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <MetadataItem
-            label={text("模块", "Module")}
+            label={t("artifactDetail.module")}
             value={`${modulePath}@${selectedVersion}`}
             mono
           />
           <MetadataItem
-            label={text("发布时间", "Published")}
+            label={t("artifactDetail.published")}
             value={formatDate(info?.Time, locale)}
           />
           <MetadataItem
-            label={text("来源", "Source")}
-            value={publisher ?? text("上游代理", "Upstream proxy")}
+            label={t("artifactDetail.source2")}
+            value={publisher ?? t("artifactDetail.upstreamProxy")}
             mono
           />
           <MetadataItem
-            label={text("已知大小", "Known size")}
+            label={t("artifactDetail.knownSize")}
             value={formatBytes(size)}
           />
         </div>
@@ -267,10 +265,7 @@ export function GoModuleDetail({
 
       <div>
         <div className="mb-2 text-xs font-medium text-fg-tertiary">
-          {text(
-            "协议资产（首次访问时缓存）",
-            "Protocol assets (cached on first access)",
-          )}
+          {t("artifactDetail.protocolAssetsCachedOnFirstAccess")}
         </div>
         <div className="grid gap-2 lg:grid-cols-3">
           {assets.map((asset) => (
@@ -287,14 +282,14 @@ export function GoModuleDetail({
               <Button
                 type="text"
                 size="small"
-                aria-label={`${text("复制", "Copy")} ${asset.label}`}
+                aria-label={`${t("artifactDetail.copy")} ${asset.label}`}
                 icon={<CopyOutlined />}
                 onClick={() => void copy(asset.url)}
               />
               <Button
                 type="text"
                 size="small"
-                aria-label={`${text("下载", "Download")} ${asset.label}`}
+                aria-label={`${t("artifactDetail.download")} ${asset.label}`}
                 icon={<DownloadOutlined />}
                 href={asset.url}
               />

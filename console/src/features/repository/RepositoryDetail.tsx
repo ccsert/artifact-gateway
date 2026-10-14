@@ -69,7 +69,7 @@ import {
 } from "./repositoryQueries";
 
 export function RepositoryDetailPage() {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const { identity } = useAuth();
   const isAdmin = platformCapabilities(identity).platformAdmin;
   const { repositoryId = "" } = useParams();
@@ -151,7 +151,7 @@ export function RepositoryDetailPage() {
   if (error !== null && !repo) {
     return (
       <div className="ag-page-stack">
-        <PageHeader title={text("仓库详情", "Repository details")} />
+        <PageHeader title={t("repository.repositoryDetails")} />
         <ErrorBanner error={error} onRetry={load} />
       </div>
     );
@@ -160,9 +160,9 @@ export function RepositoryDetailPage() {
   if (!formatDescriptor(repo.format)) {
     return (
       <div className="ag-page-stack">
-        <PageHeader title={text("仓库详情", "Repository details")} />
+        <PageHeader title={t("repository.repositoryDetails")} />
         <RepositoryFeatureUnavailable
-          feature={text("制品浏览", "Artifact browser")}
+          feature={t("repository.artifactBrowser")}
           unsupportedFormat={repo.format}
         />
       </div>
@@ -196,7 +196,7 @@ export function RepositoryDetailPage() {
             to="/repositories"
             className="hover:text-[var(--ag-link-hover)]"
           >
-            {text("仓库", "Repositories")}
+            {t("repository.repositories")}
           </Link>
           <span className="mx-1.5">/</span>
           <span className="text-fg-secondary">{repo.name}</span>
@@ -209,7 +209,7 @@ export function RepositoryDetailPage() {
       </div>
       <nav
         className="ag-repository-navigation"
-        aria-label={text("仓库任务", "Repository tasks")}
+        aria-label={t("repository.repositoryTasks")}
       >
         {activeGroup && (
           <Tabs
@@ -224,7 +224,7 @@ export function RepositoryDetailPage() {
             }}
             items={tabGroups.map((group) => ({
               key: group.key,
-              label: text(group.label, group.labelEn),
+              label: t(group.label),
             }))}
           />
         )}
@@ -238,7 +238,7 @@ export function RepositoryDetailPage() {
             onChange={(key) => selectTab(key as Tab)}
             items={activeGroup.tabs.map((item) => ({
               key: item.key,
-              label: text(item.label, item.labelEn),
+              label: t(item.label),
             }))}
           />
         )}

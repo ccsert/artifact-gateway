@@ -21,7 +21,7 @@ export function QuarantineReadPolicyCard({
   loadError: unknown;
   onRetry: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const setStoredPolicy = useSetQuarantineReadPolicy(repo.id);
   const [readEnabled, setReadEnabled] = useState(readPolicy?.enabled ?? false);
   // Save failures are local; a failed read comes from the query.
@@ -63,7 +63,7 @@ export function QuarantineReadPolicyCard({
         setReadError(err);
         return;
       }
-      setReadNotice(text("隔离读取策略已保存", "Quarantine read policy saved"));
+      setReadNotice(t("repository.quarantineReadPolicySaved"));
       if (data) {
         setStoredPolicy(data);
         setReadEnabled(data.enabled);
@@ -76,38 +76,32 @@ export function QuarantineReadPolicyCard({
   };
 
   const readDirty = readPolicy ? readPolicy.enabled !== readEnabled : false;
-  const readScope = quarantineReadScope(repo.format, text);
+  const readScope = quarantineReadScope(repo.format, t);
 
   return (
     <PolicyCard
-      eyebrow={text("读取防线", "Read guardrail")}
-      title={text("隔离制品读取", "Quarantined artifact reads")}
-      description={text(
-        "控制客户端是否仍能通过仓库协议读取已经隔离的制品；解除隔离后会立即恢复读取。",
-        "Controls whether clients may continue reading quarantined artifacts through repository protocols. Reads resume immediately after release.",
+      eyebrow={t("repository.readGuardrail")}
+      title={t("repository.quarantinedArtifactReads")}
+      description={t(
+        "repository.controlsWhetherClientsMayContinueReadingQuarantinedArtifacts",
       )}
       status={
         <>
           {readPolicy ? (
             <Tag color={readEnabled ? "warning" : "default"}>
               {readEnabled
-                ? text("阻断读取", "Reads blocked")
-                : text("允许读取", "Reads allowed")}
+                ? t("repository.readsBlocked")
+                : t("repository.readsAllowed")}
             </Tag>
           ) : (
-            <Tag color="error">{text("状态不可用", "Unavailable")}</Tag>
+            <Tag color="error">{t("repository.unavailable2")}</Tag>
           )}
           {readDirty && (
-            <Tag color="processing">
-              {text("有未保存更改", "Unsaved changes")}
-            </Tag>
+            <Tag color="processing">{t("repository.unsavedChanges")}</Tag>
           )}
           {readPolicy && (
             <Switch
-              aria-label={text(
-                "阻断隔离制品读取",
-                "Block quarantined artifact reads",
-              )}
+              aria-label={t("repository.blockQuarantinedArtifactReads")}
               checked={readEnabled}
               onChange={updateReadEnabled}
             />
@@ -129,35 +123,33 @@ export function QuarantineReadPolicyCard({
           )}
           <div className="grid gap-px overflow-hidden rounded-lg border border-line bg-[var(--ag-border-subtle)] sm:grid-cols-2">
             <ScopeFact
-              label={text("影响请求", "Affected requests")}
+              label={t("repository.affectedRequests")}
               value="GET / HEAD"
             />
             <ScopeFact
-              label={text("当前格式的阻断粒度", "Current format boundary")}
+              label={t("repository.currentFormatBoundary")}
               value={readScope.boundary}
             />
             <ScopeFact
-              label={text("发现元数据", "Discovery metadata")}
+              label={t("repository.discoveryMetadata")}
               value={readScope.metadata}
             />
             <ScopeFact
-              label={text("作为 Group 成员", "When used by a Group")}
-              value={text("不降级回退", "No lower-priority fallback")}
+              label={t("repository.whenUsedByAGroup")}
+              value={t("repository.noLowerPriorityFallback")}
             />
           </div>
           <div className="flex flex-col gap-4 border-t border-line pt-4">
             <p className="max-w-2xl text-xs leading-5 text-fg-tertiary">
-              {text(
-                "默认允许读取以保持升级兼容。启用阻断前，请先检查当前仓库已有的隔离记录。",
-                "Reads remain allowed by default for upgrade compatibility. Review existing quarantine records before enabling enforcement.",
+              {t(
+                "repository.readsRemainAllowedByDefaultForUpgradeCompatibility",
               )}
             </p>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs text-fg-disabled">
-                {text(
-                  `读取策略当前版本 ${readPolicy.version}`,
-                  `Read policy version ${readPolicy.version}`,
-                )}
+                {t("repository.readPolicyVersion", {
+                  version: readPolicy.version,
+                })}
               </span>
               <Button
                 type="primary"
@@ -166,7 +158,7 @@ export function QuarantineReadPolicyCard({
                 disabled={!readDirty}
                 onClick={saveReadPolicy}
               >
-                {text("保存读取策略", "Save read policy")}
+                {t("repository.saveReadPolicy")}
               </Button>
             </div>
           </div>

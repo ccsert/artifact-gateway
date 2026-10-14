@@ -26,76 +26,40 @@ export function RepositoryTabSurface({
 }
 
 export function RepositoryConceptHelp({ repo }: { repo: Repository }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const typeLabel =
     repo.type === "proxy" ? "Proxy Repository" : "Hosted Repository";
   const concepts = [
     [
       "Repository",
-      text(
-        "一个格式命名空间，承载访问策略、制品或上游配置。",
-        "A format namespace containing access policy, artifacts, and upstream configuration.",
-      ),
+      t("repository.aFormatNamespaceContainingAccessPolicyArtifactsAnd"),
     ],
     [
       typeLabel,
       repo.type === "proxy"
-        ? text(
-            "按需从上游拉取并缓存响应，不提供发布入口。",
-            "Fetches and caches upstream responses on demand; publishing is disabled.",
-          )
-        : text(
-            "保存已校验并发布的制品，可执行删除、恢复和保留。",
-            "Stores verified published artifacts and supports deletion, restore, and retention.",
+        ? t("repository.fetchesAndCachesUpstreamResponsesOnDemandPublishing")
+        : t(
+            "repository.storesVerifiedPublishedArtifactsAndSupportsDeletionRestore",
           ),
     ],
-    [
-      "Artifact",
-      text(
-        "用户可见的逻辑制品身份，例如 Maven 坐标或 OCI 镜像。",
-        "A user-visible logical identity such as a Maven coordinate or OCI image.",
-      ),
-    ],
-    [
-      "Asset",
-      text(
-        "制品下的不可变文件或 Blob，例如 JAR、POM 或镜像层。",
-        "An immutable file or blob under an artifact, such as a JAR, POM, or image layer.",
-      ),
-    ],
+    ["Artifact", t("repository.aUserVisibleLogicalIdentitySuchAsA")],
+    ["Asset", t("repository.anImmutableFileOrBlobUnderAnArtifact")],
     ...(repo.type === "proxy"
-      ? [
-          [
-            "Cache Entry",
-            text(
-              "上游响应的缓存索引与字节，不等同于 Hosted 制品。",
-              "An index and bytes for an upstream response; it is not a hosted artifact.",
-            ),
-          ],
-        ]
+      ? [["Cache Entry", t("repository.anIndexAndBytesForAnUpstreamResponse")]]
       : []),
     ...(repo.type === "hosted"
       ? [
           [
             "Publication",
-            text(
-              "将完整且通过校验的 staged 内容转为可见制品。",
-              "Turns complete, validated staged content into a visible artifact.",
-            ),
+            t("repository.turnsCompleteValidatedStagedContentIntoAVisible"),
           ],
           [
             "Tombstone",
-            text(
-              "删除后的可恢复记录；字节会在确认无引用后回收。",
-              "A restorable deletion record; bytes are reclaimed after references are gone.",
-            ),
+            t("repository.aRestorableDeletionRecordBytesAreReclaimedAfter"),
           ],
           [
             "Retention Policy",
-            text(
-              "按格式规则选择过期版本或路径，生成可审阅的回收任务。",
-              "Selects expired versions or paths by format rules and creates a reviewable reclamation job.",
-            ),
+            t("repository.selectsExpiredVersionsOrPathsByFormatRules"),
           ],
         ]
       : []),
@@ -104,7 +68,7 @@ export function RepositoryConceptHelp({ repo }: { repo: Repository }) {
   return (
     <Popover
       placement="bottomRight"
-      title={text("概念说明", "Concepts")}
+      title={t("repository.concepts")}
       content={
         <div className="grid max-w-[34rem] grid-cols-2 gap-x-5 gap-y-3 text-xs">
           {concepts.map(([term, description]) => (
@@ -118,12 +82,12 @@ export function RepositoryConceptHelp({ repo }: { repo: Repository }) {
         </div>
       }
     >
-      <Tooltip title={text("查看概念说明", "View concepts")}>
+      <Tooltip title={t("repository.viewConcepts")}>
         <Button
           type="text"
           size="small"
           icon={<InfoCircleOutlined />}
-          aria-label={text("查看概念说明", "View concepts")}
+          aria-label={t("repository.viewConcepts")}
         />
       </Tooltip>
     </Popover>
@@ -139,14 +103,14 @@ export function RepositorySummary({
   capacity: RepositoryCapacity | null;
   onOpenCapacity?: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const protocolPath = `${window.location.origin}/${repo.format}/${repo.name}`;
 
   return (
     <div
       className="border-b border-line pb-3"
       role="group"
-      aria-label={text("仓库摘要", "Repository summary")}
+      aria-label={t("repository.repositorySummary")}
     >
       <div className="ag-repository-summary-heading flex min-w-0 items-start justify-between gap-6">
         <div className="min-w-0">
@@ -162,8 +126,8 @@ export function RepositorySummary({
             <span aria-hidden="true">·</span>
             <span>
               {repo.anonymousRead
-                ? text("允许匿名读取", "Anonymous reads")
-                : text("私有读取", "Private reads")}
+                ? t("repository.anonymousReads")
+                : t("repository.privateReads")}
             </span>
             <span aria-hidden="true">·</span>
             <span className="font-mono">ID {repo.id}</span>
@@ -174,7 +138,7 @@ export function RepositorySummary({
         <div className="ag-repository-summary-endpoint flex min-w-0 shrink-0 items-center gap-2 pt-0.5">
           <RepositoryConceptHelp repo={repo} />
           <span className="text-xs text-fg-tertiary">
-            {text("协议入口", "Protocol endpoint")}
+            {t("repository.protocolEndpoint")}
           </span>
           <code
             className="min-w-0 max-w-[32rem] flex-1 truncate font-mono text-xs text-fg-secondary"
@@ -191,7 +155,7 @@ export function RepositorySummary({
             to={`/browse?repository=${encodeURIComponent(repo.id)}`}
             className="font-medium text-[var(--ag-link)] hover:text-[var(--ag-link-hover)]"
           >
-            {text("打开公开浏览", "Open public browser")}
+            {t("repository.openPublicBrowser")}
           </Link>
         )}
         {onOpenCapacity && (
@@ -202,11 +166,11 @@ export function RepositorySummary({
             onClick={onOpenCapacity}
           >
             {capacity
-              ? text(
-                  `${formatBytes(capacity.usedBytes)} · ${formatNumber(capacity.objectCount)} 个对象`,
-                  `${formatBytes(capacity.usedBytes)} · ${formatNumber(capacity.objectCount)} objects`,
-                )
-              : text("查看容量", "View capacity")}
+              ? t("repository.objects2", {
+                  bytes: formatBytes(capacity.usedBytes),
+                  number: formatNumber(capacity.objectCount),
+                })
+              : t("repository.viewCapacity")}
           </Button>
         )}
       </div>
@@ -219,7 +183,7 @@ export function EffectiveAccessPanel({
 }: {
   effectiveAccess: RepositoryEffectiveAccess;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <Collapse
       ghost
@@ -229,7 +193,7 @@ export function EffectiveAccessPanel({
           key: "effective-access",
           label: (
             <span className="text-xs text-fg-secondary">
-              {text("当前访问判定", "Effective access")}
+              {t("repository.effectiveAccess")}
               <span className="ml-2 font-mono text-fg-disabled">
                 {effectiveAccess.actor}
               </span>

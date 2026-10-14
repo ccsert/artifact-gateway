@@ -1,3 +1,4 @@
+import { PreferencesProvider } from "../../lib/preferences";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -26,7 +27,9 @@ const conan = {
 } as PublicRepository;
 
 const wrapper = ({ children }: { children: ReactNode }) => (
-  <TestQueryProvider>{children}</TestQueryProvider>
+  <PreferencesProvider>
+    <TestQueryProvider>{children}</TestQueryProvider>
+  </PreferencesProvider>
 );
 
 function renderPages(repository: PublicRepository, tagParam = "") {

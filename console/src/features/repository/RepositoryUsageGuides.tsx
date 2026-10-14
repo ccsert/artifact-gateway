@@ -3,7 +3,7 @@ import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 
 export function CopyButton({ text: value }: { text: string }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const { copiedValue, copy } = useClipboardAction();
   const copied = copiedValue === value;
   return (
@@ -13,7 +13,7 @@ export function CopyButton({ text: value }: { text: string }) {
       onClick={() => void copy(value)}
       className="shrink-0"
     >
-      {copied ? text("已复制", "Copied") : text("复制", "Copy")}
+      {copied ? t("repository.copied") : t("repository.copy")}
     </Button>
   );
 }
@@ -28,9 +28,7 @@ export function RepositorySnippetBlock({
   return (
     <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2">
       <div className="mb-1 flex items-center justify-between gap-3">
-        <span className="text-xs uppercase tracking-wider text-fg-tertiary">
-          {label}
-        </span>
+        <span className="text-xs text-fg-tertiary">{label}</span>
         <CopyButton text={code} />
       </div>
       <code className="block whitespace-pre-wrap break-all font-mono text-xs leading-5 text-[var(--ag-content-secondary)]">
@@ -41,29 +39,26 @@ export function RepositorySnippetBlock({
 }
 
 export function OCIPublishGuide({ repoName }: { repoName: string }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const registry = window.location.host;
   const image = `${registry}/${repoName}/<image>:<tag>`;
   return (
     <div className="grid max-w-5xl gap-4 lg:grid-cols-2">
       <div>
         <h3 className="text-sm font-medium text-fg-strong">
-          {text("通过 Docker 或 Podman 发布", "Publish with Docker or Podman")}
+          {t("repository.publishWithDockerOrPodman")}
         </h3>
         <p className="mt-1 text-xs leading-5 text-fg-tertiary">
-          {text(
-            "请管理员签发具有此仓库写入授权的服务账号凭据，并通过安全渠道提供给发布者。SSO 浏览器会话不能直接作为 Docker 凭据。",
-            "Ask an administrator for a service-account credential with write access to this repository, delivered through a secure channel. The SSO browser session is not a Docker credential.",
-          )}
+          {t("repository.askAnAdministratorForAServiceAccountCredential")}
         </p>
       </div>
       <div className="space-y-3">
         <RepositorySnippetBlock
-          label={text("登录 Registry", "Sign in to registry")}
+          label={t("repository.signInToRegistry")}
           code={`printf '%s' "$ARTIFACT_GATEWAY_TOKEN" | docker login ${registry} --username publisher --password-stdin`}
         />
         <RepositorySnippetBlock
-          label={text("标记与推送", "Tag and push")}
+          label={t("repository.tagAndPush")}
           code={`docker tag <local-image>:<tag> ${image}\ndocker push ${image}`}
         />
       </div>
@@ -72,20 +67,17 @@ export function OCIPublishGuide({ repoName }: { repoName: string }) {
 }
 
 export function NpmPublishGuide({ repoName }: { repoName: string }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const registry = `${window.location.origin}/npm/${repoName}/`;
   const authPath = `//${window.location.host}/npm/${repoName}/:_authToken=\${ARTIFACT_GATEWAY_TOKEN}`;
   return (
     <div className="grid max-w-5xl gap-4 lg:grid-cols-2">
       <div>
         <h3 className="text-sm font-medium text-fg-strong">
-          {text("注册 npm 仓库", "Configure npm registry")}
+          {t("repository.configureNpmRegistry")}
         </h3>
         <p className="mt-1 text-xs leading-5 text-fg-tertiary">
-          {text(
-            "认证令牌使用 Gateway API Key 或 resolver token。",
-            "Use a Gateway API key or resolver token for authentication.",
-          )}
+          {t("repository.useAGatewayAPIKeyOrResolverToken")}
         </p>
       </div>
       <div className="space-y-3">
@@ -94,7 +86,7 @@ export function NpmPublishGuide({ repoName }: { repoName: string }) {
           code={`registry=${registry}\n${authPath}`}
         />
         <RepositorySnippetBlock
-          label={text("发布", "Publish")}
+          label={t("repository.publish")}
           code={`npm publish --registry ${registry}`}
         />
       </div>
@@ -103,19 +95,16 @@ export function NpmPublishGuide({ repoName }: { repoName: string }) {
 }
 
 export function PyPIPublishGuide({ repoName }: { repoName: string }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const base = `${window.location.origin}/pypi/${repoName}`;
   return (
     <div className="grid max-w-5xl gap-4 lg:grid-cols-2">
       <div>
         <h3 className="text-sm font-medium text-fg-strong">
-          {text("注册 PyPI 仓库", "Configure PyPI repository")}
+          {t("repository.configurePyPIRepository")}
         </h3>
         <p className="mt-1 text-xs leading-5 text-fg-tertiary">
-          {text(
-            "匿名仓库的 pip 读取无需凭据；twine 使用任意非空用户名和 resolver token。",
-            "Anonymous pip reads need no credentials; twine uses any non-empty username with the resolver token.",
-          )}
+          {t("repository.anonymousPipReadsNeedNoCredentialsTwineUses")}
         </p>
       </div>
       <div className="space-y-3">
@@ -128,7 +117,7 @@ export function PyPIPublishGuide({ repoName }: { repoName: string }) {
           code={`[distutils]\nindex-servers = ${repoName}\n\n[${repoName}]\nrepository = ${base}/legacy/\nusername = resolver\npassword = \${GATEWAY_RESOLVER_TOKEN}`}
         />
         <RepositorySnippetBlock
-          label={text("发布", "Publish")}
+          label={t("repository.publish")}
           code={`twine upload --repository-url ${base}/legacy/ dist/*`}
         />
       </div>
@@ -137,19 +126,16 @@ export function PyPIPublishGuide({ repoName }: { repoName: string }) {
 }
 
 export function CargoPublishGuide({ repoName }: { repoName: string }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const index = `sparse+${window.location.origin}/cargo/${repoName}/`;
   return (
     <div className="grid max-w-5xl gap-4 lg:grid-cols-2">
       <div>
         <h3 className="text-sm font-medium text-fg-strong">
-          {text("配置 Cargo 仓库", "Configure Cargo registry")}
+          {t("repository.configureCargoRegistry")}
         </h3>
         <p className="mt-1 text-xs leading-5 text-fg-tertiary">
-          {text(
-            "由管理员授予仓库写入权限。私有仓库和发布需要通过安全渠道注入 CARGO_REGISTRIES_GATEWAY_TOKEN，值为 Bearer 加 Gateway Token；不要写入配置文件。授权由仓库 Grant 管理，暂不支持 cargo owner。",
-            "Ask an administrator for repository write access. For private reads and publishing, inject CARGO_REGISTRIES_GATEWAY_TOKEN as Bearer followed by the Gateway token through a secret manager; never put it in the config file. Repository grants manage access; cargo owner is unsupported.",
-          )}
+          {t("repository.askAnAdministratorForRepositoryWriteAccessFor")}
         </p>
       </div>
       <div className="space-y-3">
@@ -158,13 +144,13 @@ export function CargoPublishGuide({ repoName }: { repoName: string }) {
           code={`[registries.gateway]\nindex = "${index}"\ncredential-provider = "cargo:token"`}
         />
         <RepositorySnippetBlock
-          label={text("发布与读取", "Publish and read")}
+          label={t("repository.publishAndRead")}
           code={
             "cargo publish --registry gateway\ncargo search <crate> --registry gateway\ncargo add <crate> --registry gateway\ncargo install <crate> --registry gateway"
           }
         />
         <RepositorySnippetBlock
-          label={text("撤回与恢复版本", "Yank and restore a version")}
+          label={t("repository.yankAndRestoreAVersion")}
           code={
             "cargo yank <crate>@<version> --registry gateway\ncargo yank --undo <crate>@<version> --registry gateway"
           }

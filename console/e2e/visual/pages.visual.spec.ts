@@ -153,6 +153,16 @@ const surfaces: Surface[] = [
     path: "/system",
     ready: (page) => page.getByText("gateway-0").first(),
   },
+  {
+    name: "site-settings",
+    path: "/site-settings",
+    ready: (page) => page.getByText("站点名称").first(),
+  },
+  {
+    name: "authentication",
+    path: "/identity-providers",
+    ready: (page) => page.getByText("OIDC").first(),
+  },
 ];
 
 const themes = ["gateway-dark", "gateway-light"] as const;

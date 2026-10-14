@@ -17,7 +17,7 @@ export function CreateRepositoryDialog({
   profiles: FormatProfile[];
   onCreated: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const dialog = useDisclosure();
   const [name, setName] = useState("");
   const [format, setFormat] = useState<Format>("oci");
@@ -109,17 +109,17 @@ export function CreateRepositoryDialog({
           dialog.show();
         }}
       >
-        {text("新建仓库", "New repository")}
+        {t("repository.newRepository")}
       </Button>
       <Modal
         open={dialog.open}
-        title={text("新建仓库", "New repository")}
+        title={t("repository.newRepository")}
         onClose={dialog.hide}
         busy={busy}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
-              {text("取消", "Cancel")}
+              {t("repository.cancel")}
             </Button>
             <Button
               type="primary"
@@ -133,14 +133,14 @@ export function CreateRepositoryDialog({
                   (!endpoint.trim() || (needsHosts && !allowedHosts.trim())))
               }
             >
-              {text("创建", "Create")}
+              {t("repository.create")}
             </Button>
           </Space>
         }
       >
         <div className="space-y-4">
           {error !== null && <ErrorBanner error={error} />}
-          <Field label={text("类型", "Type")} group>
+          <Field label={t("repository.type")} group>
             <Segmented<"hosted" | "proxy">
               block
               value={type}
@@ -155,21 +155,20 @@ export function CreateRepositoryDialog({
                 value: repositoryType,
                 label:
                   repositoryType === "hosted"
-                    ? text("托管 (hosted)", "Hosted")
-                    : text("代理 (proxy)", "Proxy"),
+                    ? t("repository.hosted")
+                    : t("repository.proxy"),
               }))}
             />
             <span className="mt-1 block text-xs text-fg-disabled">
               {type === "hosted"
-                ? text("自己托管制品，可推送", "Host and publish artifacts")
-                : text("从上游仓库拉取并缓存", "Fetch and cache from upstream")}
+                ? t("repository.hostAndPublishArtifacts")
+                : t("repository.fetchAndCacheFromUpstream")}
             </span>
           </Field>
           <Field
-            label={text("仓库名称", "Repository name")}
-            hint={text(
-              "小写字母、数字与连字符，例如 team-images",
-              "Lowercase letters, numbers, and hyphens, for example team-images",
+            label={t("repository.repositoryName")}
+            hint={t(
+              "repository.lowercaseLettersNumbersAndHyphensForExampleTeam",
             )}
           >
             <Input
@@ -179,7 +178,7 @@ export function CreateRepositoryDialog({
               onChange={(e) => setName(e.target.value)}
             />
           </Field>
-          <Field label={text("格式", "Format")} group>
+          <Field label={t("repository.format")} group>
             <Select<Format>
               className="w-full font-mono"
               showSearch={{ optionFilterProp: "label" }}
@@ -195,27 +194,26 @@ export function CreateRepositoryDialog({
             <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-line bg-surface-translucent px-4 py-3">
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-fg">
-                  {text("严格发布", "Strict publication")}
+                  {t("repository.strictPublication")}
                 </div>
                 <div className="mt-1 max-w-[62ch] text-xs leading-5 text-fg-tertiary">
-                  {text(
-                    "默认关闭：Maven/Gradle 标准上传成功后立即可读，便于从 Nexus 直接迁移。开启后，同一坐标会在 Gateway commit 成功前保持不可见。",
-                    "Off by default: successful standard Maven/Gradle uploads are immediately readable for Nexus-compatible migration. When enabled, a coordinate stays hidden until its Gateway commit succeeds.",
+                  {t(
+                    "repository.offByDefaultSuccessfulStandardMavenGradleUploads",
                   )}
                 </div>
               </div>
               <Switch
                 checked={mavenStrictPublication}
                 onChange={setMavenStrictPublication}
-                aria-label={text("严格发布", "Strict publication")}
+                aria-label={t("repository.strictPublication")}
               />
             </div>
           )}
           {type === "proxy" && (
             <>
               <Field
-                label={text("上游地址 endpoint", "Upstream endpoint")}
-                hint={text("代理拉取的外部仓库地址", "External proxy source")}
+                label={t("repository.upstreamEndpoint")}
+                hint={t("repository.externalProxySource")}
               >
                 <Input
                   className="font-mono text-xs"
@@ -228,13 +226,13 @@ export function CreateRepositoryDialog({
                 />
               </Field>
               <Field
-                label={text(
-                  `允许主机 allowedHosts${needsHosts ? "（必填）" : "（可选）"}`,
-                  `Allowed hosts${needsHosts ? " (required)" : " (optional)"}`,
+                label={t(
+                  needsHosts
+                    ? "repository.allowedHostsRequired"
+                    : "repository.allowedHostsOptional",
                 )}
-                hint={text(
-                  "逗号分隔的主机名；Raw、Conan、npm、PyPI、Go、Cargo 和 APT 代理必填。PyPI 通常还需允许 files.pythonhosted.org；Cargo 通常还需 static.crates.io。",
-                  "Comma-separated hostnames; required for Raw, Conan, npm, PyPI, Go, Cargo, and APT proxies. PyPI normally also requires files.pythonhosted.org; Cargo normally also requires static.crates.io.",
+                hint={t(
+                  "repository.commaSeparatedHostnamesRequiredForRawConanNpm",
                 )}
               >
                 <Input

@@ -13,7 +13,7 @@ import {
 
 /** A repository's retention policy, loaded once and edited per version. */
 export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const policyQuery = useRetentionPolicy(repo.id);
   const invalidatePolicy = useInvalidateRetentionPolicy(repo.id);
   const policy = policyQuery.data ?? null;
@@ -24,9 +24,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
 
   if (error !== null)
     return isNotFound(error) ? (
-      <RepositoryFeatureUnavailable
-        feature={text("保留策略", "Retention policy")}
-      />
+      <RepositoryFeatureUnavailable feature={t("repository.retentionPolicy")} />
     ) : (
       <ErrorBanner error={error} onRetry={load} />
     );
@@ -35,7 +33,7 @@ export function RepositoryRetentionTab({ repo }: { repo: Repository }) {
   if (!supportsRepositoryFeature(repo.format, repo.type, "retention")) {
     return (
       <RepositoryFeatureUnavailable
-        feature={text("Hosted 仓库保留策略", "Hosted repository retention")}
+        feature={t("repository.hostedRepositoryRetention")}
       />
     );
   }

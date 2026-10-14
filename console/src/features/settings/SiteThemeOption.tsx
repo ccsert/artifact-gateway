@@ -26,7 +26,7 @@ export function SiteThemeOption({
   onMakeDefault: () => void;
   onDelete: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const source = theme.source ?? "builtin";
   return (
     <article
@@ -45,16 +45,14 @@ export function SiteThemeOption({
         </Checkbox>
         <span className="ag-theme-option-meta">
           <span className="ag-theme-option-mode">
-            {theme.mode === "dark"
-              ? text("深色", "Dark")
-              : text("浅色", "Light")}
+            {theme.mode === "dark" ? t("settings.dark") : t("settings.light")}
           </span>
           <span className="ag-theme-option-source" data-source={source}>
             {source === "managed"
-              ? text("已上传", "Uploaded")
+              ? t("settings.uploaded")
               : source === "directory"
-                ? text("目录", "Directory")
-                : text("内置", "Built in")}
+                ? t("settings.directory")
+                : t("settings.builtIn")}
           </span>
         </span>
       </div>
@@ -62,18 +60,15 @@ export function SiteThemeOption({
       <p>{theme.description}</p>
       <div className="ag-theme-option-footer">
         <Radio checked={isDefault} disabled={!enabled} onChange={onMakeDefault}>
-          {text("设为默认", "Use as default")}
+          {t("settings.useAsDefault")}
         </Radio>
         {source === "managed" && (
           <Popconfirm
             disabled={deletionBlocked}
-            title={text("删除这个上传主题？", "Delete this uploaded theme?")}
-            description={text(
-              "删除后无法恢复；若仍需使用，需要重新上传主题包。",
-              "This cannot be undone; upload the package again to restore it.",
-            )}
-            okText={text("删除", "Delete")}
-            cancelText={text("取消", "Cancel")}
+            title={t("settings.deleteThisUploadedTheme")}
+            description={t("settings.thisCannotBeUndoneUploadThePackageAgain")}
+            okText={t("settings.delete")}
+            cancelText={t("settings.cancel")}
             okButtonProps={{ danger: true }}
             onConfirm={onDelete}
           >
@@ -82,19 +77,16 @@ export function SiteThemeOption({
               type="text"
               size="small"
               icon={<DeleteOutlined />}
-              aria-label={text("删除", "Delete")}
+              aria-label={t("settings.delete")}
               loading={deleting}
               disabled={deletionBlocked}
               title={
                 deletionBlocked
-                  ? text(
-                      "请先取消启用并保存站点设置",
-                      "Disable the theme and save site settings first",
-                    )
+                  ? t("settings.disableTheThemeAndSaveSiteSettingsFirst")
                   : undefined
               }
             >
-              {text("删除", "Delete")}
+              {t("settings.delete")}
             </Button>
           </Popconfirm>
         )}

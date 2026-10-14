@@ -34,7 +34,7 @@ export function ScanRequestCard({
   /** The queued job, to show at the top of the job list. */
   onSubmitted: (job: LifecycleJob) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [form] = Form.useForm<ScanForm>();
   const [submitError, setSubmitError] = useState<unknown>(null);
   const [submittedJob, setSubmittedJob] = useState<LifecycleJob | null>(null);
@@ -95,10 +95,10 @@ export function ScanRequestCard({
       {submittedJob && (
         <Notice
           tone="success"
-          title={text("扫描任务已提交", "Scan job queued")}
+          title={t("repository.scanJobQueued")}
           description={
             <span>
-              {text("任务 ID：", "Job ID: ")}
+              {t("repository.jobID")}
               <code>{submittedJob.id}</code>
             </span>
           }
@@ -108,12 +108,7 @@ export function ScanRequestCard({
       {submitError !== null && <ErrorBanner error={submitError} />}
 
       <Card>
-        <CardHeader
-          title={text(
-            "选择并扫描不可变制品",
-            "Select and scan an immutable artifact",
-          )}
-        />
+        <CardHeader title={t("repository.selectAndScanAnImmutableArtifact")} />
         <div className="px-5 py-4">
           <Form<ScanForm>
             form={form}
@@ -124,7 +119,7 @@ export function ScanRequestCard({
           >
             <Form.Item
               className="md:col-span-2"
-              label={text("搜索并选择制品", "Search and select an artifact")}
+              label={t("repository.searchAndSelectAnArtifact")}
               style={{ marginBottom: 0 }}
             >
               <RepositoryArtifactSelect
@@ -132,11 +127,8 @@ export function ScanRequestCard({
                 purpose="scan"
                 value={selectedArtifact}
                 enabled={artifactScanning && canManage}
-                ariaLabel={text(
-                  "搜索并选择制品",
-                  "Search and select an artifact",
-                )}
-                statusForOption={(artifact) => scanStatus(artifact, jobs, text)}
+                ariaLabel={t("repository.searchAndSelectAnArtifact")}
+                statusForOption={(artifact) => scanStatus(artifact, jobs, t)}
                 onChange={(artifact) => {
                   setSelectedArtifact(artifact);
                   setManualIdentity(false);
@@ -152,9 +144,8 @@ export function ScanRequestCard({
               />
               <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                 <span className="text-xs leading-5 text-fg-tertiary">
-                  {text(
-                    "选择后会自动锁定规范坐标与完整摘要；最多显示 50 条，可输入关键词检索历史版本和 Conan 修订。仅在无法检索时使用高级手动输入。",
-                    "Selection locks the canonical coordinate and full digest. Up to 50 matches are shown; search historical versions and Conan revisions by keyword. Use advanced manual input only as a recovery path.",
+                  {t(
+                    "repository.selectionLocksTheCanonicalCoordinateAndFullDigest",
                   )}
                 </span>
                 <Button
@@ -164,8 +155,8 @@ export function ScanRequestCard({
                   onClick={toggleManualIdentity}
                 >
                   {manualIdentity
-                    ? text("收起高级手动输入", "Hide advanced manual input")
-                    : text("高级手动输入", "Advanced manual input")}
+                    ? t("repository.hideAdvancedManualInput")
+                    : t("repository.advancedManualInput")}
                 </Button>
               </div>
             </Form.Item>
@@ -180,32 +171,26 @@ export function ScanRequestCard({
                     {selectedArtifact.digest}
                   </p>
                 </div>
-                <Tag color={scanStatus(selectedArtifact, jobs, text).color}>
-                  {scanStatus(selectedArtifact, jobs, text).label}
+                <Tag color={scanStatus(selectedArtifact, jobs, t).color}>
+                  {scanStatus(selectedArtifact, jobs, t).label}
                 </Tag>
               </div>
             )}
 
             <Form.Item
               name="coordinate"
-              label={text("制品坐标", "Artifact coordinate")}
+              label={t("repository.artifactCoordinate")}
               hidden={!manualIdentity}
               style={{ marginBottom: 0 }}
               rules={[
                 {
                   required: true,
                   whitespace: true,
-                  message: text(
-                    "请输入制品坐标",
-                    "Enter an artifact coordinate",
-                  ),
+                  message: t("repository.enterAnArtifactCoordinate"),
                 },
                 {
                   max: 1024,
-                  message: text(
-                    "制品坐标过长",
-                    "Artifact coordinate is too long",
-                  ),
+                  message: t("repository.artifactCoordinateIsTooLong"),
                 },
               ]}
             >
@@ -213,30 +198,26 @@ export function ScanRequestCard({
                 disabled={!artifactScanning || !canManage}
                 placeholder={coordinatePlaceholder(
                   repo.format,
-                  text("制品的规范坐标", "Canonical artifact coordinate"),
+                  t("repository.canonicalArtifactCoordinate"),
                 )}
                 autoComplete="off"
               />
             </Form.Item>
             <Form.Item
               name="digest"
-              label={text("SHA-256 摘要", "SHA-256 digest")}
+              label={t("repository.sHA256Digest")}
               hidden={!manualIdentity}
               style={{ marginBottom: 0 }}
               rules={[
                 {
                   required: true,
                   whitespace: true,
-                  message: text(
-                    "请输入 SHA-256 摘要",
-                    "Enter a SHA-256 digest",
-                  ),
+                  message: t("repository.enterASHA256Digest"),
                 },
                 {
                   pattern: /^sha256:[0-9a-f]{64}$/,
-                  message: text(
-                    "请输入 sha256: 开头的 64 位小写十六进制摘要",
-                    "Enter sha256: followed by 64 lowercase hexadecimal characters",
+                  message: t(
+                    "repository.enterSha256FollowedBy64LowercaseHexadecimalCharacters",
                   ),
                 },
               ]}
@@ -252,20 +233,16 @@ export function ScanRequestCard({
             <div className="grid gap-3 border-t border-line pt-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center md:col-span-2">
               <p className="max-w-2xl text-xs leading-5 text-fg-tertiary">
                 {manualIdentity
-                  ? text(
-                      "高级模式要求坐标和摘要与仓库中的不可变制品完全一致。",
-                      "Advanced mode requires an exact coordinate and digest match.",
+                  ? t(
+                      "repository.advancedModeRequiresAnExactCoordinateAndDigest",
                     )
-                  : text(
-                      "扫描只读取已选制品，不会拉取或修改上游内容。",
-                      "The scan only reads the selected artifact and never fetches or modifies upstream content.",
-                    )}
+                  : t("repository.theScanOnlyReadsTheSelectedArtifactAnd")}
               </p>
               <Button
                 className="w-full sm:w-auto"
                 type="primary"
                 htmlType={manualIdentity ? "submit" : "button"}
-                aria-label={text("提交扫描", "Queue scan")}
+                aria-label={t("repository.queueScan")}
                 icon={<ScanOutlined />}
                 loading={submitting}
                 disabled={
@@ -283,7 +260,7 @@ export function ScanRequestCard({
                     : undefined
                 }
               >
-                {text("提交扫描", "Queue scan")}
+                {t("repository.queueScan")}
               </Button>
             </div>
           </Form>

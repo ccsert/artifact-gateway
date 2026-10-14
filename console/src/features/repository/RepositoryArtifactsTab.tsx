@@ -53,7 +53,7 @@ export function RepositoryArtifactsTab({
   onBrowseArtifact?: (node: BrowseNode) => void;
 }) {
   const { token } = useAuth();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const descriptor = formatDescriptor(repo.format);
   const [q, setQ] = useState(
     artifactCoordinateForDisplay(repo.format, artifactTarget),
@@ -92,10 +92,7 @@ export function RepositoryArtifactsTab({
     assetFilter: assetTarget ? "all" : proxyAssetFilter,
     artifactTarget,
     buildTarget,
-    unavailableMessage: text(
-      "读取 Proxy 缓存失败",
-      "Failed to load proxy cache",
-    ),
+    unavailableMessage: t("repository.failedToLoadProxyCache"),
   });
   const pages = artifacts.data?.pages;
   const rows = pages?.flatMap((page) => page.items) ?? [];
@@ -143,7 +140,7 @@ export function RepositoryArtifactsTab({
   }, [artifactTarget, assetTarget, format, proxyMaven]);
 
   const searchPlaceholder = descriptor
-    ? text(...descriptor.searchPlaceholder)
+    ? t(descriptor.searchPlaceholder)
     : undefined;
 
   // Proxy Maven rows are cache entries, which carry no security summary.
@@ -157,7 +154,7 @@ export function RepositoryArtifactsTab({
     repo,
     proxyMaven,
     showSecurityColumn,
-    text,
+    t,
   });
 
   const FormatDetail = formatViews(format).ArtifactDetail;
@@ -189,7 +186,7 @@ export function RepositoryArtifactsTab({
   if (!descriptor) {
     return (
       <RepositoryFeatureUnavailable
-        feature={text("制品浏览", "Artifact browser")}
+        feature={t("repository.artifactBrowser")}
         unsupportedFormat={format}
       />
     );
@@ -249,11 +246,10 @@ export function RepositoryArtifactsTab({
           placeholder={
             descriptor?.serverKeywordSearch &&
             match === "contains" &&
-            !proxyMaven
-              ? searchPlaceholder
-                  ?.replace("前缀", "关键词")
-                  .replace("prefix", "keyword")
-              : (searchPlaceholder ?? text("搜索…", "Search…"))
+            !proxyMaven &&
+            descriptor.searchKeywordPlaceholder
+              ? t(descriptor.searchKeywordPlaceholder)
+              : (searchPlaceholder ?? t("repository.search2"))
           }
           value={q}
           onChange={(e) => {
@@ -269,7 +265,7 @@ export function RepositoryArtifactsTab({
             setExpandedImage(null);
             void load(value);
           }}
-          enterButton={text("搜索", "Search")}
+          enterButton={t("repository.search")}
         />
         {canUploadRaw && (
           <RawUploadDialog repo={repo} onUploaded={() => load(q)} />
@@ -280,10 +276,10 @@ export function RepositoryArtifactsTab({
               className="w-28"
               value={proxyAssetFilter}
               options={[
-                { value: "primary", label: text("主资产", "Primary assets") },
-                { value: "all", label: text("全部文件", "All files") },
-                { value: "jar", label: text("仅 JAR", "JAR only") },
-                { value: "pom", label: text("仅 POM", "POM only") },
+                { value: "primary", label: t("repository.primaryAssets") },
+                { value: "all", label: t("repository.allFiles") },
+                { value: "jar", label: t("repository.jAROnly") },
+                { value: "pom", label: t("repository.pOMOnly") },
               ]}
               onChange={(value: ProxyMavenAssetFilter) => {
                 setProxyAssetFilter(value);
@@ -291,10 +287,10 @@ export function RepositoryArtifactsTab({
               }}
             />
             <span className="text-xs text-fg-tertiary">
-              {text(
-                `${formatNumber(proxyTotal)} 个 Maven 版本，当前显示 ${formatNumber(rows.length)} 个`,
-                `${formatNumber(proxyTotal)} Maven versions, showing ${formatNumber(rows.length)}`,
-              )}
+              {t("repository.mavenVersionsShowing", {
+                number: formatNumber(proxyTotal),
+                number2: formatNumber(rows.length),
+              })}
             </span>
           </>
         )}
@@ -308,7 +304,7 @@ export function RepositoryArtifactsTab({
               void load("");
             }}
           >
-            {text("返回完整列表", "Return to full list")}
+            {t("repository.returnToFullList")}
           </Button>
         )}
       </div>
@@ -318,7 +314,7 @@ export function RepositoryArtifactsTab({
       {error !== null && rows.length === 0 ? (
         isNotFound(error) ? (
           <RepositoryFeatureUnavailable
-            feature={text("制品浏览", "Artifact browser")}
+            feature={t("repository.artifactBrowser")}
           />
         ) : (
           <ErrorBanner error={error} onRetry={() => load(q)} />
@@ -373,10 +369,10 @@ export function RepositoryArtifactsTab({
           />
           {proxyMaven && proxyTotal > 0 && (
             <div className="border-t border-line px-4 py-2 text-center text-xs text-fg-tertiary">
-              {text(
-                `第 ${formatNumber(proxyPage)} 页，每页 ${formatNumber(PROXY_MAVEN_PAGE_SIZE)} 个 Maven 版本`,
-                `Page ${formatNumber(proxyPage)} with ${formatNumber(PROXY_MAVEN_PAGE_SIZE)} Maven versions per page`,
-              )}
+              {t("repository.pageWithMavenVersionsPerPage", {
+                number: formatNumber(proxyPage),
+                number2: formatNumber(PROXY_MAVEN_PAGE_SIZE),
+              })}
             </div>
           )}
         </>

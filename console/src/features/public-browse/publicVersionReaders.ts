@@ -1,13 +1,9 @@
+import { LocalizedError } from "../../messages/translate";
 import { listOciManifests } from "../../client";
 import { nextPublicOciTagCursor } from "../../lib/publicOci";
 import { unwrap } from "../../lib/query/client";
 import { VERSION_PAGE_SIZE } from "./constants";
 import type { PublicRepository } from "./types";
-
-/** A failed read keeps its HTTP status, so callers can tell refusals apart. */
-function statusError(message: string, status: number) {
-  return Object.assign(new Error(message), { status });
-}
 
 export type OciTagPageData = { tags: string[]; nextCursor?: string };
 
@@ -21,7 +17,8 @@ export async function readPublicOciTagPage(
   cursor: string,
   signal: AbortSignal,
 ): Promise<OciTagPageData> {
-  if (!repository) throw new Error("读取 OCI 版本失败");
+  if (!repository)
+    throw new LocalizedError("publicBrowse.failedToReadOciVersions");
   if (repository.type !== "group") {
     const page = await unwrap(
       listOciManifests({
@@ -34,11 +31,15 @@ export async function readPublicOciTagPage(
         signal,
       }),
     ).catch((error: unknown) => {
-      throw Object.assign(new Error("读取 OCI 版本失败"), {
-        status: (error as { status?: number } | null)?.status,
-      });
+      throw new LocalizedError(
+        "publicBrowse.failedToReadOciVersions",
+        undefined,
+        {
+          status: (error as { status?: number } | null)?.status,
+        },
+      );
     });
-    if (!page) throw new Error("读取 OCI 版本失败");
+    if (!page) throw new LocalizedError("publicBrowse.failedToReadOciVersions");
     return {
       tags: page.items.flatMap((manifest) =>
         manifest.tags.length > 0 ? manifest.tags : [manifest.digest],
@@ -54,9 +55,10 @@ export async function readPublicOciTagPage(
     { signal },
   );
   if (!response.ok)
-    throw statusError(
-      `读取 OCI 标签失败 (${response.status})`,
-      response.status,
+    throw new LocalizedError(
+      "publicBrowse.failedToReadOciTagsStatus",
+      { status: response.status },
+      { status: response.status },
     );
   const data = (await response.json()) as { tags?: string[] };
   const tags = data.tags ?? [];

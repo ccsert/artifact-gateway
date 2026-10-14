@@ -6,7 +6,8 @@ import {
   LogoutOutlined,
   SaveOutlined,
 } from "@ant-design/icons";
-import { Alert, App, Avatar, Button, Divider, Drawer, Form, Space } from "antd";
+import { Alert, App, Avatar, Button, Divider, Form, Space } from "antd";
+import { DetailDrawer } from "../../../components/ui/DetailDrawer";
 import {
   deleteUser,
   resetUserPassword,
@@ -177,10 +178,9 @@ export function UserDetailsDrawer({
 
   return (
     <>
-      <Drawer
-        open
-        size={720}
-        destroyOnHidden
+      <DetailDrawer
+        busy={profileBusy || actionBusy}
+        error={error}
         title={
           <div className="flex min-w-0 items-center gap-3">
             <Avatar className="shrink-0" size={36}>
@@ -210,7 +210,9 @@ export function UserDetailsDrawer({
         }
         footer={
           <div className="flex justify-end gap-2">
-            <Button onClick={onClose}>{t("identity.close")}</Button>
+            <Button onClick={onClose} disabled={profileBusy || actionBusy}>
+              {t("identity.close")}
+            </Button>
             <Button
               type="primary"
               icon={<SaveOutlined />}
@@ -223,12 +225,6 @@ export function UserDetailsDrawer({
         }
         onClose={onClose}
       >
-        {error ? (
-          <div className="mb-4">
-            <ErrorBanner error={error} />
-          </div>
-        ) : null}
-
         {(locked || user.mustChangePassword) && (
           <Alert
             className="mb-5"
@@ -328,7 +324,7 @@ export function UserDetailsDrawer({
             {t("identity.deleteUser")}
           </Button>
         </section>
-      </Drawer>
+      </DetailDrawer>
 
       <ResetPasswordDialog
         open={passwordOpen}

@@ -19,7 +19,7 @@ export function ProxyMavenUsage({
   token: string;
   onWarmed: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const base = window.location.origin;
   const settings = `<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
   <servers>
@@ -48,41 +48,39 @@ export function ProxyMavenUsage({
   const healthQuery = useProxyHealth(repoId);
   const health = healthQuery.data ?? null;
   const healthError = healthQuery.error
-    ? text("读取上游状态失败", "Failed to load upstream status")
+    ? t("repository.failedToLoadUpstreamStatus")
     : "";
 
   return (
     <div className="mb-5 space-y-3 rounded-lg border border-line bg-surface-translucent p-4">
       <div className="grid gap-3 lg:grid-cols-4">
         <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-            {text("上游", "Upstream")}
+          <div className="text-xs text-fg-tertiary">
+            {t("repository.upstream")}
           </div>
           <div
             className="mt-1 truncate font-mono text-xs text-fg"
             title={health?.endpoint}
           >
-            {health?.endpoint ?? text("检查中…", "Checking…")}
+            {health?.endpoint ?? t("repository.checking")}
           </div>
         </div>
         <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-            {text("健康", "Health")}
+          <div className="text-xs text-fg-tertiary">
+            {t("repository.health")}
           </div>
           <div
             className={`mt-1 text-xs font-semibold ${health?.reachable ? "text-[var(--ag-status-success)]" : "text-[var(--ag-status-danger)]"}`}
           >
             {health
               ? health.reachable
-                ? `${text("可达", "Reachable")}${health.status ? ` · ${health.status}` : ""}`
-                : health.error || text("不可达", "Unreachable")
-              : text("检查中…", "Checking…")}
+                ? `${t("repository.reachable")}${health.status ? ` · ${health.status}` : ""}`
+                : health.error || t("repository.unreachable")
+              : t("repository.checking")}
           </div>
         </div>
         <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-            Circuit
-          </div>
+          <div className="text-xs text-fg-tertiary">Circuit</div>
           <div
             className={`mt-1 text-xs font-semibold ${health?.circuitOpen ? "text-[var(--ag-status-danger)]" : "text-[var(--ag-status-success)]"}`}
           >
@@ -90,13 +88,13 @@ export function ProxyMavenUsage({
           </div>
         </div>
         <div className="rounded-lg border border-line bg-surface-translucent px-3 py-2">
-          <div className="text-xs uppercase tracking-wider text-fg-tertiary">
-            {text("缓存", "Cache")}
+          <div className="text-xs text-fg-tertiary">
+            {t("repository.cache")}
           </div>
           <div className="mt-1 text-xs font-semibold text-fg-strong">
             {health?.cacheEnabled
-              ? text("已启用", "Enabled")
-              : text("已停用", "Disabled")}
+              ? t("repository.enabled")
+              : t("repository.disabled")}
           </div>
         </div>
       </div>
@@ -107,23 +105,20 @@ export function ProxyMavenUsage({
       )}
       <details className="group">
         <summary className="cursor-pointer text-sm font-medium text-[var(--ag-content-strong)] hover:text-[var(--ag-link-hover)]">
-          {text("使用方法", "Usage")}{" "}
+          {t("repository.usage")}{" "}
           <span className="text-xs text-fg-disabled group-open:hidden">
-            {text("（展开）", "(expand)")}
+            {t("repository.expand")}
           </span>
         </summary>
         <div className="mt-2 space-y-2">
           <div className="text-xs text-fg-tertiary">
-            {text(
-              "Maven 代理仓库需要 Basic 认证：用户名任意且非空，密码使用 resolver token。",
-              "The Maven proxy requires Basic authentication: use any non-empty username and the resolver token as the password.",
-            )}
+            {t("repository.theMavenProxyRequiresBasicAuthenticationUseAny")}
           </div>
           <div className="grid gap-3 lg:grid-cols-3">
             <SnippetBlock label="settings.xml" code={settings} />
             <SnippetBlock label="Docker Maven" code={docker} />
             <SnippetBlock
-              label={text("直接下载", "Direct download")}
+              label={t("repository.directDownload")}
               code={direct}
             />
           </div>

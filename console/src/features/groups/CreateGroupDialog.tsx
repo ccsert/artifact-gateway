@@ -20,7 +20,7 @@ export function CreateGroupDialog({
   profiles: FormatProfile[];
   onCreated: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const dialog = useDisclosure();
   const [name, setName] = useState("");
   const [format, setFormat] = useState<Format>("oci");
@@ -82,17 +82,17 @@ export function CreateGroupDialog({
           dialog.show();
         }}
       >
-        {text("新建分组", "New group")}
+        {t("groups.newGroup")}
       </Button>
       <Modal
         open={dialog.open}
-        title={text("新建分组", "New group")}
+        title={t("groups.newGroup")}
         onClose={dialog.hide}
         busy={busy}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
-              {text("取消", "Cancel")}
+              {t("groups.cancel")}
             </Button>
             <Button
               type="primary"
@@ -105,21 +105,21 @@ export function CreateGroupDialog({
                 memberIds.length === 0
               }
             >
-              {text("创建", "Create")}
+              {t("groups.create")}
             </Button>
           </Space>
         }
       >
         <div className="space-y-4">
           {error !== null && <ErrorBanner error={error} />}
-          <Field label={text("分组名称", "Group name")}>
+          <Field label={t("groups.groupName")}>
             <Input
               className="font-mono"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </Field>
-          <Field label={text("格式", "Format")} group>
+          <Field label={t("groups.format")} group>
             <Select<Format>
               className="w-full font-mono"
               showSearch={{ optionFilterProp: "label" }}
@@ -135,19 +135,13 @@ export function CreateGroupDialog({
             />
           </Field>
           <Field
-            label={text("成员仓库", "Member repositories")}
-            hint={text(
-              "Hosted 优先，同类型成员按配置顺序解析",
-              "Hosted members come first; members of the same type follow configured order",
-            )}
+            label={t("groups.memberRepositories")}
+            hint={t("groups.hostedMembersComeFirstMembersOfTheSame")}
             group
           >
             {candidates.length === 0 ? (
               <div className="rounded-lg border border-line px-2 py-3 text-center text-xs text-fg-disabled">
-                {text(
-                  "该格式下暂无活跃仓库",
-                  "No active repositories for this format",
-                )}
+                {t("groups.noActiveRepositoriesForThisFormat")}
               </div>
             ) : (
               <MemberOrderPicker
@@ -160,22 +154,16 @@ export function CreateGroupDialog({
           <div className="flex items-center justify-between gap-6 rounded-lg border border-line bg-surface-translucent px-3 py-2.5">
             <div>
               <div className="text-sm font-medium text-fg">
-                {text("允许匿名读取", "Allow anonymous reads")}
+                {t("groups.allowAnonymousReads")}
               </div>
               <div className="mt-0.5 text-xs text-fg-tertiary">
-                {text(
-                  "Group 和成员 Repository 都允许匿名读取时，匿名请求才会解析该成员。",
-                  "Anonymous requests resolve a member only when both the group and member repository allow anonymous reads.",
-                )}
+                {t("groups.anonymousRequestsResolveAMemberOnlyWhenBoth")}
               </div>
             </div>
             <Switch
               checked={anonymousRead}
               onChange={setAnonymousRead}
-              aria-label={text(
-                "允许分组匿名读取",
-                "Allow anonymous group reads",
-              )}
+              aria-label={t("groups.allowAnonymousGroupReads")}
             />
           </div>
         </div>

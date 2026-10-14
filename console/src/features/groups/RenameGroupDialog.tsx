@@ -16,7 +16,7 @@ export function RenameGroupDialog({
   group: Group;
   onSaved: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const dialog = useDisclosure();
   const [name, setName] = useState(group.name);
   const [anonymousRead, setAnonymousRead] = useState(group.anonymousRead);
@@ -57,17 +57,17 @@ export function RenameGroupDialog({
           dialog.show();
         }}
       >
-        {text("设置", "Settings")}
+        {t("groups.settings")}
       </Button>
       <Modal
         open={dialog.open}
-        title={text(`设置分组：${group.name}`, `Group settings: ${group.name}`)}
+        title={t("groups.groupSettings", { name: group.name })}
         onClose={dialog.hide}
         busy={busy}
         footer={
           <Space>
             <Button onClick={dialog.hide} disabled={busy}>
-              {text("取消", "Cancel")}
+              {t("groups.cancel")}
             </Button>
             <Button
               type="primary"
@@ -75,14 +75,14 @@ export function RenameGroupDialog({
               loading={busy}
               disabled={!name.trim()}
             >
-              {text("保存", "Save")}
+              {t("groups.save")}
             </Button>
           </Space>
         }
       >
         <div className="space-y-4">
           {error !== null && <ErrorBanner error={error} />}
-          <Field label={text("分组名称", "Group name")}>
+          <Field label={t("groups.groupName")}>
             <Input
               className="font-mono"
               value={name}
@@ -92,22 +92,16 @@ export function RenameGroupDialog({
           <div className="flex items-center justify-between gap-6 rounded-lg border border-line bg-surface-translucent px-3 py-2.5">
             <div>
               <div className="text-sm font-medium text-fg">
-                {text("允许匿名读取", "Allow anonymous reads")}
+                {t("groups.allowAnonymousReads")}
               </div>
               <div className="mt-0.5 text-xs text-fg-tertiary">
-                {text(
-                  "仍需成员 Repository 自身允许匿名读取。",
-                  "Each member repository must also allow anonymous reads.",
-                )}
+                {t("groups.eachMemberRepositoryMustAlsoAllowAnonymousReads")}
               </div>
             </div>
             <Switch
               checked={anonymousRead}
               onChange={setAnonymousRead}
-              aria-label={text(
-                "允许分组匿名读取",
-                "Allow anonymous group reads",
-              )}
+              aria-label={t("groups.allowAnonymousGroupReads")}
             />
           </div>
         </div>

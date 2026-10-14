@@ -20,7 +20,7 @@ import { useTombstonePages } from "./repositoryQueries";
 
 /** Deleted artifacts that can still be restored. */
 export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const tombstones = useTombstonePages(repo.id);
   const items = tombstones.data?.pages.flatMap((page) => page.items) ?? [];
   const nextToken = tombstones.hasNextPage ? "more" : undefined;
@@ -47,14 +47,14 @@ export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
       setRestoreError(err);
       return;
     }
-    setRestoreNotice(text(`已恢复 ${coordinate}`, `Restored ${coordinate}`));
+    setRestoreNotice(t("repository.restored", { coordinate }));
     void load();
   };
 
   if (error !== null)
     return isNotFound(error) ? (
       <RepositoryFeatureUnavailable
-        feature={text("墓碑管理", "Tombstone management")}
+        feature={t("repository.tombstoneManagement")}
       />
     ) : (
       <ErrorBanner error={error} onRetry={() => load()} />
@@ -63,7 +63,7 @@ export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
 
   const tombstoneColumns: ColumnsType<ArtifactTombstone> = [
     {
-      title: text("坐标", "Coordinate"),
+      title: t("repository.coordinate"),
       dataIndex: "coordinate",
       key: "coordinate",
       width: 360,
@@ -77,7 +77,7 @@ export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: text("摘要", "Digest"),
+      title: t("repository.digest"),
       dataIndex: "digest",
       key: "digest",
       width: 180,
@@ -88,7 +88,7 @@ export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: text("删除时间", "Deleted"),
+      title: t("repository.deleted2"),
       dataIndex: "tombstonedAt",
       key: "tombstonedAt",
       width: 190,
@@ -99,23 +99,22 @@ export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("repository.actions"),
       key: "actions",
       fixed: "right",
       width: 100,
       render: (_, item) => (
         <Popconfirm
-          title={text("确认恢复此制品？", "Restore this artifact?")}
-          description={text(
-            "恢复后制品会重新出现在仓库浏览与协议读取中。",
-            "After restoration, the artifact is available again in repository browsing and protocol reads.",
+          title={t("repository.restoreThisArtifact")}
+          description={t(
+            "repository.afterRestorationTheArtifactIsAvailableAgainIn",
           )}
-          okText={text("恢复", "Restore")}
-          cancelText={text("取消", "Cancel")}
+          okText={t("repository.restore")}
+          cancelText={t("repository.cancel")}
           onConfirm={() => restore(item.coordinate)}
         >
           <Button size="small" loading={restoring === item.coordinate}>
-            {text("恢复", "Restore")}
+            {t("repository.restore")}
           </Button>
         </Popconfirm>
       ),
@@ -134,11 +133,8 @@ export function RepositoryTombstonesTab({ repo }: { repo: Repository }) {
       )}
       {items.length === 0 ? (
         <EmptyState
-          title={text("暂无墓碑", "No tombstones")}
-          hint={text(
-            "被删除的制品会保留墓碑记录，可在此恢复",
-            "Deleted artifacts retain tombstone records and can be restored here.",
-          )}
+          title={t("repository.noTombstones")}
+          hint={t("repository.deletedArtifactsRetainTombstoneRecordsAndCanBe")}
         />
       ) : (
         <>

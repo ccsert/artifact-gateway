@@ -7,6 +7,7 @@ import { usePreferences } from "../../lib/preferences";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 import { packageName } from "./aptModel";
+import "./apt.css";
 
 /**
  * The suite's packages: select some to preview their removal, or preview a
@@ -39,10 +40,10 @@ export function APTPackagesPanel({
   onPreviewDelete: (publicationSessionIds: string[]) => void;
   onPreviewRetention: (keepLatest: number, olderThanDays: number) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const packageColumns = [
     {
-      title: text("软件包", "Package"),
+      title: t("repository.package"),
       key: "package",
       render: (_: unknown, item: AptLifecyclePackage) => (
         <div>
@@ -52,7 +53,7 @@ export function APTPackagesPanel({
       ),
     },
     {
-      title: text("规范路径 / SHA-256", "Canonical path / SHA-256"),
+      title: t("repository.canonicalPathSHA256"),
       key: "identity",
       render: (_: unknown, item: AptLifecyclePackage) => (
         <div className="ag-apt-identity">
@@ -68,18 +69,13 @@ export function APTPackagesPanel({
   return (
     <div className="ag-page-stack">
       <div className="ag-apt-heading">
-        <p>
-          {text(
-            "选择软件包，预览从当前套件移除的影响。",
-            "Select packages to preview removal from the current suite.",
-          )}
-        </p>
+        <p>{t("repository.selectPackagesToPreviewRemovalFromTheCurrent")}</p>
         <Button
           danger
           disabled={disabled || !hasCurrent || selected.length === 0}
           onClick={() => onPreviewDelete(selected.map(String))}
         >
-          {text("预览删除", "Preview deletion")}
+          {t("repository.previewDeletion")}
         </Button>
       </div>
       <ConsoleTable
@@ -98,19 +94,16 @@ export function APTPackagesPanel({
       />
       <section
         className="ag-apt-retention"
-        aria-label={text("保留预览", "Retention preview")}
+        aria-label={t("repository.retentionPreview")}
       >
-        <h4>{text("按上传时间保留", "Retain by upload time")}</h4>
+        <h4>{t("repository.retainByUploadTime")}</h4>
         <p>
-          {text(
-            "按组件、包名和架构分组；同时超过保留数量和天数才会入选，不按 Debian 版本排序。",
-            "Grouped by component, package and architecture. Only uploads beyond both limits qualify; this is not Debian version ordering.",
-          )}
+          {t("repository.groupedByComponentPackageAndArchitectureOnlyUploads")}
         </p>
         <div className="ag-apt-toolbar">
-          <Field label={text("保留最新数量", "Keep latest uploads")}>
+          <Field label={t("repository.keepLatestUploads")}>
             <InputNumber
-              aria-label={text("保留最新数量", "Keep latest uploads")}
+              aria-label={t("repository.keepLatestUploads")}
               min={1}
               precision={0}
               value={keepLatest}
@@ -118,9 +111,9 @@ export function APTPackagesPanel({
               onChange={(v) => setKeepLatest(v ?? 1)}
             />
           </Field>
-          <Field label={text("早于天数", "Older than days")}>
+          <Field label={t("repository.olderThanDays")}>
             <InputNumber
-              aria-label={text("早于天数", "Older than days")}
+              aria-label={t("repository.olderThanDays")}
               min={1}
               precision={0}
               value={olderThanDays}
@@ -132,7 +125,7 @@ export function APTPackagesPanel({
             disabled={disabled || !hasCurrent}
             onClick={() => onPreviewRetention(keepLatest, olderThanDays)}
           >
-            {text("预览保留清理", "Preview retention")}
+            {t("repository.previewRetention")}
           </Button>
         </div>
       </section>

@@ -1,3 +1,4 @@
+import { LocalizedError } from "../../messages/translate";
 import { useState } from "react";
 import { DeleteOutlined } from "@ant-design/icons";
 import { Button, Popconfirm, Select } from "antd";
@@ -36,12 +37,12 @@ export function OciImageDetail({
   canQuarantine?: boolean;
 }) {
   const { token } = useAuth();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const queryClient = useQueryClient();
   const manifestsQuery = useOciManifests(repositoryId, image);
   const manifests = manifestsQuery.data ?? null;
   const name = `${repository}/${image}`;
-  const versions = ociVersionOptions(manifests ?? []);
+  const versions = ociVersionOptions(manifests ?? [], t);
   // A deep link wins over an earlier manual choice; otherwise the choice
   // stands while that version still exists.
   const [choice, setChoice] = useState<{
@@ -78,15 +79,20 @@ export function OciImageDetail({
   );
 
   if (manifestsQuery.isPending)
-    return <Loading label={text("加载镜像详情…", "Loading image details…")} />;
+    return <Loading label={t("artifactDetail.loadingImageDetails")} />;
   if (!manifests)
     return (
-      <ErrorBanner error={error ?? new Error("读取 OCI Manifest 列表失败")} />
+      <ErrorBanner
+        error={
+          error ??
+          new LocalizedError("artifactDetail.failedToReadOciManifestList")
+        }
+      />
     );
   if (manifests.length === 0)
     return (
       <p className="py-6 text-center text-sm text-fg-tertiary">
-        {text("该镜像没有可见 Manifest", "This image has no visible manifests")}
+        {t("artifactDetail.thisImageHasNoVisibleManifests")}
       </p>
     );
 
@@ -136,7 +142,7 @@ export function OciImageDetail({
           className="shrink-0 text-xs text-fg-tertiary"
           htmlFor="oci-version-select"
         >
-          {text("版本", "Version")}
+          {t("artifactDetail.version")}
         </label>
         <Select
           id="oci-version-select"
@@ -151,32 +157,23 @@ export function OciImageDetail({
           value={selectedReference ?? undefined}
           options={versions}
           onChange={setSelectedReference}
-          placeholder={text("搜索标签或 Digest", "Search tags or digests")}
+          placeholder={t("artifactDetail.searchTagsOrDigests")}
           listHeight={280}
         />
         {selectedVersion && (
           <Popconfirm
             title={
               selectedVersion.kind === "tag"
-                ? text("解绑当前镜像标签？", "Unlink this image tag?")
-                : text(
-                    "删除无标签 Manifest？",
-                    "Delete this untagged manifest?",
-                  )
+                ? t("artifactDetail.unlinkThisImageTag")
+                : t("artifactDetail.deleteThisUntaggedManifest")
             }
             description={
               selectedVersion.kind === "tag"
-                ? text(
-                    "只移除该标签；没有其他标签时，Manifest 会保留为可按 Digest 管理的版本。",
-                    "Only the tag is removed. The manifest remains manageable by digest when no other tags exist.",
-                  )
-                : text(
-                    "Manifest 将进入墓碑，可在墓碑页恢复。",
-                    "The manifest moves to tombstones and can be restored there.",
-                  )
+                ? t("artifactDetail.onlyTheTagIsRemovedTheManifestRemains")
+                : t("artifactDetail.theManifestMovesToTombstonesAndCanBe")
             }
-            okText={text("删除", "Delete")}
-            cancelText={text("取消", "Cancel")}
+            okText={t("artifactDetail.delete")}
+            cancelText={t("artifactDetail.cancel")}
             okButtonProps={{ danger: true }}
             onConfirm={() => void deleteReference()}
           >
@@ -187,8 +184,8 @@ export function OciImageDetail({
               loading={deleting}
             >
               {selectedVersion.kind === "tag"
-                ? text("解绑标签", "Unlink tag")
-                : text("删除 Manifest", "Delete manifest")}
+                ? t("artifactDetail.unlinkTag")
+                : t("artifactDetail.deleteManifest")}
             </Button>
           </Popconfirm>
         )}
@@ -204,7 +201,7 @@ export function OciImageDetail({
             {selectedVersion.digest}
           </code>
           {selectedVersion.kind === "digest" && (
-            <Badge tone="warning">无标签</Badge>
+            <Badge tone="warning">{t("artifactDetail.untagged")}</Badge>
           )}
         </div>
       )}
@@ -237,17 +234,14 @@ export function OciImageDetail({
         <div className="rounded-lg border border-line bg-surface-translucent p-3">
           <div className="mb-2">
             <div className="text-xs font-medium text-fg-secondary">
-              {text("使用方式", "Usage")}
+              {t("artifactDetail.usage")}
             </div>
             <div className="mt-1 text-xs text-fg-tertiary">
-              {text(
-                "使用当前选中的标签或 Digest 访问镜像。",
-                "Use the selected tag or digest to pull this image.",
-              )}
+              {t("artifactDetail.useTheSelectedTagOrDigestToPull")}
             </div>
           </div>
           <div className="grid gap-3 lg:grid-cols-3">
-            {ociUsage(repository, image, selectedReference ?? undefined).map(
+            {ociUsage(t, repository, image, selectedReference ?? undefined).map(
               (snippet: UsageSnippet) => (
                 <UsageSnippetBlock
                   key={snippet.label}
@@ -262,7 +256,7 @@ export function OciImageDetail({
       )}
 
       {manifestLoading ? (
-        <Loading label={text("加载清单…", "Loading manifest…")} />
+        <Loading label={t("artifactDetail.loadingManifest")} />
       ) : (
         manifest && (
           <OciManifestView

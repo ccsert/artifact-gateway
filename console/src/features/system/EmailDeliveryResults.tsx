@@ -12,29 +12,19 @@ export function EmailDeliveryResults({
   deliveries: EmailDelivery[];
   targets: EmailTarget[];
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const time = (value?: string) =>
     value
       ? new Date(value).toLocaleString(undefined, { timeZone: "UTC" }) + " UTC"
-      : text("未知", "Unknown");
+      : t("system.unknown");
   return (
     <Card>
-      <CardHeader
-        title={text(
-          "最近交付结果（最多 50 条）",
-          "Recent delivery results (up to 50)",
-        )}
-      />
+      <CardHeader title={t("system.recentDeliveryResultsUpTo50")} />
       <p className="px-5 pt-4 text-sm text-fg-tertiary">
-        {text(
-          "SMTP 已接受不代表最终送达或已读。停用目标不能撤回在途邮件；结果不确定的重试可能重复。",
-          "SMTP acceptance does not mean inbox delivery or reading. Disabling cannot recall in-flight mail; uncertain retries may duplicate mail.",
-        )}
+        {t("system.sMTPAcceptanceDoesNotMeanInboxDeliveryOr")}
       </p>
       {deliveries.length === 0 ? (
-        <EmptyState
-          title={text("暂无邮件交付记录", "No email deliveries yet")}
-        />
+        <EmptyState title={t("system.noEmailDeliveriesYet")} />
       ) : (
         <ul className="divide-y divide-line">
           {deliveries.map((delivery) => (
@@ -53,52 +43,47 @@ export function EmailDeliveryResults({
                         : "neutral"
                   }
                 >
-                  {quotaLabel(delivery.state, text)}
+                  {quotaLabel(delivery.state, t)}
                 </QuotaBadge>
               </div>
               <p className="text-sm text-fg-tertiary">
                 {delivery.kind === "repository_quota"
-                  ? text("仓库配额告警", "Repository quota alert")
-                  : text("管理员合成测试", "Administrator synthetic test")}{" "}
-                · {quotaLabel(delivery.scenario, text)} · {delivery.locale} ·{" "}
-                {text("尝试次数", "Attempts")}: {delivery.attempts}
+                  ? t("system.repositoryQuotaAlert")
+                  : t("system.administratorSyntheticTest")}{" "}
+                · {quotaLabel(delivery.scenario, t)} · {delivery.locale} ·{" "}
+                {t("system.attempts")}: {delivery.attempts}
               </p>
               <p className="break-all font-mono text-xs text-fg-tertiary">
-                {text("交付 ID", "Delivery ID")}: {delivery.id}
+                {t("system.deliveryID")}: {delivery.id}
               </p>
               <p className="text-xs text-fg-tertiary">
-                {text("更新时间", "Updated")}: {time(delivery.updatedAt)}
+                {t("system.updated")}: {time(delivery.updatedAt)}
                 {delivery.nextAttemptAt && (
                   <>
                     {" "}
-                    · {text("下次尝试", "Next attempt")}:{" "}
-                    {time(delivery.nextAttemptAt)}
+                    · {t("system.nextAttempt2")}: {time(delivery.nextAttemptAt)}
                   </>
                 )}
                 {delivery.acceptedAt && (
                   <>
                     {" "}
-                    · {text("接受时间", "Accepted")}:{" "}
-                    {time(delivery.acceptedAt)}
+                    · {t("system.accepted")}: {time(delivery.acceptedAt)}
                   </>
                 )}
               </p>
               {delivery.errorCode && (
                 <p className="text-sm text-fg-secondary">
-                  {quotaLabel(delivery.errorCode, text)}
+                  {quotaLabel(delivery.errorCode, t)}
                 </p>
               )}
               {delivery.automaticCancellationCode && (
                 <p className="text-sm text-fg-secondary">
-                  {quotaLabel(delivery.automaticCancellationCode, text)}
+                  {quotaLabel(delivery.automaticCancellationCode, t)}
                 </p>
               )}
               {delivery.possibleDuplicate && (
                 <p className="text-sm text-[var(--ag-status-warning)]">
-                  {text(
-                    "可能重复：先前尝试的 SMTP 结果不确定。",
-                    "Possible duplicate: an earlier SMTP attempt had an uncertain outcome.",
-                  )}
+                  {t("system.possibleDuplicateAnEarlierSMTPAttemptHadAn")}
                 </p>
               )}
             </li>

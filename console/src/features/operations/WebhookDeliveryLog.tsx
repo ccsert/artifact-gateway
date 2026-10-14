@@ -24,7 +24,7 @@ export function WebhookDeliveryLog({
 }: {
   subscriptions: WebhookSubscription[] | null;
 }) {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const [stateFilter, setStateFilter] = useState<WebhookDeliveryState | "all">(
     "all",
   );
@@ -59,7 +59,7 @@ export function WebhookDeliveryLog({
 
   const deliveryColumns: ColumnsType<WebhookDelivery> = [
     {
-      title: text("订阅", "Subscription"),
+      title: t("operations.subscription"),
       dataIndex: "subscriptionId",
       key: "subscription",
       width: 190,
@@ -70,7 +70,7 @@ export function WebhookDeliveryLog({
       ),
     },
     {
-      title: text("事件", "Event"),
+      title: t("operations.event"),
       dataIndex: "eventType",
       key: "eventType",
       width: 190,
@@ -79,14 +79,14 @@ export function WebhookDeliveryLog({
       ),
     },
     {
-      title: text("状态", "State"),
+      title: t("operations.state"),
       dataIndex: "state",
       key: "state",
       width: 110,
       render: (state: WebhookDeliveryState) => <StateBadge state={state} />,
     },
     {
-      title: text("尝试", "Attempts"),
+      title: t("operations.attempts2"),
       dataIndex: "attempts",
       key: "attempts",
       width: 90,
@@ -97,7 +97,7 @@ export function WebhookDeliveryLog({
       ),
     },
     {
-      title: text("最近结果", "Last result"),
+      title: t("operations.lastResult"),
       key: "result",
       width: 280,
       render: (_, delivery) => (
@@ -115,7 +115,7 @@ export function WebhookDeliveryLog({
       ),
     },
     {
-      title: text("更新时间", "Updated"),
+      title: t("operations.updated"),
       dataIndex: "updatedAt",
       key: "updatedAt",
       width: 180,
@@ -126,17 +126,17 @@ export function WebhookDeliveryLog({
       ),
     },
     {
-      title: text("操作", "Actions"),
+      title: t("operations.actions"),
       key: "actions",
       fixed: "right",
       width: 90,
       render: (_, delivery) =>
         delivery.state === "dead" ? (
-          <Tooltip title={text("重放投递", "Replay delivery")}>
+          <Tooltip title={t("operations.replayDelivery")}>
             <Button
               size="small"
               icon={<RedoOutlined />}
-              aria-label={text("重放投递", "Replay delivery")}
+              aria-label={t("operations.replayDelivery")}
               loading={busyId === delivery.id}
               onClick={() => void replay(delivery)}
             />
@@ -150,14 +150,14 @@ export function WebhookDeliveryLog({
   return (
     <Card>
       <CardHeader
-        title={text("最近投递", "Recent deliveries")}
+        title={t("operations.recentDeliveries")}
         extra={
           <Select<WebhookDeliveryState | "all">
-            aria-label={text("投递状态", "Delivery state")}
+            aria-label={t("operations.deliveryState")}
             value={stateFilter}
             className="w-40"
             options={[
-              { value: "all", label: text("全部状态", "All states") },
+              { value: "all", label: t("operations.allStates") },
               ...DELIVERY_STATES.map((state) => ({
                 value: state,
                 label: state,
@@ -180,15 +180,14 @@ export function WebhookDeliveryLog({
       ) : null}
       {!deliveries ? (
         error ? null : (
-          <Loading label={text("加载投递记录…", "Loading deliveries…")} />
+          <Loading label={t("operations.loadingDeliveries")} />
         )
       ) : deliveries.length === 0 ? (
         <EmptyState
           compact
-          title={text("暂无投递记录", "No deliveries yet")}
-          hint={text(
-            "订阅匹配到制品隔离或解除隔离事件后，记录会显示在这里。",
-            "Matching artifact quarantine events appear here after delivery is scheduled.",
+          title={t("operations.noDeliveriesYet")}
+          hint={t(
+            "operations.matchingArtifactQuarantineEventsAppearHereAfterDelivery",
           )}
         />
       ) : (

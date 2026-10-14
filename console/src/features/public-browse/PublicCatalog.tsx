@@ -5,7 +5,7 @@ import {
 } from "@ant-design/icons";
 import { Button } from "antd";
 import { Link } from "react-router-dom";
-import { Badge, FormatBadge } from "../../components/ui/Badge";
+import { FormatBadge, RepositoryTypeBadge } from "../../components/ui/Badge";
 import { EmptyState } from "../../components/ui/Feedback";
 import { Card } from "../../components/ui/Layout";
 import { artifactFormatVisualizationClass } from "../../lib/artifactFormatVisuals";
@@ -86,7 +86,7 @@ export function PublicCatalog({
               aria-pressed={catalogFormat === format}
               onClick={() => onCatalogFormatChange(format)}
             >
-              {format.toUpperCase()}
+              <span className="font-mono">{format}</span>
             </Button>
           ))}
         </div>
@@ -124,17 +124,7 @@ export function PublicCatalog({
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge
-                      tone={
-                        repository.type === "proxy"
-                          ? "visualization-2"
-                          : repository.type === "group"
-                            ? "visualization-6"
-                            : "visualization-1"
-                      }
-                    >
-                      {(repository.type ?? "hosted").toUpperCase()}
-                    </Badge>
+                    <RepositoryTypeBadge type={repository.type} />
                     <FormatBadge format={repository.format} />
                   </div>
                 </div>

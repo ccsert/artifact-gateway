@@ -1,3 +1,4 @@
+import { createTranslator } from "../../messages/translate";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
@@ -22,7 +23,6 @@ vi.mock("../../lib/preferences", () => ({
   usePreferences: () => ({
     locale: "en-US",
     t: (key: string) => key,
-    text: (_zh: string, en: string) => en,
   }),
 }));
 
@@ -151,6 +151,7 @@ describe("public version recovery", () => {
         ociManifestDetails: pages.ociManifestDetails,
         selectedProtocolVersions: {},
         artifactHref: () => "/artifact",
+        t: createTranslator("zh-CN"),
       });
       return (
         <>
@@ -251,7 +252,7 @@ describe("public version recovery", () => {
           result.current.ociManifestDetails["app\x00latest"],
         ).toMatchObject({
           loading: false,
-          error: `读取 OCI manifest 失败 (${status})`,
+          error: "lib.failedToReadOciManifestStatus",
         }),
       );
       expect(fetchMock).toHaveBeenCalledTimes(1);

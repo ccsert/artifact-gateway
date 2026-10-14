@@ -19,7 +19,7 @@ import { CommandPalette, useCommandPaletteShortcut } from "./CommandPalette";
 
 import { AccountMenu } from "./AccountMenu";
 import { BrandLockup, CommandTrigger, ConnectedVersion } from "./ShellChrome";
-import { navItems } from "./shellNavigation";
+import { canOpen, navGroups, navItemsFor, routeAccess } from "./routes";
 
 export function AppLayout() {
   const { authenticated, identity, identityLoading, clearToken } = useAuth();
@@ -101,74 +101,30 @@ export function AppLayout() {
     );
   }
 
-  const adminOnlyPath = [
-    "/",
-    "/operations",
-    "/system",
-    "/groups",
-    "/access",
-    "/audits",
-    "/audit-retention",
-    "/identity-providers",
-    "/site-settings",
-    "/keys",
-    "/service-accounts",
-    "/users",
-  ].includes(location.pathname);
-  const adminOnlySection = [
-    "/operations",
-    "/system",
-    "/groups",
-    "/access",
-    "/audits",
-    "/audit-retention",
-    "/identity-providers",
-    "/site-settings",
-    "/keys",
-    "/service-accounts",
-    "/users",
-  ].some((prefix) => location.pathname.startsWith(prefix + "/"));
-  if (
-    identity &&
-    !capabilities.platformAdmin &&
-    (adminOnlyPath || adminOnlySection)
-  ) {
+  // Each page's access comes from the route table; a page this identity
+  // cannot open sends it to the closest page it can.
+  const access = routeAccess(location.pathname);
+  if (identity && access && !canOpen(access, capabilities)) {
     return (
       <Navigate
-        to={capabilities.browseRepositories ? "/repositories" : "/search"}
+        to={
+          access === "admin" && capabilities.browseRepositories
+            ? "/repositories"
+            : "/search"
+        }
         replace
       />
     );
   }
 
-  // The catalog is no longer administrator-only, so it needs its own gate: an
-  // identity that cannot read any repository must not reach it by URL, and the
-  // trailing-slash form must not slip past an exact-path comparison.
-  const repositoryCatalogPath =
-    location.pathname === "/repositories" ||
-    location.pathname.startsWith("/repositories/");
-  if (identity && !capabilities.browseRepositories && repositoryCatalogPath) {
-    return <Navigate to="/search" replace />;
-  }
-
-  const visibleNavItems = navItems.filter(
-    (item) =>
-      (!("admin" in item) || capabilities.platformAdmin) &&
-      (item.to !== "/repositories" || capabilities.browseRepositories),
-  );
+  const visibleNavItems = navItemsFor(capabilities);
   const selectedItem = visibleNavItems.find((item) =>
-    "exact" in item
+    item.exact
       ? location.pathname === item.to
       : location.pathname.startsWith(item.to),
   );
   const createMenuItems = (): MenuProps["items"] =>
-    (
-      [
-        { key: "runtime", label: "nav.runtime" },
-        { key: "governance", label: "nav.governance" },
-        { key: "management", label: "nav.management" },
-      ] as const
-    ).flatMap((group) => {
+    navGroups.flatMap((group) => {
       const children = visibleNavItems
         .filter((item) => item.group === group.key)
         .map((item) => ({

@@ -22,6 +22,7 @@ import {
   localPasswordFitsBcrypt,
   localPasswordMeetsMinimum,
 } from "../identity/users/passwordPolicy";
+import "./login.css";
 
 type Mode = "oidc" | "password" | "token";
 
@@ -225,37 +226,40 @@ export function LoginPage() {
           </header>
 
           {!pendingPasswordChange && (
-            <Segmented<Mode>
-              block
-              size="large"
-              className="ag-login-modes mt-7"
-              value={mode}
-              options={[
-                ...(oidc.enabled
-                  ? [
-                      {
-                        value: "oidc" as const,
-                        label: t("auth.ssoMode"),
-                        icon: <SafetyCertificateOutlined />,
-                      },
-                    ]
-                  : []),
-                {
-                  value: "password",
-                  label: t("auth.passwordMode"),
-                  icon: <UserOutlined />,
-                },
-                {
-                  value: "token",
-                  label: t("auth.tokenMode"),
-                  icon: <KeyOutlined />,
-                },
-              ]}
-              onChange={(nextMode) => {
-                setMode(nextMode);
-                setError("");
-              }}
-            />
+            // antd resets the control's own margin; the wrapper keeps the gap.
+            <div className="mt-7">
+              <Segmented<Mode>
+                block
+                size="large"
+                className="ag-login-modes"
+                value={mode}
+                options={[
+                  ...(oidc.enabled
+                    ? [
+                        {
+                          value: "oidc" as const,
+                          label: t("auth.ssoMode"),
+                          icon: <SafetyCertificateOutlined />,
+                        },
+                      ]
+                    : []),
+                  {
+                    value: "password",
+                    label: t("auth.passwordMode"),
+                    icon: <UserOutlined />,
+                  },
+                  {
+                    value: "token",
+                    label: t("auth.tokenMode"),
+                    icon: <KeyOutlined />,
+                  },
+                ]}
+                onChange={(nextMode) => {
+                  setMode(nextMode);
+                  setError("");
+                }}
+              />
+            </div>
           )}
 
           <div className="ag-login-mode-body">
@@ -314,7 +318,7 @@ export function LoginPage() {
                   <Input
                     size="large"
                     prefix={<UserOutlined />}
-                    placeholder="alice"
+                    placeholder={t("auth.usernamePlaceholder")}
                     autoComplete="username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -323,7 +327,7 @@ export function LoginPage() {
                 <Field label={t("auth.password")}>
                   <Input.Password
                     size="large"
-                    placeholder="••••••••"
+                    placeholder={t("auth.passwordPlaceholder")}
                     autoComplete="current-password"
                     maxLength={72}
                     value={password}

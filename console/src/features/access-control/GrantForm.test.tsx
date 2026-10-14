@@ -108,6 +108,22 @@ describe("GrantForm", () => {
     expect(screen.getByText(/OIDC \/ 自定义 actor/)).toBeInTheDocument();
   });
 
+  it("names principal options for screen readers by their readable label", async () => {
+    const user = userEvent.setup();
+    renderForm(draft({ principal: "" }));
+    // Searching leaves the service account as the announced option.
+    await user.type(
+      screen.getByRole("combobox", { name: "授权主体" }),
+      "release",
+    );
+    expect(
+      screen.getByRole("option", { name: /^服务账号 · release-bot/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: /service-account:/ }),
+    ).toBeNull();
+  });
+
   it("shows a fixed principal as text instead of a select that cannot change", () => {
     renderForm(draft(), [], { lockPrincipal: true });
 

@@ -14,7 +14,7 @@ import { principalOptions } from "../access-control/grantDraft";
  * grants from a typed identity instead, so nothing is requested for them.
  */
 export function useGrantPrincipalChoices() {
-  const { t, text } = usePreferences();
+  const { t } = usePreferences();
   const { identity } = useAuth();
   const canListPrincipals = platformCapabilities(identity).platformAdmin;
   const directory = usePrincipalDirectory({ enabled: canListPrincipals });
@@ -28,9 +28,9 @@ export function useGrantPrincipalChoices() {
         directoryUsers ?? [],
         directoryApiKeys ?? [],
         directoryServiceAccounts ?? [],
-        text,
+        t,
       ),
-    [directoryApiKeys, directoryServiceAccounts, directoryUsers, text],
+    [directoryApiKeys, directoryServiceAccounts, directoryUsers, t],
   );
   const authorizationRoles = rolesQuery.data ?? [];
   const principalChoicesError =

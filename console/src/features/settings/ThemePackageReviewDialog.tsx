@@ -19,7 +19,7 @@ export function ThemePackageReviewDialog({
   onClose: () => void;
   onCommit: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <Modal
       open={pending !== null}
@@ -27,14 +27,14 @@ export function ThemePackageReviewDialog({
       busy={installing}
       title={
         pending?.validation.status === "replaceable"
-          ? text("替换上传主题", "Replace uploaded theme")
-          : text("安装主题包", "Install theme package")
+          ? t("settings.replaceUploadedTheme")
+          : t("settings.installThemePackage")
       }
       onClose={onClose}
       footer={
         <Space>
           <Button onClick={onClose} disabled={installing}>
-            {text("取消", "Cancel")}
+            {t("settings.cancel")}
           </Button>
           <Button
             type="primary"
@@ -43,10 +43,10 @@ export function ThemePackageReviewDialog({
             onClick={onCommit}
           >
             {pending?.validation.status === "replaceable"
-              ? text("确认替换", "Replace theme")
+              ? t("settings.replaceTheme")
               : pending?.validation.status === "reserved"
-                ? text("ID 不可用", "ID unavailable")
-                : text("安装并启用", "Install and enable")}
+                ? t("settings.iDUnavailable")
+                : t("settings.installAndEnable")}
           </Button>
         </Space>
       }
@@ -56,7 +56,7 @@ export function ThemePackageReviewDialog({
           {error !== null && (
             <ErrorBanner
               error={error}
-              title={text("主题包处理失败", "Theme package failed")}
+              title={t("settings.themePackageFailed")}
             />
           )}
           <Alert
@@ -70,25 +70,16 @@ export function ThemePackageReviewDialog({
             }
             title={
               pending.validation.status === "available"
-                ? text(
-                    "校验通过，可以安装",
-                    "Validation passed; ready to install",
-                  )
+                ? t("settings.validationPassedReadyToInstall")
                 : pending.validation.status === "replaceable"
-                  ? text(
-                      "该 ID 已由上传主题使用，将创建新版本",
-                      "This ID belongs to an uploaded theme; a new version will replace it",
-                    )
-                  : text(
-                      "该 ID 属于内置或目录主题，不能通过上传覆盖",
-                      "This ID belongs to a built-in or directory theme and cannot be overwritten",
-                    )
+                  ? t("settings.thisIDBelongsToAnUploadedThemeA")
+                  : t("settings.thisIDBelongsToABuiltInOr")
             }
           />
           <ThemePreview theme={pending.validation.theme} />
           <dl className="ag-theme-package-details">
             <div>
-              <dt>{text("名称", "Name")}</dt>
+              <dt>{t("settings.name")}</dt>
               <dd>{pending.validation.theme.name}</dd>
             </div>
             <div>
@@ -96,15 +87,15 @@ export function ThemePackageReviewDialog({
               <dd>{pending.validation.theme.id}</dd>
             </div>
             <div>
-              <dt>{text("模式", "Mode")}</dt>
+              <dt>{t("settings.mode")}</dt>
               <dd>
                 {pending.validation.theme.mode === "dark"
-                  ? text("深色", "Dark")
-                  : text("浅色", "Light")}
+                  ? t("settings.dark")
+                  : t("settings.light")}
               </dd>
             </div>
             <div>
-              <dt>{text("文件", "File")}</dt>
+              <dt>{t("settings.file")}</dt>
               <dd>{pending.fileName}</dd>
             </div>
           </dl>
@@ -114,10 +105,7 @@ export function ThemePackageReviewDialog({
             </p>
           )}
           <p className="ag-theme-package-safety-note">
-            {text(
-              "主题包将在服务端按严格 v1 规范再次解析；安装新主题后，还需要保存站点设置才会向用户开放。",
-              "The server strictly parses the package against v1. After installing a new theme, save site settings to make it available to users.",
-            )}
+            {t("settings.theServerStrictlyParsesThePackageAgainstV1")}
           </p>
         </div>
       )}

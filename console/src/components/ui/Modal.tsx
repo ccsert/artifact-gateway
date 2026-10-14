@@ -1,7 +1,8 @@
 import { Button, Modal as AntdModal, Space } from "antd";
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ReactNode } from "react";
 import { usePreferences } from "../../lib/preferences";
+import { ErrorBanner } from "./Feedback";
 
 /**
  * Every dialog in the console goes through this component: it owns the width
@@ -88,7 +89,7 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onClose: () => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <Modal
       open={open}
@@ -98,7 +99,7 @@ export function ConfirmDialog({
       footer={
         <Space>
           <Button onClick={onClose} disabled={busy}>
-            {text("取消", "Cancel")}
+            {t("ui.cancel")}
           </Button>
           <Button
             type="primary"
@@ -106,13 +107,187 @@ export function ConfirmDialog({
             danger={danger}
             loading={busy}
           >
-            {confirmLabel ?? text("确认", "Confirm")}
+            {confirmLabel ?? t("ui.confirm")}
           </Button>
         </Space>
       }
     >
       <div className="text-sm text-fg-secondary">{message}</div>
     </Modal>
+  );
+}
+
+/**
+ * A dialog whose body is a form with one submit action. It owns what every
+ * form dialog needs: Enter submits, the submit button shows progress and the
+ * dialog cannot be dismissed while the request is in flight, and a thrown
+ * error is shown above the fields until the next attempt or reopening.
+ *
+ * `onSubmit` throws to report failure (`unwrap` the SDK result, or throw its
+ * `error`); on success it closes the dialog itself, usually through the
+ * caller's `onClose` or `onCreated`.
+ */
+export function FormModal({
+  open,
+  title,
+  submitLabel,
+  canSubmit = true,
+  onSubmit,
+  onClose,
+  wide,
+  width,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  submitLabel: string;
+  /** The form is complete enough to send. */
+  canSubmit?: boolean;
+  onSubmit: () => Promise<void>;
+  onClose: () => void;
+  wide?: boolean;
+  width?: number;
+  children: ReactNode;
+}) {
+  const { t } = usePreferences();
+  const formId = useId();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  // Reopening starts clean rather than showing the last attempt's failure.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setError(null);
+  }
+
+  const submit = async () => {
+    if (busy || !canSubmit) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onSubmit();
+    } catch (nextError) {
+      setError(nextError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      title={title}
+      onClose={onClose}
+      busy={busy}
+      wide={wide}
+      width={width}
+      footer={
+        <Space>
+          <Button onClick={onClose} disabled={busy}>
+            {t("ui.cancel")}
+          </Button>
+          <Button
+            type="primary"
+            htmlType="submit"
+            form={formId}
+            loading={busy}
+            disabled={!canSubmit}
+          >
+            {submitLabel}
+          </Button>
+        </Space>
+      }
+    >
+      <form
+        id={formId}
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+      >
+        <div className="space-y-4">
+          {error !== null && <ErrorBanner error={error} />}
+          {children}
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * Confirms a destructive action on one target (a row, a credential, …) and
+ * runs it. The dialog is open while `target` is set; it stays open and busy
+ * while `onConfirm` runs, closes through `onClose` when it succeeds, and on
+ * failure either hands the error to `onError` or shows it in the dialog.
+ */
+export function ConfirmDanger<Target>({
+  target,
+  title,
+  message,
+  confirmLabel,
+  onConfirm,
+  onClose,
+  onDone,
+  onError,
+}: {
+  target: Target | null;
+  title: string;
+  message: (target: Target) => ReactNode;
+  confirmLabel: string;
+  onConfirm: (target: Target) => Promise<void>;
+  /** Clears `target`; called on cancel and after success. */
+  onClose: () => void;
+  onDone?: () => void;
+  onError?: (error: unknown) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  // Keep the last target on screen while the dialog animates closed.
+  const [shown, setShown] = useState(target);
+  if (target !== null && target !== shown) {
+    setShown(target);
+    setError(null);
+  }
+
+  const confirm = async () => {
+    if (target === null || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onConfirm(target);
+      onClose();
+      onDone?.();
+    } catch (nextError) {
+      if (onError) onError(nextError);
+      else setError(nextError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <ConfirmDialog
+      open={target !== null}
+      title={title}
+      message={
+        shown === null ? null : (
+          <>
+            {error !== null && (
+              <div className="mb-3">
+                <ErrorBanner error={error} />
+              </div>
+            )}
+            {message(shown)}
+          </>
+        )
+      }
+      confirmLabel={confirmLabel}
+      danger
+      busy={busy}
+      onConfirm={() => void confirm()}
+      onClose={onClose}
+    />
   );
 }
 

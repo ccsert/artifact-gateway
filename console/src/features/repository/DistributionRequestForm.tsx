@@ -6,6 +6,7 @@ import { usePreferences } from "../../lib/preferences";
 
 import { PromotionEvaluationAlert } from "./PromotionEvaluationAlert";
 import { useDistributionRequest } from "./useDistributionRequest";
+import "./apt.css";
 
 /**
  * Promote or replicate one artifact to another hosted repository of the same
@@ -29,7 +30,7 @@ export function DistributionRequestForm({
   /** Re-read the plan list after a request is accepted. */
   onSubmitted: () => Promise<unknown>;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const {
     suiteTarget,
     targetId,
@@ -70,43 +71,28 @@ export function DistributionRequestForm({
       <div className="rounded-lg border border-line p-4">
         <div className="mb-4">
           <div className="text-sm font-medium text-fg">
-            {text("发起晋升 / 复制", "Start promotion / replication")}
+            {t("repository.startPromotionReplication")}
           </div>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-fg-tertiary">
-            {text(
-              "选择不可变制品和同格式目标仓库。晋升经目标仓安全准入后发布副本；复制创建可续传计划，不代表通过安全准入。",
-              "Select an immutable artifact and a target repository of the same format. Promotion publishes a copy after target admission; replication creates a resumable plan without security approval.",
-            )}
+            {t("repository.selectAnImmutableArtifactAndATargetRepository")}
           </p>
         </div>
         <div className="grid min-w-0 grid-cols-1 items-start gap-4 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
           <Field
             group
-            label={text("源制品", "Source artifact")}
+            label={t("repository.sourceArtifact")}
             hint={
               aptPackages
-                ? text(
-                    "当前套件的可见软件包；输入包名筛选。",
-                    "Visible packages in the current suite; type a package name to filter.",
-                  )
-                : text(
-                    "最多显示 50 条；输入包名、路径或坐标前缀可缩小范围。",
-                    "Up to 50 items are shown. Type a package, path, or coordinate prefix to narrow the results.",
-                  )
+                ? t("repository.visiblePackagesInTheCurrentSuiteTypeA")
+                : t("repository.upTo50ItemsAreShownTypeA")
             }
           >
             {aptPackages ? (
               <Select
-                aria-label={text(
-                  "搜索并选择源制品",
-                  "Search and select a source artifact",
-                )}
+                aria-label={t("repository.searchAndSelectASourceArtifact")}
                 className="w-full"
                 showSearch={{ optionFilterProp: "label" }}
-                placeholder={text(
-                  "选择当前套件的软件包",
-                  "Select a package in this suite",
-                )}
+                placeholder={t("repository.selectAPackageInThisSuite")}
                 value={selectedArtifact?.key}
                 disabled={disabled || busy !== null}
                 options={aptPackages.map((item) => ({
@@ -133,30 +119,20 @@ export function DistributionRequestForm({
                 value={selectedArtifact}
                 onChange={chooseArtifact}
                 disabled={disabled || busy !== null}
-                ariaLabel={text(
-                  "搜索并选择源制品",
-                  "Search and select a source artifact",
-                )}
+                ariaLabel={t("repository.searchAndSelectASourceArtifact")}
               />
             )}
           </Field>
-          <Field
-            group
-            label={text("目标 Hosted 仓库", "Target Hosted repository")}
-          >
+          <Field group label={t("repository.targetHostedRepository")}>
             <Select
-              aria-label={text("选择目标仓库", "Select target repository")}
+              aria-label={t("repository.selectTargetRepository")}
               className="w-full"
               showSearch={{ optionFilterProp: "label" }}
               value={targetId || undefined}
-              placeholder={text(
-                "选择同格式仓库…",
-                "Select a repository with the same format…",
-              )}
+              placeholder={t("repository.selectARepositoryWithTheSameFormat")}
               options={targets.map((r) => ({ value: r.id, label: r.name }))}
-              notFoundContent={text(
-                "没有可用的同格式 Hosted 仓库",
-                "No compatible Hosted repository is available",
+              notFoundContent={t(
+                "repository.noCompatibleHostedRepositoryIsAvailable",
               )}
               disabled={disabled || busy !== null}
               onChange={(value) => {
@@ -170,14 +146,11 @@ export function DistributionRequestForm({
         {suiteTarget && (
           <div className="ag-apt-distribution-scope">
             <Field
-              label={text("目标发行套件", "Target suite")}
-              hint={text(
-                "目标仓库会使用自己的签名服务发布新快照，并保留已有成员。",
-                "The target repository signs a new snapshot with its own signer and preserves existing members.",
-              )}
+              label={t("repository.targetSuite")}
+              hint={t("repository.theTargetRepositorySignsANewSnapshotWith")}
             >
               <Input
-                aria-label={text("目标发行套件", "Target suite")}
+                aria-label={t("repository.targetSuite")}
                 placeholder="stable"
                 value={aptTargetSuite}
                 disabled={disabled || busy !== null}
@@ -195,8 +168,8 @@ export function DistributionRequestForm({
             onClick={toggleManualIdentity}
           >
             {manualIdentity
-              ? text("收起高级手动输入", "Hide advanced manual input")
-              : text("高级手动输入", "Advanced manual input")}
+              ? t("repository.hideAdvancedManualInput")
+              : t("repository.advancedManualInput")}
           </Button>
         </div>
 
@@ -214,14 +187,14 @@ export function DistributionRequestForm({
         {manualIdentity && (
           <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field
-              label={text("制品坐标", "Artifact coordinate")}
-              hint={text(
-                `${repo.format} 生命周期使用的不可变版本标识`,
-                `Immutable version identity used by ${repo.format} lifecycle operations`,
+              label={t("repository.artifactCoordinate")}
+              hint={t(
+                "repository.immutableVersionIdentityUsedByLifecycleOperations",
+                { format: repo.format },
               )}
             >
               <Input
-                aria-label={text("制品坐标", "Artifact coordinate")}
+                aria-label={t("repository.artifactCoordinate")}
                 disabled={disabled || busy !== null}
                 className="font-mono"
                 placeholder={coordinateExample ?? "coordinate"}
@@ -233,9 +206,9 @@ export function DistributionRequestForm({
                 }}
               />
             </Field>
-            <Field label={text("摘要 digest", "Digest")}>
+            <Field label={t("repository.digest2")}>
               <Input
-                aria-label={text("摘要 digest", "Digest")}
+                aria-label={t("repository.digest2")}
                 disabled={disabled || busy !== null}
                 className="font-mono"
                 placeholder="sha256:…"
@@ -264,7 +237,7 @@ export function DistributionRequestForm({
                 !digest.trim()
               }
             >
-              {text("评估准入", "Evaluate admission")}
+              {t("repository.evaluateAdmission")}
             </Button>
             <Button
               type="primary"
@@ -281,7 +254,7 @@ export function DistributionRequestForm({
                 !digest.trim()
               }
             >
-              {text("晋升", "Promote")}
+              {t("repository.promote")}
             </Button>
             <Button
               loading={busy === "replicate"}
@@ -297,7 +270,7 @@ export function DistributionRequestForm({
                 !digest.trim()
               }
             >
-              {text("复制", "Replicate")}
+              {t("repository.replicate")}
             </Button>
           </div>
         </div>

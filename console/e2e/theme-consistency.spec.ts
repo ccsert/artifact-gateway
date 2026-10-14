@@ -676,7 +676,7 @@ test("OIDC, password, and token sign-in modes share a stable layout", async ({
     .locator(".ag-login-modes label")
     .filter({ hasText: "账号密码" })
     .click();
-  await expect(page.getByPlaceholder("alice")).toBeVisible();
+  await expect(page.getByPlaceholder("输入用户名")).toBeVisible();
   const passwordHeight = await frame.evaluate((element) =>
     Math.round(element.getBoundingClientRect().height),
   );
@@ -881,7 +881,9 @@ test("deleted repositories stay archived unless explicitly requested", async ({
   );
 
   await page.goto("/repositories");
-  await expect(page.getByText("active-repository")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "active-repository" }),
+  ).toBeVisible();
   await expect(page.getByText("archived-repository")).not.toBeVisible();
 
   await page.getByText("运行中与删除中", { exact: true }).click();
@@ -959,7 +961,9 @@ test("dashboard keeps a compact overview without archived repositories", async (
   );
 
   await page.goto("/");
-  await expect(page.getByText("active-repository")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "active-repository" }),
+  ).toBeVisible();
   await expect(page.getByText("archived-repository")).not.toBeVisible();
   await expect(page.locator(".ag-health-strip, .ag-lifecycle")).toHaveCount(0);
   const metricStrip = page.getByRole("group", { name: "页面摘要" });

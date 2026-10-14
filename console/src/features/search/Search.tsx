@@ -30,18 +30,14 @@ import { searchKeys } from "../../lib/query/keys";
 export { artifactTarget, artifactVersionSizeLabel } from "./searchModel";
 
 export function SearchPage() {
-  const { locale, text } = usePreferences();
+  const { locale, t } = usePreferences();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const q = (params.get("q") ?? "").trim();
   const match: ArtifactSearchMatch =
     params.get("match") === "prefix" ? "prefix" : "contains";
   const [query, setQuery] = useState(q);
-  const search = useArtifactSearch(
-    q,
-    match,
-    text("搜索制品失败", "Artifact search failed"),
-  );
+  const search = useArtifactSearch(q, match, t("search.artifactSearchFailed"));
   const hits = useMemo(
     () => search.data?.pages.flatMap((page) => page.items) ?? [],
     [search.data],
@@ -117,7 +113,7 @@ export function SearchPage() {
     locale,
     openHit,
     setRowExpanded,
-    text,
+    t,
   });
 
   const expandedRowRender = (tableRow: SearchTableRow) => (
@@ -132,16 +128,12 @@ export function SearchPage() {
   return (
     <div className="ag-page-stack">
       <PageHeader
-        title={text("全局搜索", "Global search")}
+        title={t("search.globalSearch")}
         description={
           q
-            ? text(
-                `在所有仓库中搜索 “${q}”`,
-                `Searching all repositories for “${q}”`,
-              )
-            : text(
-                "跨仓库搜索制品坐标、包名、路径、引用与 SHA-256",
-                "Search artifact coordinates, package names, paths, references, and SHA-256 digests across repositories",
+            ? t("search.searchingAllRepositoriesFor", { q })
+            : t(
+                "search.searchArtifactCoordinatesPackageNamesPathsReferencesAnd",
               )
         }
       />
@@ -158,14 +150,11 @@ export function SearchPage() {
           allowClear
           enterButton={
             <Button type="primary" disabled={!query.trim()}>
-              {text("搜索", "Search")}
+              {t("search.search")}
             </Button>
           }
           className="max-w-3xl"
-          placeholder={text(
-            "输入坐标、包名、路径关键词或 SHA-256…",
-            "Enter a coordinate, package, path keyword, or SHA-256 digest…",
-          )}
+          placeholder={t("search.enterACoordinatePackagePathKeywordOrSHA")}
           value={query}
           loading={loading}
           onChange={(event) => {
@@ -183,11 +172,8 @@ export function SearchPage() {
       </div>
       {!q ? (
         <EmptyState
-          title={text("输入关键词开始搜索", "Enter a keyword to search")}
-          hint={text(
-            "支持 Maven 坐标、npm 包名、PyPI 项目、Go 模块、OCI 镜像、Conan 引用、Raw 路径和完整 SHA-256",
-            "Supports Maven coordinates, npm packages, PyPI projects, Go modules, OCI images, Conan references, Raw paths, and full SHA-256 digests",
-          )}
+          title={t("search.enterAKeywordToSearch")}
+          hint={t("search.supportsMavenCoordinatesNpmPackagesPyPIProjectsGo")}
         />
       ) : error && hits.length === 0 ? (
         <ErrorBanner error={error} />
@@ -195,68 +181,53 @@ export function SearchPage() {
         <Loading
           label={
             searchedRepos
-              ? text(
-                  `正在搜索 ${searchedRepos} 个仓库…`,
-                  `Searching ${searchedRepos} repositories…`,
-                )
-              : text("加载中…", "Loading…")
+              ? t("search.searchingRepositories", { searchedRepos })
+              : t("search.loading")
           }
         />
       ) : rows.length === 0 ? (
         <EmptyState
-          title={text("没有匹配的制品", "No matching artifacts")}
-          hint={text(
-            `已在 ${searchedRepos} 个仓库中搜索 “${q}”，未找到结果`,
-            `No results for “${q}” across ${searchedRepos} repositories`,
-          )}
+          title={t("search.noMatchingArtifacts")}
+          hint={t("search.noResultsForAcrossRepositories", {
+            searchedRepos,
+            q,
+          })}
         />
       ) : (
         <>
           <MetricStrip
             items={[
               {
-                label: text("结果条目", "Results"),
+                label: t("search.results"),
                 value: rows.length,
-                hint: text(
-                  `${hits.length} 个版本或文件`,
-                  `${hits.length} versions or files`,
-                ),
+                hint: t("search.versionsOrFiles", { length: hits.length }),
               },
               {
-                label: text("检索仓库", "Repositories searched"),
+                label: t("search.repositoriesSearched"),
                 value: searchedRepos,
-                hint: text(
-                  "仅包含当前身份可读仓库",
-                  "Only repositories readable by the current identity",
-                ),
+                hint: t("search.onlyRepositoriesReadableByTheCurrentIdentity"),
               },
               {
-                label: text("匹配方式", "Match mode"),
+                label: t("search.matchMode"),
                 value:
                   hits[0]?.matchKind === "digest"
-                    ? text("SHA-256 精确", "Exact SHA-256")
+                    ? t("search.exactSHA256")
                     : (hits[0]?.match ?? match) === "contains"
-                      ? text("关键词包含", "Literal contains")
-                      : text("坐标前缀", "Coordinate prefix"),
+                      ? t("search.literalContains")
+                      : t("search.coordinatePrefix"),
                 hint:
                   hits[0]?.matchKind === "digest"
-                    ? text(
-                        "包含历史可见版本",
-                        "Includes older visible versions",
-                      )
-                    : text("按格式校验输入", "Input is validated by format"),
+                    ? t("search.includesOlderVisibleVersions")
+                    : t("search.inputIsValidatedByFormat"),
               },
               {
-                label: text("分页状态", "Pagination"),
+                label: t("search.pagination"),
                 value: nextPageToken
-                  ? text("还有更多", "More available")
-                  : text("已完成", "Complete"),
+                  ? t("search.moreAvailable")
+                  : t("search.complete"),
                 hint: nextPageToken
-                  ? text(
-                      "继续加载不会丢失结果",
-                      "Loading more preserves current results",
-                    )
-                  : text("已到达末尾", "End of results"),
+                  ? t("search.loadingMorePreservesCurrentResults")
+                  : t("search.endOfResults"),
               },
             ]}
           />

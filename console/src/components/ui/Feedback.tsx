@@ -1,3 +1,4 @@
+import { LocalizedError } from "../../messages/translate";
 import type { ReactNode } from "react";
 import {
   CloseOutlined,
@@ -13,7 +14,7 @@ export function Spinner({ className = "" }: { className?: string }) {
 }
 
 export function Loading({ label }: { label?: string }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   return (
     <div
       className="ag-feedback-enter flex items-center justify-center gap-3 py-16 text-fg-secondary"
@@ -22,7 +23,7 @@ export function Loading({ label }: { label?: string }) {
       aria-busy="true"
     >
       <Spinner />
-      <span className="text-sm">{label ?? text("加载中…", "Loading…")}</span>
+      <span className="text-sm">{label ?? t("ui.loading")}</span>
     </div>
   );
 }
@@ -52,7 +53,7 @@ export function ErrorBanner({
    */
   tone?: "error" | "warning";
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const problem =
     typeof error === "object" && error !== null
       ? (error as Problem)
@@ -60,22 +61,18 @@ export function ErrorBanner({
   const plainText = typeof error === "string" ? error.trim() : "";
   const routeUnavailable = /(?:^|\b)404(?:\b|$).*not found/i.test(plainText);
   const message = routeUnavailable
-    ? text(
-        "当前 Gateway 未提供此接口，Console 与 Gateway 版本可能不一致。请更新或重启 Gateway 后重试。",
-        "The connected Gateway does not expose this endpoint. The Console and Gateway versions may not match; update or restart Gateway and retry.",
-      )
-    : problem?.message ||
-      (error instanceof Error ? error.message : plainText) ||
-      text(
-        "请求失败，请检查网络或 Token",
-        "Request failed. Check the network or token.",
-      );
+    ? t("ui.theConnectedGatewayDoesNotExposeThisEndpoint")
+    : error instanceof LocalizedError
+      ? t(error.key, error.variables)
+      : problem?.message ||
+        (error instanceof Error ? error.message : plainText) ||
+        t("ui.requestFailedCheckTheNetworkOrToken");
   return (
     <Alert
       className="ag-feedback-enter"
       type={tone}
       showIcon
-      title={title ?? text("请求出错", "Request failed")}
+      title={title ?? t("ui.requestFailed")}
       description={
         <span>
           {message}
@@ -99,7 +96,7 @@ export function ErrorBanner({
             icon={<ReloadOutlined />}
             onClick={onRetry}
           >
-            {text("重试", "Retry")}
+            {t("ui.retry")}
           </Button>
         ) : undefined
       }

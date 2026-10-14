@@ -25,7 +25,7 @@ export function QuotaEvents({
   ruleId: string;
   onAuthBlocked: (error: unknown) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const events = useQuotaSnapshot(
     async (signal) =>
       quotaResult(
@@ -40,24 +40,21 @@ export function QuotaEvents({
       {Boolean(events.error) && events.data && (
         <ErrorBanner
           tone="warning"
-          title={text(
-            "事件刷新失败，保留上次读取的数据",
-            "Event refresh failed; showing previously read data",
-          )}
-          error={safeQuotaError(events.error, text)}
+          title={t("system.eventRefreshFailedShowingPreviouslyReadData")}
+          error={safeQuotaError(events.error, t)}
           onRetry={() => void events.refresh()}
         />
       )}
       <Card>
         <CardHeader
-          title={text("最近 50 条事件", "Latest 50 events")}
+          title={t("system.latest50Events")}
           extra={
             <Button
               size="small"
               loading={events.loading}
               onClick={() => void events.refresh()}
             >
-              {text("刷新事件", "Refresh events")}
+              {t("system.refreshEvents")}
             </Button>
           }
         />
@@ -65,7 +62,7 @@ export function QuotaEvents({
           events.error ? (
             <div className="p-5">
               <ErrorBanner
-                error={safeQuotaError(events.error, text)}
+                error={safeQuotaError(events.error, t)}
                 onRetry={() => void events.refresh()}
               />
             </div>
@@ -74,11 +71,8 @@ export function QuotaEvents({
           )
         ) : events.data.length === 0 ? (
           <EmptyState
-            title={text("尚无告警事件", "No alert events yet")}
-            hint={text(
-              "停用、未知或陈旧数据不会生成恢复事件。",
-              "Disabled rules and unknown or stale data do not generate recovery events.",
-            )}
+            title={t("system.noAlertEventsYet")}
+            hint={t("system.disabledRulesAndUnknownOrStaleDataDo")}
           />
         ) : (
           <ol className="divide-y divide-line">
@@ -95,7 +89,7 @@ export function QuotaEvents({
                             : "success"
                       }
                     >
-                      {quotaLabel(event.scenario, text)}
+                      {quotaLabel(event.scenario, t)}
                     </Badge>
                     <span className="text-xs text-fg-tertiary">
                       #{event.sequence} ·{" "}
@@ -105,28 +99,26 @@ export function QuotaEvents({
                   <Badge>
                     {quotaLabel(
                       event.deliveryState ?? event.notificationCode,
-                      text,
+                      t,
                     )}
                   </Badge>
                 </div>
                 <p className="break-words text-sm text-fg-secondary">
-                  {text("事件样本", "Event sample")}:{" "}
-                  {sampleBytes(event.usedBytes, text)} /{" "}
-                  {sampleBytes(event.quotaBytes, text)} ·{" "}
-                  {text("采样", "Sampled")}{" "}
+                  {t("system.eventSample")}: {sampleBytes(event.usedBytes, t)} /{" "}
+                  {sampleBytes(event.quotaBytes, t)} · {t("system.sampled")}{" "}
                   {new Date(event.sampleAt).toLocaleString()}
                 </p>
                 <p className="text-xs text-fg-tertiary">
-                  {text("事件阈值", "Event thresholds")}:{" "}
+                  {t("system.eventThresholds")}:{" "}
                   {percent(event.policy.warningBasisPoints)} /{" "}
                   {percent(event.policy.criticalBasisPoints)} /{" "}
                   {percent(event.policy.recoveryBelowBasisPoints)} ·{" "}
-                  {text("证据起点", "Evidence since")}{" "}
+                  {t("system.evidenceSince")}{" "}
                   {new Date(event.evidenceSince).toLocaleString()}
                 </p>
                 {event.deliveryErrorCode && (
                   <p className="text-xs text-fg-tertiary">
-                    {quotaLabel(event.deliveryErrorCode, text)}
+                    {quotaLabel(event.deliveryErrorCode, t)}
                   </p>
                 )}
                 {event.deliveryId && (
@@ -142,8 +134,8 @@ export function QuotaEvents({
                       }
                     >
                       {delivery === event.deliveryId
-                        ? text("收起交付详情", "Hide delivery details")
-                        : text("查看交付详情", "View delivery details")}
+                        ? t("system.hideDeliveryDetails")
+                        : t("system.viewDeliveryDetails")}
                     </Button>
                   </div>
                 )}
@@ -170,7 +162,7 @@ function QuotaDelivery({
   deliveryId: string;
   onAuthBlocked: (error: unknown) => void;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const delivery = useQuotaSnapshot(
     async (signal) =>
       quotaResult(await getEmailDelivery({ path: { deliveryId }, signal })),
@@ -180,7 +172,7 @@ function QuotaDelivery({
   if (!delivery.data)
     return delivery.error ? (
       <ErrorBanner
-        error={safeQuotaError(delivery.error, text)}
+        error={safeQuotaError(delivery.error, t)}
         onRetry={() => void delivery.refresh()}
       />
     ) : (
@@ -190,62 +182,54 @@ function QuotaDelivery({
   return (
     <section
       className="grid min-w-0 gap-3 border-t border-line pt-4"
-      aria-label={text("邮件交付详情", "Email delivery details")}
+      aria-label={t("system.emailDeliveryDetails")}
     >
       {Boolean(delivery.error) && (
         <ErrorBanner
           tone="warning"
-          title={text("交付详情已过期", "Delivery details are out of date")}
-          error={safeQuotaError(delivery.error, text)}
+          title={t("system.deliveryDetailsAreOutOfDate")}
+          error={safeQuotaError(delivery.error, t)}
           onRetry={() => void delivery.refresh()}
         />
       )}
       <p className="text-sm text-fg-secondary">
-        {quotaLabel(item.state, text)} · {text("尝试次数", "Attempts")}:{" "}
-        {item.attempts}
+        {quotaLabel(item.state, t)} · {t("system.attempts")}: {item.attempts}
       </p>
       {item.state === "accepted" && (
         <p className="text-sm text-fg-tertiary">
-          {text(
-            "SMTP accepted 仅表示服务器接受，不表示收件箱已送达。",
-            "SMTP accepted only means the server accepted the message; it does not confirm inbox delivery.",
-          )}
+          {t("system.sMTPAcceptedOnlyMeansTheServerAcceptedThe")}
         </p>
       )}
       {item.possibleDuplicate && (
         <Notice
           tone="warning"
-          title={text("可能重复", "Possible duplicate")}
-          description={text(
-            "此前交付结果不确定，重试可能产生重复邮件。",
-            "An earlier delivery outcome was uncertain; a retry may duplicate the email.",
-          )}
+          title={t("system.possibleDuplicate")}
+          description={t("system.anEarlierDeliveryOutcomeWasUncertainARetry")}
         />
       )}
       {item.errorCode && (
         <p className="text-sm text-fg-secondary">
-          {quotaLabel(item.errorCode, text)}
+          {quotaLabel(item.errorCode, t)}
         </p>
       )}
       {item.automaticCancellationCode && (
         <p className="text-sm text-fg-secondary">
-          {quotaLabel(item.automaticCancellationCode, text)}
+          {quotaLabel(item.automaticCancellationCode, t)}
         </p>
       )}
       {item.nextAttemptAt && (
         <p className="text-xs text-fg-tertiary">
-          {text("下一次尝试", "Next attempt")}:{" "}
+          {t("system.nextAttempt")}:{" "}
           {new Date(item.nextAttemptAt).toLocaleString()}
         </p>
       )}
       {item.acceptedAt && (
         <p className="text-xs text-fg-tertiary">
-          {text("接受时间", "Accepted at")}:{" "}
-          {new Date(item.acceptedAt).toLocaleString()}
+          {t("system.acceptedAt")}: {new Date(item.acceptedAt).toLocaleString()}
         </p>
       )}
       <p className="text-xs text-fg-tertiary">
-        {text("模板", "Template")}: {item.templateVersion} ·{" "}
+        {t("system.template")}: {item.templateVersion} ·{" "}
         {item.locale === "en" ? "English" : "中文"}
       </p>
     </section>

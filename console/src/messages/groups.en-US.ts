@@ -1,0 +1,101 @@
+import type { GroupsMessageKey } from "./groups.zh-CN";
+
+export const groupsEnUS: Record<GroupsMessageKey, string> = {
+  "groups.available": "Available ({length})",
+  "groups.allAdded": "All added",
+  "groups.configuredOrderWithinEachType":
+    "Configured order ({length}, within each type)",
+  "groups.addMembersFromTheLeft": "Add members from the left",
+  "groups.moveUp": "Move up",
+  "groups.moveDown": "Move down",
+  "groups.remove": "Remove",
+  "groups.newGroup": "New group",
+  "groups.cancel": "Cancel",
+  "groups.create": "Create",
+  "groups.groupName": "Group name",
+  "groups.format": "Format",
+  "groups.memberRepositories": "Member repositories",
+  "groups.hostedMembersComeFirstMembersOfTheSame":
+    "Hosted members come first; members of the same type follow configured order",
+  "groups.noActiveRepositoriesForThisFormat":
+    "No active repositories for this format",
+  "groups.allowAnonymousReads": "Allow anonymous reads",
+  "groups.anonymousRequestsResolveAMemberOnlyWhenBoth":
+    "Anonymous requests resolve a member only when both the group and member repository allow anonymous reads.",
+  "groups.allowAnonymousGroupReads": "Allow anonymous group reads",
+  "groups.resolutionOrder": "Resolution order",
+  "groups.resolutionOrder2": "Resolution order: {name}",
+  "groups.refresh": "Refresh",
+  "groups.close": "Close",
+  "groups.hostedMembersComeFirstMembersOfTheSame2":
+    "Hosted members come first; members of the same type follow their configured positions. These are candidates, while actual hits depend on the artifact, read permissions and protocol rules.",
+  "groups.configuredMemberSAreCurrentlyExcludedFromResolution":
+    "{excludedMemberCount} configured member(s) are currently excluded from resolution.",
+  "groups.noEligibleMembers": "No eligible members",
+  "groups.effectiveCandidateOrder": "Effective candidate order",
+  "groups.configuredPosition": "Configured position {position}",
+  "groups.position": "Position",
+  "groups.member": "Member",
+  "groups.type": "Type",
+  "groups.used": "Used",
+  "groups.objects": "Objects",
+  "groups.quota": "Quota",
+  "groups.unlimited": "Unlimited",
+  "groups.capacity": "Capacity",
+  "groups.capacity2": "Capacity · {name}",
+  "groups.editMembers": "Edit members",
+  "groups.editMembers2": "Edit members: {name}",
+  "groups.save": "Save",
+  "groups.setTheOrderWithinEachTypeHostedMembers":
+    "Set the order within each type; Hosted members are tried before Proxy members.",
+  "groups.settings": "Settings",
+  "groups.groupSettings": "Group settings: {name}",
+  "groups.eachMemberRepositoryMustAlsoAllowAnonymousReads":
+    "Each member repository must also allow anonymous reads.",
+  "groups.name": "Name",
+  "groups.access": "Access",
+  "groups.anonymousRead": "Anonymous read",
+  "groups.private": "Private",
+  "groups.membersConfiguredOrder": "Members (configured order)",
+  "groups.unknown": "unknown",
+  "groups.noMembers": "No members",
+  "groups.version": "Version",
+  "groups.actions": "Actions",
+  "groups.browseDirectory": "Browse directory",
+  "groups.deleteGroup": "Delete group {name}",
+  "groups.groups": "Groups",
+  "groups.aggregateRepositoriesOfTheSameFormatBehindOne":
+    "Aggregate repositories of the same format behind one entry point",
+  "groups.groupsAreUnavailable": "Groups are unavailable",
+  "groups.theCurrentBackendDoesNotExposeTheGroups":
+    "The current backend does not expose the groups endpoint (404)",
+  "groups.noGroups": "No groups",
+  "groups.createAGroupToAggregateRepositories":
+    "Create a group to aggregate repositories",
+  "groups.groups2": "Groups",
+  "groups.memberReferences": "{memberCount} member references",
+  "groups.anonymousReadable": "Anonymous readable",
+  "groups.memberRepositoriesMustAllowAnonymousReads":
+    "Member repositories must allow anonymous reads",
+  "groups.allEntryPointsArePrivate": "All entry points are private",
+  "groups.formats": "Formats",
+  "groups.resolvedByMatchingFormat": "Resolved by matching format",
+  "groups.search": "Search",
+  "groups.searchGroupNames": "Search group names…",
+  "groups.allFormats": "All formats",
+  "groups.noMatchingGroups": "No matching groups",
+  "groups.adjustTheFiltersAndTryAgain": "Adjust the filters and try again",
+  "groups.deleteGroup2": "Delete group",
+  "groups.deleteGroup3": "Delete group",
+  "groups.memberRepositoriesAreNotDeleted":
+    "? Member repositories are not deleted.",
+  "groups.delete": "Delete",
+  "groups.backToGroups": "Back to groups",
+  "groups.groupDirectory": "Group directory",
+  "groups.exploreMemberArtifactsAndTraceEachLocalSource":
+    "Explore member artifacts and trace each local source.",
+  "groups.readOnlyView": "Read-only view",
+  "groups.thisDirectoryContainsPublicationsAndKnownCacheAn":
+    "This directory contains publications and known cache. An earlier Proxy without cached data may still serve the artifact; downloads follow protocol resolution.",
+  "groups.visibleMemberCandidateOrder": "Visible member candidate order",
+};

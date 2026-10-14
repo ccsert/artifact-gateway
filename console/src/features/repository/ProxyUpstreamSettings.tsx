@@ -24,7 +24,7 @@ export function ProxyUpstreamSettings({
   repo: Repository;
   draft: ProxySettingsDraft;
 }) {
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const descriptor = formatDescriptor(repo.format);
   const requiresHosts = descriptor?.upstreamHostAllowList ?? false;
   const {
@@ -58,11 +58,8 @@ export function ProxyUpstreamSettings({
   return (
     <Space orientation="vertical" size="middle" className="w-full">
       <Field
-        label={text("上游地址", "Upstream URL")}
-        hint={text(
-          "HTTPS 基础地址，修改后立即生效（按请求读取）。",
-          "HTTPS base URL. Changes take effect immediately on the next request.",
-        )}
+        label={t("repository.upstreamURL")}
+        hint={t("repository.hTTPSBaseURLChangesTakeEffectImmediatelyOn")}
       >
         <Input
           placeholder="https://upstream.example"
@@ -71,17 +68,11 @@ export function ProxyUpstreamSettings({
         />
       </Field>
       <Field
-        label={text("允许主机", "Allowed hosts")}
+        label={t("repository.allowedHosts")}
         hint={
           requiresHosts
-            ? text(
-                "逗号分隔，Raw / Conan / npm / PyPI / Go / Cargo / APT 代理必填。Cargo 通常需要 index.crates.io 和 static.crates.io。",
-                "Comma-separated. Required for Raw, Conan, npm, PyPI, Go, Cargo, and APT proxies. Cargo normally needs index.crates.io and static.crates.io.",
-              )
-            : text(
-                "逗号分隔；OCI / Maven 代理可留空。",
-                "Comma-separated. Optional for OCI and Maven proxies.",
-              )
+            ? t("repository.commaSeparatedRequiredForRawConanNpmPyPI")
+            : t("repository.commaSeparatedOptionalForOCIAndMavenProxies")
         }
       >
         <Input
@@ -92,13 +83,10 @@ export function ProxyUpstreamSettings({
       </Field>
       <div className="rounded-lg border border-line bg-surface-translucent px-4 py-3">
         <div className="text-sm font-medium text-fg">
-          {text("出口代理", "Egress proxy")}
+          {t("repository.egressProxy")}
         </div>
         <div className="mt-1 text-xs leading-5 text-fg-tertiary">
-          {text(
-            "配置此代理仓库访问上游时的出口网络代理，用于企业内网或受限网络环境。",
-            "Configure the egress proxy used when this proxy repository reaches its upstream, for private or restricted networks.",
-          )}
+          {t("repository.configureTheEgressProxyUsedWhenThisProxy")}
         </div>
         <Radio.Group
           className="mt-3 flex flex-col gap-2"
@@ -109,34 +97,25 @@ export function ProxyUpstreamSettings({
           }}
         >
           <Radio value="direct">
-            <span className="text-sm text-fg">{text("直连", "Direct")}</span>
+            <span className="text-sm text-fg">{t("repository.direct")}</span>
             <span className="ml-2 text-xs text-fg-tertiary">
-              {text(
-                "不经过任何代理，保留私网地址防护",
-                "Do not use a proxy; retain private-address protection",
-              )}
+              {t("repository.doNotUseAProxyRetainPrivateAddress")}
             </span>
           </Radio>
           <Radio value="environment">
             <span className="text-sm text-fg">
-              {text("跟随环境变量", "Use environment variables")}
+              {t("repository.useEnvironmentVariables")}
             </span>
             <span className="ml-2 text-xs text-fg-tertiary">
-              {text(
-                "沿用进程级 HTTP(S)_PROXY 与 NO_PROXY",
-                "Use process-level HTTP(S)_PROXY and NO_PROXY",
-              )}
+              {t("repository.useProcessLevelHTTPSPROXYAndNO")}
             </span>
           </Radio>
           <Radio value="custom">
             <span className="text-sm text-fg">
-              {text("自定义代理", "Custom proxy")}
+              {t("repository.customProxy")}
             </span>
             <span className="ml-2 text-xs text-fg-tertiary">
-              {text(
-                "为此仓库单独指定 HTTP 或 SOCKS5 代理",
-                "Set an HTTP or SOCKS5 proxy specifically for this repository",
-              )}
+              {t("repository.setAnHTTPOrSOCKS5ProxySpecificallyFor")}
             </span>
           </Radio>
         </Radio.Group>
@@ -147,7 +126,7 @@ export function ProxyUpstreamSettings({
             className="mt-3 w-full border-t border-line pt-3"
           >
             <div className="flex flex-wrap gap-3">
-              <Field label={text("协议", "Protocol")}>
+              <Field label={t("repository.protocol")}>
                 <Select
                   className="w-40"
                   value={egressProtocol}
@@ -155,13 +134,13 @@ export function ProxyUpstreamSettings({
                   options={[
                     {
                       value: "http",
-                      label: text("HTTP（CONNECT）", "HTTP (CONNECT)"),
+                      label: t("repository.hTTPCONNECT"),
                     },
                     { value: "socks5", label: "SOCKS5" },
                   ]}
                 />
               </Field>
-              <Field label={text("代理主机", "Proxy host")}>
+              <Field label={t("repository.proxyHost")}>
                 <Input
                   className="w-64"
                   placeholder="proxy.corp.example"
@@ -169,7 +148,7 @@ export function ProxyUpstreamSettings({
                   onChange={(e) => setEgressHost(e.target.value)}
                 />
               </Field>
-              <Field label={text("端口", "Port")}>
+              <Field label={t("repository.port")}>
                 <InputNumber
                   className="w-28"
                   min={1}
@@ -184,12 +163,11 @@ export function ProxyUpstreamSettings({
               <div className="flex items-center justify-between gap-6">
                 <div>
                   <div className="text-xs font-medium text-fg-secondary">
-                    {text("远程 DNS（socks5h）", "Remote DNS (socks5h)")}
+                    {t("repository.remoteDNSSocks5h")}
                   </div>
                   <div className="mt-1 text-xs leading-5 text-fg-disabled">
-                    {text(
-                      "开启后由代理服务器解析上游域名，适用于本地 DNS 不可达上游的网络。",
-                      "When enabled, the proxy resolves the upstream hostname. Use this when the local DNS cannot reach the upstream network.",
+                    {t(
+                      "repository.whenEnabledTheProxyResolvesTheUpstreamHostname",
                     )}
                   </div>
                 </div>
@@ -200,12 +178,7 @@ export function ProxyUpstreamSettings({
               </div>
             )}
             <div className="flex flex-wrap gap-3">
-              <Field
-                label={text(
-                  "代理认证用户名（可选）",
-                  "Proxy username (optional)",
-                )}
-              >
+              <Field label={t("repository.proxyUsernameOptional")}>
                 <Input
                   className="w-64"
                   placeholder="gateway"
@@ -214,24 +187,15 @@ export function ProxyUpstreamSettings({
                 />
               </Field>
               <Field
-                label={text(
-                  "代理认证密码（可选）",
-                  "Proxy password (optional)",
-                )}
-                hint={text(
-                  "AES-256-GCM 加密落库，留空则保留已存凭据。",
-                  "Stored encrypted with AES-256-GCM. Leave blank to keep the current credential.",
-                )}
+                label={t("repository.proxyPasswordOptional")}
+                hint={t("repository.storedEncryptedWithAES256GCMLeaveBlank2")}
               >
                 <Input.Password
                   className="w-64"
                   placeholder={
                     repo.egressProxy?.credentialsConfigured
-                      ? text(
-                          "已配置，输入以替换",
-                          "Configured; enter a value to replace it",
-                        )
-                      : text("未配置", "Not configured")
+                      ? t("repository.configuredEnterAValueToReplaceIt")
+                      : t("repository.notConfigured")
                   }
                   value={egressPassword}
                   onChange={(e) => setEgressPassword(e.target.value)}
@@ -244,18 +208,14 @@ export function ProxyUpstreamSettings({
                 onChange={(e) => setEgressClearCredentials(e.target.checked)}
               >
                 <span className="text-xs text-fg-secondary">
-                  {text(
-                    "清除已存储的代理凭据",
-                    "Clear stored proxy credentials",
-                  )}
+                  {t("repository.clearStoredProxyCredentials")}
                 </span>
               </Checkbox>
             )}
             <Field
-              label={text("绕过列表（noProxy）", "Bypass list (noProxy)")}
-              hint={text(
-                "逗号分隔的主机后缀或网段；命中的上游将绕过代理直连。",
-                "Comma-separated hostname suffixes or CIDRs. Matching upstreams bypass the proxy.",
+              label={t("repository.bypassListNoProxy")}
+              hint={t(
+                "repository.commaSeparatedHostnameSuffixesOrCIDRsMatchingUpstreams",
               )}
             >
               <Input
@@ -268,29 +228,26 @@ export function ProxyUpstreamSettings({
         )}
         <div className="mt-3 flex items-center gap-3 border-t border-line pt-3">
           <Button onClick={runEgressTest} loading={egressTesting}>
-            {text("测试连接", "Test connection")}
+            {t("repository.testConnection")}
           </Button>
           <span className="text-xs text-fg-disabled">
-            {text(
-              "测试使用已保存的配置",
-              "The test uses the saved configuration",
-            )}
+            {t("repository.theTestUsesTheSavedConfiguration")}
           </span>
           {egressTestResult &&
             (egressTestResult.reachable ? (
               <span className="text-xs text-[var(--ag-status-success)]">
-                {text("代理可达", "Proxy reachable")}
+                {t("repository.proxyReachable")}
                 {egressTestResult.upstreamStatus
-                  ? ` · ${text(`上游返回 ${egressTestResult.upstreamStatus}`, `upstream returned ${egressTestResult.upstreamStatus}`)}`
+                  ? ` · ${t("repository.upstreamReturned", { upstreamStatus: egressTestResult.upstreamStatus })}`
                   : ""}
                 {egressTestResult.latencyMs !== undefined
-                  ? ` · ${text(`延迟 ${egressTestResult.latencyMs} ms`, `latency ${egressTestResult.latencyMs} ms`)}`
+                  ? ` · ${t("repository.latencyMs", { latencyMs: egressTestResult.latencyMs })}`
                   : ""}
               </span>
             ) : (
               <span className="text-xs text-[var(--ag-status-danger)]">
-                {text("连接失败：", "Connection failed: ")}
-                {egressTestResult.error ?? text("未知错误", "Unknown error")}
+                {t("repository.connectionFailed")}
+                {egressTestResult.error ?? t("repository.unknownError")}
               </span>
             ))}
         </div>

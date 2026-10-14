@@ -22,7 +22,7 @@ export function UserCreateDialog({
   onCreated,
 }: UserCreateDialogProps) {
   const { message } = App.useApp();
-  const { text } = usePreferences();
+  const { t } = usePreferences();
   const [form] = Form.useForm<CreateUser>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -50,13 +50,10 @@ export function UserCreateDialog({
         },
       });
       if (requestError || !data) {
-        setError(
-          requestError ??
-            new Error(text("创建用户失败", "Failed to create user")),
-        );
+        setError(requestError ?? new Error(t("identity.failedToCreateUser")));
         return;
       }
-      void message.success(text("用户已创建", "User created"));
+      void message.success(t("identity.userCreated"));
       onCreated(data);
     } catch (nextError) {
       setError(nextError);
@@ -68,17 +65,17 @@ export function UserCreateDialog({
   return (
     <Modal
       open={open}
-      title={text("新建本地用户", "Create local user")}
+      title={t("identity.createLocalUser")}
       width={680}
       busy={busy}
       onClose={onClose}
       footer={
         <Space>
           <Button onClick={onClose} disabled={busy}>
-            {text("取消", "Cancel")}
+            {t("identity.cancel")}
           </Button>
           <Button type="primary" loading={busy} onClick={() => void submit()}>
-            {text("创建用户", "Create user")}
+            {t("identity.createUser")}
           </Button>
         </Space>
       }
@@ -92,30 +89,30 @@ export function UserCreateDialog({
         <div className="grid grid-cols-2 gap-x-4">
           <Form.Item
             name="name"
-            label={text("用户名", "Username")}
+            label={t("identity.username")}
             rules={[
               {
                 required: true,
                 whitespace: true,
-                message: text("请输入用户名", "Enter a username"),
+                message: t("identity.enterAUsername"),
               },
             ]}
           >
             <Input autoComplete="off" maxLength={128} placeholder="alice" />
           </Form.Item>
-          <Form.Item name="displayName" label={text("显示名", "Display name")}>
+          <Form.Item name="displayName" label={t("identity.displayName")}>
             <Input
               maxLength={128}
-              placeholder={text("例如：Alice Chen", "For example: Alice Chen")}
+              placeholder={t("identity.forExampleAliceChen")}
             />
           </Form.Item>
           <Form.Item
             name="email"
-            label={text("邮箱", "Email")}
+            label={t("identity.email")}
             rules={[
               {
                 type: "email",
-                message: text("请输入有效邮箱", "Enter a valid email"),
+                message: t("identity.enterAValidEmail"),
               },
             ]}
           >
@@ -127,64 +124,53 @@ export function UserCreateDialog({
           </Form.Item>
           <Form.Item
             name="role"
-            label={text("角色", "Role")}
+            label={t("identity.role")}
             rules={[{ required: true }]}
           >
             <Select
               options={[
                 {
                   value: "member",
-                  label: text(
-                    "member · 成员（无仓库权限，按仓库授权）",
-                    "member · no repository access until granted",
-                  ),
+                  label: t("identity.memberNoRepositoryAccessUntilGranted"),
                 },
                 {
                   value: "none",
-                  label: text("none · 待授权", "none · awaiting approval"),
+                  label: t("identity.noneAwaitingApproval"),
                 },
                 {
                   value: "admin",
-                  label: text("admin · 管理员", "admin · administrator"),
+                  label: t("identity.adminAdministrator"),
                 },
               ]}
             />
           </Form.Item>
         </div>
-        <Form.Item name="description" label={text("说明", "Description")}>
+        <Form.Item name="description" label={t("identity.description")}>
           <Input.TextArea
             rows={3}
             maxLength={512}
             showCount
-            placeholder={text(
-              "记录账户用途、所属团队或责任范围",
-              "Record the account purpose, team, or responsibility",
+            placeholder={t(
+              "identity.recordTheAccountPurposeTeamOrResponsibility",
             )}
           />
         </Form.Item>
         <Form.Item
           name="password"
-          label={text("初始密码", "Initial password")}
-          extra={text(
-            "至少 8 个字符且不超过 72 字节。密码只在创建时使用，不会再次显示。",
-            "Use at least 8 characters and no more than 72 bytes. The password is never displayed again.",
-          )}
+          label={t("identity.initialPassword")}
+          extra={t("identity.useAtLeast8CharactersAndNoMore")}
           rules={[
             {
               required: true,
-              message: text("请输入初始密码", "Enter an initial password"),
+              message: t("identity.enterAnInitialPassword"),
             },
             {
               validator: async (_rule, value?: string) => {
                 if (value && !localPasswordMeetsMinimum(value)) {
-                  throw new Error(
-                    text("密码至少需要 8 个字符", "Use at least 8 characters"),
-                  );
+                  throw new Error(t("identity.useAtLeast8Characters"));
                 }
                 if (value && !localPasswordFitsBcrypt(value)) {
-                  throw new Error(
-                    text("密码不能超过 72 字节", "Use no more than 72 bytes"),
-                  );
+                  throw new Error(t("identity.useNoMoreThan72Bytes"));
                 }
               },
             },
@@ -194,12 +180,12 @@ export function UserCreateDialog({
         </Form.Item>
         <Form.Item
           name="mustChangePassword"
-          label={text("首次登录要求", "First sign-in requirement")}
+          label={t("identity.firstSignInRequirement")}
           valuePropName="checked"
         >
           <Switch
-            checkedChildren={text("必须修改密码", "Change required")}
-            unCheckedChildren={text("直接使用", "Ready to use")}
+            checkedChildren={t("identity.changeRequired3")}
+            unCheckedChildren={t("identity.readyToUse")}
           />
         </Form.Item>
       </Form>

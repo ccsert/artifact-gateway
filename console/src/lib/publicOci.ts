@@ -1,3 +1,4 @@
+import { LocalizedError } from "../messages/translate";
 export interface PublicOciManifestDetail {
   digest?: string;
   size?: number;
@@ -84,8 +85,9 @@ async function readManifest(
     { headers: { Accept: manifestAccept } },
   );
   if (!response.ok) {
-    throw Object.assign(
-      new Error(`读取 OCI manifest 失败 (${response.status})`),
+    throw new LocalizedError(
+      "lib.failedToReadOciManifestStatus",
+      { status: response.status },
       { status: response.status },
     );
   }
