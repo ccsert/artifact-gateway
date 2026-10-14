@@ -1,6 +1,7 @@
 import { App as AntdApp, ConfigProvider } from "antd";
 import enUS from "antd/locale/en_US";
 import zhCN from "antd/locale/zh_CN";
+import "dayjs/locale/zh-cn";
 import type { ReactNode } from "react";
 import { usePreferences } from "../lib/preferences";
 

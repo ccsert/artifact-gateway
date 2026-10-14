@@ -152,7 +152,7 @@ export function ScheduledTasksPanel() {
       title: t("operations.action"),
       dataIndex: "kind",
       key: "kind",
-      width: 120,
+      width: locale === "en-US" ? 190 : 120,
       render: (kind: ScheduledTask["kind"]) => (
         <Badge
           tone={
@@ -239,7 +239,7 @@ export function ScheduledTasksPanel() {
       title: t("operations.actions"),
       key: "actions",
       fixed: "right",
-      width: 220,
+      width: locale === "en-US" ? 260 : 220,
       render: (_, task) => (
         <Space size={4}>
           <Button

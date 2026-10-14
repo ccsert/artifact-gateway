@@ -11,11 +11,13 @@ their meaning.
 
 ## Unreleased
 
+- Console user filters follow same-page navigation and browser history without an old search overwriting the URL, and start on the first page after a filter change. Date picker months and weekdays follow the Console language, and English scheduled task labels and row actions fit their desktop table columns.
+
 - Console display text now lives entirely in per-feature message dictionaries: the inline `text("中文", "English")` calls are gone, and unit tests fail on a missing or empty translation, mismatched placeholders, a key defined twice or used nowhere, a glossary synonym (`src/messages/glossary.ts`), or Chinese text written outside the dictionaries. That check translated usage snippet labels, untagged OCI versions, reader errors, audit CSV headers and identity labels that were Chinese-only (#276).
 
 - Console pages are declared once in `src/app/routes.tsx`, which drives the router, sidebar, command palette and access redirects. New shared primitives (`ListPage`, `ListStates`, `FilterCard`, `useUrlFilters`, `FormModal`, `ConfirmDanger`, `DetailDrawer`) carry the list states, URL-kept filters and in-flight locking; API keys, groups and users use them, and their filters now survive a reload (#274). Page-only styles load with their page instead of the global stylesheet (#273).
 
-- Console visual findings closed (#317): the repository list shows quota usage as a bar, an upstream column and a row menu instead of an always-visible delete icon; scheduled tasks fit at 1440px with labelled actions; audit actors and service account principals are no longer cut short; an empty dependency check list reads as neutral; overview cards share one height; table headings and Chinese labels are no longer uppercased or letter-spaced and format identifiers are lowercase; the sign-in page uses descriptive placeholders and drops internal API naming.
+- Console visual and interaction refinements (#317): the repository list shows quota usage as a bar, an upstream column and a row menu instead of an always-visible delete icon; scheduled tasks fit at 1440px with labelled actions; audit actors and service account principals are no longer cut short; an empty dependency check list reads as neutral; overview cards share one height; table headings and Chinese labels are no longer uppercased or letter-spaced and format identifiers are lowercase; the sign-in page uses descriptive placeholders and drops internal API naming.
 
 - CLI credentials stay bound to distinct IPv6 authorities and profile targets when a server override is used; profile/login output strips URL secrets, and concurrent profile writers serialize the full configuration transaction to avoid lost updates.
 

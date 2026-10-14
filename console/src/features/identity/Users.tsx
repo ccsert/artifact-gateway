@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   LockOutlined,
   MoreOutlined,
@@ -43,12 +44,22 @@ export function UsersPage() {
   const search = filters.values.q;
   const role = filters.values.role || undefined;
   const state = filters.values.state || undefined;
+  const location = useLocation();
   // The box answers every keystroke; the list follows once typing pauses.
   const [searchInput, setSearchInput] = useState(search);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(CONSOLE_PAGE_SIZE);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [filterLocationKey, setFilterLocationKey] = useState(location.key);
+  const navigating = filterLocationKey !== location.key;
+  // A same-page navigation replaces the draft before debounce effects run.
+  // It also resets the offset, including history and sidebar navigation.
+  if (navigating) {
+    setFilterLocationKey(location.key);
+    setSearchInput(search);
+    setPage(1);
+  }
 
   const setFilters = filters.set;
   useEffect(() => {
@@ -66,7 +77,7 @@ export function UsersPage() {
     role,
     state,
     limit: pageSize,
-    offset: (page - 1) * pageSize,
+    offset: navigating ? 0 : (page - 1) * pageSize,
   });
   const users = usersQuery.data?.items ?? [];
   const total = usersQuery.data?.total ?? 0;
@@ -215,7 +226,7 @@ export function UsersPage() {
   ];
 
   const pagination: TablePaginationConfig = {
-    current: page,
+    current: navigating ? 1 : page,
     pageSize,
     total,
     onChange: (nextPage, nextPageSize) => {
@@ -263,7 +274,7 @@ export function UsersPage() {
                 placeholder={t("identity.allRoles")}
                 value={role}
                 onChange={(value) => {
-                  filters.set({ role: value ?? "" });
+                  filters.set({ q: searchInput.trim(), role: value ?? "" });
                   setPage(1);
                 }}
                 options={[
@@ -283,7 +294,7 @@ export function UsersPage() {
                 placeholder={t("identity.allStates")}
                 value={state}
                 onChange={(value) => {
-                  filters.set({ state: value ?? "" });
+                  filters.set({ q: searchInput.trim(), state: value ?? "" });
                   setPage(1);
                 }}
                 options={[
