@@ -3,8 +3,9 @@
 [English](cli.md) · [文档索引](README.zh-CN.md)
 
 `agctl` 是面向 CI 流水线、平台管理与 agent 的网关命令行客户端。它用 bearer
-凭据直接对 `/api/v2` 下的管理 API 编程。当前可用命令为 `version`、`info` 与
-`commands`；其余命令面按可独立评审的切片陆续交付，只有实现后才会出现在
+凭据直接对 `/api/v2` 下的管理 API 编程。当前 checkout 提供 `version`、`info`、
+`commands`、`auth login|logout|whoami|change-password` 与
+`config profile add|list|use|remove`；其余命令面按可独立评审的切片陆续交付，只有实现后才会出现在
 命令树中。客户端形态与机器契约记录在
 [ADR 0007](adr/0007-agctl-cli-shape.zh-CN.md)。
 
@@ -16,8 +17,8 @@
 
 ### Release 附件
 
-每个 Release 的 tag 为 `v` 加上 `VERSION` 文件的值，Release 在 Gateway 附件旁
-发布各平台的客户端附件：
+当前 checkout 的发布构建会为后续包含本批次的 Release，在 Gateway 附件旁
+产出各平台客户端附件：
 
 ```text
 artifact-gateway-agctl_<version>_linux_amd64.tar.gz
@@ -36,9 +37,9 @@ tar -xzf artifact-gateway-agctl_<version>_<goos>_<goarch>.tar.gz
 ./agctl version
 ```
 
-`agctl version` 输出客户端版本与 revision，与 Release tag 核对后再使用。当前最新
-已发布版本为 `v0.8.1`，早于本 CLI，因此第一个包含这些附件的 Release 是从
-`main` 切出的下一个 tag。
+`agctl version` 输出客户端版本与 revision，与 Release tag 核对后再使用。已发布的
+`v0.9.0` 仅包含 CLI 骨架与源码本地构建，未纳入本次 auth/profile/分发批次，也没有
+独立 agctl 附件。这些附件需等后续包含本批次的 Release；合并代码不会发布它们。
 
 ### Go module 安装
 
@@ -47,12 +48,12 @@ go install github.com/artifact-gateway/artifact-gateway/cmd/agctl@<tag>
 ```
 
 `<tag>` 是包含 `cmd/agctl` 的 Release tag（`v<VERSION>`），路径是 `go.mod`
-声明的 module path。该通道要求两者都可公开解析，目前尚不满足：最新 tag
-`v0.8.1` 早于本 CLI；`github.com/artifact-gateway/artifact-gateway` 没有对应
+声明的 module path。该通道要求两者都可公开解析，目前尚不满足：
+`github.com/artifact-gateway/artifact-gateway` 没有对应
 仓库（`repository not found`）；改用仓库路径 `github.com/ccsert/artifact-gateway`
 请求时，会因 tagged `go.mod` 声明的是另一个路径而报 module path 不匹配。上面的
-命令是该通道的目标形态，不是当前可用的安装方式：当前可用的是 Release 附件与下文
-本地构建，待包含 CLI 的 tag 在声明的 module path 上发布后该通道才生效。
+命令是该通道的目标形态，不是当前可用的安装方式。当前请使用下文本地构建，独立
+客户端附件需等上文说明的后续发行。模块路径解析由 #347 跟踪，#128 仍保持开放。
 
 ### 容器镜像
 
@@ -111,6 +112,11 @@ Profile 选择顺序：`--profile`、`AGCTL_PROFILE`、`current_profile`、`defa
 profile，最后是只定义一个 profile 的文件。该文件由 profile 命令管理、无需手工
 编辑：`agctl config profile add|list|use|remove`；每次写入都以 0600 权限原子
 替换文件。
+
+已存 token 只用于与 profile 绑定目标一致的实际 server。用 `--server` 或
+`AGCTL_SERVER` 覆盖为不同目标时不会复用该 token；需用 `--token` 或
+`AGCTL_TOKEN` 显式提供新目标的凭据。主机名与默认端口的等价写法保留绑定，
+不同 IPv6 authority、接口 zone 与 base path 大小写不会共享凭据。
 
 ## 全局 flag
 
@@ -260,8 +266,16 @@ token。该端点只接受本地用户会话。
 - `agctl config profile remove NAME` 删除 profile，并在它正是 `current_profile`
   时将其清空。
 
-写入以 0600 权限原子替换文件；已存在的宽松权限文件会被拒绝并提示
-`chmod 600`。
+Linux 和 macOS 上的写操作通过进程间锁串行化完整的读取、修改和替换，
+然后以 0600 权限原子替换文件。稳定的同目录 `config.yaml.lock` 在句柄关闭或
+进程退出时释放；等待其他写操作超过十秒后失败，调用方可重试。
+已存在的宽松权限文件会被拒绝并提示 `chmod 600`。
+profile 和 login 输出会去除 URL 的 userinfo、查询参数与 fragment。
+
+Windows 锁实现已经通过编译检查，但当前 POSIX 权限校验不支持 Windows 私有
+profile 持久化：Windows 文件 mode 无法证明所需的 0600 保护。该平台请使用不落盘的
+`--server`/`--token` 或 `AGCTL_SERVER`/`AGCTL_TOKEN`；本批次不宣称完成 Windows
+profile 运行验收。
 
 ## 安全说明
 

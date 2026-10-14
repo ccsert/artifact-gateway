@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -67,21 +68,29 @@ func normalizeServerTarget(raw string) (string, error) {
 	parsed, err := url.Parse(value)
 	if err != nil || !parsed.IsAbs() || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		return "", &UsageError{
-			Message: fmt.Sprintf("server URL %q is not a valid http(s) URL", raw),
+			Message: "server URL is not a valid http(s) URL",
 			Hint:    "use the Gateway root URL, for example https://gateway.example.com",
 		}
 	}
 	scheme := strings.ToLower(parsed.Scheme)
-	host := strings.ToLower(parsed.Hostname())
+	host, zone, hasZone := strings.Cut(parsed.Hostname(), "%")
+	host = strings.ToLower(host)
+	if hasZone {
+		// IPv6 zone identifiers name local interfaces and are case-sensitive.
+		host += "%" + zone
+	}
 	port := parsed.Port()
 	if (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
 		port = ""
 	}
 	authority := host
 	if port != "" {
-		authority = host + ":" + port
+		authority = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") {
+		authority = "[" + host + "]"
 	}
-	return scheme + "://" + authority + strings.TrimSuffix(parsed.Path, "/"), nil
+	target := url.URL{Scheme: scheme, Host: authority, Path: strings.TrimSuffix(parsed.Path, "/")}
+	return target.String(), nil
 }
 
 func newAPIClient(settings profileSettings, options clientOptions) (*apiClient, error) {

@@ -4,8 +4,9 @@
 
 `agctl` is the Gateway command line client for CI pipelines, platform
 management, and agents. It programs against the management API under
-`/api/v2` with a bearer credential. The commands available today are
-`version`, `info`, and `commands`; the rest of the surface ships as separate
+`/api/v2` with a bearer credential. This checkout provides `version`, `info`,
+`commands`, `auth login|logout|whoami|change-password`, and
+`config profile add|list|use|remove`. The rest of the surface ships as separate
 reviewable slices and appears in the command tree only once implemented. The
 client shape and its machine contract are recorded in
 [ADR 0007](adr/0007-agctl-cli-shape.md).
@@ -19,8 +20,8 @@ come from flags, environment variables, or the profile file described below.
 
 ### Release archives
 
-Every release tag is `v` followed by the `VERSION` value, and each release
-publishes one client archive per platform next to the Gateway archives:
+The release builder in this checkout produces one client archive per platform
+next to the Gateway archives for a future release containing this batch:
 
 ```text
 artifact-gateway-agctl_<version>_linux_amd64.tar.gz
@@ -41,9 +42,10 @@ tar -xzf artifact-gateway-agctl_<version>_<goos>_<goarch>.tar.gz
 ```
 
 `agctl version` reports the client version and revision; compare both with the
-release tag before relying on the binary. The newest published release at the
-time of writing is `v0.8.1` and predates the CLI, so the first release carrying
-these archives is the next tag cut from `main`.
+release tag before relying on the binary. Published `v0.9.0` includes only the
+CLI skeleton and local source build; it excludes this auth/profile/distribution
+batch and has no separate agctl archives. These archives require a subsequent
+release containing this batch; merging the code does not publish them.
 
 ### Go module install
 
@@ -53,15 +55,14 @@ go install github.com/artifact-gateway/artifact-gateway/cmd/agctl@<tag>
 
 `<tag>` is the release tag (`v<VERSION>`) of a release that contains
 `cmd/agctl`, and the path is the module path `go.mod` declares. This channel
-needs both to be publicly resolvable, which is not the case yet: the newest tag
-`v0.8.1` predates the CLI, no repository is served at
+needs both to be publicly resolvable, which is not the case yet: no repository is served at
 `github.com/artifact-gateway/artifact-gateway` (`repository not found`), and
 requesting the module through the repository path
 `github.com/ccsert/artifact-gateway` fails with a module path mismatch because
 the tagged `go.mod` declares the other path. Read the line above as the target
-of this channel, not as a working install: release archives and the local build
-below are the channels that work today, and this one starts working once a
-post-CLI tag is published at the declared module path.
+of this channel, not as a working install. Use the local build below; independent
+client archives require the future release described above. The module-path
+resolution work remains tracked in #347, and #128 remains open.
 
 ### Container image
 
@@ -125,6 +126,13 @@ Profile selection order: `--profile`, `AGCTL_PROFILE`, `current_profile`, the
 `default` profile, then a file that defines exactly one profile. The profile
 commands manage this file without hand-editing: `agctl config profile
 add|list|use|remove`; every write replaces the file atomically with mode 0600.
+
+A stored token is used only when the effective server matches its profile's
+target. Overriding `--server` or `AGCTL_SERVER` with a different target does
+not reuse that token; supply the new target's credential explicitly through
+`--token` or `AGCTL_TOKEN`. Equivalent host/default-port spellings retain the
+binding; distinct IPv6 authorities, interface zones, and base-path case do not
+share credentials.
 
 ## Global flags
 
@@ -295,8 +303,18 @@ Manages `~/.config/agctl/config.yaml` without hand-editing:
 - `agctl config profile remove NAME` deletes a profile and unsets
   `current_profile` when it pointed at it.
 
-Writes replace the file atomically with mode 0600; a lax existing file is
-refused with a `chmod 600` hint.
+Writes serialize the full read/modify/replace transaction across processes on
+Linux and macOS, then replace the file atomically with mode 0600;
+the stable sibling `config.yaml.lock` is released when its handle closes or
+the process exits, and contention fails after ten seconds so callers can retry.
+A lax existing file is refused with a `chmod 600` hint. Profile and login
+output strips URL userinfo, query parameters, and fragments.
+
+The Windows lock implementation is compile-checked, but private profile
+persistence is not supported by the current POSIX permission validation:
+Windows file modes do not establish the required 0600 protection. Use file-less
+`--server`/`--token` or `AGCTL_SERVER`/`AGCTL_TOKEN` there; Windows profile runtime
+acceptance remains incomplete and is not claimed by this batch.
 
 ## Security notes
 

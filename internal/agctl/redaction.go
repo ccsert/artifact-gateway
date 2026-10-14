@@ -51,3 +51,20 @@ func redactURL(target *url.URL) string {
 	sanitized.RawQuery = query.Encode()
 	return sanitized.String()
 }
+
+// redactServerURL applies the same URL boundary to local profile/auth output
+// as HTTP diagnostics. A malformed stored URL must not reveal its raw input.
+func redactServerURL(raw string, knownSecrets ...string) string {
+	if raw == "" {
+		return ""
+	}
+	target, err := url.Parse(raw)
+	if err != nil || !target.IsAbs() || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" {
+		return "(invalid server URL)"
+	}
+	// Connection URLs discard query parameters, so output need not expose
+	// even credentials carried under unrecognized query field names.
+	target.RawQuery = ""
+	target.ForceQuery = false
+	return redactText(redactURL(target), knownSecrets...)
+}

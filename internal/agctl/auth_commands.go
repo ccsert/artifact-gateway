@@ -175,8 +175,8 @@ func authLoginCommand() command {
 				bound, err := normalizeServerTarget(stored.Server)
 				if err != nil || bound != target {
 					return &UsageError{
-						Message: fmt.Sprintf("profile %q targets %s but this login targets %s", profile, stored.Server, env.settings.Server),
-						Hint:    fmt.Sprintf("update the profile first (agctl config profile add %s --server %s), or log in to the profile's own target", profile, env.settings.Server),
+						Message: fmt.Sprintf("profile %q targets %s but this login targets %s", profile, redactServerURL(stored.Server, stored.Token), redactServerURL(env.settings.Server, env.settings.Token)),
+						Hint:    "update the profile first, or log in to the profile's own target",
 					}
 				}
 			}
@@ -246,7 +246,7 @@ func authLoginCommand() command {
 			}
 			result := authLoginResult{
 				Profile:            profile,
-				Server:             env.settings.Server,
+				Server:             redactServerURL(env.settings.Server, env.settings.Token, login.Token, password),
 				Username:           login.Username,
 				DisplayName:        login.DisplayName,
 				Role:               login.Role,

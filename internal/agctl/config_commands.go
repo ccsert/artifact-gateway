@@ -99,7 +99,7 @@ func configProfileAddCommand() command {
 					profile.Insecure = env.globals.insecure
 				}
 				config.Profiles[name] = profile
-				record.Server = profile.Server
+				record.Server = redactServerURL(profile.Server, profile.Token)
 				record.TokenStored = profile.Token != ""
 				record.Insecure = profile.Insecure
 				record.Current = config.CurrentProfile == name
@@ -150,7 +150,7 @@ func configProfileListCommand() command {
 				profile := config.Profiles[name]
 				items = append(items, profileRecord{
 					Name:        name,
-					Server:      profile.Server,
+					Server:      redactServerURL(profile.Server, profile.Token),
 					TokenStored: profile.Token != "",
 					Insecure:    profile.Insecure,
 					Current:     config.CurrentProfile == name,
@@ -222,7 +222,7 @@ func configProfileUseCommand() command {
 					}
 				}
 				config.CurrentProfile = name
-				record.Server = profile.Server
+				record.Server = redactServerURL(profile.Server, profile.Token)
 				record.TokenStored = profile.Token != ""
 				record.Insecure = profile.Insecure
 				record.Current = true

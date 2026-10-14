@@ -11,11 +11,21 @@ their meaning.
 
 ## Unreleased
 
+- CLI credentials stay bound to distinct IPv6 authorities and profile targets when a server override is used; profile/login output strips URL secrets, and concurrent profile writers serialize the full configuration transaction to avoid lost updates.
+
 - The `agctl` client gains its first command surface: `agctl auth login|logout|whoami|change-password` and `agctl config profile add|list|use|remove`. Login exchanges a local username and password from bounded stdin for a session token and stores it only in an explicitly selected 0600 profile, refusing a profile bound to a different server; `mustChangePassword` accounts are guided to `change-password` instead of being changed automatically, and no password, token, or issued secret is ever printed. Logout asks the server to end the session, verifies whether the credential still authenticates, and forgets a matching stored token; a machine credential or static token is reported as still authenticating instead of as revoked. A write command that cannot plan without side effects refuses `--dry-run` with a usage error before any change. Changing a profile's server drops its stored token unless a new one is provided, so a credential is never sent to a different deployment. Profiles are written atomically at mode 0600 with lax files refused.
 
 - The CLI command map (`docs/cli-command-map.md`, with a Chinese companion) classifies every management-API operation by owning issue, stage, permission, and acceptance code without claiming unimplemented coverage. `make cli-contract-check` (also part of `make ci-local`) fails when the OpenAPI contract publishes an operation the map does not classify, and its script test proves the drift detection with an injected operation.
 
 - The `agctl` client is now distributable: the release builder emits version-stamped `artifact-gateway-agctl_<version>_<os>_<arch>` archives covered by the existing checksums, `make cli-build` builds linux/darwin amd64+arm64 binaries with the VERSION and revision injected, `Dockerfile.agctl` with `make cli-docker-build` produces a distroless client image carrying CA certificates, and the install documentation covers archives, the module install path, and the container image. The module install path is documented with its real caveat: it becomes resolvable only once the declared module path matches the source repository.
+
+## 0.9.0 - 2026-10-13
+
+- Upgrading from v0.8.1 adds migration `000145_artifact_contains_search_indexes.sql`: eight GIN search indexes; the previous 144 migration files are unchanged. Ordinary index creation can block writes, so plan the migration window and index disk space, retain a consistent PostgreSQL/object-store recovery point and follow the [release upgrade notes](.github/release-notes/v0.9.0.md). This code release does not declare any target's artifact migration or production rollout complete.
+
+- CLI delivery remains limited to the already merged `agctl` skeleton and local source build (`version`, `info`, `commands`). The distribution/auth/profile batch in PR #346 is excluded; this release does not ship separate agctl archives or a published agctl image, and the remote `go install` channel remains unresolved in #347. Other CLI work and incomplete issues remain tracked independently.
+
+- Maven V2 Groups authorize member reads with the same canonical Maven resource as single repositories, so coordinate-prefix grants cover permitted artifacts, checksum sidecars and metadata. Hosted artifact metadata matches the exact groupId/artifactId, excluding child-group and adjacent-artifact versions while retaining Group fallback when the requested metadata is absent. Authorization still precedes member payload/cache access (#348).
 
 - Public browse reads OCI tags, manifest details and Conan revisions through the shared query layer: each version page is cached and cancellable, a failed later page keeps the earlier ones and Retry reads only that page, and leaving a repository drops its pages. Every Console source file is now at most 400 lines, including the user details drawer, the access evaluator and the theme resolver. Behaviour and layout are unchanged.
 

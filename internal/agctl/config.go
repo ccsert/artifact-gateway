@@ -141,6 +141,15 @@ func resolveSettings(flags *globalFlags, set map[string]bool, env func(string) s
 
 	settings.Server = pickString(set["server"], flags.server, env("AGCTL_SERVER"), profile.Server)
 	settings.Token = pickString(set["token"], flags.token, env("AGCTL_TOKEN"), profile.Token)
+	if !set["token"] && env("AGCTL_TOKEN") == "" && profile.Token != "" {
+		// Only an explicitly supplied credential may accompany a target
+		// override. The stored token remains bound to its profile's target.
+		bound, boundErr := normalizeServerTarget(profile.Server)
+		target, targetErr := normalizeServerTarget(settings.Server)
+		if boundErr != nil || targetErr != nil || bound != target {
+			settings.Token = ""
+		}
+	}
 	if set["insecure"] {
 		settings.Insecure = flags.insecure
 	} else {
@@ -165,7 +174,8 @@ func validProfileName(name string) error {
 }
 
 // mutateConfigFile loads the configuration file (a missing file starts an
-// empty document), applies mutate, and rewrites the file atomically.
+// empty document), applies mutate, and rewrites the file atomically. The whole
+// transaction is serialized across processes, including login target rechecks.
 func mutateConfigFile(path string, mutate func(*configFile) error) error {
 	if path == "" {
 		return &UsageError{
@@ -173,6 +183,13 @@ func mutateConfigFile(path string, mutate func(*configFile) error) error {
 			Hint:    "set --token or AGCTL_TOKEN for a file-less invocation",
 		}
 	}
+	configMutationMu.Lock()
+	defer configMutationMu.Unlock()
+	lock, err := acquireConfigLock(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lock.Close() }()
 	cfg, err := loadConfigFile(path)
 	if err != nil {
 		return err
