@@ -72,33 +72,6 @@ export function CardHeader({
   );
 }
 
-export function StatCard({
-  label,
-  value,
-  sub,
-  icon,
-}: {
-  label: string;
-  value: ReactNode;
-  sub?: ReactNode;
-  icon?: ReactNode;
-}) {
-  return (
-    <Card bodyClassName="px-5 py-4">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wider text-fg-tertiary">
-          {label}
-        </span>
-        {icon && <span className="text-fg-disabled">{icon}</span>}
-      </div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight text-fg-strong">
-        {value}
-      </div>
-      {sub && <div className="mt-1 text-xs text-fg-tertiary">{sub}</div>}
-    </Card>
-  );
-}
-
 export function Pagination({
   hasMore,
   loading,

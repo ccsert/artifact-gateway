@@ -185,14 +185,6 @@ export function CopyableValue({
   );
 }
 
-export function TechnicalLabel({ children }: { children: ReactNode }) {
-  return (
-    <span className="font-mono text-xs leading-5 text-fg-tertiary">
-      {children}
-    </span>
-  );
-}
-
 /**
  * The console's table baseline: themed header and row colors, page-level row
  * density, and the shared empty state.

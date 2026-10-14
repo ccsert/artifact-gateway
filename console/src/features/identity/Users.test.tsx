@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -63,13 +64,15 @@ const alice: User = {
 
 function renderPage() {
   return render(
-    <TestQueryProvider>
-      <PreferencesProvider>
-        <AntdProvider>
-          <UsersPage />
-        </AntdProvider>
-      </PreferencesProvider>
-    </TestQueryProvider>,
+    <MemoryRouter>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            <UsersPage />
+          </AntdProvider>
+        </PreferencesProvider>
+      </TestQueryProvider>
+    </MemoryRouter>,
   );
 }
 

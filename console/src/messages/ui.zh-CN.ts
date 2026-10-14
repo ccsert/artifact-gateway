@@ -56,6 +56,7 @@ export const uiZhCN = {
   "ui.loadingChart": "正在加载图表…",
   "ui.total": "合计",
   "ui.formatLegend": "格式图例",
+  "ui.clearFilters": "清除筛选",
 };
 
 export type UiMessageKey = keyof typeof uiZhCN;

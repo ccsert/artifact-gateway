@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import {
   cleanup,
   fireEvent,
@@ -93,13 +94,15 @@ function renderPage() {
   vi.mocked(getGroupCapacity).mockResolvedValue({ data: {} } as never);
 
   return render(
-    <TestQueryProvider>
-      <PreferencesProvider>
-        <AntdProvider>
-          <GroupsPage />
-        </AntdProvider>
-      </PreferencesProvider>
-    </TestQueryProvider>,
+    <MemoryRouter>
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            <GroupsPage />
+          </AntdProvider>
+        </PreferencesProvider>
+      </TestQueryProvider>
+    </MemoryRouter>,
   );
 }
 

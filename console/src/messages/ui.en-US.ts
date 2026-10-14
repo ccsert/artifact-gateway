@@ -61,4 +61,5 @@ export const uiEnUS: Record<UiMessageKey, string> = {
   "ui.loadingChart": "Loading chart…",
   "ui.total": "Total",
   "ui.formatLegend": "Format legend",
+  "ui.clearFilters": "Clear filters",
 };
