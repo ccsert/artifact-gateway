@@ -12,6 +12,7 @@ import { StateBadge } from "../../components/ui/Badge";
 import { formatDate } from "../../lib/format";
 import { LifecycleJobDetails } from "./LifecycleJobDetails";
 import { type JobAction, type OperationRow } from "./operationModel";
+import "./operations.css";
 
 export function useCompactOperationLayout() {
   const [compact, setCompact] = useState(

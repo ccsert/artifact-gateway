@@ -18,6 +18,7 @@ import { APTPackagesPanel } from "./APTPackagesPanel";
 import { APTReviewDialog } from "./APTReviewDialog";
 import { type Review } from "./aptModel";
 import { useAptLifecycleState } from "./repositoryQueries";
+import "./apt.css";
 
 /** One suite's packages, snapshots, retention and archive operations. */
 export function APTSuiteOperations({

@@ -6,6 +6,7 @@ import { ErrorBanner, Loading } from "../../../components/ui/Feedback";
 import { usePreferences } from "../../../lib/preferences";
 import { RepositoryBrowseTree } from "../../repository/RepositoryBrowseTree";
 import { useGroupBrowseRoot, useSetGroupBrowseRoot } from "../groupQueries";
+import "../group-pages.css";
 
 export function GroupBrowsePage() {
   const { groupId = "" } = useParams();

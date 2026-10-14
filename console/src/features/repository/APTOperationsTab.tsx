@@ -6,6 +6,7 @@ import { Field } from "../../components/ui/Layout";
 import { usePreferences } from "../../lib/preferences";
 
 import { APTSuiteOperations } from "./APTSuiteOperations";
+import "./apt.css";
 
 export function APTOperationsTab({
   repo,

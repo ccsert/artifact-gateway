@@ -14,6 +14,7 @@ import { usePreferences } from "../../../lib/preferences";
 import { useGroupResolution } from "../groupQueries";
 import { useQueryClient } from "@tanstack/react-query";
 import { groupKeys } from "../../../lib/query/keys";
+import "../group-pages.css";
 
 export function GroupResolutionDialog({ group }: { group: Group }) {
   const { t } = usePreferences();

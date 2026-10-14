@@ -14,6 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { identityKeys, settingsKeys } from "../../lib/query/keys";
 import { AuthenticationForm } from "./AuthenticationForm";
 import { useOidcSettings } from "./settingsQueries";
+import "./settings.css";
 
 export function AuthenticationPage() {
   const { locale, t } = usePreferences();

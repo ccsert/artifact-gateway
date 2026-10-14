@@ -27,6 +27,7 @@ import {
 } from "./siteSettingsModel";
 import { ThemePackageReviewDialog } from "./ThemePackageReviewDialog";
 import { useThemePackages } from "./useThemePackages";
+import "./settings.css";
 
 export function SiteSettingsPage() {
   const { message } = App.useApp();

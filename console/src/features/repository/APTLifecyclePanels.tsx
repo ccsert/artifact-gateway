@@ -6,6 +6,7 @@ import { usePreferences } from "../../lib/preferences";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 import { packageName } from "./aptModel";
+import "./apt.css";
 
 /** The suite's snapshots; retired ones can have their references pruned. */
 export function APTSnapshotHistory({

@@ -7,6 +7,7 @@ import { usePreferences } from "../../lib/preferences";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 import { packageName } from "./aptModel";
+import "./apt.css";
 
 /**
  * The suite's packages: select some to preview their removal, or preview a

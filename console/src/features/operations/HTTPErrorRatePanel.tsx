@@ -8,6 +8,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Card, CardHeader } from "../../components/ui/Layout";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
+import "./operations.css";
 
 const reasons: Record<HttpErrorRateReason, MessageKey> = {
   source_unavailable: "operations.trustedObservationUnavailable",

@@ -11,6 +11,7 @@ import {
   scannerStatusLabels,
   scannerStatusTone,
 } from "./diagnosticsScanner";
+import "./operations.css";
 
 function DiagnosticIdentityItem({
   label,

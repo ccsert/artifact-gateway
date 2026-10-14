@@ -5,6 +5,7 @@ import { Modal } from "../../components/ui/Modal";
 import { usePreferences } from "../../lib/preferences";
 
 import { packageName, type Review } from "./aptModel";
+import "./apt.css";
 
 /** The change a preview found, applied as a newly signed snapshot. */
 export function APTReviewDialog({

@@ -8,6 +8,7 @@ import {
   auditOutcomeLabel,
   auditOutcomeTone,
 } from "../audit/auditOutcomes";
+import "./activity.css";
 
 /**
  * Recent audit events as readable activity: what happened to which object on

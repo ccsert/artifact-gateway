@@ -3,6 +3,7 @@ import { Badge } from "../../components/ui/Badge";
 import { EmptyState } from "../../components/ui/Feedback";
 import { formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
+import "./apt.css";
 
 /** The suite's visible signed snapshot and its signing evidence. */
 export function APTCurrentSnapshot({

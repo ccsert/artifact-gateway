@@ -1,0 +1,53 @@
+.ag-group-browse-back {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.ag-group-browse-context {
+  display: grid;
+  gap: 8px;
+}
+.ag-group-browse-labels {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ag-content-secondary);
+}
+.ag-group-browse-context p {
+  max-width: 90ch;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--ag-content-secondary);
+}
+.ag-group-browse-candidates {
+  display: grid;
+  gap: 12px;
+  padding-block: 8px;
+}
+.ag-group-browse-candidates h3 {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ag-content-secondary);
+}
+.ag-group-browse-candidates ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+.ag-group-browse-candidates li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+.ag-group-browse-candidates li > span:first-child {
+  color: var(--ag-content-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.ag-group-browse-candidates a {
+  overflow-wrap: anywhere;
+}

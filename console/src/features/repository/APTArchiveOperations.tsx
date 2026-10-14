@@ -19,6 +19,7 @@ import { usePreferences } from "../../lib/preferences";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 
 import { APT_ARCHIVE_RECEIPT, archiveExportable } from "./aptModel";
+import "./apt.css";
 
 /** Export a signed snapshot as an archive, or restore one against its receipt. */
 export function APTArchiveOperations({

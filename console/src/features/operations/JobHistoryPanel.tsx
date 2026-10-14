@@ -27,6 +27,7 @@ import {
   useCompactOperationLayout,
 } from "./OperationJobParts";
 import { useControlJob, useOperationJobs } from "./operationQueries";
+import "./operations.css";
 
 /**
  * Background jobs across repositories. Reads on mount, so a deep link to the

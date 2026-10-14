@@ -22,6 +22,7 @@ import {
   localPasswordFitsBcrypt,
   localPasswordMeetsMinimum,
 } from "../identity/users/passwordPolicy";
+import "./login.css";
 
 type Mode = "oidc" | "password" | "token";
 

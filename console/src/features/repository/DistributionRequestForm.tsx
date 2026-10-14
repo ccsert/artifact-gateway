@@ -6,6 +6,7 @@ import { usePreferences } from "../../lib/preferences";
 
 import { PromotionEvaluationAlert } from "./PromotionEvaluationAlert";
 import { useDistributionRequest } from "./useDistributionRequest";
+import "./apt.css";
 
 /**
  * Promote or replicate one artifact to another hosted repository of the same

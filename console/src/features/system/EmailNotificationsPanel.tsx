@@ -25,6 +25,7 @@ import { EmailTargetEditor } from "./EmailTargetEditor";
 import { EmailTargetAction } from "./EmailTargetAction";
 import { EmailTemplatePreview } from "./EmailTemplatePreview";
 import { EmailDeliveryResults } from "./EmailDeliveryResults";
+import "./email.css";
 
 export function EmailNotificationsPanel() {
   const { identity } = useAuth();

@@ -8,6 +8,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Card, CardHeader } from "../../components/ui/Layout";
 import { formatBytes, formatDate } from "../../lib/format";
 import { usePreferences } from "../../lib/preferences";
+import "./operations.css";
 
 const aliases: LocalCapacityAlias[] = ["temporary", "logs", "backups"];
 const aliasLabels: Record<LocalCapacityAlias, MessageKey> = {

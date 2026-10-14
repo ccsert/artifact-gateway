@@ -7,6 +7,7 @@ import { RuntimeNodesPanel } from "../operations/RuntimeNodesPanel";
 import { SystemDiagnosticsPanel } from "../operations/SystemDiagnosticsPanel";
 import { QuotaAlertsPanel } from "./QuotaAlertsPanel";
 import { EmailNotificationsPanel } from "./EmailNotificationsPanel";
+import "../operations/operations.css";
 
 export function SystemPage() {
   const { t } = usePreferences();

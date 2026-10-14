@@ -22,6 +22,7 @@ import {
 } from "./DiagnosticsDetailCards";
 import { scannerNeedsAttentionFor } from "./diagnosticsScanner";
 import { isAuthorizationFailure, useDiagnostics } from "./systemQueries";
+import "./operations.css";
 
 /** The Gateway's diagnostic snapshot: health summary, then detail cards. */
 export function SystemDiagnosticsPanel() {

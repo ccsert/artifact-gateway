@@ -18,6 +18,7 @@ import {
   scannerStatusLabels,
   scannerStatusTone,
 } from "./diagnosticsScanner";
+import "./operations.css";
 
 const dependencyLabels: Record<string, MessageKey> = {
   postgresql: "operations.postgresql",

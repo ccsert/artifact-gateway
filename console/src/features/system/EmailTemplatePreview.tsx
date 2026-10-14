@@ -12,6 +12,7 @@ import { useQuotaAction } from "./useQuotaAction";
 import { quotaResult } from "./useQuotaSnapshot";
 import { emailPreviewDocument, safeEmailError } from "./emailPresentation";
 import { quotaLabel } from "./quotaAlertPresentation";
+import "./email.css";
 
 export function EmailTemplatePreview({
   writable,
