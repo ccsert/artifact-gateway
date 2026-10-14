@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { quotaKeys } from "../../lib/query/keys";
 import { isQuotaAuthError } from "./quotaAlertPresentation";
 
@@ -26,7 +26,7 @@ export function useQuotaSnapshot<T>(
   onAuthBlocked?: (error: unknown) => void,
 ) {
   const queryClient = useQueryClient();
-  const queryKey = quotaKeys.snapshot(key);
+  const queryKey = useMemo(() => quotaKeys.snapshot(key), [key]);
   const query = useQuery({
     queryKey,
     queryFn: async ({ signal }) => {
@@ -46,29 +46,44 @@ export function useQuotaSnapshot<T>(
     refetchOnWindowFocus: false,
   });
 
-  // Set by `update`, so a refresh it overtook does not count as a success.
-  const overtaken = useRef(false);
+  // A completion belongs to both this cached query and its request generation.
+  const scope = queryClient.getQueryCache().find({ queryKey, exact: true });
+  const generation = useRef(0);
+  useEffect(
+    () => () => {
+      ++generation.current;
+    },
+    [scope],
+  );
   const { refetch } = query;
   const refresh = useCallback(async () => {
-    overtaken.current = false;
+    const id = ++generation.current;
+    const isCurrent = () =>
+      id === generation.current &&
+      queryClient.getQueryCache().find({ queryKey, exact: true }) === scope;
+    // refetch alone reuses an initial read when there is no cached data yet.
+    await queryClient.cancelQueries({ queryKey, exact: true });
+    if (!isCurrent()) return false;
     const result = await refetch();
-    return !overtaken.current && result.isSuccess;
-  }, [refetch]);
+    return isCurrent() && result.isSuccess;
+  }, [queryClient, queryKey, refetch, scope]);
 
   // A page coming back into view reads again at once. Unlike the query's own
   // focus refetch, this cancels a read already in flight, so an answer that
   // was requested earlier can never land after the newer one.
   useEffect(() => {
     const visibility = () => {
-      if (document.visibilityState !== "hidden") void refetch();
+      if (document.visibilityState !== "hidden") void refresh();
     };
     document.addEventListener("visibilitychange", visibility);
     return () => document.removeEventListener("visibilitychange", visibility);
-  }, [refetch]);
+  }, [refresh]);
 
   const update = (change: (old: T) => T) => {
-    overtaken.current = true;
-    void queryClient.cancelQueries({ queryKey });
+    if (queryClient.getQueryCache().find({ queryKey, exact: true }) !== scope)
+      return;
+    ++generation.current;
+    void queryClient.cancelQueries({ queryKey, exact: true });
     const updatedAt = queryClient.getQueryState(queryKey)?.dataUpdatedAt;
     queryClient.setQueryData<T>(
       queryKey,

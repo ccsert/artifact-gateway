@@ -161,3 +161,8 @@ lands after a newer one; returning to the page re-reads at once and replaces a
 read in flight, which the query's own focus refetch would not. Their writes
 stay on `useQuotaAction`, which runs one action at a time and drops a result
 that arrives after its component unmounted.
+
+Snapshot refreshes explicitly cancel even initial reads before refetching. Each
+completion is checked against its request generation and cached query instance;
+a later refresh cannot validate an older cancelled read, and an old identity
+cannot write into a replacement snapshot.
