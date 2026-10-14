@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Service account details link to the account's repository grants and recent audit events (`/access?principal=…`, `/audits?actor=…`), so a credential rotation can be verified without copying the principal between pages; both pages open filtered to the linked principal. The visual baseline adds phone-width captures of sign-in, public browse and repository detail, and waits for the overview plot to settle so the command palette capture is stable.
+
 - Group member editing waits for the complete member list and its write version, reports read failures with Retry, and cancels closed reads. Group dialogs finish their close animation before unmounting; cancelling deletion restores focus to the row menu. Enter opens row-menu dialogs without accidentally activating their close button.
 
 - Console review close-out (#317, #319): group rows use one Edit members button plus a menu (resolution order, capacity, settings, delete) that returns focus to the row when a dialog closes, and the meaningless resource-version column is gone; accounts, users, API keys and credentials read "Enabled" instead of the repositories' "Active"; labels below the 12px floor are raised, with unit tests guarding the type floor and AA contrast of both Gateway themes. The design review is archived under `.impeccable/critique/`.

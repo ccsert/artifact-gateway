@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { Link, MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { listAuditPage, listGroups, listRepositories } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
@@ -22,16 +22,19 @@ const record = (actor: string) => ({
   repository: "stable-releases",
 });
 
-function renderPage() {
+function renderPage(entry = "/audits") {
   vi.mocked(listRepositories).mockResolvedValue({
     data: { items: [] },
   } as never);
   vi.mocked(listGroups).mockResolvedValue({ data: { items: [] } } as never);
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[entry]}>
       <TestQueryProvider>
         <PreferencesProvider>
           <AuditsPage />
+          <Link to="/audits?actor=service-account%3Asa-2">
+            Open another actor
+          </Link>
         </PreferencesProvider>
       </TestQueryProvider>
     </MemoryRouter>,
@@ -106,4 +109,51 @@ it("refreshes from the first page with one request", async () => {
     "pageToken",
     "cursor-2",
   );
+});
+
+it("opens filtered to the actor a link names", async () => {
+  vi.mocked(listAuditPage).mockResolvedValue({
+    data: { items: [record("service-account:sa-1")] },
+  } as never);
+  renderPage("/audits?actor=service-account%3Asa-1");
+
+  expect(await screen.findAllByText("service-account:sa-1")).not.toHaveLength(
+    0,
+  );
+  expect(vi.mocked(listAuditPage).mock.calls[0][0]?.query).toMatchObject({
+    actor: "service-account:sa-1",
+  });
+  // The filter is visible, so it can be cleared.
+  expect(screen.getByRole("button", { name: /清\s*除/ })).toBeEnabled();
+});
+
+it("reveals an actor supplied by navigation after advanced filters were collapsed", async () => {
+  const user = userEvent.setup();
+  vi.mocked(listAuditPage).mockResolvedValue({ data: { items: [] } } as never);
+  renderPage("/audits?actor=service-account%3Asa-1");
+  const advanced = screen.getByRole("button", { name: /高级筛选/ });
+  expect(advanced).toHaveAttribute("aria-expanded", "true");
+  await user.click(advanced);
+  expect(advanced).toHaveAttribute("aria-expanded", "false");
+
+  await user.click(screen.getByRole("link", { name: "Open another actor" }));
+  await waitFor(() =>
+    expect(
+      vi.mocked(listAuditPage).mock.calls.at(-1)?.[0]?.query,
+    ).toMatchObject({
+      actor: "service-account:sa-2",
+    }),
+  );
+  expect(screen.getByRole("button", { name: /高级筛选/ })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  expect(screen.getByText("service-account:sa-2")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: /清\s*除/ }));
+  await waitFor(() =>
+    expect(
+      vi.mocked(listAuditPage).mock.calls.at(-1)?.[0]?.query?.actor,
+    ).toBeUndefined(),
+  );
+  expect(screen.getByRole("button", { name: /清\s*除/ })).toBeDisabled();
 });

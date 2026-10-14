@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import {
   ApiOutlined,
   KeyOutlined,
@@ -167,6 +168,20 @@ export function ServiceAccountDetail({
             value={`service-account:${account.id}`}
             className="mt-1 max-w-full text-xs text-fg-secondary"
           />
+          {/* Rotation is verified elsewhere: where the principal is granted,
+              and whether the new credential is already in use. */}
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            <Link
+              to={`/access?principal=${encodeURIComponent(`service-account:${account.id}`)}`}
+            >
+              {t("identity.viewGrants")}
+            </Link>
+            <Link
+              to={`/audits?actor=${encodeURIComponent(`service-account:${account.id}`)}`}
+            >
+              {t("identity.viewRecentAudits")}
+            </Link>
+          </div>
         </div>
       </div>
       <CardHeader

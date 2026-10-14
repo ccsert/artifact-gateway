@@ -336,4 +336,6 @@ export const identityEnUS: Record<IdentityMessageKey, string> = {
     "Use at least 8 characters and no more than 72 bytes. The password is never displayed again.",
   "identity.enterAnInitialPassword": "Enter an initial password",
   "identity.firstSignInRequirement": "First sign-in requirement",
+  "identity.viewGrants": "View repository grants",
+  "identity.viewRecentAudits": "View recent audits",
 };
