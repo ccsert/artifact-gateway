@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CargoCrateDetail } from "./CargoCrateDetail";
 import { AuthProvider } from "../../lib/auth";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 
 afterEach(() => {
   cleanup();
@@ -41,13 +42,15 @@ describe("CargoCrateDetail", () => {
 
     render(
       <AuthProvider>
-        <PreferencesProvider>
-          <CargoCrateDetail
-            repoName="cargo-hosted"
-            crateName="demo-crate"
-            initialVersion="1.2.3"
-          />
-        </PreferencesProvider>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <CargoCrateDetail
+              repoName="cargo-hosted"
+              crateName="demo-crate"
+              initialVersion="1.2.3"
+            />
+          </PreferencesProvider>
+        </TestQueryProvider>
       </AuthProvider>,
     );
 

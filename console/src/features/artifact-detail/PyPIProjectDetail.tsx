@@ -11,35 +11,14 @@ import { usePreferences } from "../../lib/preferences";
 import { ArtifactIntelligencePanel } from "./ArtifactIntelligencePanel";
 import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
 import { ArtifactScanStatus } from "./ArtifactScanStatus";
-import { useAuth } from "../../lib/auth";
 import { formatBytes, formatDate, shortDigest } from "../../lib/format";
 import { pypiUsage } from "../../lib/usage";
 import {
   ConsoleTable,
   useClipboardAction,
 } from "../../components/ui/ConsolePrimitives";
-
-interface PyPIFile {
-  filename: string;
-  url: string;
-  hashes: { sha256?: string };
-  "requires-python"?: string;
-  "_artifact-gateway"?: {
-    version?: string;
-    size?: number;
-    publisher?: string;
-    "created-at"?: string;
-    "cached-at"?: string;
-    cached?: boolean;
-    "file-type"?: string;
-    "python-version"?: string;
-  };
-}
-
-interface PyPISimpleProject {
-  name: string;
-  files: PyPIFile[];
-}
+import { errorText } from "../../messages/translate";
+import { usePyPIProject, type PyPIFile } from "./protocolDetailQueries";
 
 function fileVersion(file: PyPIFile): string {
   return file["_artifact-gateway"]?.version ?? "";
@@ -70,54 +49,10 @@ export function PyPIProjectDetail({
   canQuarantine?: boolean;
 }) {
   const { locale, t } = usePreferences();
-  const { token } = useAuth();
-  const [document, setDocument] = useState<PyPISimpleProject | null>(null);
+  const projectQuery = usePyPIProject(repoName, project);
+  const document = projectQuery.data ?? null;
   const [selectedVersion, setSelectedVersion] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const { copiedValue, copy } = useClipboardAction(1400);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError("");
-    void fetch(
-      `/pypi/${encodeURIComponent(repoName)}/simple/${encodeURIComponent(project)}/`,
-      {
-        credentials: "include",
-        headers: {
-          Accept: "application/vnd.pypi.simple.v1+json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      },
-    )
-      .then(async (response) => {
-        if (!response.ok)
-          throw new Error(
-            t("artifactDetail.failedToLoadPyPIProject", {
-              status: response.status,
-            }),
-          );
-        return response.json() as Promise<PyPISimpleProject>;
-      })
-      .then((payload) => {
-        if (cancelled) return;
-        setDocument(payload);
-        setLoading(false);
-      })
-      .catch((requestError: unknown) => {
-        if (cancelled) return;
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : t("artifactDetail.failedToLoadPyPIProject2"),
-        );
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [project, repoName, t, token]);
 
   const versions = useMemo(() => {
     const byVersion = new Map<string, string>();
@@ -148,8 +83,18 @@ export function PyPIProjectDetail({
     );
   }, [initialVersion, versions]);
 
-  if (loading) return <Loading />;
-  if (error) return <ErrorBanner error={error} />;
+  if (projectQuery.isPending) return <Loading />;
+  if (projectQuery.isError && !document)
+    return (
+      <ErrorBanner
+        error={errorText(
+          projectQuery.error,
+          t,
+          "artifactDetail.failedToLoadPyPIProject2",
+        )}
+        onRetry={() => void projectQuery.refetch()}
+      />
+    );
   if (!document || !selectedVersion) return null;
 
   const selectedFiles = document.files.filter(
@@ -225,6 +170,19 @@ export function PyPIProjectDetail({
 
   return (
     <div className="grid gap-5 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+      {projectQuery.isError && (
+        <div className="xl:col-span-2">
+          <ErrorBanner
+            tone="warning"
+            error={errorText(
+              projectQuery.error,
+              t,
+              "artifactDetail.failedToLoadPyPIProject2",
+            )}
+            onRetry={() => void projectQuery.refetch()}
+          />
+        </div>
+      )}
       {selectedFiles.map((file) => {
         const digest = fileDigest(file);
         return digest ? (
