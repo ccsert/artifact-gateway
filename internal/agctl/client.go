@@ -1,6 +1,7 @@
 package agctl
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -42,12 +44,53 @@ type clientOptions struct {
 type requestOptions struct {
 	query      url.Values
 	idempotent bool
+	body       []byte
 }
 
 type apiResponse struct {
 	StatusCode int
 	Header     http.Header
 	Body       []byte
+}
+
+// normalizeServerTarget canonicalizes a Gateway server URL for identity
+// comparison, matching how the HTTP client addresses endpoints: scheme and
+// host are case-folded, default ports are dropped, and one trailing slash is
+// trimmed from the base path. The path itself is preserved.
+func normalizeServerTarget(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", &UsageError{
+			Message: "the server URL is empty",
+			Hint:    "use the Gateway root URL, for example https://gateway.example.com",
+		}
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || !parsed.IsAbs() || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return "", &UsageError{
+			Message: "server URL is not a valid http(s) URL",
+			Hint:    "use the Gateway root URL, for example https://gateway.example.com",
+		}
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	host, zone, hasZone := strings.Cut(parsed.Hostname(), "%")
+	host = strings.ToLower(host)
+	if hasZone {
+		// IPv6 zone identifiers name local interfaces and are case-sensitive.
+		host += "%" + zone
+	}
+	port := parsed.Port()
+	if (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
+		port = ""
+	}
+	authority := host
+	if port != "" {
+		authority = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") {
+		authority = "[" + host + "]"
+	}
+	target := url.URL{Scheme: scheme, Host: authority, Path: strings.TrimSuffix(parsed.Path, "/")}
+	return target.String(), nil
 }
 
 func newAPIClient(settings profileSettings, options clientOptions) (*apiClient, error) {
@@ -136,11 +179,18 @@ func (c *apiClient) do(ctx context.Context, method, path string, options request
 				return nil, c.contextError(ctx, requestURL)
 			}
 		}
-		request, err := http.NewRequestWithContext(ctx, method, requestURL.String(), nil)
+		var payload io.Reader
+		if options.body != nil {
+			payload = bytes.NewReader(options.body)
+		}
+		request, err := http.NewRequestWithContext(ctx, method, requestURL.String(), payload)
 		if err != nil {
 			return nil, &UsageError{Message: "cannot build HTTP request: " + redactText(err.Error(), c.token)}
 		}
 		request.Header.Set("Accept", "application/json")
+		if options.body != nil {
+			request.Header.Set("Content-Type", "application/json")
+		}
 		if c.userAgent != "" {
 			request.Header.Set("User-Agent", c.userAgent)
 		}
@@ -231,6 +281,39 @@ func (c *apiClient) transportError(err error, requestURL *url.URL) error {
 		Message: redactText(fmt.Sprintf("cannot reach %s: %s", requestURL.Host, detail), c.token),
 		Hint:    "check --server and network connectivity to the Gateway",
 	}
+}
+
+// postJSON sends one non-idempotent POST with a JSON payload and decodes a 2xx
+// JSON body. A nil payload sends an empty body. Non-2xx responses become
+// structured APIError values.
+func (c *apiClient) postJSON(ctx context.Context, path string, payload, target any) error {
+	body := []byte(nil)
+	if payload != nil {
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return &UsageError{Message: "cannot encode the request body"}
+		}
+		body = encoded
+	}
+	response, err := c.do(ctx, http.MethodPost, path, requestOptions{body: body})
+	if err != nil {
+		return err
+	}
+	if response.StatusCode >= 300 {
+		return parseAPIError(response, c.token)
+	}
+	if target == nil || len(response.Body) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(response.Body, target); err != nil {
+		return &APIError{
+			Code:       "invalid_response",
+			HTTPStatus: response.StatusCode,
+			Message:    "server returned an unreadable JSON response",
+			RequestID:  redactText(response.Header.Get("X-Request-ID"), c.token),
+		}
+	}
+	return nil
 }
 
 // getJSON performs an idempotent GET and decodes a 2xx JSON body. Non-2xx

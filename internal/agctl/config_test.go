@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func writeConfigFile(t *testing.T, content string, mode os.FileMode) string {
+func writeTestConfigFile(t *testing.T, content string, mode os.FileMode) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
@@ -28,7 +28,7 @@ func staticEnv(values map[string]string) func(string) string {
 }
 
 func TestResolveSettingsPrecedence(t *testing.T) {
-	path := writeConfigFile(t, `current_profile: production
+	path := writeTestConfigFile(t, `current_profile: production
 profiles:
   production:
     server: https://file.example
@@ -105,7 +105,7 @@ profiles:
 }
 
 func TestResolveSettingsProfileSelection(t *testing.T) {
-	path := writeConfigFile(t, `profiles:
+	path := writeTestConfigFile(t, `profiles:
   alpha:
     server: https://alpha.example
     token: alpha-token
@@ -171,7 +171,7 @@ func TestResolveSettingsProfileSelection(t *testing.T) {
 }
 
 func TestResolveSettingsUsesCurrentProfileAndSingleProfile(t *testing.T) {
-	current := writeConfigFile(t, `current_profile: staging
+	current := writeTestConfigFile(t, `current_profile: staging
 profiles:
   staging:
     server: https://staging.example
@@ -182,7 +182,7 @@ profiles:
 		t.Fatalf("settings = %#v, err = %v", settings, err)
 	}
 
-	single := writeConfigFile(t, `profiles:
+	single := writeTestConfigFile(t, `profiles:
   only:
     server: https://only.example
 `, 0o600)
@@ -193,7 +193,7 @@ profiles:
 }
 
 func TestResolveSettingsFailsOnDanglingCurrentProfile(t *testing.T) {
-	path := writeConfigFile(t, `current_profile: gone
+	path := writeTestConfigFile(t, `current_profile: gone
 profiles:
   alpha:
     server: https://alpha.example
@@ -206,7 +206,7 @@ profiles:
 }
 
 func TestResolveSettingsRejectsReadableConfigFile(t *testing.T) {
-	path := writeConfigFile(t, "profiles: {}\n", 0o644)
+	path := writeTestConfigFile(t, "profiles: {}\n", 0o644)
 	_, err := resolveSettings(&globalFlags{}, map[string]bool{}, staticEnv(nil), path)
 	var usage *UsageError
 	if !errors.As(err, &usage) || !strings.Contains(usage.Hint, "chmod 600") {
@@ -227,7 +227,7 @@ func TestResolveSettingsHandlesMissingAndInvalidFiles(t *testing.T) {
 		t.Fatalf("explicit profile without file: err = %v", err)
 	}
 
-	invalid := writeConfigFile(t, "profiles: [", 0o600)
+	invalid := writeTestConfigFile(t, "profiles: [", 0o600)
 	_, err = resolveSettings(&globalFlags{}, map[string]bool{}, staticEnv(nil), invalid)
 	if !errors.As(err, &usage) || !strings.Contains(usage.Message, "not valid YAML") {
 		t.Fatalf("invalid YAML: err = %v", err)

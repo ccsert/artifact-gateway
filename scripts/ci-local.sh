@@ -167,6 +167,7 @@ run_fast() {
   run "go vet" make vet
   run "go tests" env GOFLAGS= go test ./... -count=1
   run "documentation links and capabilities" make docs-check
+  run "CLI command map contract" make cli-contract-check
   run "openapi generated artifacts fresh" check_openapi_fresh
   run "console type check" make console-typecheck
   run "console lint and formatting" make console-check
@@ -175,7 +176,7 @@ run_fast() {
 
 case "$job" in
   list)
-    printf 'fast     : lint, vet, go test ./..., docs-check, openapi freshness, console typecheck/check/test\n'
+    printf 'fast     : lint, vet, go test ./..., docs-check, CLI command map contract, openapi freshness, console typecheck/check/test\n'
     printf 'quality  : CI job quality\n'
     printf 'contract : CI job contract-and-test\n'
     printf 'console  : CI job console\n'

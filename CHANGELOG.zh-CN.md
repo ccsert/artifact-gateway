@@ -8,6 +8,14 @@
 
 ## Unreleased
 
+- CLI 凭据绑定正确区分 IPv6 authority，临时覆盖 server 时不会复用其他目标的 profile token；profile/login 输出去除 URL 秘密，并发 profile 写操作串行化完整配置事务，避免丢失更新。
+
+- `agctl` 客户端迎来第一组命令面：`agctl auth login|logout|whoami|change-password` 与 `agctl config profile add|list|use|remove`。login 用有界 stdin 中的本地用户名与密码换取会话 token，且只存入显式选择的 0600 profile，绑定其他服务器的 profile 会被拒绝；`mustChangePassword` 账号会被引导到 `change-password` 而不会被自动改密，密码、token 与一次性秘密永不打印。logout 请求服务端结束会话、探测凭据是否仍可认证，并遗忘匹配的已存 token；机器凭据或静态 token 会被如实报告为"仍可认证"而不是"已撤销"。无法无副作用地预演的写命令会在任何变更之前以用法错误拒绝 `--dry-run`。更换 profile 的 server 时会丢弃已存 token，除非随更新提供新凭据，凭据绝不会被发往其他部署。profile 以 0600 原子写入，宽松权限的文件被拒绝。
+
+- CLI 命令地图（`docs/cli-command-map.md`，含中文对照）把每个管理 API 操作按承接单、阶段、权限与验收代码归类，且不宣称未实现的覆盖。`make cli-contract-check`（并入 `make ci-local`）在 OpenAPI 契约出现未归类操作时失败，脚本测试用注入的假操作证明漂移检测生效。
+
+- `agctl` 客户端现已可分发：发布构建产出带版本号的 `artifact-gateway-agctl_<version>_<os>_<arch>` 归档并纳入既有校验和；`make cli-build` 以注入的 VERSION 与 revision 构建 linux/darwin amd64+arm64 二进制；`Dockerfile.agctl` 配合 `make cli-docker-build` 产出携带 CA 证书的 distroless 客户端镜像；安装文档覆盖归档、模块安装路径与容器镜像。模块安装路径如实标注了前提：只有声明的模块路径与源码仓库一致后才可解析。
+
 ## 0.9.0 - 2026-10-13
 
 - 从 v0.8.1 升级新增 `000145_artifact_contains_search_indexes.sql`：八个 GIN 搜索索引，此前 144 项迁移文件保持不变。普通索引创建可能阻塞写入，需安排迁移窗口与索引磁盘空间，保留一致的 PostgreSQL/对象存储恢复点并遵循[发行升级说明](.github/release-notes/v0.9.0.md)。代码发行不代表任何目标实例的制品迁移或生产切换已经完成。

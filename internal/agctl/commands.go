@@ -34,12 +34,14 @@ type commandMeta struct {
 }
 
 type command struct {
-	name     string
-	synopsis string
-	usage    string
-	setFlags func(*flag.FlagSet)
-	meta     commandMeta
-	run      func(context.Context, *commandContext) error
+	name        string
+	synopsis    string
+	usage       string
+	positionals int
+	argsUsage   string
+	setFlags    func(*flag.FlagSet)
+	meta        commandMeta
+	run         func(context.Context, *commandContext) error
 }
 
 func registry() []command {
@@ -47,6 +49,14 @@ func registry() []command {
 		versionCommand(),
 		infoCommand(),
 		commandsCommand(),
+		authLoginCommand(),
+		authLogoutCommand(),
+		authWhoamiCommand(),
+		authChangePasswordCommand(),
+		configProfileAddCommand(),
+		configProfileListCommand(),
+		configProfileUseCommand(),
+		configProfileRemoveCommand(),
 	}
 }
 

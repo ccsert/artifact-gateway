@@ -29,6 +29,21 @@ for contract in api/openapi/native-hosted.yaml api/openapi/management-runtime.ya
   check_value "$contract" "$contract_version"
 done
 
+# The agctl client takes its version from this same VERSION file. Keep its
+# distribution channels linked: the release builder must emit version-stamped
+# client archives, and the module install path documented for users must be the
+# path go.mod declares. The packaged client's runtime version is verified by
+# scripts/build-release-artifacts-test.sh.
+test -d cmd/agctl
+grep -Fq 'artifact-gateway-agctl_${version}_' scripts/build-release-artifacts.sh
+cli_module=$(awk '/^module / { print $2; exit }' go.mod)
+for doc in docs/cli.md docs/cli.zh-CN.md; do
+  if ! grep -Fq "go install $cli_module/cmd/agctl@" "$doc"; then
+    printf '%s must document the module install path %s/cmd/agctl.\n' "$doc" "$cli_module" >&2
+    exit 1
+  fi
+done
+
 release_heading=$(grep -E "^## $version - [0-9]{4}-[0-9]{2}-[0-9]{2}$" CHANGELOG.md | head -n 1)
 test -n "$release_heading"
 grep -Fxq "$release_heading" CHANGELOG.zh-CN.md

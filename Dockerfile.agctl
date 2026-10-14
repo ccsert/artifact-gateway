@@ -1,0 +1,32 @@
+FROM --platform=$BUILDPLATFORM golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0 AS build
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION=dev
+ARG REVISION=unknown
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \
+    go mod download
+COPY . .
+RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,id=artifact-gateway-go-build,target=/root/.cache/go-build,sharing=locked \
+    CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath -buildvcs=false \
+    -ldflags="-s -w -X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedVersion=$VERSION -X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedRevision=$REVISION" \
+    -o /agctl ./cmd/agctl
+
+# Client-only payload: the distroless static image carries CA certificates and
+# /etc/passwd, and nothing of the server distribution. HOME points at the
+# nonroot home so a profile file can be mounted at ~/.config/agctl/config.yaml.
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+ARG VERSION=dev
+ARG REVISION=unknown
+ARG SOURCE=https://github.com/ccsert/artifact-gateway
+LABEL org.opencontainers.image.title="Artifact Gateway CLI" \
+      org.opencontainers.image.description="agctl client for CI pipelines, platform management, and agents" \
+      org.opencontainers.image.version="$VERSION" \
+      org.opencontainers.image.revision="$REVISION" \
+      org.opencontainers.image.source="$SOURCE"
+COPY --from=build /agctl /agctl
+ENV HOME=/home/nonroot
+USER nonroot:nonroot
+ENTRYPOINT ["/agctl"]

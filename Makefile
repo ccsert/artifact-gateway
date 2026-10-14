@@ -7,10 +7,16 @@ CONSOLE_DIR := console
 OPENAPI_SOURCE := api/openapi/native-hosted.yaml
 OPENAPI_BUNDLE := api/openapi/native-hosted-v1.json
 
-.PHONY: help dev-bootstrap dev dev-status dev-down local-dev-test rustfs-only-check kubernetes-local-check kubernetes-local-up kubernetes-local-status kubernetes-local-verify kubernetes-local-down reference-scanner-smoke cargo-contract openapi-dependency-test openapi-tools-ready console-codegen-ready raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e native-npm-e2e native-pypi-e2e native-go-e2e native-apt-e2e apt-signer-rotation-e2e readiness-e2e resolver-rotation-e2e service-account-rotation-e2e oci-performance-e2e performance-baseline cache-operations-e2e backup-restore-readiness backup-transfer-test upgrade-readiness member-role-migration-report release-readiness-check release-version-check release-artifacts release-artifacts-test docs-check preflight evidence up down test api-contract api-change-check integration-test integration-down lint vet race coverage dependency-audit fmt cli-build build docker-build console-docker-build migrate backup-drill restore-drill console-build console-typecheck console-check console-test console-api-check console-e2e console-visual console-visual-update openapi-bundle openapi-generate-admin openapi-check
+# agctl release identity. The client takes the VERSION file value and the Git
+# revision, injected through buildinfo exactly like the release archives.
+VERSION ?= $(shell tr -d '[:space:]' < VERSION)
+CLI_REVISION ?= $(shell git rev-parse --verify HEAD 2>/dev/null || printf 'unknown')
+CLI_TARGETS ?= linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
+CLI_LDFLAGS = -s -w -X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedVersion=$(VERSION) -X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedRevision=$(CLI_REVISION)
+.PHONY: help dev-bootstrap dev dev-status dev-down local-dev-test rustfs-only-check kubernetes-local-check kubernetes-local-up kubernetes-local-status kubernetes-local-verify kubernetes-local-down reference-scanner-smoke cargo-contract openapi-dependency-test openapi-tools-ready console-codegen-ready raw-e2e conan-e2e native-maven-e2e native-oci-e2e native-raw-e2e native-npm-e2e native-pypi-e2e native-go-e2e native-apt-e2e apt-signer-rotation-e2e readiness-e2e resolver-rotation-e2e service-account-rotation-e2e oci-performance-e2e performance-baseline cache-operations-e2e backup-restore-readiness backup-transfer-test upgrade-readiness member-role-migration-report release-readiness-check release-version-check release-artifacts release-artifacts-test docs-check preflight evidence up down test api-contract api-change-check cli-contract-check integration-test integration-down lint vet race coverage dependency-audit fmt cli-build build docker-build console-docker-build cli-docker-build migrate backup-drill restore-drill console-build console-typecheck console-check console-test console-api-check console-e2e console-visual console-visual-update openapi-bundle openapi-generate-admin openapi-check
 
 help:
-	@printf '%s\n' 'Targets: dev-bootstrap, dev, dev-status, dev-down, kubernetes-local-check, kubernetes-local-up, kubernetes-local-status, kubernetes-local-verify, kubernetes-local-down, reference-scanner-smoke, cargo-contract, up, down, test, api-contract, api-change-check, integration-test, integration-down, lint, vet, race, coverage, dependency-audit, fmt, cli-build, build, docker-build, console-docker-build, migrate, backup-drill, restore-drill, preflight, evidence, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, native-npm-e2e, native-pypi-e2e, native-go-e2e, native-apt-e2e, apt-signer-rotation-e2e, readiness-e2e, resolver-rotation-e2e, service-account-rotation-e2e, oci-performance-e2e, performance-baseline, cache-operations-e2e, backup-restore-readiness, backup-transfer-test, published-native-backup-test, upgrade-readiness, member-role-migration-report, release-readiness-check, release-version-check, release-artifacts, release-artifacts-test, docs-check, console-build, console-typecheck, console-check, console-test, console-api-check, console-e2e, console-visual, console-visual-update, openapi-bundle, openapi-generate-admin, openapi-check'
+	@printf '%s\n' 'Targets: dev-bootstrap, dev, dev-status, dev-down, kubernetes-local-check, kubernetes-local-up, kubernetes-local-status, kubernetes-local-verify, kubernetes-local-down, reference-scanner-smoke, cargo-contract, up, down, test, api-contract, api-change-check, cli-contract-check, integration-test, integration-down, lint, vet, race, coverage, dependency-audit, fmt, cli-build, build, docker-build, console-docker-build, cli-docker-build, migrate, backup-drill, restore-drill, preflight, evidence, raw-e2e, conan-e2e, native-maven-e2e, native-oci-e2e, native-raw-e2e, native-npm-e2e, native-pypi-e2e, native-go-e2e, native-apt-e2e, apt-signer-rotation-e2e, readiness-e2e, resolver-rotation-e2e, service-account-rotation-e2e, oci-performance-e2e, performance-baseline, cache-operations-e2e, backup-restore-readiness, backup-transfer-test, published-native-backup-test, upgrade-readiness, member-role-migration-report, release-readiness-check, release-version-check, release-artifacts, release-artifacts-test, docs-check, console-build, console-typecheck, console-check, console-test, console-api-check, console-e2e, console-visual, console-visual-update, openapi-bundle, openapi-generate-admin, openapi-check'
 
 dev-bootstrap:
 	@./scripts/local-dev.sh bootstrap-env
@@ -134,6 +140,10 @@ api-contract:
 api-change-check:
 	@./scripts/api-change-check.sh
 
+cli-contract-check:
+	@node --test ./scripts/cli-contract-check.test.mjs
+	@node ./scripts/cli-contract-check.mjs
+
 integration-test:
 	@./scripts/integration-test.sh
 
@@ -171,7 +181,12 @@ fmt:
 
 cli-build:
 	@mkdir -p dist
-	@go build -o dist/agctl ./cmd/agctl
+	@set -eu; for target in $(CLI_TARGETS); do \
+		goos=$${target%/*}; goarch=$${target#*/}; \
+		CGO_ENABLED=0 GOOS=$$goos GOARCH=$$goarch go build -trimpath -buildvcs=false \
+			-ldflags '$(CLI_LDFLAGS)' -o dist/agctl_$${goos}_$${goarch} ./cmd/agctl; \
+		printf 'built dist/agctl_%s_%s (version %s)\n' "$$goos" "$$goarch" "$(VERSION)"; \
+	done
 
 build:
 	@docker build -t artifact-gateway:dev .
@@ -181,6 +196,12 @@ docker-build:
 
 console-docker-build:
 	@docker build -f Dockerfile.console -t artifact-gateway-console:dev .
+
+cli-docker-build:
+	@docker build -f Dockerfile.agctl \
+		--build-arg VERSION="$(VERSION)" \
+		--build-arg REVISION="$(CLI_REVISION)" \
+		-t artifact-gateway-agctl:dev .
 
 migrate:
 	@docker compose --env-file .env -f compose.yml run --rm migrate

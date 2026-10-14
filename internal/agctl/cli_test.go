@@ -77,8 +77,13 @@ func isolatedCLI(t *testing.T) {
 
 func runCLI(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
+	return runCLIStdin(t, "", args...)
+}
+
+func runCLIStdin(t *testing.T, stdin string, args ...string) (int, string, string) {
+	t.Helper()
 	var stdout, stderr bytes.Buffer
-	code := RunCLI(context.Background(), args, &stdout, &stderr)
+	code := RunCLI(context.Background(), args, strings.NewReader(stdin), &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
 }
 
@@ -199,8 +204,16 @@ func TestCommandsPrintsTheTree(t *testing.T) {
 	seen := map[string]bool{}
 	for _, item := range tree.Items {
 		seen[item.Name] = true
-		if item.Meta.Stage != "m0" || item.Meta.Resource == "" || len(item.Meta.Scenarios) != 2 {
+		if (item.Meta.Stage != "m0" && item.Meta.Stage != "m1") || item.Meta.Resource == "" {
 			t.Fatalf("item %s meta = %#v", item.Name, item.Meta)
+		}
+		if len(item.Meta.Scenarios) == 0 || len(item.Meta.Scenarios) > 2 {
+			t.Fatalf("item %s scenarios = %#v", item.Name, item.Meta.Scenarios)
+		}
+		for _, scenario := range item.Meta.Scenarios {
+			if scenario != "ci" && scenario != "admin" {
+				t.Fatalf("item %s scenario %q", item.Name, scenario)
+			}
 		}
 		scopes := map[string]bool{}
 		for _, flag := range item.Flags {
