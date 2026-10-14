@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PyPIProjectDetail } from "./PyPIProjectDetail";
 import { AuthProvider } from "../../lib/auth";
 import { PreferencesProvider } from "../../lib/preferences";
+import { TestQueryProvider } from "../../test/queryClient";
 
 vi.mock("./ArtifactScanStatus", () => ({
   ArtifactScanStatus: () => null,
@@ -94,15 +95,17 @@ describe("PyPIProjectDetail", () => {
 
     render(
       <AuthProvider>
-        <PreferencesProvider>
-          <PyPIProjectDetail
-            repositoryId="repo-1"
-            repoName="python"
-            project="gateway-widget"
-            initialVersion="2.0.0"
-            canQuarantine
-          />
-        </PreferencesProvider>
+        <TestQueryProvider>
+          <PreferencesProvider>
+            <PyPIProjectDetail
+              repositoryId="repo-1"
+              repoName="python"
+              project="gateway-widget"
+              initialVersion="2.0.0"
+              canQuarantine
+            />
+          </PreferencesProvider>
+        </TestQueryProvider>
       </AuthProvider>,
     );
 

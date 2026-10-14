@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- npm, PyPI, Go and Cargo package details read their protocol documents through the shared query layer: a superseded read is cancelled and can never replace the current package, a gateway failure is retried once while a refusal is final and never ends the session, refresh failures retain previously loaded content with Retry, Cargo download errors stay with their original package, and switching the interface language no longer re-reads the package. A unit test now fails when a component that runs effects calls `fetch` outside the documented exceptions (#284).
+
 - Quota alerts and email notifications read through the shared query layer while keeping their stricter rules: a password-change or permission denial still blocks the workspace until an explicit refresh succeeds and never ends the session, a local write cancels the read in flight so an older answer cannot replace it, and returning to the page re-reads at once, replacing even an initial read in flight. Each refresh owns a generation, so a post-write refresh cannot make an older cancelled refresh report success. Their snapshots now also drop with the signed-in identity like every other cached read (#284).
 
 - Service account details link to the account's repository grants and recent audit events (`/access?principal=…`, `/audits?actor=…`), so a credential rotation can be verified without copying the principal between pages; both pages open filtered to the linked principal. The visual baseline adds phone-width captures of sign-in, public browse and repository detail, and waits for the overview plot to settle so the command palette capture is stable.

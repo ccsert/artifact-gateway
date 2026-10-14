@@ -39,6 +39,19 @@ This directory owns the shared pieces; feature folders own their query hooks
   tick after the mocked request resolves, so wait with `findBy…` for anything
   that depends on a second read.
 
+## Protocol reads
+
+Package detail pages read the format's own client protocol (npm packument,
+PyPI Simple JSON, Go module proxy, Cargo sparse index) rather than the
+management API. `features/artifact-detail/protocolDetailQueries.ts` owns these
+reads: keys come from `protocolKeys`, each read sends the signed-in token when
+there is one, sets `authFailure: "ignore"` because the same pages render in
+anonymous public browse, and fails with a `LocalizedError` that keeps the HTTP
+status for the retry policy. Optional evidence (the Go zip digest from `HEAD`)
+never fails the page. Refresh failures keep the loaded package content with a
+warning and Retry. Cargo download errors and requests belong to the selected
+package and identity.
+
 ## Data shared across pages
 
 - **Writers on unmigrated pages.** A read whose data other pages still write
@@ -85,9 +98,11 @@ under a warning.
 
 ## Migration checklist
 
-Components that still read in `useEffect` and import the SDK. Migrate a page
-when it is next touched, together with its split under issue 275; a few
-entries only use effects for non-data work and leave the list once checked.
+Components that read in `useEffect`, through the SDK or a plain `fetch`.
+Migrate a page when it is next touched, together with its split under issue
+275; a few entries only use effects for non-data work and leave the list once
+checked. A `fetch` behind a button (delete, export, warm, download, publish) is
+an action, not a cached read, and is not listed.
 
 - [x] `app/CommandPalette.tsx`
 - [x] `app/Layout.tsx`
@@ -96,10 +111,14 @@ entries only use effects for non-data work and leave the list once checked.
 - [x] `features/access-control/AuthorizationTemplatesPanel.tsx`
 - [x] `features/artifact-detail/ArtifactIntelligencePanel.tsx`
 - [x] `features/artifact-detail/ArtifactQuarantinePanel.tsx`
+- [x] `features/artifact-detail/CargoCrateDetail.tsx`
 - [x] `features/artifact-detail/ConanArtifactDetail.tsx`
+- [x] `features/artifact-detail/GoModuleDetail.tsx`
 - [x] `features/artifact-detail/MavenArtifactDetail.tsx`
+- [x] `features/artifact-detail/NpmPackageDetail.tsx`
 - [x] `features/artifact-detail/ArtifactScanStatus.tsx`
 - [x] `features/artifact-detail/OciImageDetail.tsx`
+- [x] `features/artifact-detail/PyPIProjectDetail.tsx`
 - [x] `features/audit/AuditRetention.tsx`
 - [x] `features/audit/Audits.tsx`
 - [x] `features/auth/Login.tsx`
@@ -166,3 +185,14 @@ Snapshot refreshes explicitly cancel even initial reads before refetching. Each
 completion is checked against its request generation and cached query instance;
 a later refresh cannot validate an older cancelled read, and an old identity
 cannot write into a replacement snapshot.
+
+## Remaining migration work
+
+The snapshot migration does not finish issue 284's all-requests requirement.
+`QuotaRuleEditor` still pages `listRepositories` through `useQuotaAction`, and
+`EmailTargetEditor` still calls `getEmailTarget` through that action helper when
+recovering from a version conflict. Those reads need query hooks in a separate
+change. The existing tree-node reader, followed log stream and authentication
+bootstrap also remain explicit exceptions; the issue's completion definition
+must account for them before it can be marked complete. The raw-fetch/effect
+guard does not prove that SDK reads have all migrated.
