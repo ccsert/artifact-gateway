@@ -1,3 +1,4 @@
+import { TestQueryProvider } from "../../test/queryClient";
 import {
   cleanup,
   fireEvent,
@@ -43,9 +44,11 @@ const target: EmailTarget = {
 };
 function mount() {
   return render(
-    <PreferencesProvider>
-      <EmailNotificationsPanel />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <EmailNotificationsPanel />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 beforeEach(() => {

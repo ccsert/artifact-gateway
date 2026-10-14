@@ -1,3 +1,4 @@
+import { TestQueryProvider } from "../../test/queryClient";
 import {
   act,
   cleanup,
@@ -78,9 +79,11 @@ const target = {
 
 function mount() {
   return render(
-    <PreferencesProvider>
-      <QuotaAlertsPanel />
-    </PreferencesProvider>,
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <QuotaAlertsPanel />
+      </PreferencesProvider>
+    </TestQueryProvider>,
   );
 }
 beforeEach(() => {
