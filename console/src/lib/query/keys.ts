@@ -91,6 +91,7 @@ export const systemKeys = {
 export const groupKeys = {
   all: ["groups"] as const,
   list: () => [...groupKeys.all, "list"] as const,
+  members: (id: string) => [...groupKeys.all, "members", id] as const,
   capacity: (id: string) => [...groupKeys.all, "capacity", id] as const,
   browse: (id: string) => [...groupKeys.all, "browse", id] as const,
   resolution: (id: string) => [...groupKeys.all, "resolution", id] as const,

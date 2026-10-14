@@ -19,6 +19,7 @@ export function Modal({
   open,
   title,
   onClose,
+  afterClose,
   children,
   footer,
   wide,
@@ -28,6 +29,8 @@ export function Modal({
   open: boolean;
   title: string;
   onClose: () => void;
+  /** Called once Ant Design has finished closing the dialog. */
+  afterClose?: () => void;
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
@@ -44,6 +47,7 @@ export function Modal({
       open={open}
       title={title}
       onCancel={busy ? undefined : onClose}
+      afterClose={afterClose}
       footer={footer ?? null}
       centered
       destroyOnHidden
@@ -79,6 +83,7 @@ export function ConfirmDialog({
   busy,
   onConfirm,
   onClose,
+  afterClose,
 }: {
   open: boolean;
   title: string;
@@ -88,6 +93,7 @@ export function ConfirmDialog({
   busy?: boolean;
   onConfirm: () => void;
   onClose: () => void;
+  afterClose?: () => void;
 }) {
   const { t } = usePreferences();
   return (
@@ -95,6 +101,7 @@ export function ConfirmDialog({
       open={open}
       title={title}
       onClose={onClose}
+      afterClose={afterClose}
       busy={busy}
       footer={
         <Space>
@@ -228,6 +235,7 @@ export function ConfirmDanger<Target>({
   confirmLabel,
   onConfirm,
   onClose,
+  afterClose,
   onDone,
   onError,
 }: {
@@ -238,6 +246,7 @@ export function ConfirmDanger<Target>({
   onConfirm: (target: Target) => Promise<void>;
   /** Clears `target`; called on cancel and after success. */
   onClose: () => void;
+  afterClose?: () => void;
   onDone?: () => void;
   onError?: (error: unknown) => void;
 }) {
@@ -287,6 +296,7 @@ export function ConfirmDanger<Target>({
       busy={busy}
       onConfirm={() => void confirm()}
       onClose={onClose}
+      afterClose={afterClose}
     />
   );
 }

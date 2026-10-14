@@ -91,7 +91,9 @@ export function ApiKeysPage() {
       title: t("identity.status"),
       key: "state",
       width: 130,
-      render: (_value, key) => <StateBadge state={keyState(key)} />,
+      render: (_value, key) => (
+        <StateBadge state={keyState(key)} subject="identity" />
+      ),
     },
     {
       title: t("identity.created"),

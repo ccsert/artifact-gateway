@@ -8,6 +8,7 @@ import {
   browseGroup,
   getGroupCapacity,
   getGroupResolution,
+  listGroupMembers,
   listGroups,
 } from "../../client";
 import type { GroupBrowsePage as GroupBrowseResponse } from "../../client";
@@ -34,6 +35,24 @@ export function useInvalidateGroups() {
     () => queryClient.invalidateQueries({ queryKey: groupKeys.all }),
     [queryClient],
   );
+}
+
+/** Members and their matching write version, read before editing. */
+export function useGroupMembers(groupId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: groupKeys.members(groupId),
+    queryFn: async ({ signal }) => {
+      const result = await listGroupMembers({ path: { groupId }, signal });
+      const members = await unwrap(Promise.resolve(result));
+      if (!members) throw new Error("Empty Group members response");
+      return {
+        members,
+        version: result.response?.headers.get("ETag")?.replaceAll('"', ""),
+      };
+    },
+    staleTime: 0,
+    enabled,
+  });
 }
 
 /** A group's capacity, read while its dialog is open. */

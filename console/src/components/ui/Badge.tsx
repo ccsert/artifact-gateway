@@ -78,9 +78,22 @@ const stateTone: Record<string, BadgeTone> = {
   dead: "danger",
 };
 
-export function StateBadge({ state }: { state: string | undefined }) {
+/**
+ * A lifecycle state as a dot and a word. Accounts, keys and credentials are
+ * `subject="identity"`: their `active` reads as enabled, not as running.
+ */
+export function StateBadge({
+  state,
+  subject,
+}: {
+  state: string | undefined;
+  subject?: "identity";
+}) {
   const { t } = usePreferences();
-  const value = state ?? "unknown";
+  const value =
+    subject === "identity" && state === "active"
+      ? "enabled"
+      : (state ?? "unknown");
   const labels: Record<string, MessageKey> = {
     active: "ui.active",
     deleting: "ui.deleting",

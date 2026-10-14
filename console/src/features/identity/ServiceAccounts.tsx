@@ -10,7 +10,7 @@ import type {
   ServiceAccount,
   ServiceAccountCredential,
 } from "../../client";
-import { Badge } from "../../components/ui/Badge";
+import { StateBadge } from "../../components/ui/Badge";
 import { MetricStrip } from "../../components/ui/ConsolePrimitives";
 import {
   EmptyState,
@@ -229,11 +229,7 @@ export function ServiceAccountsPage() {
                     <span className="truncate text-sm font-medium text-fg">
                       {account.name}
                     </span>
-                    <Badge
-                      tone={account.state === "active" ? "success" : "neutral"}
-                    >
-                      {account.state}
-                    </Badge>
+                    <StateBadge state={account.state} subject="identity" />
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-disabled">
                     {account.description || t("identity.noPurposeDocumented")}

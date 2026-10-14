@@ -21,7 +21,11 @@ import { CreateGroupDialog } from "./CreateGroupDialog";
 import { useAccessRepositories } from "../access-control/accessQueries";
 import { useFormatProfiles } from "../repository/repositoryQueries";
 import { useGroupPages, useInvalidateGroups } from "./groupQueries";
-import { groupColumns } from "./groupColumns";
+import { groupColumns, type GroupAction } from "./groupColumns";
+import { CapacityDialog } from "./GroupCapacityDialog";
+import { MembersDialog } from "./GroupMembersDialog";
+import { GroupResolutionDialog } from "./pages/GroupResolutionDialog";
+import { RenameGroupDialog } from "./RenameGroupDialog";
 
 const GROUP_FILTERS = { q: "", format: "all" as Format | "all" };
 
@@ -69,12 +73,53 @@ export function GroupsPage() {
     0,
   );
   const publicGroups = groups.filter((group) => group.anonymousRead).length;
+  // Closing a dialog returns focus to what opened it: the row's button, or
+  // its More actions button when the dialog came from the row menu.
+  const [action, setAction] = useState<{
+    key: number;
+    open: boolean;
+    kind: GroupAction;
+    group: Group;
+    returnTo: HTMLElement | null;
+  } | null>(null);
+  const [deleteReturnTo, setDeleteReturnTo] = useState<HTMLElement | null>(
+    null,
+  );
+  const closeAction = () => {
+    setAction((current) => current && { ...current, open: false });
+  };
+  const afterActionClose = () => {
+    if (!action) return;
+    action.returnTo?.focus();
+    setAction((current) => (current?.key === action.key ? null : current));
+  };
   const columns = groupColumns({
-    repos,
     repoName,
     repoById,
-    onSaved: load,
-    onDelete: setToDelete,
+    onAction: (kind, group) => {
+      const active = document.activeElement as HTMLElement | null;
+      const returnTo =
+        !active || active.closest(".ant-dropdown")
+          ? document.querySelector<HTMLElement>(
+              `[data-group-actions="${CSS.escape(group.id)}"]`,
+            )
+          : active;
+      setAction((current) => ({
+        kind,
+        group,
+        returnTo,
+        open: true,
+        key: (current?.key ?? 0) + 1,
+      }));
+    },
+    onDelete: (group) => {
+      setDeleteReturnTo(
+        document.querySelector<HTMLElement>(
+          `[data-group-actions="${CSS.escape(group.id)}"]`,
+        ),
+      );
+      setToDelete(group);
+    },
     t,
   });
 
@@ -169,7 +214,7 @@ export function GroupsPage() {
               dataSource={visibleGroups}
               columns={columns}
               pagination={false}
-              scroll={{ x: 1200 }}
+              scroll={{ x: 1000 }}
             />
           )}
           <Pagination
@@ -179,6 +224,45 @@ export function GroupsPage() {
           />
         </FilterCard>
       </ListStates>
+      {action?.kind === "members" && (
+        <MembersDialog
+          key={action.key}
+          open={action.open}
+          group={action.group}
+          repos={repos}
+          onClose={closeAction}
+          afterClose={afterActionClose}
+          onSaved={() => void load()}
+        />
+      )}
+      {action?.kind === "settings" && (
+        <RenameGroupDialog
+          key={action.key}
+          open={action.open}
+          group={action.group}
+          onClose={closeAction}
+          afterClose={afterActionClose}
+          onSaved={() => void load()}
+        />
+      )}
+      {action?.kind === "resolution" && (
+        <GroupResolutionDialog
+          key={action.key}
+          open={action.open}
+          group={action.group}
+          onClose={closeAction}
+          afterClose={afterActionClose}
+        />
+      )}
+      {action?.kind === "capacity" && (
+        <CapacityDialog
+          key={action.key}
+          open={action.open}
+          group={action.group}
+          onClose={closeAction}
+          afterClose={afterActionClose}
+        />
+      )}
       <ConfirmDanger
         target={toDelete}
         title={t("groups.deleteGroup2")}
@@ -194,6 +278,7 @@ export function GroupsPage() {
           unwrap(deleteGroup({ path: { groupId: group.id } })).then(() => {})
         }
         onClose={() => setToDelete(null)}
+        afterClose={() => deleteReturnTo?.focus()}
         onDone={() => void load()}
         onError={setError}
       />

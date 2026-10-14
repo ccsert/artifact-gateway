@@ -55,10 +55,8 @@ export const groupsZhCN = {
   "groups.membersConfiguredOrder": "成员（配置顺序）",
   "groups.unknown": "未知",
   "groups.noMembers": "无成员",
-  "groups.version": "版本",
   "groups.actions": "操作",
   "groups.browseDirectory": "浏览目录",
-  "groups.deleteGroup": "删除分组 {name}",
   "groups.groups": "分组",
   "groups.aggregateRepositoriesOfTheSameFormatBehindOne":
     "将多个同格式仓库聚合为统一入口",
@@ -92,6 +90,8 @@ export const groupsZhCN = {
   "groups.thisDirectoryContainsPublicationsAndKnownCacheAn":
     "目录展示已发布制品与已知缓存。前序 Proxy 暂无缓存，不代表上游不存在；实际下载仍按协议解析。",
   "groups.visibleMemberCandidateOrder": "可见成员候选顺序",
+  "groups.moreActionsFor": "{name} 的更多操作",
+  "groups.deleteGroupAction": "删除分组",
 };
 
 export type GroupsMessageKey = keyof typeof groupsZhCN;

@@ -1,27 +1,45 @@
 import { useState } from "react";
-import { EditOutlined } from "@ant-design/icons";
 import { Button, Space } from "antd";
-import { listGroupMembers, replaceGroupMembers } from "../../client";
+import { replaceGroupMembers } from "../../client";
 import type { Group, Member, Repository } from "../../client";
-import { ErrorBanner } from "../../components/ui/Feedback";
-import { Modal, useDisclosure } from "../../components/ui/Modal";
+import { ErrorBanner, Loading } from "../../components/ui/Feedback";
+import { Modal } from "../../components/ui/Modal";
 import { MemberOrderPicker } from "./MemberOrderPicker";
 import { usePreferences } from "../../lib/preferences";
+import { useGroupMembers } from "./groupQueries";
 
-/** Choose and order a group's member repositories. */
+/**
+ * Choose and order a group's member repositories. Each opening reads the
+ * current members and their version before the editor becomes available.
+ */
 export function MembersDialog({
   group,
+  open,
   repos,
+  onClose,
+  afterClose,
   onSaved,
 }: {
   group: Group;
+  open: boolean;
   repos: Repository[];
+  onClose: () => void;
+  afterClose: () => void;
   onSaved: () => void;
 }) {
   const { t } = usePreferences();
-  const dialog = useDisclosure();
-  const [memberIds, setMemberIds] = useState<string[]>([]);
-  const [version, setVersion] = useState(group.version);
+  const membersQuery = useGroupMembers(group.id, open);
+  const [draft, setDraft] = useState<{
+    memberIds: string[];
+    version: string;
+  } | null>(null);
+  const memberIds =
+    draft?.memberIds ??
+    [...(membersQuery.data?.members ?? [])]
+      .sort((a, b) => a.position - b.position)
+      .map((member) => member.repositoryId);
+  const version = draft?.version ?? membersQuery.data?.version ?? group.version;
+  const ready = membersQuery.isSuccess && !membersQuery.isFetching;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -29,21 +47,8 @@ export function MembersDialog({
     (r) => r.format === group.format && r.state === "active",
   );
 
-  const open = async () => {
-    setError(null);
-    dialog.show();
-    const { data, response } = await listGroupMembers({
-      path: { groupId: group.id },
-    });
-    if (data) {
-      const sorted = [...data].sort((a, b) => a.position - b.position);
-      setMemberIds(sorted.map((m) => m.repositoryId));
-    }
-    const etag = response?.headers.get("ETag");
-    if (etag) setVersion(etag.replaceAll('"', ""));
-  };
-
   const save = async () => {
+    if (busy || !ready || !open) return;
     setBusy(true);
     setError(null);
     const members: Member[] = memberIds.map((repositoryId, position) => ({
@@ -60,7 +65,7 @@ export function MembersDialog({
         setError(err);
         return;
       }
-      dialog.hide();
+      onClose();
       onSaved();
     } catch (nextError) {
       setError(nextError);
@@ -71,20 +76,23 @@ export function MembersDialog({
 
   return (
     <>
-      <Button size="small" icon={<EditOutlined />} onClick={open}>
-        {t("groups.editMembers")}
-      </Button>
       <Modal
-        open={dialog.open}
+        open={open}
         title={t("groups.editMembers2", { name: group.name })}
-        onClose={dialog.hide}
+        onClose={onClose}
+        afterClose={afterClose}
         busy={busy}
         footer={
           <Space>
-            <Button onClick={dialog.hide} disabled={busy}>
+            <Button onClick={onClose} disabled={busy}>
               {t("groups.cancel")}
             </Button>
-            <Button type="primary" onClick={save} loading={busy}>
+            <Button
+              type="primary"
+              onClick={save}
+              loading={busy}
+              disabled={!ready}
+            >
               {t("groups.save")}
             </Button>
           </Space>
@@ -92,14 +100,24 @@ export function MembersDialog({
       >
         <div className="space-y-3">
           {error !== null && <ErrorBanner error={error} />}
+          {membersQuery.error !== null && (
+            <ErrorBanner
+              error={membersQuery.error}
+              onRetry={() => membersQuery.refetch()}
+            />
+          )}
           <p className="text-xs text-fg-tertiary">
             {t("groups.setTheOrderWithinEachTypeHostedMembers")}
           </p>
-          <MemberOrderPicker
-            candidates={candidates}
-            memberIds={memberIds}
-            onChange={setMemberIds}
-          />
+          {membersQuery.isFetching ? (
+            <Loading />
+          ) : ready ? (
+            <MemberOrderPicker
+              candidates={candidates}
+              memberIds={memberIds}
+              onChange={(memberIds) => setDraft({ memberIds, version })}
+            />
+          ) : null}
         </div>
       </Modal>
     </>

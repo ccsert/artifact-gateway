@@ -1,19 +1,26 @@
-import { DatabaseOutlined } from "@ant-design/icons";
-import { Button } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { Group, GroupCapacityMember } from "../../client";
 import { Loading, ErrorBanner } from "../../components/ui/Feedback";
 import { RepositoryTypeBadge } from "../../components/ui/Badge";
-import { Modal, useDisclosure } from "../../components/ui/Modal";
+import { Modal } from "../../components/ui/Modal";
 import { ConsoleTable } from "../../components/ui/ConsolePrimitives";
 import { usePreferences } from "../../lib/preferences";
 import { useGroupCapacity } from "./groupQueries";
 
 /** A group's capacity across its member repositories. */
-export function CapacityDialog({ group }: { group: Group }) {
+export function CapacityDialog({
+  group,
+  open,
+  onClose,
+  afterClose,
+}: {
+  group: Group;
+  open: boolean;
+  onClose: () => void;
+  afterClose: () => void;
+}) {
   const { t } = usePreferences();
-  const dialog = useDisclosure();
-  const capacityQuery = useGroupCapacity(group.id, dialog.open);
+  const capacityQuery = useGroupCapacity(group.id, open);
   const capacity = capacityQuery.data ?? null;
   const error = capacityQuery.error;
   const formatBytes = (value: number) =>
@@ -80,17 +87,10 @@ export function CapacityDialog({ group }: { group: Group }) {
   ];
   return (
     <>
-      <Button
-        size="small"
-        type="text"
-        icon={<DatabaseOutlined />}
-        onClick={dialog.show}
-      >
-        {t("groups.capacity")}
-      </Button>
       <Modal
-        open={dialog.open}
-        onClose={dialog.hide}
+        open={open}
+        onClose={onClose}
+        afterClose={afterClose}
         wide
         title={t("groups.capacity2", { name: group.name })}
       >

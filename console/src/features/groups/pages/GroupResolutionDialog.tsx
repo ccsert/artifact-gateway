@@ -1,6 +1,5 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
-import { OrderedListOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ReloadOutlined } from "@ant-design/icons";
 import { Button, Space } from "antd";
 import type { Group } from "../../../client";
 import { Badge } from "../../../components/ui/Badge";
@@ -16,9 +15,18 @@ import { useQueryClient } from "@tanstack/react-query";
 import { groupKeys } from "../../../lib/query/keys";
 import "../group-pages.css";
 
-export function GroupResolutionDialog({ group }: { group: Group }) {
+export function GroupResolutionDialog({
+  group,
+  open,
+  onClose,
+  afterClose,
+}: {
+  group: Group;
+  open: boolean;
+  onClose: () => void;
+  afterClose?: () => void;
+}) {
   const { t } = usePreferences();
-  const [open, setOpen] = useState(false);
   const planQuery = useGroupResolution(group.id, open);
   const plan = planQuery.data ?? null;
   const loading = planQuery.isFetching;
@@ -28,7 +36,7 @@ export function GroupResolutionDialog({ group }: { group: Group }) {
   // Closing abandons a read in flight, so the next opening asks again
   // instead of showing an answer requested by an earlier opening.
   const close = () => {
-    setOpen(false);
+    onClose();
     void queryClient.cancelQueries({
       queryKey: groupKeys.resolution(group.id),
     });
@@ -36,16 +44,10 @@ export function GroupResolutionDialog({ group }: { group: Group }) {
 
   return (
     <>
-      <Button
-        size="small"
-        icon={<OrderedListOutlined aria-hidden />}
-        onClick={() => setOpen(true)}
-      >
-        {t("groups.resolutionOrder")}
-      </Button>
       <Modal
         open={open}
         onClose={() => close()}
+        afterClose={afterClose}
         title={t("groups.resolutionOrder2", { name: group.name })}
         footer={
           <Space>

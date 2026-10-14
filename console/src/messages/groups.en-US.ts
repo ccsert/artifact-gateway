@@ -59,10 +59,8 @@ export const groupsEnUS: Record<GroupsMessageKey, string> = {
   "groups.membersConfiguredOrder": "Members (configured order)",
   "groups.unknown": "unknown",
   "groups.noMembers": "No members",
-  "groups.version": "Version",
   "groups.actions": "Actions",
   "groups.browseDirectory": "Browse directory",
-  "groups.deleteGroup": "Delete group {name}",
   "groups.groups": "Groups",
   "groups.aggregateRepositoriesOfTheSameFormatBehindOne":
     "Aggregate repositories of the same format behind one entry point",
@@ -98,4 +96,6 @@ export const groupsEnUS: Record<GroupsMessageKey, string> = {
   "groups.thisDirectoryContainsPublicationsAndKnownCacheAn":
     "This directory contains publications and known cache. An earlier Proxy without cached data may still serve the artifact; downloads follow protocol resolution.",
   "groups.visibleMemberCandidateOrder": "Visible member candidate order",
+  "groups.moreActionsFor": "More actions for {name}",
+  "groups.deleteGroupAction": "Delete group",
 };
