@@ -165,3 +165,9 @@ export const protocolKeys = {
   cargoIndex: (repoName: string, crateName: string) =>
     [...protocolKeys.all, "cargo", repoName, crateName] as const,
 };
+
+/** Quota alert and email notification snapshots, one per panel or rule. */
+export const quotaKeys = {
+  all: ["quota"] as const,
+  snapshot: (key: string) => [...quotaKeys.all, "snapshot", key] as const,
+};

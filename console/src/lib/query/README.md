@@ -170,9 +170,29 @@ an action, not a cached read, and is not listed.
       preferences and theme fallback; it reads no server data.
 - [x] `lib/siteSettings.tsx`
 
-Quota alerts and email notifications (`features/system`) keep their own
-`useQuotaSnapshot` and `useQuotaAction` for now. Their denial handling differs
-from the shared layer: a password-change or permission denial blocks the whole
-workspace until an explicit refresh succeeds, and an older read or a late
-mutation never lands after a newer one. Their own tests pin this. Move them
-onto queries in a separate change that keeps those rules.
+Quota alerts and email notifications (`features/system`) read through
+`useQuotaSnapshot`, a query (`quotaKeys`) that keeps their stricter rules: a
+password-change or permission denial blocks the whole workspace until an
+explicit refresh succeeds and never ends the session (`authFailure:
+"ignore"`); `update` cancels a read in flight before applying a write, and a
+refresh it overtook reports failure, so an older read or a late write never
+lands after a newer one; returning to the page re-reads at once and replaces a
+read in flight, which the query's own focus refetch would not. Their writes
+stay on `useQuotaAction`, which runs one action at a time and drops a result
+that arrives after its component unmounted.
+
+Snapshot refreshes explicitly cancel even initial reads before refetching. Each
+completion is checked against its request generation and cached query instance;
+a later refresh cannot validate an older cancelled read, and an old identity
+cannot write into a replacement snapshot.
+
+## Remaining migration work
+
+The snapshot migration does not finish issue 284's all-requests requirement.
+`QuotaRuleEditor` still pages `listRepositories` through `useQuotaAction`, and
+`EmailTargetEditor` still calls `getEmailTarget` through that action helper when
+recovering from a version conflict. Those reads need query hooks in a separate
+change. The existing tree-node reader, followed log stream and authentication
+bootstrap also remain explicit exceptions; the issue's completion definition
+must account for them before it can be marked complete. The raw-fetch/effect
+guard does not prove that SDK reads have all migrated.
