@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "data": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "status": "accepted",
+    "repositoryState": "deleting",
+    "terminal": false
+  },
+  "error": {
+    "code": "wait_timeout",
+    "httpStatus": null,
+    "message": "repository 00000000-0000-4000-8000-000000000001 was not deleted within the wait budget (last state: deleting)",
+    "hint": "the deletion was accepted and continues on the server; check with agctl repo show 00000000-0000-4000-8000-000000000001, or wait again with a longer --timeout",
+    "requestId": ""
+  },
+  "meta": null
+}

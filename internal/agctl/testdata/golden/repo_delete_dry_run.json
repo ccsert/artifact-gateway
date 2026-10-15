@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "mode": "client-plan",
+    "method": "DELETE",
+    "path": "/api/v2/repositories/00000000-0000-4000-8000-000000000001",
+    "headers": {},
+    "body": null,
+    "current": {
+      "anonymousRead": false,
+      "format": "npm",
+      "id": "00000000-0000-4000-8000-000000000001",
+      "mavenStrictPublication": false,
+      "name": "npm-hosted",
+      "state": "active",
+      "type": "hosted",
+      "version": "1"
+    },
+    "verified": [
+      "the repository exists and is readable",
+      "the repository is active: protocol access would stop at once and the worker would advance it to deleted"
+    ],
+    "notVerified": [
+      "caller permission (repositories:admin)"
+    ]
+  },
+  "error": null,
+  "meta": null
+}

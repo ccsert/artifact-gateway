@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "data": {
+    "outcome": "unknown",
+    "operation": "repo create",
+    "name": "npm-hosted",
+    "idempotencyKey": "agctl-fixed-key",
+    "readBack": "agctl repo list"
+  },
+  "error": {
+    "code": "unavailable",
+    "httpStatus": 503,
+    "message": "try again",
+    "hint": "the repository may have been created; re-run the same command with --idempotency-key agctl-fixed-key to retry safely, or check agctl repo list",
+    "requestId": "req-test"
+  },
+  "meta": null
+}

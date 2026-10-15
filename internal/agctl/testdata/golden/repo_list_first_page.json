@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "items": [
+      {
+        "anonymousRead": false,
+        "format": "npm",
+        "id": "00000000-0000-4000-8000-000000000001",
+        "mavenStrictPublication": false,
+        "name": "npm-hosted",
+        "state": "active",
+        "type": "hosted",
+        "version": "1"
+      },
+      {
+        "anonymousRead": false,
+        "format": "raw",
+        "id": "00000000-0000-4000-8000-000000000002",
+        "mavenStrictPublication": false,
+        "name": "raw-proxy",
+        "state": "active",
+        "type": "proxy",
+        "version": "1"
+      }
+    ],
+    "nextCursor": "cursor-2"
+  },
+  "error": null,
+  "meta": {
+    "pagination": {
+      "mode": "cursor",
+      "pageSize": 2,
+      "pages": 1,
+      "complete": false
+    }
+  }
+}

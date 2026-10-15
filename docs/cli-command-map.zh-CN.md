@@ -8,8 +8,10 @@
 面向两类都用同一自省。
 
 本页是对完整契约的归类，不是对已安装二进制的描述。除 #125 骨架（`version`、
-`info`、`commands`）外，全部为计划，不宣称已实现；只有注册命令、文档/测试
-和真实 Gateway 验收齐备，某一行才转为 implemented/verified。
+`info`、`commands`）和阶段列标为 `implemented` 的行（目前是 #130 的
+`repo list|show|create|update|delete`，由 `make cli-e2e` 在真实 Gateway 上验收）外，
+全部为计划，不宣称已实现；只有注册命令、文档/测试和真实 Gateway 验收齐备，
+某一行才转为 implemented/verified。
 
 覆盖基线：`api/openapi/management-runtime-v1.json`（提交
 `a504ba48cd93371badcb1f2781b120b359e57b69`，127 路径 / 177 操作），以及
@@ -132,8 +134,8 @@ server base）。计划命令省略前导 `agctl`。
 | `PUT /audit-retention-policy`<br>`replaceAuditRetentionPolicy` | `audit retention set` | #138 | M2 | A | C |
 | `POST /audit-retention:execute`<br>`executeAuditRetention` | `audit retention execute` | #138 | M2 | A | W |
 | `GET /audit-retention/jobs`<br>`listAuditRetentionJobs` | `audit retention jobs` | #138 | M2 | A | Q |
-| `GET /repositories`<br>`listRepositories` | `repo list` | #130 | M1 | FR | Q |
-| `POST /repositories`<br>`createRepository` | `repo create` | #130 | M1 | A | W |
+| `GET /repositories`<br>`listRepositories` | `repo list` | #130 | M1 implemented | FR | Q |
+| `POST /repositories`<br>`createRepository` | `repo create` | #130 | M1 implemented | A | W |
 | `GET /repository-grants`<br>`listRepositoryGrants` | `grant list --all-repositories` | #134 | M1 | FA | Q |
 | `GET /authorization-templates`<br>`listAuthorizationTemplates` | `template list` | #134 | M1 | A | Q |
 | `POST /authorization-templates`<br>`createAuthorizationTemplate` | `template create` | #134 | M2 | A | W |
@@ -155,9 +157,9 @@ server base）。计划命令省略前导 `agctl`。
 | `DELETE /scheduled-tasks/{taskId}`<br>`deleteScheduledTask` | `scheduled-task delete <id>` | #137 | M2 | ST | W |
 | `POST /scheduled-tasks/{taskId}/run`<br>`runScheduledTask` | `scheduled-task run <id>` | #137 | M2 | ST | J |
 | `GET /scheduled-tasks/{taskId}/runs`<br>`listScheduledTaskRuns` | `scheduled-task runs <id>` | #137 | M2 | ST | Q |
-| `GET /repositories/{repositoryId}`<br>`getRepository` | `repo show <id>` | #130 | M1 | R | Q |
-| `DELETE /repositories/{repositoryId}`<br>`deleteRepository` | `repo delete <id>（异步 deleting → deleted）` | #130 | M1 | RA | J |
-| `PATCH /repositories/{repositoryId}`<br>`updateRepository` | `repo update <id>` | #130 | M1 | RA | C |
+| `GET /repositories/{repositoryId}`<br>`getRepository` | `repo show <id>` | #130 | M1 implemented | R | Q |
+| `DELETE /repositories/{repositoryId}`<br>`deleteRepository` | `repo delete <id>（异步 deleting → deleted）` | #130 | M1 implemented | RA | J |
+| `PATCH /repositories/{repositoryId}`<br>`updateRepository` | `repo update <id>` | #130 | M1 implemented | RA | C |
 | `POST /repositories/{repositoryId}/egress-proxy:test`<br>`testEgressProxy` | `egress-proxy test --repo <id>` | #139 | M2 | RA | W |
 | `GET /repositories/{repositoryId}/grants`<br>`listGrants` | `grant list --repo <id>` | #134 | M1 | RA | Q |
 | `PUT /repositories/{repositoryId}/grants`<br>`replaceGrants` | `不直接公开整表 PUT；使用 grant 单行写或 template apply` | #134 | N/A | RA | N |

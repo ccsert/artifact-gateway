@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "data": {
+    "items": [
+      {
+        "anonymousRead": false,
+        "format": "raw",
+        "id": "00000000-0000-4000-8000-000000000001",
+        "mavenStrictPublication": false,
+        "name": "repo-0",
+        "state": "active",
+        "type": "hosted",
+        "version": "1"
+      },
+      {
+        "anonymousRead": false,
+        "format": "raw",
+        "id": "00000000-0000-4000-8000-000000000002",
+        "mavenStrictPublication": false,
+        "name": "repo-1",
+        "state": "active",
+        "type": "hosted",
+        "version": "1"
+      },
+      {
+        "anonymousRead": false,
+        "format": "raw",
+        "id": "00000000-0000-4000-8000-000000000003",
+        "mavenStrictPublication": false,
+        "name": "repo-2",
+        "state": "active",
+        "type": "hosted",
+        "version": "1"
+      },
+      {
+        "anonymousRead": false,
+        "format": "raw",
+        "id": "00000000-0000-4000-8000-000000000004",
+        "mavenStrictPublication": false,
+        "name": "repo-3",
+        "state": "active",
+        "type": "hosted",
+        "version": "1"
+      }
+    ],
+    "nextCursor": "cursor-4"
+  },
+  "error": {
+    "code": "partial_failure",
+    "httpStatus": null,
+    "message": "--all reached its budget of 2 pages before the end of the listing",
+    "hint": "raise --max-pages, or continue with --cursor from nextCursor",
+    "requestId": ""
+  },
+  "meta": {
+    "pagination": {
+      "mode": "cursor",
+      "pageSize": 2,
+      "pages": 2,
+      "complete": false
+    }
+  }
+}

@@ -166,9 +166,15 @@ profile，最后是只定义一个 profile 的文件。该文件由 profile 命�
   `usage_error`、`credentials_missing`、`connection_error`、
   `partial_failure` 或 `internal_error`。
 - 未到达服务端的失败，`error.httpStatus` 为 null。
+- `error.code` 为 `wait_timeout` 表示有界的 `--wait` 用完了时间（退出码 8）；
+  操作仍在服务端继续。
 - 列表统一为 `{"items": [...], "nextCursor": null}`；数据来源没有服务端
-  分页时 `nextCursor` 为 null，`meta.pagination.mode` 说明真实模式（本地
-  命令树为 `none`）。
+  分页或列表已读到末尾时 `nextCursor` 为 null，`meta.pagination.mode` 说明
+  真实模式（本地命令树为 `none`，服务端分页为 `cursor`，并附带 `pageSize`、
+  已读页数 `pages` 和 `complete`）。
+- 失败但仍有内容需要报告时放在 `data`（以及 `meta`）中：列表中途停止前已读
+  到的页（退出码 3）、等待超时时已受理的 ID 和最后读到的状态（退出码 8），
+  或客户端无法确认结果的写操作的 `{"outcome": "unknown", "readBack": …}`。
 
 `--verbose` 在 stderr 上解释请求（`> GET https://…`、`< 204`），URL 中携带
 凭据的部分会被脱敏；token 本身不会打印，认证失败的响应正文同样不会。
@@ -276,6 +282,60 @@ Windows 锁实现已经通过编译检查，但当前 POSIX 权限校验不支�
 profile 持久化：Windows 文件 mode 无法证明所需的 0600 保护。该平台请使用不落盘的
 `--server`/`--token` 或 `AGCTL_SERVER`/`AGCTL_TOKEN`；本批次不宣称完成 Windows
 profile 运行验收。
+
+### `agctl repo`
+
+通过 `/api/v2/repositories` 管理仓库。仓库按 ID 指定（`agctl repo list` 会显示）。
+
+- `agctl repo list [--page-size N] [--cursor TOKEN]` 读取当前主体可见仓库的
+  一页（默认 50，范围 1–200）；空列表是成功，不是无权限。用 `--cursor` 传入
+  `nextCursor` 继续读取。`--all` 在 `--max-pages`（默认 20）和一个总体
+  `--timeout` 内跟随 cursor；触及预算或第一页之后失败时以退出码 3 结束，
+  并给出已读条目、`complete: false` 和可续读的 cursor。
+- `agctl repo show ID` 显示一个仓库；代理配置中的凭据只报告“已配置”。
+- `agctl repo create NAME --format FORMAT [--type hosted|proxy] [--endpoint
+  URL] [--allowed-host HOST]… [--anonymous-read]
+  [--maven-strict-publication]` 创建仓库（平台管理员）。每次创建都发送
+  `Idempotency-Key`，同一次调用的重试复用它，因此丢失的响应不会造成第二个
+  仓库。结果未知（连接失败、5xx）时命令会打印该 key：带
+  `--idempotency-key KEY` 重跑会重放原结果，同一 key 搭配不同请求会以退出码
+  7 被拒绝。上游凭据、出站代理和 OCI Bearer 交换暂不由本命令提供，请使用
+  Console 或 API。
+- `agctl repo update ID [--anonymous-read=true|false]
+  [--maven-strict-publication=true|false] [--endpoint URL] [--allowed-host
+  HOST]…` 只把给出的设置作为条件 `PATCH` 发送。`If-Match` 取
+  `--if-match VERSION`，未给出时取更新前刚读到的版本；并发修改会以 412
+  （退出码 7）失败且不覆盖任何内容。更新从不自动重试。Hosted 仓库只接受
+  匿名读取和 Maven 发布策略，其他设置由服务端拒绝（退出码 1）。
+- `agctl repo delete ID --yes [--wait]` 发起异步删除。缺少 `--yes` 时在任何
+  请求之前以退出码 2 失败。202 表示已受理而非完成：`data` 为 `{id, status:
+  "accepted", repositoryState: null, terminal: false}`。协议访问立即停止，
+  每分钟运行一次的删除 Worker 把仓库从 `deleting` 推进到 `deleted`。
+  `--wait` 回读仓库直到 `deleted`（`status: "deleted"`、`terminal: true`）；
+  此时 `--timeout` 约束整条命令，请预留一分钟以上。超时以退出码 8 结束，
+  给出 ID 和最后读到的状态；服务端继续删除，不会重发或取消。已删除的仓库仍可
+  读取，作为审计锚点；再次删除返回 404。
+
+`create`、`update`、`delete` 的 `--dry-run` 是客户端计划
+（`mode: "client-plan"`）：在本地校验输入，可以读取当前仓库（`update` 读版本，
+`delete` 读状态），并打印将发送的请求以及哪些已检查、哪些未检查。它从不提交
+写入，因此不能声称服务端一定会接受。
+
+## 验证
+
+- `go test ./internal/agctl/...` 离线运行，使用进程内的假服务端：覆盖命令
+  解析、退出码、脱敏和 JSON 信封。golden 信封位于
+  `internal/agctl/testdata/golden/`；有意修改输出后，用
+  `go test ./internal/agctl/ -run Repo -update` 重写并审阅差异。
+- `make cli-e2e` 构建 `agctl` 并在真实、隔离的 Gateway 上运行：按
+  `GATEWAY_ENV_FILE`（或 `.env`）在空闲端口上启动一个 Compose 项目，结束后
+  删除。设置 `CLI_E2E_SERVER` 和 `CLI_E2E_TOKEN`（管理员 token）时改为复用
+  正在运行的 Gateway，CI 在 Console E2E 之后就是这样运行的。剧本创建仓库、
+  重放创建、更新（dry-run、真实更新、过期 `If-Match`）、在列表中找到它、
+  删除（确认、dry-run、202、等待超时），并等待 `deleted`；同时检查错误
+  token（5）、仓库不存在（4）、非法输入（2）和冲突（7）的退出码。
+- `make cli-contract-check` 校验命令映射表覆盖全部契约操作，且每个标为
+  `implemented` 的行都对应已注册的命令。
 
 ## 安全说明
 

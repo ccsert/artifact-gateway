@@ -26,8 +26,14 @@ type errorReport struct {
 	RequestID  string `json:"requestId"`
 }
 
+// paginationMeta states the real pagination of a list. Server-paginated lists
+// add the page size requested, the pages read, and whether the listing reached
+// the end of the collection.
 type paginationMeta struct {
-	Mode string `json:"mode"`
+	Mode     string `json:"mode"`
+	PageSize int    `json:"pageSize,omitempty"`
+	Pages    int    `json:"pages,omitempty"`
+	Complete *bool  `json:"complete,omitempty"`
 }
 
 type envelopeMeta struct {
@@ -77,9 +83,19 @@ func renderSuccess(stdout io.Writer, format outputFormat, data any, meta *envelo
 // failure envelope on stdout; table mode prints diagnostics on stderr.
 func renderFailure(stdout, stderr io.Writer, format outputFormat, err error, knownSecrets ...string) {
 	report := errorReportFrom(err, knownSecrets...)
+	var result *resultError
+	hasResult := errors.As(err, &result)
 	if format == outputJSON {
-		_ = writeEnvelope(stdout, envelope{SchemaVersion: outputSchemaVersion, OK: false, Error: report})
+		value := envelope{SchemaVersion: outputSchemaVersion, OK: false, Error: report}
+		if hasResult {
+			value.Data = result.data
+			value.Meta = result.meta
+		}
+		_ = writeEnvelope(stdout, value)
 		return
+	}
+	if hasResult && result.human != nil {
+		_ = result.human(stdout)
 	}
 	_, _ = fmt.Fprintf(stderr, "error: %s\n", report.Message)
 	var api *APIError

@@ -199,6 +199,15 @@ jobs:
         env:
           GATEWAY_ENV_FILE: ${{ runner.temp }}/artifact-gateway.env
         run: make console-e2e
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Run agctl CLI E2E against the same gateway
+        env:
+          CLI_E2E_SERVER: http://127.0.0.1:18080
+          CLI_E2E_TOKEN: ci-admin-token
+        run: make cli-e2e
       - name: Stop gateway after Console E2E
         if: always()
         env:
