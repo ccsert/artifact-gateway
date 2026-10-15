@@ -138,6 +138,8 @@ describe("incremental runtime log controls", () => {
       .mockResolvedValueOnce(reply(page(2, 2)));
     mount();
     await screen.findByText("event-1");
+    // Let the snapshot's selection reset settle before creating a selection.
+    await act(async () => {});
     const range = document.createRange();
     range.selectNodeContents(screen.getByText("event-1"));
     const selection = window.getSelection()!;
