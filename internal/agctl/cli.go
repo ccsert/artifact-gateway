@@ -291,7 +291,12 @@ func RunCLI(ctx context.Context, args []string, stdin io.Reader, stdout, stderr 
 	}
 	format := resolvedFormat
 	fail := func(err error) int {
-		renderFailure(stdout, stderr, format, err, knownSecrets...)
+		// A stream already reported its failure in its terminal event; a
+		// second document would break NDJSON consumers.
+		var streamed *streamedError
+		if !errors.As(err, &streamed) {
+			renderFailure(stdout, stderr, format, err, knownSecrets...)
+		}
 		return exitCodeFor(err)
 	}
 
@@ -533,10 +538,13 @@ func printUsage(w io.Writer) {
 var groupSynopses = map[string]string{
 	"auth":                  "authenticate, inspect the caller, and end the local session",
 	"config":                "manage local profiles in ~/.config/agctl/config.yaml",
+	"access":                "explain effective access and manage the anonymous read switch",
+	"access anonymous":      "read or set the platform switch for anonymous reads",
 	"artifact":              "search, browse, inspect, and delete artifacts",
 	"artifact intelligence": "read artifact intelligence records",
 	"artifact quarantine":   "read artifact quarantine records",
 	"audit":                 "read administrative audit records",
+	"grant":                 "list, write, and remove single repository grants",
 	"group":                 "list, inspect, create, update, and delete Groups and their members",
 	"lifecycle-job":         "read lifecycle jobs (retention, promotion, replication, reclaim, scans)",
 	"maven":                 "Maven views of a repository",
@@ -544,6 +552,8 @@ var groupSynopses = map[string]string{
 	"overview":              "request and capacity overview",
 	"runtime":               "Gateway runtime processes",
 	"group members":         "list or replace a Group's members",
+	"role":                  "read authorization roles",
+	"template":              "read authorization templates and apply them to repositories",
 	"repo":                  "manage repositories, browse them, and print client configuration",
 }
 

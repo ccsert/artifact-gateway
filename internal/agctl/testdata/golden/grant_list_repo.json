@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "repositoryId": "00000000-0000-4000-8000-000000000001",
+    "version": "7",
+    "grants": [
+      {
+        "principal": "service-account:ci",
+        "scopes": [
+          "repositories:read"
+        ]
+      },
+      {
+        "principal": "service-account:ci",
+        "scopes": [
+          "repositories:write"
+        ],
+        "resourcePrefix": "releases/"
+      }
+    ]
+  },
+  "error": null,
+  "meta": {
+    "pagination": {
+      "mode": "none"
+    }
+  }
+}

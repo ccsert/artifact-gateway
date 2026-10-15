@@ -178,6 +178,16 @@ profile，最后是只定义一个 profile 的文件。该文件由 profile 命�
   给出的总数不出现，绝不写成 0。
 - `meta.scope` 记录一页对自身覆盖范围的说明，例如全局检索的
   `searchedRepositories`，或浏览页所属的 Group。
+- `access check --require` 在要求的权限未被授予时以 `not_permitted`（退出码 6）
+  失败，判定说明仍在 `data` 中。
+- `--follow`（`runtime logs` 和 `audit list`）配合 `--json` 输出 NDJSON：每行一个
+  带版本的事件，`{"schemaVersion": 1, "type": "entry", "data": …}`；可能漏读
+  时输出 `gap` 事件；最后恰好一个终止事件 `{"type": "end", "data": {"reason",
+  "events", "resume"}, "error": …}`。流必须带 `--duration` 或 `--max-events`
+  （否则退出码 2），不会无限运行。`reason` 为 `duration` 或 `max_events`
+  （退出码 0）、收到信号时为 `interrupted`（退出码 3）、运行日志会话变化时为
+  `scope_changed`（退出码 7），或 `error`（按错误的退出码）；`resume` 给出新流
+  可以继续的位置。流开始之前的用法错误仍是普通的单个信封。
 - 失败但仍有内容需要报告时放在 `data`（以及 `meta`）中：列表中途停止前已读
   到的页（退出码 3）、等待超时时已受理的 ID 和最后读到的状态（退出码 8），
   或客户端无法确认结果的写操作的 `{"outcome": "unknown", "readBack": …}`。
@@ -229,7 +239,7 @@ profile，最后是只定义一个 profile 的文件。该文件由 profile 命�
 
 打印命令树。`agctl commands --json` 为每条命令返回用法、flag 与契约元数据：
 资源对象、场景标签、交付阶段、真实端点、是否改变状态、最低权限，以及分页、
-dry-run、重试、wait 能力。脚本与 agent 通过该树发现已安装客户端的能力。
+dry-run、重试、wait 和 follow 能力。脚本与 agent 通过该树发现已安装客户端的能力。
 
 ### `agctl auth login`
 
@@ -413,8 +423,18 @@ Group，因此它无法确认结果的写入需要平台管理员来核对。
   R] [--group G] [--format F] [--from TIME] [--to TIME]` 用 cursor 分页读取审计
   日志（`--page-size`、`--cursor`、`--all`）。`--bounded [--limit N]` 改为从
   `GET /audits` 读取最多 500 条的一个窗口，它没有 cursor 也不支持时间范围。
-  `--csv` 输出带表头的 RFC 4180 CSV。审计日志记录授权决定、拒绝和 Group 解析，
-  并非每次管理写入；审计记录带有 `agctl` 失败时报告的请求 ID。
+  `--csv` 输出带表头的 RFC 4180 CSV。审计日志记录授权决定、拒绝、授权与模板写入
+  和 Group 解析，并非每次管理写入；审计记录带有 `agctl` 失败时报告的请求 ID。
+  `--follow` 流式输出新记录：审计记录没有序号，因此每次轮询重读两分钟的回看窗口
+  并跳过已投递的记录；不带 `--from` 时从现在开始，带上时先输出 `--from` 以来的
+  记录。一次轮询中新记录超过十页时输出 `gap` 事件。
+- `agctl runtime logs [--level L] [--component C] [--request-id ID]
+  [--trace-id ID] [--keyword TEXT] [--from TIME] [--to TIME | --window D]`
+  从应答进程的内存中读取一页（最新在前，`--limit` 最多 100）：日志只属于一个
+  实例和会话，重启即丢失（见 `meta.scope`）。`nextCursor` 配合 `--before`
+  翻到更早的条目。`--follow` 先按时间正序输出这一页，再用服务端 cursor 跟随；
+  cursor 属于一个进程会话，进程重启或换了实例应答时，流以 `scope_changed`
+  结束。未读条目被覆盖时报告为 `gap`。
 - `agctl status` 探测 `/livez`、`/readyz` 和诊断信息，逐项给出结论：依赖、运行
   节点（附问题代码）、扫描器和失败的队列任务。总体结果取最差的一项——
   `unhealthy`、`degraded`、`unknown`、`healthy`；不健康时退出码 1，加
@@ -432,6 +452,34 @@ Group，因此它无法确认结果的写入需要平台管理员来核对。
   `agctl lifecycle-job show JOB_ID` 在同一窗口中查找任务；不在窗口中的任务以
   退出码 4 结束，并说明查找的范围。运行、重试和取消任务暂不属于本命令族。
 
+### 授权
+
+授权按行写入，以主体和资源前缀为键；不提供整表替换。仓库通过 `--repo` 按 ID
+指定。
+
+- `agctl grant list --repo ID` 输出仓库的授权以及授权集版本（来自 `ETag`），
+  该版本是 `template apply` 的条件；`agctl grant list --all-repositories` 列出
+  调用者管理的全部仓库上的授权。
+- `agctl grant upsert --repo ID --principal P --scope S… [--resource-prefix
+  X]` 创建或替换一条授权，不影响其他授权；同一行可以重复发送，因此会重试。响应
+  必须包含写入的这一行和新版本，否则结果为未知。`--dry-run` 读取当前这一行，
+  报告 `create`、`replace` 或 `unchanged`。
+- `agctl grant delete --repo ID --principal P [--resource-prefix X] --yes`
+  删除一条授权。不会重试：重复请求返回 404，而这与授权本就不存在时的应答相同。
+- `agctl role list|show` 和 `agctl template list|show` 读取目录（平台管理员）。
+- `agctl template apply TEMPLATE_ID --repo ID --yes` 用模板的授权替换仓库的
+  全部授权，以 `--if-match` 或刚读到的授权集版本为条件；412（退出码 7）不替换
+  任何内容，且从不重试。`--dry-run` 读取授权和模板，列出将新增、删除、变更和
+  保留的每一条授权。
+- `agctl access check --repo ID [--actor A [--role member|admin]]
+  [--resource PATH]` 说明读、写、管理、情报和匿名读取各自的判定来源与原因。
+  `--require PERMISSION`（可重复）在任一权限不被允许时退出码 6，供 CI 和
+  agent 自检。说明其他主体需要平台管理员；`--role` 模拟该主体的全局角色。
+- `agctl access anonymous show` 读取匿名读取的平台开关；
+  `agctl access anonymous set --enabled=true|false` 以 `--if-match` 或刚读到的
+  版本为条件替换它，从不重试。开启需要 `--yes`，因为它作用于所有允许匿名读取的
+  仓库和 Group。
+
 ## 验证
 
 - `go test ./internal/agctl/...` 离线运行，使用进程内的假服务端：覆盖命令
@@ -447,8 +495,11 @@ Group，因此它无法确认结果的写入需要平台管理员来核对。
   用它和第二个仓库建 Group（dry-run、重放、未知成员、成员、解析顺序、带过期
   `If-Match` 的改名、重排、保留成员的删除）；通过原生协议发布一个 Raw 文件和
   一个 Maven POM，并检索、浏览、列出、查看和删除它们；检查无权限凭据被拒绝
-  （6）、全局检索为空，且该拒绝能按报告的请求 ID 在审计日志中找到；读取
-  status、诊断、运行节点、概览和生命周期任务；再删除仓库（确认、dry-run、
+  （6）、全局检索为空，且该拒绝能按报告的请求 ID 在审计日志中找到；为模拟的
+  成员主体写入、检查、按前缀收窄并删除授权（被拒时 access check 退出码 6），在
+  审计日志和有界 `--follow` 流中找到授权写入，应用模板（dry-run 差异、过期
+  `If-Match`、应用），把匿名开关重设为原值并验证过期版本被拒，以分页和有界流
+  读取运行日志；读取 status、诊断、运行节点、概览和生命周期任务；再删除仓库（确认、dry-run、
   202、等待超时）并等待 `deleted`。同时检查错误
   token（5）、仓库不存在（4）、非法输入（2）和冲突（7）的退出码。
 - `make cli-contract-check` 校验命令映射表覆盖全部契约操作，且每个标为

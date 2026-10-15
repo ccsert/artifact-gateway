@@ -20,6 +20,10 @@ const (
 type fakeResponse struct {
 	status int
 	body   string
+	etag   string
+	// handle, when set, answers instead of status and body, for routes whose
+	// answer depends on the request (cursors, polls).
+	handle func(r *http.Request) (int, string)
 }
 
 // routeAPI is a fake Gateway answering from a route table keyed by
@@ -43,7 +47,7 @@ func newRouteAPI(t *testing.T, prefix string) *routeAPI {
 		api.mu.Lock()
 		defer api.mu.Unlock()
 		path := strings.TrimPrefix(r.URL.Path, api.prefix)
-		api.requests = append(api.requests, recordedRequest{Method: r.Method, Path: path, Query: r.URL.RawQuery, Body: string(body)})
+		api.requests = append(api.requests, recordedRequest{Method: r.Method, Path: path, Query: r.URL.RawQuery, IfMatch: r.Header.Get("If-Match"), Body: string(body)})
 		if r.Header.Get("Authorization") != "Bearer "+repoTestToken && path != "/livez" && path != "/readyz" {
 			writeProblem(w, http.StatusUnauthorized, "access_denied", "authentication required")
 			return
@@ -53,6 +57,9 @@ func newRouteAPI(t *testing.T, prefix string) *routeAPI {
 			writeProblem(w, http.StatusNotFound, "not_found", "no route "+r.Method+" "+path)
 			return
 		}
+		if response.handle != nil {
+			response.status, response.body = response.handle(r)
+		}
 		if response.status >= 400 {
 			var problem struct{ Code, Message string }
 			_ = json.Unmarshal([]byte(response.body), &problem)
@@ -60,6 +67,9 @@ func newRouteAPI(t *testing.T, prefix string) *routeAPI {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
+		if response.etag != "" {
+			w.Header().Set("ETag", response.etag)
+		}
 		w.WriteHeader(response.status)
 		_, _ = io.WriteString(w, response.body)
 	}))
@@ -73,6 +83,18 @@ func (api *routeAPI) on(method, path string, status int, body string) {
 	api.mu.Lock()
 	defer api.mu.Unlock()
 	api.routes[method+" "+path] = fakeResponse{status: status, body: body}
+}
+
+func (api *routeAPI) onETag(method, path string, status int, body, etag string) {
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	api.routes[method+" "+path] = fakeResponse{status: status, body: body, etag: etag}
+}
+
+func (api *routeAPI) onFunc(method, path string, handle func(r *http.Request) (int, string)) {
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	api.routes[method+" "+path] = fakeResponse{handle: handle}
 }
 
 func (api *routeAPI) recorded() []recordedRequest {

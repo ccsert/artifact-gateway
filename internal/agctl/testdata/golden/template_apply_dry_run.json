@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "mode": "client-plan",
+    "method": "POST",
+    "path": "/api/v2/authorization-templates/00000000-0000-4000-b000-000000000001/apply",
+    "headers": {
+      "If-Match": "7"
+    },
+    "body": {
+      "repositoryId": "00000000-0000-4000-8000-000000000001"
+    },
+    "current": {
+      "diff": {
+        "added": [
+          {
+            "principal": "group:auditors",
+            "scopes": [
+              "repositories:read"
+            ]
+          }
+        ],
+        "removed": [
+          {
+            "principal": "user:alice",
+            "scopes": [
+              "repositories:admin"
+            ]
+          }
+        ],
+        "changed": [
+          {
+            "principal": "service-account:ci",
+            "scopes": [
+              "repositories:read",
+              "repositories:write"
+            ]
+          }
+        ],
+        "kept": []
+      },
+      "grantSetVersion": "7",
+      "templateVersion": "4"
+    },
+    "verified": [
+      "the repository's grants and the template were read; diff lists every grant added, removed, changed, and kept"
+    ],
+    "notVerified": [
+      "caller permission (repositories:admin on the target)",
+      "that the template's resource prefixes are valid for the repository's format",
+      "that the grant set version still matches when the template is applied"
+    ]
+  },
+  "error": null,
+  "meta": null
+}

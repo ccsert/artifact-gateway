@@ -200,6 +200,18 @@ With `--json`, stdout carries exactly one document — also on failure:
 - `meta.scope` carries what a page says about the range it covers, such as
   `searchedRepositories` of a global search or the Group a browse page
   belongs to.
+- `access check --require` fails with `not_permitted` (exit 6) when a
+  required permission is not granted; the explanation stays in `data`.
+- `--follow` (on `runtime logs` and `audit list`) streams NDJSON with
+  `--json`: one versioned event per line, `{"schemaVersion": 1, "type":
+  "entry", "data": …}`, a `gap` event when entries may have been missed, and
+  exactly one terminal `{"type": "end", "data": {"reason", "events",
+  "resume"}, "error": …}`. A stream needs `--duration` or `--max-events`
+  (otherwise exit 2) and never runs forever. `reason` is `duration` or
+  `max_events` (exit 0), `interrupted` on a signal (exit 3), `scope_changed`
+  when the runtime log session changed (exit 7), or `error` (the error's
+  exit code); `resume` says where a new stream continues. Usage errors before
+  the stream starts are an ordinary single envelope.
 - A failure that still has something to report carries it in `data` (and
   `meta`): the pages read before a listing stopped (exit 3), the accepted ID
   and last state of a timed-out wait (exit 8), or `{"outcome": "unknown",
@@ -258,7 +270,7 @@ when available; human output displays the same diagnostics.
 Prints the command tree. `agctl commands --json` returns, for every command,
 its usage, flags, and contract metadata: resource, scenario tags, delivery
 stage, real endpoints, whether it mutates state, minimum role, and its
-pagination, dry-run, retry, and wait capabilities. Scripts and agents use
+pagination, dry-run, retry, wait, and follow capabilities. Scripts and agents use
 this tree to discover what the installed client can do.
 
 ### `agctl auth login`
@@ -490,8 +502,22 @@ These commands read; none of them changes anything.
   `--bounded [--limit N]` instead reads one window of at most 500 records
   from `GET /audits`, which has no cursor and no time range. `--csv` prints
   RFC 4180 CSV with a header row. The log records authorization decisions,
-  refusals, and Group resolution rather than every management write; an
-  audit record carries the request id an `agctl` failure reports.
+  refusals, grant and template writes, and Group resolution rather than
+  every management write; an audit record carries the request id an `agctl`
+  failure reports. `--follow` streams new records: audit records have no
+  sequence, so each poll re-reads a two-minute lookback window and skips
+  records it already delivered; without `--from` the stream starts now, with
+  it the records since `--from` come first. More than ten pages of new
+  records in one poll emit a `gap` event.
+- `agctl runtime logs [--level L] [--component C] [--request-id ID]
+  [--trace-id ID] [--keyword TEXT] [--from TIME] [--to TIME | --window D]`
+  reads one page (newest first, `--limit` up to 100) from the memory of the
+  process that answers: the logs are local to one instance and session and
+  are lost on restart (`meta.scope`). `nextCursor` pages older entries with
+  `--before`. `--follow` prints the page oldest first and then follows with
+  the server's cursor; the cursor belongs to one process session, so a
+  restart or another instance answering ends the stream with
+  `scope_changed`. Overwritten unread entries are reported as a `gap`.
 - `agctl status` probes `/livez`, `/readyz`, and the diagnostics and prints
   one verdict per check: dependencies, runtime nodes (with their issue
   codes), scanner, and failed queue jobs. The overall result is the worst
@@ -517,6 +543,44 @@ These commands read; none of them changes anything.
   Running, retrying, and cancelling jobs is not part of this command family
   yet.
 
+### Authorization
+
+Grants are written one row at a time, keyed by principal and resource
+prefix; the whole-table replace endpoint is not exposed. Repositories are
+addressed by ID with `--repo`.
+
+- `agctl grant list --repo ID` prints a repository's grants and the grant
+  set version (from `ETag`) that conditions `template apply`;
+  `agctl grant list --all-repositories` lists the grants on every repository
+  the caller administers.
+- `agctl grant upsert --repo ID --principal P --scope S… [--resource-prefix
+  X]` creates or replaces one grant and leaves the others untouched; the
+  same row may be sent again, so the request is retried. The answer must
+  contain the written row and the new version, or the outcome is unknown.
+  `--dry-run` reads the current row and reports `create`, `replace`, or
+  `unchanged`.
+- `agctl grant delete --repo ID --principal P [--resource-prefix X] --yes`
+  removes one grant. It is not retried: a repeat answers 404, which is also
+  what a grant that does not exist answers.
+- `agctl role list|show` and `agctl template list|show` read the catalogues
+  (platform administrators).
+- `agctl template apply TEMPLATE_ID --repo ID --yes` replaces every grant of
+  the repository with the template's, conditional on `--if-match` or the
+  grant set version read just before; a 412 (exit 7) replaces nothing and the
+  apply is never retried. `--dry-run` reads the grants and the template and
+  lists every grant the apply would add, remove, change, and keep.
+- `agctl access check --repo ID [--actor A [--role member|admin]]
+  [--resource PATH]` explains read, write, admin, intelligence, and
+  anonymous read with the source and reason of each decision.
+  `--require PERMISSION` (repeatable) exits 6 when one is not allowed, for
+  CI and agent self-checks. Explaining another actor needs a platform
+  administrator; `--role` simulates that actor's global role.
+- `agctl access anonymous show` reads the platform switch for anonymous
+  reads; `agctl access anonymous set --enabled=true|false` replaces it
+  conditional on `--if-match` or the version just read, and is never
+  retried. Enabling needs `--yes`, because it applies to every repository
+  and Group that allows anonymous reads.
+
 ## Verification
 
 - `go test ./internal/agctl/...` runs offline against in-process fakes:
@@ -537,7 +601,12 @@ These commands read; none of them changes anything.
   POM through the native protocols and searches, browses, lists, inspects,
   and deletes them; checks that a credential without permissions is refused
   (6), sees an empty global search, and that the refusal is in the audit log
-  under the reported request id; reads status, diagnostics, runtime nodes,
+  under the reported request id; writes, checks, narrows, and removes a
+  grant for a simulated member (access check exit 6 when denied), finds the
+  grant writes in the audit log and in a bounded `--follow` stream, applies a
+  template (dry-run diff, stale `If-Match`, apply), re-sets the anonymous
+  switch to its own value with a stale-version refusal, reads runtime logs
+  as a page and a bounded stream; reads status, diagnostics, runtime nodes,
   overview, and lifecycle jobs; then deletes the repository (confirmation,
   dry-run, 202, timed-out wait) and waits for `deleted`. It also checks the exit codes for a wrong token (5), a missing
   repository (4), invalid input (2), and conflicts (7).

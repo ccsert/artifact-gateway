@@ -136,6 +136,10 @@ func exitCodeFor(err error) int {
 	if errors.As(err, &wait) {
 		return ExitConnection
 	}
+	var denied *accessDeniedError
+	if errors.As(err, &denied) {
+		return ExitForbidden
+	}
 	return ExitFailure
 }
 
@@ -170,6 +174,10 @@ func localErrorCode(err error) string {
 	if errors.As(err, &status) {
 		return status.overall
 	}
+	var denied *accessDeniedError
+	if errors.As(err, &denied) {
+		return "not_permitted"
+	}
 	return "internal_error"
 }
 
@@ -201,6 +209,10 @@ func errorHint(err error) string {
 	var wait *WaitTimeoutError
 	if errors.As(err, &wait) {
 		return wait.Hint
+	}
+	var denied *accessDeniedError
+	if errors.As(err, &denied) {
+		return denied.Hint
 	}
 	return ""
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# agctl end-to-end check against a real Gateway (issues #127, #130, #131 and
-# #135).
+# agctl end-to-end check against a real Gateway (issues #127, #130, #131,
+# #134 and #135).
 #
 # By default it boots an isolated Compose project from GATEWAY_ENV_FILE (or
 # .env) on free ports and removes it afterwards. To reuse a Gateway that is
@@ -20,7 +20,11 @@
 # listed, inspected and deleted; a credential without permissions is refused
 # (exit 6), sees an empty global search, and the refusal is found in the audit
 # log by its request id; status, diagnostics, runtime nodes, overview and
-# lifecycle jobs are read.
+# lifecycle jobs are read. Authorization: a single grant is written, checked
+# with access check (exit 6 when denied), narrowed by resource prefix,
+# replaced by a template (dry-run diff, stale If-Match 412, apply) and
+# removed; the grant write is found in the audit log, also through a bounded
+# --follow stream; runtime logs are read as a page and as a bounded stream.
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -412,6 +416,123 @@ PY2
 else
   printf '%s\n' 'CLI_E2E_RESOLVER_TOKEN is not set: skipping permission and audit checks' >&2
 fi
+
+# Authorization (#134). A simulated member principal is granted read on the
+# Raw repository, checked, narrowed by resource prefix, replaced by a template
+# and removed; every write is conditional or keyed to one grant row.
+grant_started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+principal="user:cli-e2e-${suffix}"
+expect 0 "$out" -- grant list --repo "$content_id" --json
+grants_version=$(field "$out" data.version)
+expect 2 "$out" -- grant upsert --repo "$content_id" --principal "$principal" --json
+expect 0 "$out" -- grant upsert --repo "$content_id" --principal "$principal" --scope repositories:read --dry-run --json
+require "$(field "$out" data.current.change)" create "grant upsert dry-run"
+expect 0 "$out" -- grant list --repo "$content_id" --json
+require "$(field "$out" data.version)" "$grants_version" "grant version after dry-run"
+expect 0 "$out" -- grant upsert --repo "$content_id" --principal "$principal" --scope repositories:read --json
+require "$(field "$out" data.change)" upserted "grant upsert"
+expect 0 "$out" -- grant upsert --repo "$content_id" --principal "$principal" --scope repositories:write --resource-prefix releases/ --json
+expect 0 "$out" -- access check --repo "$content_id" --actor "$principal" --role member --require read --json
+require "$(field "$out" data.permissions.read.allowed)" true "granted read"
+expect 6 "$out" -- access check --repo "$content_id" --actor "$principal" --role member --require write --json
+require "$(field "$out" error.code)" not_permitted "write without the prefix"
+expect 0 "$out" -- access check --repo "$content_id" --actor "$principal" --role member --resource releases/app.txt --require write --json
+expect 6 "$out" -- access check --repo "$content_id" --actor "$principal" --role member --resource other/app.txt --require write --json
+expect 0 "$out" -- grant list --all-repositories --json
+python3 - "$out" "$content_id" "$principal" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    records = json.load(stream)["data"]["items"]
+mine = sorted((record.get("resourcePrefix") or "", ",".join(record["scopes"])) for record in records
+              if record["repositoryId"] == sys.argv[2] and record["principal"] == sys.argv[3])
+if mine != [("", "repositories:read"), ("releases/", "repositories:write")]:
+    raise SystemExit(f"aggregated grants do not show both rows: {mine}")
+PY2
+expect 0 "$out" -- audit list --operation repository.grants.upsert --repository "$content_name" --from "$grant_started" --json
+python3 - "$out" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    records = json.load(stream)["data"]["items"]
+if len(records) < 2:
+    raise SystemExit(f"expected the two grant writes in the audit log, got {len(records)}")
+PY2
+expect 0 "$out" -- audit list --follow --from "$grant_started" --operation repository.grants.upsert --repository "$content_name" --max-events 2 --json
+python3 - "$out" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    events = [json.loads(line) for line in stream]
+kinds = [event["type"] for event in events]
+if kinds != ["entry", "entry", "end"] or events[-1]["data"]["reason"] != "max_events":
+    raise SystemExit(f"bounded audit stream: {kinds} {events[-1]}")
+PY2
+
+template_response="$workdir/template.json"
+curl --silent --show-error --fail --output "$template_response" -X POST -H "Authorization: Bearer $admin_token" \
+  -H 'Content-Type: application/json' \
+  --data "{\"name\":\"cli-e2e-template-${suffix}\",\"grants\":[{\"principal\":\"$principal\",\"scopes\":[\"repositories:read\",\"repositories:intelligence\"]}]}" \
+  "$server/api/v2/authorization-templates"
+template_id=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["id"])' "$template_response")
+expect 0 "$out" -- template show "$template_id" --json
+require "$(field "$out" data.grants.0.principal)" "$principal" "template grant"
+expect 0 "$out" -- grant list --repo "$content_id" --json
+grants_version=$(field "$out" data.version)
+expect 0 "$out" -- template apply "$template_id" --repo "$content_id" --dry-run --json
+python3 - "$out" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    diff = json.load(stream)["data"]["current"]["diff"]
+summary = (len(diff["added"]), len(diff["removed"]), len(diff["changed"]), len(diff["kept"]))
+if summary != (0, 1, 1, 0):
+    raise SystemExit(f"template diff (added, removed, changed, kept) = {summary}")
+PY2
+expect 2 "$out" -- template apply "$template_id" --repo "$content_id" --json
+expect 7 "$out" -- template apply "$template_id" --repo "$content_id" --yes --if-match 0 --json
+expect 0 "$out" -- grant list --repo "$content_id" --json
+require "$(field "$out" data.version)" "$grants_version" "grant version after a refused apply"
+expect 0 "$out" -- template apply "$template_id" --repo "$content_id" --yes --json
+expect 0 "$out" -- grant list --repo "$content_id" --json
+require "$(field "$out" data.grants)" "[{\"principal\": \"$principal\", \"scopes\": [\"repositories:read\", \"repositories:intelligence\"]}]" "grants after apply"
+expect 0 "$out" -- grant delete --repo "$content_id" --principal "$principal" --dry-run --json
+expect 0 "$out" -- grant delete --repo "$content_id" --principal "$principal" --yes --json
+expect 4 "$out" -- grant delete --repo "$content_id" --principal "$principal" --yes --json
+expect 6 "$out" -- access check --repo "$content_id" --actor "$principal" --role member --require read --json
+curl --silent --show-error --fail --output /dev/null -X DELETE -H "Authorization: Bearer $admin_token" "$server/api/v2/authorization-templates/$template_id"
+
+# The anonymous switch is shared with every other check on this Gateway: it is
+# read, re-set to its own value, and refused on a stale version, never flipped.
+expect 0 "$out" -- access anonymous show --json
+anonymous_enabled=$(field "$out" data.enabled)
+anonymous_version=$(field "$out" data.version)
+expect 0 "$out" -- access anonymous set --enabled="$anonymous_enabled" --yes --dry-run --json
+expect 0 "$out" -- access anonymous show --json
+require "$(field "$out" data.version)" "$anonymous_version" "anonymous version after dry-run"
+expect 0 "$out" -- access anonymous set --enabled="$anonymous_enabled" --yes --json
+expect 7 "$out" -- access anonymous set --enabled="$anonymous_enabled" --yes --if-match "$anonymous_version" --json
+expect 0 "$out" -- access anonymous show --json
+require "$(field "$out" data.enabled)" "$anonymous_enabled" "anonymous switch unchanged"
+
+# Runtime logs (#135): one page, then a bounded stream that ends on its budget.
+expect 0 "$out" -- runtime logs --limit 5 --json
+require "$(field "$out" meta.scope.scope)" local "runtime log scope"
+expect 2 "$out" -- runtime logs --follow --json
+expect 0 "$out" -- runtime logs --follow --duration 3s --interval 1s --json
+python3 - "$out" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    events = [json.loads(line) for line in stream]
+if any(event["schemaVersion"] != 1 for event in events) or events[-1]["type"] != "end" or events[-1]["data"]["reason"] != "duration":
+    raise SystemExit(f"bounded log stream did not end on its duration: {events[-1:]}")
+PY2
 
 # Runtime reads (#135). status is healthy or degraded on a running stack and
 # exits 0 for both; --strict fails exactly when it is not healthy.
