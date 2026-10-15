@@ -140,8 +140,14 @@ func incompleteResponse(response *apiResponse, client *apiClient, resource strin
 
 func readGroup(ctx context.Context, client *apiClient, id string) (adminopenapi.Group, error) {
 	var group adminopenapi.Group
-	err := client.getJSON(ctx, groupPath(id), nil, &group)
-	return group, err
+	response, err := client.sendJSON(ctx, http.MethodGet, groupPath(id), requestOptions{idempotent: true}, &group)
+	if err != nil {
+		return group, err
+	}
+	if !completeGroup(group) {
+		return group, incompleteResponse(response, client, "Group")
+	}
+	return group, nil
 }
 
 func groupConflictHint(err error, ifMatch, id string) {

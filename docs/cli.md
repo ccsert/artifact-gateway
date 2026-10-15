@@ -413,7 +413,9 @@ checked by a platform administrator.
   in the order given, conditional on `--if-match` or the version just read.
   The contract documents a member list in the response while the server
   returns the updated Group; both are accepted, and a bare member list is
-  followed by a read of the Group to report its new version.
+  followed by a read of the Group to report its new version. If that read
+  fails or returns an incomplete Group, the command fails while retaining
+  the confirmed member list and a read-back hint; it never repeats the write.
 - `agctl group delete ID --yes` deletes the Group; its member repositories
   are kept. Deletion is synchronous (`data` is `{id, deleted: true}`) and is
   never retried, because a repeat after a lost response would answer 404.

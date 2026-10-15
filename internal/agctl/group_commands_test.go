@@ -49,6 +49,8 @@ type fakeGroupAPI struct {
 	writeBody *string
 	// membersAsList answers member replacement with the documented MemberList.
 	membersAsList bool
+	// readBody overrides a Group read to exercise incomplete read-back responses.
+	readBody *string
 }
 
 func newFakeGroupAPI(t *testing.T) *fakeGroupAPI {
@@ -151,6 +153,12 @@ func (api *fakeGroupAPI) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case sub == "" && r.Method == http.MethodGet:
+		if api.readBody != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = io.WriteString(w, *api.readBody)
+			return
+		}
 		writeJSON(w, http.StatusOK, group)
 	case sub == "members" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, group.Members)
@@ -503,6 +511,34 @@ func TestGroupMembersSetAcceptsDocumentedMemberList(t *testing.T) {
 	code, stdout, stderr := runCLI(t, "group", "members", "set", group.ID, "--member", memberB, "--json")
 	if code != ExitOK || !strings.Contains(stdout, `"version": "2"`) || !strings.Contains(stdout, memberB) {
 		t.Fatalf("exit = %d, stdout = %s, stderr = %s", code, stdout, stderr)
+	}
+}
+
+func TestGroupMembersSetIncompleteReadBackPreservesAppliedMembers(t *testing.T) {
+	for name, body := range map[string]string{"empty": "", "null": "null", "empty object": "{}", "partial group": `{"name":"npm-all"}`} {
+		t.Run(name, func(t *testing.T) {
+			api := newFakeGroupAPI(t)
+			group := api.add("npm-all", "npm", memberA)
+			api.membersAsList = true
+			api.readBody = &body
+			code, stdout, _ := runCLI(t, "group", "members", "set", group.ID, "--member", memberB, "--if-match", "1", "--json")
+			envelope := decodeEnvelope(t, stdout)
+			if code != ExitFailure || envelope.OK || envelope.Error == nil || envelope.Error.Code != "invalid_response" || envelope.Error.HTTPStatus == nil || *envelope.Error.HTTPStatus != http.StatusOK {
+				t.Fatalf("an incomplete read-back must not report success: exit = %d, stdout = %s", code, stdout)
+			}
+			var data struct {
+				Items []fakeMember `json:"items"`
+			}
+			if err := json.Unmarshal(envelope.Data, &data); err != nil || len(data.Items) != 1 || data.Items[0].RepositoryID != memberB || data.Items[0].Position != 0 {
+				t.Fatalf("the confirmed member replacement must be retained: stdout = %s, err = %v", stdout, err)
+			}
+			if !strings.Contains(envelope.Error.Hint, "the members were replaced") || !strings.Contains(envelope.Error.Hint, "agctl group show "+group.ID) {
+				t.Fatalf("the read-back recovery hint must be retained: stdout = %s", stdout)
+			}
+			if len(api.writes()) != 1 || api.snapshot(group.ID).Members[0].RepositoryID != memberB {
+				t.Fatalf("the applied replacement must not be resent: writes = %+v", api.writes())
+			}
+		})
 	}
 }
 

@@ -352,7 +352,8 @@ Group，因此它无法确认结果的写入需要平台管理员来核对。
 - `agctl group members set ID --member REPOSITORY_ID…` 按给出的顺序替换
   成员，以 `--if-match` 或刚读到的版本为条件。契约写明响应是成员列表，而服务
   端返回更新后的 Group；两者都接受，收到纯成员列表时会再读取 Group 以报告新
-  版本。
+  版本。若回读失败或返回不完整的 Group，命令报告失败并保留已确认写入的成员
+  列表与回读提示，不会重复写入。
 - `agctl group delete ID --yes` 删除 Group，成员仓库保留。删除是同步的
   （`data` 为 `{id, deleted: true}`），且从不重试，因为响应丢失后的重复请求
   会返回 404。

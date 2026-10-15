@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- `agctl group members set` 在成员替换已确认后，拒绝将空或不完整的 Group 回读响应当作成功；保留已写入的成员列表和恢复提示，不会重复写入。
+
 - 新增 `agctl group list|show|create|update|delete`、`group members list|set` 和 `group resolution`，可在命令行管理 Group（#130）。成员是按解析顺序给出的仓库 ID；`update` 和 `members set` 以 Group 版本为条件，412 不会覆盖；创建在重试时复用幂等键；`delete` 需要 `--yes`，保留成员仓库且从不重试。响应无法解析或不完整的写操作报告结果未知并给出回读路径，而不是报告成功。`make cli-e2e` 现在也在真实 Gateway 上跑 Group 生命周期。成员替换端点返回更新后的 Group，而契约写的是成员列表；CLI 两者都接受。
 
 - `agctl` 仓库写入收到无法解析、为空或缺少必要字段的 HTTP 成功响应时保留恢复信息：创建返回原幂等键以便安全重放，更新提示先回读仓库状态再决定是否重试。
