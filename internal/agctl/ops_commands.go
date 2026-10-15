@@ -125,16 +125,18 @@ func auditListCommand() command {
 	var filters auditFilters
 	var bounded, csvOutput bool
 	var limit int
+	var follow followOptions
 	list := &cursorList[adminopenapi.AuditRecord]{path: auditPagePath, noun: "audit records", render: renderAuditTable}
 	return command{
 		name:     "audit list",
 		synopsis: "list administrative audit records, newest first",
-		usage:    "agctl audit list [filters] [--from TIME] [--to TIME] [--page-size N] [--cursor TOKEN | --all] | --bounded [--limit N] [--csv | --json]",
+		usage:    "agctl audit list [filters] [--from TIME] [--to TIME] [--page-size N] [--cursor TOKEN | --all] | --bounded [--limit N] | --follow (--duration D | --max-events N) [--csv | --json]",
 		setFlags: func(fs *flag.FlagSet) {
 			filters.register(fs)
 			fs.BoolVar(&bounded, "bounded", false, "read one bounded window from GET /audits instead of cursor pages")
 			fs.IntVar(&limit, "limit", 100, "records in the --bounded window (1-500)")
 			fs.BoolVar(&csvOutput, "csv", false, "print CSV with a header row instead of a table")
+			follow.register(fs)
 			list.setFlags(fs)
 		},
 		meta: commandMeta{
@@ -143,14 +145,30 @@ func auditListCommand() command {
 			Stage:        "m1",
 			Endpoints:    []string{"GET " + auditPagePath, "GET " + auditsPath},
 			MinimumRole:  "platform admin",
-			OutputSchema: "AuditPage | AuditList",
+			OutputSchema: "AuditPage | AuditList | NDJSON stream",
 			Pagination:   true,
 			DryRun:       "unsupported",
 			Retry:        true,
+			Follow:       true,
 		},
 		run: func(ctx context.Context, env *commandContext) error {
 			if csvOutput && env.format == outputJSON {
 				return &UsageError{Message: "--csv and --json cannot be combined", Hint: "choose one output format"}
+			}
+			if err := follow.validate(env); err != nil {
+				return err
+			}
+			if follow.follow {
+				for _, name := range []string{"bounded", "csv", "cursor", "all", "page-size", "max-pages", "limit", "to"} {
+					if env.flagSet[name] {
+						return &UsageError{Message: "--" + name + " cannot be combined with --follow", Hint: "--follow streams new records as they arrive; --from replays from a time first"}
+					}
+				}
+				client, err := env.client()
+				if err != nil {
+					return err
+				}
+				return followAudits(ctx, env, client, filters, follow)
 			}
 			if csvOutput {
 				list.render = renderAuditCSV

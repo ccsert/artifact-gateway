@@ -31,6 +31,9 @@ type commandMeta struct {
 	DryRun       string   `json:"dryRun"`
 	Retry        bool     `json:"retry"`
 	Wait         bool     `json:"wait"`
+	// Follow marks a command that streams new entries as bounded NDJSON
+	// (--follow with --duration or --max-events).
+	Follow bool `json:"follow"`
 }
 
 type command struct {
@@ -93,6 +96,18 @@ func registry() []command {
 		overviewShowCommand(),
 		lifecycleJobListCommand(),
 		lifecycleJobShowCommand(),
+		grantListCommand(),
+		grantUpsertCommand(),
+		grantDeleteCommand(),
+		roleListCommand(),
+		roleShowCommand(),
+		templateListCommand(),
+		templateShowCommand(),
+		templateApplyCommand(),
+		accessCheckCommand(),
+		accessAnonymousShowCommand(),
+		accessAnonymousSetCommand(),
+		runtimeLogsCommand(),
 	}
 }
 

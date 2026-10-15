@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "data": {
+    "actor": "service-account:ci",
+    "identity": {
+      "actor": "service-account:ci",
+      "kind": "service-account",
+      "administrator": false
+    },
+    "repository": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "name": "raw-hosted",
+      "format": "raw",
+      "type": "hosted",
+      "state": "active"
+    },
+    "resource": "",
+    "simulated": false,
+    "anonymousRead": {
+      "allowed": false,
+      "source": "policy",
+      "reason": "disabled"
+    },
+    "permissions": {
+      "read": {
+        "allowed": true,
+        "source": "grant",
+        "reason": "granted"
+      },
+      "write": {
+        "allowed": false,
+        "source": "grant",
+        "reason": "scope_not_granted"
+      },
+      "admin": {
+        "allowed": false,
+        "source": "grant",
+        "reason": "scope_not_granted"
+      },
+      "intelligence": {
+        "allowed": false,
+        "source": "grant",
+        "reason": "scope_not_granted"
+      }
+    }
+  },
+  "error": {
+    "code": "not_permitted",
+    "httpStatus": null,
+    "message": "service-account:ci may not write (scope_not_granted) on repository raw-hosted",
+    "hint": "grant the missing scope with agctl grant upsert, or check the resource prefix with --resource",
+    "requestId": ""
+  },
+  "meta": null
+}

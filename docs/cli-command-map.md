@@ -13,8 +13,10 @@ use the same introspection for both views.
 This page classifies the full contract; it does not describe the installed
 binary. Apart from the #125 skeleton (`version`, `info`, `commands`) and the
 rows whose phase says `implemented` (the #130 repository and Group commands,
-the #131 artifact and format views, and the read-only #135 audit, status,
-diagnostics, runtime-node, overview, and lifecycle-job commands, each
+the #131 artifact and format views, the #134 grant, role, template, access
+check, and anonymous-switch commands, and the read-only #135 audit, status,
+diagnostics, runtime-node and runtime-log, overview, and lifecycle-job
+commands, each
 accepted against a real Gateway by `make cli-e2e`), every row is a plan. A
 row may claim implemented/verified only once its command is
 registered, its documentation and tests exist, and it passed acceptance
@@ -128,8 +130,8 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `GET /formats`<br>`listFormatProfiles` | `formats list` (info reuses the same read) | #125 | M0 | I | Q |
 | `GET /identity`<br>`getCurrentIdentity` | `auth whoami` (info reuses the same read) | #129 | M1 | I | Q |
 | `GET /artifact-search`<br>`searchArtifacts` | `artifact search --global` | #131 | M1 implemented | FR | Q |
-| `GET /anonymous-access-policy`<br>`getAnonymousAccessPolicy` | `access anonymous show` | #134 | M1 | A | Q |
-| `PUT /anonymous-access-policy`<br>`replaceAnonymousAccessPolicy` | `access anonymous set` | #134 | M1 | A | C |
+| `GET /anonymous-access-policy`<br>`getAnonymousAccessPolicy` | `access anonymous show` | #134 | M1 implemented | A | Q |
+| `PUT /anonymous-access-policy`<br>`replaceAnonymousAccessPolicy` | `access anonymous set` | #134 | M1 implemented | A | C |
 | `GET /site-settings`<br>`getSiteSettings` | `site-settings show` (theme list reuses availableThemes) | #139 | M2 | PUBLIC | Q |
 | `PUT /site-settings`<br>`replaceSiteSettings` | `site-settings set` | #139 | M2 | A | C |
 | `POST /console-themes:validate`<br>`validateConsoleThemePackage` | `theme validate --remote` | #139 | M2 | A | W |
@@ -148,7 +150,7 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `POST /webhook-deliveries/{deliveryId}:replay`<br>`replayWebhookDelivery` | `webhook delivery replay <id>` | #137 | M2 | A | W |
 | `GET /runtime/nodes`<br>`listRuntimeNodes` | `runtime nodes` | #135 | M1 implemented | A | Q |
 | `GET /diagnostics`<br>`getDiagnostics` | `diagnostics` (status reuses the same read) | #135 | M1 implemented | A | Q |
-| `GET /runtime/logs`<br>`listRuntimeLogs` | `runtime logs` | #135 | M1 | A | L |
+| `GET /runtime/logs`<br>`listRuntimeLogs` | `runtime logs` | #135 | M1 implemented | A | L |
 | `GET /api-keys`<br>`listApiKeys` | `api-key list` | #133 | M1 | A | Q |
 | `POST /api-keys`<br>`createApiKey` | `api-key create` | #133 | M1 | A | S |
 | `DELETE /api-keys/{apiKeyId}`<br>`revokeApiKey` | `api-key delete <id>` | #133 | M1 | A | W |
@@ -179,16 +181,16 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `GET /audit-retention/jobs`<br>`listAuditRetentionJobs` | `audit retention jobs` | #138 | M2 | A | Q |
 | `GET /repositories`<br>`listRepositories` | `repo list` | #130 | M1 implemented | FR | Q |
 | `POST /repositories`<br>`createRepository` | `repo create` | #130 | M1 implemented | A | W |
-| `GET /repository-grants`<br>`listRepositoryGrants` | `grant list --all-repositories` | #134 | M1 | FA | Q |
-| `GET /authorization-templates`<br>`listAuthorizationTemplates` | `template list` | #134 | M1 | A | Q |
+| `GET /repository-grants`<br>`listRepositoryGrants` | `grant list --all-repositories` | #134 | M1 implemented | FA | Q |
+| `GET /authorization-templates`<br>`listAuthorizationTemplates` | `template list` | #134 | M1 implemented | A | Q |
 | `POST /authorization-templates`<br>`createAuthorizationTemplate` | `template create` | #134 | M2 | A | W |
-| `GET /authorization-templates/{templateId}`<br>`getAuthorizationTemplate` | `template show <id>` | #134 | M1 | A | Q |
+| `GET /authorization-templates/{templateId}`<br>`getAuthorizationTemplate` | `template show <id>` | #134 | M1 implemented | A | Q |
 | `PUT /authorization-templates/{templateId}`<br>`updateAuthorizationTemplate` | `template update <id>` | #134 | M2 | A | C |
 | `DELETE /authorization-templates/{templateId}`<br>`deleteAuthorizationTemplate` | `template delete <id>` | #134 | M2 | A | W |
-| `POST /authorization-templates/{templateId}/apply`<br>`applyAuthorizationTemplate` | `template apply <id> --repo <id>` | #134 | M1 | RA | G |
-| `GET /authorization-roles`<br>`listAuthorizationRoles` | `role list` | #134 | M1 | A | Q |
+| `POST /authorization-templates/{templateId}/apply`<br>`applyAuthorizationTemplate` | `template apply <id> --repo <id>` | #134 | M1 implemented | RA | G |
+| `GET /authorization-roles`<br>`listAuthorizationRoles` | `role list` | #134 | M1 implemented | A | Q |
 | `POST /authorization-roles`<br>`createAuthorizationRole` | `role create` | #134 | M2 | A | W |
-| `GET /authorization-roles/{roleId}`<br>`getAuthorizationRole` | `role show <id>` | #134 | M1 | A | Q |
+| `GET /authorization-roles/{roleId}`<br>`getAuthorizationRole` | `role show <id>` | #134 | M1 implemented | A | Q |
 | `PUT /authorization-roles/{roleId}`<br>`updateAuthorizationRole` | `role update <id>` | #134 | M2 | A | C |
 | `DELETE /authorization-roles/{roleId}`<br>`deleteAuthorizationRole` | `role delete <id>` | #134 | M2 | A | W |
 | `GET /repository-capacities`<br>`listRepositoryCapacities` | `capacity list` | #138 | M2 | FA | Q |
@@ -204,10 +206,10 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `DELETE /repositories/{repositoryId}`<br>`deleteRepository` | `repo delete <id>` (asynchronous deleting → deleted) | #130 | M1 implemented | RA | J |
 | `PATCH /repositories/{repositoryId}`<br>`updateRepository` | `repo update <id>` | #130 | M1 implemented | RA | C |
 | `POST /repositories/{repositoryId}/egress-proxy:test`<br>`testEgressProxy` | `egress-proxy test --repo <id>` | #139 | M2 | RA | W |
-| `GET /repositories/{repositoryId}/grants`<br>`listGrants` | `grant list --repo <id>` | #134 | M1 | RA | Q |
+| `GET /repositories/{repositoryId}/grants`<br>`listGrants` | `grant list --repo <id>` | #134 | M1 implemented | RA | Q |
 | `PUT /repositories/{repositoryId}/grants`<br>`replaceGrants` | not exposed as a whole-table PUT; use single-row grant writes or `template apply` | #134 | N/A | RA | N |
-| `POST /repositories/{repositoryId}/grants`<br>`upsertGrant` | `grant upsert --repo <id>` | #134 | M1 | RA | G |
-| `DELETE /repositories/{repositoryId}/grants`<br>`deleteGrant` | `grant delete --repo <id>` | #134 | M1 | RA | G |
+| `POST /repositories/{repositoryId}/grants`<br>`upsertGrant` | `grant upsert --repo <id>` | #134 | M1 implemented | RA | G |
+| `DELETE /repositories/{repositoryId}/grants`<br>`deleteGrant` | `grant delete --repo <id>` | #134 | M1 implemented | RA | G |
 | `GET /repositories/{repositoryId}/retention-policy`<br>`getRetentionPolicy` | `policy retention show --repo <id>` | #139 | M2 | R | Q |
 | `PUT /repositories/{repositoryId}/retention-policy`<br>`replaceRetentionPolicy` | `policy retention set --repo <id>` | #139 | M2 | RA | C |
 | `GET /repositories/{repositoryId}/security-policy`<br>`getSecurityPolicy` | `policy security show --repo <id>` | #139 | M2 | RA | Q |
@@ -236,7 +238,7 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `GET /repositories/{repositoryId}/tombstones`<br>`listRepositoryTombstones` | `tombstone list --repo <id>` | #138 | M2 | RA | Q |
 | `POST /repositories/{repositoryId}/tombstones`<br>`tombstoneRepositoryArtifact` | `artifact tombstone --repo <id>` | #138 | M2 | RA | W |
 | `GET /repositories/{repositoryId}/capabilities`<br>`getRepositoryCapabilities` | `repo capabilities <id>` | #130 | M1 implemented | R | Q |
-| `GET /repositories/{repositoryId}/effective-access`<br>`getRepositoryEffectiveAccess` | `access check --repo <id>` | #134 | M1 | I/A | Q |
+| `GET /repositories/{repositoryId}/effective-access`<br>`getRepositoryEffectiveAccess` | `access check --repo <id>` | #134 | M1 implemented | I/A | Q |
 | `GET /groups`<br>`listGroups` | `group list` | #130 | M1 implemented | A | Q |
 | `POST /groups`<br>`createGroup` | `group create` | #130 | M1 implemented | G | W |
 | `GET /groups/{groupId}`<br>`getGroup` | `group show <id>` | #130 | M1 implemented | A | Q |

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "mode": "client-plan",
+    "method": "POST",
+    "path": "/api/v2/repositories/00000000-0000-4000-8000-000000000001/grants",
+    "headers": {},
+    "body": {
+      "principal": "service-account:ci",
+      "scopes": [
+        "repositories:read",
+        "repositories:write"
+      ]
+    },
+    "current": {
+      "repositoryId": "00000000-0000-4000-8000-000000000001",
+      "change": "replace",
+      "before": {
+        "principal": "service-account:ci",
+        "scopes": [
+          "repositories:read"
+        ]
+      },
+      "after": {
+        "principal": "service-account:ci",
+        "scopes": [
+          "repositories:read",
+          "repositories:write"
+        ]
+      },
+      "version": "7"
+    },
+    "verified": [
+      "principal, scopes, and prefix shape",
+      "the repository's current grant for this principal and prefix was read"
+    ],
+    "notVerified": [
+      "caller permission (repositories:admin)",
+      "that the resource prefix is canonical for the repository's format"
+    ]
+  },
+  "error": null,
+  "meta": null
+}
