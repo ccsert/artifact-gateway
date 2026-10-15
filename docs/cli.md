@@ -477,7 +477,8 @@ addressed by ID with `--repo`.
   publish snippets for hosted repositories. Credentials are always the
   placeholder `${ARTIFACT_GATEWAY_TOKEN}`; the configured token is never
   written into a snippet. URLs follow the server the CLI talks to, with
-  credentials, query, and fragment removed.
+  credentials, query, and fragment removed. PyPI `.netrc` entries use the
+  bare hostname that pip matches, while index URLs retain any explicit port.
 
 ### Audit and runtime
 
@@ -498,13 +499,21 @@ These commands read; none of them changes anything.
   exits 1 when it is unhealthy, or with `--strict` whenever it is not
   healthy. Without credentials, or when the caller may not read the
   diagnostics, those checks are `unknown`, never healthy.
+  An unhealthy or unreachable scanner makes ordinary `status` fail;
+  a stale scanner database remains degraded and fails with `--strict`.
 - `agctl diagnostics`, `agctl runtime nodes`, and `agctl overview show` print
   the server documents (JSON output passes them through unchanged, so new
-  fields reach scripts) with a human summary.
+  fields reach scripts) with a human summary. Diagnostics includes each
+  local mount's status, reason, byte values, actual sample time and shared
+  aliases, plus the observation scope and unit. Missing values remain unknown.
 - `agctl lifecycle-job list [--repo ID | --limit N]` reads the newest jobs of
-  one repository or, by default, the newest 500 across the repositories the
-  caller administers. `agctl lifecycle-job show JOB_ID` finds one job in the
-  same list; a job outside it answers exit 4 with the range that was searched.
+  one repository (at most 100), or a global window of at most 500 by default.
+  The server limits the global window before filtering repository permissions:
+  a short or empty result does not prove completeness. Both sources report
+  `mode: bounded`; global completeness stays unknown, and a repository window
+  is complete only when fewer than 100 jobs are returned.
+  `agctl lifecycle-job show JOB_ID` finds one job in the same window; a job
+  outside it answers exit 4 with the range that was searched.
   Running, retrying, and cancelling jobs is not part of this command family
   yet.
 

@@ -402,7 +402,8 @@ Group，因此它无法确认结果的写入需要平台管理员来核对。
   `docker login`、Raw `curl`、Conan remote、APT `sources.list` 与 `auth.conf`、
   Cargo `config.toml`），Hosted 仓库附带发布片段。凭据一律是占位符
   `${ARTIFACT_GATEWAY_TOKEN}`，已配置的 token 绝不写进片段。URL 取 CLI 所连
-  服务端，去掉凭据、查询参数和片段。
+  服务端，去掉凭据、查询参数和片段。PyPI `.netrc` 使用 pip 匹配的纯主机名，
+  索引 URL 仍保留显式端口。
 
 ### 审计与运行状态
 
@@ -418,12 +419,17 @@ Group，因此它无法确认结果的写入需要平台管理员来核对。
   节点（附问题代码）、扫描器和失败的队列任务。总体结果取最差的一项——
   `unhealthy`、`degraded`、`unknown`、`healthy`；不健康时退出码 1，加
   `--strict` 时只要不是 healthy 就退出 1。没有凭据或无权读取诊断时，这些检查为
-  `unknown`，绝不报告为健康。
+  `unknown`，绝不报告为健康。扫描器不健康或不可达时，普通 `status` 也会失败；
+  扫描器数据库过期仍为降级，使用 `--strict` 时失败。
 - `agctl diagnostics`、`agctl runtime nodes` 和 `agctl overview show` 打印服务端
   文档（JSON 输出原样透传，新增字段也能到达脚本），并附带人类可读摘要。
+  诊断摘要保留各本地挂载的状态、原因、字节数、实际采样时间及共享别名，并说明
+  观测范围和单位；缺失值仍为 unknown。
 - `agctl lifecycle-job list [--repo ID | --limit N]` 读取一个仓库的最新任务，
-  或默认读取调用者管理的全部仓库中最新的 500 个任务。
-  `agctl lifecycle-job show JOB_ID` 在同一列表中查找任务；不在列表中的任务以
+  最多 100 条；或默认读取全局最新 500 条的窗口。服务端先截取全局窗口，再过滤
+  仓库权限，因此返回不足一页甚至空集合都不能证明完整。两个来源均报告
+  `mode: bounded`；全局完整性保持未知，单仓库不足 100 条时才报告完整。
+  `agctl lifecycle-job show JOB_ID` 在同一窗口中查找任务；不在窗口中的任务以
   退出码 4 结束，并说明查找的范围。运行、重试和取消任务暂不属于本命令族。
 
 ## 验证

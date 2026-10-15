@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- CLI 巡检保留实际观测边界：生命周期列表报告有界窗口，不再由权限过滤后的条数推断完整；扫描器不健康或不可达时，普通 `status` 也会失败；人类诊断摘要保留各挂载的状态、字节数与采样时间。PyPI 接入配置按纯主机名匹配 `.netrc` 凭据，服务端 URL 可保留显式端口。
+
 - `agctl` 新增仓库内容、审计与运行状态命令（#130、#131、#135）。`artifact search` 检索单个仓库或全部可读仓库（`--global`，并报告检索了多少仓库）；`artifact browse`、`repo browse` 和 `group browse` 浏览服务端的浏览树；`artifact identities`、`artifact usage`、`artifact intelligence show`、`artifact quarantine show`、`oci images|manifests` 和 `maven coordinates` 读取格式视图；`artifact list|show|delete` 针对 Maven Hosted 制品，`show` 把情报和隔离状态报告为已记录、无记录、无权查看或不可用，而不是健康。`repo capabilities` 列出 Hosted 格式支持的操作，`repo connect` 为各格式打印客户端配置，凭据为 `${ARTIFACT_GATEWAY_TOKEN}` 占位符。`audit list` 分页读取审计日志（或读取 `--bounded` 窗口），支持表格、JSON 和 `--csv` 输出；`status` 在 Gateway 不健康时以非零退出（`--strict`：只要不健康就失败），读不到的检查报告为 unknown；`diagnostics`、`runtime nodes`、`overview show` 和 `lifecycle-job list|show` 读取运行状态。服务端文档在 JSON 输出中原样透传。分页元数据新增 bounded 和 offset 窗口，命令映射守卫按命令声明的端点核对每个 implemented 行。`make cli-e2e` 在真实 Gateway 上覆盖以上全部，包括被拒绝的凭据可按请求 ID 在审计日志中找到。
 
 - `agctl group members set` 在成员替换已确认后，拒绝将空或不完整的 Group 回读响应当作成功；保留已写入的成员列表和恢复提示，不会重复写入。

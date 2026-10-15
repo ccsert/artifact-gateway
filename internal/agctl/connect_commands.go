@@ -80,14 +80,15 @@ type connectGuide struct {
 // connectTarget names the Gateway the snippets point at: the configured
 // server without credentials, query, or fragment.
 type connectTarget struct {
-	base string // https://gateway.example.com[/prefix]
-	host string // gateway.example.com[:port]
-	path string // gateway.example.com[:port][/prefix], for npm and netrc lines
+	base     string // https://gateway.example.com[/prefix]
+	host     string // gateway.example.com[:port]
+	hostname string // bare hostname for pip's .netrc lookup
+	path     string // gateway.example.com[:port][/prefix], for npm lines
 }
 
 func newConnectTarget(server *url.URL) connectTarget {
 	clean := url.URL{Scheme: server.Scheme, Host: server.Host, Path: strings.TrimSuffix(server.Path, "/")}
-	return connectTarget{base: clean.String(), host: clean.Host, path: clean.Host + clean.Path}
+	return connectTarget{base: clean.String(), host: clean.Host, hostname: clean.Hostname(), path: clean.Host + clean.Path}
 }
 
 // connectSnippets builds the client configuration for one repository. The
@@ -109,7 +110,7 @@ func connectSnippets(target connectTarget, name string, format adminopenapi.Form
 		index := base + "/pypi/" + name + "/simple/"
 		snippets = append(snippets,
 			connectSnippet{Label: "pip configuration", File: "pip.conf", Content: "[global]\nindex-url = " + index},
-			connectSnippet{Label: "pip credentials", File: ".netrc", Content: fmt.Sprintf("machine %s\nlogin %s\npassword %s", target.host, clientUser, tokenPlaceholder)})
+			connectSnippet{Label: "pip credentials", File: ".netrc", Content: fmt.Sprintf("machine %s\nlogin %s\npassword %s", target.hostname, clientUser, tokenPlaceholder)})
 		if hosted {
 			snippets = append(snippets,
 				connectSnippet{Label: "twine configuration", File: ".pypirc", Content: fmt.Sprintf(

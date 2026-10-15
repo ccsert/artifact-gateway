@@ -18,14 +18,15 @@ import (
 )
 
 const (
-	auditsPath        = managementPrefix + "/audits"
-	auditPagePath     = managementPrefix + "/audits/page"
-	diagnosticsPath   = managementPrefix + "/diagnostics"
-	runtimeNodesPath  = managementPrefix + "/runtime/nodes"
-	overviewPath      = managementPrefix + "/overview-statistics"
-	lifecycleJobsPath = managementPrefix + "/lifecycle-jobs"
-	maxAuditLimit     = 500
-	maxLifecycleLimit = 500
+	auditsPath               = managementPrefix + "/audits"
+	auditPagePath            = managementPrefix + "/audits/page"
+	diagnosticsPath          = managementPrefix + "/diagnostics"
+	runtimeNodesPath         = managementPrefix + "/runtime/nodes"
+	overviewPath             = managementPrefix + "/overview-statistics"
+	lifecycleJobsPath        = managementPrefix + "/lifecycle-jobs"
+	maxAuditLimit            = 500
+	maxLifecycleLimit        = 500
+	repositoryLifecycleLimit = 100
 )
 
 // auditFilters are the filters both audit endpoints share.
@@ -327,6 +328,8 @@ func addDiagnosticChecks(ctx context.Context, client *apiClient, report *statusR
 		switch {
 		case scanner.Status == adminopenapi.DiagnosticScannerStatusNotConfigured:
 			report.add("scanner", "healthy", "not configured")
+		case scanner.Status == adminopenapi.DiagnosticScannerStatusUnhealthy || scanner.Status == adminopenapi.DiagnosticScannerStatusUnreachable:
+			report.add("scanner", "unhealthy", detail)
 		case scanner.Status == adminopenapi.DiagnosticScannerStatusUnknown:
 			report.add("scanner", "unknown", detail)
 		case scanner.Status == adminopenapi.DiagnosticScannerStatusHealthy && scanner.DatabaseFreshness == adminopenapi.DiagnosticScannerDatabaseFreshnessFresh:
@@ -420,7 +423,34 @@ func renderDiagnostics(w io.Writer, diagnostics adminopenapi.Diagnostics) error 
 	if capacity := diagnostics.LocalCapacity; capacity == nil {
 		lines = append(lines, [2]string{"local capacity", "not configured"})
 	} else {
-		lines = append(lines, [2]string{"local capacity", fmt.Sprintf("%d mounts checked at %s", len(capacity.Mounts), capacity.CheckedAt.UTC().Format(time.RFC3339))})
+		lines = append(lines, [2]string{"local capacity", fmt.Sprintf("%s, scope %s, unit %s; checked at %s", capacity.Source, capacity.Scope, capacity.Unit, capacity.CheckedAt.UTC().Format(time.RFC3339))})
+		for _, mount := range capacity.Mounts {
+			parts := []string{string(mount.Status)}
+			if mount.Reason != nil {
+				parts = append(parts, "reason "+string(*mount.Reason))
+			}
+			total, available := "unknown", "unknown"
+			if mount.TotalBytes != nil {
+				total = fmt.Sprintf("%d %s", *mount.TotalBytes, capacity.Unit)
+			}
+			if mount.AvailableBytes != nil {
+				available = fmt.Sprintf("%d %s", *mount.AvailableBytes, capacity.Unit)
+			}
+			parts = append(parts, "total "+total, "available "+available)
+			sample := formatTime(mount.SampleAt)
+			if sample == "" {
+				sample = "unknown"
+			}
+			parts = append(parts, "sample "+sample)
+			if len(mount.SharedWith) > 0 {
+				aliases := make([]string, 0, len(mount.SharedWith))
+				for _, alias := range mount.SharedWith {
+					aliases = append(aliases, string(alias))
+				}
+				parts = append(parts, "shared with "+strings.Join(aliases, ", "))
+			}
+			lines = append(lines, [2]string{"mount " + string(mount.Alias), strings.Join(parts, ", ")})
+		}
 	}
 	for _, queue := range diagnostics.Queues {
 		lines = append(lines, [2]string{fmt.Sprintf("queue %s/%s", queue.Kind, queue.Format), fmt.Sprintf("%d %s", queue.Count, queue.State)})
@@ -519,7 +549,7 @@ type lifecycleJobRow struct {
 
 // readLifecycleJobs reads the newest jobs of one repository, or of every
 // repository the caller administers. Neither endpoint pages: the global one
-// keeps the newest `limit` jobs, the repository one the server's newest jobs.
+// limits before permission filtering; the repository one returns at most 100.
 func readLifecycleJobs(ctx context.Context, client *apiClient, repo string, limit int) ([]lifecycleJobRow, *paginationMeta, error) {
 	if repo != "" {
 		var jobs []adminopenapi.LifecycleJob
@@ -530,7 +560,12 @@ func readLifecycleJobs(ctx context.Context, client *apiClient, repo string, limi
 		for _, job := range jobs {
 			rows = append(rows, lifecycleJobRow{RepositoryID: repo, Job: job})
 		}
-		return rows, &paginationMeta{Mode: "none"}, nil
+		meta := &paginationMeta{Mode: "bounded", Limit: repositoryLifecycleLimit}
+		if len(rows) < repositoryLifecycleLimit {
+			complete := true
+			meta.Complete = &complete
+		}
+		return rows, meta, nil
 	}
 	var jobs []adminopenapi.RepositoryLifecycleJob
 	if err := client.getJSON(ctx, lifecycleJobsPath, url.Values{"limit": {strconv.Itoa(limit)}}, &jobs); err != nil {
@@ -541,10 +576,8 @@ func readLifecycleJobs(ctx context.Context, client *apiClient, repo string, limi
 		rows = append(rows, lifecycleJobRow{RepositoryID: item.RepositoryId.String(), RepositoryName: item.RepositoryName, Job: item.Job})
 	}
 	meta := &paginationMeta{Mode: "bounded", Limit: limit}
-	if len(rows) < limit {
-		complete := true
-		meta.Complete = &complete
-	}
+	// Fewer visible rows do not prove that older visible jobs do not exist:
+	// the server applies its limit before filtering repository permissions.
 	return rows, meta, nil
 }
 
@@ -617,7 +650,18 @@ func lifecycleJobListCommand() command {
 			if err != nil {
 				return err
 			}
-			return env.render(newListPayload(rows), &envelopeMeta{Pagination: pagination}, func(w io.Writer) error { return renderLifecycleJobs(w, rows) })
+			scope := map[string]any{"limitAppliedBeforeAuthorization": true}
+			window := fmt.Sprintf("up to %d newest global jobs, filtered to administered repositories", limit)
+			if repo != "" {
+				scope = map[string]any{"repositoryId": repo}
+				window = fmt.Sprintf("up to %d newest jobs of repository %s", repositoryLifecycleLimit, repo)
+			}
+			return env.render(newListPayload(rows), &envelopeMeta{Pagination: pagination, Scope: scope}, func(w io.Writer) error {
+				if _, err := fmt.Fprintln(w, "window: "+window); err != nil {
+					return err
+				}
+				return renderLifecycleJobs(w, rows)
+			})
 		},
 	}
 }
@@ -662,9 +706,9 @@ func lifecycleJobShowCommand() command {
 				}
 				return env.render(row, nil, func(w io.Writer) error { return renderLifecycleJob(w, row) })
 			}
-			scope := fmt.Sprintf("the %d newest jobs visible to this credential", len(rows))
+			scope := fmt.Sprintf("the global window of %d newest jobs after repository-permission filtering", limit)
 			if repo != "" {
-				scope = "the newest jobs of repository " + repo
+				scope = fmt.Sprintf("the %d newest jobs of repository %s", repositoryLifecycleLimit, repo)
 			}
 			return &APIError{
 				Code:       "not_found",

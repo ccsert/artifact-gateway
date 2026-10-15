@@ -24,8 +24,10 @@
   "meta": {
     "pagination": {
       "mode": "bounded",
-      "complete": true,
       "limit": 10
+    },
+    "scope": {
+      "limitAppliedBeforeAuthorization": true
     }
   }
 }

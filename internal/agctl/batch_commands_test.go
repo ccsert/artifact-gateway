@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -342,7 +343,11 @@ func TestRepoConnectSnapshots(t *testing.T) {
 				t.Fatalf("the configured token leaked into a snippet: %s", stdout)
 			}
 			host := strings.TrimPrefix(api.server.URL, "http://")
-			assertGolden(t, "repo_connect_"+tc.format+"_"+tc.kind+".txt", stdout, host, "gateway.test")
+			server, err := url.Parse(api.server.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertGolden(t, "repo_connect_"+tc.format+"_"+tc.kind+".txt", stdout, host, "gateway.test", server.Hostname(), "gateway.test")
 		})
 	}
 }
