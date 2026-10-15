@@ -49,14 +49,15 @@ type fakeRepositoryAPI struct {
 	t      *testing.T
 	server *httptest.Server
 
-	mu           sync.Mutex
-	repos        []*fakeRepository
-	requests     []recordedRequest
-	idempotency  map[string]string
-	failCreates  int // answer the next N creates with 503 after applying them
-	failPages    map[int]bool
-	deleteAfter  int // GETs of a deleting repository before it turns deleted; <0 never
-	deletingGets map[string]int
+	mu                sync.Mutex
+	repos             []*fakeRepository
+	requests          []recordedRequest
+	idempotency       map[string]string
+	failCreates       int     // answer the next N creates with 503 after applying them
+	writeResponseBody *string // override successful repository write responses
+	failPages         map[int]bool
+	deleteAfter       int // GETs of a deleting repository before it turns deleted; <0 never
+	deletingGets      map[string]int
 }
 
 func newFakeRepositoryAPI(t *testing.T) *fakeRepositoryAPI {
@@ -171,7 +172,7 @@ func (api *fakeRepositoryAPI) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		repo.Version = bump(repo.Version)
 		w.Header().Set("ETag", repo.Version)
-		writeJSON(w, http.StatusOK, repo)
+		api.writeRepository(w, http.StatusOK, repo)
 	case http.MethodDelete:
 		if repo.State == "active" {
 			repo.State = "deleting"
@@ -244,7 +245,16 @@ func (api *fakeRepositoryAPI) create(w http.ResponseWriter, r *http.Request, bod
 		writeProblem(w, http.StatusServiceUnavailable, "unavailable", "try again")
 		return
 	}
-	writeJSON(w, http.StatusCreated, repo)
+	api.writeRepository(w, http.StatusCreated, repo)
+}
+
+func (api *fakeRepositoryAPI) writeRepository(w http.ResponseWriter, status int, repo *fakeRepository) {
+	if api.writeResponseBody != nil {
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, *api.writeResponseBody)
+		return
+	}
+	writeJSON(w, status, repo)
 }
 
 func bump(version string) string {
@@ -430,6 +440,53 @@ func TestRepoCreateUnknownOutcomeReportsKey(t *testing.T) {
 	code, _, _ = runCLI(t, "repo", "create", "other", "--format", "npm", "--idempotency-key", "agctl-fixed-key")
 	if code != ExitConflict || len(api.repos) != 1 {
 		t.Fatalf("conflict exit = %d, repositories = %d", code, len(api.repos))
+	}
+}
+
+func TestRepoWriteInvalidResponsePreservesRecovery(t *testing.T) {
+	for _, body := range []string{"{broken", "", "null", "{}"} {
+		for _, operation := range []string{"create", "update"} {
+			t.Run(operation+"/"+body, func(t *testing.T) {
+				api := newFakeRepositoryAPI(t)
+				api.writeResponseBody = &body
+				args := []string{"repo", "create", "npm-hosted", "--format", "npm", "--json"}
+				var repo *fakeRepository
+				if operation == "update" {
+					repo = api.add("npm-hosted", "npm", "hosted")
+					args = []string{"repo", "update", repo.ID, "--anonymous-read", "--if-match", "1", "--json"}
+				}
+				code, stdout, _ := runCLI(t, args...)
+				envelope := decodeEnvelope(t, stdout)
+				if code != ExitFailure || envelope.OK || envelope.Error == nil || envelope.Error.Code != "invalid_response" {
+					t.Fatalf("exit = %d, stdout = %s", code, stdout)
+				}
+				var outcome unknownOutcome
+				if err := json.Unmarshal(envelope.Data, &outcome); err != nil {
+					t.Fatal(err)
+				}
+				if outcome.Outcome != "unknown" || outcome.Operation != "repo "+operation {
+					t.Fatalf("missing recovery information: %s", stdout)
+				}
+				writes := api.writes()
+				if len(writes) != 1 {
+					t.Fatalf("an unreadable success response must not trigger another write: %+v", writes)
+				}
+				if operation == "update" {
+					if outcome.ID != repo.ID || outcome.ReadBack != "agctl repo show "+repo.ID || !repo.AnonymousRead || repo.Version != "2" {
+						t.Fatalf("update recovery = %+v, repository = %+v", outcome, repo)
+					}
+					return
+				}
+				if outcome.IdempotencyKey == "" || outcome.IdempotencyKey != writes[0].IdempotencyKey || !strings.Contains(envelope.Error.Hint, outcome.IdempotencyKey) {
+					t.Fatalf("create lost its generated idempotency key: %s", stdout)
+				}
+				api.writeResponseBody = nil
+				code, stdout, _ = runCLI(t, "repo", "create", "npm-hosted", "--format", "npm", "--idempotency-key", outcome.IdempotencyKey, "--json")
+				if code != ExitOK || len(api.repos) != 1 || !strings.Contains(stdout, api.repos[0].ID) {
+					t.Fatalf("safe replay exit = %d, repositories = %d, stdout = %s", code, len(api.repos), stdout)
+				}
+			})
+		}
 	}
 }
 

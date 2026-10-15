@@ -196,6 +196,10 @@ With `--json`, stdout carries exactly one document — also on failure:
   `meta`): the pages read before a listing stopped (exit 3), the accepted ID
   and last state of a timed-out wait (exit 8), or `{"outcome": "unknown",
   "readBack": …}` for a write whose result the client could not observe.
+  Repository creation and updates also report an unknown outcome when a
+  successful HTTP response contains unreadable, empty, or incomplete repository
+  JSON. Creation preserves its idempotency key for safe replay; updates must be
+  read back before retrying.
 
 `--verbose` explains requests on stderr (`> GET https://…`, `< 204`) with
 credential-bearing URL parts redacted; the token itself is never printed, and

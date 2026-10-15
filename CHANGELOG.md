@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Repository writes through `agctl` retain recovery information when a successful HTTP response is unreadable, empty, or incomplete: creation reports its original idempotency key for safe replay, and updates report the repository to read back before retrying.
+
 - `agctl repo list|show|create|update|delete` manage repositories from the command line (#130). Listing reads one page by default and `--all` follows cursors within a page and time budget, exiting 3 with the pages read when it stops early. `create` sends an idempotency key that retries reuse and reports it when the outcome is unknown; `update` is conditional on the repository version and a 412 never overwrites; `delete` needs `--yes`, treats 202 as accepted rather than finished, and `--wait` reads the repository back until it is `deleted` within `--timeout`, exiting 8 with the last state on timeout. `--dry-run` prints a client plan without submitting the write. `make cli-e2e` runs the lifecycle against a real isolated Gateway and runs in CI; offline golden envelopes cover the JSON output (#127).
 
 - Query-backed editor reads preserve their opening repository catalogue, pagination cursor, selection and draft across panel refreshes, and cancelled explicit reads cannot reapply an old cached success. Access rechecks hide previous decisions while pending or failed, including a 403 that keeps the signed-in identity. Cancelling a replication plan invalidates its progress as well as the list. The read inventory follows SDK aliases and namespace calls and reports helpers shared by queries and ordinary actions; its remaining non-query scope still requires issue #284's acceptance decision.

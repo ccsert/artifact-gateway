@@ -340,14 +340,36 @@ type unknownOutcome struct {
 
 // outcomeUnknown reports whether a failed write may still have been applied:
 // the connection failed or timed out after the request could have been sent,
-// or the server failed without refusing the request.
+// or the server failed without refusing the request. An unreadable success
+// response cannot establish the resulting repository either.
 func outcomeUnknown(err error) bool {
 	var connection *ConnectionError
 	if errors.As(err, &connection) {
 		return true
 	}
 	var api *APIError
-	return errors.As(err, &api) && api.HTTPStatus >= 500
+	return errors.As(err, &api) && (api.HTTPStatus >= 500 ||
+		(api.Code == "invalid_response" && api.HTTPStatus >= 200 && api.HTTPStatus < 300))
+}
+
+// sendRepositoryWrite requires the identifying fields of the returned
+// repository before reporting success. Empty, null, or incomplete JSON must
+// preserve recovery information just like an unreadable response.
+func sendRepositoryWrite(ctx context.Context, client *apiClient, method, path string, options requestOptions) (adminopenapi.Repository, error) {
+	var repo adminopenapi.Repository
+	response, err := client.sendJSON(ctx, method, path, options, &repo)
+	if err != nil {
+		return repo, err
+	}
+	if repo.Id == "" || repo.Name == "" || repo.Format == "" || repo.State == "" || repo.Version == "" {
+		return repo, &APIError{
+			Code:       "invalid_response",
+			HTTPStatus: response.StatusCode,
+			Message:    "server returned an incomplete repository response",
+			RequestID:  redactText(response.Header.Get("X-Request-ID"), client.token),
+		}
+	}
+	return repo, nil
 }
 
 func unknownOutcomeError(err error, outcome unknownOutcome, hint string) error {
@@ -473,12 +495,11 @@ func repoCreateCommand() command {
 			}
 			// The endpoint replays the same response for the same key and body,
 			// so every attempt of this call may resend it.
-			var repo adminopenapi.Repository
-			_, err = client.sendJSON(ctx, http.MethodPost, repositoriesPath, requestOptions{
+			repo, err := sendRepositoryWrite(ctx, client, http.MethodPost, repositoriesPath, requestOptions{
 				body:       body,
 				idempotent: true,
 				header:     http.Header{"Idempotency-Key": {idempotencyKey}},
-			}, &repo)
+			})
 			if err != nil {
 				if outcomeUnknown(err) {
 					return unknownOutcomeError(err, unknownOutcome{
@@ -595,11 +616,10 @@ func repoUpdateCommand() command {
 			}
 			// A conditional write is not retried: if a lost attempt applied it,
 			// the retry would fail on the new version and misreport a conflict.
-			var repo adminopenapi.Repository
-			_, err = client.sendJSON(ctx, http.MethodPatch, repositoryPath(id), requestOptions{
+			repo, err := sendRepositoryWrite(ctx, client, http.MethodPatch, repositoryPath(id), requestOptions{
 				body:   body,
 				header: http.Header{"If-Match": {ifMatch}},
-			}, &repo)
+			})
 			if err != nil {
 				var api *APIError
 				if errors.As(err, &api) && api.HTTPStatus == http.StatusPreconditionFailed {
