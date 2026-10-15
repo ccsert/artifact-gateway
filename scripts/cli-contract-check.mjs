@@ -103,11 +103,21 @@ export function normalizedCommand(cell) {
 
 // A row claims implementation by carrying `implemented` in its Phase cell
 // (for example `M1 implemented`). The claim is only legal when the installed
-// command registry actually exposes the command, and two rows may not claim
-// one command.
+// command registry actually exposes the command. The registry is either a
+// set of command names, or a map from each name to the endpoints its
+// `agctl commands --json` metadata declares. With endpoints, a claimed
+// management row must be one of the command's declared endpoints, and one
+// command may serve several rows (such as `artifact search --global` and
+// `--repo`) because each claim is checked against what it really sends.
+// Without endpoints two rows may not claim one command.
+export function managementEndpoint(row) {
+  return `${row.method} /api/v2${row.path}`;
+}
+
 function findImplementationIssues(englishMap, registeredCommands) {
   const issues = [];
   const byCommand = new Map();
+  const endpointsKnown = registeredCommands instanceof Map;
   for (const [operationId, row] of englishMap) {
     if (!/implemented/iu.test(row.phase)) continue;
     const command = normalizedCommand(row.command);
@@ -116,6 +126,16 @@ function findImplementationIssues(englishMap, registeredCommands) {
         kind: 'implemented-without-command',
         message: `${commandMapPath} marks ${operationId} implemented, but ${command ? `command "${command}" is` : 'its planned command is'} not registered in cmd/agctl; register it or drop the implemented claim`,
       });
+      continue;
+    }
+    if (endpointsKnown) {
+      const endpoint = managementEndpoint(row);
+      if (!registeredCommands.get(command).has(endpoint)) {
+        issues.push({
+          kind: 'implemented-endpoint-undeclared',
+          message: `${commandMapPath} marks ${operationId} implemented by "${command}", but that command does not declare ${endpoint} in its endpoints; declare it or drop the implemented claim`,
+        });
+      }
       continue;
     }
     const claimants = byCommand.get(command) ?? [];
@@ -223,7 +243,8 @@ export function findContractDrift({ managementOperations, nativeOperations, engl
 }
 
 // loadRegisteredCommands reads the installed command registry through its
-// stable machine contract (`agctl commands --json`).
+// stable machine contract (`agctl commands --json`): each command name with
+// the endpoints it declares.
 export function loadRegisteredCommands(repoRoot) {
   const output = execFileSync('go', ['run', './cmd/agctl', 'commands', '--json'], {
     cwd: repoRoot,
@@ -233,7 +254,12 @@ export function loadRegisteredCommands(repoRoot) {
   if (!Array.isArray(items)) {
     throw new Error('agctl commands --json did not return a command list');
   }
-  return new Set(items.map((item) => String(item.name).toLowerCase()));
+  return new Map(
+    items.map((item) => [
+      String(item.name).toLowerCase(),
+      new Set(Array.isArray(item.meta?.endpoints) ? item.meta.endpoints.map(String) : []),
+    ]),
+  );
 }
 
 function main() {

@@ -1,0 +1,10 @@
+# npm-hosted (npm hosted) at http://gateway.test/gw
+# set ARTIFACT_GATEWAY_TOKEN to a credential with access to this repository
+
+## npm configuration — .npmrc
+registry=http://gateway.test/gw/npm/npm-hosted/
+//gateway.test/gw/npm/npm-hosted/:_authToken=${ARTIFACT_GATEWAY_TOKEN}
+always-auth=true
+
+## publish
+npm publish --registry http://gateway.test/gw/npm/npm-hosted/

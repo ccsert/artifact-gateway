@@ -268,14 +268,19 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 
-// assertGolden compares a JSON envelope with testdata/golden/NAME.json after
-// replacing the fake server URL; `go test -run Repo -update` rewrites it.
+// assertGolden compares output with testdata/golden/NAME (NAME.json for a
+// JSON envelope) after applying the replacements, such as the fake server
+// URL; `go test ./internal/agctl/ -update` rewrites it.
 func assertGolden(t *testing.T, name, output string, replacements ...string) {
 	t.Helper()
 	for index := 0; index+1 < len(replacements); index += 2 {
 		output = strings.ReplaceAll(output, replacements[index], replacements[index+1])
 	}
-	path := filepath.Join("testdata", "golden", name+".json")
+	// A name without an extension is a JSON envelope.
+	if filepath.Ext(name) == "" {
+		name += ".json"
+	}
+	path := filepath.Join("testdata", "golden", name)
 	if *updateGolden {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)

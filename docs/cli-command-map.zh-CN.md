@@ -8,8 +8,9 @@
 面向两类都用同一自省。
 
 本页是对完整契约的归类，不是对已安装二进制的描述。除 #125 骨架（`version`、
-`info`、`commands`）和阶段列标为 `implemented` 的行（目前是 #130 的
-`repo list|show|create|update|delete` 和除 `browse` 外的 `group` 命令，由 `make cli-e2e` 在真实 Gateway 上验收）外，
+`info`、`commands`）和阶段列标为 `implemented` 的行（#130 的仓库与 Group 命令、
+#131 的制品与格式视图，以及 #135 的只读审计、status、诊断、运行节点、概览和
+生命周期任务命令，均由 `make cli-e2e` 在真实 Gateway 上验收）外，
 全部为计划，不宣称已实现；只有注册命令、文档/测试和真实 Gateway 验收齐备，
 某一行才转为 implemented/verified。
 
@@ -84,7 +85,7 @@ server base）。计划命令省略前导 `agctl`。
 | `POST /email-notifications:preview`<br>`previewEmailNotification` | `email preview` | #336 | M2 | A | D |
 | `GET /formats`<br>`listFormatProfiles` | `formats list（info 复用）` | #125 | M0 | I | Q |
 | `GET /identity`<br>`getCurrentIdentity` | `auth whoami（info 复用）` | #129 | M1 | I | Q |
-| `GET /artifact-search`<br>`searchArtifacts` | `artifact search --global` | #131 | M1 | FR | Q |
+| `GET /artifact-search`<br>`searchArtifacts` | `artifact search --global` | #131 | M1 implemented | FR | Q |
 | `GET /anonymous-access-policy`<br>`getAnonymousAccessPolicy` | `access anonymous show` | #134 | M1 | A | Q |
 | `PUT /anonymous-access-policy`<br>`replaceAnonymousAccessPolicy` | `access anonymous set` | #134 | M1 | A | C |
 | `GET /site-settings`<br>`getSiteSettings` | `site-settings show（theme list 复用 availableThemes）` | #139 | M2 | PUBLIC | Q |
@@ -103,8 +104,8 @@ server base）。计划命令省略前导 `agctl`。
 | `GET /webhook-deliveries`<br>`listWebhookDeliveries` | `webhook delivery list` | #137 | M2 | A | Q |
 | `GET /webhook-deliveries/{deliveryId}`<br>`getWebhookDelivery` | `webhook delivery show <id>` | #137 | M2 | A | Q |
 | `POST /webhook-deliveries/{deliveryId}:replay`<br>`replayWebhookDelivery` | `webhook delivery replay <id>` | #137 | M2 | A | W |
-| `GET /runtime/nodes`<br>`listRuntimeNodes` | `runtime nodes` | #135 | M1 | A | Q |
-| `GET /diagnostics`<br>`getDiagnostics` | `diagnostics（status 复用）` | #135 | M1 | A | Q |
+| `GET /runtime/nodes`<br>`listRuntimeNodes` | `runtime nodes` | #135 | M1 implemented | A | Q |
+| `GET /diagnostics`<br>`getDiagnostics` | `diagnostics（status 复用）` | #135 | M1 implemented | A | Q |
 | `GET /runtime/logs`<br>`listRuntimeLogs` | `runtime logs` | #135 | M1 | A | L |
 | `GET /api-keys`<br>`listApiKeys` | `api-key list` | #133 | M1 | A | Q |
 | `POST /api-keys`<br>`createApiKey` | `api-key create` | #133 | M1 | A | S |
@@ -127,9 +128,9 @@ server base）。计划命令省略前导 `agctl`。
 | `GET /users/{userId}/identities`<br>`listUserIdentities` | `user identities list <id>` | #335 | M1 | A | Q |
 | `POST /users/{userId}/identities`<br>`createUserIdentity` | `user identities link <id>` | #335 | M1 | A | W |
 | `DELETE /users/{userId}/identities/{identityId}`<br>`deleteUserIdentity` | `user identities unlink <id> --identity <iid>` | #335 | M1 | A | W |
-| `GET /audits`<br>`listAudits` | `audit list --bounded` | #135 | M1 | A | Q |
-| `GET /audits/page`<br>`listAuditPage` | `audit list --cursor <cursor>` | #135 | M1 | A | Q |
-| `GET /overview-statistics`<br>`getOverviewStatistics` | `overview show` | #135 | M1 | FR | Q |
+| `GET /audits`<br>`listAudits` | `audit list --bounded` | #135 | M1 implemented | A | Q |
+| `GET /audits/page`<br>`listAuditPage` | `audit list --cursor <cursor>` | #135 | M1 implemented | A | Q |
+| `GET /overview-statistics`<br>`getOverviewStatistics` | `overview show` | #135 | M1 implemented | FR | Q |
 | `GET /audit-retention-policy`<br>`getAuditRetentionPolicy` | `audit retention show` | #138 | M2 | A | Q |
 | `PUT /audit-retention-policy`<br>`replaceAuditRetentionPolicy` | `audit retention set` | #138 | M2 | A | C |
 | `POST /audit-retention:execute`<br>`executeAuditRetention` | `audit retention execute` | #138 | M2 | A | W |
@@ -149,7 +150,7 @@ server base）。计划命令省略前导 `agctl`。
 | `PUT /authorization-roles/{roleId}`<br>`updateAuthorizationRole` | `role update <id>` | #134 | M2 | A | C |
 | `DELETE /authorization-roles/{roleId}`<br>`deleteAuthorizationRole` | `role delete <id>` | #134 | M2 | A | W |
 | `GET /repository-capacities`<br>`listRepositoryCapacities` | `capacity list` | #138 | M2 | FA | Q |
-| `GET /lifecycle-jobs`<br>`listLifecycleJobs` | `lifecycle-job list --all-repositories` | #135 | M1 | FA | Q |
+| `GET /lifecycle-jobs`<br>`listLifecycleJobs` | `lifecycle-job list --all-repositories` | #135 | M1 implemented | FA | Q |
 | `GET /scheduled-tasks`<br>`listScheduledTasks` | `scheduled-task list` | #137 | M2 | ST | Q |
 | `POST /scheduled-tasks`<br>`createScheduledTask` | `scheduled-task create` | #137 | M2 | ST | W |
 | `GET /scheduled-tasks/{taskId}`<br>`getScheduledTask` | `scheduled-task show <id>` | #137 | M2 | ST | Q |
@@ -182,7 +183,7 @@ server base）。计划命令省略前导 `agctl`。
 | `GET /repositories/{repositoryId}/replications/{replicationPlanId}`<br>`getRepositoryReplication` | `replication show <plan> --repo <id>` | #138 | M2 | RA | Q |
 | `DELETE /repositories/{repositoryId}/replications/{replicationPlanId}`<br>`deleteRepositoryReplication` | `replication cancel <plan> --repo <id>` | #138 | M2 | RA | W |
 | `POST /repositories/{repositoryId}/restore`<br>`restoreRepositoryArtifact` | `artifact restore --repo <id>` | #138 | M2 | RA | W |
-| `GET /repositories/{repositoryId}/lifecycle-jobs`<br>`listRepositoryLifecycleJobs` | `lifecycle-job list --repo <id>（show/wait 按 ID 过滤同一响应）` | #135 | M1 | RA | Q |
+| `GET /repositories/{repositoryId}/lifecycle-jobs`<br>`listRepositoryLifecycleJobs` | `lifecycle-job list --repo <id>（show/wait 按 ID 过滤同一响应）` | #135 | M1 implemented | RA | Q |
 | `GET /repositories/{repositoryId}/artifact-scans`<br>`getRepositoryArtifactScanStatus` | `artifact scan status --repo <id>` | #137 | M2 | RI | Q |
 | `POST /repositories/{repositoryId}/artifact-scans`<br>`createRepositoryArtifactScan` | `artifact scan enqueue --repo <id>` | #137 | M2 | RI | J |
 | `POST /repositories/{repositoryId}/artifact-scans:reconcile`<br>`reconcileRepositoryArtifactScans` | `artifact scan reconcile --repo <id>` | #137 | M2 | RI | W |
@@ -192,33 +193,33 @@ server base）。计划命令省略前导 `agctl`。
 | `POST /repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/cancel`<br>`cancelRepositoryLifecycleJob` | `lifecycle-job cancel --repo <id> --id <job>` | #137 | M2 | RA | W |
 | `GET /repositories/{repositoryId}/tombstones`<br>`listRepositoryTombstones` | `tombstone list --repo <id>` | #138 | M2 | RA | Q |
 | `POST /repositories/{repositoryId}/tombstones`<br>`tombstoneRepositoryArtifact` | `artifact tombstone --repo <id>` | #138 | M2 | RA | W |
-| `GET /repositories/{repositoryId}/capabilities`<br>`getRepositoryCapabilities` | `repo capabilities <id>` | #130 | M1 | R | Q |
+| `GET /repositories/{repositoryId}/capabilities`<br>`getRepositoryCapabilities` | `repo capabilities <id>` | #130 | M1 implemented | R | Q |
 | `GET /repositories/{repositoryId}/effective-access`<br>`getRepositoryEffectiveAccess` | `access check --repo <id>` | #134 | M1 | I/A | Q |
 | `GET /groups`<br>`listGroups` | `group list` | #130 | M1 implemented | A | Q |
 | `POST /groups`<br>`createGroup` | `group create` | #130 | M1 implemented | G | W |
 | `GET /groups/{groupId}`<br>`getGroup` | `group show <id>` | #130 | M1 implemented | A | Q |
 | `PUT /groups/{groupId}`<br>`replaceGroup` | `group update <id>` | #130 | M1 implemented | G | C |
 | `DELETE /groups/{groupId}`<br>`deleteGroup` | `group delete <id>` | #130 | M1 implemented | G | W |
-| `GET /groups/{groupId}/browse`<br>`browseGroup` | `group browse <id>` | #130 | M1 | R* | Q |
+| `GET /groups/{groupId}/browse`<br>`browseGroup` | `group browse <id>` | #130 | M1 implemented | R* | Q |
 | `GET /groups/{groupId}/members`<br>`listGroupMembers` | `group members list <id>` | #130 | M1 implemented | A | Q |
 | `PUT /groups/{groupId}/members`<br>`replaceGroupMembers` | `group members set <id>` | #130 | M1 implemented | G | C |
 | `GET /groups/{groupId}/capacity`<br>`getGroupCapacity` | `capacity show --group <id>` | #138 | M2 | A | Q |
 | `GET /groups/{groupId}/resolution`<br>`getGroupResolution` | `group resolution <id>` | #130 | M1 implemented | A | Q |
 | `POST /repositories/{repositoryId}/publish-sessions`<br>`createPublishSession` | `publish create --repo <id>` | #132 | M1 | W | U |
-| `GET /repositories/{repositoryId}/artifacts`<br>`listArtifacts` | `artifact list --repo <id>` | #131 | M1 | R* | Q |
-| `GET /repositories/{repositoryId}/artifact-usage`<br>`listRepositoryArtifactUsage` | `artifact usage --repo <id>` | #131 | M1 | R* | Q |
-| `GET /repositories/{repositoryId}/artifact-search`<br>`searchRepositoryArtifacts` | `artifact search --repo <id>` | #131 | M1 | R* | Q |
-| `GET /repositories/{repositoryId}/browse`<br>`browseRepository` | `artifact browse --repo <id>（repo browse 别名）` | #131 | M1 | R* | Q |
-| `GET /repositories/{repositoryId}/artifact-identities`<br>`listRepositoryArtifactIdentities` | `artifact identities --repo <id>` | #131 | M1 | R | Q |
-| `GET /repositories/{repositoryId}/artifacts/{artifactId}`<br>`getArtifact` | `artifact show <id> --repo <id>` | #131 | M1 | R* | Q |
-| `DELETE /repositories/{repositoryId}/artifacts/{artifactId}`<br>`deleteArtifact` | `artifact delete <id> --repo <id>` | #131 | M1 | W | W |
-| `GET /repositories/{repositoryId}/artifact-intelligence`<br>`getArtifactIntelligence` | `artifact intelligence show --repo <id>` | #131 | M1 | R* | Q |
+| `GET /repositories/{repositoryId}/artifacts`<br>`listArtifacts` | `artifact list --repo <id>` | #131 | M1 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/artifact-usage`<br>`listRepositoryArtifactUsage` | `artifact usage --repo <id>` | #131 | M1 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/artifact-search`<br>`searchRepositoryArtifacts` | `artifact search --repo <id>` | #131 | M1 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/browse`<br>`browseRepository` | `artifact browse --repo <id>（repo browse 别名）` | #131 | M1 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/artifact-identities`<br>`listRepositoryArtifactIdentities` | `artifact identities --repo <id>` | #131 | M1 implemented | R | Q |
+| `GET /repositories/{repositoryId}/artifacts/{artifactId}`<br>`getArtifact` | `artifact show <id> --repo <id>` | #131 | M1 implemented | R* | Q |
+| `DELETE /repositories/{repositoryId}/artifacts/{artifactId}`<br>`deleteArtifact` | `artifact delete <id> --repo <id>` | #131 | M1 implemented | W | W |
+| `GET /repositories/{repositoryId}/artifact-intelligence`<br>`getArtifactIntelligence` | `artifact intelligence show --repo <id>` | #131 | M1 implemented | R* | Q |
 | `PUT /repositories/{repositoryId}/artifact-intelligence`<br>`replaceArtifactIntelligence` | `artifact intelligence set --repo <id>` | #138 | M2 | RI | C |
-| `GET /repositories/{repositoryId}/artifact-quarantine`<br>`getArtifactQuarantine` | `artifact quarantine show --repo <id>` | #131 | M1 | R | Q |
+| `GET /repositories/{repositoryId}/artifact-quarantine`<br>`getArtifactQuarantine` | `artifact quarantine show --repo <id>` | #131 | M1 implemented | R | Q |
 | `PUT /repositories/{repositoryId}/artifact-quarantine`<br>`replaceArtifactQuarantine` | `artifact quarantine set --repo <id>` | #138 | M2 | RA | C |
-| `GET /repositories/{repositoryId}/oci/images`<br>`listOCIImages` | `oci images --repo <id>` | #131 | M1 | R* | Q |
-| `GET /repositories/{repositoryId}/oci/manifests`<br>`listOCIManifests` | `oci manifests --repo <id>` | #131 | M1 | R* | Q |
-| `GET /repositories/{repositoryId}/maven/coordinates`<br>`listMavenCoordinates` | `maven coordinates --repo <id>` | #131 | M1 | R* | Q |
+| `GET /repositories/{repositoryId}/oci/images`<br>`listOCIImages` | `oci images --repo <id>` | #131 | M1 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/oci/manifests`<br>`listOCIManifests` | `oci manifests --repo <id>` | #131 | M1 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/maven/coordinates`<br>`listMavenCoordinates` | `maven coordinates --repo <id>` | #131 | M1 implemented | R* | Q |
 | `POST /repositories/{repositoryId}/apt/publication-sessions`<br>`createAPTPublicationSession` | `apt publication-session create --repo <id>` | #138 | M2 | W | W |
 | `GET /repositories/{repositoryId}/apt/publication-sessions/{sessionId}`<br>`getAPTPublicationSession` | `apt publication-session show --repo <id> --id <session>` | #138 | M2 | W | Q |
 | `PUT /repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package`<br>`uploadAPTPublicationPackage` | `apt publication-session upload --repo <id> --id <session>` | #138 | M2 | W | W |
@@ -336,12 +337,14 @@ server base）。计划命令省略前导 `agctl`。
   的行要求注册命令与真实验收；计划 M2/blocked 不强迫首版实现。行通过在阶段
   列携带 `implemented` 声明实现（例如 `M1 implemented`）；守卫经
   `agctl commands --json` 读取已安装的命令注册表，implemented 行没有注册命令、
-  或两行声明同一个命令时失败。
+  或该命令的元数据没有声明这一行的端点（`METHOD /api/v2/path`）时失败。一个
+  命令可以承接多行（例如 `artifact search --global` 与 `--repo`），前提是每行
+  的端点都按命令声明的实际请求核对。
 - 一个资源命令/别名使用同一注册实现；CLI tree 的 CI/管理 tags 不复制操作；
   JSON 输出 schema、权限、mutation、分页、幂等、dry-run、wait/cancel 必须来自
   同一元数据来源。
 - 增补验收：注入一个新 operationId 未分类失败；改名/删接口仍引用失败；planned
-  M2 不误判首版缺实现；implemented 行没有注册命令失败、两行声明同一命令失败；
+  M2 不误判首版缺实现；implemented 行没有注册命令失败，命令未声明该行端点也失败；
   只为已实现命令生成 #140 可执行菜谱。
 - 本页在上方记录契约基线 SHA 与核对日期；计数由守卫重新推导，不把旧计数固定
   在文档里。

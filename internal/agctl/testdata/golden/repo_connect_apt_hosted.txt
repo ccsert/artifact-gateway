@@ -1,0 +1,11 @@
+# apt-hosted (apt hosted) at http://gateway.test/gw
+# set ARTIFACT_GATEWAY_TOKEN to a credential with access to this repository
+# note: APT hosted repositories are a management-only preview: clients cannot install from them until signed snapshots are published
+
+## APT source — /etc/apt/sources.list.d/apt-hosted.list
+deb http://gateway.test/gw/apt/apt-hosted <suite> <component>
+
+## APT credentials — /etc/apt/auth.conf.d/apt-hosted.conf
+machine gateway.test/gw/apt/apt-hosted
+login ci
+password ${ARTIFACT_GATEWAY_TOKEN}

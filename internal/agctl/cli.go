@@ -531,11 +531,20 @@ func printUsage(w io.Writer) {
 }
 
 var groupSynopses = map[string]string{
-	"auth":          "authenticate, inspect the caller, and end the local session",
-	"config":        "manage local profiles in ~/.config/agctl/config.yaml",
-	"group":         "list, inspect, create, update, and delete Groups and their members",
-	"group members": "list or replace a Group's members",
-	"repo":          "list, inspect, create, update, and delete repositories",
+	"auth":                  "authenticate, inspect the caller, and end the local session",
+	"config":                "manage local profiles in ~/.config/agctl/config.yaml",
+	"artifact":              "search, browse, inspect, and delete artifacts",
+	"artifact intelligence": "read artifact intelligence records",
+	"artifact quarantine":   "read artifact quarantine records",
+	"audit":                 "read administrative audit records",
+	"group":                 "list, inspect, create, update, and delete Groups and their members",
+	"lifecycle-job":         "read lifecycle jobs (retention, promotion, replication, reclaim, scans)",
+	"maven":                 "Maven views of a repository",
+	"oci":                   "OCI views of a repository",
+	"overview":              "request and capacity overview",
+	"runtime":               "Gateway runtime processes",
+	"group members":         "list or replace a Group's members",
+	"repo":                  "manage repositories, browse them, and print client configuration",
 }
 
 func printGroupUsage(w io.Writer, prefix, children []string) {

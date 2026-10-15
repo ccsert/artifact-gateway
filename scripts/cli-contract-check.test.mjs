@@ -257,6 +257,42 @@ test('fails two implemented rows that claim the same registered command', () => 
   assert.match(finding.message, /listWidgets and getWidget/);
 });
 
+test('accepts several implemented rows for one command that declares each endpoint', () => {
+  const managementOperations = enumerateContractOperations({
+    paths: {
+      '/widget-search': { get: { operationId: 'searchWidgets' } },
+      '/shelves/{shelfId}/widget-search': { get: { operationId: 'searchShelfWidgets' } },
+    },
+  });
+  const englishMap = classification([
+    mapRow('GET', '/widget-search', 'searchWidgets', '`widget search --global`', '#999', 'M1 implemented', 'A', 'Q'),
+    mapRow('GET', '/shelves/{shelfId}/widget-search', 'searchShelfWidgets', '`widget search --shelf <id>`', '#999', 'M1 implemented', 'A', 'Q'),
+  ]);
+  const registeredCommands = new Map([
+    ['widget search', new Set(['GET /api/v2/widget-search', 'GET /api/v2/shelves/{shelfId}/widget-search'])],
+  ]);
+  assert.deepEqual(findContractDrift({ managementOperations, nativeOperations: [], englishMap, registeredCommands }), []);
+});
+
+test('fails an implemented row whose endpoint the command does not declare', () => {
+  const managementOperations = enumerateContractOperations({
+    paths: {
+      '/widgets': { get: { operationId: 'listWidgets' } },
+      '/widgets/{widgetId}': { get: { operationId: 'getWidget' } },
+    },
+  });
+  const englishMap = classification([
+    mapRow('GET', '/widgets', 'listWidgets', '`widget list`', '#999', 'M1 implemented', 'A', 'Q'),
+    mapRow('GET', '/widgets/{widgetId}', 'getWidget', '`widget list <id>`', '#999', 'M1 implemented', 'A', 'Q'),
+  ]);
+  const registeredCommands = new Map([['widget list', new Set(['GET /api/v2/widgets'])]]);
+  const issues = findContractDrift({ managementOperations, nativeOperations: [], englishMap, registeredCommands });
+  assert.equal(issues.length, 1, JSON.stringify(issues));
+  assert.equal(issues[0].kind, 'implemented-endpoint-undeclared');
+  assert.match(issues[0].message, /getWidget/);
+  assert.match(issues[0].message, /GET \/api\/v2\/widgets\/\{widgetId\}/);
+});
+
 test('normalizes planned-command cells to registry names', () => {
   assert.equal(normalizedCommand('`config profile add NAME --server URL`'), 'config profile add');
   assert.equal(normalizedCommand('agctl auth whoami'), 'auth whoami');

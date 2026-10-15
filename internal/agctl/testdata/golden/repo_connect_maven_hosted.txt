@@ -1,0 +1,27 @@
+# maven-hosted (maven hosted) at http://gateway.test/gw
+# set ARTIFACT_GATEWAY_TOKEN to a credential with access to this repository
+
+## Maven credentials — settings.xml
+<servers>
+  <server>
+    <id>maven-hosted</id>
+    <username>ci</username>
+    <password>${env.ARTIFACT_GATEWAY_TOKEN}</password>
+  </server>
+</servers>
+
+## Maven repository — pom.xml
+<repositories>
+  <repository>
+    <id>maven-hosted</id>
+    <url>http://gateway.test/gw/maven/maven-hosted/</url>
+  </repository>
+</repositories>
+
+## Maven deployment — pom.xml
+<distributionManagement>
+  <repository>
+    <id>maven-hosted</id>
+    <url>http://gateway.test/gw/maven/maven-hosted/</url>
+  </repository>
+</distributionManagement>

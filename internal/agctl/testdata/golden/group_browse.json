@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "items": [
+      {
+        "hasChildren": false,
+        "id": "n-1",
+        "kind": "asset",
+        "name": "app.txt",
+        "size": 12,
+        "sourceRepositoryName": "raw-hosted"
+      }
+    ],
+    "nextCursor": null
+  },
+  "error": null,
+  "meta": {
+    "pagination": {
+      "mode": "cursor",
+      "pageSize": 50,
+      "pages": 1,
+      "complete": true
+    },
+    "scope": {
+      "candidates": [
+        {
+          "repositoryId": "00000000-0000-4000-8000-000000000001",
+          "repositoryName": "raw-hosted",
+          "type": "hosted",
+          "resolutionOrder": 0
+        }
+      ],
+      "format": "raw",
+      "groupId": "00000000-0000-4000-8000-000000000001",
+      "groupName": "raw-all"
+    }
+  }
+}

@@ -1,0 +1,7 @@
+# npm-proxy (npm proxy) at http://gateway.test/gw
+# set ARTIFACT_GATEWAY_TOKEN to a credential with access to this repository
+
+## npm configuration — .npmrc
+registry=http://gateway.test/gw/npm/npm-proxy/
+//gateway.test/gw/npm/npm-proxy/:_authToken=${ARTIFACT_GATEWAY_TOKEN}
+always-auth=true

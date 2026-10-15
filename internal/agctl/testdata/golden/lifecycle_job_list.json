@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "items": [
+      {
+        "repositoryId": "00000000-0000-4000-8000-000000000001",
+        "repositoryName": "raw-hosted",
+        "job": {
+          "attempts": 1,
+          "createdAt": "2026-10-15T08:00:00Z",
+          "id": "job-1",
+          "kind": "retention",
+          "maxAttempts": 3,
+          "progressCurrent": 4,
+          "progressTotal": 4,
+          "state": "completed"
+        }
+      }
+    ],
+    "nextCursor": null
+  },
+  "error": null,
+  "meta": {
+    "pagination": {
+      "mode": "bounded",
+      "complete": true,
+      "limit": 10
+    }
+  }
+}

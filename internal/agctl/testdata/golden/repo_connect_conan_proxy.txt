@@ -1,0 +1,8 @@
+# conan-proxy (conan proxy) at http://gateway.test/gw
+# set ARTIFACT_GATEWAY_TOKEN to a credential with access to this repository
+
+## add remote
+conan remote add conan-proxy http://gateway.test/gw/conan/v2/conan-proxy
+
+## sign in
+conan remote login conan-proxy ci -p "$ARTIFACT_GATEWAY_TOKEN"

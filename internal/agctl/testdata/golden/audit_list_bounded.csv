@@ -1,0 +1,3 @@
+occurredAt,outcome,actor,operation,format,repository,group,status,resource,requestId,authorizationSource,authorizationReason
+2026-10-15T08:00:00Z,access_denied,svc-ci,read,raw,raw-hosted,,403,releases/app.txt,req-1,,
+2026-10-15T07:00:00Z,success,admin,create,management,,,,"repositories/x, ""quoted""",,,
