@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "mode": "client-plan",
+    "method": "PUT",
+    "path": "/api/v2/groups/00000000-0000-4000-9000-000000000001",
+    "headers": {
+      "If-Match": "1"
+    },
+    "body": {
+      "anonymousRead": false,
+      "format": "npm",
+      "id": "00000000-0000-4000-9000-000000000001",
+      "members": [
+        {
+          "position": 0,
+          "repositoryId": "00000000-0000-4000-8000-00000000000a"
+        }
+      ],
+      "name": "npm-public",
+      "version": "1"
+    },
+    "current": {
+      "anonymousRead": false,
+      "format": "npm",
+      "id": "00000000-0000-4000-9000-000000000001",
+      "members": [
+        {
+          "position": 0,
+          "repositoryId": "00000000-0000-4000-8000-00000000000a"
+        }
+      ],
+      "name": "npm-all",
+      "version": "1"
+    },
+    "verified": [
+      "the Group exists and its current members and version were read"
+    ],
+    "notVerified": [
+      "caller permission (platform admin, or repositories:admin on every member it keeps, drops, or adds)",
+      "name uniqueness",
+      "that the version still matches when the update is sent"
+    ]
+  },
+  "error": null,
+  "meta": null
+}

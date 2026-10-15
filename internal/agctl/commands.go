@@ -62,6 +62,14 @@ func registry() []command {
 		repoCreateCommand(),
 		repoUpdateCommand(),
 		repoDeleteCommand(),
+		groupListCommand(),
+		groupShowCommand(),
+		groupCreateCommand(),
+		groupUpdateCommand(),
+		groupDeleteCommand(),
+		groupMembersListCommand(),
+		groupMembersSetCommand(),
+		groupResolutionCommand(),
 	}
 }
 

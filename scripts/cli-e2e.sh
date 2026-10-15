@@ -6,7 +6,8 @@
 # already running, set CLI_E2E_SERVER and CLI_E2E_TOKEN (an admin token); the
 # script then only creates repositories with unique names and deletes them.
 #
-# Scenario: repository create -> update -> visible in list -> delete accepted
+# Scenario: repository create -> update -> visible in list -> Group create,
+# members, resolution, rename, reorder, delete -> repository delete accepted
 # (deleting) -> bounded wait for deleted -> still readable as deleted. Around
 # it: the exit-code matrix (2 usage, 4 not found, 5 unauthenticated, 7
 # conflict, 8 wait timeout), --dry-run without business changes, idempotent
@@ -211,6 +212,70 @@ if sys.argv[2] not in ids:
 if envelope["meta"]["pagination"]["complete"] is not True:
     raise SystemExit("--all did not reach the end of the listing")
 PY
+
+# Groups: a second npm repository joins the first. Create (dry-run, replay),
+# inspect members and resolution order, rename with a stale If-Match that
+# never overwrites, reorder members, and delete without touching members.
+member="cli-e2e-npm-member-${suffix}"
+expect 0 "$out" -- repo create "$member" --format npm --json
+member_id=$(field "$out" data.id)
+group="cli-e2e-group-${suffix}"
+expect 0 "$out" -- group create "$group" --format npm --member "$repo_id" --member "$member_id" --dry-run --json
+require "$(field "$out" data.mode)" client-plan "group create dry-run mode"
+expect 0 "$out" -- group list --all --page-size 200 --json
+python3 - "$out" "$group" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    names = [item["name"] for item in json.load(stream)["data"]["items"]]
+if sys.argv[2] in names:
+    raise SystemExit("group create --dry-run created the Group")
+PY2
+group_key="cli-e2e-group-${suffix}"
+expect 0 "$out" -- group create "$group" --format npm --member "$repo_id" --member "$member_id" --idempotency-key "$group_key" --json
+group_id=$(field "$out" data.id)
+group_version=$(field "$out" data.version)
+expect 0 "$out" -- group create "$group" --format npm --member "$repo_id" --member "$member_id" --idempotency-key "$group_key" --json
+require "$(field "$out" data.id)" "$group_id" "idempotent Group replay id"
+expect 1 "$out" -- group create "cli-e2e-bad-${suffix}" --format npm --member 00000000-0000-4000-8000-000000000000 --json
+require "$(field "$out" error.httpStatus)" 400 "Group with an unknown member"
+expect 0 "$out" -- group members list "$group_id" --json
+require "$(field "$out" data.items.0.repositoryId)" "$repo_id" "first configured member"
+require "$(field "$out" data.items.1.repositoryId)" "$member_id" "second configured member"
+expect 0 "$out" -- group resolution "$group_id" --json
+require "$(field "$out" data.members.0.repositoryId)" "$repo_id" "first resolved member"
+require "$(field "$out" data.excludedMemberCount)" 0 "excluded members"
+
+expect 0 "$out" -- group update "$group_id" --name "${group}-renamed" --dry-run --json
+expect 0 "$out" -- group show "$group_id" --json
+require "$(field "$out" data.name)" "$group" "name after update dry-run"
+expect 0 "$out" -- group update "$group_id" --name "${group}-renamed" --anonymous-read=true --json
+require "$(field "$out" data.name)" "${group}-renamed" "renamed Group"
+require "$(field "$out" data.anonymousRead)" true "Group anonymousRead"
+require "$(field "$out" data.members.1.repositoryId)" "$member_id" "members kept by the update"
+renamed_version=$(field "$out" data.version)
+expect 7 "$out" -- group update "$group_id" --name "${group}-stale" --if-match "$group_version" --json
+require "$(field "$out" error.httpStatus)" 412 "stale Group If-Match"
+expect 0 "$out" -- group show "$group_id" --json
+require "$(field "$out" data.name)" "${group}-renamed" "name after 412"
+require "$(field "$out" data.version)" "$renamed_version" "version after 412"
+
+expect 0 "$out" -- group members set "$group_id" --member "$member_id" --member "$repo_id" --json
+require "$(field "$out" data.members.0.repositoryId)" "$member_id" "reordered first member"
+expect 7 "$out" -- group members set "$group_id" --member "$repo_id" --if-match "$renamed_version" --json
+expect 0 "$out" -- group resolution "$group_id" --json
+require "$(field "$out" data.members.0.repositoryId)" "$member_id" "resolution follows the new order"
+
+expect 2 "$out" -- group delete "$group_id" --json
+expect 0 "$out" -- group delete "$group_id" --dry-run --json
+expect 0 "$out" -- group show "$group_id" --json
+expect 0 "$out" -- group delete "$group_id" --yes --json
+require "$(field "$out" data.deleted)" true "Group deleted"
+expect 4 "$out" -- group show "$group_id" --json
+expect 0 "$out" -- repo show "$member_id" --json
+require "$(field "$out" data.state)" active "member kept after Group deletion"
+expect 0 "$out" -- repo delete "$member_id" --yes --json
 
 # Delete: confirmation and dry-run first, then acceptance, which is not
 # completion, then a bounded wait for the terminal state.

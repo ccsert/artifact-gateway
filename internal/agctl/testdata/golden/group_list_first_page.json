@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "items": [
+      {
+        "anonymousRead": false,
+        "format": "npm",
+        "id": "00000000-0000-4000-9000-000000000001",
+        "members": [
+          {
+            "position": 0,
+            "repositoryId": "00000000-0000-4000-8000-00000000000a"
+          },
+          {
+            "position": 1,
+            "repositoryId": "00000000-0000-4000-8000-00000000000b"
+          }
+        ],
+        "name": "npm-all",
+        "version": "1"
+      }
+    ],
+    "nextCursor": "cursor-1"
+  },
+  "error": null,
+  "meta": {
+    "pagination": {
+      "mode": "cursor",
+      "pageSize": 1,
+      "pages": 1,
+      "complete": false
+    }
+  }
+}

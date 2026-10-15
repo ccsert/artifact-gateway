@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -21,9 +20,6 @@ import (
 
 const (
 	repositoriesPath       = managementPrefix + "/repositories"
-	repoDefaultPageSize    = 50
-	repoMaxPageSize        = 200
-	repoDefaultMaxPages    = 20
 	repoIdempotencyKeyMax  = 128
 	repoDeleteNeedsConfirm = "agctl repo delete needs --yes to delete a repository"
 )
@@ -54,10 +50,6 @@ func repositoryType(repo adminopenapi.Repository) string {
 	}
 	return string(*repo.Type)
 }
-
-// repoPage is the list envelope data: the repositories read and the cursor
-// that continues the listing (null at the end of the collection).
-type repoPage = listPayload[adminopenapi.Repository]
 
 func renderRepositoryTable(w io.Writer, items []adminopenapi.Repository) error {
 	if len(items) == 0 {
@@ -133,19 +125,17 @@ func renderRepository(w io.Writer, repo adminopenapi.Repository) error {
 }
 
 func repoListCommand() command {
-	var pageSize, maxPages int
-	var cursor string
-	var all bool
+	list := &cursorList[adminopenapi.Repository]{
+		path:    repositoriesPath,
+		command: "agctl repo list",
+		noun:    "repositories",
+		render:  renderRepositoryTable,
+	}
 	return command{
 		name:     "repo list",
 		synopsis: "list the repositories visible to the caller",
 		usage:    "agctl repo list [--page-size N] [--cursor TOKEN | --all [--max-pages N]] [--json]",
-		setFlags: func(fs *flag.FlagSet) {
-			fs.IntVar(&pageSize, "page-size", repoDefaultPageSize, "repositories per page (1-200)")
-			fs.StringVar(&cursor, "cursor", "", "continue a listing from the nextCursor of an earlier page")
-			fs.BoolVar(&all, "all", false, "follow cursors until the end, within --max-pages and --timeout")
-			fs.IntVar(&maxPages, "max-pages", repoDefaultMaxPages, "page budget for --all; reaching it exits 3 with the pages read")
-		},
+		setFlags: list.setFlags,
 		meta: commandMeta{
 			Resource:     "repository",
 			Scenarios:    []string{"ci", "admin"},
@@ -157,90 +147,7 @@ func repoListCommand() command {
 			DryRun:       "unsupported",
 			Retry:        true,
 		},
-		run: func(ctx context.Context, env *commandContext) error {
-			if pageSize < 1 || pageSize > repoMaxPageSize {
-				return &UsageError{Message: fmt.Sprintf("--page-size %d is out of range", pageSize), Hint: "use a page size from 1 to 200"}
-			}
-			if maxPages < 1 {
-				return &UsageError{Message: fmt.Sprintf("--max-pages %d must be positive", maxPages), Hint: "pass --max-pages with a page budget such as 20"}
-			}
-			if all && cursor != "" {
-				return &UsageError{Message: "--all and --cursor cannot be combined", Hint: "--all starts from the first page; use --cursor alone to read one later page"}
-			}
-			client, err := env.client()
-			if err != nil {
-				return err
-			}
-			// --all spends one overall time budget across its pages.
-			if all {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, env.globals.timeout)
-				defer cancel()
-			}
-			items := []adminopenapi.Repository{}
-			next := cursor
-			pages := 0
-			for {
-				query := url.Values{"pageSize": {strconv.Itoa(pageSize)}}
-				if next != "" {
-					query.Set("pageToken", next)
-				}
-				var page adminopenapi.RepositoryPage
-				if err := client.getJSON(ctx, repositoriesPath, query, &page); err != nil {
-					if pages == 0 {
-						return err
-					}
-					return repoListPartial(env, items, next, pageSize, pages,
-						fmt.Sprintf("listing stopped after %d pages: %s", pages, err.Error()),
-						"the items read so far are reported; re-run with --cursor to continue from nextCursor")
-				}
-				pages++
-				items = append(items, page.Items...)
-				next = ""
-				if page.NextPageToken != nil {
-					next = *page.NextPageToken
-				}
-				if !all || next == "" {
-					break
-				}
-				if pages >= maxPages {
-					return repoListPartial(env, items, next, pageSize, pages,
-						fmt.Sprintf("--all reached its budget of %d pages before the end of the listing", pages),
-						"raise --max-pages, or continue with --cursor from nextCursor")
-				}
-			}
-			payload, meta := repoListResult(items, next, pageSize, pages)
-			return env.render(payload, meta, func(w io.Writer) error {
-				if err := renderRepositoryTable(w, items); err != nil {
-					return err
-				}
-				if next != "" {
-					_, _ = fmt.Fprintf(env.stderr, "more repositories: agctl repo list --cursor %s\n", next)
-				}
-				return nil
-			})
-		},
-	}
-}
-
-func repoListResult(items []adminopenapi.Repository, next string, pageSize, pages int) (repoPage, *envelopeMeta) {
-	payload := newListPayload(items)
-	if next != "" {
-		payload.NextCursor = &next
-	}
-	complete := next == ""
-	return payload, &envelopeMeta{Pagination: &paginationMeta{Mode: "cursor", PageSize: pageSize, Pages: pages, Complete: &complete}}
-}
-
-func repoListPartial(env *commandContext, items []adminopenapi.Repository, next string, pageSize, pages int, message, hint string) error {
-	payload, meta := repoListResult(items, next, pageSize, pages)
-	return &resultError{
-		err:  &PartialError{Message: message, Hint: hint},
-		data: payload,
-		meta: meta,
-		human: func(w io.Writer) error {
-			return renderRepositoryTable(w, items)
-		},
+		run: list.run,
 	}
 }
 

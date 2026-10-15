@@ -9,7 +9,7 @@
 
 本页是对完整契约的归类，不是对已安装二进制的描述。除 #125 骨架（`version`、
 `info`、`commands`）和阶段列标为 `implemented` 的行（目前是 #130 的
-`repo list|show|create|update|delete`，由 `make cli-e2e` 在真实 Gateway 上验收）外，
+`repo list|show|create|update|delete` 和除 `browse` 外的 `group` 命令，由 `make cli-e2e` 在真实 Gateway 上验收）外，
 全部为计划，不宣称已实现；只有注册命令、文档/测试和真实 Gateway 验收齐备，
 某一行才转为 implemented/verified。
 
@@ -194,16 +194,16 @@ server base）。计划命令省略前导 `agctl`。
 | `POST /repositories/{repositoryId}/tombstones`<br>`tombstoneRepositoryArtifact` | `artifact tombstone --repo <id>` | #138 | M2 | RA | W |
 | `GET /repositories/{repositoryId}/capabilities`<br>`getRepositoryCapabilities` | `repo capabilities <id>` | #130 | M1 | R | Q |
 | `GET /repositories/{repositoryId}/effective-access`<br>`getRepositoryEffectiveAccess` | `access check --repo <id>` | #134 | M1 | I/A | Q |
-| `GET /groups`<br>`listGroups` | `group list` | #130 | M1 | A | Q |
-| `POST /groups`<br>`createGroup` | `group create` | #130 | M1 | G | W |
-| `GET /groups/{groupId}`<br>`getGroup` | `group show <id>` | #130 | M1 | A | Q |
-| `PUT /groups/{groupId}`<br>`replaceGroup` | `group update <id>` | #130 | M1 | G | C |
-| `DELETE /groups/{groupId}`<br>`deleteGroup` | `group delete <id>` | #130 | M1 | G | W |
+| `GET /groups`<br>`listGroups` | `group list` | #130 | M1 implemented | A | Q |
+| `POST /groups`<br>`createGroup` | `group create` | #130 | M1 implemented | G | W |
+| `GET /groups/{groupId}`<br>`getGroup` | `group show <id>` | #130 | M1 implemented | A | Q |
+| `PUT /groups/{groupId}`<br>`replaceGroup` | `group update <id>` | #130 | M1 implemented | G | C |
+| `DELETE /groups/{groupId}`<br>`deleteGroup` | `group delete <id>` | #130 | M1 implemented | G | W |
 | `GET /groups/{groupId}/browse`<br>`browseGroup` | `group browse <id>` | #130 | M1 | R* | Q |
-| `GET /groups/{groupId}/members`<br>`listGroupMembers` | `group members list <id>` | #130 | M1 | A | Q |
-| `PUT /groups/{groupId}/members`<br>`replaceGroupMembers` | `group members set <id>` | #130 | M1 | G | C |
+| `GET /groups/{groupId}/members`<br>`listGroupMembers` | `group members list <id>` | #130 | M1 implemented | A | Q |
+| `PUT /groups/{groupId}/members`<br>`replaceGroupMembers` | `group members set <id>` | #130 | M1 implemented | G | C |
 | `GET /groups/{groupId}/capacity`<br>`getGroupCapacity` | `capacity show --group <id>` | #138 | M2 | A | Q |
-| `GET /groups/{groupId}/resolution`<br>`getGroupResolution` | `group resolution <id>` | #130 | M1 | A | Q |
+| `GET /groups/{groupId}/resolution`<br>`getGroupResolution` | `group resolution <id>` | #130 | M1 implemented | A | Q |
 | `POST /repositories/{repositoryId}/publish-sessions`<br>`createPublishSession` | `publish create --repo <id>` | #132 | M1 | W | U |
 | `GET /repositories/{repositoryId}/artifacts`<br>`listArtifacts` | `artifact list --repo <id>` | #131 | M1 | R* | Q |
 | `GET /repositories/{repositoryId}/artifact-usage`<br>`listRepositoryArtifactUsage` | `artifact usage --repo <id>` | #131 | M1 | R* | Q |

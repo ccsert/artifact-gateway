@@ -13,8 +13,8 @@ use the same introspection for both views.
 This page classifies the full contract; it does not describe the installed
 binary. Apart from the #125 skeleton (`version`, `info`, `commands`) and the
 rows whose phase says `implemented` (currently #130's
-`repo list|show|create|update|delete`, accepted against a real Gateway by
-`make cli-e2e`), every row is a plan. A row may claim implemented/verified only once its command is
+`repo list|show|create|update|delete` and the `group` commands other than
+`browse`, accepted against a real Gateway by `make cli-e2e`), every row is a plan. A row may claim implemented/verified only once its command is
 registered, its documentation and tests exist, and it passed acceptance
 against a real Gateway.
 
@@ -235,16 +235,16 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `POST /repositories/{repositoryId}/tombstones`<br>`tombstoneRepositoryArtifact` | `artifact tombstone --repo <id>` | #138 | M2 | RA | W |
 | `GET /repositories/{repositoryId}/capabilities`<br>`getRepositoryCapabilities` | `repo capabilities <id>` | #130 | M1 | R | Q |
 | `GET /repositories/{repositoryId}/effective-access`<br>`getRepositoryEffectiveAccess` | `access check --repo <id>` | #134 | M1 | I/A | Q |
-| `GET /groups`<br>`listGroups` | `group list` | #130 | M1 | A | Q |
-| `POST /groups`<br>`createGroup` | `group create` | #130 | M1 | G | W |
-| `GET /groups/{groupId}`<br>`getGroup` | `group show <id>` | #130 | M1 | A | Q |
-| `PUT /groups/{groupId}`<br>`replaceGroup` | `group update <id>` | #130 | M1 | G | C |
-| `DELETE /groups/{groupId}`<br>`deleteGroup` | `group delete <id>` | #130 | M1 | G | W |
+| `GET /groups`<br>`listGroups` | `group list` | #130 | M1 implemented | A | Q |
+| `POST /groups`<br>`createGroup` | `group create` | #130 | M1 implemented | G | W |
+| `GET /groups/{groupId}`<br>`getGroup` | `group show <id>` | #130 | M1 implemented | A | Q |
+| `PUT /groups/{groupId}`<br>`replaceGroup` | `group update <id>` | #130 | M1 implemented | G | C |
+| `DELETE /groups/{groupId}`<br>`deleteGroup` | `group delete <id>` | #130 | M1 implemented | G | W |
 | `GET /groups/{groupId}/browse`<br>`browseGroup` | `group browse <id>` | #130 | M1 | R* | Q |
-| `GET /groups/{groupId}/members`<br>`listGroupMembers` | `group members list <id>` | #130 | M1 | A | Q |
-| `PUT /groups/{groupId}/members`<br>`replaceGroupMembers` | `group members set <id>` | #130 | M1 | G | C |
+| `GET /groups/{groupId}/members`<br>`listGroupMembers` | `group members list <id>` | #130 | M1 implemented | A | Q |
+| `PUT /groups/{groupId}/members`<br>`replaceGroupMembers` | `group members set <id>` | #130 | M1 implemented | G | C |
 | `GET /groups/{groupId}/capacity`<br>`getGroupCapacity` | `capacity show --group <id>` | #138 | M2 | A | Q |
-| `GET /groups/{groupId}/resolution`<br>`getGroupResolution` | `group resolution <id>` | #130 | M1 | A | Q |
+| `GET /groups/{groupId}/resolution`<br>`getGroupResolution` | `group resolution <id>` | #130 | M1 implemented | A | Q |
 | `POST /repositories/{repositoryId}/publish-sessions`<br>`createPublishSession` | `publish create --repo <id>` | #132 | M1 | W | U |
 | `GET /repositories/{repositoryId}/artifacts`<br>`listArtifacts` | `artifact list --repo <id>` | #131 | M1 | R* | Q |
 | `GET /repositories/{repositoryId}/artifact-usage`<br>`listRepositoryArtifactUsage` | `artifact usage --repo <id>` | #131 | M1 | R* | Q |
