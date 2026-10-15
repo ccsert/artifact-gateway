@@ -105,13 +105,35 @@ func TestRuntimeLogsFollowResumesWithoutSkippingPageTail(t *testing.T) {
 	}
 }
 
+// Cancel only after the stream actually identifies its source. A millisecond
+// deadline can expire before the first HTTP response on a busy CI runner.
+type cancelOnScopeWriter struct {
+	bytes.Buffer
+	cancel context.CancelFunc
+}
+
+func (w *cancelOnScopeWriter) Write(data []byte) (int, error) {
+	n, err := w.Buffer.Write(data)
+	if bytes.Contains(data, []byte(`"type":"scope"`)) {
+		w.cancel()
+	}
+	return n, err
+}
+
 func TestRuntimeLogsEmptyFollowReportsScope(t *testing.T) {
 	api := newRouteAPI(t, "")
 	api.on("GET", runtimeLogsPath, 200, `{"scope":"local","instanceId":"i-1","sessionId":"s-1","items":[],"afterCursor":"c-0","hasMore":false}`)
-	code, stdout, _ := runCLI(t, "runtime", "logs", "--follow", "--duration", "10ms", "--json")
-	events := ndjson(t, stdout)
-	if code != ExitOK || events[0]["type"] != "scope" {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stdout := &cancelOnScopeWriter{cancel: cancel}
+	var stderr bytes.Buffer
+	code := RunCLI(ctx, []string{"runtime", "logs", "--follow", "--duration", "5s", "--json"}, strings.NewReader(""), stdout, &stderr)
+	events := ndjson(t, stdout.String())
+	if code != ExitPartial || events[0]["type"] != "scope" {
 		t.Fatalf("empty stream must identify its source: exit=%d, events=%v", code, events)
+	}
+	if end := events[len(events)-1]["data"].(map[string]any); end["reason"] != "interrupted" || end["events"] != float64(0) {
+		t.Fatalf("empty stream end=%v", end)
 	}
 	scope := events[0]["data"].(map[string]any)
 	if scope["scope"] != "local" || scope["instanceId"] != "i-1" || scope["sessionId"] != "s-1" {
