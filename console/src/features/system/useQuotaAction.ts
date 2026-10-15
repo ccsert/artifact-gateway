@@ -37,7 +37,23 @@ export function useQuotaAction(onAuthBlocked?: (error: unknown) => void) {
       if (alive.current && !abort.signal.aborted) setBusy(false);
     }
   };
-  const blocked =
+  return {
+    busy,
+    error,
+    blocked: quotaBlocked(error, onAuthBlocked),
+    run,
+  };
+}
+
+/**
+ * Whether a failure stops the form until the person reloads: a version
+ * conflict, a deleted rule, or a denial the page does not already block.
+ */
+export function quotaBlocked(
+  error: unknown,
+  onAuthBlocked?: (error: unknown) => void,
+): boolean {
+  const blocking =
     typeof error === "object" &&
     error !== null &&
     "code" in error &&
@@ -50,10 +66,5 @@ export function useQuotaAction(onAuthBlocked?: (error: unknown) => void) {
       "unauthenticated",
       "rule_deleted",
     ].includes(String(error.code));
-  return {
-    busy,
-    error,
-    blocked: blocked && (!onAuthBlocked || !isQuotaAuthError(error)),
-    run,
-  };
+  return blocking && (!onAuthBlocked || !isQuotaAuthError(error));
 }

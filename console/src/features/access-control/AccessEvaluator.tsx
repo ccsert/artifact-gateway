@@ -1,4 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { accessKeys } from "../../lib/query/keys";
+import { unwrap } from "../../lib/query/client";
+import { LocalizedError } from "../../messages/translate";
 import { Badge } from "../../components/ui/Badge";
 import { Button, Collapse, Input, Select } from "antd";
 import { ExperimentOutlined, ReloadOutlined } from "@ant-design/icons";
@@ -59,10 +63,46 @@ export function AccessEvaluator({
     ? chosenRepository
     : (repositories[0]?.id ?? "");
   const [resource, setResource] = useState("");
-  const [evaluation, setEvaluation] =
-    useState<RepositoryEffectiveAccess | null>(null);
-  const [evaluationError, setEvaluationError] = useState<unknown>(null);
-  const [evaluating, setEvaluating] = useState(false);
+  // The submitted evaluation is a query keyed by its inputs: changing an
+  // input withdraws it, and an earlier answer can never replace a newer one.
+  const [request, setRequest] = useState<{
+    repositoryId: string;
+    query: Record<string, string | undefined>;
+  } | null>(null);
+  const [validationError, setValidationError] = useState<unknown>(null);
+  const evaluationQuery = useQuery({
+    queryKey: accessKeys.evaluation(
+      request?.repositoryId ?? "",
+      request?.query ?? {},
+    ),
+    queryFn: async ({ signal }) => {
+      const data = await unwrap(
+        getRepositoryEffectiveAccess({
+          path: { repositoryId: request?.repositoryId ?? "" },
+          query: request?.query,
+          signal,
+        }),
+      );
+      if (!data) throw new LocalizedError("access.accessEvaluationFailed");
+      return data;
+    },
+    enabled: Boolean(request),
+    // An access decision is read fresh each time it is asked for.
+    staleTime: 0,
+    gcTime: 0,
+  });
+  const evaluation: RepositoryEffectiveAccess | null =
+    request && evaluationQuery.isSuccess && !evaluationQuery.isFetching
+      ? (evaluationQuery.data ?? null)
+      : null;
+  const evaluationError =
+    validationError ??
+    (request && !evaluationQuery.isFetching ? evaluationQuery.error : null);
+  const evaluating = evaluationQuery.isFetching;
+  const withdraw = () => {
+    setRequest(null);
+    setValidationError(null);
+  };
 
   const evaluatorPrincipals = useMemo(
     () =>
@@ -89,10 +129,10 @@ export function AccessEvaluator({
       ? customRole
       : (selectedPrincipalChoice?.role ?? "none");
 
-  const runEvaluation = async () => {
+  const runEvaluation = () => {
     const choice = selectedPrincipalChoice;
     if (!choice || !selectedRepository) {
-      setEvaluationError(new Error(t("access.selectAPrincipalAndRepository")));
+      setValidationError(new Error(t("access.selectAPrincipalAndRepository")));
       return;
     }
     const actor =
@@ -100,17 +140,16 @@ export function AccessEvaluator({
         ? customActor.trim()
         : choice.actor;
     if (!choice.current && !actor) {
-      setEvaluationError(
+      setValidationError(
         new Error(
           t("access.enterTheCompleteActorProducedByTheAuthenticationSystem"),
         ),
       );
       return;
     }
-    setEvaluating(true);
-    setEvaluationError(null);
-    const { data, error: err } = await getRepositoryEffectiveAccess({
-      path: { repositoryId: selectedRepository },
+    setValidationError(null);
+    const next = {
+      repositoryId: selectedRepository,
       query: choice.current
         ? { resource: resource.trim() || undefined }
         : {
@@ -121,13 +160,11 @@ export function AccessEvaluator({
                 : effectiveEvaluatorRole,
             resource: resource.trim() || undefined,
           },
-    });
-    setEvaluating(false);
-    if (err || !data) {
-      setEvaluationError(err ?? new Error(t("access.accessEvaluationFailed")));
-      return;
-    }
-    setEvaluation(data);
+    };
+    // Asking again for the same evaluation reads it again.
+    if (request && JSON.stringify(request) === JSON.stringify(next))
+      void evaluationQuery.refetch();
+    else setRequest(next);
   };
 
   return (
@@ -187,8 +224,7 @@ export function AccessEvaluator({
                 }))}
                 onChange={(value) => {
                   setSelectedPrincipal(value);
-                  setEvaluation(null);
-                  setEvaluationError(null);
+                  withdraw();
                 }}
               />
             </FilterField>
@@ -204,7 +240,7 @@ export function AccessEvaluator({
                 ]}
                 onChange={(value: EvaluatorRole) => {
                   setCustomRole(value);
-                  setEvaluation(null);
+                  withdraw();
                 }}
               />
             </FilterField>
@@ -222,8 +258,7 @@ export function AccessEvaluator({
                 onChange={(value) => {
                   setSelectedRepository(value);
                   setResource("");
-                  setEvaluation(null);
-                  setEvaluationError(null);
+                  withdraw();
                 }}
               />
             </FilterField>
@@ -238,10 +273,9 @@ export function AccessEvaluator({
                 value={resource}
                 onChange={(event) => {
                   setResource(event.target.value);
-                  setEvaluation(null);
-                  setEvaluationError(null);
+                  withdraw();
                 }}
-                onPressEnter={() => void runEvaluation()}
+                onPressEnter={runEvaluation}
               />
             </FilterField>
             <Button
@@ -249,7 +283,7 @@ export function AccessEvaluator({
               icon={<ExperimentOutlined />}
               loading={evaluating}
               disabled={evaluatorOptionsLoading || !selectedRepository}
-              onClick={() => void runEvaluation()}
+              onClick={runEvaluation}
             >
               {t("access.evaluate")}
             </Button>
@@ -268,10 +302,9 @@ export function AccessEvaluator({
                   value={customActor}
                   onChange={(event) => {
                     setCustomActor(event.target.value);
-                    setEvaluation(null);
-                    setEvaluationError(null);
+                    withdraw();
                   }}
-                  onPressEnter={() => void runEvaluation()}
+                  onPressEnter={runEvaluation}
                 />
               </FilterField>
               <div className="col-span-3 flex items-end pb-2 text-xs text-fg-disabled">

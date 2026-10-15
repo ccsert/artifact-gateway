@@ -33,6 +33,8 @@ export const repositoryKeys = {
     [...repositoryKeys.detail(id), "scan-jobs"] as const,
   replicationPlans: (id: string) =>
     [...repositoryKeys.detail(id), "replication-plans"] as const,
+  replicationPlan: (id: string, planId: string) =>
+    [...repositoryKeys.replicationPlans(id), planId] as const,
   aptLifecycle: (id: string, suite: string) =>
     [...repositoryKeys.detail(id), "apt-lifecycle", suite] as const,
 };
@@ -66,6 +68,11 @@ export const accessKeys = {
   /** Single 200-item pages used to choose principals and repositories. */
   directory: (source: "users" | "service-accounts" | "repositories") =>
     [...accessKeys.all, "directory", source] as const,
+  /** One submitted effective-access evaluation. */
+  evaluation: (
+    repositoryId: string,
+    query: Record<string, string | undefined>,
+  ) => [...accessKeys.all, "evaluation", repositoryId, query] as const,
 };
 
 export const operationKeys = {
@@ -170,4 +177,9 @@ export const protocolKeys = {
 export const quotaKeys = {
   all: ["quota"] as const,
   snapshot: (key: string) => [...quotaKeys.all, "snapshot", key] as const,
+  /** Repository pages a rule editor loads after the panel's first page. */
+  editorRepositories: (startToken: string) =>
+    [...quotaKeys.all, "editor-repositories", startToken] as const,
+  emailTarget: (targetId: string) =>
+    [...quotaKeys.all, "email-target", targetId] as const,
 };
