@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- CLI 跟随流在预算耗尽时保留未读数据：运行日志按剩余事件数限制每页，用 `--after-cursor` 续读，空流也标明本地进程。审计轮询超过十页时先以 `poll_budget` 和退出码 3 结束，不越过未读历史；包含边界的回看续读时间可能重放记录。不完整的授权、模板和匿名策略写响应报告结果未知并给出回读提示。
+
 - `agctl` 新增授权管理与日志、审计的流式输出（#134、#135）。`grant list|upsert|delete` 按单行操作授权（upsert 以单行为键，因此会重试；delete 需要确认且从不重试）；`template apply` 只有带 `--yes` 才会替换仓库的全部授权，以授权集版本为条件，其 `--dry-run` 列出将新增、删除、变更和保留的每一条授权；`role list|show` 和 `template list|show` 读取目录；`access check` 说明调用者或模拟主体的读、写、管理、情报和匿名读取权限，带 `--require` 时缺少权限即退出码 6；`access anonymous show|set` 读取并有条件地设置平台开关，开启需要 `--yes`。`runtime logs` 读取应答进程的内存日志，`runtime logs --follow` 和 `audit list --follow` 输出以 `--duration` 或 `--max-events` 为界的 NDJSON，最后恰好一个终止事件，说明结束原因和续读位置；日志会话重启时流以 `scope_changed` 结束，漏读以 gap 事件报告。`agctl commands --json` 新增 `follow` 能力。`make cli-e2e` 验证授权在删除前后的 `access check` 结果、带过期版本的模板应用、审计日志及其流中的授权写入，以及有界日志流。
 
 - CLI 巡检保留实际观测边界：生命周期列表报告有界窗口，不再由权限过滤后的条数推断完整；扫描器不健康或不可达时，普通 `status` 也会失败；人类诊断摘要保留各挂载的状态、字节数与采样时间。PyPI 接入配置按纯主机名匹配 `.netrc` 凭据，服务端 URL 可保留显式端口。

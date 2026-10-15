@@ -186,7 +186,8 @@ profile，最后是只定义一个 profile 的文件。该文件由 profile 命�
   "events", "resume"}, "error": …}`。流必须带 `--duration` 或 `--max-events`
   （否则退出码 2），不会无限运行。`reason` 为 `duration` 或 `max_events`
   （退出码 0）、收到信号时为 `interrupted`（退出码 3）、运行日志会话变化时为
-  `scope_changed`（退出码 7），或 `error`（按错误的退出码）；`resume` 给出新流
+  `scope_changed`（退出码 7）、审计轮询未读完所有页时为 `poll_budget`（退出码 3），
+  或 `error`（按错误的退出码）；`resume` 给出新流
   可以继续的位置。流开始之前的用法错误仍是普通的单个信封。
 - 失败但仍有内容需要报告时放在 `data`（以及 `meta`）中：列表中途停止前已读
   到的页（退出码 3）、等待超时时已受理的 ID 和最后读到的状态（退出码 8），
@@ -427,12 +428,22 @@ Group，因此它无法确认结果的写入需要平台管理员来核对。
   和 Group 解析，并非每次管理写入；审计记录带有 `agctl` 失败时报告的请求 ID。
   `--follow` 流式输出新记录：审计记录没有序号，因此每次轮询重读两分钟的回看窗口
   并跳过已投递的记录；不带 `--from` 时从现在开始，带上时先输出 `--from` 以来的
-  记录。一次轮询中新记录超过十页时输出 `gap` 事件。
+  记录。一次轮询读了十页仍有后续页时，先输出 `gap`，再以 `poll_budget`
+  （退出码 3）结束，不投递该轮不完整的数据，也不推进到未读历史之后。
+  此时应缩小过滤范围，或用 `audit list --all` 回读历史。`end.resume.from`
+  保留包含边界的回看窗口下限，带同样过滤条件恢复时可能重放记录，包括同一
+  时间戳的记录，消费者应去重；延迟超过两分钟回看窗口才到达的记录不在此轮询
+  保证内。
 - `agctl runtime logs [--level L] [--component C] [--request-id ID]
   [--trace-id ID] [--keyword TEXT] [--from TIME] [--to TIME | --window D]`
   从应答进程的内存中读取一页（最新在前，`--limit` 最多 100）：日志只属于一个
   实例和会话，重启即丢失（见 `meta.scope`）。`nextCursor` 配合 `--before`
-  翻到更早的条目。`--follow` 先按时间正序输出这一页，再用服务端 cursor 跟随；
+  翻到更早的条目。`--follow` 先输出 `scope` 事件，保留本地实例、会话、保留范围
+  与来源元数据（空流也有），再按时间正序输出这一页，用服务端 cursor 跟随。
+  每次请求最多读取剩余事件预算，结束游标不会越过本页尚未投递的条目。
+  用 `end.resume.afterCursor` 配合
+  `--after-cursor CURSOR --follow --duration D` 和同样过滤条件即可续读；
+  `--after-cursor` 不带 follow 时读取一页正序记录。
   cursor 属于一个进程会话，进程重启或换了实例应答时，流以 `scope_changed`
   结束。未读条目被覆盖时报告为 `gap`。
 - `agctl status` 探测 `/livez`、`/readyz` 和诊断信息，逐项给出结论：依赖、运行
@@ -475,10 +486,36 @@ Group，因此它无法确认结果的写入需要平台管理员来核对。
   [--resource PATH]` 说明读、写、管理、情报和匿名读取各自的判定来源与原因。
   `--require PERMISSION`（可重复）在任一权限不被允许时退出码 6，供 CI 和
   agent 自检。说明其他主体需要平台管理员；`--role` 模拟该主体的全局角色。
+  本人没有读取或情报权限时，服务端以 404（退出码 4）隐藏仓库存在性；拿到判定
+  矩阵后，`--require` 发现权限被拒时才退出码 6。
 - `agctl access anonymous show` 读取匿名读取的平台开关；
   `agctl access anonymous set --enabled=true|false` 以 `--if-match` 或刚读到的
   版本为条件替换它，从不重试。开启需要 `--yes`，因为它作用于所有允许匿名读取的
   仓库和 Group。
+
+### 最小权限服务账号自检
+
+准备已有的活跃服务账号及其凭据，签发凭据由 #133 单独承接。在环境中设置
+`AGCTL_SERVER`、`REPO_ID`、`SERVICE_ACCOUNT_ID`、`ADMIN_TOKEN` 和
+`SERVICE_ACCOUNT_TOKEN`；只有管理员写入授权。以下剧本仅允许读取
+`releases/` 下的资源，写入仍被拒绝：
+
+```sh
+AGCTL_TOKEN="$ADMIN_TOKEN" agctl grant upsert --repo "$REPO_ID" \
+  --principal "service-account:$SERVICE_ACCOUNT_ID" \
+  --resource-prefix releases/ --scope repositories:read
+AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
+  --resource releases/app.txt --require read --json
+# 预期退出码 6：已有读取权限可以看见资源，但写入被拒绝。
+AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
+  --resource releases/app.txt --require write --json
+AGCTL_TOKEN="$ADMIN_TOKEN" agctl grant delete --repo "$REPO_ID" \
+  --principal "service-account:$SERVICE_ACCOUNT_ID" \
+  --resource-prefix releases/ --yes
+# 若这是账号的唯一权限，撤销后预期退出码 4。
+AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
+  --resource releases/app.txt --require read --json
+```
 
 ## 验证
 
@@ -499,7 +536,9 @@ Group，因此它无法确认结果的写入需要平台管理员来核对。
   成员主体写入、检查、按前缀收窄并删除授权（被拒时 access check 退出码 6），在
   审计日志和有界 `--follow` 流中找到授权写入，应用模板（dry-run 差异、过期
   `If-Match`、应用），把匿名开关重设为原值并验证过期版本被拒，以分页和有界流
-  读取运行日志；读取 status、诊断、运行节点、概览和生命周期任务；再删除仓库（确认、dry-run、
+  读取运行日志，用 `--after-cursor` 续读，并验证并发单行授权保留不同主体的记录。
+  隔离 Compose 模式还验证真实非管理员本人权限、模拟和写授权被拒、版本不变且
+  没有变更类审计，以及撤销后隐藏仓库。读取 status、诊断、运行节点、概览和生命周期任务；再删除仓库（确认、dry-run、
   202、等待超时）并等待 `deleted`。同时检查错误
   token（5）、仓库不存在（4）、非法输入（2）和冲突（7）的退出码。
 - `make cli-contract-check` 校验命令映射表覆盖全部契约操作，且每个标为

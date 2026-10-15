@@ -301,6 +301,9 @@ func TestRuntimeLogsFollowStreamsNDJSON(t *testing.T) {
 		case "c-2":
 			return 200, `{"scope":"local","instanceId":"i-1","sessionId":"s-1","items":[` + logEntry(3) + `],"afterCursor":"c-3","order":"ascending","hasMore":true,"retention":{"earliestSequence":3,"latestSequence":9,"gap":true}}`
 		default:
+			if r.URL.Query().Get("limit") == "1" {
+				return 200, `{"scope":"local","instanceId":"i-1","sessionId":"s-1","items":[` + logEntry(4) + `],"afterCursor":"c-4","order":"ascending","hasMore":true}`
+			}
 			return 200, `{"scope":"local","instanceId":"i-1","sessionId":"s-1","items":[` + logEntry(4) + `,` + logEntry(5) + `],"afterCursor":"c-5","order":"ascending","hasMore":false}`
 		}
 	})
@@ -316,11 +319,11 @@ func TestRuntimeLogsFollowStreamsNDJSON(t *testing.T) {
 			sequences = append(sequences, fmt.Sprint(event["data"].(map[string]any)["sequence"]))
 		}
 	}
-	if strings.Join(sequences, ",") != "1,2,3,4" || strings.Join(kinds, ",") != "entry,entry,gap,entry,entry,end" {
+	if strings.Join(sequences, ",") != "1,2,3,4" || strings.Join(kinds, ",") != "scope,entry,entry,gap,entry,entry,end" {
 		t.Fatalf("kinds = %v, sequences = %v", kinds, sequences)
 	}
 	end := events[len(events)-1]["data"].(map[string]any)
-	if end["reason"] != "max_events" || end["events"] != float64(4) || end["resume"].(map[string]any)["afterCursor"] != "c-5" {
+	if end["reason"] != "max_events" || end["events"] != float64(4) || end["resume"].(map[string]any)["afterCursor"] != "c-4" {
 		t.Fatalf("end = %v", end)
 	}
 	for _, request := range api.recorded()[1:] {

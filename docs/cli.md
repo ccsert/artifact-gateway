@@ -209,7 +209,8 @@ With `--json`, stdout carries exactly one document — also on failure:
   "resume"}, "error": …}`. A stream needs `--duration` or `--max-events`
   (otherwise exit 2) and never runs forever. `reason` is `duration` or
   `max_events` (exit 0), `interrupted` on a signal (exit 3), `scope_changed`
-  when the runtime log session changed (exit 7), or `error` (the error's
+  when the runtime log session changed (exit 7), `poll_budget` when an audit
+  poll cannot read all its pages (exit 3), or `error` (the error's
   exit code); `resume` says where a new stream continues. Usage errors before
   the stream starts are an ordinary single envelope.
 - A failure that still has something to report carries it in `data` (and
@@ -507,15 +508,26 @@ These commands read; none of them changes anything.
   failure reports. `--follow` streams new records: audit records have no
   sequence, so each poll re-reads a two-minute lookback window and skips
   records it already delivered; without `--from` the stream starts now, with
-  it the records since `--from` come first. More than ten pages of new
-  records in one poll emit a `gap` event.
+  it the records since `--from` come first. If a poll still has unread pages
+  after ten requests, it emits a `gap` and ends with `poll_budget` (exit 3)
+  before delivering that incomplete poll. Narrow the filters or read history
+  with `audit list --all`. `end.resume.from` preserves the inclusive lookback
+  floor for restarting with the same filters; records can replay, including
+  those sharing a timestamp, so consumers should deduplicate. Records arriving
+  later than the two-minute lookback are outside this polling guarantee.
 - `agctl runtime logs [--level L] [--component C] [--request-id ID]
   [--trace-id ID] [--keyword TEXT] [--from TIME] [--to TIME | --window D]`
   reads one page (newest first, `--limit` up to 100) from the memory of the
   process that answers: the logs are local to one instance and session and
   are lost on restart (`meta.scope`). `nextCursor` pages older entries with
-  `--before`. `--follow` prints the page oldest first and then follows with
-  the server's cursor; the cursor belongs to one process session, so a
+  `--before`. `--follow` first emits a `scope` event with local instance,
+  session, retention and source metadata (also for an empty stream), prints
+  the page oldest first and then follows with the server's cursor. It caps
+  each request to the remaining event budget, so an end cursor never skips
+  unread entries in a fetched page. Restart with
+  `--after-cursor CURSOR --follow --duration D` using `end.resume.afterCursor`
+  and the same filters; `--after-cursor` also reads one ascending page without
+  follow. The cursor belongs to one process session, so a
   restart or another instance answering ends the stream with
   `scope_changed`. Overwritten unread entries are reported as a `gap`.
 - `agctl status` probes `/livez`, `/readyz`, and the diagnostics and prints
@@ -574,12 +586,39 @@ addressed by ID with `--repo`.
   anonymous read with the source and reason of each decision.
   `--require PERMISSION` (repeatable) exits 6 when one is not allowed, for
   CI and agent self-checks. Explaining another actor needs a platform
-  administrator; `--role` simulates that actor's global role.
+  administrator; `--role` simulates that actor's global role. A caller with
+  no read or intelligence authority gets 404 (exit 4), hiding the repository's
+  existence; `--require` exits 6 when a returned decision denies permission.
 - `agctl access anonymous show` reads the platform switch for anonymous
   reads; `agctl access anonymous set --enabled=true|false` replaces it
   conditional on `--if-match` or the version just read, and is never
   retried. Enabling needs `--yes`, because it applies to every repository
   and Group that allows anonymous reads.
+
+### Least-privilege service-account check
+
+Use an existing active service account and its credential: credential issuance
+is tracked separately in #133. Set `AGCTL_SERVER`, `REPO_ID`,
+`SERVICE_ACCOUNT_ID`, `ADMIN_TOKEN`, and `SERVICE_ACCOUNT_TOKEN` in the
+environment; only the administrator writes the grant. This example admits
+reads under `releases/` and leaves write authority denied:
+
+```sh
+AGCTL_TOKEN="$ADMIN_TOKEN" agctl grant upsert --repo "$REPO_ID" \
+  --principal "service-account:$SERVICE_ACCOUNT_ID" \
+  --resource-prefix releases/ --scope repositories:read
+AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
+  --resource releases/app.txt --require read --json
+# Expected exit 6: read authority reveals the resource, but write is denied.
+AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
+  --resource releases/app.txt --require write --json
+AGCTL_TOKEN="$ADMIN_TOKEN" agctl grant delete --repo "$REPO_ID" \
+  --principal "service-account:$SERVICE_ACCOUNT_ID" \
+  --resource-prefix releases/ --yes
+# Expected exit 4 after revocation, if this was the account's only authority.
+AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
+  --resource releases/app.txt --require read --json
+```
 
 ## Verification
 
@@ -606,7 +645,11 @@ addressed by ID with `--repo`.
   grant writes in the audit log and in a bounded `--follow` stream, applies a
   template (dry-run diff, stale `If-Match`, apply), re-sets the anonymous
   switch to its own value with a stale-version refusal, reads runtime logs
-  as a page and a bounded stream; reads status, diagnostics, runtime nodes,
+  as a page and a bounded stream that can resume with `--after-cursor`;
+  verifies concurrent single-row grants preserve both principals. In isolated
+  Compose mode it also verifies a real non-admin caller's access, refused
+  simulation and grant write, unchanged version and absence of mutation audit,
+  and the hidden repository after revocation. It reads status, diagnostics, runtime nodes,
   overview, and lifecycle jobs; then deletes the repository (confirmation,
   dry-run, 202, timed-out wait) and waits for `deleted`. It also checks the exit codes for a wrong token (5), a missing
   repository (4), invalid input (2), and conflicts (7).

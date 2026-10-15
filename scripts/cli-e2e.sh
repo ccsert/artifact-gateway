@@ -104,7 +104,7 @@ go build -o "$workdir/agctl" ./cmd/agctl
 # Every invocation runs without a profile file, with credentials only from
 # the environment, and with stdin closed: agctl must never prompt.
 agctl() {
-  HOME="$workdir/home" AGCTL_SERVER="$server" AGCTL_TOKEN="$admin_token" AGCTL_PROFILE="" \
+  HOME="$workdir/home" AGCTL_SERVER="$server" AGCTL_TOKEN="${cli_test_token:-$admin_token}" AGCTL_PROFILE="" \
     "$workdir/agctl" "$@" </dev/null
 }
 
@@ -504,6 +504,51 @@ expect 0 "$out" -- grant delete --repo "$content_id" --principal "$principal" --
 expect 0 "$out" -- grant delete --repo "$content_id" --principal "$principal" --yes --json
 expect 4 "$out" -- grant delete --repo "$content_id" --principal "$principal" --yes --json
 expect 6 "$out" -- access check --repo "$content_id" --actor "$principal" --role member --require read --json
+
+# Concurrent writes to different principals preserve both rows. Each process
+# has separate result files; neither reads and replaces the whole grant set.
+concurrent_a="user:cli-e2e-a-${suffix}"
+concurrent_b="user:cli-e2e-b-${suffix}"
+agctl grant upsert --repo "$content_id" --principal "$concurrent_a" --scope repositories:read --json >"$workdir/grant-a.json" 2>"$workdir/grant-a.err" &
+grant_a_pid=$!
+agctl grant upsert --repo "$content_id" --principal "$concurrent_b" --scope repositories:write --json >"$workdir/grant-b.json" 2>"$workdir/grant-b.err" &
+grant_b_pid=$!
+wait "$grant_a_pid"
+wait "$grant_b_pid"
+expect 0 "$out" -- grant list --repo "$content_id" --json
+python3 - "$out" "$concurrent_a" "$concurrent_b" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    grants = {row["principal"]: row["scopes"] for row in json.load(stream)["data"]["grants"]}
+if grants.get(sys.argv[2]) != ["repositories:read"] or grants.get(sys.argv[3]) != ["repositories:write"]:
+    raise SystemExit(f"concurrent single-row writes overwrote one another: {grants}")
+PY2
+expect 0 "$out" -- grant delete --repo "$content_id" --principal "$concurrent_a" --yes --json
+expect 0 "$out" -- grant delete --repo "$content_id" --principal "$concurrent_b" --yes --json
+
+# A real non-admin credential checks itself, cannot simulate an administrator
+# or change grants, and loses read access after its grant is revoked.
+if [[ -n "$project" && -n "$resolver_token" ]]; then
+  cli_test_token=$resolver_token expect 0 "$out" -- auth whoami --json
+  member_actor=$(field "$out" data.actor)
+  expect 0 "$out" -- grant upsert --repo "$content_id" --principal "$member_actor" --scope repositories:read --json
+  cli_test_token=$resolver_token expect 0 "$out" -- access check --repo "$content_id" --require read --json
+  require "$(field "$out" data.simulated)" false "real caller access check"
+  cli_test_token=$resolver_token expect 6 "$out" -- access check --repo "$content_id" --require write --json
+  expect 0 "$out" -- grant list --repo "$content_id" --json
+  grants_version=$(field "$out" data.version)
+  cli_test_token=$resolver_token expect 6 "$out" -- access check --repo "$content_id" --actor "$principal" --role admin --require admin --json
+  cli_test_token=$resolver_token expect 6 "$out" -- grant upsert --repo "$content_id" --principal "$member_actor" --scope repositories:admin --json
+  expect 0 "$out" -- grant list --repo "$content_id" --json
+  require "$(field "$out" data.version)" "$grants_version" "refused member write leaves grants unchanged"
+  expect 0 "$out" -- audit list --operation repository.grants.upsert --actor "$member_actor" --repository "$content_name" --from "$grant_started" --json
+  require "$(field "$out" data.items)" "[]" "refused member write has no mutation audit"
+  expect 0 "$out" -- grant delete --repo "$content_id" --principal "$member_actor" --yes --json
+  # With no remaining authority the API hides the repository's existence.
+  cli_test_token=$resolver_token expect 4 "$out" -- access check --repo "$content_id" --require read --json
+fi
 curl --silent --show-error --fail --output /dev/null -X DELETE -H "Authorization: Bearer $admin_token" "$server/api/v2/authorization-templates/$template_id"
 
 # The anonymous switch is shared with every other check on this Gateway: it is
@@ -532,7 +577,19 @@ with open(sys.argv[1], encoding="utf-8") as stream:
     events = [json.loads(line) for line in stream]
 if any(event["schemaVersion"] != 1 for event in events) or events[-1]["type"] != "end" or events[-1]["data"]["reason"] != "duration":
     raise SystemExit(f"bounded log stream did not end on its duration: {events[-1:]}")
+if events[0]["type"] != "scope" or events[0]["data"]["scope"] != "local" or not events[0]["data"]["instanceId"] or not events[0]["data"]["sessionId"]:
+    raise SystemExit("log stream must identify its local process, even without entries")
 PY2
+after_cursor=$(python3 - "$out" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    events = [json.loads(line) for line in stream]
+print(events[-1]["data"]["resume"]["afterCursor"])
+PY2
+)
+expect 0 "$out" -- runtime logs --after-cursor "$after_cursor" --follow --duration 1s --json
 
 # Runtime reads (#135). status is healthy or degraded on a running stack and
 # exits 0 for both; --strict fails exactly when it is not healthy.

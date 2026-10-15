@@ -108,6 +108,11 @@ func grantWriteResult(response *apiResponse, client *apiClient, repo string) (gr
 	if !strings.HasPrefix(trimmed, "[") || json.Unmarshal(response.Body, &grants) != nil || response.Header.Get("ETag") == "" {
 		return grantSet{}, incompleteResponse(response, client, "grant list")
 	}
+	for _, grant := range grants {
+		if strings.TrimSpace(grant.Principal) == "" || grant.Scopes == nil {
+			return grantSet{}, incompleteResponse(response, client, "grant list")
+		}
+	}
 	return grantSet{RepositoryID: repo, Version: response.Header.Get("ETag"), Grants: grantRows(grants)}, nil
 }
 
@@ -876,8 +881,15 @@ func accessAnonymousSetCommand() command {
 			// Conditional and therefore not retried.
 			var policy adminopenapi.AnonymousAccessPolicy
 			response, err := client.sendJSON(ctx, http.MethodPut, anonymousPolicyPath, requestOptions{body: encoded, header: http.Header{"If-Match": {ifMatch}}}, &policy)
-			if err == nil && (policy.Version == "" || policy.Enabled != enabled) {
-				err = incompleteResponse(response, client, "anonymous access policy")
+			if err == nil {
+				// A bool's zero value cannot distinguish a confirmed false from
+				// a missing/null enabled field in a truncated success response.
+				var fields struct {
+					Enabled *bool `json:"enabled"`
+				}
+				if json.Unmarshal(response.Body, &fields) != nil || fields.Enabled == nil || policy.Version == "" || policy.Enabled != enabled {
+					err = incompleteResponse(response, client, "anonymous access policy")
+				}
 			}
 			if err != nil {
 				var api *APIError

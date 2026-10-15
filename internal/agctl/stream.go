@@ -245,6 +245,9 @@ func logScope(page adminopenapi.RuntimeLogPage) map[string]any {
 	if page.Retention != nil {
 		scope["retention"] = page.Retention
 	}
+	if page.Source != nil {
+		scope["source"] = page.Source
+	}
 	if page.AfterCursor != nil {
 		scope["afterCursor"] = *page.AfterCursor
 	}
@@ -259,15 +262,17 @@ func runtimeLogsCommand() command {
 	var follow followOptions
 	var limit int
 	var before int64
+	var after string
 	return command{
 		name:     "runtime logs",
 		synopsis: "read the responding process's recent logs; --follow streams new entries as NDJSON",
-		usage:    "agctl runtime logs [--level L] [--component C] [--request-id ID] [--trace-id ID] [--keyword TEXT] [--from TIME] [--to TIME | --window DURATION] [--limit N] [--before SEQUENCE] [--follow (--duration D | --max-events N)] [--json]",
+		usage:    "agctl runtime logs [--level L] [--component C] [--request-id ID] [--trace-id ID] [--keyword TEXT] [--from TIME] [--to TIME | --window DURATION] [--limit N] [--before SEQUENCE | --after-cursor CURSOR] [--follow (--duration D | --max-events N)] [--json]",
 		setFlags: func(fs *flag.FlagSet) {
 			filters.register(fs)
 			follow.register(fs)
 			fs.IntVar(&limit, "limit", 50, "entries per page (1-100)")
 			fs.Int64Var(&before, "before", 0, "read entries older than this sequence (the nextCursor of a page)")
+			fs.StringVar(&after, "after-cursor", "", "resume newer entries from end.resume.afterCursor, keeping the same filters")
 		},
 		meta: commandMeta{
 			Resource:     "runtime",
@@ -291,6 +296,9 @@ func runtimeLogsCommand() command {
 			if before < 0 || (follow.follow && env.flagSet["before"]) {
 				return &UsageError{Message: "--before must be a positive sequence and cannot be combined with --follow", Hint: "page older entries with --before; stream newer ones with --follow"}
 			}
+			if env.flagSet["after-cursor"] && (after == "" || env.flagSet["before"]) {
+				return &UsageError{Message: "--after-cursor must be nonempty and cannot be combined with --before", Hint: "resume with the same filters and end.resume.afterCursor"}
+			}
 			values, err := filters.values(follow.follow)
 			if err != nil {
 				return err
@@ -307,6 +315,9 @@ func runtimeLogsCommand() command {
 			if before > 0 {
 				query.Set("beforeSequence", strconv.FormatInt(before, 10))
 			}
+			if after != "" {
+				query.Set("afterCursor", after)
+			}
 			if !follow.follow {
 				var page adminopenapi.RuntimeLogPage
 				if err := client.getJSON(ctx, runtimeLogsPath, query, &page); err != nil {
@@ -322,8 +333,14 @@ func runtimeLogsCommand() command {
 					if _, err := fmt.Fprintf(w, "# %s logs of instance %s, session %s (lost on restart)\n", page.Scope, page.InstanceId, page.SessionId); err != nil {
 						return err
 					}
-					for index := len(page.Items) - 1; index >= 0; index-- {
-						if _, err := fmt.Fprintln(w, logLine(page.Items[index])); err != nil {
+					items := append([]adminopenapi.RuntimeLogEntry(nil), page.Items...)
+					if after == "" {
+						for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
+							items[i], items[j] = items[j], items[i]
+						}
+					}
+					for _, entry := range items {
+						if _, err := fmt.Fprintln(w, logLine(entry)); err != nil {
 							return err
 						}
 					}
@@ -349,7 +366,8 @@ func followRuntimeLogs(parent context.Context, env *commandContext, client *apiC
 		ctx, cancel = context.WithTimeout(parent, follow.duration)
 		defer cancel()
 	}
-	cursor := ""
+	cursor := first.Get("afterCursor")
+	scopeReported := false
 	resume := func() map[string]any {
 		if cursor == "" {
 			return nil
@@ -358,6 +376,13 @@ func followRuntimeLogs(parent context.Context, env *commandContext, client *apiC
 	}
 	query := first
 	for {
+		// A cursor covers the entire response page. Never fetch more entries
+		// than can be delivered before --max-events ends this stream.
+		pageLimit, _ := strconv.Atoi(query.Get("limit"))
+		if stream.limit > 0 {
+			pageLimit = min(pageLimit, stream.limit-stream.events)
+			query.Set("limit", strconv.Itoa(pageLimit))
+		}
 		var page adminopenapi.RuntimeLogPage
 		err := client.getJSON(ctx, runtimeLogsPath, query, &page)
 		if err != nil {
@@ -368,6 +393,15 @@ func followRuntimeLogs(parent context.Context, env *commandContext, client *apiC
 				api.Hint = "the Gateway process restarted or another instance answered; start a new stream"
 			}
 			return stream.end(reason, resume(), cause)
+		}
+		if len(page.Items) > pageLimit || page.AfterCursor == nil || *page.AfterCursor == "" {
+			return stream.end("error", resume(), &APIError{Code: "invalid_response", HTTPStatus: http.StatusOK, Message: "server returned an oversized log page or no cursor to follow"})
+		}
+		if !scopeReported {
+			if err := stream.note("scope", logScope(page), fmt.Sprintf("# %s logs of instance %s, session %s (lost on restart)", page.Scope, page.InstanceId, page.SessionId)); err != nil {
+				return err
+			}
+			scopeReported = true
 		}
 		items := page.Items
 		if cursor == "" {
@@ -380,21 +414,17 @@ func followRuntimeLogs(parent context.Context, env *commandContext, client *apiC
 				return err
 			}
 		}
-		if page.AfterCursor != nil {
-			cursor = *page.AfterCursor
-		}
 		for _, entry := range items {
 			done, err := stream.emit("entry", entry, logLine(entry))
 			if err != nil {
 				return err
 			}
 			if done {
+				cursor = *page.AfterCursor
 				return stream.end("max_events", resume(), nil)
 			}
 		}
-		if cursor == "" {
-			return stream.end("error", nil, &APIError{Code: "invalid_response", HTTPStatus: http.StatusOK, Message: "server returned no cursor to follow"})
-		}
+		cursor = *page.AfterCursor
 		if page.HasMore == nil || !*page.HasMore {
 			if !sleepOrDone(ctx, follow.interval) {
 				reason, _ := streamStop(ctx, parent, nil)
@@ -448,7 +478,9 @@ func followAudits(parent context.Context, env *commandContext, client *apiClient
 	// than the stream is never delivered as new.
 	start, watermark := since, since
 	resume := func() map[string]any {
-		return map[string]any{"from": watermark.Format(time.RFC3339Nano)}
+		// Re-read the lookback after a restart too. This is inclusive and may
+		// replay entries, but cannot skip delayed records behind the watermark.
+		return map[string]any{"from": since.Format(time.RFC3339Nano)}
 	}
 	for {
 		query := url.Values{}
@@ -488,6 +520,10 @@ func followAudits(parent context.Context, env *commandContext, client *apiClient
 			if err := stream.note("gap", map[string]any{"reason": "poll_budget", "pages": auditPollPageBudget}, "gap: more audit records arrived than one poll reads; some may be missing"); err != nil {
 				return err
 			}
+			return stream.end("poll_budget", resume(), &PartialError{
+				Message: "audit poll reached its page budget before all records were read",
+				Hint:    "narrow the filters, or read history with audit list --all; resume from the reported from time (entries may replay)",
+			})
 		}
 		// Pages are newest first; deliver oldest first.
 		for index := len(fresh) - 1; index >= 0; index-- {
