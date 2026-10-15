@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "mode": "client-plan",
+    "method": "PATCH",
+    "path": "/api/v2/repositories/00000000-0000-4000-8000-000000000001",
+    "headers": {
+      "If-Match": "1"
+    },
+    "body": {
+      "allowedHosts": [
+        "a.example",
+        "b.example"
+      ]
+    },
+    "current": {
+      "anonymousRead": false,
+      "format": "raw",
+      "id": "00000000-0000-4000-8000-000000000001",
+      "mavenStrictPublication": false,
+      "name": "raw-proxy",
+      "state": "active",
+      "type": "proxy",
+      "version": "1"
+    },
+    "verified": [
+      "at least one setting is given",
+      "the repository exists and its current version was read"
+    ],
+    "notVerified": [
+      "caller permission (repositories:admin)",
+      "which settings the repository type accepts (hosted repositories only take anonymous read and Maven publication policy)",
+      "that the version still matches when the update is sent"
+    ]
+  },
+  "error": null,
+  "meta": null
+}

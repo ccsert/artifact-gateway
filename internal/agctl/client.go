@@ -45,6 +45,10 @@ type requestOptions struct {
 	query      url.Values
 	idempotent bool
 	body       []byte
+	// header carries operation headers such as If-Match and Idempotency-Key.
+	// Every attempt of one call sends the same values, so a retried write
+	// reuses its idempotency key.
+	header http.Header
 }
 
 type apiResponse struct {
@@ -191,6 +195,9 @@ func (c *apiClient) do(ctx context.Context, method, path string, options request
 		if options.body != nil {
 			request.Header.Set("Content-Type", "application/json")
 		}
+		for name, values := range options.header {
+			request.Header[http.CanonicalHeaderKey(name)] = append([]string(nil), values...)
+		}
 		if c.userAgent != "" {
 			request.Header.Set("User-Agent", c.userAgent)
 		}
@@ -287,57 +294,55 @@ func (c *apiClient) transportError(err error, requestURL *url.URL) error {
 // JSON body. A nil payload sends an empty body. Non-2xx responses become
 // structured APIError values.
 func (c *apiClient) postJSON(ctx context.Context, path string, payload, target any) error {
-	body := []byte(nil)
-	if payload != nil {
-		encoded, err := json.Marshal(payload)
-		if err != nil {
-			return &UsageError{Message: "cannot encode the request body"}
-		}
-		body = encoded
-	}
-	response, err := c.do(ctx, http.MethodPost, path, requestOptions{body: body})
+	body, err := encodeBody(payload)
 	if err != nil {
 		return err
 	}
-	if response.StatusCode >= 300 {
-		return parseAPIError(response, c.token)
-	}
-	if target == nil || len(response.Body) == 0 {
-		return nil
-	}
-	if err := json.Unmarshal(response.Body, target); err != nil {
-		return &APIError{
-			Code:       "invalid_response",
-			HTTPStatus: response.StatusCode,
-			Message:    "server returned an unreadable JSON response",
-			RequestID:  redactText(response.Header.Get("X-Request-ID"), c.token),
-		}
-	}
-	return nil
+	_, err = c.sendJSON(ctx, http.MethodPost, path, requestOptions{body: body}, target)
+	return err
 }
 
 // getJSON performs an idempotent GET and decodes a 2xx JSON body. Non-2xx
 // responses become structured APIError values.
 func (c *apiClient) getJSON(ctx context.Context, path string, query url.Values, target any) error {
-	response, err := c.do(ctx, http.MethodGet, path, requestOptions{query: query, idempotent: true})
+	_, err := c.sendJSON(ctx, http.MethodGet, path, requestOptions{query: query, idempotent: true}, target)
+	return err
+}
+
+// sendJSON sends one request and decodes a 2xx JSON body into target. The
+// response is returned for its headers (ETag, Location). Non-2xx responses
+// become structured APIError values.
+func (c *apiClient) sendJSON(ctx context.Context, method, path string, options requestOptions, target any) (*apiResponse, error) {
+	response, err := c.do(ctx, method, path, options)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if response.StatusCode >= 300 {
-		return parseAPIError(response, c.token)
+		return response, parseAPIError(response, c.token)
 	}
 	if target == nil || len(response.Body) == 0 {
-		return nil
+		return response, nil
 	}
 	if err := json.Unmarshal(response.Body, target); err != nil {
-		return &APIError{
+		return response, &APIError{
 			Code:       "invalid_response",
 			HTTPStatus: response.StatusCode,
 			Message:    "server returned an unreadable JSON response",
 			RequestID:  redactText(response.Header.Get("X-Request-ID"), c.token),
 		}
 	}
-	return nil
+	return response, nil
+}
+
+func encodeBody(payload any) ([]byte, error) {
+	if payload == nil {
+		return nil, nil
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return nil, &UsageError{Message: "cannot encode the request body"}
+	}
+	return encoded, nil
 }
 
 // parseAPIError converts a non-2xx response into an APIError. The management

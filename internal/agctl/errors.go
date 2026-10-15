@@ -6,6 +6,7 @@ package agctl
 
 import (
 	"errors"
+	"io"
 	"net/http"
 )
 
@@ -58,6 +59,34 @@ type PartialError struct {
 
 func (e *PartialError) Error() string { return e.Message }
 
+// WaitTimeoutError marks a bounded --wait that ran out of time before the
+// operation reached a terminal state. The server keeps working; nothing is
+// cancelled or resubmitted. It exits with code 8.
+type WaitTimeoutError struct {
+	Message string
+	Hint    string
+}
+
+func (e *WaitTimeoutError) Error() string { return e.Message }
+
+// resultError attaches what a failed command still has to report: the
+// accepted ID and last observed state of a timed-out wait, the pages read
+// before a listing stopped, or the read-back path of a write whose outcome is
+// unknown. JSON mode prints data and meta in the failure envelope; human mode
+// prints the human rendering on stdout before the diagnostics. The exit code
+// and error code come from the wrapped error.
+type resultError struct {
+	err   error
+	data  any
+	meta  *envelopeMeta
+	hint  string
+	human func(io.Writer) error
+}
+
+func (e *resultError) Error() string { return e.err.Error() }
+
+func (e *resultError) Unwrap() error { return e.err }
+
 // APIError is a structured refusal or failure returned by the management API.
 type APIError struct {
 	Code       string
@@ -103,6 +132,10 @@ func exitCodeFor(err error) int {
 	if errors.As(err, &connection) {
 		return ExitConnection
 	}
+	var wait *WaitTimeoutError
+	if errors.As(err, &wait) {
+		return ExitConnection
+	}
 	return ExitFailure
 }
 
@@ -129,10 +162,18 @@ func localErrorCode(err error) string {
 	if errors.As(err, &connection) {
 		return "connection_error"
 	}
+	var wait *WaitTimeoutError
+	if errors.As(err, &wait) {
+		return "wait_timeout"
+	}
 	return "internal_error"
 }
 
 func errorHint(err error) string {
+	var result *resultError
+	if errors.As(err, &result) && result.hint != "" {
+		return result.hint
+	}
 	var usage *UsageError
 	if errors.As(err, &usage) {
 		return usage.Hint
@@ -152,6 +193,10 @@ func errorHint(err error) string {
 	var connection *ConnectionError
 	if errors.As(err, &connection) {
 		return connection.Hint
+	}
+	var wait *WaitTimeoutError
+	if errors.As(err, &wait) {
+		return wait.Hint
 	}
 	return ""
 }

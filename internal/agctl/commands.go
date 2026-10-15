@@ -57,6 +57,11 @@ func registry() []command {
 		configProfileListCommand(),
 		configProfileUseCommand(),
 		configProfileRemoveCommand(),
+		repoListCommand(),
+		repoShowCommand(),
+		repoCreateCommand(),
+		repoUpdateCommand(),
+		repoDeleteCommand(),
 	}
 }
 

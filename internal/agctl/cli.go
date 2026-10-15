@@ -533,6 +533,7 @@ func printUsage(w io.Writer) {
 var groupSynopses = map[string]string{
 	"auth":   "authenticate, inspect the caller, and end the local session",
 	"config": "manage local profiles in ~/.config/agctl/config.yaml",
+	"repo":   "list, inspect, create, update, and delete repositories",
 }
 
 func printGroupUsage(w io.Writer, prefix, children []string) {

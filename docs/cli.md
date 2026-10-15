@@ -185,9 +185,21 @@ With `--json`, stdout carries exactly one document — also on failure:
   local failures use `usage_error`, `credentials_missing`, `connection_error`,
   `partial_failure`, or `internal_error`.
 - `error.httpStatus` is null for failures that never reached the server.
+- `error.code` `wait_timeout` marks a bounded `--wait` that ran out of time
+  (exit 8); the operation continues on the server.
 - Lists use `{"items": [...], "nextCursor": null}`; `nextCursor` is null when
-  the data source has no server-side pagination, and `meta.pagination.mode`
-  states the real mode (`none` for local command trees).
+  the data source has no server-side pagination or the listing reached its
+  end, and `meta.pagination.mode` states the real mode (`none` for local
+  command trees, `cursor` for server pages, which add `pageSize`, `pages`
+  read, and `complete`).
+- A failure that still has something to report carries it in `data` (and
+  `meta`): the pages read before a listing stopped (exit 3), the accepted ID
+  and last state of a timed-out wait (exit 8), or `{"outcome": "unknown",
+  "readBack": …}` for a write whose result the client could not observe.
+  Repository creation and updates also report an unknown outcome when a
+  successful HTTP response contains unreadable, empty, or incomplete repository
+  JSON. Creation preserves its idempotency key for safe replay; updates must be
+  read back before retrying.
 
 `--verbose` explains requests on stderr (`> GET https://…`, `< 204`) with
 credential-bearing URL parts redacted; the token itself is never printed, and
@@ -315,6 +327,76 @@ persistence is not supported by the current POSIX permission validation:
 Windows file modes do not establish the required 0600 protection. Use file-less
 `--server`/`--token` or `AGCTL_SERVER`/`AGCTL_TOKEN` there; Windows profile runtime
 acceptance remains incomplete and is not claimed by this batch.
+
+### `agctl repo`
+
+Repository management over `/api/v2/repositories`. Repositories are addressed
+by ID (`agctl repo list` shows it).
+
+- `agctl repo list [--page-size N] [--cursor TOKEN]` reads one page (50 by
+  default, 1–200) of the repositories visible to the caller; an empty list is
+  a success, not a permission error. `nextCursor` continues the listing with
+  `--cursor`. `--all` follows cursors within `--max-pages` (default 20) and
+  one overall `--timeout`; reaching the budget, or a failure after the first
+  page, exits 3 with the items read, `complete: false`, and the cursor to
+  continue from.
+- `agctl repo show ID` prints one repository; credentials of proxy settings
+  are reported only as configured.
+- `agctl repo create NAME --format FORMAT [--type hosted|proxy] [--endpoint
+  URL] [--allowed-host HOST]… [--anonymous-read]
+  [--maven-strict-publication]` creates a repository (platform admin). Every
+  create sends an `Idempotency-Key`, and retries of the same call reuse it, so
+  a lost response never creates a second repository. When the outcome stays
+  unknown (connection failure, 5xx) the command prints the key: re-running
+  with `--idempotency-key KEY` replays the original result, and the same key
+  with a different request is refused with exit 7. Upstream credentials,
+  egress proxies, and OCI bearer exchange are not exposed by this command yet;
+  use the Console or the API for them.
+- `agctl repo update ID [--anonymous-read=true|false]
+  [--maven-strict-publication=true|false] [--endpoint URL] [--allowed-host
+  HOST]…` sends only the given settings as a conditional `PATCH`. `If-Match`
+  is `--if-match VERSION` or, without it, the version read just before the
+  update; a concurrent change fails with 412 (exit 7) and nothing is
+  overwritten. The update is never retried automatically. Hosted repositories
+  accept only anonymous read and Maven publication policy; the server refuses
+  other settings (exit 1).
+- `agctl repo delete ID --yes [--wait]` requests the asynchronous deletion.
+  Without `--yes` it exits 2 before any request. A 202 is acceptance, not
+  completion: `data` is `{id, status: "accepted", repositoryState: null,
+  terminal: false}`. Protocol access stops at once and the deletion worker,
+  which runs once a minute, advances the repository from `deleting` to
+  `deleted`. `--wait` reads the repository back until it is `deleted`
+  (`status: "deleted"`, `terminal: true`); `--timeout` then bounds the whole
+  command, so allow more than a minute. A timeout exits 8 with the ID and the
+  last state read; the server keeps deleting and nothing is resent or
+  cancelled. A deleted repository stays readable as an audit anchor; deleting
+  it again answers 404.
+
+`--dry-run` on `create`, `update`, and `delete` is a client plan
+(`mode: "client-plan"`): it validates the input locally, may read the current
+repository (`update` reads its version, `delete` its state), and prints the
+request it would send with what was and was not checked. It never submits the
+write, so it cannot claim the server would accept it.
+
+## Verification
+
+- `go test ./internal/agctl/...` runs offline against in-process fakes:
+  command parsing, exit codes, redaction, and the JSON envelopes. Golden
+  envelopes live in `internal/agctl/testdata/golden/`; after an intended
+  output change, rewrite them with `go test ./internal/agctl/ -run Repo
+  -update` and review the diff.
+- `make cli-e2e` builds `agctl` and runs it against a real, isolated Gateway:
+  it boots a Compose project from `GATEWAY_ENV_FILE` (or `.env`) on free
+  ports and removes it afterwards. With `CLI_E2E_SERVER` and `CLI_E2E_TOKEN`
+  (an admin token) it reuses a running Gateway instead, which is how CI runs
+  it after the Console E2E. The scenario creates a repository, replays the
+  create, updates it (dry-run, real update, stale `If-Match`), finds it in the
+  list, deletes it (confirmation, dry-run, 202, timed-out wait), and waits for
+  `deleted`; it also checks the exit codes for a wrong token (5), a missing
+  repository (4), invalid input (2), and conflicts (7).
+- `make cli-contract-check` verifies that the command map classifies every
+  contract operation and that each row marked `implemented` names a
+  registered command.
 
 ## Security notes
 

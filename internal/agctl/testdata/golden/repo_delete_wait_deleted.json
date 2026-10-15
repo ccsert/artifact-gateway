@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "status": "deleted",
+    "repositoryState": "deleted",
+    "terminal": true
+  },
+  "error": null,
+  "meta": null
+}

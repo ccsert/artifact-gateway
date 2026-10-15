@@ -11,8 +11,10 @@ commands, HTTP/JSON behavior, credentials, and permissions exist once; agents
 use the same introspection for both views.
 
 This page classifies the full contract; it does not describe the installed
-binary. Apart from the #125 skeleton (`version`, `info`, `commands`), every
-row is a plan. A row may claim implemented/verified only once its command is
+binary. Apart from the #125 skeleton (`version`, `info`, `commands`) and the
+rows whose phase says `implemented` (currently #130's
+`repo list|show|create|update|delete`, accepted against a real Gateway by
+`make cli-e2e`), every row is a plan. A row may claim implemented/verified only once its command is
 registered, its documentation and tests exist, and it passed acceptance
 against a real Gateway.
 
@@ -173,8 +175,8 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `PUT /audit-retention-policy`<br>`replaceAuditRetentionPolicy` | `audit retention set` | #138 | M2 | A | C |
 | `POST /audit-retention:execute`<br>`executeAuditRetention` | `audit retention execute` | #138 | M2 | A | W |
 | `GET /audit-retention/jobs`<br>`listAuditRetentionJobs` | `audit retention jobs` | #138 | M2 | A | Q |
-| `GET /repositories`<br>`listRepositories` | `repo list` | #130 | M1 | FR | Q |
-| `POST /repositories`<br>`createRepository` | `repo create` | #130 | M1 | A | W |
+| `GET /repositories`<br>`listRepositories` | `repo list` | #130 | M1 implemented | FR | Q |
+| `POST /repositories`<br>`createRepository` | `repo create` | #130 | M1 implemented | A | W |
 | `GET /repository-grants`<br>`listRepositoryGrants` | `grant list --all-repositories` | #134 | M1 | FA | Q |
 | `GET /authorization-templates`<br>`listAuthorizationTemplates` | `template list` | #134 | M1 | A | Q |
 | `POST /authorization-templates`<br>`createAuthorizationTemplate` | `template create` | #134 | M2 | A | W |
@@ -196,9 +198,9 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `DELETE /scheduled-tasks/{taskId}`<br>`deleteScheduledTask` | `scheduled-task delete <id>` | #137 | M2 | ST | W |
 | `POST /scheduled-tasks/{taskId}/run`<br>`runScheduledTask` | `scheduled-task run <id>` | #137 | M2 | ST | J |
 | `GET /scheduled-tasks/{taskId}/runs`<br>`listScheduledTaskRuns` | `scheduled-task runs <id>` | #137 | M2 | ST | Q |
-| `GET /repositories/{repositoryId}`<br>`getRepository` | `repo show <id>` | #130 | M1 | R | Q |
-| `DELETE /repositories/{repositoryId}`<br>`deleteRepository` | `repo delete <id>` (asynchronous deleting → deleted) | #130 | M1 | RA | J |
-| `PATCH /repositories/{repositoryId}`<br>`updateRepository` | `repo update <id>` | #130 | M1 | RA | C |
+| `GET /repositories/{repositoryId}`<br>`getRepository` | `repo show <id>` | #130 | M1 implemented | R | Q |
+| `DELETE /repositories/{repositoryId}`<br>`deleteRepository` | `repo delete <id>` (asynchronous deleting → deleted) | #130 | M1 implemented | RA | J |
+| `PATCH /repositories/{repositoryId}`<br>`updateRepository` | `repo update <id>` | #130 | M1 implemented | RA | C |
 | `POST /repositories/{repositoryId}/egress-proxy:test`<br>`testEgressProxy` | `egress-proxy test --repo <id>` | #139 | M2 | RA | W |
 | `GET /repositories/{repositoryId}/grants`<br>`listGrants` | `grant list --repo <id>` | #134 | M1 | RA | Q |
 | `PUT /repositories/{repositoryId}/grants`<br>`replaceGrants` | not exposed as a whole-table PUT; use single-row grant writes or `template apply` | #134 | N/A | RA | N |

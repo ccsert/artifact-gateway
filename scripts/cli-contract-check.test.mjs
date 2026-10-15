@@ -9,6 +9,7 @@ import {
   enumerateContractOperations,
   findContractDrift,
   loadContractFile,
+  loadRegisteredCommands,
   normalizedCommand,
   parseCommandMap,
 } from './cli-contract-check.mjs';
@@ -188,7 +189,12 @@ test('the repository command map classifies every contract operation', () => {
   const chineseMap = parseCommandMap(
     readFileSync(path.join(repoRoot, 'docs/cli-command-map.zh-CN.md'), 'utf8'),
   );
-  assert.deepEqual(findContractDrift({ managementOperations, nativeOperations, englishMap, chineseMap }), []);
+  // Implemented rows are checked against the registry the client really has.
+  const registeredCommands = loadRegisteredCommands(repoRoot);
+  assert.deepEqual(
+    findContractDrift({ managementOperations, nativeOperations, englishMap, chineseMap, registeredCommands }),
+    [],
+  );
 });
 
 test('fails an implemented row whose command is not registered', () => {

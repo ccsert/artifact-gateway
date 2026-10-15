@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "mode": "client-plan",
+    "method": "POST",
+    "path": "/api/v2/repositories",
+    "headers": {
+      "Idempotency-Key": "agctl-fixed-key"
+    },
+    "body": {
+      "allowedHosts": [
+        "registry.npmjs.org"
+      ],
+      "endpoint": "https://registry.npmjs.org",
+      "format": "npm",
+      "name": "npm-proxy",
+      "type": "proxy"
+    },
+    "current": null,
+    "verified": [
+      "name pattern, format, and type",
+      "endpoint and allowed hosts only on proxy repositories"
+    ],
+    "notVerified": [
+      "caller permission (platform admin)",
+      "name uniqueness",
+      "endpoint reachability and server-side egress policy"
+    ]
+  },
+  "error": null,
+  "meta": null
+}
