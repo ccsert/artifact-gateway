@@ -531,9 +531,11 @@ func printUsage(w io.Writer) {
 }
 
 var groupSynopses = map[string]string{
-	"auth":   "authenticate, inspect the caller, and end the local session",
-	"config": "manage local profiles in ~/.config/agctl/config.yaml",
-	"repo":   "list, inspect, create, update, and delete repositories",
+	"auth":          "authenticate, inspect the caller, and end the local session",
+	"config":        "manage local profiles in ~/.config/agctl/config.yaml",
+	"group":         "list, inspect, create, update, and delete Groups and their members",
+	"group members": "list or replace a Group's members",
+	"repo":          "list, inspect, create, update, and delete repositories",
 }
 
 func printGroupUsage(w io.Writer, prefix, children []string) {
@@ -549,6 +551,9 @@ func printGroupUsage(w io.Writer, prefix, children []string) {
 		synopsis := ""
 		if cmd, ok := lookupCommand(path + " " + child); ok {
 			synopsis = cmd.synopsis
+		} else {
+			// A nested group such as `group members` has no command of its own.
+			synopsis = groupSynopses[path+" "+child]
 		}
 		_, _ = fmt.Fprintf(w, "  %-*s  %s\n", width, child, synopsis)
 	}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "data": {
+    "outcome": "unknown",
+    "operation": "group create",
+    "name": "npm-all",
+    "idempotencyKey": "agctl-fixed-key",
+    "readBack": "agctl group list"
+  },
+  "error": {
+    "code": "unavailable",
+    "httpStatus": 503,
+    "message": "try again",
+    "hint": "the Group may have been created; re-run the same command with --idempotency-key agctl-fixed-key to retry safely, or check agctl group list",
+    "requestId": "req-test"
+  },
+  "meta": null
+}

@@ -175,8 +175,9 @@ profile，最后是只定义一个 profile 的文件。该文件由 profile 命�
 - 失败但仍有内容需要报告时放在 `data`（以及 `meta`）中：列表中途停止前已读
   到的页（退出码 3）、等待超时时已受理的 ID 和最后读到的状态（退出码 8），
   或客户端无法确认结果的写操作的 `{"outcome": "unknown", "readBack": …}`。
-  创建和更新仓库时，HTTP 成功但仓库 JSON 无法解析、为空或缺少必要字段，也会
-  报告结果未知。创建保留原幂等键以便安全重放；更新需要先回读状态再决定是否重试。
+  仓库和 Group 的写操作在 HTTP 成功但 JSON 无法解析、为空或缺少必要字段时，
+  也会报告结果未知。创建保留原幂等键以便安全重放；更新和删除需要先回读状态再
+  决定是否重试。
 
 `--verbose` 在 stderr 上解释请求（`> GET https://…`、`< 204`），URL 中携带
 凭据的部分会被脱敏；token 本身不会打印，认证失败的响应正文同样不会。
@@ -323,18 +324,57 @@ profile 运行验收。
 `delete` 读状态），并打印将发送的请求以及哪些已检查、哪些未检查。它从不提交
 写入，因此不能声称服务端一定会接受。
 
+### `agctl group`
+
+通过 `/api/v2/groups` 管理 Group。一个 Group 引用同一格式的多个仓库；在每种
+仓库类型内部，成员的配置位置决定解析顺序。Group 按 ID 指定。
+
+读取 Group（`list`、`show`、`members list`、`resolution`）需要平台管理员。
+写入还接受对变更前后引用的每个仓库都有管理权限的主体；这类主体无法回读
+Group，因此它无法确认结果的写入需要平台管理员来核对。
+
+- `agctl group list [--page-size N] [--cursor TOKEN | --all [--max-pages
+  N]]` 的分页方式与 `agctl repo list` 相同。
+- `agctl group show ID` 显示 Group 及按配置位置排列的成员；
+  `agctl group members list ID` 只显示成员（`meta.pagination.mode` 为
+  `none`：该端点不分页）。
+- `agctl group resolution ID` 显示协议解析器读取成员的顺序（先 hosted 后
+  proxy，再按配置位置），附带仓库名称，以及因缺失、未激活或格式不符而排除的
+  成员数。它不查询制品，也不代表任何读者的访问决定。
+- `agctl group create NAME --format FORMAT --member REPOSITORY_ID…
+  [--anonymous-read]` 创建 Group，`--member` 的顺序即配置位置。与
+  `repo create` 相同，每次创建都发送 `Idempotency-Key` 并在重试时复用，结果
+  未知时打印该 key 供 `--idempotency-key` 使用。
+- `agctl group update ID [--name NAME] [--anonymous-read=true|false]` 读取
+  Group，带上修改后整体发回（`PUT`），保留格式和成员；`If-Match` 取
+  `--if-match VERSION` 或刚读到的版本，412（退出码 7）不覆盖任何内容。
+  修改成员请用 `agctl group members set`。
+- `agctl group members set ID --member REPOSITORY_ID…` 按给出的顺序替换
+  成员，以 `--if-match` 或刚读到的版本为条件。契约写明响应是成员列表，而服务
+  端返回更新后的 Group；两者都接受，收到纯成员列表时会再读取 Group 以报告新
+  版本。若回读失败或返回不完整的 Group，命令报告失败并保留已确认写入的成员
+  列表与回读提示，不会重复写入。
+- `agctl group delete ID --yes` 删除 Group，成员仓库保留。删除是同步的
+  （`data` 为 `{id, deleted: true}`），且从不重试，因为响应丢失后的重复请求
+  会返回 404。
+
+`update`、`members set` 和 `delete` 从不自动重试。Group 写操作的
+`--dry-run` 与 `agctl repo` 一样是客户端计划。
+
 ## 验证
 
 - `go test ./internal/agctl/...` 离线运行，使用进程内的假服务端：覆盖命令
   解析、退出码、脱敏和 JSON 信封。golden 信封位于
   `internal/agctl/testdata/golden/`；有意修改输出后，用
-  `go test ./internal/agctl/ -run Repo -update` 重写并审阅差异。
+  `go test ./internal/agctl/ -run 'Repo|Group' -update` 重写并审阅差异。
 - `make cli-e2e` 构建 `agctl` 并在真实、隔离的 Gateway 上运行：按
   `GATEWAY_ENV_FILE`（或 `.env`）在空闲端口上启动一个 Compose 项目，结束后
   删除。设置 `CLI_E2E_SERVER` 和 `CLI_E2E_TOKEN`（管理员 token）时改为复用
   正在运行的 Gateway，CI 在 Console E2E 之后就是这样运行的。剧本创建仓库、
-  重放创建、更新（dry-run、真实更新、过期 `If-Match`）、在列表中找到它、
-  删除（确认、dry-run、202、等待超时），并等待 `deleted`；同时检查错误
+  重放创建、更新（dry-run、真实更新、过期 `If-Match`）并在列表中找到它；
+  用它和第二个仓库建 Group（dry-run、重放、未知成员、成员、解析顺序、带过期
+  `If-Match` 的改名、重排、保留成员的删除）；再删除仓库（确认、dry-run、
+  202、等待超时）并等待 `deleted`。同时检查错误
   token（5）、仓库不存在（4）、非法输入（2）和冲突（7）的退出码。
 - `make cli-contract-check` 校验命令映射表覆盖全部契约操作，且每个标为
   `implemented` 的行都对应已注册的命令。

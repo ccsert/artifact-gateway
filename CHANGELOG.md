@@ -11,6 +11,10 @@ their meaning.
 
 ## Unreleased
 
+- `agctl group members set` rejects empty or incomplete Group read-back responses after a confirmed member replacement, retaining the applied member list and recovery hint without repeating the write.
+
+- `agctl group list|show|create|update|delete`, `group members list|set` and `group resolution` manage Groups from the command line (#130). Members are repository IDs in resolution order; `update` and `members set` are conditional on the Group version and a 412 never overwrites; creation reuses its idempotency key across retries; `delete` needs `--yes`, keeps the member repositories and is never retried. Writes whose response is unreadable or incomplete report an unknown outcome with the read-back path instead of success. `make cli-e2e` now also runs the Group lifecycle against a real Gateway. The member replacement endpoint returns the updated Group although the contract documents a member list; the CLI accepts both.
+
 - Repository writes through `agctl` retain recovery information when a successful HTTP response is unreadable, empty, or incomplete: creation reports its original idempotency key for safe replay, and updates report the repository to read back before retrying.
 
 - `agctl repo list|show|create|update|delete` manage repositories from the command line (#130). Listing reads one page by default and `--all` follows cursors within a page and time budget, exiting 3 with the pages read when it stops early. `create` sends an idempotency key that retries reuse and reports it when the outcome is unknown; `update` is conditional on the repository version and a 412 never overwrites; `delete` needs `--yes`, treats 202 as accepted rather than finished, and `--wait` reads the repository back until it is `deleted` within `--timeout`, exiting 8 with the last state on timeout. `--dry-run` prints a client plan without submitting the write. `make cli-e2e` runs the lifecycle against a real isolated Gateway and runs in CI; offline golden envelopes cover the JSON output (#127).

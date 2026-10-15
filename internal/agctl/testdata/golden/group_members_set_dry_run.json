@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "mode": "client-plan",
+    "method": "PUT",
+    "path": "/api/v2/groups/00000000-0000-4000-9000-000000000001/members",
+    "headers": {
+      "If-Match": "1"
+    },
+    "body": [
+      {
+        "position": 0,
+        "repositoryId": "00000000-0000-4000-8000-00000000000b"
+      }
+    ],
+    "current": null,
+    "verified": [
+      "members are distinct repository IDs, positioned in the order given"
+    ],
+    "notVerified": [
+      "caller permission (platform admin, or repositories:admin on every member it keeps, drops, or adds)",
+      "that every member is an active repository of the Group's format",
+      "that the version still matches when the update is sent"
+    ]
+  },
+  "error": null,
+  "meta": null
+}

@@ -196,10 +196,10 @@ With `--json`, stdout carries exactly one document — also on failure:
   `meta`): the pages read before a listing stopped (exit 3), the accepted ID
   and last state of a timed-out wait (exit 8), or `{"outcome": "unknown",
   "readBack": …}` for a write whose result the client could not observe.
-  Repository creation and updates also report an unknown outcome when a
-  successful HTTP response contains unreadable, empty, or incomplete repository
-  JSON. Creation preserves its idempotency key for safe replay; updates must be
-  read back before retrying.
+  Repository and Group writes also report an unknown outcome when a
+  successful HTTP response contains unreadable, empty, or incomplete JSON.
+  Creation preserves its idempotency key for safe replay; updates and
+  deletions must be read back before retrying.
 
 `--verbose` explains requests on stderr (`> GET https://…`, `< 204`) with
 credential-bearing URL parts redacted; the token itself is never printed, and
@@ -378,21 +378,69 @@ repository (`update` reads its version, `delete` its state), and prints the
 request it would send with what was and was not checked. It never submits the
 write, so it cannot claim the server would accept it.
 
+### `agctl group`
+
+Group management over `/api/v2/groups`. A Group references repositories of
+one format; the members' configured positions decide the resolution order
+within each repository type. Groups are addressed by ID.
+
+Reading a Group (`list`, `show`, `members list`, `resolution`) needs a
+platform administrator. Writing one also accepts a caller who administers
+every repository the Group references before and after the change; such a
+caller cannot read the Group back, so a write it cannot confirm has to be
+checked by a platform administrator.
+
+- `agctl group list [--page-size N] [--cursor TOKEN | --all [--max-pages
+  N]]` pages through Groups like `agctl repo list`.
+- `agctl group show ID` prints the Group and its members by configured
+  position; `agctl group members list ID` prints only the members
+  (`meta.pagination.mode` is `none`: the endpoint is not paginated).
+- `agctl group resolution ID` shows the order the protocol resolver reads the
+  members in (hosted before proxy, then configured position) with repository
+  names, and how many members it excludes as missing, inactive, or of another
+  format. It does not query artifacts or decide any reader's access.
+- `agctl group create NAME --format FORMAT --member REPOSITORY_ID…
+  [--anonymous-read]` creates a Group; the order of `--member` is the
+  configured position. Like `repo create`, every create sends an
+  `Idempotency-Key` that retries reuse, and an unknown outcome prints the key
+  for `--idempotency-key`.
+- `agctl group update ID [--name NAME] [--anonymous-read=true|false]` reads
+  the Group and sends it back whole (`PUT`) with the change, keeping its
+  format and members; `If-Match` is `--if-match VERSION` or the version just
+  read, and a 412 (exit 7) overwrites nothing. Change members with
+  `agctl group members set`.
+- `agctl group members set ID --member REPOSITORY_ID…` replaces the members
+  in the order given, conditional on `--if-match` or the version just read.
+  The contract documents a member list in the response while the server
+  returns the updated Group; both are accepted, and a bare member list is
+  followed by a read of the Group to report its new version. If that read
+  fails or returns an incomplete Group, the command fails while retaining
+  the confirmed member list and a read-back hint; it never repeats the write.
+- `agctl group delete ID --yes` deletes the Group; its member repositories
+  are kept. Deletion is synchronous (`data` is `{id, deleted: true}`) and is
+  never retried, because a repeat after a lost response would answer 404.
+
+`update`, `members set`, and `delete` are never retried automatically.
+`--dry-run` on the Group writes is a client plan, as for `agctl repo`.
+
 ## Verification
 
 - `go test ./internal/agctl/...` runs offline against in-process fakes:
   command parsing, exit codes, redaction, and the JSON envelopes. Golden
   envelopes live in `internal/agctl/testdata/golden/`; after an intended
-  output change, rewrite them with `go test ./internal/agctl/ -run Repo
-  -update` and review the diff.
+  output change, rewrite them with `go test ./internal/agctl/ -run
+  'Repo|Group' -update` and review the diff.
 - `make cli-e2e` builds `agctl` and runs it against a real, isolated Gateway:
   it boots a Compose project from `GATEWAY_ENV_FILE` (or `.env`) on free
   ports and removes it afterwards. With `CLI_E2E_SERVER` and `CLI_E2E_TOKEN`
   (an admin token) it reuses a running Gateway instead, which is how CI runs
   it after the Console E2E. The scenario creates a repository, replays the
-  create, updates it (dry-run, real update, stale `If-Match`), finds it in the
-  list, deletes it (confirmation, dry-run, 202, timed-out wait), and waits for
-  `deleted`; it also checks the exit codes for a wrong token (5), a missing
+  create, updates it (dry-run, real update, stale `If-Match`), and finds it in
+  the list; builds a Group over it and a second repository (dry-run, replay,
+  unknown member, members, resolution order, rename with a stale `If-Match`,
+  reorder, delete that keeps the members); then deletes the repository
+  (confirmation, dry-run, 202, timed-out wait) and waits for `deleted`. It
+  also checks the exit codes for a wrong token (5), a missing
   repository (4), invalid input (2), and conflicts (7).
 - `make cli-contract-check` verifies that the command map classifies every
   contract operation and that each row marked `implemented` names a

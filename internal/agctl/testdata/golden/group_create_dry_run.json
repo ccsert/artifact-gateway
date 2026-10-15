@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "mode": "client-plan",
+    "method": "POST",
+    "path": "/api/v2/groups",
+    "headers": {
+      "Idempotency-Key": "agctl-fixed-key"
+    },
+    "body": {
+      "anonymousRead": true,
+      "format": "npm",
+      "members": [
+        {
+          "position": 0,
+          "repositoryId": "00000000-0000-4000-8000-00000000000a"
+        },
+        {
+          "position": 1,
+          "repositoryId": "00000000-0000-4000-8000-00000000000b"
+        }
+      ],
+      "name": "npm-all"
+    },
+    "current": null,
+    "verified": [
+      "name pattern and format",
+      "members are distinct repository IDs, positioned in the order given"
+    ],
+    "notVerified": [
+      "caller permission (platform admin, or repositories:admin on every member it keeps, drops, or adds)",
+      "name uniqueness",
+      "that the format supports Groups and every member is an active repository of that format"
+    ]
+  },
+  "error": null,
+  "meta": null
+}

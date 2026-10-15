@@ -107,13 +107,20 @@ func TestOCICacheRenewsDistributedLockAndCancelsLostOwner(t *testing.T) {
 	cache := NewDefaultOCICache(NewMemoryOCIObjectStore(), nil).WithCoordinator(coordinator)
 	cache.WithLockTiming(30*time.Millisecond, 5*time.Millisecond)
 
+	// The fill runs until the lock has been renewed twice rather than for a
+	// fixed time, so a loaded machine cannot finish it before the renewals.
 	content, err := cache.Do(context.Background(), "key", func(ctx context.Context) (CachedOCIContent, error) {
-		select {
-		case <-time.After(16 * time.Millisecond):
-			return CachedOCIContent{Body: []byte("ok")}, nil
-		case <-ctx.Done():
-			return CachedOCIContent{}, ctx.Err()
+		deadline := time.After(5 * time.Second)
+		for coordinator.Renewals() < 2 {
+			select {
+			case <-time.After(time.Millisecond):
+			case <-deadline:
+				return CachedOCIContent{}, errors.New("lock was not renewed while the fill ran")
+			case <-ctx.Done():
+				return CachedOCIContent{}, ctx.Err()
+			}
 		}
+		return CachedOCIContent{Body: []byte("ok")}, nil
 	})
 	if err != nil || string(content.Body) != "ok" || coordinator.Renewals() < 2 {
 		t.Fatalf("content=%q err=%v renewals=%d", content.Body, err, coordinator.Renewals())
