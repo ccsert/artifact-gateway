@@ -164,6 +164,8 @@ describe("AccessControlPage", () => {
 
     await waitFor(() =>
       expect(mockGetRepositoryEffectiveAccess).toHaveBeenCalledWith({
+        // The evaluation runs as a query, so a superseded one is cancelled.
+        signal: expect.any(AbortSignal),
         path: { repositoryId: "00000000-0000-4000-8000-000000000001" },
         query: {
           actor: "user:active-user",
@@ -173,6 +175,126 @@ describe("AccessControlPage", () => {
       }),
     );
     expect(await screen.findByText("模拟结果")).toBeInTheDocument();
+  });
+
+  it("never shows an earlier evaluation after its inputs changed", async () => {
+    mockListRepositoryGrants.mockResolvedValue({ data: [] } as never);
+    mockGetAnonymousAccessPolicy.mockResolvedValue({
+      data: { enabled: false, version: "1" },
+    } as never);
+    mockListRepositories.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: "00000000-0000-4000-8000-000000000001",
+            name: "releases",
+            format: "raw",
+            type: "hosted",
+            state: "active",
+          },
+        ],
+      },
+    } as never);
+    mockListUsers.mockResolvedValue({
+      data: {
+        items: [{ name: "active-user", role: "member", state: "active" }],
+      },
+    } as never);
+    mockListApiKeys.mockResolvedValue({ data: { items: [] } } as never);
+    mockListServiceAccounts.mockResolvedValue({
+      error: "404 page not found",
+    } as never);
+    const answer = (resource: string) => {
+      const response = {
+        data: {
+          actor: "user:active-user",
+          resource: "",
+          simulated: true,
+          repository: {
+            id: "00000000-0000-4000-8000-000000000001",
+            name: "releases",
+            format: "raw",
+            type: "hosted",
+            state: "active",
+          },
+          identity: {
+            kind: "local_session",
+            subject: "active-user",
+            displayName: "active-user",
+          },
+          anonymousRead: {
+            allowed: false,
+            source: "repository",
+            reason: "private",
+          },
+          permissions: {
+            read: {
+              allowed: true,
+              source: "repository_grants",
+              reason: "scope_granted",
+            },
+            write: { allowed: false, source: "none", reason: "not granted" },
+            admin: { allowed: false, source: "none", reason: "not granted" },
+            intelligence: {
+              allowed: false,
+              source: "none",
+              reason: "not granted",
+            },
+          },
+        },
+      } as { data: { resource: string } };
+      return { data: { ...response.data, resource } } as never;
+    };
+    let finishFirst: (value: never) => void = () => {};
+    mockGetRepositoryEffectiveAccess
+      .mockImplementationOnce(
+        () =>
+          new Promise<never>((resolve) => {
+            finishFirst = resolve;
+          }),
+      )
+      .mockResolvedValue(answer("docs/"));
+
+    const user = userEvent.setup();
+    render(
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <AntdProvider>
+            <MemoryRouter initialEntries={["/access?tab=evaluate"]}>
+              <AccessControlPage />
+            </MemoryRouter>
+          </AntdProvider>
+        </PreferencesProvider>
+      </TestQueryProvider>,
+    );
+
+    expect(
+      await screen.findByText(
+        "服务账号暂时不可用，仍可检查当前身份、用户、API Key 和自定义 actor。",
+      ),
+    ).toBeVisible();
+
+    const principalPicker = screen.getByRole("combobox", {
+      name: "授权主体",
+    });
+    await user.click(principalPicker);
+    await user.click(screen.getByText(/用户 · active-user/));
+    await user.click(screen.getByRole("button", { name: /检\s*查/ }));
+
+    await waitFor(() =>
+      expect(mockGetRepositoryEffectiveAccess).toHaveBeenCalledTimes(1),
+    );
+    // Changing an input withdraws the evaluation in flight.
+    await user.type(
+      screen.getByPlaceholderText("releases/2026/app.tar.gz"),
+      "docs/",
+    );
+    await user.click(screen.getByRole("button", { name: /检\s*查/ }));
+    expect(await screen.findByText("docs/")).toBeInTheDocument();
+    finishFirst(answer(""));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.getByText("docs/")).toBeInTheDocument();
+    expect(screen.queryByText("整个仓库")).not.toBeInTheDocument();
   });
 
   it("omits disabled users and unusable API keys from the principal picker", async () => {
@@ -311,6 +433,8 @@ describe("AccessControlPage", () => {
     await user.click(screen.getByRole("button", { name: /检\s*查/ }));
     await waitFor(() =>
       expect(mockGetRepositoryEffectiveAccess).toHaveBeenCalledWith({
+        // The evaluation runs as a query, so a superseded one is cancelled.
+        signal: expect.any(AbortSignal),
         path: { repositoryId: "00000000-0000-4000-8000-000000000001" },
         query: {
           actor: "service-account:active-service-account",

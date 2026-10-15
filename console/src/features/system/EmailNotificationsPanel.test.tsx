@@ -438,3 +438,29 @@ it("locks duplicate saves and discards a cancelled form's late result and errors
   expect(JSON.stringify(localStorage)).not.toContain("private@example.test");
   expect(mocks.testEmailNotification).not.toHaveBeenCalled();
 });
+
+it("blocks the workspace when reloading a conflicted target is refused", async () => {
+  mocks.updateEmailTarget.mockResolvedValue({
+    error: { code: "version_conflict", message: "private-raw" },
+  });
+  mount();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "编辑 Synthetic operations" }),
+  );
+  await userEvent.type(
+    screen.getByLabelText("收件人地址"),
+    "private@example.test",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "保存目标" }));
+  expect(await screen.findByText(/配置已变更/)).toBeInTheDocument();
+  mocks.getEmailTarget.mockResolvedValue({
+    error: { code: "password_change_required" },
+  });
+  await userEvent.click(
+    screen.getByRole("button", { name: "刷新最新目标并重新编辑" }),
+  );
+  expect(await screen.findByText(/必须先修改密码/)).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "保存目标" }),
+  ).not.toBeInTheDocument();
+});

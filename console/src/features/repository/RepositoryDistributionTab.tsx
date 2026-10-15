@@ -1,8 +1,5 @@
 import { useState } from "react";
-import {
-  deleteRepositoryReplication,
-  getRepositoryReplication,
-} from "../../client";
+import { deleteRepositoryReplication } from "../../client";
 import type {
   AptLifecyclePackage,
   ReplicationPlan,
@@ -28,7 +25,7 @@ import {
   replicationPlanColumns,
 } from "./distributionColumns";
 import { useAccessRepositories } from "../access-control/accessQueries";
-import { useReplicationPlans } from "./repositoryQueries";
+import { useReplicationPlan, useReplicationPlans } from "./repositoryQueries";
 
 /** Promotion and replication: the request form and this repository's plans. */
 export function RepositoryDistributionTab({
@@ -49,7 +46,15 @@ export function RepositoryDistributionTab({
   const repos = reposQuery.data?.items ?? [];
   const plans = plansQuery.data ?? null;
   const error = reposQuery.error ?? plansQuery.error;
-  const [detail, setDetail] = useState<ReplicationPlanDetail | null>(null);
+  // The open plan's detail is a query: reopening shows the last answer while
+  // it is read again, and a cancelled read never lands in a newer detail.
+  const [detailPlanId, setDetailPlanId] = useState<string | null>(null);
+  const detailQuery = useReplicationPlan(repo.id, detailPlanId);
+  const detail: ReplicationPlanDetail | null = detailPlanId
+    ? (detailQuery.data ?? null)
+    : null;
+  const detailError =
+    detailPlanId && !detailQuery.isFetching ? detailQuery.error : null;
   const [actionError, setActionError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
   const load = () => Promise.all([reposQuery.refetch(), plansQuery.refetch()]);
@@ -71,19 +76,9 @@ export function RepositoryDistributionTab({
     }
   };
 
-  const showDetail = async (planId: string) => {
-    try {
-      const { data, error: err } = await getRepositoryReplication({
-        path: { repositoryId: repo.id, replicationPlanId: planId },
-      });
-      if (err) {
-        setActionError(err);
-        return;
-      }
-      setDetail(data ?? null);
-    } catch (err) {
-      setActionError(err);
-    }
+  const showDetail = (planId: string) => {
+    if (planId === detailPlanId) void detailQuery.refetch();
+    else setDetailPlanId(planId);
   };
 
   const repoName = (id: string) =>
@@ -106,6 +101,12 @@ export function RepositoryDistributionTab({
         <ErrorBanner error={error} onRetry={() => void load()} />
       )}
       {actionError !== null && <ErrorBanner error={actionError} />}
+      {detailError && (
+        <ErrorBanner
+          error={detailError}
+          onRetry={() => void detailQuery.refetch()}
+        />
+      )}
       {notice && (
         <Notice tone="success" title={notice} onClose={() => setNotice("")} />
       )}
@@ -144,7 +145,7 @@ export function RepositoryDistributionTab({
       <Modal
         open={!!detail}
         title={t("repository.replicationProgress")}
-        onClose={() => setDetail(null)}
+        onClose={() => setDetailPlanId(null)}
         wide
       >
         {detail && (

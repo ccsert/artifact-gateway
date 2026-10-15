@@ -186,13 +186,33 @@ completion is checked against its request generation and cached query instance;
 a later refresh cannot validate an older cancelled read, and an old identity
 cannot write into a replacement snapshot.
 
-## Remaining migration work
+## Reads outside queries
 
-The snapshot migration does not finish issue 284's all-requests requirement.
-`QuotaRuleEditor` still pages `listRepositories` through `useQuotaAction`, and
-`EmailTargetEditor` still calls `getEmailTarget` through that action helper when
-recovering from a version conflict. Those reads need query hooks in a separate
-change. The existing tree-node reader, followed log stream and authentication
-bootstrap also remain explicit exceptions; the issue's completion definition
-must account for them before it can be marked complete. The raw-fetch/effect
-guard does not prove that SDK reads have all migrated.
+`scripts/read-inventory.mjs` lists every Gateway read in `src`: each generated
+SDK operation that issues GET or HEAD, and each `fetch` without another
+method. The type checker follows names to their declarations, so a read
+counts as a query read when it runs in a `queryFn`, in an argument of a hook
+whose `queryFn` calls it (`useQuotaSnapshot`, `useDashboardResource`), or in
+code those reach (format listers through their registry).
+
+```sh
+node scripts/read-inventory.mjs          # summary and the reads outside queries
+node scripts/read-inventory.mjs --json   # every read with its file, line and context
+```
+
+`src/test/readInventory.test.ts` fails when a read runs outside a query and
+is not one of these exceptions, or when an exception no longer exists:
+
+- **Documented exceptions.** The authentication bootstrap (`/auth/session`
+  sits above the query provider and decides its identity), the repository
+  browse tree (one node page at a time with retry and de-duplication) and the
+  followed runtime log stream (gap detection, not a cached read).
+- **One step of an action.** A read the person's own action needs right
+  then: finding the Maven artifact id before deleting it, the publish session
+  while uploading, the `.crate` download, a proxy warm-up fetch, the APT
+  snapshot export, current grants before applying a template or removing a
+  user's access, and verifying a pasted token at sign-in.
+
+Explicit re-reads (refresh the latest version after a conflict) use
+`useExplicitRead`; reads opened on demand (a plan's progress, an access
+evaluation) are queries keyed by what was asked for.

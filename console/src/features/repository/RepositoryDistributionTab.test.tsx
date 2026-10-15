@@ -12,6 +12,7 @@ import type { Repository } from "../../client";
 import { PreferencesProvider } from "../../lib/preferences";
 import { RepositoryDistributionTab } from "./RepositoryDistributionTab";
 import { TestQueryProvider } from "../../test/queryClient";
+import { getRepositoryReplication } from "../../client";
 
 vi.mock("../../client", () => ({
   createRepositoryPromotion: vi.fn(),
@@ -396,4 +397,64 @@ it("uses visible APT packages and requires the target suite, preserving an uncer
     digest: digestA,
     aptTargetSuite: "bookworm",
   });
+});
+
+it("opens a plan's progress, reports a failed read with Retry, and reads again", async () => {
+  const user = userEvent.setup();
+  const plan = {
+    id: "plan-1",
+    sourceRepositoryId: source.id,
+    targetRepositoryId: target.id,
+    format: "maven" as const,
+    coordinate,
+    digest: digestA,
+    state: "running" as const,
+    createdAt: "2026-08-12T05:00:00Z",
+  };
+  mockListRepositories.mockResolvedValue({
+    data: { items: [source, target], nextPageToken: "" },
+  } as never);
+  mockListRepositoryReplications.mockResolvedValue({ data: [plan] } as never);
+  vi.mocked(getRepositoryReplication)
+    .mockResolvedValueOnce({
+      error: { status: 503, message: "detail unavailable" },
+    } as never)
+    .mockResolvedValue({
+      data: {
+        ...plan,
+        checkpoints: [
+          {
+            objectKey: "maven/widget-1.2.3.jar",
+            digest: digestA,
+            size: 2048,
+            byteOffset: 1024,
+            state: "copying",
+            attempts: 1,
+          },
+        ],
+      },
+    } as never);
+
+  render(
+    <TestQueryProvider>
+      <PreferencesProvider>
+        <RepositoryDistributionTab repo={source} />
+      </PreferencesProvider>
+    </TestQueryProvider>,
+  );
+
+  await user.click(await screen.findByRole("button", { name: /进\s*度/ }));
+  expect(await screen.findByText("detail unavailable")).toBeVisible();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: /重\s*试/ }));
+  expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  expect(await screen.findByText("maven/widget-1.2.3.jar")).toBeInTheDocument();
+  expect(screen.queryByText("detail unavailable")).not.toBeInTheDocument();
+  expect(getRepositoryReplication).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      path: { repositoryId: source.id, replicationPlanId: "plan-1" },
+      signal: expect.any(AbortSignal),
+    }),
+  );
 });

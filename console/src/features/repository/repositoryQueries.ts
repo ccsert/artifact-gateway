@@ -18,6 +18,7 @@ import {
   listRepositories,
   listRepositoryLifecycleJobs,
   listRepositoryTombstones,
+  getRepositoryReplication,
   listRepositoryReplications,
   listRepositoryCapacities,
   listRepositoryArtifactUsage,
@@ -214,6 +215,28 @@ export function useReplicationPlans(repositoryId: string) {
         throw error;
       }
     },
+    staleTime: 0,
+  });
+}
+
+/**
+ * One replication plan with its checkpoints, read when its detail opens.
+ * It sits under the plan list, so a cancel that refreshes plans covers it.
+ */
+export function useReplicationPlan(
+  repositoryId: string,
+  planId: string | null,
+) {
+  return useQuery({
+    queryKey: repositoryKeys.replicationPlan(repositoryId, planId ?? ""),
+    queryFn: ({ signal }) =>
+      unwrap(
+        getRepositoryReplication({
+          path: { repositoryId, replicationPlanId: planId ?? "" },
+          signal,
+        }),
+      ),
+    enabled: Boolean(planId),
     staleTime: 0,
   });
 }

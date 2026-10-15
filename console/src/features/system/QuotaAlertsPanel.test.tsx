@@ -628,3 +628,64 @@ it.each([
     expect(mocks.updateRepositoryQuotaAlertRule).not.toHaveBeenCalled();
   },
 );
+
+it("reports a failed repository page in the editor and reads it again on request", async () => {
+  mocks.listRepositoryQuotaAlertRules.mockResolvedValue({ data: [] });
+  let failPage = true;
+  mocks.listRepositories.mockImplementation(({ query }) =>
+    Promise.resolve(
+      query.pageToken
+        ? failPage
+          ? { error: { status: 503, code: "unavailable" } }
+          : {
+              data: {
+                items: [
+                  {
+                    id: "repo-b",
+                    name: "Second page repository",
+                    state: "active",
+                    type: "hosted",
+                    format: "raw",
+                  },
+                ],
+              },
+            }
+        : {
+            data: {
+              items: [
+                {
+                  id: "repo-a",
+                  name: "Synthetic Raw",
+                  state: "active",
+                  type: "hosted",
+                  format: "raw",
+                },
+              ],
+              nextPageToken: "page-two",
+            },
+          },
+    ),
+  );
+  mount();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "创建规则" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "加载更多仓库" }));
+  // The failure is local to the editor; the panel stays writable.
+  await waitFor(() =>
+    expect(
+      mocks.listRepositories.mock.calls.filter(
+        ([options]) => options.query.pageToken === "page-two",
+      ),
+    ).toHaveLength(1),
+  );
+  expect(
+    await screen.findByText("请求失败。请检查连接并刷新后重试。"),
+  ).toBeInTheDocument();
+  failPage = false;
+  await userEvent.click(screen.getByRole("button", { name: "加载更多仓库" }));
+  await userEvent.click(screen.getByRole("combobox", { name: "仓库" }));
+  expect(
+    await screen.findByRole("option", { name: "Second page repository" }),
+  ).toBeInTheDocument();
+});

@@ -30,7 +30,9 @@ import {
   safeQuotaError,
   isQuotaAuthError,
 } from "./quotaAlertPresentation";
-import { useQuotaAction } from "./useQuotaAction";
+import { quotaBlocked, useQuotaAction } from "./useQuotaAction";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { quotaKeys } from "../../lib/query/keys";
 import { quotaResult } from "./useQuotaSnapshot";
 
 export function QuotaRuleEditor({
@@ -65,12 +67,48 @@ export function QuotaRuleEditor({
     attempted && !repositoryId ? t("system.chooseARepository") : undefined;
   const targetError =
     attempted && !targetId ? t("system.chooseAnEmailTarget") : undefined;
-  const [catalogue, setCatalogue] = useState(() => ({
-    items: repositories,
-    nextPageToken,
-  }));
   const action = useQuotaAction(onAuthBlocked);
-  const more = useQuotaAction(onAuthBlocked);
+  // Pages after the panel's first one, read only when asked for and dropped
+  // with the editor; a denial blocks the panel like any other quota read.
+  const more = useInfiniteQuery({
+    queryKey: quotaKeys.editorRepositories(nextPageToken ?? ""),
+    queryFn: async ({ pageParam, signal }) => {
+      try {
+        return quotaResult(
+          await listRepositories({
+            signal,
+            query: { pageSize: 200, pageToken: pageParam },
+          }),
+        );
+      } catch (cause) {
+        if (!signal.aborted && isQuotaAuthError(cause)) onAuthBlocked(cause);
+        throw cause;
+      }
+    },
+    initialPageParam: nextPageToken,
+    getNextPageParam: (page) => page.nextPageToken || undefined,
+    enabled: false,
+    gcTime: 0,
+    retry: false,
+    meta: { authFailure: "ignore" },
+  });
+  const loadedPages = more.data?.pages ?? [];
+  const catalogue = {
+    items: loadedPages.reduce(
+      (items, page) => [
+        ...items,
+        ...page.items.filter(
+          (repo) => !items.some((item) => item.id === repo.id),
+        ),
+      ],
+      repositories,
+    ),
+    nextPageToken: loadedPages.length
+      ? loadedPages[loadedPages.length - 1].nextPageToken
+      : nextPageToken,
+  };
+  const moreError = more.isFetching ? undefined : (more.error ?? undefined);
+  const moreBlocked = quotaBlocked(moreError, onAuthBlocked);
   const fields = (
     percentKey: keyof RepositoryQuotaAlertPolicy,
     holdKey: keyof RepositoryQuotaAlertPolicy,
@@ -156,38 +194,18 @@ export function QuotaRuleEditor({
             <div className="grid gap-3">
               <Pagination
                 hasMore
-                disabled={!canSave || more.blocked || action.busy}
-                loading={more.busy}
+                disabled={!canSave || moreBlocked || action.busy}
+                loading={more.isFetchingNextPage || more.isFetching}
                 onMore={() =>
-                  void more.run(
-                    async (signal) =>
-                      quotaResult(
-                        await listRepositories({
-                          signal,
-                          query: {
-                            pageSize: 200,
-                            pageToken: catalogue.nextPageToken,
-                          },
-                        }),
-                      ),
-                    (next) =>
-                      setCatalogue((old) => ({
-                        ...next,
-                        nextPageToken: next.nextPageToken,
-                        items: [
-                          ...old.items,
-                          ...next.items.filter(
-                            (repo) =>
-                              !old.items.some((item) => item.id === repo.id),
-                          ),
-                        ],
-                      })),
-                  )
+                  // The first extra page is the query's first fetch.
+                  void (more.data
+                    ? more.fetchNextPage({ cancelRefetch: false })
+                    : more.refetch())
                 }
                 label={t("system.loadMoreRepositories")}
               />
-              {Boolean(more.error) && !isQuotaAuthError(more.error) && (
-                <ErrorBanner error={safeQuotaError(more.error, t)} />
+              {Boolean(moreError) && !isQuotaAuthError(moreError) && (
+                <ErrorBanner error={safeQuotaError(moreError, t)} />
               )}
             </div>
           )}

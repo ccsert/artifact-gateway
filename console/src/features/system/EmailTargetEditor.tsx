@@ -14,6 +14,9 @@ import {
 } from "../../components/ui/formFeedback";
 import { usePreferences } from "../../lib/preferences";
 import { useQuotaAction } from "./useQuotaAction";
+import { quotaKeys } from "../../lib/query/keys";
+import { isQuotaAuthError } from "./quotaAlertPresentation";
+import { useExplicitRead } from "../../lib/query/useExplicitRead";
 import { quotaResult } from "./useQuotaSnapshot";
 import {
   emailConflict,
@@ -57,7 +60,21 @@ export function EmailTargetEditor({
         ? t("system.enterOneValidMailboxWithoutADisplayName")
         : undefined;
   const action = useQuotaAction(onAuthBlocked);
-  const reload = useQuotaAction(onAuthBlocked);
+  // After a version conflict the person reloads the target explicitly and
+  // confirms again; the read goes through the query layer.
+  const reload = useExplicitRead(
+    quotaKeys.emailTarget(current?.id ?? ""),
+    async (signal) =>
+      quotaResult(
+        await getEmailTarget({
+          path: { targetId: current?.id ?? "" },
+          signal,
+        }),
+      ),
+    (error) => {
+      if (isQuotaAuthError(error)) onAuthBlocked(error);
+    },
+  );
   const [conflict, setConflict] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   return (
@@ -193,21 +210,12 @@ export function EmailTargetEditor({
               <Button
                 loading={reload.busy}
                 onClick={() =>
-                  void reload.run(
-                    async (signal) =>
-                      quotaResult(
-                        await getEmailTarget({
-                          path: { targetId: current.id },
-                          signal,
-                        }),
-                      ),
-                    (next) => {
-                      setCurrent(next);
-                      setRecipient("");
-                      setConflict(false);
-                      setAcknowledged(true);
-                    },
-                  )
+                  void reload.run((next) => {
+                    setCurrent(next);
+                    setRecipient("");
+                    setConflict(false);
+                    setAcknowledged(true);
+                  })
                 }
               >
                 {t("system.refreshLatestTargetAndEditAgain")}
