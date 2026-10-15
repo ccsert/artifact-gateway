@@ -1,0 +1,8 @@
+# raw-hosted (raw hosted) at http://gateway.test/gw
+# set ARTIFACT_GATEWAY_TOKEN to a credential with access to this repository
+
+## download
+curl --fail --location -H "Authorization: Bearer $ARTIFACT_GATEWAY_TOKEN" --output <file> http://gateway.test/gw/raw/raw-hosted/<path>
+
+## upload
+curl --fail -H "Authorization: Bearer $ARTIFACT_GATEWAY_TOKEN" --upload-file <file> http://gateway.test/gw/raw/raw-hosted/<path>

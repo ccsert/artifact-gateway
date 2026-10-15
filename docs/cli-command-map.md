@@ -12,9 +12,11 @@ use the same introspection for both views.
 
 This page classifies the full contract; it does not describe the installed
 binary. Apart from the #125 skeleton (`version`, `info`, `commands`) and the
-rows whose phase says `implemented` (currently #130's
-`repo list|show|create|update|delete` and the `group` commands other than
-`browse`, accepted against a real Gateway by `make cli-e2e`), every row is a plan. A row may claim implemented/verified only once its command is
+rows whose phase says `implemented` (the #130 repository and Group commands,
+the #131 artifact and format views, and the read-only #135 audit, status,
+diagnostics, runtime-node, overview, and lifecycle-job commands, each
+accepted against a real Gateway by `make cli-e2e`), every row is a plan. A
+row may claim implemented/verified only once its command is
 registered, its documentation and tests exist, and it passed acceptance
 against a real Gateway.
 
@@ -125,7 +127,7 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `POST /email-notifications:preview`<br>`previewEmailNotification` | `email preview` | #336 | M2 | A | D |
 | `GET /formats`<br>`listFormatProfiles` | `formats list` (info reuses the same read) | #125 | M0 | I | Q |
 | `GET /identity`<br>`getCurrentIdentity` | `auth whoami` (info reuses the same read) | #129 | M1 | I | Q |
-| `GET /artifact-search`<br>`searchArtifacts` | `artifact search --global` | #131 | M1 | FR | Q |
+| `GET /artifact-search`<br>`searchArtifacts` | `artifact search --global` | #131 | M1 implemented | FR | Q |
 | `GET /anonymous-access-policy`<br>`getAnonymousAccessPolicy` | `access anonymous show` | #134 | M1 | A | Q |
 | `PUT /anonymous-access-policy`<br>`replaceAnonymousAccessPolicy` | `access anonymous set` | #134 | M1 | A | C |
 | `GET /site-settings`<br>`getSiteSettings` | `site-settings show` (theme list reuses availableThemes) | #139 | M2 | PUBLIC | Q |
@@ -144,8 +146,8 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `GET /webhook-deliveries`<br>`listWebhookDeliveries` | `webhook delivery list` | #137 | M2 | A | Q |
 | `GET /webhook-deliveries/{deliveryId}`<br>`getWebhookDelivery` | `webhook delivery show <id>` | #137 | M2 | A | Q |
 | `POST /webhook-deliveries/{deliveryId}:replay`<br>`replayWebhookDelivery` | `webhook delivery replay <id>` | #137 | M2 | A | W |
-| `GET /runtime/nodes`<br>`listRuntimeNodes` | `runtime nodes` | #135 | M1 | A | Q |
-| `GET /diagnostics`<br>`getDiagnostics` | `diagnostics` (status reuses the same read) | #135 | M1 | A | Q |
+| `GET /runtime/nodes`<br>`listRuntimeNodes` | `runtime nodes` | #135 | M1 implemented | A | Q |
+| `GET /diagnostics`<br>`getDiagnostics` | `diagnostics` (status reuses the same read) | #135 | M1 implemented | A | Q |
 | `GET /runtime/logs`<br>`listRuntimeLogs` | `runtime logs` | #135 | M1 | A | L |
 | `GET /api-keys`<br>`listApiKeys` | `api-key list` | #133 | M1 | A | Q |
 | `POST /api-keys`<br>`createApiKey` | `api-key create` | #133 | M1 | A | S |
@@ -168,9 +170,9 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `GET /users/{userId}/identities`<br>`listUserIdentities` | `user identities list <id>` | #335 | M1 | A | Q |
 | `POST /users/{userId}/identities`<br>`createUserIdentity` | `user identities link <id>` | #335 | M1 | A | W |
 | `DELETE /users/{userId}/identities/{identityId}`<br>`deleteUserIdentity` | `user identities unlink <id> --identity <iid>` | #335 | M1 | A | W |
-| `GET /audits`<br>`listAudits` | `audit list --bounded` | #135 | M1 | A | Q |
-| `GET /audits/page`<br>`listAuditPage` | `audit list --cursor <cursor>` | #135 | M1 | A | Q |
-| `GET /overview-statistics`<br>`getOverviewStatistics` | `overview show` | #135 | M1 | FR | Q |
+| `GET /audits`<br>`listAudits` | `audit list --bounded` | #135 | M1 implemented | A | Q |
+| `GET /audits/page`<br>`listAuditPage` | `audit list --cursor <cursor>` | #135 | M1 implemented | A | Q |
+| `GET /overview-statistics`<br>`getOverviewStatistics` | `overview show` | #135 | M1 implemented | FR | Q |
 | `GET /audit-retention-policy`<br>`getAuditRetentionPolicy` | `audit retention show` | #138 | M2 | A | Q |
 | `PUT /audit-retention-policy`<br>`replaceAuditRetentionPolicy` | `audit retention set` | #138 | M2 | A | C |
 | `POST /audit-retention:execute`<br>`executeAuditRetention` | `audit retention execute` | #138 | M2 | A | W |
@@ -190,7 +192,7 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `PUT /authorization-roles/{roleId}`<br>`updateAuthorizationRole` | `role update <id>` | #134 | M2 | A | C |
 | `DELETE /authorization-roles/{roleId}`<br>`deleteAuthorizationRole` | `role delete <id>` | #134 | M2 | A | W |
 | `GET /repository-capacities`<br>`listRepositoryCapacities` | `capacity list` | #138 | M2 | FA | Q |
-| `GET /lifecycle-jobs`<br>`listLifecycleJobs` | `lifecycle-job list --all-repositories` | #135 | M1 | FA | Q |
+| `GET /lifecycle-jobs`<br>`listLifecycleJobs` | `lifecycle-job list --all-repositories` | #135 | M1 implemented | FA | Q |
 | `GET /scheduled-tasks`<br>`listScheduledTasks` | `scheduled-task list` | #137 | M2 | ST | Q |
 | `POST /scheduled-tasks`<br>`createScheduledTask` | `scheduled-task create` | #137 | M2 | ST | W |
 | `GET /scheduled-tasks/{taskId}`<br>`getScheduledTask` | `scheduled-task show <id>` | #137 | M2 | ST | Q |
@@ -223,7 +225,7 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `GET /repositories/{repositoryId}/replications/{replicationPlanId}`<br>`getRepositoryReplication` | `replication show <plan> --repo <id>` | #138 | M2 | RA | Q |
 | `DELETE /repositories/{repositoryId}/replications/{replicationPlanId}`<br>`deleteRepositoryReplication` | `replication cancel <plan> --repo <id>` | #138 | M2 | RA | W |
 | `POST /repositories/{repositoryId}/restore`<br>`restoreRepositoryArtifact` | `artifact restore --repo <id>` | #138 | M2 | RA | W |
-| `GET /repositories/{repositoryId}/lifecycle-jobs`<br>`listRepositoryLifecycleJobs` | `lifecycle-job list --repo <id>` (show/wait filter the same response by ID) | #135 | M1 | RA | Q |
+| `GET /repositories/{repositoryId}/lifecycle-jobs`<br>`listRepositoryLifecycleJobs` | `lifecycle-job list --repo <id>` (show/wait filter the same response by ID) | #135 | M1 implemented | RA | Q |
 | `GET /repositories/{repositoryId}/artifact-scans`<br>`getRepositoryArtifactScanStatus` | `artifact scan status --repo <id>` | #137 | M2 | RI | Q |
 | `POST /repositories/{repositoryId}/artifact-scans`<br>`createRepositoryArtifactScan` | `artifact scan enqueue --repo <id>` | #137 | M2 | RI | J |
 | `POST /repositories/{repositoryId}/artifact-scans:reconcile`<br>`reconcileRepositoryArtifactScans` | `artifact scan reconcile --repo <id>` | #137 | M2 | RI | W |
@@ -233,33 +235,33 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `POST /repositories/{repositoryId}/lifecycle-jobs/{lifecycleJobId}/cancel`<br>`cancelRepositoryLifecycleJob` | `lifecycle-job cancel --repo <id> --id <job>` | #137 | M2 | RA | W |
 | `GET /repositories/{repositoryId}/tombstones`<br>`listRepositoryTombstones` | `tombstone list --repo <id>` | #138 | M2 | RA | Q |
 | `POST /repositories/{repositoryId}/tombstones`<br>`tombstoneRepositoryArtifact` | `artifact tombstone --repo <id>` | #138 | M2 | RA | W |
-| `GET /repositories/{repositoryId}/capabilities`<br>`getRepositoryCapabilities` | `repo capabilities <id>` | #130 | M1 | R | Q |
+| `GET /repositories/{repositoryId}/capabilities`<br>`getRepositoryCapabilities` | `repo capabilities <id>` | #130 | M1 implemented | R | Q |
 | `GET /repositories/{repositoryId}/effective-access`<br>`getRepositoryEffectiveAccess` | `access check --repo <id>` | #134 | M1 | I/A | Q |
 | `GET /groups`<br>`listGroups` | `group list` | #130 | M1 implemented | A | Q |
 | `POST /groups`<br>`createGroup` | `group create` | #130 | M1 implemented | G | W |
 | `GET /groups/{groupId}`<br>`getGroup` | `group show <id>` | #130 | M1 implemented | A | Q |
 | `PUT /groups/{groupId}`<br>`replaceGroup` | `group update <id>` | #130 | M1 implemented | G | C |
 | `DELETE /groups/{groupId}`<br>`deleteGroup` | `group delete <id>` | #130 | M1 implemented | G | W |
-| `GET /groups/{groupId}/browse`<br>`browseGroup` | `group browse <id>` | #130 | M1 | R* | Q |
+| `GET /groups/{groupId}/browse`<br>`browseGroup` | `group browse <id>` | #130 | M1 implemented | R* | Q |
 | `GET /groups/{groupId}/members`<br>`listGroupMembers` | `group members list <id>` | #130 | M1 implemented | A | Q |
 | `PUT /groups/{groupId}/members`<br>`replaceGroupMembers` | `group members set <id>` | #130 | M1 implemented | G | C |
 | `GET /groups/{groupId}/capacity`<br>`getGroupCapacity` | `capacity show --group <id>` | #138 | M2 | A | Q |
 | `GET /groups/{groupId}/resolution`<br>`getGroupResolution` | `group resolution <id>` | #130 | M1 implemented | A | Q |
 | `POST /repositories/{repositoryId}/publish-sessions`<br>`createPublishSession` | `publish create --repo <id>` | #132 | M1 | W | U |
-| `GET /repositories/{repositoryId}/artifacts`<br>`listArtifacts` | `artifact list --repo <id>` | #131 | M1 | R* | Q |
-| `GET /repositories/{repositoryId}/artifact-usage`<br>`listRepositoryArtifactUsage` | `artifact usage --repo <id>` | #131 | M1 | R* | Q |
-| `GET /repositories/{repositoryId}/artifact-search`<br>`searchRepositoryArtifacts` | `artifact search --repo <id>` | #131 | M1 | R* | Q |
-| `GET /repositories/{repositoryId}/browse`<br>`browseRepository` | `artifact browse --repo <id>` (repo browse alias) | #131 | M1 | R* | Q |
-| `GET /repositories/{repositoryId}/artifact-identities`<br>`listRepositoryArtifactIdentities` | `artifact identities --repo <id>` | #131 | M1 | R | Q |
-| `GET /repositories/{repositoryId}/artifacts/{artifactId}`<br>`getArtifact` | `artifact show <id> --repo <id>` | #131 | M1 | R* | Q |
-| `DELETE /repositories/{repositoryId}/artifacts/{artifactId}`<br>`deleteArtifact` | `artifact delete <id> --repo <id>` | #131 | M1 | W | W |
-| `GET /repositories/{repositoryId}/artifact-intelligence`<br>`getArtifactIntelligence` | `artifact intelligence show --repo <id>` | #131 | M1 | R* | Q |
+| `GET /repositories/{repositoryId}/artifacts`<br>`listArtifacts` | `artifact list --repo <id>` | #131 | M1 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/artifact-usage`<br>`listRepositoryArtifactUsage` | `artifact usage --repo <id>` | #131 | M1 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/artifact-search`<br>`searchRepositoryArtifacts` | `artifact search --repo <id>` | #131 | M1 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/browse`<br>`browseRepository` | `artifact browse --repo <id>` (repo browse alias) | #131 | M1 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/artifact-identities`<br>`listRepositoryArtifactIdentities` | `artifact identities --repo <id>` | #131 | M1 implemented | R | Q |
+| `GET /repositories/{repositoryId}/artifacts/{artifactId}`<br>`getArtifact` | `artifact show <id> --repo <id>` | #131 | M1 implemented | R* | Q |
+| `DELETE /repositories/{repositoryId}/artifacts/{artifactId}`<br>`deleteArtifact` | `artifact delete <id> --repo <id>` | #131 | M1 implemented | W | W |
+| `GET /repositories/{repositoryId}/artifact-intelligence`<br>`getArtifactIntelligence` | `artifact intelligence show --repo <id>` | #131 | M1 implemented | R* | Q |
 | `PUT /repositories/{repositoryId}/artifact-intelligence`<br>`replaceArtifactIntelligence` | `artifact intelligence set --repo <id>` | #138 | M2 | RI | C |
-| `GET /repositories/{repositoryId}/artifact-quarantine`<br>`getArtifactQuarantine` | `artifact quarantine show --repo <id>` | #131 | M1 | R | Q |
+| `GET /repositories/{repositoryId}/artifact-quarantine`<br>`getArtifactQuarantine` | `artifact quarantine show --repo <id>` | #131 | M1 implemented | R | Q |
 | `PUT /repositories/{repositoryId}/artifact-quarantine`<br>`replaceArtifactQuarantine` | `artifact quarantine set --repo <id>` | #138 | M2 | RA | C |
-| `GET /repositories/{repositoryId}/oci/images`<br>`listOCIImages` | `oci images --repo <id>` | #131 | M1 | R* | Q |
-| `GET /repositories/{repositoryId}/oci/manifests`<br>`listOCIManifests` | `oci manifests --repo <id>` | #131 | M1 | R* | Q |
-| `GET /repositories/{repositoryId}/maven/coordinates`<br>`listMavenCoordinates` | `maven coordinates --repo <id>` | #131 | M1 | R* | Q |
+| `GET /repositories/{repositoryId}/oci/images`<br>`listOCIImages` | `oci images --repo <id>` | #131 | M1 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/oci/manifests`<br>`listOCIManifests` | `oci manifests --repo <id>` | #131 | M1 implemented | R* | Q |
+| `GET /repositories/{repositoryId}/maven/coordinates`<br>`listMavenCoordinates` | `maven coordinates --repo <id>` | #131 | M1 implemented | R* | Q |
 | `POST /repositories/{repositoryId}/apt/publication-sessions`<br>`createAPTPublicationSession` | `apt publication-session create --repo <id>` | #138 | M2 | W | W |
 | `GET /repositories/{repositoryId}/apt/publication-sessions/{sessionId}`<br>`getAPTPublicationSession` | `apt publication-session show --repo <id> --id <session>` | #138 | M2 | W | Q |
 | `PUT /repositories/{repositoryId}/apt/publication-sessions/{sessionId}/package`<br>`uploadAPTPublicationPackage` | `apt publication-session upload --repo <id> --id <session>` | #138 | M2 | W | W |
@@ -388,7 +390,10 @@ operator file/OS privileges are two different authorization boundaries.
   claims implementation by carrying `implemented` in its Phase cell (for
   example `M1 implemented`); the guard reads the installed command registry
   through `agctl commands --json` and fails when an implemented row has no
-  registered command, or when two implemented rows claim the same command.
+  registered command, or when the command does not declare the row's
+  endpoint (`METHOD /api/v2/path`) in its metadata. One command may serve
+  several rows, such as `artifact search --global` and `--repo`, only because
+  each row's endpoint is checked against what the command declares it sends.
 - One resource command/alias uses one registration implementation; the CLI
   tree's CI/platform tags do not duplicate operations, and JSON output schema,
   permission, mutation, pagination, idempotency, dry-run, and wait/cancel
@@ -396,7 +401,8 @@ operator file/OS privileges are two different authorization boundaries.
 - Supplementary acceptance: injecting a new unclassified operationId fails;
   a rename or removal that is still referenced fails; planned M2 rows are not
   misjudged as a missing first release; an implemented row without a
-  registered command fails and two implemented rows sharing one command fail;
+  registered command fails, and so does one whose endpoint the command does
+  not declare;
   and #140 runnable recipes are generated only for implemented commands.
 - The map records the contract baseline SHA and review date above; the guard
   re-derives the operation counts and the page never pins the old counts as

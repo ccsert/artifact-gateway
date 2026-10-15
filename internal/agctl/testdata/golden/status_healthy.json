@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "server": "http://gateway.test",
+    "overall": "healthy",
+    "checks": [
+      {
+        "name": "livez",
+        "status": "healthy"
+      },
+      {
+        "name": "readyz",
+        "status": "healthy"
+      },
+      {
+        "name": "dependency postgres",
+        "status": "healthy"
+      },
+      {
+        "name": "dependency smtp",
+        "status": "healthy",
+        "detail": "not configured"
+      },
+      {
+        "name": "nodes",
+        "status": "healthy",
+        "detail": "1 online, 0 stale, 0 offline"
+      },
+      {
+        "name": "queues",
+        "status": "healthy"
+      }
+    ]
+  },
+  "error": null,
+  "meta": null
+}

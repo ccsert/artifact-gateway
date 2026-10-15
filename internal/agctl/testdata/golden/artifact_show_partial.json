@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "artifact": {
+      "id": "00000000-0000-4000-a000-000000000001",
+      "coordinate": "com.example:demo:1.0.0",
+      "digest": "sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+      "createdAt": "2026-10-15T08:00:00Z",
+      "state": "visible",
+      "futureField": "kept"
+    },
+    "intelligence": {
+      "status": "none"
+    },
+    "quarantine": {
+      "status": "not_permitted",
+      "code": "access_denied"
+    }
+  },
+  "error": null,
+  "meta": null
+}

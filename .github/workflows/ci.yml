@@ -207,6 +207,7 @@ jobs:
         env:
           CLI_E2E_SERVER: http://127.0.0.1:18080
           CLI_E2E_TOKEN: ci-admin-token
+          CLI_E2E_RESOLVER_TOKEN: ci-resolver-token
         run: make cli-e2e
       - name: Stop gateway after Console E2E
         if: always()

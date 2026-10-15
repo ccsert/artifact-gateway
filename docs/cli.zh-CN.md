@@ -167,15 +167,21 @@ profile，最后是只定义一个 profile 的文件。该文件由 profile 命�
   `partial_failure` 或 `internal_error`。
 - 未到达服务端的失败，`error.httpStatus` 为 null。
 - `error.code` 为 `wait_timeout` 表示有界的 `--wait` 用完了时间（退出码 8）；
-  操作仍在服务端继续。
+  操作仍在服务端继续。`agctl status` 以 `unhealthy` 失败，或在 `--strict` 下
+  以 `degraded`、`unknown` 失败（退出码 1）。
 - 列表统一为 `{"items": [...], "nextCursor": null}`；数据来源没有服务端
   分页或列表已读到末尾时 `nextCursor` 为 null，`meta.pagination.mode` 说明
-  真实模式（本地命令树为 `none`，服务端分页为 `cursor`，并附带 `pageSize`、
-  已读页数 `pages` 和 `complete`）。
+  真实模式：本地命令树和一次返回全部内容的端点为 `none`；服务端分页为
+  `cursor`，附带 `pageSize`、已读页数 `pages` 和 `complete`；没有 cursor 的
+  窗口为 `bounded`，附带 `limit`，只有窗口未满时才给出 `complete: true`；
+  偏移窗口为 `offset`，附带 `limit`、`offset` 和服务端的 `total`。服务端没有
+  给出的总数不出现，绝不写成 0。
+- `meta.scope` 记录一页对自身覆盖范围的说明，例如全局检索的
+  `searchedRepositories`，或浏览页所属的 Group。
 - 失败但仍有内容需要报告时放在 `data`（以及 `meta`）中：列表中途停止前已读
   到的页（退出码 3）、等待超时时已受理的 ID 和最后读到的状态（退出码 8），
   或客户端无法确认结果的写操作的 `{"outcome": "unknown", "readBack": …}`。
-  仓库和 Group 的写操作在 HTTP 成功但 JSON 无法解析、为空或缺少必要字段时，
+  仓库、Group 和制品的写操作在 HTTP 成功但 JSON 无法解析、为空或缺少必要字段时，
   也会报告结果未知。创建保留原幂等键以便安全重放；更新和删除需要先回读状态再
   决定是否重试。
 
@@ -361,23 +367,92 @@ Group，因此它无法确认结果的写入需要平台管理员来核对。
 `update`、`members set` 和 `delete` 从不自动重试。Group 写操作的
 `--dry-run` 与 `agctl repo` 一样是客户端计划。
 
+### 仓库内容与格式视图
+
+内容读取遵循仓库的读取授权：无权读取的仓库返回 403（退出码 6），全局检索则
+只覆盖可读仓库，空结果是成功。仓库通过 `--repo` 按 ID 指定。
+
+- `agctl artifact search --repo ID [--q TEXT]` 检索一个仓库；
+  `agctl artifact search --global --q TEXT [--format FORMAT]` 检索全部可读仓库，
+  并在 `meta.scope.searchedRepositories` 中报告检索了多少仓库。
+  `--match prefix|contains` 选择服务端匹配方式（缺省为前缀）。两者都用
+  `--page-size`、`--cursor` 和 `--all` 分页。
+- `agctl artifact browse --repo ID [--parent NODE_ID]`（也可用
+  `agctl repo browse ID`）列出服务端浏览树的一层；节点 ID 不透明、带签名并会
+  过期。`agctl group browse ID` 浏览 Maven 或 Raw Group 中可读成员的并集，并在
+  `meta.scope` 中给出 Group 及其候选成员。
+- `agctl artifact identities --repo ID --purpose scan|distribution` 列出扫描或
+  晋升可接受的规范坐标与摘要。该端点没有 cursor：`--limit`（1–200）限定窗口，
+  窗口已满时可能还有更多。
+- `agctl artifact usage --repo ID [--limit N] [--offset N]` 以偏移窗口显示各资源
+  的下载次数，并附带服务端总数。
+- `agctl artifact intelligence show` 和 `agctl artifact quarantine show` 读取
+  某个 `--coordinate` 与 `--digest` 的记录；404 表示没有记录。
+- `agctl oci images|manifests` 和 `agctl maven coordinates` 是格式视图；
+  `oci manifests` 需要 `--name IMAGE`，并包括没有标签的 manifest。
+- `agctl artifact list|show|delete --repo ID` 针对 Maven Hosted 发布流程记录的
+  制品，其他格式返回 404。`list` 一次返回全部可见制品（`meta.pagination.mode`
+  为 `none`）。`show` 附带制品的情报和隔离记录，每项报告为 `recorded`、
+  `none`、`not_permitted` 或 `unavailable`——未读取到的绝不报告为健康。
+  `delete ARTIFACT_ID --repo ID --yes` 为制品打墓碑（202；`serverState` 是服务
+  端的删除状态）；重复请求会再次被受理，因此和其他幂等请求一样会重试。
+- `agctl repo capabilities ID` 列出 Hosted 仓库所属格式支持的操作。
+- `agctl repo connect ID` 按仓库格式打印客户端配置（`.npmrc`、`pip.conf` 与
+  `.pypirc`、Maven `settings.xml` 与 `pom.xml`、`GOPROXY` 与 `.netrc`、
+  `docker login`、Raw `curl`、Conan remote、APT `sources.list` 与 `auth.conf`、
+  Cargo `config.toml`），Hosted 仓库附带发布片段。凭据一律是占位符
+  `${ARTIFACT_GATEWAY_TOKEN}`，已配置的 token 绝不写进片段。URL 取 CLI 所连
+  服务端，去掉凭据、查询参数和片段。PyPI `.netrc` 使用 pip 匹配的纯主机名，
+  索引 URL 仍保留显式端口。
+
+### 审计与运行状态
+
+这些命令只读，不改变任何内容。
+
+- `agctl audit list [--actor A] [--operation O] [--outcome O] [--repository
+  R] [--group G] [--format F] [--from TIME] [--to TIME]` 用 cursor 分页读取审计
+  日志（`--page-size`、`--cursor`、`--all`）。`--bounded [--limit N]` 改为从
+  `GET /audits` 读取最多 500 条的一个窗口，它没有 cursor 也不支持时间范围。
+  `--csv` 输出带表头的 RFC 4180 CSV。审计日志记录授权决定、拒绝和 Group 解析，
+  并非每次管理写入；审计记录带有 `agctl` 失败时报告的请求 ID。
+- `agctl status` 探测 `/livez`、`/readyz` 和诊断信息，逐项给出结论：依赖、运行
+  节点（附问题代码）、扫描器和失败的队列任务。总体结果取最差的一项——
+  `unhealthy`、`degraded`、`unknown`、`healthy`；不健康时退出码 1，加
+  `--strict` 时只要不是 healthy 就退出 1。没有凭据或无权读取诊断时，这些检查为
+  `unknown`，绝不报告为健康。扫描器不健康或不可达时，普通 `status` 也会失败；
+  扫描器数据库过期仍为降级，使用 `--strict` 时失败。
+- `agctl diagnostics`、`agctl runtime nodes` 和 `agctl overview show` 打印服务端
+  文档（JSON 输出原样透传，新增字段也能到达脚本），并附带人类可读摘要。
+  诊断摘要保留各本地挂载的状态、原因、字节数、实际采样时间及共享别名，并说明
+  观测范围和单位；缺失值仍为 unknown。
+- `agctl lifecycle-job list [--repo ID | --limit N]` 读取一个仓库的最新任务，
+  最多 100 条；或默认读取全局最新 500 条的窗口。服务端先截取全局窗口，再过滤
+  仓库权限，因此返回不足一页甚至空集合都不能证明完整。两个来源均报告
+  `mode: bounded`；全局完整性保持未知，单仓库不足 100 条时才报告完整。
+  `agctl lifecycle-job show JOB_ID` 在同一窗口中查找任务；不在窗口中的任务以
+  退出码 4 结束，并说明查找的范围。运行、重试和取消任务暂不属于本命令族。
+
 ## 验证
 
 - `go test ./internal/agctl/...` 离线运行，使用进程内的假服务端：覆盖命令
   解析、退出码、脱敏和 JSON 信封。golden 信封位于
   `internal/agctl/testdata/golden/`；有意修改输出后，用
-  `go test ./internal/agctl/ -run 'Repo|Group' -update` 重写并审阅差异。
+  `go test ./internal/agctl/ -update` 重写并审阅差异。
 - `make cli-e2e` 构建 `agctl` 并在真实、隔离的 Gateway 上运行：按
   `GATEWAY_ENV_FILE`（或 `.env`）在空闲端口上启动一个 Compose 项目，结束后
   删除。设置 `CLI_E2E_SERVER` 和 `CLI_E2E_TOKEN`（管理员 token）时改为复用
-  正在运行的 Gateway，CI 在 Console E2E 之后就是这样运行的。剧本创建仓库、
+  正在运行的 Gateway，CI 在 Console E2E 之后就是这样运行的；设置
+  `CLI_E2E_RESOLVER_TOKEN` 会加入需要无仓库权限凭据的检查。剧本创建仓库、
   重放创建、更新（dry-run、真实更新、过期 `If-Match`）并在列表中找到它；
   用它和第二个仓库建 Group（dry-run、重放、未知成员、成员、解析顺序、带过期
-  `If-Match` 的改名、重排、保留成员的删除）；再删除仓库（确认、dry-run、
+  `If-Match` 的改名、重排、保留成员的删除）；通过原生协议发布一个 Raw 文件和
+  一个 Maven POM，并检索、浏览、列出、查看和删除它们；检查无权限凭据被拒绝
+  （6）、全局检索为空，且该拒绝能按报告的请求 ID 在审计日志中找到；读取
+  status、诊断、运行节点、概览和生命周期任务；再删除仓库（确认、dry-run、
   202、等待超时）并等待 `deleted`。同时检查错误
   token（5）、仓库不存在（4）、非法输入（2）和冲突（7）的退出码。
 - `make cli-contract-check` 校验命令映射表覆盖全部契约操作，且每个标为
-  `implemented` 的行都对应已注册的命令。
+  `implemented` 的行都对应声明了该行端点的已注册命令。
 
 ## 安全说明
 

@@ -186,17 +186,25 @@ With `--json`, stdout carries exactly one document — also on failure:
   `partial_failure`, or `internal_error`.
 - `error.httpStatus` is null for failures that never reached the server.
 - `error.code` `wait_timeout` marks a bounded `--wait` that ran out of time
-  (exit 8); the operation continues on the server.
+  (exit 8); the operation continues on the server. `agctl status` fails with
+  `unhealthy`, or under `--strict` with `degraded` or `unknown` (exit 1).
 - Lists use `{"items": [...], "nextCursor": null}`; `nextCursor` is null when
   the data source has no server-side pagination or the listing reached its
   end, and `meta.pagination.mode` states the real mode (`none` for local
-  command trees, `cursor` for server pages, which add `pageSize`, `pages`
-  read, and `complete`).
+  command trees and endpoints that answer everything at once, `cursor` for
+  server pages, which add `pageSize`, `pages` read, and `complete`; `bounded`
+  for a window without a cursor, with its `limit` and `complete: true` only
+  when the window was not full; `offset` for an offset window with `limit`,
+  `offset`, and the server's `total`). A total the server does not report is
+  absent, never 0.
+- `meta.scope` carries what a page says about the range it covers, such as
+  `searchedRepositories` of a global search or the Group a browse page
+  belongs to.
 - A failure that still has something to report carries it in `data` (and
   `meta`): the pages read before a listing stopped (exit 3), the accepted ID
   and last state of a timed-out wait (exit 8), or `{"outcome": "unknown",
   "readBack": …}` for a write whose result the client could not observe.
-  Repository and Group writes also report an unknown outcome when a
+  Repository, Group, and artifact writes also report an unknown outcome when a
   successful HTTP response contains unreadable, empty, or incomplete JSON.
   Creation preserves its idempotency key for safe replay; updates and
   deletions must be read back before retrying.
@@ -423,28 +431,119 @@ checked by a platform administrator.
 `update`, `members set`, and `delete` are never retried automatically.
 `--dry-run` on the Group writes is a client plan, as for `agctl repo`.
 
+### Repository content and format views
+
+Content reads follow the repository's read authorization; a repository the
+caller may not read answers 403 (exit 6), while a global search filters to
+readable repositories and an empty result is a success. Repositories are
+addressed by ID with `--repo`.
+
+- `agctl artifact search --repo ID [--q TEXT]` searches one repository;
+  `agctl artifact search --global --q TEXT [--format FORMAT]` searches every
+  readable repository and reports `meta.scope.searchedRepositories`.
+  `--match prefix|contains` selects the server's match mode (prefix when
+  omitted). Both page with `--page-size`, `--cursor`, and `--all`.
+- `agctl artifact browse --repo ID [--parent NODE_ID]` (also
+  `agctl repo browse ID`) lists one level of the server's browse tree; node
+  IDs are opaque, signed, and expire. `agctl group browse ID` browses the
+  union of a Maven or Raw Group's readable members and reports the Group and
+  its candidate members in `meta.scope`.
+- `agctl artifact identities --repo ID --purpose scan|distribution` lists the
+  canonical coordinate and digest pairs scanners or promotion accept. The
+  endpoint has no cursor: `--limit` (1–200) bounds the window, and a full
+  window may hide more.
+- `agctl artifact usage --repo ID [--limit N] [--offset N]` shows download
+  counts per resource in an offset window with the server's total.
+- `agctl artifact intelligence show` and `agctl artifact quarantine show`
+  read the record of one `--coordinate` and `--digest`; 404 means none is
+  recorded.
+- `agctl oci images|manifests` and `agctl maven coordinates` are the format
+  views; `oci manifests` needs `--name IMAGE` and includes untagged
+  manifests.
+- `agctl artifact list|show|delete --repo ID` cover the artifacts the Maven
+  hosted publication flow records; other formats answer 404. `list` returns
+  every visible artifact at once (`meta.pagination.mode` is `none`). `show`
+  adds the artifact's intelligence and quarantine records, each reported as
+  `recorded`, `none`, `not_permitted`, or `unavailable` — never as healthy
+  when it was not read. `delete ARTIFACT_ID --repo ID --yes` tombstones the
+  artifact (202; `serverState` is the server's deletion state); repeating it
+  is accepted again, so the request is retried like other idempotent calls.
+- `agctl repo capabilities ID` lists the operations a hosted repository's
+  format supports.
+- `agctl repo connect ID` prints client configuration for the repository's
+  format (`.npmrc`, `pip.conf` and `.pypirc`, Maven `settings.xml` and
+  `pom.xml`, `GOPROXY` and `.netrc`, `docker login`, Raw `curl`, Conan
+  remotes, APT `sources.list` and `auth.conf`, Cargo `config.toml`), with
+  publish snippets for hosted repositories. Credentials are always the
+  placeholder `${ARTIFACT_GATEWAY_TOKEN}`; the configured token is never
+  written into a snippet. URLs follow the server the CLI talks to, with
+  credentials, query, and fragment removed. PyPI `.netrc` entries use the
+  bare hostname that pip matches, while index URLs retain any explicit port.
+
+### Audit and runtime
+
+These commands read; none of them changes anything.
+
+- `agctl audit list [--actor A] [--operation O] [--outcome O] [--repository
+  R] [--group G] [--format F] [--from TIME] [--to TIME]` pages through the
+  audit log with cursors (`--page-size`, `--cursor`, `--all`).
+  `--bounded [--limit N]` instead reads one window of at most 500 records
+  from `GET /audits`, which has no cursor and no time range. `--csv` prints
+  RFC 4180 CSV with a header row. The log records authorization decisions,
+  refusals, and Group resolution rather than every management write; an
+  audit record carries the request id an `agctl` failure reports.
+- `agctl status` probes `/livez`, `/readyz`, and the diagnostics and prints
+  one verdict per check: dependencies, runtime nodes (with their issue
+  codes), scanner, and failed queue jobs. The overall result is the worst
+  check — `unhealthy`, `degraded`, `unknown`, `healthy` — and the command
+  exits 1 when it is unhealthy, or with `--strict` whenever it is not
+  healthy. Without credentials, or when the caller may not read the
+  diagnostics, those checks are `unknown`, never healthy.
+  An unhealthy or unreachable scanner makes ordinary `status` fail;
+  a stale scanner database remains degraded and fails with `--strict`.
+- `agctl diagnostics`, `agctl runtime nodes`, and `agctl overview show` print
+  the server documents (JSON output passes them through unchanged, so new
+  fields reach scripts) with a human summary. Diagnostics includes each
+  local mount's status, reason, byte values, actual sample time and shared
+  aliases, plus the observation scope and unit. Missing values remain unknown.
+- `agctl lifecycle-job list [--repo ID | --limit N]` reads the newest jobs of
+  one repository (at most 100), or a global window of at most 500 by default.
+  The server limits the global window before filtering repository permissions:
+  a short or empty result does not prove completeness. Both sources report
+  `mode: bounded`; global completeness stays unknown, and a repository window
+  is complete only when fewer than 100 jobs are returned.
+  `agctl lifecycle-job show JOB_ID` finds one job in the same window; a job
+  outside it answers exit 4 with the range that was searched.
+  Running, retrying, and cancelling jobs is not part of this command family
+  yet.
+
 ## Verification
 
 - `go test ./internal/agctl/...` runs offline against in-process fakes:
   command parsing, exit codes, redaction, and the JSON envelopes. Golden
   envelopes live in `internal/agctl/testdata/golden/`; after an intended
-  output change, rewrite them with `go test ./internal/agctl/ -run
-  'Repo|Group' -update` and review the diff.
+  output change, rewrite them with `go test ./internal/agctl/ -update` and
+  review the diff.
 - `make cli-e2e` builds `agctl` and runs it against a real, isolated Gateway:
   it boots a Compose project from `GATEWAY_ENV_FILE` (or `.env`) on free
   ports and removes it afterwards. With `CLI_E2E_SERVER` and `CLI_E2E_TOKEN`
   (an admin token) it reuses a running Gateway instead, which is how CI runs
-  it after the Console E2E. The scenario creates a repository, replays the
+  it after the Console E2E; `CLI_E2E_RESOLVER_TOKEN` adds the checks that need
+  a credential without repository permissions. The scenario creates a repository, replays the
   create, updates it (dry-run, real update, stale `If-Match`), and finds it in
   the list; builds a Group over it and a second repository (dry-run, replay,
   unknown member, members, resolution order, rename with a stale `If-Match`,
-  reorder, delete that keeps the members); then deletes the repository
-  (confirmation, dry-run, 202, timed-out wait) and waits for `deleted`. It
-  also checks the exit codes for a wrong token (5), a missing
+  reorder, delete that keeps the members); publishes a Raw file and a Maven
+  POM through the native protocols and searches, browses, lists, inspects,
+  and deletes them; checks that a credential without permissions is refused
+  (6), sees an empty global search, and that the refusal is in the audit log
+  under the reported request id; reads status, diagnostics, runtime nodes,
+  overview, and lifecycle jobs; then deletes the repository (confirmation,
+  dry-run, 202, timed-out wait) and waits for `deleted`. It also checks the exit codes for a wrong token (5), a missing
   repository (4), invalid input (2), and conflicts (7).
 - `make cli-contract-check` verifies that the command map classifies every
   contract operation and that each row marked `implemented` names a
-  registered command.
+  registered command that declares the row's endpoint.
 
 ## Security notes
 

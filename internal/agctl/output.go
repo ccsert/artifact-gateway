@@ -34,10 +34,19 @@ type paginationMeta struct {
 	PageSize int    `json:"pageSize,omitempty"`
 	Pages    int    `json:"pages,omitempty"`
 	Complete *bool  `json:"complete,omitempty"`
+	// Limit and Offset describe an offset window or a bounded read; Total is
+	// the server's count when it reports one (null means unknown, never 0).
+	Limit  int  `json:"limit,omitempty"`
+	Offset *int `json:"offset,omitempty"`
+	Total  *int `json:"total,omitempty"`
 }
 
 type envelopeMeta struct {
 	Pagination *paginationMeta `json:"pagination"`
+	// Scope carries what a page reports about the range it covers, such as
+	// how many repositories a global search read or which Group a browse page
+	// belongs to. Omitted when the source reports nothing.
+	Scope map[string]any `json:"scope,omitempty"`
 }
 
 type envelope struct {

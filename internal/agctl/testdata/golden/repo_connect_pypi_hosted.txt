@@ -1,0 +1,23 @@
+# pypi-hosted (pypi hosted) at http://gateway.test/gw
+# set ARTIFACT_GATEWAY_TOKEN to a credential with access to this repository
+
+## pip configuration — pip.conf
+[global]
+index-url = http://gateway.test/gw/pypi/pypi-hosted/simple/
+
+## pip credentials — .netrc
+machine gateway.test
+login ci
+password ${ARTIFACT_GATEWAY_TOKEN}
+
+## twine configuration — .pypirc
+[distutils]
+index-servers = pypi-hosted
+
+[pypi-hosted]
+repository = http://gateway.test/gw/pypi/pypi-hosted/legacy/
+username = ci
+password = ${ARTIFACT_GATEWAY_TOKEN}
+
+## publish
+twine upload --repository pypi-hosted dist/*

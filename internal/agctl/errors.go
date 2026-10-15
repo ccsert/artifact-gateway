@@ -166,6 +166,10 @@ func localErrorCode(err error) string {
 	if errors.As(err, &wait) {
 		return "wait_timeout"
 	}
+	var status *statusError
+	if errors.As(err, &status) {
+		return status.overall
+	}
 	return "internal_error"
 }
 
