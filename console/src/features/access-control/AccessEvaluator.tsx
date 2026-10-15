@@ -91,9 +91,10 @@ export function AccessEvaluator({
     staleTime: 0,
     gcTime: 0,
   });
-  const evaluation: RepositoryEffectiveAccess | null = request
-    ? (evaluationQuery.data ?? null)
-    : null;
+  const evaluation: RepositoryEffectiveAccess | null =
+    request && evaluationQuery.isSuccess && !evaluationQuery.isFetching
+      ? (evaluationQuery.data ?? null)
+      : null;
   const evaluationError =
     validationError ??
     (request && !evaluationQuery.isFetching ? evaluationQuery.error : null);

@@ -11,7 +11,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// An alternate source root lets the regression tests exercise small fixtures.
+const rootIndex = process.argv.indexOf("--root");
+const root =
+  rootIndex < 0
+    ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+    : path.resolve(process.argv[rootIndex + 1]);
 const src = path.join(root, "src");
 
 const sdk = ts.createSourceFile(
@@ -49,7 +54,11 @@ function fetchIsRead(call, source) {
       property.name.getText(source) === "method",
   );
   if (!method) return true;
-  return /^["'`](GET|HEAD)["'`]$/.test(method.initializer.getText(source));
+  // An unknown method may be a read; do not silently omit it.
+  return (
+    !ts.isStringLiteralLike(method.initializer) ||
+    /^(GET|HEAD)$/i.test(method.initializer.text)
+  );
 }
 
 function enclosingFunctionName(node) {
@@ -79,6 +88,39 @@ const sources = program
   .getSourceFiles()
   .filter((source) => wanted.has(path.resolve(source.fileName)));
 
+function resolvedSymbol(node) {
+  let symbol = checker.getSymbolAtLocation(node);
+  if (symbol && symbol.flags & ts.SymbolFlags.Alias)
+    symbol = checker.getAliasedSymbol(symbol);
+  return symbol;
+}
+
+// Follow import aliases, namespace members and local aliases to the SDK,
+// rather than treating the spelling at the call site as an operation name.
+function readName(expression, seen = new Set()) {
+  const symbol = resolvedSymbol(expression);
+  if (!symbol || seen.has(symbol)) return undefined;
+  seen.add(symbol);
+  for (const declaration of symbol.declarations ?? []) {
+    const filename = path.resolve(declaration.getSourceFile().fileName);
+    if (
+      filename === path.join(src, "client", "sdk.gen.ts") &&
+      readOperations.has(symbol.name)
+    )
+      return symbol.name;
+    if (
+      symbol.name === "fetch" &&
+      /lib\.(dom|webworker)\.d\.ts$/.test(filename)
+    )
+      return "fetch";
+    if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+      const name = readName(declaration.initializer, seen);
+      if (name) return name;
+    }
+  }
+  return undefined;
+}
+
 function walk(node, visit) {
   visit(node);
   node.forEachChild((child) => walk(child, visit));
@@ -101,9 +143,10 @@ for (const source of sources) {
       if (!isQueryFn(inner, source)) return;
       walk(inner.initializer, (use) => {
         if (ts.isIdentifier(use) && params.includes(use.text)) {
-          const indexes = readerHooks.get(node.name.text) ?? new Set();
+          const symbol = resolvedSymbol(node.name);
+          const indexes = readerHooks.get(symbol) ?? new Set();
           indexes.add(params.indexOf(use.text));
-          readerHooks.set(node.name.text, indexes);
+          readerHooks.set(symbol, indexes);
         }
       });
     });
@@ -115,8 +158,9 @@ const contexts = [];
 for (const source of sources) {
   walk(source, (node) => {
     if (isQueryFn(node, source)) contexts.push(node.initializer);
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      for (const index of readerHooks.get(node.expression.text) ?? [])
+    if (ts.isCallExpression(node)) {
+      for (const index of readerHooks.get(resolvedSymbol(node.expression)) ??
+        [])
         if (node.arguments[index]) contexts.push(node.arguments[index]);
     }
   });
@@ -154,9 +198,7 @@ while (queue.length) {
   reachedNodes.add(node);
   walk(node, (inner) => {
     if (!ts.isIdentifier(inner)) return;
-    let symbol = checker.getSymbolAtLocation(inner);
-    if (symbol && symbol.flags & ts.SymbolFlags.Alias)
-      symbol = checker.getAliasedSymbol(symbol);
+    const symbol = resolvedSymbol(inner);
     for (const declaration of symbol?.declarations ?? []) {
       const target = followed(declaration);
       if (
@@ -174,17 +216,73 @@ function insideContext(node) {
   return false;
 }
 
+// A helper can also be called outside a query. Follow those call sites and
+// callbacks separately; merely being reachable from a query is insufficient.
+const outsideNodes = new Set();
+const outsideQueue = [];
+function enqueueTargets(identifier) {
+  for (const declaration of resolvedSymbol(identifier)?.declarations ?? []) {
+    const target = followed(declaration);
+    // A query's returned data may be referenced elsewhere without executing
+    // its initializer again. Follow callable values and function registries.
+    const callable =
+      checker.getTypeAtLocation(identifier).getCallSignatures().length > 0;
+    if (
+      target &&
+      (callable ||
+        ts.isObjectLiteralExpression(target) ||
+        ts.isArrayLiteralExpression(target)) &&
+      wanted.has(path.resolve(declaration.getSourceFile().fileName))
+    )
+      outsideQueue.push(target);
+  }
+}
+for (const source of sources) {
+  walk(source, (node) => {
+    if (ts.isCallExpression(node) && !insideContext(node)) {
+      enqueueTargets(node.expression);
+      for (const argument of node.arguments)
+        if (!contextNodes.has(argument)) enqueueTargets(argument);
+    }
+    if (!ts.isIdentifier(node) || insideContext(node)) return;
+    const parent = node.parent;
+    // Runtime references only: a declaration, import or type is not a call.
+    if (
+      ts.isJsxExpression(parent) ||
+      (ts.isPropertyAssignment(parent) && parent.initializer === node) ||
+      (ts.isVariableDeclaration(parent) && parent.initializer === node)
+    )
+      enqueueTargets(node);
+  });
+}
+function followOutside(node) {
+  if (contextNodes.has(node)) return;
+  if (ts.isIdentifier(node)) enqueueTargets(node);
+  node.forEachChild(followOutside);
+}
+while (outsideQueue.length) {
+  const node = outsideQueue.pop();
+  if (outsideNodes.has(node)) continue;
+  outsideNodes.add(node);
+  followOutside(node);
+}
+function reachedOutside(node) {
+  for (let current = node; current; current = current.parent) {
+    if (contextNodes.has(current)) return false;
+    if (outsideNodes.has(current)) return true;
+  }
+  return false;
+}
+
 const rows = [];
 for (const source of sources) {
   walk(source, (node) => {
-    if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression)) return;
-    const name = node.expression.text;
-    const isRead =
-      readOperations.has(name) ||
-      (name === "fetch" && fetchIsRead(node, source));
-    if (!isRead) return;
+    if (!ts.isCallExpression(node)) return;
+    const name = readName(node.expression);
+    if (!name || (name === "fetch" && !fetchIsRead(node, source))) return;
     const helper = enclosingFunctionName(node);
-    const where = insideContext(node) ? "query" : "other";
+    const where =
+      insideContext(node) && !reachedOutside(node) ? "query" : "other";
     const { line } = source.getLineAndCharacterOfPosition(
       node.getStart(source),
     );

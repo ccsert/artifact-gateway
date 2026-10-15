@@ -193,7 +193,10 @@ SDK operation that issues GET or HEAD, and each `fetch` without another
 method. The type checker follows names to their declarations, so a read
 counts as a query read when it runs in a `queryFn`, in an argument of a hook
 whose `queryFn` calls it (`useQuotaSnapshot`, `useDashboardResource`), or in
-code those reach (format listers through their registry).
+code those reach (format listers through their registry). SDK aliases and
+namespace calls resolve to their declarations. A helper also called by an
+ordinary action is listed outside queries, even if a query calls it too.
+Unknown fetch methods are conservatively treated as possible reads.
 
 ```sh
 node scripts/read-inventory.mjs          # summary and the reads outside queries
@@ -208,7 +211,8 @@ is not one of these exceptions, or when an exception no longer exists:
   browse tree (one node page at a time with retry and de-duplication) and the
   followed runtime log stream (gap detection, not a cached read).
 - **One step of an action.** A read the person's own action needs right
-  then: finding the Maven artifact id before deleting it, the publish session
+  then: finding the Maven artifact id before deleting it, exchanging credentials
+  for an OCI registry token (also shared with queries), the publish session
   while uploading, the `.crate` download, a proxy warm-up fetch, the APT
   snapshot export, current grants before applying a template or removing a
   user's access, and verifying a pasted token at sign-in.
@@ -216,3 +220,12 @@ is not one of these exceptions, or when an exception no longer exists:
 Explicit re-reads (refresh the latest version after a conflict) use
 `useExplicitRead`; reads opened on demand (a plan's progress, an access
 evaluation) are queries keyed by what was asked for.
+
+The quota editor retains its opening catalogue and cursor while the parent
+snapshot refreshes, preserving loaded choices and the draft. Explicit reads
+apply a result only while their query instance and component generation still
+match; cancellation cannot reapply a previous cached success.
+
+This list records the remaining non-query scope; it does not revise issue
+284's acceptance criterion. That issue remains open until the exception scope
+is explicitly accepted or the remaining reads are migrated.

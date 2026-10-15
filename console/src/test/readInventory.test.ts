@@ -26,6 +26,8 @@ const exceptions: Record<string, string> = {
   // Reads that are one step of an action the person started.
   "features/artifact-detail/MavenArtifactDetail.tsx#deleteCurrent":
     "finds the artifact id right before deleting it",
+  "features/artifact-detail/ociImageModel.ts#ociRegistryToken":
+    "exchanges credentials for a registry token, also immediately before deleting a manifest",
   "features/repository/MavenPublishWizard.tsx#uploadAll":
     "checks the publish session while uploading",
   "features/artifact-detail/CargoCrateDetail.tsx#download":

@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Query-backed editor reads preserve their opening repository catalogue, pagination cursor, selection and draft across panel refreshes, and cancelled explicit reads cannot reapply an old cached success. Access rechecks hide previous decisions while pending or failed, including a 403 that keeps the signed-in identity. Cancelling a replication plan invalidates its progress as well as the list. The read inventory follows SDK aliases and namespace calls and reports helpers shared by queries and ordinary actions; its remaining non-query scope still requires issue #284's acceptance decision.
+
 - The last management reads outside the shared query layer move onto it: the quota rule editor's extra repository pages, reloading an email target after a version conflict, a replication plan's progress and an access evaluation. A superseded evaluation can no longer replace a newer one, a failed plan read offers Retry, and the editor reads are cancelled when the editor closes. `scripts/read-inventory.mjs` lists every Gateway read and where it runs, and a unit test fails when a read runs outside a query without a listed reason (#284).
 
 - npm, PyPI, Go and Cargo package details read their protocol documents through the shared query layer: a superseded read is cancelled and can never replace the current package, a gateway failure is retried once while a refusal is final and never ends the session, refresh failures retain previously loaded content with Retry, Cargo download errors stay with their original package, and switching the interface language no longer re-reads the package. A unit test now fails when a component that runs effects calls `fetch` outside the documented exceptions (#284).

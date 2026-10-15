@@ -1,5 +1,5 @@
-import { useQuery, type QueryKey } from "@tanstack/react-query";
-import { useCallback, useRef } from "react";
+import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef } from "react";
 
 /**
  * A read that runs only when the person asks for it (a "refresh the latest
@@ -17,6 +17,7 @@ export function useExplicitRead<T>(
   read: (signal: AbortSignal) => Promise<T>,
   onError?: (error: unknown) => void,
 ) {
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey,
     queryFn: async ({ signal }) => {
@@ -33,14 +34,26 @@ export function useExplicitRead<T>(
     meta: { authFailure: "ignore" },
   });
   const generation = useRef(0);
+  const scope = queryClient.getQueryCache().find({ queryKey, exact: true });
+  useEffect(
+    () => () => {
+      ++generation.current;
+    },
+    [scope],
+  );
   const { refetch } = query;
   const run = useCallback(
     async (apply: (data: T) => void) => {
       const id = ++generation.current;
       const result = await refetch();
-      if (id === generation.current && result.isSuccess) apply(result.data);
+      if (
+        id === generation.current &&
+        queryClient.getQueryCache().find({ queryKey, exact: true }) === scope &&
+        result.isSuccess
+      )
+        apply(result.data);
     },
-    [refetch],
+    [queryClient, queryKey, refetch, scope],
   );
   return {
     busy: query.isFetching,

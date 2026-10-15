@@ -1,8 +1,16 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createRepositoryPromotion,
+  deleteRepositoryReplication,
   evaluateSecurityPolicy,
   listRepositories,
   listRepositoryArtifactIdentities,
@@ -457,4 +465,96 @@ it("opens a plan's progress, reports a failed read with Retry, and reads again",
       signal: expect.any(AbortSignal),
     }),
   );
+  await user.click(
+    within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }),
+  );
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  vi.mocked(getRepositoryReplication).mockResolvedValueOnce({
+    error: { status: 503, message: "Reopened progress unavailable" },
+  } as never);
+  await user.click(screen.getByRole("button", { name: /进\s*度/ }));
+  const reopened = within(await screen.findByRole("dialog"));
+  expect(
+    await reopened.findByText("Reopened progress unavailable"),
+  ).toBeInTheDocument();
+  expect(reopened.getByText("maven/widget-1.2.3.jar")).toBeInTheDocument();
+  await user.click(reopened.getByRole("button", { name: /重\s*试/ }));
+  await waitFor(() =>
+    expect(
+      reopened.queryByText("Reopened progress unavailable"),
+    ).not.toBeInTheDocument(),
+  );
 });
+
+it.each(["loaded", "pending"])(
+  "refreshes %s progress opened while cancelling a plan after the write completes",
+  async (readState) => {
+    const user = userEvent.setup();
+    const plan = {
+      id: "plan-cancel",
+      sourceRepositoryId: source.id,
+      targetRepositoryId: target.id,
+      format: "maven" as const,
+      coordinate,
+      digest: digestA,
+      state: "pending" as const,
+      createdAt: "2026-08-12T05:00:00Z",
+    };
+    mockListRepositories.mockResolvedValue({
+      data: { items: [source, target] },
+    } as never);
+    mockListRepositoryReplications.mockResolvedValue({ data: [plan] } as never);
+    let cancelled = false;
+    let finish!: (value: never) => void;
+    let finishDetail: ((value: never) => void) | undefined;
+    vi.mocked(deleteRepositoryReplication).mockImplementationOnce(
+      () =>
+        new Promise<never>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    vi.mocked(getRepositoryReplication).mockImplementation(async () => {
+      if (!cancelled && readState === "pending")
+        return new Promise<never>((resolve) => {
+          finishDetail = resolve;
+        });
+      return {
+        data: {
+          ...plan,
+          state: cancelled ? "cancelled" : "pending",
+          checkpoints: [],
+          lastError: cancelled ? "Cancellation confirmed" : undefined,
+        },
+      } as never;
+    });
+    render(
+      <TestQueryProvider>
+        <PreferencesProvider>
+          <RepositoryDistributionTab repo={source} />
+        </PreferencesProvider>
+      </TestQueryProvider>,
+    );
+    await user.click(await screen.findByRole("button", { name: /取\s*消/ }));
+    await user.click(screen.getByRole("button", { name: "确认取消" }));
+    await waitFor(() =>
+      expect(deleteRepositoryReplication).toHaveBeenCalledTimes(1),
+    );
+    await user.click(screen.getByRole("button", { name: /进\s*度/ }));
+    if (readState === "loaded") await screen.findByRole("dialog");
+    else await waitFor(() => expect(finishDetail).toBeDefined());
+    cancelled = true;
+    await act(async () => {
+      finish({} as never);
+    });
+    const confirmation = await within(
+      await screen.findByRole("dialog"),
+    ).findByText("Cancellation confirmed");
+    await waitFor(() => expect(confirmation).toBeVisible());
+    await act(async () => {
+      finishDetail?.({ data: { ...plan, checkpoints: [] } } as never);
+    });
+    expect(confirmation).toBeVisible();
+  },
+);

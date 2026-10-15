@@ -68,10 +68,13 @@ export function QuotaRuleEditor({
   const targetError =
     attempted && !targetId ? t("system.chooseAnEmailTarget") : undefined;
   const action = useQuotaAction(onAuthBlocked);
+  // One editor opening owns its catalogue and cursor. A panel refresh must
+  // not discard loaded options or restart pagination under a selected draft.
+  const [firstPage] = useState(() => ({ items: repositories, nextPageToken }));
   // Pages after the panel's first one, read only when asked for and dropped
   // with the editor; a denial blocks the panel like any other quota read.
   const more = useInfiniteQuery({
-    queryKey: quotaKeys.editorRepositories(nextPageToken ?? ""),
+    queryKey: quotaKeys.editorRepositories(firstPage.nextPageToken ?? ""),
     queryFn: async ({ pageParam, signal }) => {
       try {
         return quotaResult(
@@ -85,7 +88,7 @@ export function QuotaRuleEditor({
         throw cause;
       }
     },
-    initialPageParam: nextPageToken,
+    initialPageParam: firstPage.nextPageToken,
     getNextPageParam: (page) => page.nextPageToken || undefined,
     enabled: false,
     gcTime: 0,
@@ -101,11 +104,11 @@ export function QuotaRuleEditor({
           (repo) => !items.some((item) => item.id === repo.id),
         ),
       ],
-      repositories,
+      firstPage.items,
     ),
     nextPageToken: loadedPages.length
       ? loadedPages[loadedPages.length - 1].nextPageToken
-      : nextPageToken,
+      : firstPage.nextPageToken,
   };
   const moreError = more.isFetching ? undefined : (more.error ?? undefined);
   const moreBlocked = quotaBlocked(moreError, onAuthBlocked);

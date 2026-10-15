@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { repositoryKeys } from "../../lib/query/keys";
 import { deleteRepositoryReplication } from "../../client";
 import type {
   AptLifecyclePackage,
@@ -38,6 +40,7 @@ export function RepositoryDistributionTab({
   disabled?: boolean;
 }) {
   const { t } = usePreferences();
+  const queryClient = useQueryClient();
   // APT promotes and replicates into a named distribution suite.
   const suiteTarget = Boolean(formatDescriptor(repo.format)?.distributionSuite);
   // The same catalog read Access Control uses to name repositories.
@@ -70,7 +73,11 @@ export function RepositoryDistributionTab({
         return;
       }
       setNotice(t("repository.replicationPlanCanceledWorkersWillNotRetryIt"));
-      void plansQuery.refetch();
+      const queryKey = repositoryKeys.replicationPlans(repo.id);
+      // Even an initial detail read must be replaced after this write;
+      // invalidate alone can reuse an initial request with no cached data.
+      await queryClient.cancelQueries({ queryKey });
+      await queryClient.invalidateQueries({ queryKey });
     } catch (err) {
       setActionError(err);
     }
@@ -101,7 +108,7 @@ export function RepositoryDistributionTab({
         <ErrorBanner error={error} onRetry={() => void load()} />
       )}
       {actionError !== null && <ErrorBanner error={actionError} />}
-      {detailError && (
+      {detailError && !detail && (
         <ErrorBanner
           error={detailError}
           onRetry={() => void detailQuery.refetch()}
@@ -150,6 +157,12 @@ export function RepositoryDistributionTab({
       >
         {detail && (
           <div className="space-y-4">
+            {detailError && (
+              <ErrorBanner
+                error={detailError}
+                onRetry={() => void detailQuery.refetch()}
+              />
+            )}
             <div className="flex flex-wrap gap-4 text-xs text-fg-secondary">
               <span>
                 {t("repository.status2")}

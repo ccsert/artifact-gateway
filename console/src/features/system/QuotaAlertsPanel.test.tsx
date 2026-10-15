@@ -689,3 +689,73 @@ it("reports a failed repository page in the editor and reads it again on request
     await screen.findByRole("option", { name: "Second page repository" }),
   ).toBeInTheDocument();
 });
+
+it("keeps the editor's loaded catalogue, selection and draft across a panel refresh", async () => {
+  mocks.listRepositoryQuotaAlertRules.mockResolvedValue({ data: [] });
+  const repository = (id: string, name: string) => ({
+    id,
+    name,
+    state: "active",
+    type: "hosted",
+    format: "raw",
+  });
+  let refreshed = false;
+  mocks.listRepositories.mockImplementation(({ query }) =>
+    Promise.resolve({
+      data: query.pageToken
+        ? {
+            items: [repository("repo-b", "Second page repository")],
+            nextPageToken: "page-three",
+          }
+        : {
+            items: [repository("repo-a", "Synthetic Raw")],
+            nextPageToken: refreshed ? "new-page-two" : "page-two",
+          },
+    }),
+  );
+  mocks.createRepositoryQuotaAlertRule.mockResolvedValue({ data: rule });
+  mount();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "创建规则" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "加载更多仓库" }));
+  const picker = screen.getByRole("combobox", { name: "仓库" });
+  await userEvent.click(picker);
+  await userEvent.click(
+    await screen.findByRole("option", { name: "Second page repository" }),
+  );
+  await userEvent.click(screen.getByRole("combobox", { name: "邮件目标" }));
+  await userEvent.click(
+    await screen.findByRole("option", { name: /Synthetic operations/ }),
+  );
+  await fillPolicy();
+  refreshed = true;
+  await userEvent.click(screen.getByRole("button", { name: "刷新" }));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "创建停用规则" })).toBeEnabled(),
+  );
+  expect(picker.closest(".ant-select")).toHaveTextContent(
+    "Second page repository",
+  );
+  expect(screen.getByRole("textbox", { name: "警告阈值（%）" })).toHaveValue(
+    "80.01",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "加载更多仓库" }));
+  await waitFor(() =>
+    expect(mocks.listRepositories).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: { pageSize: 200, pageToken: "page-three" },
+      }),
+    ),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "创建停用规则" }));
+  await waitFor(() =>
+    expect(mocks.createRepositoryQuotaAlertRule).toHaveBeenCalledTimes(1),
+  );
+  expect(mocks.createRepositoryQuotaAlertRule.mock.calls[0][0].body).toEqual({
+    repositoryId: "repo-b",
+    targetId: "target-a",
+    enabled: false,
+    policy: { ...policy, warningBasisPoints: 8001 },
+  });
+});
