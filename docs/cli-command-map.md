@@ -13,7 +13,8 @@ use the same introspection for both views.
 This page classifies the full contract; it does not describe the installed
 binary. Apart from the #125 skeleton (`version`, `info`, `commands`) and the
 rows whose phase says `implemented` (the #130 repository and Group commands,
-the #131 artifact and format views, the #133 service account, credential,
+the #131 artifact and format views, the #132 Raw and Maven publishing
+commands, the #133 service account, credential,
 and API key commands, the #134 grant, role, template, access check, and
 anonymous-switch commands, the #335 user, session, and identity commands, and the read-only #135 audit, status,
 diagnostics, runtime-node and runtime-log, overview, and lifecycle-job
@@ -250,7 +251,7 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `PUT /groups/{groupId}/members`<br>`replaceGroupMembers` | `group members set <id>` | #130 | M1 implemented | G | C |
 | `GET /groups/{groupId}/capacity`<br>`getGroupCapacity` | `capacity show --group <id>` | #138 | M2 | A | Q |
 | `GET /groups/{groupId}/resolution`<br>`getGroupResolution` | `group resolution <id>` | #130 | M1 implemented | A | Q |
-| `POST /repositories/{repositoryId}/publish-sessions`<br>`createPublishSession` | `publish create --repo <id>` | #132 | M1 | W | U |
+| `POST /repositories/{repositoryId}/publish-sessions`<br>`createPublishSession` | `publish create --repo <id>` | #132 | M1 implemented | W | U |
 | `GET /repositories/{repositoryId}/artifacts`<br>`listArtifacts` | `artifact list --repo <id>` | #131 | M1 implemented | R* | Q |
 | `GET /repositories/{repositoryId}/artifact-usage`<br>`listRepositoryArtifactUsage` | `artifact usage --repo <id>` | #131 | M1 implemented | R* | Q |
 | `GET /repositories/{repositoryId}/artifact-search`<br>`searchRepositoryArtifacts` | `artifact search --repo <id>` | #131 | M1 implemented | R* | Q |
@@ -290,9 +291,9 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `GET /conan-publish-sessions/{sessionId}`<br>`getConanPublishSession` | not exposed: Conan session orchestration is outside the CLI M1 scope; native Conan publication is tracked by #312 | #132 / #312 | N/A | R | N |
 | `PUT /conan-publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadConanPublishObject` | not exposed: Conan session orchestration is outside the CLI M1 scope; native Conan publication is tracked by #312 | #132 / #312 | N/A | W | N |
 | `POST /conan-publish-sessions/{sessionId}:commit`<br>`commitConanPublishSession` | not exposed: Conan session orchestration is outside the CLI M1 scope; native Conan publication is tracked by #312 | #132 / #312 | N/A | W | N |
-| `GET /publish-sessions/{sessionId}`<br>`getPublishSession` | `publish status <session>` | #132 | M1 | R | U |
-| `PUT /publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadPublishObject` | `publish upload <session>` | #132 | M1 | W | U |
-| `POST /publish-sessions/{sessionId}:commit`<br>`commitPublishSession` | `publish commit <session>` | #132 | M1 | W | U |
+| `GET /publish-sessions/{sessionId}`<br>`getPublishSession` | `publish status <session>` | #132 | M1 implemented | R | U |
+| `PUT /publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadPublishObject` | `publish upload <session>` | #132 | M1 implemented | W | U |
+| `POST /publish-sessions/{sessionId}:commit`<br>`commitPublishSession` | `publish commit <session>` | #132 | M1 implemented | W | U |
 
 ## Additional protocol operations in the native bundle
 
@@ -306,7 +307,7 @@ paths are not the Nexus management REST API.
 | --- | --- | --- | --- | --- | --- |
 | `GET /raw/{repository}/{path}`<br>`readRawContent` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `HEAD /raw/{repository}/{path}`<br>`headRawContent` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
-| `PUT /raw/{repository}/{path}`<br>`putRawHostedContent` | publish raw upload | #132 | M1 | W | U: size/digest plus conflict and read-back |
+| `PUT /raw/{repository}/{path}`<br>`putRawHostedContent` | `publish raw` | #132 | M1 implemented | W | U: size/digest plus conflict and read-back |
 | `POST /raw/{repository}/{path}`<br>`startRawHostedResumableUpload` | `publish raw resumable` adapter | #132 | M2 | W | U: offset/digest and interrupted replay |
 | `PATCH /raw/{repository}/{path}`<br>`appendRawHostedResumableUpload` | `publish raw resumable` adapter | #132 | M2 | W | U: offset/digest and interrupted replay |
 | `DELETE /raw/{repository}/{path}`<br>`deleteRawHostedContent` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |

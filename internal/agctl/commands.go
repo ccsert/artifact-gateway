@@ -129,6 +129,12 @@ func registry() []command {
 		userIdentitiesListCommand(),
 		userIdentitiesLinkCommand(),
 		userIdentitiesUnlinkCommand(),
+		publishRawCommand(),
+		publishCreateCommand(),
+		publishUploadCommand(),
+		publishCommitCommand(),
+		publishStatusCommand(),
+		publishMavenCommand(),
 	}
 }
 

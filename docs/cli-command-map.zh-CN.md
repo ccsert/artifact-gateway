@@ -9,7 +9,7 @@
 
 本页是对完整契约的归类，不是对已安装二进制的描述。除 #125 骨架（`version`、
 `info`、`commands`）和阶段列标为 `implemented` 的行（#130 的仓库与 Group 命令、
-#131 的制品与格式视图、#133 的服务账号、凭据与 API key 命令、#134 的授权、角色、
+#131 的制品与格式视图、#132 的 Raw 与 Maven 发布命令、#133 的服务账号、凭据与 API key 命令、#134 的授权、角色、
 模板、访问检查与匿名开关命令、#335 的用户、会话与身份命令，以及
 #135 的只读审计、status、诊断、运行节点与运行日志、概览和生命周期任务命令，均由 `make cli-e2e` 在真实 Gateway 上验收）外，
 全部为计划，不宣称已实现；只有注册命令、文档/测试和真实 Gateway 验收齐备，
@@ -206,7 +206,7 @@ server base）。计划命令省略前导 `agctl`。
 | `PUT /groups/{groupId}/members`<br>`replaceGroupMembers` | `group members set <id>` | #130 | M1 implemented | G | C |
 | `GET /groups/{groupId}/capacity`<br>`getGroupCapacity` | `capacity show --group <id>` | #138 | M2 | A | Q |
 | `GET /groups/{groupId}/resolution`<br>`getGroupResolution` | `group resolution <id>` | #130 | M1 implemented | A | Q |
-| `POST /repositories/{repositoryId}/publish-sessions`<br>`createPublishSession` | `publish create --repo <id>` | #132 | M1 | W | U |
+| `POST /repositories/{repositoryId}/publish-sessions`<br>`createPublishSession` | `publish create --repo <id>` | #132 | M1 implemented | W | U |
 | `GET /repositories/{repositoryId}/artifacts`<br>`listArtifacts` | `artifact list --repo <id>` | #131 | M1 implemented | R* | Q |
 | `GET /repositories/{repositoryId}/artifact-usage`<br>`listRepositoryArtifactUsage` | `artifact usage --repo <id>` | #131 | M1 implemented | R* | Q |
 | `GET /repositories/{repositoryId}/artifact-search`<br>`searchRepositoryArtifacts` | `artifact search --repo <id>` | #131 | M1 implemented | R* | Q |
@@ -246,9 +246,9 @@ server base）。计划命令省略前导 `agctl`。
 | `GET /conan-publish-sessions/{sessionId}`<br>`getConanPublishSession` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生 Conan 发布由 #312 跟踪 | #132 / #312 | N/A | R | N |
 | `PUT /conan-publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadConanPublishObject` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生 Conan 发布由 #312 跟踪 | #132 / #312 | N/A | W | N |
 | `POST /conan-publish-sessions/{sessionId}:commit`<br>`commitConanPublishSession` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生 Conan 发布由 #312 跟踪 | #132 / #312 | N/A | W | N |
-| `GET /publish-sessions/{sessionId}`<br>`getPublishSession` | `publish status <session>` | #132 | M1 | R | U |
-| `PUT /publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadPublishObject` | `publish upload <session>` | #132 | M1 | W | U |
-| `POST /publish-sessions/{sessionId}:commit`<br>`commitPublishSession` | `publish commit <session>` | #132 | M1 | W | U |
+| `GET /publish-sessions/{sessionId}`<br>`getPublishSession` | `publish status <session>` | #132 | M1 implemented | R | U |
+| `PUT /publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadPublishObject` | `publish upload <session>` | #132 | M1 implemented | W | U |
+| `POST /publish-sessions/{sessionId}:commit`<br>`commitPublishSession` | `publish commit <session>` | #132 | M1 implemented | W | U |
 
 ## 原生 bundle 中的附加协议操作
 
@@ -260,7 +260,7 @@ server base）。计划命令省略前导 `agctl`。
 | --- | --- | --- | --- | --- | --- |
 | `GET /raw/{repository}/{path}`<br>`readRawContent` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `HEAD /raw/{repository}/{path}`<br>`headRawContent` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
-| `PUT /raw/{repository}/{path}`<br>`putRawHostedContent` | publish raw upload | #132 | M1 | W | U：大小/摘要与冲突/回读 |
+| `PUT /raw/{repository}/{path}`<br>`putRawHostedContent` | `publish raw` | #132 | M1 implemented | W | U：大小/摘要与冲突/回读 |
 | `POST /raw/{repository}/{path}`<br>`startRawHostedResumableUpload` | publish raw resumable 适配 | #132 | M2 | W | U：offset/摘要/中断重放 |
 | `PATCH /raw/{repository}/{path}`<br>`appendRawHostedResumableUpload` | publish raw resumable 适配 | #132 | M2 | W | U：offset/摘要/中断重放 |
 | `DELETE /raw/{repository}/{path}`<br>`deleteRawHostedContent` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |

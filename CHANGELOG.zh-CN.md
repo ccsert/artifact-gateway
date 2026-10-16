@@ -8,6 +8,10 @@
 
 ## Unreleased
 
+- `agctl` 在上传前核对 Maven 会话响应的仓库与声明文件；提交响应丢失时，只接受目标会话的完整回读作为成功证据。响应损坏或身份不符时保留幂等键或会话回读路径并报告未知结果。上传重试期间源文件不可读时也保留先前未知状态，部分失败的恢复提示要求保留原目标和文件参数。
+
+- `agctl` 新增制品发布与登录到私有文件（#132、#129、#140）。`publish raw` 把文件或目录树上传到 Raw Hosted 仓库，在本地计算 SHA-256 并交由 Gateway 校验，仓库中已有相同摘要的对象会跳过，以有限并发流式上传，逐个报告对象的规范坐标，任一对象未确认时退出码 3；重跑是安全的。`publish maven` 在幂等键下通过发布会话发布一个 Maven 坐标（同一 key 可续传，已提交的会话不会被重复使用），并提供 `publish create|upload|commit|status` 分步命令；提交响应丢失时通过回读会话确认。`auth login --secret-output FILE` 把会话 token 写入新的私有文件而不是 profile。请求路径只转义一次，带空格的 Raw 名称保持规范坐标。agent skill `.agents/skills/agctl/SKILL.md` 说明机器契约以及 CI 和管理菜谱，其中出现客户端没有的命令、参数或参数个数时单元测试会失败。命令映射守卫改为按原生协议行自身的路径核对。
+
 - Console 区块重试在刷新数据送达组件后恢复渲染，避免旧响应再次抛错并短暂闪回失败提示。
 
 - 管理 API 契约现在记录 Conan 发布会话路由：`POST /repositories/{repositoryId}/conan-publish-sessions`（请求体 `CreateConanPublishSession`：`kind` 为 `recipe` 或 `package`，以及 `reference`、`recipeRevision`、`packageId`、`packageRevision`、`objects`；201 返回 `PublishSession`）、`GET /conan-publish-sessions/{sessionId}`、`PUT /conan-publish-sessions/{sessionId}/objects/{objectName}`（204）与 `POST /conan-publish-sessions/{sessionId}:commit`（200 返回含 `state` 和 `revision` 的 `ConanPublishCommit`）。Console 生成客户端随之获得这些类型。这些路由现在经过生成的管理路由，格式错误的会话 ID 返回 400 而不是 404，创建请求体与其他管理接口共用 1 MiB JSON 上限；对象上传不受该上限限制。

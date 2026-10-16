@@ -114,7 +114,14 @@ export function managementEndpoint(row) {
   return `${row.method} /api/v2${row.path}`;
 }
 
-function findImplementationIssues(englishMap, registeredCommands) {
+// declaredEndpoint is how a command names a row's operation: management
+// operations live under /api/v2, native protocol operations at their own
+// paths.
+function declaredEndpoint(row, nativeOperationIds) {
+  return nativeOperationIds.has(row.operationId) ? `${row.method} ${row.path}` : managementEndpoint(row);
+}
+
+function findImplementationIssues(englishMap, registeredCommands, nativeOperationIds = new Set()) {
   const issues = [];
   const byCommand = new Map();
   const endpointsKnown = registeredCommands instanceof Map;
@@ -129,7 +136,7 @@ function findImplementationIssues(englishMap, registeredCommands) {
       continue;
     }
     if (endpointsKnown) {
-      const endpoint = managementEndpoint(row);
+      const endpoint = declaredEndpoint(row, nativeOperationIds);
       if (!registeredCommands.get(command).has(endpoint)) {
         issues.push({
           kind: 'implemented-endpoint-undeclared',
@@ -237,7 +244,13 @@ export function findContractDrift({ managementOperations, nativeOperations, engl
     }
   }
 
-  issues.push(...findImplementationIssues(englishMap, registeredCommands));
+  // The native bundle repeats the management operations it shares; only the
+  // ones the management bundle lacks are protocol paths outside /api/v2.
+  const managementIds = new Set(managementOperations.map((operation) => operation.operationId));
+  const nativeOperationIds = new Set(
+    nativeOperations.map((operation) => operation.operationId).filter((id) => id && !managementIds.has(id)),
+  );
+  issues.push(...findImplementationIssues(englishMap, registeredCommands, nativeOperationIds));
 
   return issues;
 }

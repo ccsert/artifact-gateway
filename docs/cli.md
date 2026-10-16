@@ -282,8 +282,11 @@ Exchanges a local username and password for a session token (`POST
 /auth/login`) and stores the token in an explicitly selected profile. The
 password comes from bounded stdin (`--password-stdin`); missing, empty, or
 oversized input exits 2 before any request. Without `--profile` (or
-`AGCTL_PROFILE`) the command refuses to store the token: it offers no
-`--secret-output` destination, and the client never prints a token. A profile already bound to a different server is refused before the
+`AGCTL_PROFILE`) the command refuses to store the token unless
+`--secret-output FILE` names a new private file for it instead (the same
+rules as every one-time secret: checked before the request, mode 0600, never
+overwritten, never printed; `--profile` and `--secret-output` exclude each
+other). The client never prints a token. A profile already bound to a different server is refused before the
 request (`--server` or `AGCTL_SERVER` overrides included), and a profile
 without a server is bound to the actual login target when the token is
 stored, so a token is never sent to the wrong deployment later. When the
@@ -695,6 +698,40 @@ no repository access by itself — repository access comes from grants
   linking needs the issuer configured on the Gateway, and unlinking needs
   `--yes`.
 
+### Publishing
+
+- `agctl publish raw SOURCE --repo ID [--to PATH_OR_PREFIX]` uploads a file,
+  or every regular file of a directory tree (links are not followed), to a
+  Raw hosted repository with `PUT /raw/{repository}/{path}`. Each object's
+  SHA-256 is computed locally and sent as the `Digest` header, so the Gateway
+  verifies the bytes, and the answer's ETag must name the same digest or the
+  object is reported `unknown`. Objects whose repository copy already has the
+  same digest are `skipped` (a `HEAD` read; `--force` uploads them anyway),
+  so re-running after a partial failure is safe. Uploads run `--parallel`
+  at a time (default 4) and stream from disk; a 1 GiB object limit applies.
+  Results list every object with its `path`, canonical `coordinate` (each
+  segment escaped like Go's `url.PathEscape`, as search reports it), size,
+  digest, and status; any `failed` or `unknown` object exits 3. A Raw PUT
+  replaces whatever the path held: there is no conditional write yet.
+- `agctl publish maven --repo ID --coordinate G:A:V --pom FILE [--file
+  FILE]…` publishes one Maven coordinate through a publish session: it
+  declares every file with its size and digest under an `Idempotency-Key`,
+  uploads them, and commits. Re-running with the same `--idempotency-key`
+  resumes the same open session; a committed session is never reused (exit
+  7). The steps are also separate commands: `agctl publish create`,
+  `agctl publish upload SESSION --file …`, `agctl publish commit SESSION`, and
+  `agctl publish status SESSION`. Uploads are content-addressed and retried;
+  the commit is not retried (a repeat answers 409), and a lost commit answer
+  is settled by reading the session back: `committed` confirms it.
+- Other formats publish with their native clients; `agctl repo connect`
+  prints their configuration.
+
+### Agent skill
+
+`.agents/skills/agctl/SKILL.md` teaches agents the machine contract and the
+CI and administration recipes. A unit test fails when the skill names a
+command, flag, or argument count the client does not have.
+
 ## Verification
 
 - `go test ./internal/agctl/...` runs offline against in-process fakes:
@@ -732,7 +769,12 @@ no repository access by itself — repository access comes from grants
   access with its grant; an API key is created and revoked; a pending user
   becomes a member without repository access until granted, its session is
   ended and rejected, its password reset from a file, and the user deleted;
-  no token or password may appear in any output. It also checks the exit codes for a wrong token (5), a missing
+  no token or password may appear in any output. Publishing uploads a Raw
+  tree (dry run, upload, skip on re-run, re-upload of the changed file only,
+  byte-for-byte read-back, canonical coordinates in search) and publishes two
+  Maven coordinates through sessions (orchestrated and step by step, with a
+  committed session refused and a repeated commit answering 409); a user signs
+  in with `auth login --secret-output` and uses the token. It also checks the exit codes for a wrong token (5), a missing
   repository (4), invalid input (2), and conflicts (7).
 - `make cli-contract-check` verifies that the command map classifies every
   contract operation and that each row marked `implemented` names a

@@ -49,6 +49,12 @@ type requestOptions struct {
 	// Every attempt of one call sends the same values, so a retried write
 	// reuses its idempotency key.
 	header http.Header
+	// stream, when set, sends a binary body instead of JSON: it is opened
+	// again for every attempt, so a retry resends the same bytes without
+	// holding the whole file in memory. length and contentType describe it.
+	stream      func() (io.ReadCloser, error)
+	length      int64
+	contentType string
 }
 
 type apiResponse struct {
@@ -150,9 +156,18 @@ func newAPIClient(settings profileSettings, options clientOptions) (*apiClient, 
 	}, nil
 }
 
+// resolveURL joins an API path to the server URL. The path is already
+// escaped by its caller (segments pass through url.PathEscape), so it is
+// kept as the raw path instead of being escaped a second time.
 func (c *apiClient) resolveURL(path string, query url.Values) *url.URL {
 	target := *c.baseURL
-	target.Path = strings.TrimSuffix(target.Path, "/") + path
+	base := strings.TrimSuffix(target.EscapedPath(), "/")
+	escaped := base + path
+	if unescaped, err := url.PathUnescape(escaped); err == nil {
+		target.Path, target.RawPath = unescaped, escaped
+	} else {
+		target.Path, target.RawPath = strings.TrimSuffix(target.Path, "/")+path, ""
+	}
 	if len(query) > 0 {
 		target.RawQuery = query.Encode()
 	}
@@ -187,13 +202,37 @@ func (c *apiClient) do(ctx context.Context, method, path string, options request
 		if options.body != nil {
 			payload = bytes.NewReader(options.body)
 		}
+		if options.stream != nil {
+			reader, err := options.stream()
+			if err != nil {
+				if attempt > 0 {
+					return nil, &ConnectionError{
+						Message: "cannot reopen the upload after an earlier request: " + redactText(err.Error(), c.token),
+						Hint:    "the earlier upload may have been applied; restore the same source bytes and retry the original command",
+					}
+				}
+				return nil, &UsageError{Message: "cannot read the upload: " + redactText(err.Error(), c.token)}
+			}
+			payload = reader
+		}
 		request, err := http.NewRequestWithContext(ctx, method, requestURL.String(), payload)
 		if err != nil {
+			if closer, ok := payload.(io.Closer); ok && options.stream != nil {
+				_ = closer.Close()
+			}
 			return nil, &UsageError{Message: "cannot build HTTP request: " + redactText(err.Error(), c.token)}
 		}
 		request.Header.Set("Accept", "application/json")
 		if options.body != nil {
 			request.Header.Set("Content-Type", "application/json")
+		}
+		if options.stream != nil {
+			request.ContentLength = options.length
+			contentType := options.contentType
+			if contentType == "" {
+				contentType = "application/octet-stream"
+			}
+			request.Header.Set("Content-Type", contentType)
 		}
 		for name, values := range options.header {
 			request.Header[http.CanonicalHeaderKey(name)] = append([]string(nil), values...)
