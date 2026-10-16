@@ -231,12 +231,14 @@ func TestParsePathRoutesDistTagEndpoints(t *testing.T) {
 }
 
 func TestValidDistTagRejectsVersionLikeNames(t *testing.T) {
-	for _, tag := range []string{"latest", "next", "beta", "release-2026", "lts.x", "v-next"} {
+	// npm's semver.validRange returns null for these ordinary tags, including
+	// digit-prefixed names and prerelease-like names without a full version.
+	for _, tag := range []string{"latest", "next", "beta", "release-2026", "lts.x", "v-next", "2026-release", "2026-10-16", "1-canary", "v1-release", "1.2-beta", "V2.0.0", "*foo", "x-beta", "9007199254740991"} {
 		if !ValidDistTag(tag) {
 			t.Fatalf("tag %q was rejected", tag)
 		}
 	}
-	for _, tag := range []string{"", "1.2.3", "1", "v1", "V2.0.0", "^1.0.0", "~1", ">=1", "<2", "=1.0.0", "*", "x", "X", "a b", " latest", "a/b", "a\\b", strings.Repeat("a", 129)} {
+	for _, tag := range []string{"", "1.2.3", "1", "v1", "^1.0.0", "~1", ">=1", "<2", "=1.0.0", "*", "x", "X", "x.x", "x.1", "v*", "vX.X", "1.2.x", "1.2.3-beta", "^preview", ">next", "=beta", "a b", " latest", "a/b", "a\\b", strings.Repeat("a", 129)} {
 		if ValidDistTag(tag) {
 			t.Fatalf("tag %q was accepted", tag)
 		}

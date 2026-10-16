@@ -226,6 +226,66 @@ func TestNativeNPMDistTagsRefuseInvalidTargetsAndCallers(t *testing.T) {
 	}
 }
 
+func TestNativeNPMDistTagsPreserveOrdinaryVersionLikeNames(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "npm-ordinary-tags", Format: repository.FormatNPM})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	publishNPMDistTagHTTPFixture(t, handler, repo.Name, "widget", "1.0.0", map[string]string{"latest": "1.0.0"})
+	path := "/npm/" + repo.Name + "/-/package/widget/dist-tags"
+	for _, tag := range []string{"2026-release", "2026-10-16", "1-canary", "v1-release", "1.2-beta", "V2.0.0"} {
+		if response := npmDistTagRequest(t, handler, http.MethodPut, path+"/"+tag, "resolver-secret", `"1.0.0"`); response.Code != http.StatusOK {
+			t.Fatalf("add ordinary tag %q=%d %s", tag, response.Code, response.Body.String())
+		}
+		if tags := decodeNPMDistTags(t, npmDistTagRequest(t, handler, http.MethodGet, path, "resolver-secret", "")); tags[tag] != "1.0.0" {
+			t.Fatalf("ordinary tag %q missing: %v", tag, tags)
+		}
+		if response := npmDistTagRequest(t, handler, http.MethodDelete, path+"/"+tag, "resolver-secret", ""); response.Code != http.StatusOK {
+			t.Fatalf("remove ordinary tag %q=%d %s", tag, response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestNativeNPMGroupDistTagWritesRequirePackageWritePermission(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "npm-tag-permissions", Format: repository.FormatNPM})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	publishNPMDistTagHTTPFixture(t, handler, repo.Name, "widget", "1.0.0", map[string]string{"latest": "1.0.0", "beta": "1.0.0"})
+	createV2Group(t, store, "npm-tag-permissions-group", repository.FormatNPM, repository.GroupMember{RepositoryID: repo.ID, Position: 0})
+	if _, err = store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{
+		{Principal: "tag-reader", Scopes: []string{"repositories:read"}},
+		{Principal: "tag-writer", Scopes: []string{"repositories:read", "repositories:write"}, ResourcePrefix: "widget"},
+		{Principal: "other-writer", Scopes: []string{"repositories:read", "repositories:write"}, ResourcePrefix: "other"},
+	}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	path := "/npm/npm-tag-permissions-group/-/package/widget/dist-tags"
+	reader := testAuthenticator().IssueToken("tag-reader")
+	if tags := decodeNPMDistTags(t, npmDistTagRequest(t, handler, http.MethodGet, path, reader, "")); tags["beta"] != "1.0.0" {
+		t.Fatalf("reader tags=%v", tags)
+	}
+	for _, method := range []string{http.MethodPut, http.MethodDelete} {
+		for _, tc := range []struct {
+			actor  string
+			status int
+		}{{"tag-reader", http.StatusForbidden}, {"other-writer", http.StatusForbidden}, {"tag-writer", http.StatusMethodNotAllowed}} {
+			response := npmDistTagRequest(t, handler, method, path+"/beta", testAuthenticator().IssueToken(tc.actor), `"1.0.0"`)
+			if response.Code != tc.status {
+				t.Errorf("%s as %s=%d, want %d; body=%s", method, tc.actor, response.Code, tc.status, response.Body.String())
+			}
+		}
+	}
+	if tags := decodeNPMDistTags(t, npmDistTagRequest(t, handler, http.MethodGet, path, reader, "")); tags["beta"] != "1.0.0" {
+		t.Fatalf("refused writes changed tags=%v", tags)
+	}
+}
+
 func TestNativeNPMDistTagsProxyAndGroupAreReadOnly(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
@@ -270,6 +330,13 @@ func TestNativeNPMDistTagsProxyAndGroupAreReadOnly(t *testing.T) {
 	// The first member that defines a tag is authoritative for it.
 	if len(groupTags) != 3 || groupTags["latest"] != "1.0.0" || groupTags["beta"] != "1.0.0" || groupTags["rc"] != "2.0.0" {
 		t.Fatalf("group tags=%v", groupTags)
+	}
+	// Unsupported Group writes are tested with an actual member writer;
+	// readers receive 403 before the route's read-only 405 response.
+	for _, member := range []repository.HostedRepository{primary, secondary} {
+		if _, err = store.ReplaceRepositoryGrants(ctx, member.ID, []repository.RepositoryGrant{{Principal: "build-agent", Scopes: []string{"repositories:read", "repositories:write"}}}, "1"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	for _, path := range []string{"/npm/" + proxy.Name + "/-/package/widget/dist-tags/beta", "/npm/npm-tag-group/-/package/widget/dist-tags/beta"} {
 		for _, method := range []string{http.MethodPut, http.MethodDelete} {

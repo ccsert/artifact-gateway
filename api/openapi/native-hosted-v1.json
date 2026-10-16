@@ -4837,7 +4837,7 @@
           "name": "tag",
           "in": "path",
           "required": true,
-          "description": "Dist-tag name. Names that read as a SemVer version or range (a leading digit, `v<digit>`, or a range operator) are refused so `<pkg>@<tag>` stays unambiguous.\n",
+          "description": "Dist-tag name. Names that parse as an npm SemVer range, including wildcard forms such as x.x, x.1, and v*, are refused. A digit prefix alone is allowed: 2026-release, 2026-10-16, 1-canary, and v1-release remain ordinary tags so `<pkg>@<tag>` stays unambiguous.\n",
           "schema": {
             "type": "string",
             "minLength": 1,

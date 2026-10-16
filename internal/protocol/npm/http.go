@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/url"
 	"path"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -106,20 +108,59 @@ func parseDistTagsPath(repositoryName, rest string) (Route, bool) {
 }
 
 // ValidDistTag accepts the dist-tag names the publish document already admits
-// and, like the npm CLI, refuses names that read as a version or range so
-// `npm install <name>@<tag>` stays unambiguous.
+// and, like the npm CLI's semver.validRange check, refuses version ranges.
 func ValidDistTag(tag string) bool {
-	if tag == "" || len(tag) > 128 || strings.TrimSpace(tag) != tag || strings.ContainsAny(tag, "/\\\x00 \t\r\n") {
+	if tag == "" || len(tag) > 128 || strings.TrimSpace(tag) != tag || strings.ContainsAny(tag, "/\\\x00 \t\r\n<>=^|") {
 		return false
 	}
-	first := tag[0]
-	if first >= '0' && first <= '9' || strings.IndexByte("<>=~^*|", first) >= 0 {
+	return !npmDistTagIsRange(tag)
+}
+
+// Range operators other than ~ are not legal tag characters and are rejected
+// above. The remaining npm ranges are single versions, x-ranges, and tildes.
+// Unlike a numeric-prefix heuristic, npm's strict range grammar keeps names
+// such as 2026-release and 1.2-beta available as tags.
+// A prerelease suffix needs all three version components; wildcard components
+// (including x.x, x.1, and v*) remain ranges. Uppercase V is an ordinary tag.
+var npmDistTagRange = regexp.MustCompile(`^(~?)(v*)(0|[1-9][0-9]*|[xX*])(?:\.(0|[1-9][0-9]*|[xX*])(?:\.(0|[1-9][0-9]*|[xX*])(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?)?)?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$`)
+
+func npmDistTagIsRange(tag string) bool {
+	parts := npmDistTagRange.FindStringSubmatch(tag)
+	if parts == nil || parts[6] != "" && !validIdentifiers(parts[6], true) {
 		return false
 	}
-	if (first == 'v' || first == 'V' || first == '=') && len(tag) > 1 && tag[1] >= '0' && tag[1] <= '9' {
+	wildcard := 3
+	var numbers [3]uint64
+	for index, component := range parts[3:6] {
+		if component == "" || strings.ContainsAny(component, "xX*") {
+			wildcard = min(wildcard, index)
+		}
+		if index < wildcard {
+			// node-semver bounds numeric components to JavaScript's safe integers.
+			value, err := strconv.ParseUint(component, 10, 53)
+			if err != nil {
+				return false
+			}
+			numbers[index] = value
+		}
+	}
+	if wildcard == 3 && parts[1] == "" && parts[2] != "" && parts[2] != "v" {
 		return false
 	}
-	return !strings.EqualFold(tag, "x")
+	// Expanding a partial range can overflow npm's numeric bound even
+	// though the literal component fits (for example 9007199254740991).
+	increment := -1
+	if wildcard > 0 {
+		if parts[1] == "~" {
+			increment = min(wildcard-1, 1)
+		} else if wildcard < 3 {
+			increment = wildcard - 1
+		}
+	}
+	if increment >= 0 && numbers[increment] == 1<<53-1 {
+		return false
+	}
+	return true
 }
 
 func ValidPackageName(name string) bool {

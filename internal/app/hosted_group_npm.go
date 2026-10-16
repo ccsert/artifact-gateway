@@ -74,7 +74,11 @@ func (h v2GroupNPMHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 	if isAnonymous(principal) {
 		members = anonymousHostedGroupMembers(group, members)
 	}
-	members, denied := resolver.authorizeRepositoryMembers(r.Context(), principal, group.Name, repository.FormatNPM, route.Package, members)
+	operation := RepositoryRead
+	if route.Kind == npmprotocol.RouteDistTags && route.Tag != "" && isNPMWriteMethod(r.Method) {
+		operation = RepositoryWrite
+	}
+	members, denied := resolver.authorizeRepositoryMembers(r.Context(), principal, group.Name, repository.FormatNPM, route.Package, members, operation)
 	if denied && len(members) == 0 {
 		h.native.challenge(w, http.StatusForbidden, "repository permission required")
 		return

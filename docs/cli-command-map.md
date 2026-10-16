@@ -298,13 +298,17 @@ the contract's server base. Planned commands omit the leading `agctl`.
 ## Additional protocol operations in the native bundle
 
 Management operations repeat in the native bundle and reuse the table above;
-they are not implemented twice. The 39 additional operations below are
+they are not implemented twice. The 43 additional operations below are
 classified one by one. Native URLs follow each protocol's server override and
 real routes and must not be joined to `/api/v2` blindly. Nexus-compatible data
 paths are not the Nexus management REST API.
 
 | Protocol API / operationId | Planned command / handling | Owning issue | Phase | Permission | Acceptance |
 | --- | --- | --- | --- | --- | --- |
+| `GET /npm/{repository}/-/package/{package}/dist-tags`<br>`listNPMDistTags` | native npm client manages dist-tags; agctl does not orchestrate this protocol action | #308 | N/A | native-format authorization | N: npm dist-tag owns this action; no separate agctl command |
+| `HEAD /npm/{repository}/-/package/{package}/dist-tags`<br>`headNPMDistTags` | native npm client manages dist-tags; agctl does not orchestrate this protocol action | #308 | N/A | native-format authorization | N: npm dist-tag owns this action; no separate agctl command |
+| `PUT /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`setNPMDistTag` | native npm client manages dist-tags; agctl does not orchestrate this protocol action | #308 | N/A | native-format authorization | N: npm dist-tag owns this action; no separate agctl command |
+| `DELETE /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`deleteNPMDistTag` | native npm client manages dist-tags; agctl does not orchestrate this protocol action | #308 | N/A | native-format authorization | N: npm dist-tag owns this action; no separate agctl command |
 | `GET /raw/{repository}/{path}`<br>`readRawContent` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `HEAD /raw/{repository}/{path}`<br>`headRawContent` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `PUT /raw/{repository}/{path}`<br>`putRawHostedContent` | `publish raw` | #132 | M1 implemented | W | U: size/digest plus conflict and read-back |
