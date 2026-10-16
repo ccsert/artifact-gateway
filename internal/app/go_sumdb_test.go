@@ -17,8 +17,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/egress"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/egress"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 	"golang.org/x/mod/sumdb"
 	"golang.org/x/mod/sumdb/dirhash"

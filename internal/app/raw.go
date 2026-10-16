@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/egress"
-	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
-	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
+	"github.com/ccsert/artifact-gateway/internal/egress"
+	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
+	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/requestcontext"
 	"github.com/google/uuid"
 )
 

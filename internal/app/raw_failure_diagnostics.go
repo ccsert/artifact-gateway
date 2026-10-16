@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
+	"github.com/ccsert/artifact-gateway/internal/operationalog"
 )
 
 type rawFailureContextKey struct{}

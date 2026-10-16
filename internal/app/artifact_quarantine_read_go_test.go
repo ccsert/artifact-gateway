@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // publishQuarantineReadGoVersion publishes one Hosted module version and

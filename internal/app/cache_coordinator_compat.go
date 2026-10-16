@@ -1,6 +1,6 @@
 package app
 
-import cache "github.com/artifact-gateway/artifact-gateway/internal/cache"
+import cache "github.com/ccsert/artifact-gateway/internal/cache"
 
 // Compatibility aliases retain the app composition surface while cache
 // coordination is owned by its protocol-independent module.

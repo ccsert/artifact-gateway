@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/config"
-	"github.com/artifact-gateway/artifact-gateway/internal/database"
+	"github.com/ccsert/artifact-gateway/internal/config"
+	"github.com/ccsert/artifact-gateway/internal/database"
 )
 
 type checkerFunc func(context.Context) error

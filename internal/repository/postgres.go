@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/database"
+	"github.com/ccsert/artifact-gateway/internal/database"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 

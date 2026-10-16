@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func newConditionalRawHandler(t *testing.T) (*repository.MemoryStore, func(method, path string, body []byte, headers map[string]string) *httptest.ResponseRecorder) {

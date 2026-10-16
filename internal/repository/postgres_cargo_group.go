@@ -6,7 +6,7 @@ import (
 	"errors"
 	"sort"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/protocol/cargo"
+	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
 )
 
 func (s *PostgresStore) ReconcileCargoGroupIndex(ctx context.Context, groupID, name string, candidates []CargoGroupVersion) ([]CargoGroupVersion, error) {

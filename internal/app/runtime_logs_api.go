@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
-	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
+	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/operationalog"
 )
 
 // ListRuntimeLogs only reads this process's bounded memory buffer. A caller

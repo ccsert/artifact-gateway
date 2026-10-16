@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
+	"github.com/ccsert/artifact-gateway/internal/requestcontext"
 )
 
 func (s *PostgresStore) RecordAudit(ctx context.Context, audit AuditRecord) error {

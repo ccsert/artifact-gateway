@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 )
 
 // ErrQuotaExceeded means a valid upstream response cannot be retained because

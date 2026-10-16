@@ -11,7 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
+	rawmaintenance "github.com/ccsert/artifact-gateway/internal/maintenance/raw"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/replication"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/replication"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // MavenReplication publishes target-owned assets only after every source asset

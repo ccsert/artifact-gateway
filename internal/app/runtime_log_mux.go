@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
+	"github.com/ccsert/artifact-gateway/internal/operationalog"
 )
 
 // runtimeLogMux records only server registrations. Request paths and mutable

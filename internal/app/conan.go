@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/egress"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/egress"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // ConanClient is deliberately narrower than a generic HTTP client: client

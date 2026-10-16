@@ -12,8 +12,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/app"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/app"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 

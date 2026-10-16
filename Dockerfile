@@ -14,12 +14,12 @@ RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=loc
 RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=artifact-gateway-go-build,target=/root/.cache/go-build,sharing=locked \
     CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath -buildvcs=false \
-    -ldflags="-s -w -X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedVersion=$VERSION -X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedRevision=$REVISION" \
+    -ldflags="-s -w -X github.com/ccsert/artifact-gateway/internal/buildinfo.injectedVersion=$VERSION -X github.com/ccsert/artifact-gateway/internal/buildinfo.injectedRevision=$REVISION" \
     -o /gateway ./cmd/gateway
 RUN --mount=type=cache,id=artifact-gateway-go-mod,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=artifact-gateway-go-build,target=/root/.cache/go-build,sharing=locked \
     CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build -trimpath -buildvcs=false \
-    -ldflags="-s -w -X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedVersion=$VERSION -X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedRevision=$REVISION" \
+    -ldflags="-s -w -X github.com/ccsert/artifact-gateway/internal/buildinfo.injectedVersion=$VERSION -X github.com/ccsert/artifact-gateway/internal/buildinfo.injectedRevision=$REVISION" \
     -o /gateway-healthcheck ./cmd/healthcheck
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab

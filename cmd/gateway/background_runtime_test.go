@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/config"
+	"github.com/ccsert/artifact-gateway/internal/config"
 )
 
 func TestAPTReclaimWorkerRequiresBothFormatAndKindAdmission(t *testing.T) {

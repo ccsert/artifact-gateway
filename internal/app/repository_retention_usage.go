@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // usageEvidence is the lifecycle download evidence matched for one retention

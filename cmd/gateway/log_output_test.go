@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/config"
-	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
+	"github.com/ccsert/artifact-gateway/internal/config"
+	"github.com/ccsert/artifact-gateway/internal/operationalog"
 )
 
 func TestRuntimeLogOutputClosesAfterRuntimeCleanup(t *testing.T) {

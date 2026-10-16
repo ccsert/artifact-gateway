@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
-	"github.com/artifact-gateway/artifact-gateway/internal/protocol/cargo"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
+	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestNativeCargoHostedPublishSparseIndexAndDownload(t *testing.T) {

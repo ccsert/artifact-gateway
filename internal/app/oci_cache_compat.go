@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
-	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
+	ociprotocol "github.com/ccsert/artifact-gateway/internal/protocol/oci"
 )
 
 // Compatibility aliases retain the app composition surface while OCI cache

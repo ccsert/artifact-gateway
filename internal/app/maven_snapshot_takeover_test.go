@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
-	"github.com/artifact-gateway/artifact-gateway/internal/snapshotimport"
-	testsupport "github.com/artifact-gateway/artifact-gateway/internal/testsupport/snapshotfixture"
+	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/snapshotimport"
+	testsupport "github.com/ccsert/artifact-gateway/internal/testsupport/snapshotfixture"
 	"github.com/google/uuid"
 )
 

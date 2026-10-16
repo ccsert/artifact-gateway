@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/protocol/cargo"
+	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
 )
 
 func cargoProxyNameKey(repositoryID, name string) (string, error) {

@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/artifact-gateway/artifact-gateway/internal/capacityplan"
+	"github.com/ccsert/artifact-gateway/internal/capacityplan"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/snapshotimport"
+	"github.com/ccsert/artifact-gateway/internal/snapshotimport"
 )
 
 func WriteSnapshotManifest(t testing.TB, dir string, m snapshotimport.Manifest) string {

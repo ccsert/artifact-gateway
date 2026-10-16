@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
-	"github.com/artifact-gateway/artifact-gateway/internal/egress"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/egress"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // egressProxyRequest is the write shape for per-repository egress proxy

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // proxyUpstream is a minimal Registry V2 / file upstream used by the native

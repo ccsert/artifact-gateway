@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
+	"github.com/ccsert/artifact-gateway/internal/requestcontext"
 )
 
 func (s *MemoryStore) RecordAudit(ctx context.Context, record AuditRecord) error {

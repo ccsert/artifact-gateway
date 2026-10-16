@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
-	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
+	"github.com/ccsert/artifact-gateway/internal/operationalog"
+	"github.com/ccsert/artifact-gateway/internal/requestcontext"
 	"github.com/felixge/httpsnoop"
 )
 

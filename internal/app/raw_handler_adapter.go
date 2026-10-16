@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // RawHandler is the app composition adapter for the protocol-owned handler.

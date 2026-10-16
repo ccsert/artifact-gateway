@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/database"
+	"github.com/ccsert/artifact-gateway/internal/database"
 )
 
 func TestPostgresCapacityListPreservesMavenPrefixSemantics(t *testing.T) {

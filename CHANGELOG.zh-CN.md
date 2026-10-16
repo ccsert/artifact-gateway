@@ -8,6 +8,10 @@
 
 ## Unreleased
 
+- 备份发布校验继续兼容以旧模块路径构建的原始二进制。模块路径、命令路径与保留的构建信息链接参数必须属于同一个明确允许的命名空间；制品摘要、平台、批准归档、版本、revision 与完整迁移账本校验仍全部必需。
+
+- Go 模块路径改为源码仓库路径 `github.com/ccsert/artifact-gateway`（#347，[ADR 0008](docs/adr/0008-go-module-path.zh-CN.md)）。从下一个 Release tag 起，`go install github.com/ccsert/artifact-gateway/cmd/agctl@<tag>` 可安装客户端；`v0.9.0` 及更早的 tag 声明的是从未可解析的旧路径，无法这样安装。module 模式安装以 tag 作为版本、revision 显示为 `unknown`，因为 Go 工具链不为 `pkg@version` 构建记录 VCS 信息。引用 Gateway 包的代码须改用新路径。`make release-version-check` 现在还会在 `go.mod` 与所在 GitHub 仓库不一致时失败。
+
 - npm Hosted 仓库支持发布后管理 dist-tag（#308）。`npm dist-tag ls/add/rm` 通过 `GET /npm/<repository>/-/package/<package>/dist-tags` 与 `PUT`/`DELETE …/dist-tags/<tag>` 工作，scope 与非 scope 包均支持。标签只能指向可见、已提交、未墓碑且未被隔离读取策略拦截的版本（否则返回 404；目标被隔离时返回 409）；可解析为 npm SemVer 范围的标签名会被拒绝（包括 `x.x`、`x.1` 和 `v*`），普通数字前缀标签如 `2026-release`、`1-canary` 仍然有效，`latest` 只能移动不能删除（400）。每次修改需要仓库写权限，并与一条 `npm.dist-tag.set` 或 `npm.dist-tag.delete` 审计记录在同一存储事务中提交，证据包含标签、新版本与原版本；重复提交当前状态会成功并记为未变化。PostgreSQL 上移动标签先锁版本行再锁包行，并发墓碑要么使标签修改被拒绝，要么在之后连同版本一起移除该标签。Packument 与 Group 合并在下一次读取时即反映变化，Tarball 字节与版本身份始终不变。Proxy 仓库列出缓存的上游标签，Group 列出每个标签首个定义它的成员的值，两者都先核对仓库写权限，再拒绝标签写入（只读主体得到 403，写入主体得到 405）。未认证的 npm `DELETE` 请求现在返回 401 而不是 405。Console 暂不展示或编辑 dist-tag。
 
 - Raw 条件写入列表保留实体标签引号内的逗号，并接受 RFC 9110 规定的不透明标签字节（含 obs-text）。通配符必须是字段的唯一值；重复或混用通配符返回 400，且不改变路径引用。

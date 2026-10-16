@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 
-	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
-	"github.com/artifact-gateway/artifact-gateway/internal/localcapacity"
+	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/localcapacity"
 )
 
 func diagnosticLocalCapacity(ctx context.Context, observer *localcapacity.Observer) *adminopenapi.DiagnosticLocalCapacity {

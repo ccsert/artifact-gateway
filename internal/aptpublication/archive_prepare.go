@@ -12,8 +12,8 @@ import (
 	"sort"
 	"strings"
 
-	aptprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/apt"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	aptprotocol "github.com/ccsert/artifact-gateway/internal/protocol/apt"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 var ErrSnapshotArchiveTooLarge = errors.New("APT archive exceeds restore size limit")

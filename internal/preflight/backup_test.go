@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/backupmanifest"
+	"github.com/ccsert/artifact-gateway/internal/backupmanifest"
 )
 
 func backupInput(t *testing.T) (string, []byte) {

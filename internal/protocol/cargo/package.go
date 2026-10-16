@@ -21,7 +21,7 @@ import (
 	"time"
 
 	mastermindssemver "github.com/Masterminds/semver/v3"
-	"github.com/artifact-gateway/artifact-gateway/internal/protocol/identity"
+	"github.com/ccsert/artifact-gateway/internal/protocol/identity"
 	"github.com/pelletier/go-toml/v2"
 	"golang.org/x/mod/semver"
 )

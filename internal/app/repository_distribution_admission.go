@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // artifactDistributionDigests returns every immutable file digest published by

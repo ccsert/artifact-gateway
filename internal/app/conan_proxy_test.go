@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestConanProxyTLSE2EPinsVerifiedAddressAndUsesPersistentCache(t *testing.T) {

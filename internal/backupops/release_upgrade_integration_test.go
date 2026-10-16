@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/backupmanifest"
+	"github.com/ccsert/artifact-gateway/internal/backupmanifest"
 	"github.com/google/uuid"
 )
 
@@ -180,6 +180,7 @@ func formalUpgradeRelease(t *testing.T) Release {
 		t.Fatal("baseline VERSION mismatch")
 	}
 	releaseDir := t.TempDir()
+	// The fixed v0.5.0 source predates the module namespace migration.
 	prefix := "github.com/artifact-gateway/artifact-gateway/internal/buildinfo."
 	cmd = exec.Command("go", "build", "-mod=readonly", "-buildvcs=false", "-ldflags", "-X "+prefix+"injectedVersion=0.5.0 -X "+prefix+"injectedRevision="+alertUpgradeBaseline, "-o", filepath.Join(releaseDir, "gateway"), "./cmd/gateway")
 	cmd.Dir = source

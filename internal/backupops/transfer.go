@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/backupmanifest"
-	"github.com/artifact-gateway/artifact-gateway/internal/opsjson"
+	"github.com/ccsert/artifact-gateway/internal/backupmanifest"
+	"github.com/ccsert/artifact-gateway/internal/opsjson"
 )
 
 // FrozenSource is the read-only source boundary. ObserveFrozen must fail for

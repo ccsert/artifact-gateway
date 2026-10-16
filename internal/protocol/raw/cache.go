@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	cache "github.com/artifact-gateway/artifact-gateway/internal/cache"
-	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	cache "github.com/ccsert/artifact-gateway/internal/cache"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 var ErrCacheMiss = errors.New("raw cache miss")

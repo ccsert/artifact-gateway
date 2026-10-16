@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	conanprotocol "github.com/ccsert/artifact-gateway/internal/protocol/conan"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // ConanCache keeps the existing handler composition surface while cache

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/protocol/cargo"
+	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
 )
 
 func cargoTestClaim(repositoryID, version, digestCharacter string) CargoIdentityClaim {

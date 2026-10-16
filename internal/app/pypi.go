@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/egress"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/egress"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 const pypiProxyUserAgent = "pip/26 Artifact-Gateway/1.0"

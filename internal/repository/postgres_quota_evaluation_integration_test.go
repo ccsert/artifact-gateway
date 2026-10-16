@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/artifact-gateway/artifact-gateway/internal/quotaalert"
+	"github.com/ccsert/artifact-gateway/internal/quotaalert"
 	"github.com/google/uuid"
 	"os"
 	"sync"

@@ -2,7 +2,7 @@ package emailnotification
 
 import (
 	"bytes"
-	"github.com/artifact-gateway/artifact-gateway/internal/quotaalert"
+	"github.com/ccsert/artifact-gateway/internal/quotaalert"
 	"github.com/google/uuid"
 	"strings"
 	"testing"

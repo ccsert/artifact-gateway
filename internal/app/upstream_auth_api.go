@@ -3,8 +3,8 @@ package app
 import (
 	"errors"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
-	"github.com/artifact-gateway/artifact-gateway/internal/secrets"
+	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/secrets"
 )
 
 // upstreamAuthSecretPurpose binds every stored upstream credential ciphertext
