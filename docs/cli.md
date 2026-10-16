@@ -777,6 +777,8 @@ These second-batch (M2) commands need a platform administrator.
   `queue_full` is a definite refusal (exit 1) only when no earlier attempt may
   already have queued the test. After a lost or uncertain earlier answer, the
   result stays unknown with the original key and target version for recovery.
+  An explicit key/version recovery also stays unknown if channel readiness
+  refuses it before the server can look up the earlier key.
 
 ### Agent skill
 

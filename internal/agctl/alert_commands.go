@@ -44,9 +44,18 @@ func emailOutcomeUnknown(err error) bool {
 	return outcomeUnknown(err)
 }
 
-func emailRequestOutcomeUnknown(err error, response *apiResponse) bool {
+func emailRequestOutcomeUnknown(err error, response *apiResponse, recovering bool) bool {
 	if emailOutcomeUnknown(err) {
 		return true
+	}
+	// Channel readiness is checked before looking up a prior key. A new CLI
+	// process recovering with that key cannot use this refusal to disprove a
+	// delivery queued by its earlier invocation.
+	if recovering {
+		var api *APIError
+		if errors.As(err, &api) && (api.Code == "email_disabled" || api.Code == "encryption_key_unavailable") {
+			return true
+		}
 	}
 	if response != nil {
 		for _, prior := range response.priorErrors {
@@ -1056,7 +1065,7 @@ func emailTestCommand() command {
 				err = incompleteResponse(response, client, "email delivery")
 			}
 			if err != nil {
-				if emailRequestOutcomeUnknown(err, response) {
+				if emailRequestOutcomeUnknown(err, response, env.flagSet["idempotency-key"] && env.flagSet["if-match"]) {
 					return unknownOutcomeError(err, unknownOutcome{Operation: "email test", ID: target, IdempotencyKey: key, Version: version, ReadBack: "agctl email delivery list"},
 						fmt.Sprintf("a test may have been queued; re-run with --idempotency-key %s --if-match %s (the same scenario and target) to get the same delivery instead of a second email", key, version))
 				}

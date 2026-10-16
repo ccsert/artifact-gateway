@@ -635,7 +635,8 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   `agctl quota-alert delete RULE_ID --yes` 有条件地删除。
 - 503 且错误码为 `email_disabled`、`encryption_key_unavailable` 或 `queue_full`
   仅在此前没有可能已入队的尝试时属于确定拒绝（退出码 1）。此前响应丢失或结果
-  不确定时，仍保留未知结果和原始幂等键、目标版本供回读恢复。
+  不确定时，仍保留未知结果和原始幂等键、目标版本供回读恢复。携带原 key/version
+  的恢复调用若在服务端查幂等记录之前被通道状态拒绝，也继续保留未知结果。
 
 ### Agent skill
 

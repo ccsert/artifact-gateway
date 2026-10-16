@@ -10,7 +10,7 @@
 
 - `agctl` 在邮件测试重试遭拒绝时保留此前可能已入队的未知结果；确认测试或等待完成前核对投递身份、版本与场景。配额事件按最新 50 条窗口报告，邮件等待命令自省明确返回 `cancelSupported: false`。
 
-- `agctl` 新增配额告警与邮件通知管理（#336，M2）。`quota-alert list|show|create|update|delete|events` 要求显式给出全部阈值和时长（没有默认策略），新规则默认停用，每次有条件更新都把未改动的字段（包括启用状态，否则端点会将其清除）按原值发回；启用需要 `--yes`。`email capability`、`email target list|show|create|update`、`email preview`、`email test` 和 `email delivery list|show|wait|replay` 不在任何输出中显示收件人（只从 stdin 或私有文件读取），带 `--yes` 在可复用的幂等键下排队测试邮件，在 `--timeout` 内等待中继接收且不假装可以取消，并把 `email_disabled`、`encryption_key_unavailable` 和 `queue_full` 视为确定的拒绝。`make email-compose-check` 现在用这些命令驱动自有 TLS SMTP，并断言只多送达一封邮件。
+- `agctl` 新增配额告警与邮件通知管理（#336，M2）。`quota-alert list|show|create|update|delete|events` 要求显式给出全部阈值和时长（没有默认策略），新规则默认停用，每次有条件更新都把未改动的字段（包括启用状态，否则端点会将其清除）按原值发回；启用需要 `--yes`。`email capability`、`email target list|show|create|update`、`email preview`、`email test` 和 `email delivery list|show|wait|replay` 不在任何输出中显示收件人（只从 stdin 或私有文件读取），带 `--yes` 在可复用的幂等键下排队测试邮件，在 `--timeout` 内等待中继接收且不假装可以取消，仅在此前没有可能已入队的尝试时，把首次 `email_disabled`、`encryption_key_unavailable` 或 `queue_full` 视为确定的拒绝。`make email-compose-check` 现在用这些命令驱动自有 TLS SMTP，并断言只多送达一封邮件。
 
 - Group 读取权限与写入一致（#359）。对 Group 引用的每个仓库都有管理权限的主体现在可以读取它——`GET /api/v2/groups/{id}`、`/members`、`/resolution` 和 `/capacity`——并在 `GET /api/v2/groups` 中看到它，该列表按此规则过滤；每次请求最多检查 1000 个 Group，因此一页可能不足甚至为空，此时 `nextPageToken` 继续扫描。其他非平台主体得到 404（此前为 403），如同 Group 不存在，因此只管理部分成员的 Group 对其不可见。`PUT /api/v2/groups/{id}/members` 的契约改为记录服务端实际返回的完整 Group，而非成员列表。`agctl` 同步更新读取权限说明，`group members set` 仍兼容较旧服务端返回的纯成员列表。
 - `agctl` 在上传前核对 Maven 会话响应的仓库与声明文件；提交响应丢失时，只接受目标会话的完整回读作为成功证据。响应损坏或身份不符时保留幂等键或会话回读路径并报告未知结果。上传重试期间源文件不可读时也保留先前未知状态，部分失败的恢复提示要求保留原目标和文件参数。

@@ -287,12 +287,19 @@ func TestEmailTestRetainsEarlierUnknownAfterRefusal(t *testing.T) {
 		}
 		return 503, `{"code":"email_disabled"}`
 	})
-	const key = "8f14e45f-ceea-467a-9575-6a3b1f2c9d10"
-	code, stdout, _ := runCLI(t, "email", "test", "--target", targetID, "--scenario", "warning", "--idempotency-key", key, "--yes", "--json")
+	code, stdout, _ := runCLI(t, "email", "test", "--target", targetID, "--scenario", "warning", "--yes", "--json")
 	var recovery unknownOutcome
 	_ = json.Unmarshal(decodeEnvelope(t, stdout).Data, &recovery)
-	if code == ExitOK || recovery.Outcome != "unknown" || recovery.IdempotencyKey != key || recovery.Version != "7" || attempts.Load() < 2 {
+	if code == ExitOK || recovery.Outcome != "unknown" || recovery.IdempotencyKey == "" || recovery.Version != "7" || attempts.Load() < 2 {
 		t.Fatalf("a later refusal cannot disprove the earlier queue: exit=%d, stdout=%s", code, stdout)
+	}
+	key := recovery.IdempotencyKey
+	api.on("POST", "/api/v2/email-notifications:test", 503, `{"code":"email_disabled"}`)
+	code, stdout, _ = runCLI(t, "email", "test", "--target", targetID, "--scenario", "warning", "--idempotency-key", key, "--if-match", "7", "--yes", "--json")
+	recovery = unknownOutcome{}
+	_ = json.Unmarshal(decodeEnvelope(t, stdout).Data, &recovery)
+	if code == ExitOK || recovery.Outcome != "unknown" || recovery.IdempotencyKey != key || recovery.Version != "7" {
+		t.Fatalf("a fresh recovery process must keep the original unknown result: exit=%d, stdout=%s", code, stdout)
 	}
 }
 
