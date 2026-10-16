@@ -108,6 +108,14 @@ else
   server="http://127.0.0.1:${gateway_port}"
 fi
 
+# Match the canonical issuer returned by configuration and identity writes.
+oidc_issuer=$(python3 - "$oidc_issuer" <<'PY2'
+import sys
+
+print(sys.argv[1].strip().rstrip("/"))
+PY2
+)
+
 go build -o "$workdir/agctl" ./cmd/agctl
 
 # Every invocation runs without a profile file, with credentials only from
