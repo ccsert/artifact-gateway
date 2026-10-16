@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Conan 发布会话响应（`POST /api/v2/repositories/{id}/conan-publish-sessions` 与 `GET /api/v2/conan-publish-sessions/{id}`）现在与 Maven 一样使用 `PublishSession` 结构：`id`、`repositoryId`、`coordinate`、`state`、`expiresAt` 和 `objects`（每项含 `name`、`digest`、`size`）。`coordinate` 为 `reference#recipeRevision`，package 会话追加 `/packageId#packageRevision`。此前响应泄露了首字母大写的存储模型字段名（`ID`、`RepositoryID`、`Publisher`、`Kind` 等）并暴露了发布者。读取大写字段的客户端需改用契约字段名。
+
 - Maven 发布会话响应（`POST /api/v2/repositories/{id}/publish-sessions` 与 `GET /api/v2/publish-sessions/{id}`）现在与 `PublishSession` 契约一致：字段为 `id`、`repositoryId`、`coordinate`、`state`、`expiresAt` 和 `objects`（每项含 `name`、`digest`、`size`），不再暴露契约未声明的 `Publisher` 和 `PomObject`。此前响应泄露了首字母大写的存储模型字段名，导致 Console 的 Maven 发布向导拿不到会话 ID。读取大写字段的客户端需改用契约字段名；`agctl` 不受影响。
 
 - `agctl` 在请求前拒绝其他用户可访问的密码文件，核对凭据/API key/会话吊销响应中的目标身份，并拒绝不完整的服务账号列表，避免误报 404。OIDC 身份 subject 与 API 一致按 512 个字符限制，支持 Unicode 字符。
