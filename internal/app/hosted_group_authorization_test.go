@@ -168,6 +168,25 @@ func TestHostedGroupMembershipFollowsRepositoryAdministration(t *testing.T) {
 	if names := listed("admin-secret"); len(names) != 4 {
 		t.Fatalf("platform tier lists %v", names)
 	}
+	// One request checks a bounded number of Groups: with a budget of one, a
+	// page can be empty while its token continues the scan, and walking the
+	// pages still finds every readable Group.
+	previous := groupListScanBudget
+	groupListScanBudget = 1
+	t.Cleanup(func() { groupListScanBudget = previous })
+	var first struct {
+		Items         []adminopenapi.Group `json:"items"`
+		NextPageToken string               `json:"nextPageToken"`
+	}
+	if response := call(otherAdmin, http.MethodGet, "/api/v2/groups?pageSize=50", "", ""); json.Unmarshal(response.Body.Bytes(), &first) != nil || len(first.Items) > 1 || first.NextPageToken == "" {
+		t.Fatalf("a bounded scan returns at most what it checked and a token: %s", response.Body.String())
+	}
+	if names := strings.Join(sortedStrings(listed(repoAdmin)), ","); names != "managed-group,second-managed-group" {
+		t.Fatalf("member administrator lists %s under a bounded scan", names)
+	}
+	if names := strings.Join(sortedStrings(listed(otherAdmin)), ","); names != "other-group" {
+		t.Fatalf("other administrator lists %s under a bounded scan", names)
+	}
 	if _, err := store.ReplaceRepositoryGrants(ctx, managed.ID, nil, "2"); err != nil {
 		t.Fatal(err)
 	}

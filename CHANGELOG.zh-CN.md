@@ -8,7 +8,7 @@
 
 ## Unreleased
 
-- Group 读取权限与写入一致（#359）。对 Group 引用的每个仓库都有管理权限的主体现在可以读取它——`GET /api/v2/groups/{id}`、`/members`、`/resolution` 和 `/capacity`——并在 `GET /api/v2/groups` 中看到它，该列表按此规则过滤且不会把分页截短。其他非平台主体得到 404（此前为 403），如同 Group 不存在，因此只管理部分成员的 Group 对其不可见。`PUT /api/v2/groups/{id}/members` 的契约改为记录服务端实际返回的完整 Group，而非成员列表。`agctl` 同步更新读取权限说明，`group members set` 仍兼容较旧服务端返回的纯成员列表。
+- Group 读取权限与写入一致（#359）。对 Group 引用的每个仓库都有管理权限的主体现在可以读取它——`GET /api/v2/groups/{id}`、`/members`、`/resolution` 和 `/capacity`——并在 `GET /api/v2/groups` 中看到它，该列表按此规则过滤；每次请求最多检查 1000 个 Group，因此一页可能不足甚至为空，此时 `nextPageToken` 继续扫描。其他非平台主体得到 404（此前为 403），如同 Group 不存在，因此只管理部分成员的 Group 对其不可见。`PUT /api/v2/groups/{id}/members` 的契约改为记录服务端实际返回的完整 Group，而非成员列表。`agctl` 同步更新读取权限说明，`group members set` 仍兼容较旧服务端返回的纯成员列表。
 - `agctl` 在上传前核对 Maven 会话响应的仓库与声明文件；提交响应丢失时，只接受目标会话的完整回读作为成功证据。响应损坏或身份不符时保留幂等键或会话回读路径并报告未知结果。上传重试期间源文件不可读时也保留先前未知状态，部分失败的恢复提示要求保留原目标和文件参数。
 
 - `agctl` 新增制品发布与登录到私有文件（#132、#129、#140）。`publish raw` 把文件或目录树上传到 Raw Hosted 仓库，在本地计算 SHA-256 并交由 Gateway 校验，仓库中已有相同摘要的对象会跳过，以有限并发流式上传，逐个报告对象的规范坐标，任一对象未确认时退出码 3；重跑是安全的。`publish maven` 在幂等键下通过发布会话发布一个 Maven 坐标（同一 key 可续传，已提交的会话不会被重复使用），并提供 `publish create|upload|commit|status` 分步命令；提交响应丢失时通过回读会话确认。`auth login --secret-output FILE` 把会话 token 写入新的私有文件而不是 profile。请求路径只转义一次，带空格的 Raw 名称保持规范坐标。agent skill `.agents/skills/agctl/SKILL.md` 说明机器契约以及 CI 和管理菜谱，其中出现客户端没有的命令、参数或参数个数时单元测试会失败。命令映射守卫改为按原生协议行自身的路径核对。

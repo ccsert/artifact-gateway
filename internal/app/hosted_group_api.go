@@ -115,10 +115,16 @@ func (h generatedRepositoryAPIAdapter) readGroup(w http.ResponseWriter, r *http.
 	return group, true
 }
 
+// groupListScanBudget bounds how many Groups one filtered list request checks,
+// so a caller who can read few Groups cannot make a single request scan the
+// whole catalog.
+var groupListScanBudget = 1000
+
 // ListGroups lists every Group to the platform tier and, to anyone else, the
 // Groups whose members it all administers. A filtered page may span several
-// store batches; its token is the last Group scanned, so the next page resumes
-// after it rather than after the last Group returned.
+// store batches and stops after groupListScanBudget Groups, so it can be short
+// or empty while more remain; its token is the last Group scanned, so the next
+// page resumes after it rather than after the last Group returned.
 func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http.Request, params adminopenapi.ListGroupsParams) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
@@ -152,9 +158,9 @@ func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http
 		limit = 50
 	}
 	items := make([]repository.HostedGroup, 0, limit)
-	scanned, hasMore := after, false
-	for len(items) < limit {
-		batch, next, err := h.groups.ListHostedGroups(r.Context(), 200, scanned)
+	scanned, hasMore, budget := after, false, groupListScanBudget
+	for len(items) < limit && budget > 0 {
+		batch, next, err := h.groups.ListHostedGroups(r.Context(), min(200, budget), scanned)
 		if errors.Is(err, repository.ErrNotFound) {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid")
 			return
@@ -163,6 +169,8 @@ func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list groups failed")
 			return
 		}
+		budget -= len(batch)
+		hasMore = next != ""
 		for index, candidate := range batch {
 			scanned = candidate.ID
 			if h.administersGroupMembers(r, principal, candidate.Members) {
