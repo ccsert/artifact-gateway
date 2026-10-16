@@ -554,6 +554,7 @@ var groupSynopses = map[string]string{
 	"overview":              "request and capacity overview",
 	"runtime":               "Gateway runtime processes",
 	"group members":         "list or replace a Group's members",
+	"publish":               "publish Raw files and Maven coordinates with verified digests",
 	"role":                  "read authorization roles",
 	"service-account":       "list, inspect, create, and update service accounts",
 	"user":                  "manage local users, their passwords, sessions, and linked identities",

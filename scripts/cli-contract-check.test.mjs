@@ -293,6 +293,21 @@ test('fails an implemented row whose endpoint the command does not declare', () 
   assert.match(issues[0].message, /GET \/api\/v2\/widgets\/\{widgetId\}/);
 });
 
+test('checks a native protocol row against its own path, not /api/v2', () => {
+  const nativeOperations = enumerateContractOperations({
+    paths: { '/raw/{repository}/{path}': { put: { operationId: 'putRaw' } } },
+  });
+  const englishMap = classification([
+    mapRow('PUT', '/raw/{repository}/{path}', 'putRaw', '`publish raw`', '#999', 'M1 implemented', 'W', 'U'),
+  ]);
+  const declared = new Map([['publish raw', new Set(['PUT /raw/{repository}/{path}'])]]);
+  assert.deepEqual(findContractDrift({ managementOperations: [], nativeOperations, englishMap, registeredCommands: declared }), []);
+  const prefixed = new Map([['publish raw', new Set(['PUT /api/v2/raw/{repository}/{path}'])]]);
+  const issues = findContractDrift({ managementOperations: [], nativeOperations, englishMap, registeredCommands: prefixed });
+  assert.equal(issues.length, 1, JSON.stringify(issues));
+  assert.equal(issues[0].kind, 'implemented-endpoint-undeclared');
+});
+
 test('normalizes planned-command cells to registry names', () => {
   assert.equal(normalizedCommand('`config profile add NAME --server URL`'), 'config profile add');
   assert.equal(normalizedCommand('agctl auth whoami'), 'auth whoami');

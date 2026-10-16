@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- `agctl` 新增制品发布与登录到私有文件（#132、#129、#140）。`publish raw` 把文件或目录树上传到 Raw Hosted 仓库，在本地计算 SHA-256 并交由 Gateway 校验，仓库中已有相同摘要的对象会跳过，以有限并发流式上传，逐个报告对象的规范坐标，任一对象未确认时退出码 3；重跑是安全的。`publish maven` 在幂等键下通过发布会话发布一个 Maven 坐标（同一 key 可续传，已提交的会话不会被重复使用），并提供 `publish create|upload|commit|status` 分步命令；提交响应丢失时通过回读会话确认。`auth login --secret-output FILE` 把会话 token 写入新的私有文件而不是 profile。请求路径只转义一次，带空格的 Raw 名称保持规范坐标。agent skill `.agents/skills/agctl/SKILL.md` 说明机器契约以及 CI 和管理菜谱，其中出现客户端没有的命令、参数或参数个数时单元测试会失败。命令映射守卫改为按原生协议行自身的路径核对。
+
 - `agctl` 在请求前拒绝其他用户可访问的密码文件，核对凭据/API key/会话吊销响应中的目标身份，并拒绝不完整的服务账号列表，避免误报 404。OIDC 身份 subject 与 API 一致按 512 个字符限制，支持 Unicode 字符。
 
 - `agctl` 新增机器身份与用户身份管理（#133、#335）。`service-account list|show|create|update` 管理 CI 主体（没有单个账号的端点，`show` 通过读取列表查找，只有读完整个列表才返回 404）；`credential issue` 和 `api-key create` 只把一次性秘密写入 `--secret-output` 指定的新私有文件（0600 权限，请求前检查，从不覆盖已有文件或链接，从不打印，从不重试），签发后无法保存时报告 `secret_not_delivered` 并给出需要吊销的 ID；`credential revoke` 和 `api-key revoke` 立即让秘密失效。`user list|show|create|update|delete|reset-password` 只从有界 stdin 或文件读取密码，输出、计划和错误中都不含密码；`user sessions list|revoke` 结束单个或全部会话；`user identities list|link|unlink` 管理已链接的 OIDC 身份。条件写入使用刚读到的版本，从不重试。`make cli-e2e` 运行 CI 剧本——服务账号凭据写入 0600 文件、使用、轮换（旧秘密返回 401）、随授权撤销失去访问——以及 API key、用户、会话和密码检查，任何 token 或密码进入 agctl 输出都会失败。

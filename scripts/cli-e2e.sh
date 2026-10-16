@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# agctl end-to-end check against a real Gateway (issues #127, #130, #131,
-# #133, #134, #135 and #335).
+# agctl end-to-end check against a real Gateway (issues #127, #129, #130,
+# #131, #132, #133, #134, #135 and #335).
 #
 # By default it boots an isolated Compose project from GATEWAY_ENV_FILE (or
 # .env) on free ports and removes it afterwards. To reuse a Gateway that is
@@ -739,6 +739,108 @@ expect 2 "$out" -- user delete "$user_id" --json
 expect 0 "$out" -- user delete "$user_id" --dry-run --json
 expect 0 "$out" -- user delete "$user_id" --yes --json
 expect 4 "$out" -- user show "$user_id" --json
+
+# Publishing (#132). A Raw tree is uploaded, re-run (everything skipped by
+# digest), changed (only the changed file goes up), and read back byte for
+# byte; a Maven coordinate is published through a session, and a committed
+# session is never reused.
+publish_repo="cli-e2e-publish-${suffix}"
+expect 0 "$out" -- repo create "$publish_repo" --format raw --json
+publish_id=$(field "$out" data.id)
+tree="$workdir/tree"
+mkdir -p "$tree/docs"
+printf 'one' >"$tree/one.txt"
+printf 'two' >"$tree/docs/two words.txt"
+printf 'three' >"$tree/docs/three.txt"
+publish_counts() {
+  python3 - "$out" <<'PY2'
+import json
+import sys
+from collections import Counter
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    items = json.load(stream)["data"]["items"]
+print(",".join(f"{status}={count}" for status, count in sorted(Counter(item["status"] for item in items).items())))
+PY2
+}
+expect 0 "$out" -- publish raw "$tree" --repo "$publish_id" --to releases/1.0 --dry-run --json
+require "$(publish_counts)" "planned=3" "publish dry-run"
+expect 0 "$out" -- publish raw "$tree" --repo "$publish_id" --to releases/1.0 --parallel 2 --json
+require "$(publish_counts)" "uploaded=3" "first publish"
+expect 0 "$out" -- publish raw "$tree" --repo "$publish_id" --to releases/1.0 --json
+require "$(publish_counts)" "skipped=3" "re-run publish"
+printf 'three, changed' >"$tree/docs/three.txt"
+expect 0 "$out" -- publish raw "$tree" --repo "$publish_id" --to releases/1.0 --json
+require "$(publish_counts)" "skipped=2,uploaded=1" "changed publish"
+[[ "$(curl --silent --show-error --fail -H "Authorization: Bearer $admin_token" "$server/raw/$publish_repo/releases/1.0/docs/two%20words.txt")" == two ]] || {
+  printf '%s\n' 'the published file does not read back' >&2
+  exit 1
+}
+expect 0 "$out" -- artifact search --repo "$publish_id" --q releases/1.0/docs/ --json
+python3 - "$out" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    coordinates = sorted(item["coordinate"] for item in json.load(stream)["data"]["items"])
+# Raw coordinates are canonical: each segment escaped like Go's url.PathEscape.
+if coordinates != ["releases/1.0/docs/three.txt", "releases/1.0/docs/two%20words.txt"]:
+    raise SystemExit(f"published files in search: {coordinates}")
+PY2
+expect 2 "$out" -- publish raw "$tree/one.txt" --repo "$publish_id" --to ../escape --json
+expect 2 "$out" -- publish raw "$tree" --repo "$maven_id" --json
+
+maven_publish="cli-e2e-maven-publish-${suffix}"
+expect 0 "$out" -- repo create "$maven_publish" --format maven --json
+maven_publish_id=$(field "$out" data.id)
+mkdir -p "$workdir/maven"
+for version in 2.0.0 2.0.1; do
+  printf '<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>com.example.agctl</groupId><artifactId>publish</artifactId><version>%s</version></project>' "$version" >"$workdir/maven/publish-$version.pom"
+  printf 'jar %s' "$version" >"$workdir/maven/publish-$version.jar"
+done
+maven_key="cli-e2e-maven-${suffix}"
+expect 0 "$out" -- publish maven --repo "$maven_publish_id" --coordinate com.example.agctl:publish:2.0.0 --pom "$workdir/maven/publish-2.0.0.pom" --file "$workdir/maven/publish-2.0.0.jar" --idempotency-key "$maven_key" --json
+require "$(field "$out" data.state)" committed "maven publish"
+require "$(field "$out" data.artifact.coordinate)" com.example.agctl:publish:2.0.0 "published coordinate"
+expect 7 "$out" -- publish maven --repo "$maven_publish_id" --coordinate com.example.agctl:publish:2.0.0 --pom "$workdir/maven/publish-2.0.0.pom" --file "$workdir/maven/publish-2.0.0.jar" --idempotency-key "$maven_key" --json
+expect 0 "$out" -- publish create --repo "$maven_publish_id" --coordinate com.example.agctl:publish:2.0.1 --pom "$workdir/maven/publish-2.0.1.pom" --file "$workdir/maven/publish-2.0.1.jar" --json
+session_id=$(field "$out" data.id)
+require "$(field "$out" data.state)" open "new session"
+curl --silent --show-error --fail --output "$workdir/session.json" -H "Authorization: Bearer $admin_token" "$server/api/v2/publish-sessions/$session_id"
+expect 0 "$out" -- publish upload "$session_id" --file "$workdir/maven/publish-2.0.1.pom" --file "$workdir/maven/publish-2.0.1.jar" --json
+require "$(publish_counts)" "uploaded=2" "session upload"
+expect 0 "$out" -- publish upload "$session_id" --file "$workdir/maven/publish-2.0.1.jar" --json
+expect 0 "$out" -- publish commit "$session_id" --json
+require "$(field "$out" data.artifact.coordinate)" com.example.agctl:publish:2.0.1 "committed coordinate"
+expect 0 "$out" -- publish status "$session_id" --json
+require "$(field "$out" data.state)" committed "session state"
+expect 7 "$out" -- publish commit "$session_id" --json
+expect 0 "$out" -- maven coordinates --repo "$maven_publish_id" --json
+python3 - "$out" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    coordinates = sorted(item["coordinate"] for item in json.load(stream)["data"]["items"])
+if coordinates != ["com.example.agctl:publish:2.0.0", "com.example.agctl:publish:2.0.1"]:
+    raise SystemExit(f"published coordinates: {coordinates}")
+PY2
+
+# Session token to a private file (#129): the token reaches only the file.
+login_user="cli-e2e-login-${suffix}"
+expect 0 "$out" -- user create "$login_user" --role member --password-file "$secrets/password" --json
+login_user_id=$(field "$out" data.id)
+got=0
+HOME="$workdir/home" AGCTL_SERVER="$server" AGCTL_TOKEN="" AGCTL_PROFILE="" \
+  "$workdir/agctl" auth login --username "$login_user" --password-stdin --secret-output "$secrets/session" --verbose --json \
+  <"$secrets/password" >"$out" 2>"$workdir/stderr" || got=$?
+require "$got" 0 "login to a secret file"
+nosecret "$(cat "$secrets/session")"
+nosecret "$user_password"
+require "$(field "$out" data.secretOutput.delivered)" true "login token delivered"
+cli_test_token=$(cat "$secrets/session") expect 0 "$out" -- auth whoami --json
+require "$(field "$out" data.actor)" "user:$login_user" "login identity"
+expect 0 "$out" -- user delete "$login_user_id" --yes --json
 
 # Runtime reads (#135). status is healthy or degraded on a running stack and
 # exits 0 for both; --strict fails exactly when it is not healthy.

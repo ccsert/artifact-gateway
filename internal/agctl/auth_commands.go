@@ -130,24 +130,28 @@ func clearStoredToken(env *commandContext, token string) (string, error) {
 }
 
 type authLoginResult struct {
-	Profile            string `json:"profile"`
-	Server             string `json:"server"`
-	Username           string `json:"username"`
-	DisplayName        string `json:"displayName,omitempty"`
-	Role               string `json:"role,omitempty"`
-	MustChangePassword bool   `json:"mustChangePassword"`
+	// Profile names where the token was stored; with --secret-output it is
+	// absent and SecretOutput says where the token went.
+	Profile            string          `json:"profile,omitempty"`
+	Server             string          `json:"server"`
+	Username           string          `json:"username"`
+	DisplayName        string          `json:"displayName,omitempty"`
+	Role               string          `json:"role,omitempty"`
+	MustChangePassword bool            `json:"mustChangePassword"`
+	SecretOutput       *secretDelivery `json:"secretOutput,omitempty"`
 }
 
 func authLoginCommand() command {
-	var username string
+	var username, secretOutput string
 	var passwordStdin bool
 	return command{
 		name:     "auth login",
-		synopsis: "authenticate with a username and password and store the session token in a profile",
-		usage:    "agctl auth login --username NAME --profile NAME --password-stdin",
+		synopsis: "authenticate with a username and password and store the session token in a profile or a private file",
+		usage:    "agctl auth login --username NAME (--profile NAME | --secret-output FILE) --password-stdin",
 		setFlags: func(fs *flag.FlagSet) {
 			fs.StringVar(&username, "username", "", "local username to authenticate")
 			fs.BoolVar(&passwordStdin, "password-stdin", false, "read the password from stdin (bounded, never echoed)")
+			fs.StringVar(&secretOutput, "secret-output", "", "write the session token to this new private file instead of a profile (mode 0600; never overwritten)")
 		},
 		meta: commandMeta{
 			Resource:     "auth",
@@ -161,6 +165,12 @@ func authLoginCommand() command {
 			DryRun:       "unsupported",
 		},
 		run: func(ctx context.Context, env *commandContext) error {
+			if env.flagSet["secret-output"] {
+				if env.flagSet["profile"] {
+					return &UsageError{Message: "choose one of --profile or --secret-output for the session token", Hint: "--profile stores it in the config file; --secret-output writes it to a new private file"}
+				}
+				return loginToFile(ctx, env, username, passwordStdin, secretOutput)
+			}
 			profile, stored, err := explicitProfile(env)
 			if err != nil {
 				return err
@@ -264,6 +274,85 @@ func authLoginCommand() command {
 			})
 		},
 	}
+}
+
+// readLoginInput validates the username and reads the password; it runs
+// before any request.
+func readLoginInput(env *commandContext, username string, passwordStdin bool) (string, error) {
+	if strings.TrimSpace(username) == "" {
+		return "", &UsageError{Message: "auth login requires --username", Hint: "pass --username NAME"}
+	}
+	hint := `pipe it in, for example: printf '%s\n' "$AGCTL_LOGIN_PASSWORD" | agctl auth login --username NAME --secret-output FILE --password-stdin`
+	if !passwordStdin {
+		return "", &UsageError{Message: "auth login requires --password-stdin", Hint: hint}
+	}
+	password, err := readBoundedSecret(env.stdin, secretInputLimit, "password", hint)
+	if err != nil {
+		return "", err
+	}
+	env.addKnownSecret(password)
+	return password, nil
+}
+
+// loginToFile signs in and writes the session token to a new private file,
+// with the same rules as every one-time secret: the destination is checked
+// before the request, and the token never reaches any output.
+func loginToFile(ctx context.Context, env *commandContext, username string, passwordStdin bool, output string) error {
+	password, err := readLoginInput(env, username, passwordStdin)
+	if err != nil {
+		return err
+	}
+	destination, err := prepareSecretDestination(output)
+	if err != nil {
+		return err
+	}
+	client, err := env.client()
+	if err != nil {
+		destination.discard()
+		return err
+	}
+	var login struct {
+		Token              string `json:"token"`
+		Username           string `json:"username"`
+		DisplayName        string `json:"displayName"`
+		Role               string `json:"role"`
+		MustChangePassword bool   `json:"mustChangePassword"`
+	}
+	if err := client.postJSON(ctx, "/auth/login", map[string]string{"username": strings.TrimSpace(username), "password": password}, &login); err != nil {
+		destination.discard()
+		return err
+	}
+	if login.Token == "" || login.Username == "" {
+		destination.discard()
+		return &APIError{Code: "invalid_response", HTTPStatus: http.StatusOK, Message: "the server returned no session token"}
+	}
+	env.addKnownSecret(login.Token)
+	result := authLoginResult{
+		Server:             redactServerURL(env.settings.Server, env.settings.Token, login.Token, password),
+		Username:           login.Username,
+		DisplayName:        login.DisplayName,
+		Role:               login.Role,
+		MustChangePassword: login.MustChangePassword,
+		SecretOutput:       &secretDelivery{Path: destination.path, Mode: "0600", Delivered: true},
+	}
+	if err := destination.deliver(login.Token); err != nil {
+		result.SecretOutput.Delivered = false
+		return &resultError{
+			err:  &deliveryError{message: err.Error()},
+			data: result,
+			hint: "the session was created but its token was not saved; an administrator can end it with agctl user sessions revoke, or it expires on its own",
+		}
+	}
+	return env.render(result, nil, func(w io.Writer) error {
+		if _, err := fmt.Fprintf(w, "authenticated as %s against %s; session token written to %s (mode 0600) and not shown\n", result.Username, result.Server, destination.path); err != nil {
+			return err
+		}
+		if result.MustChangePassword {
+			_, err := fmt.Fprintln(w, "password change required: run `agctl auth change-password` with this token and sign in again")
+			return err
+		}
+		return nil
+	})
 }
 
 type authLogoutResult struct {
