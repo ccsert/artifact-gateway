@@ -57,12 +57,23 @@ func (s *MemoryStore) CancelRawUpload(_ context.Context, id string) (RawUpload, 
 	s.rawUploads[id] = v
 	return v, nil
 }
-func (s *MemoryStore) CompleteRawUpload(_ context.Context, id string, asset RawAsset) (RawAsset, error) {
+func (s *MemoryStore) CompleteRawUpload(ctx context.Context, id string, asset RawAsset) (RawAsset, error) {
+	return s.CompleteRawUploadIf(ctx, id, asset, RawWriteCondition{})
+}
+
+// CompleteRawUploadIf publishes an open upload only when the path's current
+// reference satisfies condition. A failed condition leaves the upload open so
+// the client can cancel it or let reclaim collect its staged bytes.
+func (s *MemoryStore) CompleteRawUploadIf(_ context.Context, id string, asset RawAsset, condition RawWriteCondition) (RawAsset, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v, ok := s.rawUploads[id]
 	if !ok || v.State != "open" || time.Now().After(v.ExpiresAt) || v.RepositoryID != asset.RepositoryID || v.Path != asset.Path {
 		return RawAsset{}, ErrNotFound
+	}
+	current, exists := s.rawAssets[rawAssetKey(asset.RepositoryID, asset.Path)]
+	if !condition.Allows(current, exists) {
+		return current, ErrPreconditionFailed
 	}
 	now := time.Now().UTC()
 	asset.UpdatedAt = now
@@ -146,9 +157,18 @@ func (s *MemoryStore) StageRawObject(_ context.Context, object RawObject) error 
 	return nil
 }
 
-func (s *MemoryStore) PutRawAsset(_ context.Context, asset RawAsset) (RawAsset, error) {
+func (s *MemoryStore) PutRawAsset(ctx context.Context, asset RawAsset) (RawAsset, error) {
+	return s.PutRawAssetIf(ctx, asset, RawWriteCondition{})
+}
+
+// PutRawAssetIf replaces the path reference only when its current state
+// satisfies condition; on ErrPreconditionFailed it returns the current asset.
+func (s *MemoryStore) PutRawAssetIf(_ context.Context, asset RawAsset, condition RawWriteCondition) (RawAsset, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if current, exists := s.rawAssets[rawAssetKey(asset.RepositoryID, asset.Path)]; !condition.Allows(current, exists) {
+		return current, ErrPreconditionFailed
+	}
 	asset.UpdatedAt = time.Now().UTC()
 	if object, ok := s.rawObjects[asset.Digest]; ok {
 		object.RepositoryID = asset.RepositoryID

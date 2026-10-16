@@ -204,6 +204,9 @@ dist_tag_round() {
 }
 dist_tag_round ag-npm-fixture 1.0.0 1.1.0 beta
 dist_tag_round @artifact-gateway/npm-fixture 2.0.0 2.1.0 stable
+# Numeric prefixes are ordinary tags unless the whole name is a SemVer range.
+dist_tag_round ag-npm-fixture 1.0.0 1.1.0 2026-release
+dist_tag_round @artifact-gateway/npm-fixture 2.0.0 2.1.0 v1-release
 if npm_config_userconfig="$auth_config" npm dist-tag add ag-npm-fixture@9.9.9 beta --registry="$registry_url" >"$workdir/dist-tag-missing.log" 2>&1; then
   printf 'npm dist-tag accepted an unpublished version\n' >&2
   exit 1

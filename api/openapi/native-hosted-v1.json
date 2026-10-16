@@ -2965,7 +2965,7 @@
       },
       "put": {
         "operationId": "putRawHostedContent",
-        "description": "Standard Raw Hosted write. The request body is stored as immutable verified content and the canonical Raw path is atomically created or replaced; no management publish session is used for Raw. A `.sha256` or `.sha512` target validates that checksum against an existing primary object and returns no content without storing a sidecar asset. With `uploadId` and `complete=1`, appends any final bytes, requires a `Digest: sha-256=<base64>` header, and atomically publishes the resumable upload.\n",
+        "description": "Standard Raw Hosted write. The request body is stored as immutable verified content and the canonical Raw path is atomically created or replaced; no management publish session is used for Raw. A `.sha256` or `.sha512` target validates that checksum against an existing primary object and returns no content without storing a sidecar asset. With `uploadId` and `complete=1`, appends any final bytes, requires a `Digest: sha-256=<base64>` header, and atomically publishes the resumable upload.\nIf-Match and If-None-Match (RFC 9110) make a primary-path write or a resumable completion conditional. The Gateway re-evaluates them in the same lock or transaction that replaces the path reference, so of two writers holding the same validator only one succeeds. `If-None-Match: *` creates only when the path has no current asset; `If-Match: *` replaces only an existing asset; an entity-tag list compares against the current digest, accepting both the `\"sha256-<hex>\"` tag reads return and the `\"sha256:<hex>\"` tag writes return. If-Match uses strong comparison, so a weak tag never matches. A failed condition answers 412 without the current validator and stores nothing; a failed resumable completion leaves the upload open. If-Unmodified-Since cannot be evaluated atomically and is rejected with 400. A request without these headers keeps the unconditional replacement behavior.\n",
         "parameters": [
           {
             "name": "uploadId",
@@ -3000,6 +3000,22 @@
               "type": "string",
               "pattern": "^sha-256=[A-Za-z0-9+/]+={0,2}$"
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "`*` or a comma-separated list of entity tags the current path reference must match (strong comparison).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "`*` for create-only, or a comma-separated list of entity tags the current path reference must not match (weak comparison).",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "security": [
@@ -3025,8 +3041,14 @@
           "201": {
             "description": "Immutable content stored and the Raw path reference atomically created or replaced"
           },
+          "400": {
+            "description": "Malformed If-Match or If-None-Match, or an unsupported If-Unmodified-Since precondition; nothing is stored"
+          },
           "401": {
             "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "412": {
+            "description": "The current path reference does not satisfy If-Match or If-None-Match; the reference is unchanged and a resumable upload stays open"
           },
           "422": {
             "$ref": "#/components/responses/Problem"

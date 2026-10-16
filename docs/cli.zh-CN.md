@@ -598,6 +598,46 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   `committed` 即确认成功。
 - 其他格式用各自的原生客户端发布；`agctl repo connect` 打印其配置。
 
+### 配额告警与邮件
+
+这些第二批（M2）命令需要平台管理员。
+
+- `agctl email capability` 报告应答进程能否排队邮件（`ready`、`email_disabled`、
+  `encryption_key_unavailable`）。ready 只表示已配置，不代表邮件能送达收件箱。
+- `agctl email target list|show` 从不显示收件人，只显示 `recipientConfigured`。
+  `agctl email target create NAME --locale en|zh-CN (--recipient-stdin |
+  --recipient-file FILE) [--enabled]` 只从有界 stdin 或私有（0600）文件读取地址，
+  并在包括计划在内的所有输出中脱敏。`agctl email target update ID` 以刚读到的版本
+  为条件修改名称、语言、启用状态或收件人；未给出的字段按原值发回，因为该端点把
+  省略的 `enabled` 当作停用。规则在更新前继续绑定原目标版本。
+- `agctl email preview --scenario S --locale L [--html-output FILE]
+  [--text-output FILE]` 渲染固定的合成数据，不入队；两部分必须写入不同文件。
+- `agctl email test --target ID --scenario S --yes` 在 `Idempotency-Key`（UUID；
+  `--idempotency-key` 可复用，同一 key 返回同一投递，因此会重试）下按目标当前版本
+  排队一封真实测试邮件。服务端按 key、目标、目标版本和场景识别重复请求，因此
+  结果未知时会报告发送所用的版本，之后的重试用 `--idempotency-key K --if-match VERSION`
+  把它带回，而不是读取更新的版本。入队不等于送达：`agctl email delivery wait ID [--timeout D]`
+  轮询直到中继接收或判定失败，超时退出码 8 且投递仍在队列中——没有取消操作；
+  `commands --json` 明确报告 `cancelSupported: false`。等待只接受目标投递 ID 的
+  完整响应作为完成证据。
+  `agctl email delivery list [--limit N]` 读取最新的投递（最多 100，无 cursor）；
+  `show` 读取一条，包括尝试次数和 `possibleDuplicate`。
+  `agctl email delivery replay ID --yes` 以版本为条件重新排队一条失败的投递，
+  从不重试。
+- `agctl quota-alert list|show|events` 读取规则、其状态及告警、严重、恢复事件和
+  投递状态。事件只返回最新 50 条窗口（`meta.pagination.mode: bounded`、
+  `limit: 50`），满窗口时完整性未知，也没有 cursor 读取更早历史。
+  `agctl quota-alert create --repo ID --target ID` 必须给出全部阈值和
+  时长（`--warning-bp`、`--critical-bp`、`--recovery-below-bp`、`--warning-for`、
+  `--critical-for`、`--recovery-for`、`--max-sample-age`）；没有默认策略，规则
+  默认停用，除非 `--enabled --yes`。`agctl quota-alert update RULE_ID` 以刚读到的
+  版本为条件修改阈值、目标或启用状态，未改动的字段按原值发回；启用需要 `--yes`。
+  `agctl quota-alert delete RULE_ID --yes` 有条件地删除。
+- 503 且错误码为 `email_disabled`、`encryption_key_unavailable` 或 `queue_full`
+  仅在此前没有可能已入队的尝试时属于确定拒绝（退出码 1）。此前响应丢失或结果
+  不确定时，仍保留未知结果和原始幂等键、目标版本供回读恢复。携带原 key/version
+  的恢复调用若在服务端查幂等记录之前被通道状态拒绝，也继续保留未知结果。
+
 ### Agent skill
 
 `.agents/skills/agctl/SKILL.md` 向 agent 说明机器契约以及 CI 和管理菜谱。skill
@@ -613,7 +653,9 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   `GATEWAY_ENV_FILE`（或 `.env`）在空闲端口上启动一个 Compose 项目，结束后
   删除。设置 `CLI_E2E_SERVER` 和 `CLI_E2E_TOKEN`（管理员 token）时改为复用
   正在运行的 Gateway，CI 在 Console E2E 之后就是这样运行的；设置
-  `CLI_E2E_RESOLVER_TOKEN` 会加入需要无仓库权限凭据的检查。剧本创建仓库、
+  `CLI_E2E_RESOLVER_TOKEN` 会加入需要无仓库权限凭据的检查；设置
+  `CLI_E2E_OIDC_ISSUER`（Gateway 已配置的 OIDC issuer，会规范化首尾空白和末尾斜杠）会加入身份绑定检查，
+  隔离 Compose 模式自行配置合成 issuer，CI 在共享 Gateway 上配置一个。剧本创建仓库、
   重放创建、更新（dry-run、真实更新、过期 `If-Match`）并在列表中找到它；
   用它和第二个仓库建 Group（dry-run、重放、未知成员、成员、解析顺序、带过期
   `If-Match` 的改名、重排、保留成员的删除）；通过原生协议发布一个 Raw 文件和
@@ -628,11 +670,19 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   202、等待超时）并等待 `deleted`。还会运行 CI 剧本：服务账号只把凭据签发到
   0600 文件，用它读取仓库，轮换后旧秘密返回 401，撤销授权后失去访问；创建并吊销
   API key；待授权用户升为 member 后在授权前仍无仓库权限，其会话被结束后被拒，
-  从文件重置密码，最后删除用户；任何输出中都不得出现 token 或密码。发布部分上传
+  从文件重置密码，最后删除用户，上述每次变更（创建、角色更新、会话列出与吊销、
+  重置密码、删除）都以管理员为 actor 记录在审计日志的 `users/<id>` 下；该用户
+  为 member 时，其会话管理账号与身份均被拒绝（6）。为该用户链接一个 OIDC 身份（先 dry-run）并列出；同一 subject 链接到
+  另一用户或再次链接到同一用户均为冲突（7），非已配置 issuer 被拒绝；解除绑定
+  （`--yes`，先 dry-run）后再次解除返回 404（4），释放的 subject 可链接到另一用户，
+  两次变更都能在审计日志中找到；任何输出中都不得出现 token 或密码。发布部分上传
   Raw 目录树（dry-run、上传、重跑时跳过、只重传改动的文件、逐字节回读、检索中的
   规范坐标），并通过会话发布两个 Maven 坐标（一步完成与分步执行，已提交会话被拒，
   重复提交返回 409）；用户用 `auth login --secret-output` 登录并使用该 token。同时检查错误
   token（5）、仓库不存在（4）、非法输入（2）和冲突（7）的退出码。
+- `make email-compose-check` 在带自有 TLS SMTP 的隔离 Gateway 上运行邮件命令：
+  从私有收件人文件建目标、改名后仍保持启用、预览和计划不入队、带 key 的测试只送达
+  一次、重放被拒，以及配额规则的生命周期；收件人不出现在任何 agctl 输出中。
 - `make cli-contract-check` 校验命令映射表覆盖全部契约操作，且每个标为
   `implemented` 的行都对应声明了该行端点的已注册命令。
 
