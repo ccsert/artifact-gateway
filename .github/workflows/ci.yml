@@ -195,6 +195,9 @@ jobs:
           RUSTFS_RPC_SECRET=ci-rustfs-independent-rpc-secret-0001
           RUSTFS_API_PORT=19000
           RUSTFS_CONSOLE_PORT=19001
+          GATEWAY_OIDC_ISSUER=http://127.0.0.1:1/ci-cli-e2e
+          GATEWAY_OIDC_AUDIENCE=ci-cli-e2e
+          GATEWAY_OIDC_JWKS_URL=http://127.0.0.1:1/ci-cli-e2e/jwks
           EOF
           docker compose --env-file "$GATEWAY_ENV_FILE" -f compose.yml up --build --wait --remove-orphans
       - name: Run console E2E
@@ -210,6 +213,7 @@ jobs:
           CLI_E2E_SERVER: http://127.0.0.1:18080
           CLI_E2E_TOKEN: ci-admin-token
           CLI_E2E_RESOLVER_TOKEN: ci-resolver-token
+          CLI_E2E_OIDC_ISSUER: http://127.0.0.1:1/ci-cli-e2e
         run: make cli-e2e
       - name: Stop gateway after Console E2E
         if: always()

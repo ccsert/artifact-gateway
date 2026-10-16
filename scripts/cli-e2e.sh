@@ -8,7 +8,8 @@
 # script then only creates repositories with unique names and deletes them.
 # CLI_E2E_RESOLVER_TOKEN (the Gateway's resolver token) adds the checks that
 # need a credential without repository permissions; without it they are
-# skipped.
+# skipped. CLI_E2E_OIDC_ISSUER (the Gateway's configured OIDC issuer) adds
+# the identity link checks; the isolated Gateway gets a synthetic issuer.
 #
 # Scenario: repository create -> update -> visible in list -> Group create,
 # members, resolution, rename, reorder, delete -> repository delete accepted
@@ -70,6 +71,7 @@ if [[ -n "${CLI_E2E_SERVER:-}" ]]; then
   server=$CLI_E2E_SERVER
   admin_token=$CLI_E2E_TOKEN
   resolver_token=${CLI_E2E_RESOLVER_TOKEN:-}
+  oidc_issuer=${CLI_E2E_OIDC_ISSUER:-}
 else
   command -v docker >/dev/null || {
     printf '%s\n' 'CLI E2E requires docker, or CLI_E2E_SERVER and CLI_E2E_TOKEN for a running Gateway.' >&2
@@ -90,14 +92,29 @@ else
     $1 != "RUSTFS_API_PORT" &&
     $1 != "RUSTFS_CONSOLE_PORT" &&
     $1 != "GATEWAY_ADMIN_TOKEN" &&
-    $1 != "GATEWAY_RESOLVER_TOKEN" { print }
+    $1 != "GATEWAY_RESOLVER_TOKEN" &&
+    $1 !~ /^GATEWAY_OIDC_/ { print }
   ' "$env_file" >"$workdir/gateway.env"
   printf 'GATEWAY_HTTP_PORT=%s\nGATEWAY_POSTGRES_PORT=%s\nRUSTFS_API_PORT=%s\nRUSTFS_CONSOLE_PORT=%s\nGATEWAY_ADMIN_TOKEN=%s\nGATEWAY_RESOLVER_TOKEN=%s\n' \
     "$gateway_port" "$(free_port)" "$(free_port)" "$(free_port)" \
     "$admin_token" "$resolver_token" >>"$workdir/gateway.env"
+  # A synthetic OIDC issuer for the identity-link checks. Nothing listens on
+  # it: linking only compares the issuer, and opaque bearer tokens are
+  # rejected as JWTs before any key fetch.
+  oidc_issuer="http://127.0.0.1:1/cli-e2e-oidc-${RANDOM}"
+  printf 'GATEWAY_OIDC_ISSUER=%s\nGATEWAY_OIDC_AUDIENCE=agctl-cli-e2e\nGATEWAY_OIDC_JWKS_URL=%s/jwks\n' \
+    "$oidc_issuer" "$oidc_issuer" >>"$workdir/gateway.env"
   compose up -d --build --wait
   server="http://127.0.0.1:${gateway_port}"
 fi
+
+# Match the canonical issuer returned by configuration and identity writes.
+oidc_issuer=$(python3 - "$oidc_issuer" <<'PY2'
+import sys
+
+print(sys.argv[1].strip().rstrip("/"))
+PY2
+)
 
 go build -o "$workdir/agctl" ./cmd/agctl
 
@@ -737,6 +754,9 @@ expect 0 "$out" -- user create "$user" --role none --password-file "$secrets/pas
 nosecret "$user_password"
 expect 0 "$out" -- user list --search "$user" --json
 require "$(field "$out" meta.pagination.total)" 0 "password preflight and dry-run create no user"
+expect 0 "$out" -- auth whoami --json
+admin_actor=$(field "$out" data.actor)
+user_started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 expect 0 "$out" -- user create "$user" --role none --password-file "$secrets/password" --verbose --json
 nosecret "$user_password"
 user_id=$(field "$out" data.id)
@@ -753,6 +773,17 @@ expect 0 "$out" -- access check --repo "$content_id" --actor "user:$user" --role
 expect 0 "$out" -- user sessions list "$user_id" --json
 session_id=$(field "$out" data.items.0.id)
 cli_test_token=$session_token expect 0 "$out" -- auth whoami --json
+# A member session cannot manage accounts or identities (403, exit 6).
+cli_test_token=$session_token expect 6 "$out" -- user list --json
+cli_test_token=$session_token expect 6 "$out" -- user identities list "$user_id" --json
+require "$(field "$out" error.httpStatus)" 403 "member identity list status"
+nosecret "$session_token"
+cli_test_token=$session_token expect 6 "$out" -- user identities unlink "$user_id" --identity 00000000-0000-4000-8000-000000000000 --yes --json
+nosecret "$session_token"
+if [[ -n "$oidc_issuer" ]]; then
+  cli_test_token=$session_token expect 6 "$out" -- user identities link "$user_id" --issuer "$oidc_issuer" --subject "cli-e2e-self-${suffix}" --json
+  nosecret "$session_token"
+fi
 expect 0 "$out" -- user sessions revoke "$user_id" --session "$session_id" --yes --json
 expect 0 "$out" -- user sessions revoke "$user_id" --session "$session_id" --yes --json
 cli_test_token=$session_token expect 5 "$out" -- auth whoami --json
@@ -764,6 +795,76 @@ require "$(field "$out" data.mustChangePassword)" true "reset requires a change"
 expect 0 "$out" -- user identities list "$user_id" --json
 require "$(field "$out" data.items)" "[]" "no linked identities"
 expect 4 "$out" -- user identities unlink "$user_id" --identity 00000000-0000-4000-8000-000000000000 --yes --json
+require "$(field "$out" error.httpStatus)" 404 "missing identity status"
+# Identity links (#335) against the configured OIDC issuer: dry-run submits
+# nothing; a link is listed; the same subject on another user, or again on
+# this one, is a 409 (exit 7); an issuer other than the configured one is
+# refused; unlink removes it, and a second unlink answers 404 (exit 4). Both
+# changes reach the audit log, and no token reaches any output.
+if [[ -n "$oidc_issuer" ]]; then
+  subject="cli-e2e-subject-${suffix}"
+  identity_started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  expect 2 "$out" -- user identities link "$user_id" --issuer "$oidc_issuer" --json
+  expect 0 "$out" -- user identities link "$user_id" --issuer "$oidc_issuer" --subject "$subject" --dry-run --json
+  require "$(field "$out" data.mode)" client-plan "link dry-run mode"
+  expect 0 "$out" -- user identities list "$user_id" --json
+  require "$(field "$out" data.items)" "[]" "link dry-run links nothing"
+  expect 0 "$out" -- user identities link "$user_id" --issuer "$oidc_issuer" --subject "$subject" --verbose --json
+  nosecret "$admin_token"
+  identity_id=$(field "$out" data.id)
+  require "$(field "$out" data.userId)" "$user_id" "linked identity user"
+  require "$(field "$out" data.subject)" "$subject" "linked identity subject"
+  require "$(field "$out" data.kind)" oidc "linked identity kind"
+  expect 0 "$out" -- user identities list "$user_id" --json
+  require "$(field "$out" data.items.0.id)" "$identity_id" "listed identity"
+  require "$(field "$out" data.items.0.issuer)" "$oidc_issuer" "listed identity issuer"
+  require "$(python3 -c 'import json, sys; print(len(json.load(open(sys.argv[1]))["data"]["items"]))' "$out")" 1 "a single linked identity"
+  expect 0 "$out" -- user identities list "$user_id"
+  grep -q -- "$subject" "$out" || {
+    printf '%s\n' 'the identity table misses the subject' >&2
+    exit 1
+  }
+  other_user="cli-e2e-other-${suffix}"
+  expect 0 "$out" -- user create "$other_user" --role none --password-file "$secrets/password" --json
+  other_user_id=$(field "$out" data.id)
+  expect 7 "$out" -- user identities link "$other_user_id" --issuer "$oidc_issuer" --subject "$subject" --json
+  require "$(field "$out" error.httpStatus)" 409 "identity conflict status"
+  nosecret "$admin_token"
+  expect 7 "$out" -- user identities link "$user_id" --issuer "$oidc_issuer/" --subject "$subject" --json
+  expect 0 "$out" -- user identities list "$other_user_id" --json
+  require "$(field "$out" data.items)" "[]" "a conflicting link links nothing"
+  expect 1 "$out" -- user identities link "$other_user_id" --issuer "https://issuer.invalid/cli-e2e" --subject "$subject" --json
+  require "$(field "$out" error.httpStatus)" 400 "foreign issuer status"
+  expect 2 "$out" -- user identities unlink "$user_id" --identity "$identity_id" --json
+  expect 0 "$out" -- user identities unlink "$user_id" --identity "$identity_id" --dry-run --json
+  expect 0 "$out" -- user identities list "$user_id" --json
+  require "$(field "$out" data.items.0.id)" "$identity_id" "unlink dry-run keeps the identity"
+  expect 4 "$out" -- user identities unlink "$other_user_id" --identity "$identity_id" --yes --json
+  expect 0 "$out" -- user identities unlink "$user_id" --identity "$identity_id" --yes --json
+  require "$(field "$out" data.unlinked)" true "unlinked"
+  nosecret "$admin_token"
+  expect 0 "$out" -- user identities list "$user_id" --json
+  require "$(field "$out" data.items)" "[]" "no identity after unlink"
+  expect 4 "$out" -- user identities unlink "$user_id" --identity "$identity_id" --yes --json
+  require "$(field "$out" error.httpStatus)" 404 "second unlink status"
+  # Once unlinked, the subject is free for another user.
+  expect 0 "$out" -- user identities link "$other_user_id" --issuer "$oidc_issuer" --subject "$subject" --json
+  expect 0 "$out" -- audit list --from "$identity_started" --page-size 200 --all --json
+  python3 - "$out" "$user_id" "$identity_id" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    records = json.load(stream)["data"]["items"]
+resource = f"users/{sys.argv[2]}/identities/{sys.argv[3]}"
+operations = sorted(record["operation"] for record in records if record.get("resource") == resource)
+if operations != ["user.identity.link", "user.identity.unlink"]:
+    raise SystemExit(f"identity audit for {resource}: {operations}")
+PY2
+  expect 0 "$out" -- user delete "$other_user_id" --yes --json
+else
+  printf '%s\n' 'CLI E2E: CLI_E2E_OIDC_ISSUER is not set; identity link checks skipped.' >&2
+fi
 expect 0 "$out" -- user list --search "$user" --json
 require "$(field "$out" meta.pagination.total)" 1 "user search"
 expect 0 "$out" -- grant delete --repo "$content_id" --principal "user:$user" --yes --json
@@ -771,6 +872,36 @@ expect 2 "$out" -- user delete "$user_id" --json
 expect 0 "$out" -- user delete "$user_id" --dry-run --json
 expect 0 "$out" -- user delete "$user_id" --yes --json
 expect 4 "$out" -- user show "$user_id" --json
+# The user's lifecycle is in the audit log, by the administrator: create,
+# the role update, the session list, both single-session revokes (the second
+# is idempotent), revoke-all, the password reset and the delete. Refused,
+# dry-run and stale (412) attempts change nothing and record nothing here.
+expect 0 "$out" -- audit list --from "$user_started" --page-size 200 --all --json
+python3 - "$out" "$user_id" "$admin_actor" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    records = json.load(stream)["data"]["items"]
+resource = f"users/{sys.argv[2]}"
+mine = [record for record in records if record.get("resource") == resource]
+got = sorted((record["operation"], record["status"]) for record in mine)
+want = sorted([
+    ("user.create", 201),
+    ("user.update", 200),
+    ("user.session.list", 200),
+    ("user.session.revoke", 200),
+    ("user.session.revoke", 200),
+    ("user.sessions.revoke", 200),
+    ("user.password.reset", 200),
+    ("user.delete", 204),
+])
+if got != want:
+    raise SystemExit(f"user lifecycle audit for {resource}: {got}")
+actors = {record.get("actor") for record in mine}
+if actors != {sys.argv[3]}:
+    raise SystemExit(f"user lifecycle audit actors for {resource}: {sorted(map(str, actors))}")
+PY2
 
 # Publishing (#132). A Raw tree is uploaded, re-run (everything skipped by
 # digest), changed (only the changed file goes up), and read back byte for
