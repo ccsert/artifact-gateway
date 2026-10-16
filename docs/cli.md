@@ -745,7 +745,8 @@ command, flag, or argument count the client does not have.
   (an admin token) it reuses a running Gateway instead, which is how CI runs
   it after the Console E2E; `CLI_E2E_RESOLVER_TOKEN` adds the checks that need
   a credential without repository permissions, and `CLI_E2E_OIDC_ISSUER` (the
-  Gateway's configured OIDC issuer) adds the identity link checks; isolated
+  Gateway's configured OIDC issuer, with surrounding whitespace and trailing
+  slashes normalized) adds the identity link checks; isolated
   Compose mode configures a synthetic issuer itself, and CI configures one on
   the shared Gateway. The scenario creates a repository, replays the
   create, updates it (dry-run, real update, stale `If-Match`), and finds it in
