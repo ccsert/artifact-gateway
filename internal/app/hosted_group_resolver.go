@@ -37,7 +37,7 @@ func (r v2GroupResolver) authorizeMembers(ctx context.Context, principal Princip
 // every V2 member repository. npm Groups use this because one packument can
 // aggregate metadata from every member; an unmanaged default grant set must
 // still honor the configured static repository patterns.
-func (r v2GroupResolver) authorizeRepositoryMembers(ctx context.Context, principal Principal, groupName string, format repository.Format, resource string, members []repository.Member) ([]repository.Member, bool) {
+func (r v2GroupResolver) authorizeRepositoryMembers(ctx context.Context, principal Principal, groupName string, format repository.Format, resource string, members []repository.Member, operation RepositoryOperation) ([]repository.Member, bool) {
 	if isAnonymous(principal) {
 		return members, false
 	}
@@ -47,7 +47,7 @@ func (r v2GroupResolver) authorizeRepositoryMembers(ctx context.Context, princip
 		repo, err := r.repos.GetHostedRepository(ctx, member.RepositoryID)
 		decision := AuthorizationDecision{Source: "repository_grants", Reason: "grant_lookup_failed"}
 		if err == nil && repo.Format == format && repo.State == repository.RepositoryActive {
-			decision = r.authorizer.AuthorizeResource(ctx, principal, repo, RepositoryRead, resource)
+			decision = r.authorizer.AuthorizeResource(ctx, principal, repo, operation, resource)
 		}
 		if decision.Allowed {
 			eligible = append(eligible, member)

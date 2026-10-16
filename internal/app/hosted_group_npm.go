@@ -74,7 +74,11 @@ func (h v2GroupNPMHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 	if isAnonymous(principal) {
 		members = anonymousHostedGroupMembers(group, members)
 	}
-	members, denied := resolver.authorizeRepositoryMembers(r.Context(), principal, group.Name, repository.FormatNPM, route.Package, members)
+	operation := RepositoryRead
+	if route.Kind == npmprotocol.RouteDistTags && route.Tag != "" && isNPMWriteMethod(r.Method) {
+		operation = RepositoryWrite
+	}
+	members, denied := resolver.authorizeRepositoryMembers(r.Context(), principal, group.Name, repository.FormatNPM, route.Package, members, operation)
 	if denied && len(members) == 0 {
 		h.native.challenge(w, http.StatusForbidden, "repository permission required")
 		return
@@ -121,7 +125,40 @@ func (h v2GroupNPMHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 			return
 		}
 		h.tarball(w, r, resolver, group, members, route.Package, route.Tarball, principal.Actor)
+	case npmprotocol.RouteDistTags:
+		if route.Tag != "" && (r.Method == http.MethodPut || r.Method == http.MethodDelete) {
+			resolver.auditResolution(r.Context(), group, repository.FormatNPM, route.Package, strings.ToLower(r.Method), principal.Actor, repository.AuditAccessDenied, http.StatusMethodNotAllowed)
+			h.native.writeError(w, http.StatusMethodNotAllowed, "dist-tags can only be changed in a Hosted repository")
+			return
+		}
+		if route.Tag != "" || r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		h.distTags(w, r, resolver, group, members, route.Package, principal.Actor)
 	}
+}
+
+// distTags answers `npm dist-tag ls` through a Group with the same merge the
+// packument uses: for each tag the first member in Group order that defines it
+// is authoritative, and tags naming a version no member serves are dropped.
+func (h v2GroupNPMHandler) distTags(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, packageName, actor string) {
+	merged, firstError, stale, _, _ := h.resolvePackage(r, resolver, group, members, packageName, actor)
+	if len(merged.Versions) == 0 {
+		if firstError != nil {
+			resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName, strings.ToLower(r.Method), actor, firstError.Outcome, firstError.Status)
+			h.native.writeError(w, firstError.Status, firstError.Message)
+		} else {
+			resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
+			h.native.writeError(w, http.StatusNotFound, "package not found")
+		}
+		return
+	}
+	if stale {
+		w.Header().Set("Warning", `110 Artifact-Gateway "Response is stale"`)
+	}
+	groupRepo := repository.HostedRepository{ID: group.ID, Name: group.Name, Format: repository.FormatNPM, Type: repository.RepositoryTypeHosted}
+	h.native.writeNPMMetadataJSON(w, r, groupRepo, packageName, actor, "bypass", npmAuditTarget{GroupName: group.Name, Repository: group.Name}, visibleNPMDistTags(merged))
 }
 
 func (h v2GroupNPMHandler) packument(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup, members []repository.Member, packageName, actor string) {

@@ -45,7 +45,7 @@ func (h v2GroupGoHandler) serve(w http.ResponseWriter, r *http.Request, resolver
 	if isAnonymous(principal) {
 		members = anonymousHostedGroupMembers(group, members)
 	}
-	members, denied := resolver.authorizeRepositoryMembers(r.Context(), principal, group.Name, repository.FormatGo, route.module, members)
+	members, denied := resolver.authorizeRepositoryMembers(r.Context(), principal, group.Name, repository.FormatGo, route.module, members, RepositoryRead)
 	if denied && len(members) == 0 {
 		h.native.challenge(w, http.StatusForbidden, "repository permission required")
 		return

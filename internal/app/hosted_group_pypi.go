@@ -48,7 +48,7 @@ func (h v2GroupPyPIHandler) serve(w http.ResponseWriter, r *http.Request, resolv
 	if resource == "" {
 		resource = route.filename
 	}
-	members, denied := resolver.authorizeRepositoryMembers(r.Context(), principal, group.Name, repository.FormatPyPI, resource, members)
+	members, denied := resolver.authorizeRepositoryMembers(r.Context(), principal, group.Name, repository.FormatPyPI, resource, members, RepositoryRead)
 	if denied && len(members) == 0 {
 		h.native.challenge(w, http.StatusForbidden, "repository permission required")
 		return
