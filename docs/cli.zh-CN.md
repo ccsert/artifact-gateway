@@ -613,7 +613,9 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   `GATEWAY_ENV_FILE`（或 `.env`）在空闲端口上启动一个 Compose 项目，结束后
   删除。设置 `CLI_E2E_SERVER` 和 `CLI_E2E_TOKEN`（管理员 token）时改为复用
   正在运行的 Gateway，CI 在 Console E2E 之后就是这样运行的；设置
-  `CLI_E2E_RESOLVER_TOKEN` 会加入需要无仓库权限凭据的检查。剧本创建仓库、
+  `CLI_E2E_RESOLVER_TOKEN` 会加入需要无仓库权限凭据的检查；设置
+  `CLI_E2E_OIDC_ISSUER`（Gateway 已配置的 OIDC issuer）会加入身份绑定检查，
+  隔离 Compose 模式自行配置合成 issuer，CI 在共享 Gateway 上配置一个。剧本创建仓库、
   重放创建、更新（dry-run、真实更新、过期 `If-Match`）并在列表中找到它；
   用它和第二个仓库建 Group（dry-run、重放、未知成员、成员、解析顺序、带过期
   `If-Match` 的改名、重排、保留成员的删除）；通过原生协议发布一个 Raw 文件和
@@ -628,7 +630,11 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   202、等待超时）并等待 `deleted`。还会运行 CI 剧本：服务账号只把凭据签发到
   0600 文件，用它读取仓库，轮换后旧秘密返回 401，撤销授权后失去访问；创建并吊销
   API key；待授权用户升为 member 后在授权前仍无仓库权限，其会话被结束后被拒，
-  从文件重置密码，最后删除用户；任何输出中都不得出现 token 或密码。发布部分上传
+  从文件重置密码，最后删除用户；该用户为 member 时，其会话管理账号与身份均被
+  拒绝（6）。为该用户链接一个 OIDC 身份（先 dry-run）并列出；同一 subject 链接到
+  另一用户或再次链接到同一用户均为冲突（7），非已配置 issuer 被拒绝；解除绑定
+  （`--yes`，先 dry-run）后再次解除返回 404（4），释放的 subject 可链接到另一用户，
+  两次变更都能在审计日志中找到；任何输出中都不得出现 token 或密码。发布部分上传
   Raw 目录树（dry-run、上传、重跑时跳过、只重传改动的文件、逐字节回读、检索中的
   规范坐标），并通过会话发布两个 Maven 坐标（一步完成与分步执行，已提交会话被拒，
   重复提交返回 409）；用户用 `auth login --secret-output` 登录并使用该 token。同时检查错误
