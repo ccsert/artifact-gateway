@@ -2,6 +2,7 @@
 groups:
   get:
     operationId: listGroups
+    description: The platform tier lists every group; any other caller lists the groups whose referenced repositories it all administers. A page may hold fewer items than pageSize while nextPageToken is set.
     parameters:
     - "$ref": "../components/parameters.yaml#/PageSize"
     - "$ref": "../components/parameters.yaml#/PageToken"
@@ -29,10 +30,12 @@ groups_groupId:
   - "$ref": "../components/parameters.yaml#/GroupId"
   get:
     operationId: getGroup
-    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
+    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may read it, the same rule that lets them manage it. Any other caller gets 404, as if the group did not exist.
     responses:
       '200':
         "$ref": "../components/responses.yaml#/Group"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
   put:
     operationId: replaceGroup
     description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it, including the members it drops and the ones it adds. The refusal names the member that is out of bounds.
@@ -60,13 +63,15 @@ groups_groupId_members:
   - "$ref": "../components/parameters.yaml#/GroupId"
   get:
     operationId: listGroupMembers
-    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
+    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may read it, the same rule that lets them manage it. Any other caller gets 404, as if the group did not exist.
     responses:
       '200':
         "$ref": "../components/responses.yaml#/MemberList"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
   put:
     operationId: replaceGroupMembers
-    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
+    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it, including the members it drops and the ones it adds. The response is the whole updated group, so its new version is known without another read.
     parameters:
     - "$ref": "../components/parameters.yaml#/IfMatch"
     requestBody:
@@ -77,7 +82,7 @@ groups_groupId_members:
             "$ref": "../components/schemas.yaml#/MemberList"
     responses:
       '200':
-        "$ref": "../components/responses.yaml#/MemberList"
+        "$ref": "../components/responses.yaml#/Group"
       '412':
         "$ref": "../components/responses.yaml#/Problem"
     x-gateway-memberConstraints:
@@ -89,7 +94,7 @@ groups_groupId_capacity:
   - "$ref": "../components/parameters.yaml#/GroupId"
   get:
     operationId: getGroupCapacity
-    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.
+    description: A hosted group references repositories, so the platform tier and the administrators of every repository it references may read it, the same rule that lets them manage it. Any other caller gets 404, as if the group did not exist.
     responses:
       '200':
         "$ref": "../components/responses.yaml#/GroupCapacity"
@@ -101,7 +106,7 @@ groups_groupId_resolution:
   get:
     operationId: getGroupResolution
     summary: Inspect the server-owned Group member candidate order
-    description: Administrative configuration inspection. Uses the protocol resolver's Hosted-first order with configured positions within each type. Missing, inactive and mismatched repositories are excluded. No artifacts or upstreams are queried; this is not a per-artifact hit result or an authorization decision for a particular reader.
+    description: Administrative configuration inspection. Uses the protocol resolver's Hosted-first order with configured positions within each type. Missing, inactive and mismatched repositories are excluded. No artifacts or upstreams are queried; this is not a per-artifact hit result or an authorization decision for a particular reader. The platform tier and the administrators of every repository the group references may read it; any other caller gets 404, as if the group did not exist.
     responses:
       '200':
         description: Current eligible member candidates

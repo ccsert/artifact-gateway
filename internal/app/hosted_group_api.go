@@ -73,8 +73,65 @@ func (h generatedRepositoryAPIAdapter) recordGroupMembershipDenial(r *http.Reque
 	})
 }
 
+// administersGroupMembers reports, without answering or auditing, whether a
+// principal outside the platform tier administers every member: the rule that
+// lets it write the Group also lets it read the Group. A member without a
+// readable repository fails closed.
+func (h generatedRepositoryAPIAdapter) administersGroupMembers(r *http.Request, principal Principal, members []repository.GroupMember) bool {
+	for _, member := range members {
+		if member.RepositoryID == "" {
+			return false
+		}
+		repo, err := h.store.GetHostedRepository(r.Context(), member.RepositoryID)
+		if err != nil || !h.authorizer.Authorize(r.Context(), principal, repo, RepositoryAdmin).Allowed {
+			return false
+		}
+	}
+	return true
+}
+
+// readGroup loads a Group for a read endpoint. The platform tier reads every
+// Group; a caller who administers every member reads that Group, the same rule
+// writes use. Any other caller gets 404, as if the Group did not exist, so a
+// read does not reveal a Group the caller only partly administers.
+func (h generatedRepositoryAPIAdapter) readGroup(w http.ResponseWriter, r *http.Request, id string) (repository.HostedGroup, bool) {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
+		return repository.HostedGroup{}, false
+	}
+	if code, message, blocked := accountStateProblem(principal.AccountStateReason()); blocked {
+		writeHostedProblem(w, http.StatusForbidden, code, message)
+		return repository.HostedGroup{}, false
+	}
+	group, err := h.groups.GetHostedGroup(r.Context(), id)
+	if errors.Is(err, repository.ErrNotFound) || (err == nil && !principal.Admin && !h.administersGroupMembers(r, principal, group.Members)) {
+		writeHostedProblem(w, http.StatusNotFound, "not_found", "group not found")
+		return repository.HostedGroup{}, false
+	}
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get group failed")
+		return repository.HostedGroup{}, false
+	}
+	return group, true
+}
+
+// groupListScanBudget bounds how many Groups one filtered list request checks,
+// so a caller who can read few Groups cannot make a single request scan the
+// whole catalog.
+var groupListScanBudget = 1000
+
+// ListGroups lists every Group to the platform tier and, to anyone else, the
+// Groups whose members it all administers. A filtered page may span several
+// store batches and stops after groupListScanBudget Groups, so it can be short
+// or empty while more remain; its token is the last Group scanned, so the next
+// page resumes after it rather than after the last Group returned.
 func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http.Request, params adminopenapi.ListGroupsParams) {
-	if _, ok := h.authorize(w, r); !ok {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
+		return
+	}
+	if code, message, blocked := accountStateProblem(principal.AccountStateReason()); blocked {
+		writeHostedProblem(w, http.StatusForbidden, code, message)
 		return
 	}
 	limit, after := 50, ""
@@ -84,14 +141,53 @@ func (h generatedRepositoryAPIAdapter) ListGroups(w http.ResponseWriter, r *http
 	if params.PageToken != nil {
 		after = string(*params.PageToken)
 	}
-	items, next, err := h.groups.ListHostedGroups(r.Context(), limit, after)
-	if errors.Is(err, repository.ErrNotFound) {
-		writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid")
+	if principal.Admin {
+		items, next, err := h.groups.ListHostedGroups(r.Context(), limit, after)
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list groups failed")
+			return
+		}
+		writeNativeMavenJSON(w, http.StatusOK, map[string]any{"items": items, "nextPageToken": next})
 		return
 	}
-	if err != nil {
-		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list groups failed")
-		return
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	items := make([]repository.HostedGroup, 0, limit)
+	scanned, hasMore, budget := after, false, groupListScanBudget
+	for len(items) < limit && budget > 0 {
+		batch, next, err := h.groups.ListHostedGroups(r.Context(), min(200, budget), scanned)
+		if errors.Is(err, repository.ErrNotFound) {
+			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid")
+			return
+		}
+		if err != nil {
+			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list groups failed")
+			return
+		}
+		budget -= len(batch)
+		hasMore = next != ""
+		for index, candidate := range batch {
+			scanned = candidate.ID
+			if h.administersGroupMembers(r, principal, candidate.Members) {
+				items = append(items, candidate)
+			}
+			if len(items) == limit {
+				hasMore = index < len(batch)-1 || next != ""
+				break
+			}
+		}
+		if len(items) == limit || next == "" {
+			break
+		}
+	}
+	next := ""
+	if hasMore {
+		next = scanned
 	}
 	writeNativeMavenJSON(w, http.StatusOK, map[string]any{"items": items, "nextPageToken": next})
 }
@@ -144,32 +240,16 @@ func (h generatedRepositoryAPIAdapter) GetGroup(w http.ResponseWriter, r *http.R
 }
 
 func (h generatedRepositoryAPIAdapter) ListGroupMembers(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
-	if _, ok := h.authorize(w, r); !ok {
-		return
-	}
-	group, err := h.groups.GetHostedGroup(r.Context(), id.String())
-	if errors.Is(err, repository.ErrNotFound) {
-		writeHostedProblem(w, 404, "not_found", "group not found")
-		return
-	}
-	if err != nil {
-		writeHostedProblem(w, 500, "internal_error", "get group failed")
+	group, ok := h.readGroup(w, r, id.String())
+	if !ok {
 		return
 	}
 	writeNativeMavenJSON(w, 200, group.Members)
 }
 
 func (h generatedRepositoryAPIAdapter) GetGroupCapacity(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
-	if _, ok := h.authorize(w, r); !ok {
-		return
-	}
-	group, err := h.groups.GetHostedGroup(r.Context(), id.String())
-	if errors.Is(err, repository.ErrNotFound) {
-		writeHostedProblem(w, http.StatusNotFound, "not_found", "group not found")
-		return
-	}
-	if err != nil {
-		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get group failed")
+	group, ok := h.readGroup(w, r, id.String())
+	if !ok {
 		return
 	}
 	items := make([]map[string]any, 0, len(group.Members))
@@ -278,19 +358,9 @@ func (h generatedRepositoryAPIAdapter) ReplaceGroupMembers(w http.ResponseWriter
 }
 
 func (h generatedRepositoryAPIAdapter) writeGroup(w http.ResponseWriter, r *http.Request, id string) {
-	if _, ok := h.authorize(w, r); !ok {
-		return
+	if group, ok := h.readGroup(w, r, id); ok {
+		writeNativeMavenJSON(w, 200, group)
 	}
-	group, err := h.groups.GetHostedGroup(r.Context(), id)
-	if errors.Is(err, repository.ErrNotFound) {
-		writeHostedProblem(w, 404, "not_found", "group not found")
-		return
-	}
-	if err != nil {
-		writeHostedProblem(w, 500, "internal_error", "get group failed")
-		return
-	}
-	writeNativeMavenJSON(w, 200, group)
 }
 
 func (h generatedRepositoryAPIAdapter) writeGroupMutation(w http.ResponseWriter, group repository.HostedGroup, err error) {

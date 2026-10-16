@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 
@@ -71,8 +72,9 @@ func TestHostedGroupMembershipFollowsRepositoryAdministration(t *testing.T) {
 	}
 	groupPath := "/api/v2/groups/" + group.Id.String()
 	replaced := call(repoAdmin, http.MethodPut, groupPath+"/members", memberBody(managed.ID), "1")
-	if replaced.Code != http.StatusOK {
-		t.Fatalf("replace=%d body=%s", replaced.Code, replaced.Body.String())
+	var replacedGroup adminopenapi.Group
+	if replaced.Code != http.StatusOK || json.Unmarshal(replaced.Body.Bytes(), &replacedGroup) != nil || replacedGroup.Id != group.Id || replacedGroup.Version != "2" || len(replacedGroup.Members) != 1 {
+		t.Fatalf("a member replacement answers the whole updated group: replace=%d body=%s", replaced.Code, replaced.Body.String())
 	}
 
 	// A member outside the caller's administration refuses the whole request and
@@ -115,8 +117,75 @@ func TestHostedGroupMembershipFollowsRepositoryAdministration(t *testing.T) {
 
 	// An account that administers that repository again may delete the group;
 	// withdrawing the grant first takes the group away from it.
-	if response := call(otherAdmin, http.MethodGet, groupPath, "", ""); response.Code != http.StatusForbidden {
-		t.Fatalf("unrelated administrator read=%d body=%s", response.Code, response.Body.String())
+	// The rule that lets a caller write a group lets it read the group back;
+	// any other caller cannot tell the group exists.
+	for _, suffix := range []string{"", "/members", "/resolution", "/capacity"} {
+		if response := call(repoAdmin, http.MethodGet, groupPath+suffix, "", ""); response.Code != http.StatusOK {
+			t.Fatalf("member administrator read %q=%d body=%s", suffix, response.Code, response.Body.String())
+		}
+		if response := call(otherAdmin, http.MethodGet, groupPath+suffix, "", ""); response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"not_found"`) {
+			t.Fatalf("unrelated administrator read %q=%d body=%s", suffix, response.Code, response.Body.String())
+		}
+	}
+	listed := func(token string) []string {
+		var names []string
+		pageToken := ""
+		for pages := 0; ; pages++ {
+			path := "/api/v2/groups?pageSize=1"
+			if pageToken != "" {
+				path += "&pageToken=" + pageToken
+			}
+			response := call(token, http.MethodGet, path, "", "")
+			var page struct {
+				Items         []adminopenapi.Group `json:"items"`
+				NextPageToken string               `json:"nextPageToken"`
+			}
+			if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &page) != nil || len(page.Items) > 1 || pages > 10 {
+				t.Fatalf("list=%d body=%s", response.Code, response.Body.String())
+			}
+			for _, item := range page.Items {
+				names = append(names, item.Name)
+			}
+			if page.NextPageToken == "" {
+				return names
+			}
+			pageToken = page.NextPageToken
+		}
+	}
+	// A group the caller only partly administers stays hidden, and filtering
+	// does not cut a page short of the groups after it.
+	for _, body := range []string{createBody("mixed-group", managed.ID, other.ID), createBody("other-group", other.ID), createBody("second-managed-group", managed.ID)} {
+		if response := call("admin-secret", http.MethodPost, "/api/v2/groups", body, ""); response.Code != http.StatusCreated {
+			t.Fatalf("platform create=%d body=%s", response.Code, response.Body.String())
+		}
+	}
+	if names := strings.Join(sortedStrings(listed(repoAdmin)), ","); names != "managed-group,second-managed-group" {
+		t.Fatalf("member administrator lists %s", names)
+	}
+	if names := strings.Join(sortedStrings(listed(otherAdmin)), ","); names != "other-group" {
+		t.Fatalf("other administrator lists %s", names)
+	}
+	if names := listed("admin-secret"); len(names) != 4 {
+		t.Fatalf("platform tier lists %v", names)
+	}
+	// One request checks a bounded number of Groups: with a budget of one, a
+	// page can be empty while its token continues the scan, and walking the
+	// pages still finds every readable Group.
+	previous := groupListScanBudget
+	groupListScanBudget = 1
+	t.Cleanup(func() { groupListScanBudget = previous })
+	var first struct {
+		Items         []adminopenapi.Group `json:"items"`
+		NextPageToken string               `json:"nextPageToken"`
+	}
+	if response := call(otherAdmin, http.MethodGet, "/api/v2/groups?pageSize=50", "", ""); json.Unmarshal(response.Body.Bytes(), &first) != nil || len(first.Items) > 1 || first.NextPageToken == "" {
+		t.Fatalf("a bounded scan returns at most what it checked and a token: %s", response.Body.String())
+	}
+	if names := strings.Join(sortedStrings(listed(repoAdmin)), ","); names != "managed-group,second-managed-group" {
+		t.Fatalf("member administrator lists %s under a bounded scan", names)
+	}
+	if names := strings.Join(sortedStrings(listed(otherAdmin)), ","); names != "other-group" {
+		t.Fatalf("other administrator lists %s under a bounded scan", names)
 	}
 	if _, err := store.ReplaceRepositoryGrants(ctx, managed.ID, nil, "2"); err != nil {
 		t.Fatal(err)
@@ -130,4 +199,9 @@ func TestHostedGroupMembershipFollowsRepositoryAdministration(t *testing.T) {
 	if response := call(repoAdmin, http.MethodDelete, groupPath, "", ""); response.Code != http.StatusNoContent {
 		t.Fatalf("restored grant delete=%d body=%s", response.Code, response.Body.String())
 	}
+}
+
+func sortedStrings(values []string) []string {
+	sort.Strings(values)
+	return values
 }

@@ -348,9 +348,10 @@ profile 运行验收。
 通过 `/api/v2/groups` 管理 Group。一个 Group 引用同一格式的多个仓库；在每种
 仓库类型内部，成员的配置位置决定解析顺序。Group 按 ID 指定。
 
-读取 Group（`list`、`show`、`members list`、`resolution`）需要平台管理员。
-写入还接受对变更前后引用的每个仓库都有管理权限的主体；这类主体无法回读
-Group，因此它无法确认结果的写入需要平台管理员来核对。
+平台管理员可以读写所有 Group。对 Group 引用的每个仓库都有管理权限的主体可以
+读取它（`show`、`members list`、`resolution`）并在 `list` 中看到它；写入则要求
+对变更前后的成员都有管理权限。其他主体得到 404，如同 Group 不存在，因此只管理
+部分成员的 Group 对其不可见。
 
 - `agctl group list [--page-size N] [--cursor TOKEN | --all [--max-pages
   N]]` 的分页方式与 `agctl repo list` 相同。
@@ -369,9 +370,8 @@ Group，因此它无法确认结果的写入需要平台管理员来核对。
   `--if-match VERSION` 或刚读到的版本，412（退出码 7）不覆盖任何内容。
   修改成员请用 `agctl group members set`。
 - `agctl group members set ID --member REPOSITORY_ID…` 按给出的顺序替换
-  成员，以 `--if-match` 或刚读到的版本为条件。契约写明响应是成员列表，而服务
-  端返回更新后的 Group；两者都接受，收到纯成员列表时会再读取 Group 以报告新
-  版本。若回读失败或返回不完整的 Group，命令报告失败并保留已确认写入的成员
+  成员，以 `--if-match` 或刚读到的版本为条件。服务端返回更新后的 Group；较旧的
+  服务端只返回成员列表，此时会再读取 Group 以报告新版本。若回读失败或返回不完整的 Group，命令报告失败并保留已确认写入的成员
   列表与回读提示，不会重复写入。
 - `agctl group delete ID --yes` 删除 Group，成员仓库保留。删除是同步的
   （`data` 为 `{id, deleted: true}`），且从不重试，因为响应丢失后的重复请求

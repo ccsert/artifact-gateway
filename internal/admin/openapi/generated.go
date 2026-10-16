@@ -18569,6 +18569,22 @@ func (response GetGroup200JSONResponse) VisitGetGroupResponse(w http.ResponseWri
 	return err
 }
 
+type GetGroup404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetGroup404ApplicationProblemPlusJSONResponse) VisitGetGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReplaceGroupRequestObject struct {
 	GroupId GroupId `json:"groupId"`
 	Params  ReplaceGroupParams
@@ -18764,6 +18780,22 @@ func (response ListGroupMembers200JSONResponse) VisitListGroupMembersResponse(w 
 	return err
 }
 
+type ListGroupMembers404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListGroupMembers404ApplicationProblemPlusJSONResponse) VisitListGroupMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReplaceGroupMembersRequestObject struct {
 	GroupId GroupId `json:"groupId"`
 	Params  ReplaceGroupMembersParams
@@ -18774,7 +18806,7 @@ type ReplaceGroupMembersResponseObject interface {
 	VisitReplaceGroupMembersResponse(w http.ResponseWriter) error
 }
 
-type ReplaceGroupMembers200JSONResponse struct{ MemberListJSONResponse }
+type ReplaceGroupMembers200JSONResponse struct{ GroupJSONResponse }
 
 func (response ReplaceGroupMembers200JSONResponse) VisitReplaceGroupMembersResponse(w http.ResponseWriter) error {
 

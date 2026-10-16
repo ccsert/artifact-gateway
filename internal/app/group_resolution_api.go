@@ -1,27 +1,17 @@
 package app
 
 import (
-	"errors"
 	"net/http"
 
 	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 
 // GetGroupResolution inspects configuration using the protocol resolver itself.
 // It does not query artifacts, contact upstreams, or decide access for a reader.
 func (h generatedRepositoryAPIAdapter) GetGroupResolution(w http.ResponseWriter, r *http.Request, id adminopenapi.GroupId) {
-	if _, ok := h.authorize(w, r); !ok {
-		return
-	}
-	group, err := h.groups.GetHostedGroup(r.Context(), id.String())
-	if errors.Is(err, repository.ErrNotFound) {
-		writeHostedProblem(w, http.StatusNotFound, "not_found", "group not found")
-		return
-	}
-	if err != nil {
-		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "get group failed")
+	group, ok := h.readGroup(w, r, id.String())
+	if !ok {
 		return
 	}
 	members, err := (v2GroupResolver{groups: h.groups, repos: h.store}).resolveMembers(r.Context(), group)
