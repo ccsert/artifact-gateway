@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # agctl end-to-end check against a real Gateway (issues #127, #130, #131,
-# #134 and #135).
+# #133, #134, #135 and #335).
 #
 # By default it boots an isolated Compose project from GATEWAY_ENV_FILE (or
 # .env) on free ports and removes it afterwards. To reuse a Gateway that is
@@ -590,6 +590,149 @@ print(events[-1]["data"]["resume"]["afterCursor"])
 PY2
 )
 expect 0 "$out" -- runtime logs --after-cursor "$after_cursor" --follow --duration 1s --json
+
+# Machine identity (#133), the #127 CI playbook: a service account gets a
+# credential whose secret only reaches a private file, is granted read on the
+# Raw repository, reads with that credential, is rotated (the old credential
+# answers 401, exit 5), and loses access with its grant. No secret may reach
+# any output.
+nosecret() {
+  local secret=$1
+  if grep -q -- "$secret" "$out" "$workdir/stderr"; then
+    printf '%s\n' 'a secret reached agctl output' >&2
+    exit 1
+  fi
+}
+account="cli-e2e-bot-${suffix}"
+expect 0 "$out" -- service-account create "$account" --description "agctl E2E" --json
+account_id=$(field "$out" data.id)
+expect 0 "$out" -- service-account show "$account_id" --json
+require "$(field "$out" data.state)" active "service account state"
+secrets="$workdir/secrets"
+mkdir -m 700 "$secrets"
+expect 2 "$out" -- credential issue --service-account "$account_id" --name e2e --json
+expect 0 "$out" -- credential issue --service-account "$account_id" --name e2e-old --secret-output "$secrets/old" --dry-run --json
+[[ ! -e "$secrets/old" ]] || {
+  printf '%s\n' 'credential issue --dry-run created the secret file' >&2
+  exit 1
+}
+expect 0 "$out" -- credential issue --service-account "$account_id" --name e2e-old --secret-output "$secrets/old" --verbose --json
+old_credential=$(field "$out" data.id)
+old_token=$(cat "$secrets/old")
+nosecret "$old_token"
+[[ "$(python3 -c 'import os, stat, sys; print(oct(stat.S_IMODE(os.stat(sys.argv[1]).st_mode)))' "$secrets/old")" == 0o600 ]] || {
+  printf '%s\n' 'the secret file is not private' >&2
+  exit 1
+}
+expect 2 "$out" -- credential issue --service-account "$account_id" --name e2e-old --secret-output "$secrets/old" --json
+expect 0 "$out" -- grant upsert --repo "$content_id" --principal "service-account:$account_id" --scope repositories:read --json
+cli_test_token=$old_token expect 0 "$out" -- artifact search --repo "$content_id" --q releases/ --json
+require "$(field "$out" data.items.0.coordinate)" releases/app.txt "search with the service account credential"
+cli_test_token=$old_token expect 6 "$out" -- grant list --repo "$content_id" --json
+expect 0 "$out" -- credential issue --service-account "$account_id" --name e2e-new --secret-output "$secrets/new" --json
+new_token=$(cat "$secrets/new")
+nosecret "$new_token"
+expect 2 "$out" -- credential revoke "$old_credential" --service-account "$account_id" --json
+expect 0 "$out" -- credential revoke "$old_credential" --service-account "$account_id" --yes --json
+expect 0 "$out" -- credential revoke "$old_credential" --service-account "$account_id" --yes --json
+cli_test_token=$old_token expect 5 "$out" -- artifact search --repo "$content_id" --q releases/ --json
+cli_test_token=$new_token expect 0 "$out" -- artifact search --repo "$content_id" --q releases/ --json
+expect 0 "$out" -- credential list --service-account "$account_id" --json
+python3 - "$out" "$old_credential" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    items = json.load(stream)["data"]["items"]
+states = {item["name"]: bool(item.get("revokedAt")) for item in items}
+if states != {"e2e-old": True, "e2e-new": False} or "token" in json.dumps(items):
+    raise SystemExit(f"credential list after rotation: {states}")
+PY2
+expect 0 "$out" -- grant delete --repo "$content_id" --principal "service-account:$account_id" --yes --json
+cli_test_token=$new_token expect 6 "$out" -- artifact search --repo "$content_id" --q releases/ --json
+expect 0 "$out" -- service-account update "$account_id" --state disabled --json
+require "$(field "$out" data.state)" disabled "disabled service account"
+cli_test_token=$new_token expect 5 "$out" -- auth whoami --json
+expect 7 "$out" -- credential issue --service-account "$account_id" --name refused --secret-output "$secrets/refused" --json
+[[ ! -e "$secrets/refused" ]] || {
+  printf '%s\n' 'a refused issue created the secret file' >&2
+  exit 1
+}
+expect 0 "$out" -- audit list --operation service_account.credential.create --from "$grant_started" --json
+python3 - "$out" "$account_id" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    records = [record for record in json.load(stream)["data"]["items"] if sys.argv[2] in record.get("resource", "")]
+if len(records) != 2:
+    raise SystemExit(f"expected two credential issues in the audit log, got {len(records)}")
+PY2
+
+# Platform API keys (#133): the secret again reaches only its file.
+expect 0 "$out" -- api-key create "cli-e2e-key-${suffix}" --role member --secret-output "$secrets/key" --json
+key_id=$(field "$out" data.id)
+key_token=$(cat "$secrets/key")
+nosecret "$key_token"
+cli_test_token=$key_token expect 0 "$out" -- auth whoami --json
+expect 0 "$out" -- api-key list --json
+python3 - "$out" "$key_id" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    items = json.load(stream)["data"]["items"]
+if [item["id"] for item in items if item["id"] == sys.argv[2]] != [sys.argv[2]] or "token" in json.dumps(items):
+    raise SystemExit("api-key list does not show the key, or shows a secret")
+PY2
+expect 0 "$out" -- api-key revoke "$key_id" --yes --json
+cli_test_token=$key_token expect 5 "$out" -- auth whoami --json
+
+# Users (#335): a pending user becomes a member, which grants no repository
+# access by itself; an explicit grant does. Ending its session rejects the
+# session token; the password is reset from a private file; the user is
+# deleted. The password never reaches any output.
+user="cli-e2e-user-${suffix}"
+user_password="Cli-e2e-${suffix}-pw"
+printf '%s\n' "$user_password" >"$secrets/password"
+chmod 600 "$secrets/password"
+expect 2 "$out" -- user create "$user" --role none --json
+expect 0 "$out" -- user create "$user" --role none --password-file "$secrets/password" --dry-run --json
+nosecret "$user_password"
+expect 0 "$out" -- user create "$user" --role none --password-file "$secrets/password" --verbose --json
+nosecret "$user_password"
+user_id=$(field "$out" data.id)
+require "$(field "$out" data.role)" none "pending user role"
+login="$workdir/login.json"
+curl --silent --show-error --fail --output "$login" -H 'Content-Type: application/json' \
+  --data "{\"username\":\"$user\",\"password\":\"$user_password\"}" "$server/auth/login"
+session_token=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["token"])' "$login")
+expect 0 "$out" -- user update "$user_id" --role member --display-name "CLI E2E" --json
+require "$(field "$out" data.role)" member "member role"
+expect 6 "$out" -- access check --repo "$content_id" --actor "user:$user" --role member --require read --json
+expect 0 "$out" -- grant upsert --repo "$content_id" --principal "user:$user" --scope repositories:read --json
+expect 0 "$out" -- access check --repo "$content_id" --actor "user:$user" --role member --require read --json
+expect 0 "$out" -- user sessions list "$user_id" --json
+session_id=$(field "$out" data.items.0.id)
+cli_test_token=$session_token expect 0 "$out" -- auth whoami --json
+expect 0 "$out" -- user sessions revoke "$user_id" --session "$session_id" --yes --json
+expect 0 "$out" -- user sessions revoke "$user_id" --session "$session_id" --yes --json
+cli_test_token=$session_token expect 5 "$out" -- auth whoami --json
+expect 0 "$out" -- user sessions revoke "$user_id" --all --yes --json
+expect 7 "$out" -- user update "$user_id" --description stale --if-match 1 --json
+expect 0 "$out" -- user reset-password "$user_id" --password-file "$secrets/password" --must-change-password --json
+nosecret "$user_password"
+require "$(field "$out" data.mustChangePassword)" true "reset requires a change"
+expect 0 "$out" -- user identities list "$user_id" --json
+require "$(field "$out" data.items)" "[]" "no linked identities"
+expect 4 "$out" -- user identities unlink "$user_id" --identity 00000000-0000-4000-8000-000000000000 --yes --json
+expect 0 "$out" -- user list --search "$user" --json
+require "$(field "$out" meta.pagination.total)" 1 "user search"
+expect 0 "$out" -- grant delete --repo "$content_id" --principal "user:$user" --yes --json
+expect 2 "$out" -- user delete "$user_id" --json
+expect 0 "$out" -- user delete "$user_id" --dry-run --json
+expect 0 "$out" -- user delete "$user_id" --yes --json
+expect 4 "$out" -- user show "$user_id" --json
 
 # Runtime reads (#135). status is healthy or degraded on a running stack and
 # exits 0 for both; --strict fails exactly when it is not healthy.

@@ -178,6 +178,10 @@ func localErrorCode(err error) string {
 	if errors.As(err, &denied) {
 		return "not_permitted"
 	}
+	var delivery *deliveryError
+	if errors.As(err, &delivery) {
+		return "secret_not_delivered"
+	}
 	return "internal_error"
 }
 

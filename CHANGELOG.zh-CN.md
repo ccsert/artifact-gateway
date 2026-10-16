@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- `agctl` 新增机器身份与用户身份管理（#133、#335）。`service-account list|show|create|update` 管理 CI 主体（没有单个账号的端点，`show` 通过读取列表查找，只有读完整个列表才返回 404）；`credential issue` 和 `api-key create` 只把一次性秘密写入 `--secret-output` 指定的新私有文件（0600 权限，请求前检查，从不覆盖已有文件或链接，从不打印，从不重试），签发后无法保存时报告 `secret_not_delivered` 并给出需要吊销的 ID；`credential revoke` 和 `api-key revoke` 立即让秘密失效。`user list|show|create|update|delete|reset-password` 只从有界 stdin 或文件读取密码，输出、计划和错误中都不含密码；`user sessions list|revoke` 结束单个或全部会话；`user identities list|link|unlink` 管理已链接的 OIDC 身份。条件写入使用刚读到的版本，从不重试。`make cli-e2e` 运行 CI 剧本——服务账号凭据写入 0600 文件、使用、轮换（旧秘密返回 401）、随授权撤销失去访问——以及 API key、用户、会话和密码检查，任何 token 或密码进入 agctl 输出都会失败。
+
 - CLI 跟随流在预算耗尽时保留未读数据：运行日志按剩余事件数限制每页，用 `--after-cursor` 续读，空流也标明本地进程。审计轮询超过十页时先以 `poll_budget` 和退出码 3 结束，不越过未读历史；包含边界的回看续读时间可能重放记录。不完整的授权、模板和匿名策略写响应报告结果未知并给出回读提示。
 
 - `agctl` 新增授权管理与日志、审计的流式输出（#134、#135）。`grant list|upsert|delete` 按单行操作授权（upsert 以单行为键，因此会重试；delete 需要确认且从不重试）；`template apply` 只有带 `--yes` 才会替换仓库的全部授权，以授权集版本为条件，其 `--dry-run` 列出将新增、删除、变更和保留的每一条授权；`role list|show` 和 `template list|show` 读取目录；`access check` 说明调用者或模拟主体的读、写、管理、情报和匿名读取权限，带 `--require` 时缺少权限即退出码 6；`access anonymous show|set` 读取并有条件地设置平台开关，开启需要 `--yes`。`runtime logs` 读取应答进程的内存日志，`runtime logs --follow` 和 `audit list --follow` 输出以 `--duration` 或 `--max-events` 为界的 NDJSON，最后恰好一个终止事件，说明结束原因和续读位置；日志会话重启时流以 `scope_changed` 结束，漏读以 gap 事件报告。`agctl commands --json` 新增 `follow` 能力。`make cli-e2e` 验证授权在删除前后的 `access check` 结果、带过期版本的模板应用、审计日志及其流中的授权写入，以及有界日志流。

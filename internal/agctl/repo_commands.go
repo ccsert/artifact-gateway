@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -206,8 +207,11 @@ func renderPlan(w io.Writer, plan writePlan) error {
 		}
 	}
 	if plan.Body != nil {
-		body, _ := encodeBody(plan.Body)
-		if _, err := fmt.Fprintf(w, "  body: %s\n", body); err != nil {
+		var body strings.Builder
+		encoder := json.NewEncoder(&body)
+		encoder.SetEscapeHTML(false)
+		_ = encoder.Encode(plan.Body)
+		if _, err := fmt.Fprintf(w, "  body: %s\n", strings.TrimSpace(body.String())); err != nil {
 			return err
 		}
 	}

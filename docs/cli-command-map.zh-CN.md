@@ -9,7 +9,8 @@
 
 本页是对完整契约的归类，不是对已安装二进制的描述。除 #125 骨架（`version`、
 `info`、`commands`）和阶段列标为 `implemented` 的行（#130 的仓库与 Group 命令、
-#131 的制品与格式视图、#134 的授权、角色、模板、访问检查与匿名开关命令，以及
+#131 的制品与格式视图、#133 的服务账号、凭据与 API key 命令、#134 的授权、角色、
+模板、访问检查与匿名开关命令、#335 的用户、会话与身份命令，以及
 #135 的只读审计、status、诊断、运行节点与运行日志、概览和生命周期任务命令，均由 `make cli-e2e` 在真实 Gateway 上验收）外，
 全部为计划，不宣称已实现；只有注册命令、文档/测试和真实 Gateway 验收齐备，
 某一行才转为 implemented/verified。
@@ -107,27 +108,27 @@ server base）。计划命令省略前导 `agctl`。
 | `GET /runtime/nodes`<br>`listRuntimeNodes` | `runtime nodes` | #135 | M1 implemented | A | Q |
 | `GET /diagnostics`<br>`getDiagnostics` | `diagnostics（status 复用）` | #135 | M1 implemented | A | Q |
 | `GET /runtime/logs`<br>`listRuntimeLogs` | `runtime logs` | #135 | M1 implemented | A | L |
-| `GET /api-keys`<br>`listApiKeys` | `api-key list` | #133 | M1 | A | Q |
-| `POST /api-keys`<br>`createApiKey` | `api-key create` | #133 | M1 | A | S |
-| `DELETE /api-keys/{apiKeyId}`<br>`revokeApiKey` | `api-key delete <id>` | #133 | M1 | A | W |
-| `GET /service-accounts`<br>`listServiceAccounts` | `service-account list（show 按 ID 从列表派生）` | #133 | M1 | A | Q |
-| `POST /service-accounts`<br>`createServiceAccount` | `service-account create` | #133 | M1 | A | W |
-| `PUT /service-accounts/{serviceAccountId}`<br>`updateServiceAccount` | `service-account update <id>` | #133 | M1 | A | C |
-| `GET /service-accounts/{serviceAccountId}/credentials`<br>`listServiceAccountCredentials` | `credential list --service-account <id>` | #133 | M1 | A | Q |
-| `POST /service-accounts/{serviceAccountId}/credentials`<br>`createServiceAccountCredential` | `credential issue --service-account <id>` | #133 | M1 | A | S |
-| `DELETE /service-accounts/{serviceAccountId}/credentials/{credentialId}`<br>`revokeServiceAccountCredential` | `credential revoke <id> --service-account <id>` | #133 | M1 | A | W |
-| `GET /users`<br>`listUsers` | `user list` | #335 | M1 | A | Q |
-| `POST /users`<br>`createUser` | `user create` | #335 | M1 | A | W |
-| `GET /users/{userId}`<br>`getUser` | `user show <id>` | #335 | M1 | A | Q |
-| `PATCH /users/{userId}`<br>`updateUser` | `user update <id>` | #335 | M1 | A | W |
-| `DELETE /users/{userId}`<br>`deleteUser` | `user delete <id>` | #335 | M1 | A | W |
-| `POST /users/{userId}/password`<br>`resetUserPassword` | `user reset-password <id>` | #335 | M1 | A | C |
-| `POST /users/{userId}/sessions:revoke`<br>`revokeUserSessions` | `user sessions revoke <id> --all` | #335 | M1 | A | C |
-| `GET /users/{userId}/sessions`<br>`listUserSessions` | `user sessions list <id>` | #335 | M1 | A | Q |
-| `DELETE /users/{userId}/sessions/{sessionId}`<br>`revokeUserSession` | `user sessions revoke <id> --session <sid>` | #335 | M1 | A | W |
-| `GET /users/{userId}/identities`<br>`listUserIdentities` | `user identities list <id>` | #335 | M1 | A | Q |
-| `POST /users/{userId}/identities`<br>`createUserIdentity` | `user identities link <id>` | #335 | M1 | A | W |
-| `DELETE /users/{userId}/identities/{identityId}`<br>`deleteUserIdentity` | `user identities unlink <id> --identity <iid>` | #335 | M1 | A | W |
+| `GET /api-keys`<br>`listApiKeys` | `api-key list` | #133 | M1 implemented | A | Q |
+| `POST /api-keys`<br>`createApiKey` | `api-key create` | #133 | M1 implemented | A | S |
+| `DELETE /api-keys/{apiKeyId}`<br>`revokeApiKey` | `api-key revoke <id>` | #133 | M1 implemented | A | W |
+| `GET /service-accounts`<br>`listServiceAccounts` | `service-account list（show 按 ID 从列表派生）` | #133 | M1 implemented | A | Q |
+| `POST /service-accounts`<br>`createServiceAccount` | `service-account create` | #133 | M1 implemented | A | W |
+| `PUT /service-accounts/{serviceAccountId}`<br>`updateServiceAccount` | `service-account update <id>` | #133 | M1 implemented | A | C |
+| `GET /service-accounts/{serviceAccountId}/credentials`<br>`listServiceAccountCredentials` | `credential list --service-account <id>` | #133 | M1 implemented | A | Q |
+| `POST /service-accounts/{serviceAccountId}/credentials`<br>`createServiceAccountCredential` | `credential issue --service-account <id>` | #133 | M1 implemented | A | S |
+| `DELETE /service-accounts/{serviceAccountId}/credentials/{credentialId}`<br>`revokeServiceAccountCredential` | `credential revoke <id> --service-account <id>` | #133 | M1 implemented | A | W |
+| `GET /users`<br>`listUsers` | `user list` | #335 | M1 implemented | A | Q |
+| `POST /users`<br>`createUser` | `user create` | #335 | M1 implemented | A | W |
+| `GET /users/{userId}`<br>`getUser` | `user show <id>` | #335 | M1 implemented | A | Q |
+| `PATCH /users/{userId}`<br>`updateUser` | `user update <id>` | #335 | M1 implemented | A | W |
+| `DELETE /users/{userId}`<br>`deleteUser` | `user delete <id>` | #335 | M1 implemented | A | W |
+| `POST /users/{userId}/password`<br>`resetUserPassword` | `user reset-password <id>` | #335 | M1 implemented | A | C |
+| `POST /users/{userId}/sessions:revoke`<br>`revokeUserSessions` | `user sessions revoke <id> --all` | #335 | M1 implemented | A | C |
+| `GET /users/{userId}/sessions`<br>`listUserSessions` | `user sessions list <id>` | #335 | M1 implemented | A | Q |
+| `DELETE /users/{userId}/sessions/{sessionId}`<br>`revokeUserSession` | `user sessions revoke <id> --session <sid>` | #335 | M1 implemented | A | W |
+| `GET /users/{userId}/identities`<br>`listUserIdentities` | `user identities list <id>` | #335 | M1 implemented | A | Q |
+| `POST /users/{userId}/identities`<br>`createUserIdentity` | `user identities link <id>` | #335 | M1 implemented | A | W |
+| `DELETE /users/{userId}/identities/{identityId}`<br>`deleteUserIdentity` | `user identities unlink <id> --identity <iid>` | #335 | M1 implemented | A | W |
 | `GET /audits`<br>`listAudits` | `audit list --bounded` | #135 | M1 implemented | A | Q |
 | `GET /audits/page`<br>`listAuditPage` | `audit list --cursor <cursor>` | #135 | M1 implemented | A | Q |
 | `GET /overview-statistics`<br>`getOverviewStatistics` | `overview show` | #135 | M1 implemented | FR | Q |
