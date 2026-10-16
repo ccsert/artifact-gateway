@@ -67,6 +67,13 @@ func (s *PostgresStore) CancelRawUpload(ctx context.Context, id string) (RawUplo
 	return v, err
 }
 func (s *PostgresStore) CompleteRawUpload(ctx context.Context, id string, asset RawAsset) (RawAsset, error) {
+	return s.CompleteRawUploadIf(ctx, id, asset, RawWriteCondition{})
+}
+
+// CompleteRawUploadIf publishes an open upload only when the path's current
+// reference satisfies condition. A failed condition rolls back and leaves the
+// upload open.
+func (s *PostgresStore) CompleteRawUploadIf(ctx context.Context, id string, asset RawAsset, condition RawWriteCondition) (RawAsset, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return asset, err
@@ -86,8 +93,11 @@ func (s *PostgresStore) CompleteRawUpload(ctx context.Context, id string, asset 
 	if _, err = tx.ExecContext(ctx, `INSERT INTO native_raw_objects (digest,repository_id,object_key,size) VALUES ($1,$2,$3,$4) ON CONFLICT (digest) DO UPDATE SET repository_id=EXCLUDED.repository_id,collected_at=NULL`, asset.Digest, asset.RepositoryID, asset.ObjectKey, asset.Size); err != nil {
 		return asset, err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO native_raw_assets (repository_id,path,digest,content_type) VALUES ($1,$2,$3,$4) ON CONFLICT (repository_id,path) DO UPDATE SET digest=EXCLUDED.digest,content_type=EXCLUDED.content_type,updated_at=now()`, asset.RepositoryID, asset.Path, asset.Digest, asset.ContentType); err != nil {
-		return asset, err
+	if current, replaceErr := replaceRawAssetIf(ctx, tx, asset, condition); replaceErr != nil {
+		if errors.Is(replaceErr, ErrPreconditionFailed) {
+			return current, replaceErr
+		}
+		return asset, replaceErr
 	}
 	asset.UpdatedAt = time.Now().UTC()
 	if _, err = tx.ExecContext(ctx, `UPDATE native_raw_uploads SET state='completed' WHERE id::text=$1`, id); err != nil {
@@ -162,6 +172,12 @@ func (s *PostgresStore) MarkRawUploadCollected(ctx context.Context, id string) e
 }
 
 func (s *PostgresStore) PutRawAsset(ctx context.Context, v RawAsset) (RawAsset, error) {
+	return s.PutRawAssetIf(ctx, v, RawWriteCondition{})
+}
+
+// PutRawAssetIf replaces the path reference only when its current state
+// satisfies condition; on ErrPreconditionFailed it returns the current asset.
+func (s *PostgresStore) PutRawAssetIf(ctx context.Context, v RawAsset, condition RawWriteCondition) (RawAsset, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return v, err
@@ -173,12 +189,51 @@ func (s *PostgresStore) PutRawAsset(ctx context.Context, v RawAsset) (RawAsset, 
 	if err = tx.QueryRowContext(ctx, `SELECT object_key,size FROM native_raw_objects WHERE digest=$1`, v.Digest).Scan(&v.ObjectKey, &v.Size); err != nil {
 		return v, err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO native_raw_assets (repository_id,path,digest,content_type) VALUES ($1,$2,$3,$4) ON CONFLICT (repository_id,path) DO UPDATE SET digest=EXCLUDED.digest,content_type=EXCLUDED.content_type,updated_at=now()`, v.RepositoryID, v.Path, v.Digest, v.ContentType); err != nil {
-		return v, err
+	if current, replaceErr := replaceRawAssetIf(ctx, tx, v, condition); replaceErr != nil {
+		if errors.Is(replaceErr, ErrPreconditionFailed) {
+			return current, replaceErr
+		}
+		return v, replaceErr
 	}
 	v.UpdatedAt = time.Now().UTC()
 	return v, tx.Commit()
 }
+
+// replaceRawAssetIf points the path at asset inside tx. A conditional write
+// locks the current reference row before evaluating condition, so a competing
+// writer either waits for this transaction or is evaluated against its result.
+// An absent path is created with ON CONFLICT DO NOTHING; losing that race
+// re-evaluates the condition against the reference the winner committed.
+func replaceRawAssetIf(ctx context.Context, tx *sql.Tx, asset RawAsset, condition RawWriteCondition) (RawAsset, error) {
+	if condition.Unconditional() {
+		_, err := tx.ExecContext(ctx, `INSERT INTO native_raw_assets (repository_id,path,digest,content_type) VALUES ($1,$2,$3,$4) ON CONFLICT (repository_id,path) DO UPDATE SET digest=EXCLUDED.digest,content_type=EXCLUDED.content_type,updated_at=now()`, asset.RepositoryID, asset.Path, asset.Digest, asset.ContentType)
+		return RawAsset{}, err
+	}
+	for attempt := 0; attempt < 3; attempt++ {
+		current := RawAsset{RepositoryID: asset.RepositoryID, Path: asset.Path}
+		err := tx.QueryRowContext(ctx, `SELECT digest,content_type,updated_at FROM native_raw_assets WHERE repository_id=$1::uuid AND path=$2 FOR UPDATE`, asset.RepositoryID, asset.Path).Scan(&current.Digest, &current.ContentType, &current.UpdatedAt)
+		exists := err == nil
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return RawAsset{}, err
+		}
+		if !condition.Allows(current, exists) {
+			return current, ErrPreconditionFailed
+		}
+		if exists {
+			_, err = tx.ExecContext(ctx, `UPDATE native_raw_assets SET digest=$3,content_type=$4,updated_at=now() WHERE repository_id=$1::uuid AND path=$2`, asset.RepositoryID, asset.Path, asset.Digest, asset.ContentType)
+			return RawAsset{}, err
+		}
+		result, err := tx.ExecContext(ctx, `INSERT INTO native_raw_assets (repository_id,path,digest,content_type) VALUES ($1,$2,$3,$4) ON CONFLICT (repository_id,path) DO NOTHING`, asset.RepositoryID, asset.Path, asset.Digest, asset.ContentType)
+		if err != nil {
+			return RawAsset{}, err
+		}
+		if inserted, _ := result.RowsAffected(); inserted == 1 {
+			return RawAsset{}, nil
+		}
+	}
+	return RawAsset{}, ErrPreconditionFailed
+}
+
 func (s *PostgresStore) StageRawObject(ctx context.Context, object RawObject) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO native_raw_objects (digest,repository_id,object_key,size) VALUES ($1,$2,$3,$4) ON CONFLICT (digest) DO UPDATE SET repository_id=COALESCE(native_raw_objects.repository_id,EXCLUDED.repository_id),collected_at=NULL`, object.Digest, nullableString(object.RepositoryID), object.ObjectKey, object.Size)
 	return err

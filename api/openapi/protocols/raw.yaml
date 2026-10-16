@@ -4,7 +4,9 @@ x-gateway-protocol-overlay:
     Gateway overlay.
   gatewayDecision: Use PUT, GET, HEAD, and DELETE at /raw/{repository}/{path}; path
     is a mutable catch-all reference to immutable verified content. Repeating PUT
-    atomically replaces the current path mapping. GET or HEAD on a trailing-slash directory prefix lists visible
+    atomically replaces the current path mapping. If-Match and If-None-Match make
+    a write conditional on the current mapping and are evaluated atomically with
+    the replacement. GET or HEAD on a trailing-slash directory prefix lists visible
     Hosted assets below that prefix. `.sha256` and `.sha512` paths are derived
     checksum sidecars; PUT validates an assertion and never stores another asset.
     A resumable Hosted upload starts with POST `?resumable=1`, then uses its
@@ -107,6 +109,19 @@ raw_repository_path:
       content without storing a sidecar asset. With `uploadId` and `complete=1`, appends
       any final bytes, requires a `Digest: sha-256=<base64>` header, and atomically
       publishes the resumable upload.
+
+      If-Match and If-None-Match (RFC 9110) make a primary-path write or a resumable
+      completion conditional. The Gateway re-evaluates them in the same lock or
+      transaction that replaces the path reference, so of two writers holding the
+      same validator only one succeeds. `If-None-Match: *` creates only when the
+      path has no current asset; `If-Match: *` replaces only an existing asset; an
+      entity-tag list compares against the current digest, accepting both the
+      `"sha256-<hex>"` tag reads return and the `"sha256:<hex>"` tag writes return.
+      If-Match uses strong comparison, so a weak tag never matches. A failed
+      condition answers 412 without the current validator and stores nothing; a
+      failed resumable completion leaves the upload open. If-Unmodified-Since cannot
+      be evaluated atomically and is rejected with 400. A request without these
+      headers keeps the unconditional replacement behavior.
     parameters:
     - name: uploadId
       in: query
@@ -128,6 +143,18 @@ raw_repository_path:
       schema:
         type: string
         pattern: '^sha-256=[A-Za-z0-9+/]+={0,2}$'
+    - name: If-Match
+      in: header
+      description: '`*` or a comma-separated list of entity tags the current path
+        reference must match (strong comparison).'
+      schema:
+        type: string
+    - name: If-None-Match
+      in: header
+      description: '`*` for create-only, or a comma-separated list of entity tags
+        the current path reference must not match (weak comparison).'
+      schema:
+        type: string
     security:
     - protocolBasicAuth: []
     - protocolBearerAuth: []
@@ -141,8 +168,14 @@ raw_repository_path:
     responses:
       '201':
         description: Immutable content stored and the Raw path reference atomically created or replaced
+      '400':
+        description: Malformed If-Match or If-None-Match, or an unsupported If-Unmodified-Since
+          precondition; nothing is stored
       '401':
         "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '412':
+        description: The current path reference does not satisfy If-Match or If-None-Match;
+          the reference is unchanged and a resumable upload stays open
       '422':
         "$ref": "../components/responses.yaml#/Problem"
   post:

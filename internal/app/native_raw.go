@@ -151,6 +151,10 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		}
 		serveNativeRawObject(w, r, path, asset, h.objects)
 	case http.MethodPut:
+		condition, ok := h.checkRawWriteCondition(w, r, repo, path)
+		if !ok {
+			return true
+		}
 		spool, err := spoolUpload(r.Body, 1<<30)
 		if err != nil {
 			if errors.Is(err, errUploadTooLarge) {
@@ -185,7 +189,11 @@ func (h nativeRawHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		if contentType == "" {
 			contentType = "application/octet-stream"
 		}
-		if _, err = h.store.PutRawAsset(r.Context(), repository.RawAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: key, Size: spool.Size(), ContentType: contentType}); err != nil {
+		if _, err = h.store.PutRawAssetIf(r.Context(), repository.RawAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: key, Size: spool.Size(), ContentType: contentType}, condition); err != nil {
+			if errors.Is(err, repository.ErrPreconditionFailed) {
+				writeRawPreconditionFailed(w)
+				return true
+			}
 			if repository.IsQuotaExceeded(err) {
 				http.Error(w, "repository capacity quota exceeded", http.StatusInsufficientStorage)
 				return true
@@ -272,6 +280,10 @@ func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		condition, ok := h.checkRawWriteCondition(w, r, repo, path)
+		if !ok {
+			return
+		}
 		if r.ContentLength != 0 {
 			upload, err = h.appendUpload(r.Context(), r, upload)
 			if err != nil {
@@ -298,6 +310,12 @@ func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 			return
 		}
 		defer releaseObject()
+		// Record the object before writing its bytes so a failed or
+		// precondition-rejected commit leaves them reclaimable.
+		if err = h.store.StageRawObject(r.Context(), repository.RawObject{RepositoryID: repo.ID, Digest: digest, ObjectKey: key, Size: size}); err != nil {
+			http.Error(w, "stage raw object failed", 500)
+			return
+		}
 		if err = h.objects.PutVerifiedReader(r.Context(), key, spool.Reader(), size, digest); err != nil {
 			http.Error(w, "persist raw object failed", 500)
 			return
@@ -306,7 +324,11 @@ func (h nativeRawHandler) upload(w http.ResponseWriter, r *http.Request, repo re
 		if contentType == "" {
 			contentType = "application/octet-stream"
 		}
-		asset, err := h.store.CompleteRawUpload(r.Context(), id, repository.RawAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: key, Size: size, ContentType: contentType})
+		asset, err := h.store.CompleteRawUploadIf(r.Context(), id, repository.RawAsset{RepositoryID: repo.ID, Path: path, Digest: digest, ObjectKey: key, Size: size, ContentType: contentType}, condition)
+		if errors.Is(err, repository.ErrPreconditionFailed) {
+			writeRawPreconditionFailed(w)
+			return
+		}
 		if err != nil {
 			http.Error(w, "raw upload cannot be completed", http.StatusConflict)
 			return
