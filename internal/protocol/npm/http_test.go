@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"strings"
 	"testing"
 )
 
@@ -197,4 +198,47 @@ func npmTestTarballEntries(t *testing.T, entries []npmTestTarEntry) []byte {
 		t.Fatal(err)
 	}
 	return compressed.Bytes()
+}
+
+func TestParsePathRoutesDistTagEndpoints(t *testing.T) {
+	cases := []struct {
+		path, pkg, tag string
+	}{
+		{"/npm/releases/-/package/widget/dist-tags", "widget", ""},
+		{"/npm/releases/-/package/widget/dist-tags/beta", "widget", "beta"},
+		{"/npm/releases/-/package/@scope%2fwidget/dist-tags", "@scope/widget", ""},
+		{"/npm/releases/-/package/@scope%2Fwidget/dist-tags/next-2", "@scope/widget", "next-2"},
+		{"/npm/releases/-/package/dist-tags/dist-tags/canary", "dist-tags", "canary"},
+	}
+	for _, tc := range cases {
+		route, ok := ParsePath(tc.path)
+		if !ok || route.Repository != "releases" || route.Kind != RouteDistTags || route.Package != tc.pkg || route.Tag != tc.tag {
+			t.Fatalf("%s route=%#v ok=%t", tc.path, route, ok)
+		}
+	}
+	for _, path := range []string{
+		"/npm/releases/-/package/widget",
+		"/npm/releases/-/package/widget/dist-tags/",
+		"/npm/releases/-/package/widget/dist-tags/1.2.3",
+		"/npm/releases/-/package/widget/dist-tags/a%2Fb",
+		"/npm/releases/-/package/Widget/dist-tags",
+		"/npm/releases/-/package/%2e%2e/dist-tags",
+	} {
+		if route, ok := ParsePath(path); ok {
+			t.Fatalf("%s was accepted as %#v", path, route)
+		}
+	}
+}
+
+func TestValidDistTagRejectsVersionLikeNames(t *testing.T) {
+	for _, tag := range []string{"latest", "next", "beta", "release-2026", "lts.x", "v-next"} {
+		if !ValidDistTag(tag) {
+			t.Fatalf("tag %q was rejected", tag)
+		}
+	}
+	for _, tag := range []string{"", "1.2.3", "1", "v1", "V2.0.0", "^1.0.0", "~1", ">=1", "<2", "=1.0.0", "*", "x", "X", "a b", " latest", "a/b", "a\\b", strings.Repeat("a", 129)} {
+		if ValidDistTag(tag) {
+			t.Fatalf("tag %q was accepted", tag)
+		}
+	}
 }

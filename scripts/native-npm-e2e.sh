@@ -157,6 +157,59 @@ if (
 fi
 grep -q 'previously published versions' "$workdir/duplicate.log"
 
+# `npm dist-tag add/ls/rm` after publication, for an unscoped and a scoped
+# package that each have two published versions. A moved tag must resolve for
+# `npm install <pkg>@<tag>` from an empty cache, a removed tag must stop
+# resolving, and no tag change may alter the published tarball identity.
+(
+  cd "$scoped"
+  npm version 2.1.0 --no-git-tag-version >/dev/null
+  npm_config_userconfig="$auth_config" npm publish --registry="$registry_url" --tag=next --access=public
+)
+dist_tag_round() {
+  local package_name=$1 first=$2 second=$3 tag=$4
+  local integrity_before integrity_after listed
+  integrity_before="$(npm_config_userconfig="$anonymous_config" npm view "${package_name}@${first}" dist.integrity --registry="$registry_url")"
+  npm_config_userconfig="$auth_config" npm dist-tag add "${package_name}@${second}" "$tag" --registry="$registry_url"
+  listed="$(npm_config_userconfig="$auth_config" npm dist-tag ls "$package_name" --registry="$registry_url")"
+  grep -qx "${tag}: ${second}" <<<"$listed" || { printf 'dist-tag ls after add:\n%s\n' "$listed" >&2; exit 1; }
+  npm_config_userconfig="$auth_config" npm dist-tag add "${package_name}@${first}" "$tag" --registry="$registry_url"
+  listed="$(npm_config_userconfig="$auth_config" npm dist-tag ls "$package_name" --registry="$registry_url")"
+  grep -qx "${tag}: ${first}" <<<"$listed" || { printf 'dist-tag ls after move:\n%s\n' "$listed" >&2; exit 1; }
+  local tag_install="$workdir/dist-tag-install-${tag}"
+  mkdir "$tag_install"
+  (
+    cd "$tag_install"
+    npm init -y >/dev/null
+    npm_config_cache="$workdir/npm-cache-dist-tag-${tag}" npm_config_userconfig="$auth_config" npm install "${package_name}@${tag}" \
+      --registry="$registry_url" --ignore-scripts --no-audit --no-fund
+    node -e 'const [name,version]=process.argv.slice(1); if(require(`./node_modules/${name}/package.json`).version!==version) process.exit(1)' "$package_name" "$first"
+  )
+  npm_config_userconfig="$auth_config" npm dist-tag rm "$package_name" "$tag" --registry="$registry_url"
+  listed="$(npm_config_userconfig="$auth_config" npm dist-tag ls "$package_name" --registry="$registry_url")"
+  if grep -q "^${tag}: " <<<"$listed"; then
+    printf 'dist-tag rm left %s:\n%s\n' "$tag" "$listed" >&2
+    exit 1
+  fi
+  if npm_config_cache="$workdir/npm-cache-dist-tag-${tag}-removed" npm_config_userconfig="$auth_config" \
+    npm view "${package_name}@${tag}" version --registry="$registry_url" 2>/dev/null | grep -q .; then
+    printf 'removed dist-tag %s still resolves\n' "$tag" >&2
+    exit 1
+  fi
+  integrity_after="$(npm_config_userconfig="$anonymous_config" npm view "${package_name}@${first}" dist.integrity --registry="$registry_url")"
+  if [[ "$integrity_before" != "$integrity_after" ]]; then
+    printf 'dist-tag changes altered %s@%s integrity\n' "$package_name" "$first" >&2
+    exit 1
+  fi
+}
+dist_tag_round ag-npm-fixture 1.0.0 1.1.0 beta
+dist_tag_round @artifact-gateway/npm-fixture 2.0.0 2.1.0 stable
+if npm_config_userconfig="$auth_config" npm dist-tag add ag-npm-fixture@9.9.9 beta --registry="$registry_url" >"$workdir/dist-tag-missing.log" 2>&1; then
+  printf 'npm dist-tag accepted an unpublished version\n' >&2
+  exit 1
+fi
+grep -q 'E404' "$workdir/dist-tag-missing.log"
+
 LISTEN_ADDR="127.0.0.1:${proxy_port}" NPM_PROXY_ENDPOINT="$registry_url" "$workdir/native-npm-fixture" >"$workdir/proxy.log" 2>&1 &
 proxy_pid=$!
 until curl --silent --show-error --fail "$proxy_url/livez" >/dev/null; do
@@ -178,6 +231,18 @@ node -e '
   if (metadata.name !== "ag-npm-fixture" || metadata.version !== "1.0.0") process.exit(1);
   if (!metadata.dist?.tarball?.startsWith(registry)) process.exit(1);
 ' "$corepack_metadata" "$group_registry_url"
+
+# Groups list the authoritative member's dist-tags but never accept tag writes:
+# a caller without member write access is refused with 403, a writer with 405.
+group_tags=$(curl --fail --silent --show-error "${group_registry_url}-/package/ag-npm-fixture/dist-tags")
+node -e 'const tags=JSON.parse(process.argv[1]); if(tags.latest!=="1.0.0" || tags.next!=="1.1.0" || tags.beta) process.exit(1)' "$group_tags"
+group_tag_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  --request PUT --header 'Authorization: Bearer fixture-secret' --header 'Content-Type: application/json' \
+  --data '"1.0.0"' "${group_registry_url}-/package/ag-npm-fixture/dist-tags/beta")"
+if [[ "$group_tag_status" != "403" && "$group_tag_status" != "405" ]]; then
+  printf 'Group dist-tag write status=%s\n' "$group_tag_status" >&2
+  exit 1
+fi
 
 lockfile_install="$workdir/lockfile-install"
 mkdir "$lockfile_install"
@@ -261,4 +326,4 @@ mkdir "$offline_install"
   node -e 'for (const [name,version] of Object.entries({"ag-npm-private-fixture":"3.0.0","ag-npm-fixture":"1.0.0","@artifact-gateway/npm-fixture":"2.0.0"})) { const actual=require(`./node_modules/${name}/package.json`).version; if(actual!==version) process.exit(1) }'
 )
 
-printf 'Native npm Hosted, Proxy, Group, and cold package-lock online/offline npm ci E2E passed through Nexus-compatible repository roots at %s\n' "$proxy_url"
+printf 'Native npm Hosted (with dist-tag add/ls/rm), Proxy, Group, and cold package-lock online/offline npm ci E2E passed through Nexus-compatible repository roots at %s\n' "$proxy_url"

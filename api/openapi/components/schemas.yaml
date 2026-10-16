@@ -3972,3 +3972,25 @@ RepositoryArtifactUsage:
       items:
         "$ref": "#/ArtifactUsageStat"
     generatedAt: {type: string, format: date-time}
+NPMDistTags:
+  type: object
+  description: npm dist-tag name to version.
+  additionalProperties:
+    type: string
+  example:
+    latest: 1.0.0
+    next: 1.1.0
+NPMDistTagResult:
+  type: object
+  required:
+  - ok
+  - id
+  - dist-tags
+  properties:
+    ok:
+      type: boolean
+    id:
+      type: string
+      description: Package name
+    dist-tags:
+      "$ref": "#/NPMDistTags"

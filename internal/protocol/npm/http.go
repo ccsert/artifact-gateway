@@ -23,6 +23,9 @@ const (
 	RouteAuditBulk
 	RouteAuditQuick
 	RouteWhoami
+	// RouteDistTags is npm's dist-tag API: `/-/package/<name>/dist-tags` lists
+	// tags and `/-/package/<name>/dist-tags/<tag>` sets or removes one.
+	RouteDistTags
 )
 
 type Route struct {
@@ -30,6 +33,7 @@ type Route struct {
 	Package    string
 	Version    string
 	Tarball    string
+	Tag        string
 	Kind       RouteKind
 }
 
@@ -61,6 +65,9 @@ func ParsePath(escapedPath string) (Route, bool) {
 	case "-/npm/v1/security/audits/quick":
 		return Route{Repository: repositoryName, Kind: RouteAuditQuick}, true
 	}
+	if strings.HasPrefix(resource, "-/package/") {
+		return parseDistTagsPath(repositoryName, strings.TrimPrefix(resource, "-/package/"))
+	}
 	if marker := strings.LastIndex(resource, "/-/"); marker >= 0 {
 		packageName, tarballName := resource[:marker], resource[marker+3:]
 		if !ValidPackageName(packageName) || !ValidTarballName(tarballName) {
@@ -78,6 +85,41 @@ func ParsePath(escapedPath string) (Route, bool) {
 		return Route{}, false
 	}
 	return Route{Repository: repositoryName, Package: resource, Kind: RoutePackage}, true
+}
+
+func parseDistTagsPath(repositoryName, rest string) (Route, bool) {
+	if packageName, ok := strings.CutSuffix(rest, "/dist-tags"); ok {
+		if !ValidPackageName(packageName) {
+			return Route{}, false
+		}
+		return Route{Repository: repositoryName, Package: packageName, Kind: RouteDistTags}, true
+	}
+	marker := strings.LastIndex(rest, "/dist-tags/")
+	if marker <= 0 {
+		return Route{}, false
+	}
+	packageName, tag := rest[:marker], rest[marker+len("/dist-tags/"):]
+	if !ValidPackageName(packageName) || !ValidDistTag(tag) {
+		return Route{}, false
+	}
+	return Route{Repository: repositoryName, Package: packageName, Tag: tag, Kind: RouteDistTags}, true
+}
+
+// ValidDistTag accepts the dist-tag names the publish document already admits
+// and, like the npm CLI, refuses names that read as a version or range so
+// `npm install <name>@<tag>` stays unambiguous.
+func ValidDistTag(tag string) bool {
+	if tag == "" || len(tag) > 128 || strings.TrimSpace(tag) != tag || strings.ContainsAny(tag, "/\\\x00 \t\r\n") {
+		return false
+	}
+	first := tag[0]
+	if first >= '0' && first <= '9' || strings.IndexByte("<>=~^*|", first) >= 0 {
+		return false
+	}
+	if (first == 'v' || first == 'V' || first == '=') && len(tag) > 1 && tag[1] >= '0' && tag[1] <= '9' {
+		return false
+	}
+	return !strings.EqualFold(tag, "x")
 }
 
 func ValidPackageName(name string) bool {

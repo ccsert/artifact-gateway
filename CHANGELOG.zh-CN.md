@@ -8,6 +8,7 @@
 
 ## Unreleased
 
+- npm Hosted 仓库支持发布后管理 dist-tag（#308）。`npm dist-tag ls/add/rm` 通过 `GET /npm/<repository>/-/package/<package>/dist-tags` 与 `PUT`/`DELETE …/dist-tags/<tag>` 工作，scope 与非 scope 包均支持。标签只能指向可见、已提交、未墓碑且未被隔离读取策略拦截的版本（否则返回 404；目标被隔离时返回 409）；看起来像版本号或范围的标签名会被拒绝，`latest` 只能移动不能删除（400）。每次修改需要仓库写权限，并与一条 `npm.dist-tag.set` 或 `npm.dist-tag.delete` 审计记录在同一存储事务中提交，证据包含标签、新版本与原版本；重复提交当前状态会成功并记为未变化。PostgreSQL 上移动标签先锁版本行再锁包行，并发墓碑要么使标签修改被拒绝，要么在之后连同版本一起移除该标签。Packument 与 Group 合并在下一次读取时即反映变化，Tarball 字节与版本身份始终不变。Proxy 仓库列出缓存的上游标签，Group 列出每个标签首个定义它的成员的值，两者都拒绝标签写入。未认证的 npm `DELETE` 请求现在返回 401 而不是 405。Console 暂不展示或编辑 dist-tag。
 - Group 读取权限与写入一致（#359）。对 Group 引用的每个仓库都有管理权限的主体现在可以读取它——`GET /api/v2/groups/{id}`、`/members`、`/resolution` 和 `/capacity`——并在 `GET /api/v2/groups` 中看到它，该列表按此规则过滤；每次请求最多检查 1000 个 Group，因此一页可能不足甚至为空，此时 `nextPageToken` 继续扫描。其他非平台主体得到 404（此前为 403），如同 Group 不存在，因此只管理部分成员的 Group 对其不可见。`PUT /api/v2/groups/{id}/members` 的契约改为记录服务端实际返回的完整 Group，而非成员列表。`agctl` 同步更新读取权限说明，`group members set` 仍兼容较旧服务端返回的纯成员列表。
 - `agctl` 在上传前核对 Maven 会话响应的仓库与声明文件；提交响应丢失时，只接受目标会话的完整回读作为成功证据。响应损坏或身份不符时保留幂等键或会话回读路径并报告未知结果。上传重试期间源文件不可读时也保留先前未知状态，部分失败的恢复提示要求保留原目标和文件参数。
 

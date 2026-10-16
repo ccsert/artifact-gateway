@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -394,6 +395,40 @@ type NPMVersion struct {
 	DeletedAt       time.Time
 	CollectedAt     time.Time
 	CreatedAt       time.Time
+}
+
+// NPMDistTagMutation names one Hosted dist-tag change. Version is ignored by
+// DeleteNPMDistTag. Audit is committed in the same transaction as a successful
+// mutation; the store adds distTag, version, previous, and changed evidence.
+type NPMDistTagMutation struct {
+	RepositoryID string
+	PackageName  string
+	Tag          string
+	Version      string
+	Audit        AuditRecord
+}
+
+// NPMDistTagChange is the committed result of one dist-tag mutation. Previous
+// is the version the tag named before the mutation (empty for a new tag), and
+// Changed is false when the request repeated the current state.
+type NPMDistTagChange struct {
+	DistTags map[string]string
+	Previous string
+	Changed  bool
+}
+
+// AuditRecord returns the mutation audit with the committed change as evidence.
+func (m NPMDistTagMutation) AuditRecord(change NPMDistTagChange, version string) AuditRecord {
+	record := m.Audit
+	record.Evidence = make(map[string]string, len(m.Audit.Evidence)+4)
+	for key, value := range m.Audit.Evidence {
+		record.Evidence[key] = value
+	}
+	record.Evidence["distTag"] = m.Tag
+	record.Evidence["version"] = version
+	record.Evidence["previous"] = change.Previous
+	record.Evidence["changed"] = strconv.FormatBool(change.Changed)
+	return record
 }
 
 type NPMObject struct {
