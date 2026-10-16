@@ -674,7 +674,8 @@ no repository access by itself — repository access comes from grants
   `agctl user show ID` reads one user.
 - `agctl user create NAME --role R (--password-stdin | --password-file FILE)`
   creates a user. Passwords come only from bounded stdin or the first line
-  of a file, are checked locally (8 characters to 72 bytes), and never appear
+  of a private regular file (no group or other permissions; use `chmod 600`),
+  are checked locally (8 characters to 72 bytes), and never appear
   in output, plans (`--dry-run` shows a placeholder), errors, or verbose
   logs. Creation is not retried.
 - `agctl user update ID [--role R] [--state S] [--display-name …] [--email …]

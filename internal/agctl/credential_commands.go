@@ -85,10 +85,17 @@ func findServiceAccount(ctx context.Context, client *apiClient, match func(admin
 			query.Set("pageToken", token)
 		}
 		var page serverPage[adminopenapi.ServiceAccount]
-		if err := client.getJSON(ctx, serviceAccountsPath, query, &page); err != nil {
+		response, err := client.sendJSON(ctx, http.MethodGet, serviceAccountsPath, requestOptions{query: query, idempotent: true}, &page)
+		if err != nil {
 			return nil, false, err
 		}
+		if page.Items == nil {
+			return nil, false, incompleteResponse(response, client, "service account list")
+		}
 		for index := range page.Items {
+			if !completeServiceAccount(page.Items[index]) {
+				return nil, false, incompleteResponse(response, client, "service account list item")
+			}
 			if match(page.Items[index]) {
 				return &page.Items[index], true, nil
 			}
@@ -498,7 +505,7 @@ func nonZeroUUID(id openapi_types.UUID) string {
 // revokeCredential revokes a credential or an API key. Revocation sets
 // revokedAt once and answers the same record again, so it is retried; the
 // record stays listed with its revocation time.
-func revokeCredential(ctx context.Context, env *commandContext, path, kind, readBack string, target any, revokedAt func() *time.Time) error {
+func revokeCredential(ctx context.Context, env *commandContext, path, kind, readBack string, target any, matchesIdentity func() bool, revokedAt func() *time.Time) error {
 	if !env.globals.dryRun && !env.globals.yes {
 		return &UsageError{Message: fmt.Sprintf("revoking this %s needs --yes; it stops authenticating at once", kind), Hint: "re-run with --yes, or with --dry-run to see the request"}
 	}
@@ -512,7 +519,7 @@ func revokeCredential(ctx context.Context, env *commandContext, path, kind, read
 		return err
 	}
 	response, err := client.sendJSON(ctx, http.MethodDelete, path, requestOptions{idempotent: true}, target)
-	if err == nil && revokedAt() == nil {
+	if err == nil && (revokedAt() == nil || !matchesIdentity()) {
 		err = incompleteResponse(response, client, kind)
 	}
 	if err != nil {
@@ -551,7 +558,10 @@ func credentialRevokeCommand() command {
 			}
 			var credential adminopenapi.ServiceAccountCredential
 			return revokeCredential(ctx, env, serviceAccountPath(account)+"/credentials/"+url.PathEscape(env.args[0]), "credential",
-				"agctl credential list --service-account "+account, &credential, func() *time.Time { return credential.RevokedAt })
+				"agctl credential list --service-account "+account, &credential,
+				func() bool {
+					return strings.EqualFold(nonZeroUUID(credential.Id), env.args[0]) && strings.EqualFold(nonZeroUUID(credential.ServiceAccountId), account)
+				}, func() *time.Time { return credential.RevokedAt })
 		},
 	}
 }
@@ -697,7 +707,8 @@ func apiKeyRevokeCommand() command {
 		},
 		run: func(ctx context.Context, env *commandContext) error {
 			var key adminopenapi.APIKey
-			return revokeCredential(ctx, env, apiKeysPath+"/"+url.PathEscape(env.args[0]), "API key", "agctl api-key list", &key, func() *time.Time { return key.RevokedAt })
+			return revokeCredential(ctx, env, apiKeysPath+"/"+url.PathEscape(env.args[0]), "API key", "agctl api-key list", &key,
+				func() bool { return strings.EqualFold(nonZeroUUID(key.Id), env.args[0]) }, func() *time.Time { return key.RevokedAt })
 		},
 	}
 }

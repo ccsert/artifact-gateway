@@ -313,6 +313,108 @@ func TestUserCreateReadsPasswordSafely(t *testing.T) {
 	noSecret(t, userPassword, stdout, stderr)
 }
 
+func TestPasswordFileMustBePrivateBeforeAnyRequest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX file permissions are not available")
+	}
+	for _, mode := range []os.FileMode{0o644, 0o640, 0o620} {
+		t.Run(fmt.Sprintf("%o", mode), func(t *testing.T) {
+			api := newRouteAPI(t, "")
+			path := filepath.Join(t.TempDir(), "password")
+			if err := os.WriteFile(path, []byte(userPassword+"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(path, mode); err != nil {
+				t.Fatal(err)
+			}
+			for _, args := range [][]string{
+				{"user", "create", "alice", "--role", "member", "--password-file", path, "--json"},
+				{"user", "reset-password", userID, "--password-file", path, "--json"},
+			} {
+				code, stdout, stderr := runCLI(t, args...)
+				noSecret(t, userPassword, stdout, stderr)
+				if code != ExitUsage || len(api.recorded()) != 0 {
+					t.Fatalf("a non-private password file must fail before requests: exit = %d, requests = %d, stdout = %s", code, len(api.recorded()), stdout)
+				}
+			}
+		})
+	}
+}
+
+func TestRevocationRequiresTheRequestedIdentity(t *testing.T) {
+	other := "00000000-0000-4000-c000-000000000002"
+	stamp := `"revokedAt":"2026-10-15T09:00:00Z"`
+	for _, test := range []struct {
+		name, path string
+		args       []string
+		bodies     []string
+	}{
+		{"credential", "/api/v2/service-accounts/" + accountID + "/credentials/" + credentialID,
+			[]string{"credential", "revoke", credentialID, "--service-account", accountID, "--yes", "--json"},
+			[]string{
+				`{` + stamp + `}`,
+				`{"id":"` + credentialID + `",` + stamp + `}`,
+				`{"id":"` + other + `","serviceAccountId":"` + accountID + `",` + stamp + `}`,
+				`{"id":"` + credentialID + `","serviceAccountId":"` + other + `",` + stamp + `}`,
+			}},
+		{"api-key", "/api/v2/api-keys/" + credentialID,
+			[]string{"api-key", "revoke", credentialID, "--yes", "--json"},
+			[]string{`{` + stamp + `}`, `{"id":"` + other + `",` + stamp + `}`}},
+		{"session", "/api/v2/users/" + userID + "/sessions/" + credentialID,
+			[]string{"user", "sessions", "revoke", userID, "--session", credentialID, "--yes", "--json"},
+			[]string{
+				`{` + stamp + `}`,
+				`{"id":"` + credentialID + `",` + stamp + `}`,
+				`{"id":"` + other + `","userId":"` + userID + `",` + stamp + `}`,
+				`{"id":"` + credentialID + `","userId":"` + other + `",` + stamp + `}`,
+			}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for index, body := range test.bodies {
+				t.Run(fmt.Sprint(index), func(t *testing.T) {
+					api := newRouteAPI(t, "")
+					api.on("DELETE", test.path, 200, body)
+					code, stdout, _ := runCLI(t, test.args...)
+					envelope := decodeEnvelope(t, stdout)
+					var data unknownOutcome
+					_ = json.Unmarshal(envelope.Data, &data)
+					if code == ExitOK || envelope.Error == nil || envelope.Error.Code != "invalid_response" || data.Outcome != "unknown" || api.count("DELETE") != 1 {
+						t.Fatalf("an unconfirmed revocation must not succeed or repeat: exit = %d, stdout = %s", code, stdout)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestServiceAccountShowRejectsIncompleteList(t *testing.T) {
+	for _, body := range []string{"", "null", `{}`, `{"items":null}`, `{"items":[{}]}`} {
+		t.Run(body, func(t *testing.T) {
+			api := newRouteAPI(t, "")
+			api.on("GET", "/api/v2/service-accounts", 200, body)
+			code, stdout, _ := runCLI(t, "service-account", "show", accountID, "--json")
+			envelope := decodeEnvelope(t, stdout)
+			if code == ExitOK || code == ExitNotFound || envelope.Error == nil || envelope.Error.Code != "invalid_response" {
+				t.Fatalf("an incomplete list cannot prove not found: exit = %d, stdout = %s", code, stdout)
+			}
+		})
+	}
+}
+
+func TestUserIdentitySubjectUsesCharacterLimit(t *testing.T) {
+	api := newRouteAPI(t, "")
+	path := "/api/v2/users/" + userID + "/identities"
+	api.on("POST", path, 201, `{"id":"`+credentialID+`","userId":"`+userID+`","kind":"oidc","issuer":"https://id.example.com","subject":"`+strings.Repeat("用", 512)+`"}`)
+	code, stdout, _ := runCLI(t, "user", "identities", "link", userID, "--issuer", "https://id.example.com", "--subject", strings.Repeat("用", 512), "--json")
+	if code != ExitOK || api.count("POST") != 1 || !strings.Contains(api.recorded()[0].Body, strings.Repeat("用", 512)) {
+		t.Fatalf("512 Unicode characters must be accepted: exit = %d, stdout = %s", code, stdout)
+	}
+	code, _, _ = runCLI(t, "user", "identities", "link", userID, "--issuer", "https://id.example.com", "--subject", strings.Repeat("用", 513))
+	if code != ExitUsage || api.count("POST") != 1 {
+		t.Fatalf("513 characters must fail before another request: exit = %d", code)
+	}
+}
+
 func TestUserListOffsetWindow(t *testing.T) {
 	api := newRouteAPI(t, "")
 	api.on("GET", "/api/v2/users", 200, `{"items":[`+userJSON("1")+`],"total":3,"offset":1,"limit":1}`)

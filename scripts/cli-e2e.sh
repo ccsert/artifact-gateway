@@ -697,8 +697,14 @@ user_password="Cli-e2e-${suffix}-pw"
 printf '%s\n' "$user_password" >"$secrets/password"
 chmod 600 "$secrets/password"
 expect 2 "$out" -- user create "$user" --role none --json
+chmod 644 "$secrets/password"
+expect 2 "$out" -- user create "$user" --role none --password-file "$secrets/password" --json
+nosecret "$user_password"
+chmod 600 "$secrets/password"
 expect 0 "$out" -- user create "$user" --role none --password-file "$secrets/password" --dry-run --json
 nosecret "$user_password"
+expect 0 "$out" -- user list --search "$user" --json
+require "$(field "$out" meta.pagination.total)" 0 "password preflight and dry-run create no user"
 expect 0 "$out" -- user create "$user" --role none --password-file "$secrets/password" --verbose --json
 nosecret "$user_password"
 user_id=$(field "$out" data.id)

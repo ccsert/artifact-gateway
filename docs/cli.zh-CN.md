@@ -558,7 +558,8 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
 - `agctl user list [--search TEXT] [--role R] [--state S] [--limit N]
   [--offset N]` 读取带服务端总数的偏移窗口；`agctl user show ID` 读取一个用户。
 - `agctl user create NAME --role R (--password-stdin | --password-file FILE)`
-  创建用户。密码只来自有界 stdin 或文件的第一行，本地校验长度（8 个字符到
+  创建用户。密码只来自有界 stdin 或私有普通文件的第一行（不得有组或其他用户
+  权限，可用 `chmod 600` 设置），本地校验长度（8 个字符到
   72 字节），从不出现在输出、计划（`--dry-run` 显示占位符）、错误或 verbose
   日志中。创建不重试。
 - `agctl user update ID [--role R] [--state S] [--display-name …] [--email …]

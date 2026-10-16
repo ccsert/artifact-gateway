@@ -59,9 +59,18 @@ func (p passwordInput) read(env *commandContext) (string, error) {
 		if err != nil || !info.Mode().IsRegular() || info.Size() > secretInputLimit {
 			return "", &UsageError{Message: fmt.Sprintf("--password-file %s is not a readable file of at most %d bytes", p.file, secretInputLimit), Hint: hint}
 		}
-		data, err := os.ReadFile(p.file)
+		file, err := os.Open(p.file)
 		if err != nil {
 			return "", &UsageError{Message: fmt.Sprintf("cannot read --password-file %s", p.file), Hint: hint}
+		}
+		defer func() { _ = file.Close() }()
+		info, err = file.Stat()
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() > secretInputLimit {
+			return "", &UsageError{Message: "--password-file must be a private regular file of at most 4096 bytes", Hint: "use chmod 600 on the password file, or pass --password-stdin"}
+		}
+		data, err := io.ReadAll(io.LimitReader(file, int64(secretInputLimit)+1))
+		if err != nil || len(data) > secretInputLimit {
+			return "", &UsageError{Message: "cannot read a password file of at most 4096 bytes", Hint: hint}
 		}
 		password, _, _ = strings.Cut(string(data), "\n")
 		password = strings.TrimRight(password, "\r")
@@ -649,7 +658,7 @@ func userSessionsRevokeCommand() command {
 				// session again, so the request is retried.
 				var revoked adminopenapi.UserSession
 				response, err := client.sendJSON(ctx, http.MethodDelete, path, requestOptions{idempotent: true}, &revoked)
-				if err == nil && revoked.RevokedAt == nil {
+				if err == nil && (revoked.RevokedAt == nil || !strings.EqualFold(nonZeroUUID(revoked.Id), session) || !strings.EqualFold(nonZeroUUID(revoked.UserId), id)) {
 					err = incompleteResponse(response, client, "user session")
 				}
 				if err != nil {
@@ -757,7 +766,7 @@ func userIdentitiesLinkCommand() command {
 				return &UsageError{Message: "--issuer must be an absolute URL", Hint: "use the OIDC issuer configured on the Gateway"}
 			}
 			subject = strings.TrimSpace(subject)
-			if subject == "" || len(subject) > 512 {
+			if subject == "" || utf8.RuneCountInString(subject) > 512 {
 				return &UsageError{Message: "--subject must be 1-512 characters", Hint: "use the identity's sub claim"}
 			}
 			body := adminopenapi.CreateUserIdentity{Issuer: issuer, Subject: subject}
