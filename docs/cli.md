@@ -772,6 +772,9 @@ command, flag, or argument count the client does not have.
   access with its grant; an API key is created and revoked; a pending user
   becomes a member without repository access until granted, its session is
   ended and rejected, its password reset from a file, and the user deleted;
+  each of those changes (create, role update, session list and revokes,
+  password reset, delete) is in the audit log under `users/<id>`, by the
+  administrator;
   while a member, its session is refused account and identity management
   (6). An OIDC identity is linked to the user (dry-run first) and listed; the
   same subject on another user, or again on the same one, is a conflict (7),
