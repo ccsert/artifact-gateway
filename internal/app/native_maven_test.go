@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -1194,4 +1196,67 @@ func TestNativeMavenSnapshotTombstoneScopesToSingleBuild(t *testing.T) {
 	if code, body := read(prefix(second) + ".pom"); code != http.StatusOK {
 		t.Fatalf("surviving build 2 pom = %d %q", code, body)
 	}
+}
+
+func TestNativeMavenPublishSessionResponsesMatchContractKeys(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "releases", Format: repository.FormatMaven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewGatewayHandler(Dependencies{NativeMavenObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	pomDigest := "sha256:" + strings.Repeat("a", 64)
+	body, _ := json.Marshal(nativeMavenSessionRequest{Format: "maven", Coordinate: "org.example:widget:1.0.0", PomObject: "widget-1.0.0.pom", Objects: []repository.MavenDeclaredObject{{Name: "widget-1.0.0.pom", Digest: pomDigest, Size: 42}}})
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/publish-sessions", bytes.NewReader(body))
+	authorize(request, "admin-secret")
+	request.Header.Set("Idempotency-Key", "native-maven-contract-keys")
+	created := httptest.NewRecorder()
+	h.ServeHTTP(created, request)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create session=%d %s", created.Code, created.Body.String())
+	}
+	id := requirePublishSessionContractKeys(t, created.Body.Bytes())
+
+	get := httptest.NewRequest(http.MethodGet, "/api/v2/publish-sessions/"+id, nil)
+	authorize(get, "admin-secret")
+	read := httptest.NewRecorder()
+	h.ServeHTTP(read, get)
+	if read.Code != http.StatusOK {
+		t.Fatalf("get session=%d %s", read.Code, read.Body.String())
+	}
+	if got := requirePublishSessionContractKeys(t, read.Body.Bytes()); got != id {
+		t.Fatalf("get session id=%q, want %q", got, id)
+	}
+}
+
+func requirePublishSessionContractKeys(t *testing.T, body []byte) string {
+	t.Helper()
+	var session map[string]json.RawMessage
+	if err := json.Unmarshal(body, &session); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := sortedJSONKeys(session), []string{"coordinate", "expiresAt", "id", "objects", "repositoryId", "state"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("session keys=%v, want %v; body=%s", got, want, body)
+	}
+	var objects []map[string]json.RawMessage
+	if err := json.Unmarshal(session["objects"], &objects); err != nil || len(objects) != 1 {
+		t.Fatalf("objects=%s err=%v", session["objects"], err)
+	}
+	if got, want := sortedJSONKeys(objects[0]), []string{"digest", "name", "size"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("object keys=%v, want %v; body=%s", got, want, body)
+	}
+	var id string
+	if err := json.Unmarshal(session["id"], &id); err != nil || id == "" {
+		t.Fatalf("id=%s err=%v", session["id"], err)
+	}
+	return id
+}
+
+func sortedJSONKeys(object map[string]json.RawMessage) []string {
+	keys := make([]string, 0, len(object))
+	for key := range object {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
