@@ -754,6 +754,9 @@ expect 0 "$out" -- user create "$user" --role none --password-file "$secrets/pas
 nosecret "$user_password"
 expect 0 "$out" -- user list --search "$user" --json
 require "$(field "$out" meta.pagination.total)" 0 "password preflight and dry-run create no user"
+expect 0 "$out" -- auth whoami --json
+admin_actor=$(field "$out" data.actor)
+user_started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 expect 0 "$out" -- user create "$user" --role none --password-file "$secrets/password" --verbose --json
 nosecret "$user_password"
 user_id=$(field "$out" data.id)
@@ -869,6 +872,36 @@ expect 2 "$out" -- user delete "$user_id" --json
 expect 0 "$out" -- user delete "$user_id" --dry-run --json
 expect 0 "$out" -- user delete "$user_id" --yes --json
 expect 4 "$out" -- user show "$user_id" --json
+# The user's lifecycle is in the audit log, by the administrator: create,
+# the role update, the session list, both single-session revokes (the second
+# is idempotent), revoke-all, the password reset and the delete. Refused,
+# dry-run and stale (412) attempts change nothing and record nothing here.
+expect 0 "$out" -- audit list --from "$user_started" --page-size 200 --all --json
+python3 - "$out" "$user_id" "$admin_actor" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    records = json.load(stream)["data"]["items"]
+resource = f"users/{sys.argv[2]}"
+mine = [record for record in records if record.get("resource") == resource]
+got = sorted((record["operation"], record["status"]) for record in mine)
+want = sorted([
+    ("user.create", 201),
+    ("user.update", 200),
+    ("user.session.list", 200),
+    ("user.session.revoke", 200),
+    ("user.session.revoke", 200),
+    ("user.sessions.revoke", 200),
+    ("user.password.reset", 200),
+    ("user.delete", 204),
+])
+if got != want:
+    raise SystemExit(f"user lifecycle audit for {resource}: {got}")
+actors = {record.get("actor") for record in mine}
+if actors != {sys.argv[3]}:
+    raise SystemExit(f"user lifecycle audit actors for {resource}: {sorted(map(str, actors))}")
+PY2
 
 # Publishing (#132). A Raw tree is uploaded, re-run (everything skipped by
 # digest), changed (only the changed file goes up), and read back byte for
