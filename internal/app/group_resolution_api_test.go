@@ -41,7 +41,8 @@ func TestGroupResolutionUsesRuntimeOrderAndExcludesUnavailableMembers(t *testing
 	if w := request(""); w.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated status=%d body=%s", w.Code, w.Body.String())
 	}
-	if w := request("resolver-secret"); w.Code != http.StatusForbidden {
+	// A caller that does not administer every member cannot tell the group exists.
+	if w := request("resolver-secret"); w.Code != http.StatusNotFound {
 		t.Fatalf("non-admin status=%d body=%s", w.Code, w.Body.String())
 	}
 	w := request(testAuthenticator().AdminToken)

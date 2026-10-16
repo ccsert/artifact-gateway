@@ -19,11 +19,12 @@ import (
 
 const groupsPath = managementPrefix + "/groups"
 
-// Group reads need the platform tier; writes also accept a caller who
-// administers every repository the Group references (before and after the
-// change). The server decides; these strings only describe it.
+// Group reads and writes accept the platform tier and a caller who
+// administers every repository the Group references; a write needs that for
+// the members before and after the change. A reader outside that rule gets
+// 404. The server decides; these strings only describe it.
 const (
-	groupReadRole  = "platform admin"
+	groupReadRole  = "platform admin, or repositories:admin on every member"
 	groupWriteRole = "platform admin, or repositories:admin on every member it keeps, drops, or adds"
 )
 
@@ -346,7 +347,7 @@ func groupUpdateCommand() command {
 			Stage:        "m1",
 			Endpoints:    []string{"GET " + groupsPath + "/{groupId}", "PUT " + groupsPath + "/{groupId}"},
 			Mutating:     true,
-			MinimumRole:  groupWriteRole + "; reading the current Group needs " + groupReadRole,
+			MinimumRole:  groupWriteRole,
 			InputSchema:  "Group",
 			OutputSchema: "Group",
 			DryRun:       "client-plan",
@@ -551,7 +552,7 @@ func groupMembersSetCommand() command {
 			Stage:        "m1",
 			Endpoints:    []string{"GET " + groupsPath + "/{groupId}", "PUT " + groupsPath + "/{groupId}/members"},
 			Mutating:     true,
-			MinimumRole:  groupWriteRole + "; reading the current version needs " + groupReadRole + " unless --if-match is given",
+			MinimumRole:  groupWriteRole,
 			InputSchema:  "MemberList",
 			OutputSchema: "Group",
 			DryRun:       "client-plan",
@@ -623,10 +624,10 @@ func groupMembersSetCommand() command {
 	}
 }
 
-// replaceGroupMembers sends the conditional member replacement. The contract
-// documents a MemberList response while the server answers with the updated
-// Group; both are accepted. A bare member list carries no version, so the
-// Group is read back to report its new version. The write is not retried.
+// replaceGroupMembers sends the conditional member replacement. The server
+// answers with the updated Group. A server older than that contract answers
+// with a bare member list, which carries no version, so the Group is read
+// back to report its new version. The write is not retried.
 func replaceGroupMembers(ctx context.Context, client *apiClient, id string, body []byte, ifMatch string) (adminopenapi.Group, error) {
 	response, err := client.sendJSON(ctx, http.MethodPut, groupPath(id)+"/members", requestOptions{
 		body:   body,

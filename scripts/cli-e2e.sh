@@ -648,6 +648,38 @@ states = {item["name"]: bool(item.get("revokedAt")) for item in items}
 if states != {"e2e-old": True, "e2e-new": False} or "token" in json.dumps(items):
     raise SystemExit(f"credential list after rotation: {states}")
 PY2
+# Group reads follow Group writes (#359): administering every member lets the
+# account read, list, and replace the members of a Group; a Group it only
+# partly administers answers 404 and stays out of its list.
+expect 0 "$out" -- grant upsert --repo "$content_id" --principal "service-account:$account_id" --scope repositories:admin --json
+expect 0 "$out" -- repo create "cli-e2e-raw-other-${suffix}" --format raw --json
+other_raw_id=$(field "$out" data.id)
+expect 0 "$out" -- group create "cli-e2e-owned-${suffix}" --format raw --member "$content_id" --json
+owned_group=$(field "$out" data.id)
+owned_version=$(field "$out" data.version)
+expect 0 "$out" -- group create "cli-e2e-mixed-${suffix}" --format raw --member "$content_id" --member "$other_raw_id" --json
+mixed_group=$(field "$out" data.id)
+cli_test_token=$new_token expect 0 "$out" -- group show "$owned_group" --json
+cli_test_token=$new_token expect 0 "$out" -- group resolution "$owned_group" --json
+cli_test_token=$new_token expect 4 "$out" -- group show "$mixed_group" --json
+cli_test_token=$new_token expect 0 "$out" -- group list --all --json
+python3 - "$out" "$owned_group" "$mixed_group" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    ids = {item["id"] for item in json.load(stream)["data"]["items"]}
+if sys.argv[2] not in ids or sys.argv[3] in ids:
+    raise SystemExit(f"member administrator lists {sorted(ids)}")
+PY2
+cli_test_token=$new_token expect 0 "$out" -- group members set "$owned_group" --member "$content_id" --json
+[[ "$(field "$out" data.version)" != "$owned_version" ]] || {
+  printf '%s\n' 'members set did not report the new Group version' >&2
+  exit 1
+}
+expect 0 "$out" -- group delete "$owned_group" --yes --json
+expect 0 "$out" -- group delete "$mixed_group" --yes --json
+expect 0 "$out" -- repo delete "$other_raw_id" --yes --json
 expect 0 "$out" -- grant delete --repo "$content_id" --principal "service-account:$account_id" --yes --json
 cli_test_token=$new_token expect 6 "$out" -- artifact search --repo "$content_id" --q releases/ --json
 expect 0 "$out" -- service-account update "$account_id" --state disabled --json

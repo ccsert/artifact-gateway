@@ -409,11 +409,11 @@ Group management over `/api/v2/groups`. A Group references repositories of
 one format; the members' configured positions decide the resolution order
 within each repository type. Groups are addressed by ID.
 
-Reading a Group (`list`, `show`, `members list`, `resolution`) needs a
-platform administrator. Writing one also accepts a caller who administers
-every repository the Group references before and after the change; such a
-caller cannot read the Group back, so a write it cannot confirm has to be
-checked by a platform administrator.
+A platform administrator reads and writes every Group. A caller who
+administers every repository a Group references may read it (`show`,
+`members list`, `resolution`) and finds it in `list`; writing it needs that
+for the members before and after the change. Any other caller gets 404, as if
+the Group did not exist, so a Group it only partly administers stays hidden.
 
 - `agctl group list [--page-size N] [--cursor TOKEN | --all [--max-pages
   N]]` pages through Groups like `agctl repo list`.
@@ -436,9 +436,9 @@ checked by a platform administrator.
   `agctl group members set`.
 - `agctl group members set ID --member REPOSITORY_ID…` replaces the members
   in the order given, conditional on `--if-match` or the version just read.
-  The contract documents a member list in the response while the server
-  returns the updated Group; both are accepted, and a bare member list is
-  followed by a read of the Group to report its new version. If that read
+  The server returns the updated Group; an older server that returns a bare
+  member list is followed by a read of the Group to report its new version.
+  If that read
   fails or returns an incomplete Group, the command fails while retaining
   the confirmed member list and a read-back hint; it never repeats the write.
 - `agctl group delete ID --yes` deletes the Group; its member repositories

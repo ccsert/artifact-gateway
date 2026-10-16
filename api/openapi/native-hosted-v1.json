@@ -2246,6 +2246,7 @@
     "/groups": {
       "get": {
         "operationId": "listGroups",
+        "description": "The platform tier lists every group; any other caller lists the groups whose referenced repositories it all administers. A page may hold fewer items than pageSize while nextPageToken is set.",
         "parameters": [
           {
             "$ref": "#/components/parameters/PageSize"
@@ -2296,10 +2297,13 @@
       ],
       "get": {
         "operationId": "getGroup",
-        "description": "A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.",
+        "description": "A hosted group references repositories, so the platform tier and the administrators of every repository it references may read it, the same rule that lets them manage it. Any other caller gets 404, as if the group did not exist.",
         "responses": {
           "200": {
             "$ref": "#/components/responses/Group"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       },
@@ -2416,16 +2420,19 @@
       ],
       "get": {
         "operationId": "listGroupMembers",
-        "description": "A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.",
+        "description": "A hosted group references repositories, so the platform tier and the administrators of every repository it references may read it, the same rule that lets them manage it. Any other caller gets 404, as if the group did not exist.",
         "responses": {
           "200": {
             "$ref": "#/components/responses/MemberList"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       },
       "put": {
         "operationId": "replaceGroupMembers",
-        "description": "A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it.",
+        "description": "A hosted group references repositories, so the platform tier and the administrators of every repository it references may manage it, including the members it drops and the ones it adds. The response is the whole updated group, so its new version is known without another read.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IfMatch"
@@ -2443,7 +2450,7 @@
         },
         "responses": {
           "200": {
-            "$ref": "#/components/responses/MemberList"
+            "$ref": "#/components/responses/Group"
           },
           "412": {
             "$ref": "#/components/responses/Problem"
