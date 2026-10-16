@@ -798,7 +798,11 @@ command, flag, or argument count the client does not have.
   ports and removes it afterwards. With `CLI_E2E_SERVER` and `CLI_E2E_TOKEN`
   (an admin token) it reuses a running Gateway instead, which is how CI runs
   it after the Console E2E; `CLI_E2E_RESOLVER_TOKEN` adds the checks that need
-  a credential without repository permissions. The scenario creates a repository, replays the
+  a credential without repository permissions, and `CLI_E2E_OIDC_ISSUER` (the
+  Gateway's configured OIDC issuer, with surrounding whitespace and trailing
+  slashes normalized) adds the identity link checks; isolated
+  Compose mode configures a synthetic issuer itself, and CI configures one on
+  the shared Gateway. The scenario creates a repository, replays the
   create, updates it (dry-run, real update, stale `If-Match`), and finds it in
   the list; builds a Group over it and a second repository (dry-run, replay,
   unknown member, members, resolution order, rename with a stale `If-Match`,
@@ -823,6 +827,12 @@ command, flag, or argument count the client does not have.
   access with its grant; an API key is created and revoked; a pending user
   becomes a member without repository access until granted, its session is
   ended and rejected, its password reset from a file, and the user deleted;
+  while a member, its session is refused account and identity management
+  (6). An OIDC identity is linked to the user (dry-run first) and listed; the
+  same subject on another user, or again on the same one, is a conflict (7),
+  and an issuer other than the configured one is refused; it is unlinked
+  (`--yes`, dry-run first), a second unlink answers 404 (4), the freed subject
+  links to the other user, and both changes are in the audit log;
   no token or password may appear in any output. Publishing uploads a Raw
   tree (dry run, upload, skip on re-run, re-upload of the changed file only,
   byte-for-byte read-back, canonical coordinates in search) and publishes two
