@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 	"golang.org/x/text/encoding/charmap"
@@ -249,7 +250,7 @@ func (h nativeMavenHandler) createWithIdempotencyKey(w http.ResponseWriter, r *h
 		writeHostedProblem(w, 500, "internal_error", "create publish session failed")
 		return
 	}
-	writeNativeMavenJSON(w, http.StatusCreated, s)
+	writeNativeMavenSession(w, http.StatusCreated, s)
 }
 func (h nativeMavenHandler) session(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.admin(r); !ok {
@@ -282,7 +283,7 @@ func (h nativeMavenHandler) getSession(w http.ResponseWriter, r *http.Request, i
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "publish session not found")
 		return
 	}
-	writeNativeMavenJSON(w, http.StatusOK, s)
+	writeNativeMavenSession(w, http.StatusOK, s)
 }
 func (h nativeMavenHandler) upload(w http.ResponseWriter, r *http.Request, id, name string) {
 	s, err := h.store.GetMavenPublishSession(r.Context(), id)
@@ -1396,6 +1397,34 @@ func generatedMavenChecksumsFromReader(reader io.Reader, includeSHA512 ...bool) 
 	}
 	return out, nil
 }
+
+// writeNativeMavenSession encodes the contract PublishSession rather than the
+// store model, which carries publisher and POM bookkeeping the API does not expose.
+func writeNativeMavenSession(w http.ResponseWriter, status int, s repository.MavenPublishSession) {
+	response, err := nativeMavenSessionResponse(s)
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "publish session is invalid")
+		return
+	}
+	writeNativeMavenJSON(w, status, response)
+}
+
+func nativeMavenSessionResponse(s repository.MavenPublishSession) (adminopenapi.PublishSession, error) {
+	id, err := uuid.Parse(s.ID)
+	if err != nil {
+		return adminopenapi.PublishSession{}, err
+	}
+	repositoryID, err := uuid.Parse(s.RepositoryID)
+	if err != nil {
+		return adminopenapi.PublishSession{}, err
+	}
+	objects := make([]adminopenapi.DeclaredObject, 0, len(s.Objects))
+	for _, object := range s.Objects {
+		objects = append(objects, adminopenapi.DeclaredObject{Name: object.Name, Digest: object.Digest, Size: int(object.Size)})
+	}
+	return adminopenapi.PublishSession{Id: id, RepositoryId: repositoryID, Coordinate: s.Coordinate, State: adminopenapi.PublishSessionState(s.State), ExpiresAt: s.ExpiresAt, Objects: objects}, nil
+}
+
 func writeNativeMavenJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
