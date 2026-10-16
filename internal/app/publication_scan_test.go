@@ -12,6 +12,7 @@ import (
 
 	"github.com/artifact-gateway/artifact-gateway/internal/repository"
 	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
+	"github.com/google/uuid"
 )
 
 type unavailablePublicationRepositoryStore struct {
@@ -247,7 +248,7 @@ func TestConanPublicationEnqueuesRecipeAndPackageScans(t *testing.T) {
 	store := repository.NewMemoryStore()
 	objects := NewMemoryOCIObjectStore()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
-		ID: "conan-releases", Name: "conan-releases", Format: repository.FormatConan,
+		ID: uuid.NewString(), Name: "conan-releases", Format: repository.FormatConan,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -316,7 +317,9 @@ func publishConanForScan(t *testing.T, handler http.Handler, repositoryID string
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create Conan publish session = %d body=%s", created.Code, created.Body.String())
 	}
-	var session repository.ConanPublishSession
+	var session struct {
+		ID string `json:"id"`
+	}
 	if err = json.Unmarshal(created.Body.Bytes(), &session); err != nil {
 		t.Fatal(err)
 	}

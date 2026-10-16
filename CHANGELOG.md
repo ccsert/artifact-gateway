@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Conan publish session responses (`POST /api/v2/repositories/{id}/conan-publish-sessions` and `GET /api/v2/conan-publish-sessions/{id}`) now use the same `PublishSession` shape as Maven: `id`, `repositoryId`, `coordinate`, `state`, `expiresAt` and `objects` (each with `name`, `digest`, `size`). `coordinate` is `reference#recipeRevision`, with `/packageId#packageRevision` appended for package sessions. They previously leaked capitalized store field names (`ID`, `RepositoryID`, `Publisher`, `Kind`, ...) and exposed the publisher. Clients that read the capitalized keys must switch to the contract names.
+
 - Maven publish session responses (`POST /api/v2/repositories/{id}/publish-sessions` and `GET /api/v2/publish-sessions/{id}`) now match the `PublishSession` contract: keys are `id`, `repositoryId`, `coordinate`, `state`, `expiresAt` and `objects` (each with `name`, `digest`, `size`), and the undeclared `Publisher` and `PomObject` fields are no longer exposed. They previously leaked capitalized store field names, which left the Console Maven publish wizard without a session ID. Clients that read the capitalized keys must switch to the contract names; `agctl` is unaffected.
 
 - `agctl` rejects password files accessible to other users before sending requests, verifies the requested identity in credential/API key/session revocation responses, and rejects incomplete service-account lists instead of inferring a false 404. OIDC identity subjects use the API's 512-character limit, including Unicode characters.

@@ -1410,19 +1410,25 @@ func writeNativeMavenSession(w http.ResponseWriter, status int, s repository.Mav
 }
 
 func nativeMavenSessionResponse(s repository.MavenPublishSession) (adminopenapi.PublishSession, error) {
-	id, err := uuid.Parse(s.ID)
+	return publishSessionResponse(s.ID, s.RepositoryID, s.Coordinate, s.State, s.Objects, s.ExpiresAt)
+}
+
+// publishSessionResponse builds the contract PublishSession shared by the
+// Maven and Conan publish session endpoints.
+func publishSessionResponse(id, repositoryID, coordinate, state string, declared []repository.MavenDeclaredObject, expiresAt time.Time) (adminopenapi.PublishSession, error) {
+	sessionID, err := uuid.Parse(id)
 	if err != nil {
 		return adminopenapi.PublishSession{}, err
 	}
-	repositoryID, err := uuid.Parse(s.RepositoryID)
+	repoID, err := uuid.Parse(repositoryID)
 	if err != nil {
 		return adminopenapi.PublishSession{}, err
 	}
-	objects := make([]adminopenapi.DeclaredObject, 0, len(s.Objects))
-	for _, object := range s.Objects {
+	objects := make([]adminopenapi.DeclaredObject, 0, len(declared))
+	for _, object := range declared {
 		objects = append(objects, adminopenapi.DeclaredObject{Name: object.Name, Digest: object.Digest, Size: int(object.Size)})
 	}
-	return adminopenapi.PublishSession{Id: id, RepositoryId: repositoryID, Coordinate: s.Coordinate, State: adminopenapi.PublishSessionState(s.State), ExpiresAt: s.ExpiresAt, Objects: objects}, nil
+	return adminopenapi.PublishSession{Id: sessionID, RepositoryId: repoID, Coordinate: coordinate, State: adminopenapi.PublishSessionState(state), ExpiresAt: expiresAt, Objects: objects}, nil
 }
 
 func writeNativeMavenJSON(w http.ResponseWriter, status int, v any) {
