@@ -168,7 +168,7 @@ func (h nativeNPMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 	}
 
 	operation := RepositoryRead
-	if r.Method == http.MethodPut || route.Kind == npmprotocol.RoutePing && r.URL.Query().Get("write") == "true" {
+	if isNPMWriteMethod(r.Method) || route.Kind == npmprotocol.RoutePing && r.URL.Query().Get("write") == "true" {
 		operation = RepositoryWrite
 	}
 	principal, authenticated := h.protocolPrincipal(r)
@@ -250,6 +250,8 @@ func (h nativeNPMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		} else {
 			h.tarball(w, r, repo, route.Package, route.Tarball, principal.Actor)
 		}
+	case npmprotocol.RouteDistTags:
+		h.serveDistTags(w, r, repo, route, principal.Actor)
 	}
 	return true
 }

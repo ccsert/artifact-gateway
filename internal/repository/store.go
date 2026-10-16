@@ -34,6 +34,7 @@ var (
 	ErrInvalidWebhookDeliveryState   = errors.New("webhook delivery state is invalid")
 	ErrAPTPackageConflict            = errors.New("APT package identity already has different immutable bytes")
 	ErrConsoleThemeExists            = errors.New("console theme already exists")
+	ErrNPMDistTagTargetUnavailable   = errors.New("npm dist-tag target version is not visible")
 	ErrConsoleThemeNotFound          = errors.New("console theme not found")
 )
 
@@ -384,12 +385,14 @@ type NativeRawStore interface {
 	UpdateRawUpload(context.Context, string, int64) (RawUpload, error)
 	CancelRawUpload(context.Context, string) (RawUpload, error)
 	CompleteRawUpload(context.Context, string, RawAsset) (RawAsset, error)
+	CompleteRawUploadIf(context.Context, string, RawAsset, RawWriteCondition) (RawAsset, error)
 	ExpireRawUploads(context.Context, time.Time, int) ([]RawUpload, error)
 	ListUncollectedRawUploads(context.Context, int) ([]RawUpload, error)
 	MarkRawUploadCollected(context.Context, string) error
 	LockRawObject(context.Context, string) (func(), error)
 	StageRawObject(context.Context, RawObject) error
 	PutRawAsset(context.Context, RawAsset) (RawAsset, error)
+	PutRawAssetIf(context.Context, RawAsset, RawWriteCondition) (RawAsset, error)
 	GetRawAsset(context.Context, string, string) (RawAsset, error)
 	ListRawAssets(context.Context, string, string, int, string, ...ArtifactSearchMatch) ([]RawAsset, error)
 	DeleteRawAsset(context.Context, string, string) error
@@ -401,6 +404,12 @@ type NativeRawStore interface {
 
 type NativeNPMStore interface {
 	PublishNPMVersion(context.Context, NPMVersion, map[string]string) (NPMVersion, error)
+	// SetNPMDistTag points one dist-tag of a Hosted package at a visible
+	// version, and DeleteNPMDistTag removes one. Each commits atomically, with
+	// its audit record, against publication, tombstone, and restore of the
+	// same package.
+	SetNPMDistTag(context.Context, NPMDistTagMutation) (NPMDistTagChange, error)
+	DeleteNPMDistTag(context.Context, NPMDistTagMutation) (NPMDistTagChange, error)
 	SyncNPMProxyPackage(context.Context, NPMPackage) (NPMPackage, error)
 	StoreNPMProxyNegative(context.Context, NPMPackage) error
 	CacheNPMProxyTarball(context.Context, NPMVersion) (NPMVersion, error)
