@@ -7636,6 +7636,15 @@ export type GetGroupData = {
   url: "/groups/{groupId}";
 };
 
+export type GetGroupErrors = {
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetGroupError = GetGroupErrors[keyof GetGroupErrors];
+
 export type GetGroupResponses = {
   /**
    * Group
@@ -7739,6 +7748,16 @@ export type ListGroupMembersData = {
   url: "/groups/{groupId}/members";
 };
 
+export type ListGroupMembersErrors = {
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type ListGroupMembersError =
+  ListGroupMembersErrors[keyof ListGroupMembersErrors];
+
 export type ListGroupMembersResponses = {
   /**
    * Members
@@ -7773,9 +7792,9 @@ export type ReplaceGroupMembersError =
 
 export type ReplaceGroupMembersResponses = {
   /**
-   * Members
+   * Group
    */
-  200: MemberList;
+  200: Group;
 };
 
 export type ReplaceGroupMembersResponse =
