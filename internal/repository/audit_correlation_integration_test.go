@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
+	"github.com/ccsert/artifact-gateway/internal/requestcontext"
 	"github.com/google/uuid"
 )
 

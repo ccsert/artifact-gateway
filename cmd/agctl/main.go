@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/agctl"
+	"github.com/ccsert/artifact-gateway/internal/agctl"
 )
 
 func main() {

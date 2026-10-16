@@ -50,19 +50,17 @@ release containing this batch; merging the code does not publish them.
 ### Go module install
 
 ```sh
-go install github.com/artifact-gateway/artifact-gateway/cmd/agctl@<tag>
+go install github.com/ccsert/artifact-gateway/cmd/agctl@<tag>
 ```
 
-`<tag>` is the release tag (`v<VERSION>`) of a release that contains
-`cmd/agctl`, and the path is the module path `go.mod` declares. This channel
-needs both to be publicly resolvable, which is not the case yet: no repository is served at
-`github.com/artifact-gateway/artifact-gateway` (`repository not found`), and
-requesting the module through the repository path
-`github.com/ccsert/artifact-gateway` fails with a module path mismatch because
-the tagged `go.mod` declares the other path. Read the line above as the target
-of this channel, not as a working install. Use the local build below; independent
-client archives require the future release described above. The module-path
-resolution work remains tracked in #347, and #128 remains open.
+`<tag>` is a release tag (`v<VERSION>`) whose `go.mod` declares
+`github.com/ccsert/artifact-gateway`, the source repository path
+([ADR 0008](adr/0008-go-module-path.md)). The first release after this change is
+the earliest such tag; `v0.9.0` and older declare the previous, unresolvable
+path and cannot be installed this way. A module-mode install reports the tag as
+its version, but the Go toolchain records no VCS data for `pkg@version` builds,
+so `agctl version` shows the revision as `unknown`. Use a release archive or
+the image when you need the revision.
 
 ### Container image
 

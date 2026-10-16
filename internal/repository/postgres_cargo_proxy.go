@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/protocol/cargo"
+	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
 )
 
 func (s *PostgresStore) GetCargoProxyConfig(ctx context.Context, repositoryID string) (CargoProxyConfig, error) {

@@ -7,8 +7,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/backupmanifest"
-	"github.com/artifact-gateway/artifact-gateway/internal/opsjson"
+	"github.com/ccsert/artifact-gateway/internal/backupmanifest"
+	"github.com/ccsert/artifact-gateway/internal/opsjson"
 )
 
 // Re-read inventory and complete bytes inside the observed stopped interval.

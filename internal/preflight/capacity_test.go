@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/capacityplan"
+	"github.com/ccsert/artifact-gateway/internal/capacityplan"
 )
 
 func capacityInput() string {

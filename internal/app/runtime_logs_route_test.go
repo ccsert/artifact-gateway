@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/operationalog"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestRuntimeLogsPreserveRegisteredRouteAndResolvedRepositoryClass(t *testing.T) {

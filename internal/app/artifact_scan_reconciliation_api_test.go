@@ -9,9 +9,9 @@ import (
 	"net/url"
 	"testing"
 
-	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
-	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
+	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/scanning"
 	"github.com/google/uuid"
 )
 

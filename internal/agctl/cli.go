@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/buildinfo"
+	"github.com/ccsert/artifact-gateway/internal/buildinfo"
 )
 
 const defaultTimeout = 30 * time.Second

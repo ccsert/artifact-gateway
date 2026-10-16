@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/cache"
-	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/cache"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 const defaultMaxObjectBytes = int64(1 << 30)

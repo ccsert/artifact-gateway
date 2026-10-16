@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
-	"github.com/artifact-gateway/artifact-gateway/internal/snapshotimport"
+	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/snapshotimport"
 )
 
 var mavenClientReceiptPattern = regexp.MustCompile(`^([0-9]{8}\.[0-9]{6})-([1-9][0-9]*)(?:-|\.)`)

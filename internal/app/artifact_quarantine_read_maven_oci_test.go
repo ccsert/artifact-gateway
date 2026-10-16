@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func publishQuarantineReadMaven(t *testing.T, store *repository.MemoryStore, objects *MemoryOCIObjectStore, repo repository.HostedRepository) (repository.MavenArtifact, string) {

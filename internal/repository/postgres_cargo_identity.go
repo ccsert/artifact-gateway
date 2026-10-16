@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/protocol/cargo"
+	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
 )
 
 func (s *PostgresStore) ReserveCargoIdentity(ctx context.Context, claim CargoIdentityClaim) (CargoIdentityReservation, bool, error) {

@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	testsupport "github.com/artifact-gateway/artifact-gateway/internal/testsupport/snapshotfixture"
+	testsupport "github.com/ccsert/artifact-gateway/internal/testsupport/snapshotfixture"
 )
 
 func TestMavenClientSnapshotHistoryTakeoverAndDeploy(t *testing.T) {

@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
-	"github.com/artifact-gateway/artifact-gateway/internal/secrets"
+	"github.com/ccsert/artifact-gateway/internal/authorization"
+	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/secrets"
 )
 
 const (

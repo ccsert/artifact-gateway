@@ -16,7 +16,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/backupmanifest"
+	"github.com/ccsert/artifact-gateway/internal/backupmanifest"
 )
 
 var errRelease = errors.New("approved release and schema do not match backup")
@@ -90,8 +90,8 @@ func VerifyRelease(m backupmanifest.Manifest, release Release, ledger io.Reader)
 				}
 			}
 		}
-		prefix := "github.com/artifact-gateway/artifact-gateway/internal/buildinfo."
-		if bi.Path != "github.com/artifact-gateway/artifact-gateway/cmd/gateway" || bi.Main.Path != "github.com/artifact-gateway/artifact-gateway" || values["GOOS"]+"/"+values["GOARCH"] != m.Gateway.Artifact.Platform {
+		prefix := "github.com/ccsert/artifact-gateway/internal/buildinfo."
+		if bi.Path != "github.com/ccsert/artifact-gateway/cmd/gateway" || bi.Main.Path != "github.com/ccsert/artifact-gateway" || values["GOOS"]+"/"+values["GOARCH"] != m.Gateway.Artifact.Platform {
 			return errRelease
 		}
 		_, hasLDFlags := values["-ldflags"]

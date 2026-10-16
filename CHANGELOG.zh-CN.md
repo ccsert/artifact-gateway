@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Go 模块路径改为源码仓库路径 `github.com/ccsert/artifact-gateway`（#347，[ADR 0008](docs/adr/0008-go-module-path.zh-CN.md)）。从下一个 Release tag 起，`go install github.com/ccsert/artifact-gateway/cmd/agctl@<tag>` 可安装客户端；`v0.9.0` 及更早的 tag 声明的是从未可解析的旧路径，无法这样安装。module 模式安装以 tag 作为版本、revision 显示为 `unknown`，因为 Go 工具链不为 `pkg@version` 构建记录 VCS 信息。引用 Gateway 包的代码须改用新路径。`make release-version-check` 现在还会在 `go.mod` 与所在 GitHub 仓库不一致时失败。
+
 - `agctl` 在邮件测试重试遭拒绝时保留此前可能已入队的未知结果；确认测试或等待完成前核对投递身份、版本与场景。配额事件按最新 50 条窗口报告，邮件等待命令自省明确返回 `cancelSupported: false`。
 
 - `agctl` 新增配额告警与邮件通知管理（#336，M2）。`quota-alert list|show|create|update|delete|events` 要求显式给出全部阈值和时长（没有默认策略），新规则默认停用，每次有条件更新都把未改动的字段（包括启用状态，否则端点会将其清除）按原值发回；启用需要 `--yes`。`email capability`、`email target list|show|create|update`、`email preview`、`email test` 和 `email delivery list|show|wait|replay` 不在任何输出中显示收件人（只从 stdin 或私有文件读取），带 `--yes` 在可复用的幂等键下排队测试邮件，在 `--timeout` 内等待中继接收且不假装可以取消，仅在此前没有可能已入队的尝试时，把首次 `email_disabled`、`encryption_key_unavailable` 或 `queue_full` 视为确定的拒绝。`make email-compose-check` 现在用这些命令驱动自有 TLS SMTP，并断言只多送达一封邮件。

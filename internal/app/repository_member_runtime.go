@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 type groupMemberAccess struct {

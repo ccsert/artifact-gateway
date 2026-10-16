@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 

@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/lifecycle"
-	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
-	"github.com/artifact-gateway/artifact-gateway/internal/replication"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/lifecycle"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
+	"github.com/ccsert/artifact-gateway/internal/replication"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 

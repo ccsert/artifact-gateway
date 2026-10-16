@@ -9,8 +9,8 @@ import (
 	"sort"
 	"time"
 
-	mavenprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/maven"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	mavenprotocol "github.com/ccsert/artifact-gateway/internal/protocol/maven"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 

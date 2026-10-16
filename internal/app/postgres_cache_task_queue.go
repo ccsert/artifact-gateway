@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/database"
+	"github.com/ccsert/artifact-gateway/internal/database"
 	"github.com/google/uuid"
 )
 

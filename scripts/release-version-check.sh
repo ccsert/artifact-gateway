@@ -37,6 +37,20 @@ done
 test -d cmd/agctl
 grep -Fq 'artifact-gateway-agctl_${version}_' scripts/build-release-artifacts.sh
 cli_module=$(awk '/^module / { print $2; exit }' go.mod)
+# go install resolves the module path as a repository, so it must be the GitHub
+# repository that serves the tags (ADR 0008). CI names it; a checkout falls back
+# to its origin remote and skips the check when neither is known.
+source_repository=${GITHUB_REPOSITORY:-}
+if [[ -z "$source_repository" ]]; then
+  origin_url=$(git remote get-url origin 2>/dev/null || true)
+  if [[ "$origin_url" =~ github\.com[:/]([^/]+/[^/]+)$ ]]; then
+    source_repository=${BASH_REMATCH[1]%.git}
+  fi
+fi
+if [[ -n "$source_repository" && "$cli_module" != "github.com/$source_repository" ]]; then
+  printf 'go.mod module %s does not match the source repository github.com/%s.\n' "$cli_module" "$source_repository" >&2
+  exit 1
+fi
 for doc in docs/cli.md docs/cli.zh-CN.md; do
   if ! grep -Fq "go install $cli_module/cmd/agctl@" "$doc"; then
     printf '%s must document the module install path %s/cmd/agctl.\n' "$doc" "$cli_module" >&2

@@ -16,7 +16,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
+	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )

@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
+	"github.com/ccsert/artifact-gateway/internal/aptpublication"
 )
 
 const maxPublicKeyInputBytes = int64(1 << 20)

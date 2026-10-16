@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/lifecycle"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/lifecycle"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // ArtifactIntelligenceCopyWorker completes metadata propagation that could

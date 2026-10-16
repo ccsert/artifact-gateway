@@ -7,10 +7,10 @@ import (
 	"time"
 	"unicode"
 
-	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
-	npmprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/npm"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
-	"github.com/artifact-gateway/artifact-gateway/internal/v2contract"
+	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	npmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/npm"
+	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/v2contract"
 )
 
 func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.SearchRepositoryArtifactsParams) {

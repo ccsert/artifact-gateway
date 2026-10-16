@@ -2,7 +2,7 @@ package emailnotification
 
 import (
 	"context"
-	"github.com/artifact-gateway/artifact-gateway/internal/testsupport"
+	"github.com/ccsert/artifact-gateway/internal/testsupport"
 	"net"
 	"os"
 	"path/filepath"

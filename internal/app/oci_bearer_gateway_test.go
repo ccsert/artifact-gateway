@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // This mandatory opt-in gate uses an explicit empty registry configuration.

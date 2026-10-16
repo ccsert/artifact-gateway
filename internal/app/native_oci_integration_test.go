@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	ociprotocol "github.com/ccsert/artifact-gateway/internal/protocol/oci"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 

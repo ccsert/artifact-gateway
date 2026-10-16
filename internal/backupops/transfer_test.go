@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/backupmanifest"
-	"github.com/artifact-gateway/artifact-gateway/internal/backupops"
+	"github.com/ccsert/artifact-gateway/internal/backupmanifest"
+	"github.com/ccsert/artifact-gateway/internal/backupops"
 )
 
 type fakeSource struct {

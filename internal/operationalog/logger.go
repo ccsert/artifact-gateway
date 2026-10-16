@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
+	"github.com/ccsert/artifact-gateway/internal/requestcontext"
 )
 
 // NewLogger emits one bounded-schema JSON object per line. Runtime output is

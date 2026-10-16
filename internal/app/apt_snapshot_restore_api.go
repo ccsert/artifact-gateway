@@ -5,9 +5,9 @@ import (
 	"mime"
 	"net/http"
 
-	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
-	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/aptpublication"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func (h generatedRepositoryAPIAdapter) RestoreAPTRepositorySnapshot(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.RestoreAPTRepositorySnapshotParams) {

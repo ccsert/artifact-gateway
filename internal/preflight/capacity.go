@@ -12,8 +12,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/capacityplan"
-	"github.com/artifact-gateway/artifact-gateway/internal/opsjson"
+	"github.com/ccsert/artifact-gateway/internal/capacityplan"
+	"github.com/ccsert/artifact-gateway/internal/opsjson"
 )
 
 const maxCapacityInputBytes = 8 << 20

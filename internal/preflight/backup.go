@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/backupmanifest"
-	"github.com/artifact-gateway/artifact-gateway/internal/opsjson"
+	"github.com/ccsert/artifact-gateway/internal/backupmanifest"
+	"github.com/ccsert/artifact-gateway/internal/opsjson"
 )
 
 const maxBackupInputBytes = 8 << 20

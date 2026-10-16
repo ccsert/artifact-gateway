@@ -7,8 +7,8 @@ import (
 	"errors"
 	"io"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/protocol/cargo"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // ReserveCargoPublicationIdentity is the non-public C0 entry point. It parses

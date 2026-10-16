@@ -8,7 +8,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/config"
+	"github.com/ccsert/artifact-gateway/internal/config"
 )
 
 func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {

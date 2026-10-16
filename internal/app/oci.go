@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/egress"
-	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/egress"
+	ociprotocol "github.com/ccsert/artifact-gateway/internal/protocol/oci"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 const ociManifest = "manifests"

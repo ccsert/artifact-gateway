@@ -13,10 +13,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/capacityplan"
-	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
-	"github.com/artifact-gateway/artifact-gateway/internal/opsjson"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/capacityplan"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
+	"github.com/ccsert/artifact-gateway/internal/opsjson"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/quotaalert"
+	"github.com/ccsert/artifact-gateway/internal/quotaalert"
 )
 
 // Compare safe public fields explicitly; a successful empty response must fail

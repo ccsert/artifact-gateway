@@ -1,4 +1,4 @@
-module github.com/artifact-gateway/artifact-gateway
+module github.com/ccsert/artifact-gateway
 
 go 1.26.9
 

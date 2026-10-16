@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	protocolidentity "github.com/artifact-gateway/artifact-gateway/internal/protocol/identity"
+	protocolidentity "github.com/ccsert/artifact-gateway/internal/protocol/identity"
 )
 
 func (s *MemoryStore) ListArtifactIdentities(_ context.Context, repositoryID string, format Format, purpose ArtifactIdentityPurpose, query string, limit int) ([]ArtifactIdentity, error) {

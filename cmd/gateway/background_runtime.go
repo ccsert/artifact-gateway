@@ -4,16 +4,16 @@ import (
 	"context"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/app"
-	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
-	"github.com/artifact-gateway/artifact-gateway/internal/config"
-	"github.com/artifact-gateway/artifact-gateway/internal/emailnotification"
-	rawmaintenance "github.com/artifact-gateway/artifact-gateway/internal/maintenance/raw"
-	conanprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/conan"
-	npmprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/npm"
-	rawprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/raw"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
-	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
+	"github.com/ccsert/artifact-gateway/internal/app"
+	"github.com/ccsert/artifact-gateway/internal/aptpublication"
+	"github.com/ccsert/artifact-gateway/internal/config"
+	"github.com/ccsert/artifact-gateway/internal/emailnotification"
+	rawmaintenance "github.com/ccsert/artifact-gateway/internal/maintenance/raw"
+	conanprotocol "github.com/ccsert/artifact-gateway/internal/protocol/conan"
+	npmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/npm"
+	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
+	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/scanning"
 )
 
 type backgroundRuntime struct {

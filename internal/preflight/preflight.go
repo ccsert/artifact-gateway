@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/config"
-	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
-	"github.com/artifact-gateway/artifact-gateway/internal/secrets"
+	"github.com/ccsert/artifact-gateway/internal/config"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
+	"github.com/ccsert/artifact-gateway/internal/secrets"
 	"github.com/jackc/pgx/v5"
 )
 

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/database"
+	"github.com/ccsert/artifact-gateway/internal/database"
 )
 
 var postgresNotificationChannels = []string{

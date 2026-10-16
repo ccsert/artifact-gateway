@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
-	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
-	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
-	"github.com/artifact-gateway/artifact-gateway/internal/consoletheme"
-	"github.com/artifact-gateway/artifact-gateway/internal/egress"
-	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
-	"github.com/artifact-gateway/artifact-gateway/internal/scanning"
-	"github.com/artifact-gateway/artifact-gateway/internal/secrets"
+	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/aptpublication"
+	"github.com/ccsert/artifact-gateway/internal/consoletheme"
+	"github.com/ccsert/artifact-gateway/internal/egress"
+	"github.com/ccsert/artifact-gateway/internal/operationalog"
+	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/scanning"
+	"github.com/ccsert/artifact-gateway/internal/secrets"
 	"github.com/google/uuid"
 )
 

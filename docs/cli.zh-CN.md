@@ -44,16 +44,15 @@ tar -xzf artifact-gateway-agctl_<version>_<goos>_<goarch>.tar.gz
 ### Go module 安装
 
 ```sh
-go install github.com/artifact-gateway/artifact-gateway/cmd/agctl@<tag>
+go install github.com/ccsert/artifact-gateway/cmd/agctl@<tag>
 ```
 
-`<tag>` 是包含 `cmd/agctl` 的 Release tag（`v<VERSION>`），路径是 `go.mod`
-声明的 module path。该通道要求两者都可公开解析，目前尚不满足：
-`github.com/artifact-gateway/artifact-gateway` 没有对应
-仓库（`repository not found`）；改用仓库路径 `github.com/ccsert/artifact-gateway`
-请求时，会因 tagged `go.mod` 声明的是另一个路径而报 module path 不匹配。上面的
-命令是该通道的目标形态，不是当前可用的安装方式。当前请使用下文本地构建，独立
-客户端附件需等上文说明的后续发行。模块路径解析由 #347 跟踪，#128 仍保持开放。
+`<tag>` 是 `go.mod` 声明 `github.com/ccsert/artifact-gateway`（即源码仓库路径，见
+[ADR 0008](adr/0008-go-module-path.zh-CN.md)）的 Release tag（`v<VERSION>`）。本变更
+之后的首个发行是最早满足条件的 tag；`v0.9.0` 及更早版本声明的是此前无法解析的旧路径，
+不能这样安装。module 模式安装以 tag 作为版本，但 Go 工具链不为 `pkg@version` 构建
+记录 VCS 信息，因此 `agctl version` 的 revision 显示为 `unknown`；需要 revision 时请
+使用 Release 附件或镜像。
 
 ### 容器镜像
 

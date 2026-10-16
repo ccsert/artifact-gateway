@@ -10,9 +10,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
-	"github.com/artifact-gateway/artifact-gateway/internal/secrets"
+	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/secrets"
 	"github.com/google/uuid"
 )
 

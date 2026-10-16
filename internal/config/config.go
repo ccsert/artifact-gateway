@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/aptpublication"
-	"github.com/artifact-gateway/artifact-gateway/internal/authorization"
-	"github.com/artifact-gateway/artifact-gateway/internal/database"
-	"github.com/artifact-gateway/artifact-gateway/internal/emailnotification"
-	"github.com/artifact-gateway/artifact-gateway/internal/localcapacity"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/aptpublication"
+	"github.com/ccsert/artifact-gateway/internal/authorization"
+	"github.com/ccsert/artifact-gateway/internal/database"
+	"github.com/ccsert/artifact-gateway/internal/emailnotification"
+	"github.com/ccsert/artifact-gateway/internal/localcapacity"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // NodeRole controls which parts of the Gateway runtime are enabled. The

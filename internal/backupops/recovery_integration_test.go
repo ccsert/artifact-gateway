@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/backupmanifest"
+	"github.com/ccsert/artifact-gateway/internal/backupmanifest"
 	"github.com/google/uuid"
 )
 
@@ -482,7 +482,7 @@ func integrationRelease(t *testing.T) Release {
 	t.Helper()
 	dir := t.TempDir()
 	revision := strings.Repeat("a", 40)
-	prefix := "github.com/artifact-gateway/artifact-gateway/internal/buildinfo."
+	prefix := "github.com/ccsert/artifact-gateway/internal/buildinfo."
 	cmd := exec.Command("go", "build", "-buildvcs=false", "-ldflags", "-X "+prefix+"injectedVersion=synthetic-recovery -X "+prefix+"injectedRevision="+revision, "-o", filepath.Join(dir, "gateway"), "./cmd/gateway")
 	cmd.Dir = "../.."
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+runtime.GOARCH)

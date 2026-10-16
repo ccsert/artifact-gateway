@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/httperrorrate"
+	"github.com/ccsert/artifact-gateway/internal/httperrorrate"
 )
 
 var epoch = time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)

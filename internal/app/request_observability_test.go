@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/operationalog"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/operationalog"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 func TestRequestObservabilityCorrelatesAuditAndBoundsAccessLog(t *testing.T) {

@@ -126,7 +126,7 @@ fi
 
 workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
-ldflags="-s -w -X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedVersion=$version -X github.com/artifact-gateway/artifact-gateway/internal/buildinfo.injectedRevision=$revision"
+ldflags="-s -w -X github.com/ccsert/artifact-gateway/internal/buildinfo.injectedVersion=$version -X github.com/ccsert/artifact-gateway/internal/buildinfo.injectedRevision=$revision"
 
 for target in "${targets[@]}"; do
   if [[ ! "$target" =~ ^(linux|darwin|windows)/(amd64|arm64)$ ]]; then

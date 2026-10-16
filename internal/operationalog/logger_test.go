@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/requestcontext"
+	"github.com/ccsert/artifact-gateway/internal/requestcontext"
 )
 
 func TestNewLoggerEmitsIdentityAndRedactsSensitiveAttributes(t *testing.T) {

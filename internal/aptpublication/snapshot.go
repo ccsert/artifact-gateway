@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
-	aptprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/apt"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
+	aptprotocol "github.com/ccsert/artifact-gateway/internal/protocol/apt"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 

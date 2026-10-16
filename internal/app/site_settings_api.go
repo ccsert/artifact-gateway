@@ -11,8 +11,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	adminopenapi "github.com/artifact-gateway/artifact-gateway/internal/admin/openapi"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 const maxSiteLogoDataBytes = 192 << 10

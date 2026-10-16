@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/app"
-	"github.com/artifact-gateway/artifact-gateway/internal/emailnotification"
-	"github.com/artifact-gateway/artifact-gateway/internal/quotaalert"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
-	"github.com/artifact-gateway/artifact-gateway/internal/secrets"
-	"github.com/artifact-gateway/artifact-gateway/internal/testsupport"
+	"github.com/ccsert/artifact-gateway/internal/app"
+	"github.com/ccsert/artifact-gateway/internal/emailnotification"
+	"github.com/ccsert/artifact-gateway/internal/quotaalert"
+	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/secrets"
+	"github.com/ccsert/artifact-gateway/internal/testsupport"
 	"github.com/google/uuid"
 )
 

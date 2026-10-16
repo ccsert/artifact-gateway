@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
-	"github.com/artifact-gateway/artifact-gateway/internal/snapshotimport"
-	fixture "github.com/artifact-gateway/artifact-gateway/internal/testsupport/snapshotfixture"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
+	"github.com/ccsert/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/snapshotimport"
+	fixture "github.com/ccsert/artifact-gateway/internal/testsupport/snapshotfixture"
 )
 
 type mutateAtUpload struct {

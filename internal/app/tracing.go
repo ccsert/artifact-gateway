@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/config"
+	"github.com/ccsert/artifact-gateway/internal/config"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"

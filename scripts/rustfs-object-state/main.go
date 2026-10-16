@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 )
 
 func main() {

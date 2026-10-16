@@ -18,9 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/objectstore"
-	protocolidentity "github.com/artifact-gateway/artifact-gateway/internal/protocol/identity"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
+	protocolidentity "github.com/ccsert/artifact-gateway/internal/protocol/identity"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"

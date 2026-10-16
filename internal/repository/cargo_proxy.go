@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/protocol/cargo"
+	"github.com/ccsert/artifact-gateway/internal/protocol/cargo"
 )
 
 // CargoProxyIndex stores the upstream sparse response without rewriting its

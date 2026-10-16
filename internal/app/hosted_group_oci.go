@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	ociprotocol "github.com/artifact-gateway/artifact-gateway/internal/protocol/oci"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	ociprotocol "github.com/ccsert/artifact-gateway/internal/protocol/oci"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 // v2GroupOCIHandler serves Registry V2 reads against a V2 HostedGroup. Hosted

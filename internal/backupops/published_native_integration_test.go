@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/backupmanifest"
+	"github.com/ccsert/artifact-gateway/internal/backupmanifest"
 )
 
 // The same owned PG/RustFS/source/sentinel fixture as the existing recovery

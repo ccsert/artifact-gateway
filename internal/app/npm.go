@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/egress"
-	"github.com/artifact-gateway/artifact-gateway/internal/repository"
+	"github.com/ccsert/artifact-gateway/internal/egress"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 const npmProxyUserAgent = "npm/11 Artifact-Gateway/1.0"

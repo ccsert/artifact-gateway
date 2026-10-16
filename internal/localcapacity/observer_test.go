@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artifact-gateway/artifact-gateway/internal/localcapacity"
+	"github.com/ccsert/artifact-gateway/internal/localcapacity"
 )
 
 func TestUnconfiguredObserverDoesNotProbeDefaultLocations(t *testing.T) {

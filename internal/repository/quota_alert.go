@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
-	"github.com/artifact-gateway/artifact-gateway/internal/quotaalert"
+	"github.com/ccsert/artifact-gateway/internal/quotaalert"
 	"time"
 )
 
