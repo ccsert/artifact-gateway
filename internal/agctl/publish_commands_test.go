@@ -195,7 +195,7 @@ const sessionID = "00000000-0000-4000-e000-000000000001"
 
 func sessionBody(state string) string {
 	// The server encodes sessions with Go field names; decoding is case-insensitive.
-	return `{"ID":"` + sessionID + `","RepositoryID":"` + testRepoID + `","Coordinate":"com.example:app:1.0.0","State":"` + state + `","ExpiresAt":"2026-10-15T09:00:00Z","Objects":[{"Name":"app-1.0.0.pom","Digest":"sha256:x","Size":3},{"Name":"app-1.0.0.jar","Digest":"sha256:y","Size":3}]}`
+	return `{"ID":"` + sessionID + `","RepositoryID":"` + testRepoID + `","Coordinate":"com.example:app:1.0.0","State":"` + state + `","ExpiresAt":"2026-10-15T09:00:00Z","Objects":[{"Name":"app-1.0.0.pom","Digest":"sha256:60c24224bbc16801180850bc99d8f099e79aaf26ddaac8fedaab553ecce43f20","Size":3},{"Name":"app-1.0.0.jar","Digest":"sha256:0163f1eea7894350060624d315234d40c508ab251ba121714e234503045faadd","Size":3}]}`
 }
 
 const artifactBody = `{"id":"00000000-0000-4000-a000-000000000009","coordinate":"com.example:app:1.0.0","digest":"sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","createdAt":"2026-10-15T08:00:00Z","state":"visible"}`
@@ -311,5 +311,77 @@ func TestPublishCommandsAreRegisteredHonestly(t *testing.T) {
 		if !ok || cmd.meta.Retry != want.retry {
 			t.Fatalf("%s meta = %+v", name, cmd.meta)
 		}
+	}
+}
+
+func TestPublishCreationRejectsMismatchedSession(t *testing.T) {
+	for name, body := range map[string]string{
+		"repository":  strings.ReplaceAll(sessionBody("open"), testRepoID, "00000000-0000-4000-a000-000000000099"),
+		"declaration": strings.ReplaceAll(sessionBody("open"), "sha256:60c24224bbc16801180850bc99d8f099e79aaf26ddaac8fedaab553ecce43f20", "sha256:wrong"),
+		"state":       sessionBody("unknown"),
+		"expiry":      strings.ReplaceAll(sessionBody("open"), "2026-10-15T09:00:00Z", "0001-01-01T00:00:00Z"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			api := newRouteAPI(t, "")
+			pom, jar := mavenFiles(t)
+			api.on("POST", repoBase+"/publish-sessions", 201, body)
+			code, stdout, _ := runCLI(t, "publish", "maven", "--repo", testRepoID, "--coordinate", "com.example:app:1.0.0", "--pom", pom, "--file", jar, "--idempotency-key", "recover-key", "--json")
+			var recovery unknownOutcome
+			envelope := decodeEnvelope(t, stdout)
+			_ = json.Unmarshal(envelope.Data, &recovery)
+			if code == ExitOK || envelope.Error == nil || envelope.Error.Code != "invalid_response" || recovery.Outcome != "unknown" || recovery.IdempotencyKey != "recover-key" || api.count("PUT") != 0 || api.count("POST") != 1 {
+				t.Fatalf("unrelated session must not be used: exit=%d, stdout=%s", code, stdout)
+			}
+		})
+	}
+}
+
+func TestPublishCommitRejectsUnprovenReadBack(t *testing.T) {
+	for name, body := range map[string]string{
+		"incomplete":    `{"state":"committed"}`,
+		"other session": strings.ReplaceAll(sessionBody("committed"), sessionID, "00000000-0000-4000-e000-000000000099"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			api := newRouteAPI(t, "")
+			api.on("POST", "/api/v2/publish-sessions/"+sessionID+":commit", 503, `{"code":"unavailable"}`)
+			api.on("GET", "/api/v2/publish-sessions/"+sessionID, 200, body)
+			code, stdout, _ := runCLI(t, "publish", "commit", sessionID, "--json")
+			var recovery unknownOutcome
+			_ = json.Unmarshal(decodeEnvelope(t, stdout).Data, &recovery)
+			if code == ExitOK || recovery.Outcome != "unknown" || recovery.ID != sessionID || api.count("POST") != 1 {
+				t.Fatalf("unproven commit must remain unknown: exit=%d, stdout=%s", code, stdout)
+			}
+		})
+	}
+}
+
+func TestPublishRawRetryKeepsUnknownWhenSourceDisappears(t *testing.T) {
+	api := newRouteAPI(t, "")
+	file := filepath.Join(writeTree(t, map[string]string{"a.txt": "alpha"}), "a.txt")
+	api.on("GET", repoBase, 200, `{"id":"`+testRepoID+`","name":"raw-hosted","format":"raw","type":"hosted","state":"active","version":"1"}`)
+	api.onFunc("PUT", "/raw/raw-hosted/releases/a.txt", func(*http.Request) (int, string) {
+		if err := os.Remove(file); err != nil {
+			t.Error(err)
+		}
+		return 503, `{"code":"unavailable"}`
+	})
+	code, stdout, _ := runCLI(t, "publish", "raw", file, "--repo", testRepoID, "--to", "releases/a.txt", "--force", "--json")
+	if code != ExitPartial || objectStatuses(t, stdout)["releases/a.txt"] != "unknown" {
+		t.Fatalf("an already-sent upload remains unknown: exit=%d, stdout=%s", code, stdout)
+	}
+	hint := decodeEnvelope(t, stdout).Error.Hint
+	if !strings.Contains(hint, "original") || !strings.Contains(hint, "--to") {
+		t.Fatalf("recovery must keep the original destination: %s", hint)
+	}
+}
+
+func TestPublishUploadRecoveryKeepsFileArguments(t *testing.T) {
+	api := newRouteAPI(t, "")
+	pom, _ := mavenFiles(t)
+	api.on("PUT", "/api/v2/publish-sessions/"+sessionID+"/objects/app-1.0.0.pom", 422, `{"code":"digest_mismatch"}`)
+	code, stdout, _ := runCLI(t, "publish", "upload", sessionID, "--file", pom, "--json")
+	hint := decodeEnvelope(t, stdout).Error.Hint
+	if code != ExitPartial || !strings.Contains(hint, "original") || !strings.Contains(hint, "--file") || strings.Contains(hint, "skipped by digest") {
+		t.Fatalf("recovery must keep upload files: exit=%d, hint=%s", code, hint)
 	}
 }

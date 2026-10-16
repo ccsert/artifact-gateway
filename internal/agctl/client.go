@@ -205,6 +205,12 @@ func (c *apiClient) do(ctx context.Context, method, path string, options request
 		if options.stream != nil {
 			reader, err := options.stream()
 			if err != nil {
+				if attempt > 0 {
+					return nil, &ConnectionError{
+						Message: "cannot reopen the upload after an earlier request: " + redactText(err.Error(), c.token),
+						Hint:    "the earlier upload may have been applied; restore the same source bytes and retry the original command",
+					}
+				}
 				return nil, &UsageError{Message: "cannot read the upload: " + redactText(err.Error(), c.token)}
 			}
 			payload = reader

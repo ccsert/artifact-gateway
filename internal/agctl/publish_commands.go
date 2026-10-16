@@ -315,7 +315,7 @@ func publishRawCommand() command {
 				}(&results[index], object)
 			}
 			wait.Wait()
-			return renderObjectResults(env, results, "agctl publish raw "+env.args[0]+" --repo "+repo)
+			return renderObjectResults(env, results, "re-run the original publish raw command with the same SOURCE, --repo and --to values; objects already in place are skipped by digest")
 		},
 	}
 }
@@ -347,7 +347,7 @@ func renderObjectResults(env *commandContext, results []objectResult, rerun stri
 	return &resultError{
 		err: &PartialError{
 			Message: fmt.Sprintf("%d of %d objects were not confirmed (%d failed, %d unknown)", failed, len(results), counts["failed"], counts["unknown"]),
-			Hint:    "re-run the same command: objects already in place are skipped by digest; " + rerun,
+			Hint:    rerun,
 		},
 		data:  newListPayload(results),
 		meta:  &envelopeMeta{Pagination: &paginationMeta{Mode: "none"}},
@@ -415,7 +415,34 @@ func sessionRequest(coordinate, pomName string, objects []localObject) createMav
 }
 
 func completeSession(session adminopenapi.PublishSession) bool {
-	return session.Id != (openapi_types.UUID{}) && session.Coordinate != "" && session.State != "" && len(session.Objects) > 0
+	if session.Id == (openapi_types.UUID{}) || session.RepositoryId == (openapi_types.UUID{}) || session.Coordinate == "" || !session.State.Valid() || session.ExpiresAt.IsZero() || len(session.Objects) == 0 {
+		return false
+	}
+	seen := make(map[string]bool, len(session.Objects))
+	for _, object := range session.Objects {
+		if object.Name == "" || object.Digest == "" || object.Size < 0 || seen[object.Name] {
+			return false
+		}
+		seen[object.Name] = true
+	}
+	return true
+}
+
+func sessionMatchesRequest(session adminopenapi.PublishSession, repo string, request createMavenSession) bool {
+	if !completeSession(session) || !strings.EqualFold(session.RepositoryId.String(), repo) || session.Coordinate != request.Coordinate || len(session.Objects) != len(request.Objects) {
+		return false
+	}
+	declared := make(map[string]declaredObject, len(request.Objects))
+	for _, object := range request.Objects {
+		declared[object.Name] = object
+	}
+	for _, object := range session.Objects {
+		want, ok := declared[object.Name]
+		if !ok || object.Digest != want.Digest || int64(object.Size) != want.Size {
+			return false
+		}
+	}
+	return true
 }
 
 func renderSession(w io.Writer, session adminopenapi.PublishSession) error {
@@ -448,7 +475,7 @@ func createSession(ctx context.Context, client *apiClient, repo, key string, req
 	response, err := client.sendJSON(ctx, http.MethodPost, repositorySubPath(repo, "publish-sessions"), requestOptions{
 		body: body, idempotent: true, header: http.Header{"Idempotency-Key": {key}},
 	}, &session)
-	if err == nil && (!completeSession(session) || session.Coordinate != request.Coordinate) {
+	if err == nil && !sessionMatchesRequest(session, repo, request) {
 		err = incompleteResponse(response, client, "publish session")
 	}
 	return session, err
@@ -501,7 +528,7 @@ func commitSession(ctx context.Context, client *apiClient, sessionID string) (ad
 		return artifact, false, err
 	}
 	var session adminopenapi.PublishSession
-	if readErr := client.getJSON(ctx, publishSessionsPath+"/"+url.PathEscape(sessionID), nil, &session); readErr == nil && session.State == adminopenapi.PublishSessionStateCommitted {
+	if readErr := client.getJSON(ctx, publishSessionsPath+"/"+url.PathEscape(sessionID), nil, &session); readErr == nil && completeSession(session) && strings.EqualFold(session.Id.String(), sessionID) && session.State == adminopenapi.PublishSessionStateCommitted {
 		return adminopenapi.Artifact{}, true, nil
 	}
 	return artifact, false, err
@@ -628,7 +655,7 @@ func publishUploadCommand() command {
 				return err
 			}
 			results := uploadSessionObjects(ctx, client, env.args[0], objects, parallel)
-			return renderObjectResults(env, results, "agctl publish upload "+env.args[0])
+			return renderObjectResults(env, results, "re-run the original publish upload command with the same SESSION and --file values; re-uploading the same bytes is safe")
 		},
 	}
 }
