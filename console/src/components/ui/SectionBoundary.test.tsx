@@ -1,5 +1,6 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useQuery } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreferencesProvider } from "../../lib/preferences";
 import { SectionBoundary } from "./SectionBoundary";
@@ -98,6 +99,46 @@ describe("SectionBoundary", () => {
     expect(await screen.findByText("Recovered panel")).toBeVisible();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(read).toHaveBeenCalledTimes(2);
+  });
+  it("renders a bare refetch's answer after Retry, never the failed one again", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const read = vi
+      .fn<() => Promise<string>>()
+      .mockResolvedValueOnce("broken")
+      .mockResolvedValue("valid");
+    const rendered: string[] = [];
+    function Content({ value }: { value: string }) {
+      rendered.push(value);
+      if (value === "broken") throw new Error("malformed answer");
+      return <p>Recovered panel</p>;
+    }
+    function ResourcePage() {
+      const query = useQuery({ queryKey: ["stale-probe"], queryFn: read });
+      return (
+        <PreferencesProvider>
+          <SectionBoundary
+            onReset={() => query.refetch({ throwOnError: true })}
+            recoveryKeys={[query.data]}
+          >
+            {query.data ? <Content value={query.data} /> : <p>Loading panel</p>}
+          </SectionBoundary>
+        </PreferencesProvider>
+      );
+    }
+    render(
+      <TestQueryProvider>
+        <ResourcePage />
+      </TestQueryProvider>,
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "malformed answer",
+    );
+    error.mockClear();
+    rendered.length = 0;
+    await userEvent.setup().click(screen.getByRole("button", { name: /重试/ }));
+    expect(await screen.findByText("Recovered panel")).toBeVisible();
+    expect(rendered).not.toContain("broken");
+    expect(error).not.toHaveBeenCalled();
   });
   it("keeps the rest of the page when one section fails, and retries it", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
