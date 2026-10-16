@@ -16,7 +16,7 @@
 某一行才转为 implemented/verified。
 
 覆盖基线：`api/openapi/management-runtime-v1.json`（提交
-`a504ba48cd93371badcb1f2781b120b359e57b69`，127 路径 / 177 操作），以及
+`a504ba48cd93371badcb1f2781b120b359e57b69`，127 路径 / 177 操作），加上 #366 新纳入契约的四条 Conan 会话操作（当前 131 路径 / 181 操作），以及
 `api/openapi/native-hosted-v1.json` 中 CLI 需要触达的协议端点。计数由下方
 漂移守卫重新推导，不固定在本页；契约变化时先更新本页。最近一次核对：
 2026-10-11（#126 补充）。
@@ -62,7 +62,7 @@ Gateway E2E，不只检查 HTTP 200：
 
 ## 管理契约逐操作映射
 
-下表 177 行覆盖基线 `api/openapi/management-runtime-v1.json` 的完整操作集；
+下表 181 行覆盖基线 `api/openapi/management-runtime-v1.json` 的完整操作集；
 守卫从文件重新推导该集合，不信任此计数。路径均相对 `/api/v2`（契约的
 server base）。计划命令省略前导 `agctl`。
 
@@ -242,6 +242,10 @@ server base）。计划命令省略前导 `agctl`。
 | `POST /repositories/{repositoryId}/cache/negative:clear`<br>`clearProxyNegativeCache` | `cache clear-negative --repo <id>` | #137 | M2 | RA | W |
 | `POST /repositories/{repositoryId}/cache/refresh`<br>`refreshProxyCache` | `cache refresh --repo <id>` | #137 | M2 | RA | W |
 | `GET /repositories/{repositoryId}/proxy/health`<br>`getProxyHealth` | `proxy health --repo <id>` | #137 | M2 | R | Q |
+| `POST /repositories/{repositoryId}/conan-publish-sessions`<br>`createConanPublishSession` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生 Conan 发布由 #312 跟踪 | #132 / #312 | N/A | W | N |
+| `GET /conan-publish-sessions/{sessionId}`<br>`getConanPublishSession` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生 Conan 发布由 #312 跟踪 | #132 / #312 | N/A | R | N |
+| `PUT /conan-publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadConanPublishObject` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生 Conan 发布由 #312 跟踪 | #132 / #312 | N/A | W | N |
+| `POST /conan-publish-sessions/{sessionId}:commit`<br>`commitConanPublishSession` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生 Conan 发布由 #312 跟踪 | #132 / #312 | N/A | W | N |
 | `GET /publish-sessions/{sessionId}`<br>`getPublishSession` | `publish status <session>` | #132 | M1 implemented | R | U |
 | `PUT /publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadPublishObject` | `publish upload <session>` | #132 | M1 implemented | W | U |
 | `POST /publish-sessions/{sessionId}:commit`<br>`commitPublishSession` | `publish commit <session>` | #132 | M1 implemented | W | U |

@@ -1,3 +1,4 @@
+import { notifyManager } from "@tanstack/react-query";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { usePreferences } from "../../lib/preferences";
 import { ErrorBanner } from "./Feedback";
@@ -95,6 +96,10 @@ export class SectionBoundary extends Component<
     this.retryPending = true;
     try {
       await this.props.onReset?.();
+      // A refetch resolves before its answer reaches the components that
+      // render it: the query layer delivers it on its notification queue.
+      // Re-render after that, or the section repeats the answer that failed.
+      await new Promise<void>((resolve) => notifyManager.schedule(resolve));
       if (generation === this.resetGeneration) {
         this.retryPending = false;
         this.setState({ error: null, failed: false });

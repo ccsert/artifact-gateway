@@ -25,7 +25,7 @@ registered, its documentation and tests exist, and it passed acceptance
 against a real Gateway.
 
 Baseline: `api/openapi/management-runtime-v1.json` at commit
-`a504ba48cd93371badcb1f2781b120b359e57b69` (127 paths / 177 operations), plus
+`a504ba48cd93371badcb1f2781b120b359e57b69` (127 paths / 177 operations), extended by the four Conan session operations in #366 (currently 131 paths / 181 operations), plus
 the protocol endpoints of `api/openapi/native-hosted-v1.json` the CLI needs to
 reach. Counts are re-derived by the drift guard below, not frozen here; the
 map is updated first whenever the contract changes. Last reviewed: 2026-10-11
@@ -106,7 +106,7 @@ just an HTTP 200:
 
 ## Management contract operation map
 
-All 177 rows below cover the complete operation set of the baseline
+All 181 rows below cover the complete operation set of the baseline
 `api/openapi/management-runtime-v1.json`; the drift guard re-derives the set
 from the file rather than trusting this count. Paths are relative to `/api/v2`,
 the contract's server base. Planned commands omit the leading `agctl`.
@@ -287,6 +287,10 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `POST /repositories/{repositoryId}/cache/negative:clear`<br>`clearProxyNegativeCache` | `cache clear-negative --repo <id>` | #137 | M2 | RA | W |
 | `POST /repositories/{repositoryId}/cache/refresh`<br>`refreshProxyCache` | `cache refresh --repo <id>` | #137 | M2 | RA | W |
 | `GET /repositories/{repositoryId}/proxy/health`<br>`getProxyHealth` | `proxy health --repo <id>` | #137 | M2 | R | Q |
+| `POST /repositories/{repositoryId}/conan-publish-sessions`<br>`createConanPublishSession` | not exposed: Conan session orchestration is outside the CLI M1 scope; native Conan publication is tracked by #312 | #132 / #312 | N/A | W | N |
+| `GET /conan-publish-sessions/{sessionId}`<br>`getConanPublishSession` | not exposed: Conan session orchestration is outside the CLI M1 scope; native Conan publication is tracked by #312 | #132 / #312 | N/A | R | N |
+| `PUT /conan-publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadConanPublishObject` | not exposed: Conan session orchestration is outside the CLI M1 scope; native Conan publication is tracked by #312 | #132 / #312 | N/A | W | N |
+| `POST /conan-publish-sessions/{sessionId}:commit`<br>`commitConanPublishSession` | not exposed: Conan session orchestration is outside the CLI M1 scope; native Conan publication is tracked by #312 | #132 / #312 | N/A | W | N |
 | `GET /publish-sessions/{sessionId}`<br>`getPublishSession` | `publish status <session>` | #132 | M1 implemented | R | U |
 | `PUT /publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadPublishObject` | `publish upload <session>` | #132 | M1 implemented | W | U |
 | `POST /publish-sessions/{sessionId}:commit`<br>`commitPublishSession` | `publish commit <session>` | #132 | M1 implemented | W | U |

@@ -517,6 +517,11 @@ ConanPackageIdList:
   content:
     application/json:
       schema: {"$ref": "../components/schemas.yaml#/ConanPackageIdList"}
+ConanPublishCommit:
+  description: Conan publish session committed
+  content:
+    application/json:
+      schema: {"$ref": "../components/schemas.yaml#/ConanPublishCommit"}
 ProxyCacheBrowsePage:
   description: Maven Proxy cache browse page
   content:

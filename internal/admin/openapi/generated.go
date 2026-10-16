@@ -583,6 +583,21 @@ func (e ConanPackageRevisionState) Valid() bool {
 	}
 }
 
+// Defines values for ConanPublishCommitState.
+const (
+	ConanPublishCommitStateVisible ConanPublishCommitState = "visible"
+)
+
+// Valid indicates whether the value is a known member of the ConanPublishCommitState enum.
+func (e ConanPublishCommitState) Valid() bool {
+	switch e {
+	case ConanPublishCommitStateVisible:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConanRecipeRevisionState.
 const (
 	ConanRecipeRevisionStateDeleted ConanRecipeRevisionState = "deleted"
@@ -742,6 +757,24 @@ func (e CreateAPIKeyRoles) Valid() bool {
 	case CreateAPIKeyRolesAdmin:
 		return true
 	case CreateAPIKeyRolesMember:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateConanPublishSessionKind.
+const (
+	Package CreateConanPublishSessionKind = "package"
+	Recipe  CreateConanPublishSessionKind = "recipe"
+)
+
+// Valid indicates whether the value is a known member of the CreateConanPublishSessionKind enum.
+func (e CreateConanPublishSessionKind) Valid() bool {
+	switch e {
+	case Package:
+		return true
+	case Recipe:
 		return true
 	default:
 		return false
@@ -3966,6 +3999,16 @@ type ConanPackageRevisionList struct {
 	Items []ConanPackageRevision `json:"items"`
 }
 
+// ConanPublishCommit defines model for ConanPublishCommit.
+type ConanPublishCommit struct {
+	// Revision Recipe revision of the committed session, for recipe and package sessions alike.
+	Revision string                  `json:"revision"`
+	State    ConanPublishCommitState `json:"state"`
+}
+
+// ConanPublishCommitState defines model for ConanPublishCommit.State.
+type ConanPublishCommitState string
+
 // ConanRecipeRevision defines model for ConanRecipeRevision.
 type ConanRecipeRevision struct {
 	CreatedAt time.Time                `json:"createdAt"`
@@ -4106,6 +4149,25 @@ type CreateAPTPublicationSession struct {
 	ObjectName       string  `json:"objectName"`
 	Suite            string  `json:"suite"`
 }
+
+// CreateConanPublishSession A recipe session declares recipeRevision only; a package session also declares packageId and packageRevision. The session coordinate is reference#recipeRevision, extended with /packageId#packageRevision for package sessions.
+type CreateConanPublishSession struct {
+	Kind    CreateConanPublishSessionKind `json:"kind"`
+	Objects []DeclaredObject              `json:"objects"`
+
+	// PackageId Required for package sessions; absent or empty for recipe sessions.
+	PackageId *string `json:"packageId,omitempty"`
+
+	// PackageRevision Required for package sessions; absent or empty for recipe sessions.
+	PackageRevision *string `json:"packageRevision,omitempty"`
+	RecipeRevision  string  `json:"recipeRevision"`
+
+	// Reference Conan reference in path form, name/version/user/channel.
+	Reference string `json:"reference"`
+}
+
+// CreateConanPublishSessionKind defines model for CreateConanPublishSession.Kind.
+type CreateConanPublishSessionKind string
 
 // CreateGroup defines model for CreateGroup.
 type CreateGroup struct {
@@ -6871,6 +6933,9 @@ type RefreshProxyCacheJSONRequestBody = MavenCacheRefreshRequest
 // ReplaceRepositoryCapacityJSONRequestBody defines body for ReplaceRepositoryCapacity for application/json ContentType.
 type ReplaceRepositoryCapacityJSONRequestBody = RepositoryCapacityQuota
 
+// CreateConanPublishSessionJSONRequestBody defines body for CreateConanPublishSession for application/json ContentType.
+type CreateConanPublishSessionJSONRequestBody = CreateConanPublishSession
+
 // UpsertGrantJSONRequestBody defines body for UpsertGrant for application/json ContentType.
 type UpsertGrantJSONRequestBody = Grant
 
@@ -7062,6 +7127,15 @@ type ServerInterface interface {
 
 	// (POST /authorization-templates/{templateId}/apply)
 	ApplyAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateId AuthorizationTemplateId, params ApplyAuthorizationTemplateParams)
+
+	// (GET /conan-publish-sessions/{sessionId})
+	GetConanPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId)
+
+	// (PUT /conan-publish-sessions/{sessionId}/objects/{objectName})
+	UploadConanPublishObject(w http.ResponseWriter, r *http.Request, sessionId SessionId, objectName string)
+
+	// (POST /conan-publish-sessions/{sessionId}:commit)
+	CommitConanPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId)
 
 	// (POST /console-themes)
 	InstallConsoleThemePackage(w http.ResponseWriter, r *http.Request)
@@ -7269,6 +7343,9 @@ type ServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/capacity)
 	ReplaceRepositoryCapacity(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
+
+	// (POST /repositories/{repositoryId}/conan-publish-sessions)
+	CreateConanPublishSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
 
 	// (GET /repositories/{repositoryId}/conan/package-ids)
 	ListConanPackageIds(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params ListConanPackageIdsParams)
@@ -8489,6 +8566,93 @@ func (siw *ServerInterfaceWrapper) ApplyAuthorizationTemplate(w http.ResponseWri
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ApplyAuthorizationTemplate(w, r, templateId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetConanPublishSession operation middleware
+func (siw *ServerInterfaceWrapper) GetConanPublishSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId SessionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetConanPublishSession(w, r, sessionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UploadConanPublishObject operation middleware
+func (siw *ServerInterfaceWrapper) UploadConanPublishObject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId SessionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "objectName" -------------
+	var objectName string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "objectName", r.PathValue("objectName"), &objectName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "objectName", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadConanPublishObject(w, r, sessionId, objectName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CommitConanPublishSession operation middleware
+func (siw *ServerInterfaceWrapper) CommitConanPublishSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId SessionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CommitConanPublishSession(w, r, sessionId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11230,6 +11394,32 @@ func (siw *ServerInterfaceWrapper) ReplaceRepositoryCapacity(w http.ResponseWrit
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceRepositoryCapacity(w, r, repositoryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateConanPublishSession operation middleware
+func (siw *ServerInterfaceWrapper) CreateConanPublishSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateConanPublishSession(w, r, repositoryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14770,6 +14960,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/authorization-templates/{templateId}", wrapper.GetAuthorizationTemplate)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/authorization-templates/{templateId}", wrapper.UpdateAuthorizationTemplate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/authorization-templates/{templateId}/apply", wrapper.ApplyAuthorizationTemplate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/conan-publish-sessions/{sessionId}", wrapper.GetConanPublishSession)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/conan-publish-sessions/{sessionId}/objects/{objectName}", wrapper.UploadConanPublishObject)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/conan-publish-sessions/{sessionId}:commit", wrapper.CommitConanPublishSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/console-themes", wrapper.InstallConsoleThemePackage)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/console-themes/{themeId}", wrapper.DeleteConsoleThemePackage)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/console-themes/{themeId}", wrapper.ReplaceConsoleThemePackage)
@@ -14839,6 +15032,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/capabilities", wrapper.GetRepositoryCapabilities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/capacity", wrapper.GetRepositoryCapacity)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/capacity", wrapper.ReplaceRepositoryCapacity)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/conan-publish-sessions", wrapper.CreateConanPublishSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/conan/package-ids", wrapper.ListConanPackageIds)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/conan/package-revisions", wrapper.ListConanPackageRevisions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/repositories/{repositoryId}/conan/package-revisions/{revision}", wrapper.DeleteConanPackageRevision)
@@ -14976,6 +15170,8 @@ type AuthorizationTemplateListJSONResponse AuthorizationTemplateList
 type ConanPackageIdListJSONResponse ConanPackageIdList
 
 type ConanPackageRevisionListJSONResponse ConanPackageRevisionList
+
+type ConanPublishCommitJSONResponse ConanPublishCommit
 
 type ConanRecipeRevisionListJSONResponse ConanRecipeRevisionList
 
@@ -16419,6 +16615,186 @@ func (response ApplyAuthorizationTemplate412ApplicationProblemPlusJSONResponse) 
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConanPublishSessionRequestObject struct {
+	SessionId SessionId `json:"sessionId"`
+}
+
+type GetConanPublishSessionResponseObject interface {
+	VisitGetConanPublishSessionResponse(w http.ResponseWriter) error
+}
+
+type GetConanPublishSession200JSONResponse struct{ PublishSessionJSONResponse }
+
+func (response GetConanPublishSession200JSONResponse) VisitGetConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConanPublishSession404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetConanPublishSession404ApplicationProblemPlusJSONResponse) VisitGetConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadConanPublishObjectRequestObject struct {
+	SessionId  SessionId `json:"sessionId"`
+	ObjectName string    `json:"objectName"`
+	Body       io.Reader
+}
+
+type UploadConanPublishObjectResponseObject interface {
+	VisitUploadConanPublishObjectResponse(w http.ResponseWriter) error
+}
+
+type UploadConanPublishObject204Response struct {
+}
+
+func (response UploadConanPublishObject204Response) VisitUploadConanPublishObjectResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UploadConanPublishObject404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UploadConanPublishObject404ApplicationProblemPlusJSONResponse) VisitUploadConanPublishObjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadConanPublishObject409ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadConanPublishObject409ApplicationProblemPlusJSONResponse) VisitUploadConanPublishObjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadConanPublishObject422ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadConanPublishObject422ApplicationProblemPlusJSONResponse) VisitUploadConanPublishObjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitConanPublishSessionRequestObject struct {
+	SessionId SessionId `json:"sessionId"`
+}
+
+type CommitConanPublishSessionResponseObject interface {
+	VisitCommitConanPublishSessionResponse(w http.ResponseWriter) error
+}
+
+type CommitConanPublishSession200JSONResponse struct{ ConanPublishCommitJSONResponse }
+
+func (response CommitConanPublishSession200JSONResponse) VisitCommitConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitConanPublishSession404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CommitConanPublishSession404ApplicationProblemPlusJSONResponse) VisitCommitConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitConanPublishSession409ApplicationProblemPlusJSONResponse Problem
+
+func (response CommitConanPublishSession409ApplicationProblemPlusJSONResponse) VisitCommitConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitConanPublishSession422ApplicationProblemPlusJSONResponse Problem
+
+func (response CommitConanPublishSession422ApplicationProblemPlusJSONResponse) VisitCommitConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitConanPublishSession507ApplicationProblemPlusJSONResponse Problem
+
+func (response CommitConanPublishSession507ApplicationProblemPlusJSONResponse) VisitCommitConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(507)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -21830,6 +22206,73 @@ func (response ReplaceRepositoryCapacity404ApplicationProblemPlusJSONResponse) V
 	return err
 }
 
+type CreateConanPublishSessionRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Body         *CreateConanPublishSessionJSONRequestBody
+}
+
+type CreateConanPublishSessionResponseObject interface {
+	VisitCreateConanPublishSessionResponse(w http.ResponseWriter) error
+}
+
+type CreateConanPublishSession201JSONResponse struct{ PublishSessionJSONResponse }
+
+func (response CreateConanPublishSession201JSONResponse) VisitCreateConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateConanPublishSession400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateConanPublishSession400ApplicationProblemPlusJSONResponse) VisitCreateConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateConanPublishSession403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateConanPublishSession403ApplicationProblemPlusJSONResponse) VisitCreateConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateConanPublishSession404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateConanPublishSession404ApplicationProblemPlusJSONResponse) VisitCreateConanPublishSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListConanPackageIdsRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 	Params       ListConanPackageIdsParams
@@ -27108,6 +27551,15 @@ type StrictServerInterface interface {
 	// (POST /authorization-templates/{templateId}/apply)
 	ApplyAuthorizationTemplate(ctx context.Context, request ApplyAuthorizationTemplateRequestObject) (ApplyAuthorizationTemplateResponseObject, error)
 
+	// (GET /conan-publish-sessions/{sessionId})
+	GetConanPublishSession(ctx context.Context, request GetConanPublishSessionRequestObject) (GetConanPublishSessionResponseObject, error)
+
+	// (PUT /conan-publish-sessions/{sessionId}/objects/{objectName})
+	UploadConanPublishObject(ctx context.Context, request UploadConanPublishObjectRequestObject) (UploadConanPublishObjectResponseObject, error)
+
+	// (POST /conan-publish-sessions/{sessionId}:commit)
+	CommitConanPublishSession(ctx context.Context, request CommitConanPublishSessionRequestObject) (CommitConanPublishSessionResponseObject, error)
+
 	// (POST /console-themes)
 	InstallConsoleThemePackage(ctx context.Context, request InstallConsoleThemePackageRequestObject) (InstallConsoleThemePackageResponseObject, error)
 
@@ -27314,6 +27766,9 @@ type StrictServerInterface interface {
 
 	// (PUT /repositories/{repositoryId}/capacity)
 	ReplaceRepositoryCapacity(ctx context.Context, request ReplaceRepositoryCapacityRequestObject) (ReplaceRepositoryCapacityResponseObject, error)
+
+	// (POST /repositories/{repositoryId}/conan-publish-sessions)
+	CreateConanPublishSession(ctx context.Context, request CreateConanPublishSessionRequestObject) (CreateConanPublishSessionResponseObject, error)
 
 	// (GET /repositories/{repositoryId}/conan/package-ids)
 	ListConanPackageIds(ctx context.Context, request ListConanPackageIdsRequestObject) (ListConanPackageIdsResponseObject, error)
@@ -28314,6 +28769,87 @@ func (sh *strictHandler) ApplyAuthorizationTemplate(w http.ResponseWriter, r *ht
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ApplyAuthorizationTemplateResponseObject); ok {
 		if err := validResponse.VisitApplyAuthorizationTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetConanPublishSession operation middleware
+func (sh *strictHandler) GetConanPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId) {
+	var request GetConanPublishSessionRequestObject
+
+	request.SessionId = sessionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetConanPublishSession(ctx, request.(GetConanPublishSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetConanPublishSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetConanPublishSessionResponseObject); ok {
+		if err := validResponse.VisitGetConanPublishSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UploadConanPublishObject operation middleware
+func (sh *strictHandler) UploadConanPublishObject(w http.ResponseWriter, r *http.Request, sessionId SessionId, objectName string) {
+	var request UploadConanPublishObjectRequestObject
+
+	request.SessionId = sessionId
+	request.ObjectName = objectName
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UploadConanPublishObject(ctx, request.(UploadConanPublishObjectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UploadConanPublishObject")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UploadConanPublishObjectResponseObject); ok {
+		if err := validResponse.VisitUploadConanPublishObjectResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CommitConanPublishSession operation middleware
+func (sh *strictHandler) CommitConanPublishSession(w http.ResponseWriter, r *http.Request, sessionId SessionId) {
+	var request CommitConanPublishSessionRequestObject
+
+	request.SessionId = sessionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CommitConanPublishSession(ctx, request.(CommitConanPublishSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CommitConanPublishSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CommitConanPublishSessionResponseObject); ok {
+		if err := validResponse.VisitCommitConanPublishSessionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -30297,6 +30833,39 @@ func (sh *strictHandler) ReplaceRepositoryCapacity(w http.ResponseWriter, r *htt
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceRepositoryCapacityResponseObject); ok {
 		if err := validResponse.VisitReplaceRepositoryCapacityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateConanPublishSession operation middleware
+func (sh *strictHandler) CreateConanPublishSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId) {
+	var request CreateConanPublishSessionRequestObject
+
+	request.RepositoryId = repositoryId
+
+	var body CreateConanPublishSessionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateConanPublishSession(ctx, request.(CreateConanPublishSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateConanPublishSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateConanPublishSessionResponseObject); ok {
+		if err := validResponse.VisitCreateConanPublishSessionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

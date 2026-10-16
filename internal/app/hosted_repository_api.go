@@ -259,6 +259,7 @@ func managementBrowseRepositoryID(path string) (string, bool) {
 type generatedRepositoryAPIAdapter struct {
 	hostedRepositoryAPIHandler
 	sessions               nativeMavenHandler
+	conanPublish           nativeConanPublishHandler
 	aptPublication         *aptpublication.Manager
 	aptSnapshotPublisher   *aptpublication.Publisher
 	aptSnapshotImporter    *aptpublication.SnapshotArchiveImporter

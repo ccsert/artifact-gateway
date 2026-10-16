@@ -3138,6 +3138,40 @@ ConanPackageIdList:
     items:
       type: array
       items: {type: string}
+CreateConanPublishSession:
+  type: object
+  description: A recipe session declares recipeRevision only; a package session
+    also declares packageId and packageRevision. The session coordinate is
+    reference#recipeRevision, extended with /packageId#packageRevision for
+    package sessions.
+  required: [kind, reference, recipeRevision, objects]
+  additionalProperties: false
+  properties:
+    kind: {type: string, enum: [recipe, package]}
+    reference:
+      type: string
+      description: Conan reference in path form, name/version/user/channel.
+      pattern: '^[^/\\#]+/[^/\\#]+/[^/\\#]+/[^/\\#]+$'
+    recipeRevision: {type: string, pattern: '^[^/\\#]+$'}
+    packageId:
+      type: string
+      pattern: '^[^/\\#]*$'
+      description: Required for package sessions; absent or empty for recipe sessions.
+    packageRevision:
+      type: string
+      pattern: '^[^/\\#]*$'
+      description: Required for package sessions; absent or empty for recipe sessions.
+    objects:
+      type: array
+      items: {"$ref": "#/DeclaredObject"}
+ConanPublishCommit:
+  type: object
+  required: [state, revision]
+  properties:
+    state: {type: string, enum: [visible]}
+    revision:
+      type: string
+      description: Recipe revision of the committed session, for recipe and package sessions alike.
 ProxyCacheAsset:
   type: object
   required: [path, name, sidecar]

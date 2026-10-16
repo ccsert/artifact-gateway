@@ -22,9 +22,14 @@ type nativeConanPublishHandler struct {
 	publicationScanner *publicationScanScheduler
 }
 
+// nativeConanPublishRequest is the CreateConanPublishSession contract body.
 type nativeConanPublishRequest struct {
-	Kind, Reference, RecipeRevision, PackageID, PackageRevision string
-	Objects                                                     []repository.MavenDeclaredObject
+	Kind            string                           `json:"kind"`
+	Reference       string                           `json:"reference"`
+	RecipeRevision  string                           `json:"recipeRevision"`
+	PackageID       string                           `json:"packageId"`
+	PackageRevision string                           `json:"packageRevision"`
+	Objects         []repository.MavenDeclaredObject `json:"objects"`
 }
 
 func newNativeConanPublishHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeConanPublishHandler {
@@ -59,7 +64,7 @@ func (h nativeConanPublishHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		if len(parts) == 1 && r.Method == http.MethodGet {
-			h.withSession(w, r, id, RepositoryRead, func(session repository.ConanPublishSession) { writeNativeMavenJSON(w, http.StatusOK, session) })
+			h.withSession(w, r, id, RepositoryRead, func(session repository.ConanPublishSession) { writeNativeConanSession(w, http.StatusOK, session) })
 			return
 		}
 	}
@@ -97,7 +102,7 @@ func (h nativeConanPublishHandler) create(w http.ResponseWriter, r *http.Request
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "create Conan publish session failed")
 		return
 	}
-	writeNativeMavenJSON(w, http.StatusCreated, session)
+	writeNativeConanSession(w, http.StatusCreated, session)
 }
 
 func (h nativeConanPublishHandler) upload(w http.ResponseWriter, r *http.Request, session repository.ConanPublishSession, name string) {
@@ -189,11 +194,7 @@ func (h nativeConanPublishHandler) commit(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if h.publicationScanner != nil {
-		coordinate := session.Reference + "#" + session.RecipeRevision
-		if session.Kind == "package" {
-			coordinate += "/" + session.PackageID + "#" + session.PackageRevision
-		}
-		_ = h.publicationScanner.ScheduleRepository(r.Context(), session.RepositoryID, repository.FormatConan, coordinate, digest, session.Publisher)
+		_ = h.publicationScanner.ScheduleRepository(r.Context(), session.RepositoryID, repository.FormatConan, conanSessionCoordinate(session), digest, session.Publisher)
 	}
 	writeNativeMavenJSON(w, http.StatusOK, map[string]string{"state": "visible", "revision": session.RecipeRevision})
 }
@@ -248,6 +249,28 @@ func conanPublishResource(request nativeConanPublishRequest) string {
 		resource += "/packages/" + request.PackageID + "/revisions/" + request.PackageRevision
 	}
 	return resource
+}
+
+// writeNativeConanSession encodes the contract PublishSession rather than the
+// store model, which has no json tags and carries publisher bookkeeping the API
+// does not expose. The Conan revision identity is folded into coordinate.
+func writeNativeConanSession(w http.ResponseWriter, status int, session repository.ConanPublishSession) {
+	response, err := publishSessionResponse(session.ID, session.RepositoryID, conanSessionCoordinate(session), session.State, session.Objects, session.ExpiresAt)
+	if err != nil {
+		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "publish session is invalid")
+		return
+	}
+	writeNativeMavenJSON(w, status, response)
+}
+
+// conanSessionCoordinate is reference#recipeRevision, extended with
+// /packageID#packageRevision for package sessions.
+func conanSessionCoordinate(session repository.ConanPublishSession) string {
+	coordinate := session.Reference + "#" + session.RecipeRevision
+	if session.Kind == "package" {
+		coordinate += "/" + session.PackageID + "#" + session.PackageRevision
+	}
+	return coordinate
 }
 
 func conanSessionResource(session repository.ConanPublishSession) string {
