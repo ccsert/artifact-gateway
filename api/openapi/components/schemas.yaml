@@ -3155,11 +3155,11 @@ CreateConanPublishSession:
     recipeRevision: {type: string, pattern: '^[^/\\#]+$'}
     packageId:
       type: string
-      pattern: '^[^/\\#]+$'
+      pattern: '^[^/\\#]*$'
       description: Required for package sessions; absent or empty for recipe sessions.
     packageRevision:
       type: string
-      pattern: '^[^/\\#]+$'
+      pattern: '^[^/\\#]*$'
       description: Required for package sessions; absent or empty for recipe sessions.
     objects:
       type: array
