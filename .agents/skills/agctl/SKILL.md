@@ -151,6 +151,23 @@ agctl access anonymous show --json
 `member` grants no repository access by itself; repository access always
 comes from `grant upsert` or `template apply`.
 
+## Recipe: quota alerts and email
+
+```sh
+agctl email capability --json
+agctl email target create ops --locale en --recipient-file ./ops-recipient --json
+agctl email preview --scenario warning --locale en --json
+agctl email test --target TARGET_ID --scenario warning --yes --json
+agctl email delivery wait DELIVERY_ID --timeout 2m --json
+agctl quota-alert create --repo REPOSITORY_ID --target TARGET_ID --warning-bp 8500 --critical-bp 9500 --recovery-below-bp 8000 --warning-for 10m --critical-for 5m --recovery-for 10m --max-sample-age 10m --json
+agctl quota-alert update RULE_ID --enabled=true --yes --json
+```
+
+Recipients come only from a private file or stdin and are never printed. A
+rule starts disabled; there is no default policy, so name every threshold.
+`ready` and `accepted` mean configured and handed to the relay, not read by a
+person.
+
 ## When something is missing
 
 If `agctl commands --json` does not list what you need, the CLI does not

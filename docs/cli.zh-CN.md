@@ -598,6 +598,38 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   `committed` 即确认成功。
 - 其他格式用各自的原生客户端发布；`agctl repo connect` 打印其配置。
 
+### 配额告警与邮件
+
+这些第二批（M2）命令需要平台管理员。
+
+- `agctl email capability` 报告应答进程能否排队邮件（`ready`、`email_disabled`、
+  `encryption_key_unavailable`）。ready 只表示已配置，不代表邮件能送达收件箱。
+- `agctl email target list|show` 从不显示收件人，只显示 `recipientConfigured`。
+  `agctl email target create NAME --locale en|zh-CN (--recipient-stdin |
+  --recipient-file FILE) [--enabled]` 只从有界 stdin 或私有（0600）文件读取地址，
+  并在包括计划在内的所有输出中脱敏。`agctl email target update ID` 以刚读到的版本
+  为条件修改名称、语言、启用状态或收件人；未给出的字段按原值发回，因为该端点把
+  省略的 `enabled` 当作停用。规则在更新前继续绑定原目标版本。
+- `agctl email preview --scenario S --locale L [--html-output FILE]
+  [--text-output FILE]` 渲染固定的合成数据，不入队。
+- `agctl email test --target ID --scenario S --yes` 在 `Idempotency-Key`（UUID；
+  `--idempotency-key` 可复用，同一 key 返回同一投递，因此会重试）下按目标当前版本
+  排队一封真实测试邮件。入队不等于送达：`agctl email delivery wait ID [--timeout D]`
+  轮询直到中继接收或判定失败，超时退出码 8 且投递仍在队列中——没有取消操作。
+  `agctl email delivery list [--limit N]` 读取最新的投递（最多 100，无 cursor）；
+  `show` 读取一条，包括尝试次数和 `possibleDuplicate`。
+  `agctl email delivery replay ID --yes` 以版本为条件重新排队一条失败的投递，
+  从不重试。
+- `agctl quota-alert list|show|events` 读取规则、其状态及告警、严重、恢复事件和
+  投递状态。`agctl quota-alert create --repo ID --target ID` 必须给出全部阈值和
+  时长（`--warning-bp`、`--critical-bp`、`--recovery-below-bp`、`--warning-for`、
+  `--critical-for`、`--recovery-for`、`--max-sample-age`）；没有默认策略，规则
+  默认停用，除非 `--enabled --yes`。`agctl quota-alert update RULE_ID` 以刚读到的
+  版本为条件修改阈值、目标或启用状态，未改动的字段按原值发回；启用需要 `--yes`。
+  `agctl quota-alert delete RULE_ID --yes` 有条件地删除。
+- 503 且错误码为 `email_disabled`、`encryption_key_unavailable` 或 `queue_full`
+  是确定的拒绝（退出码 1），不是结果未知。
+
 ### Agent skill
 
 `.agents/skills/agctl/SKILL.md` 向 agent 说明机器契约以及 CI 和管理菜谱。skill
@@ -633,6 +665,9 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   规范坐标），并通过会话发布两个 Maven 坐标（一步完成与分步执行，已提交会话被拒，
   重复提交返回 409）；用户用 `auth login --secret-output` 登录并使用该 token。同时检查错误
   token（5）、仓库不存在（4）、非法输入（2）和冲突（7）的退出码。
+- `make email-compose-check` 在带自有 TLS SMTP 的隔离 Gateway 上运行邮件命令：
+  从私有收件人文件建目标、改名后仍保持启用、预览和计划不入队、带 key 的测试只送达
+  一次、重放被拒，以及配额规则的生命周期；收件人不出现在任何 agctl 输出中。
 - `make cli-contract-check` 校验命令映射表覆盖全部契约操作，且每个标为
   `implemented` 的行都对应声明了该行端点的已注册命令。
 

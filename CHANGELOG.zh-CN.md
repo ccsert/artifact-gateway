@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- `agctl` 新增配额告警与邮件通知管理（#336，M2）。`quota-alert list|show|create|update|delete|events` 要求显式给出全部阈值和时长（没有默认策略），新规则默认停用，每次有条件更新都把未改动的字段（包括启用状态，否则端点会将其清除）按原值发回；启用需要 `--yes`。`email capability`、`email target list|show|create|update`、`email preview`、`email test` 和 `email delivery list|show|wait|replay` 不在任何输出中显示收件人（只从 stdin 或私有文件读取），带 `--yes` 在可复用的幂等键下排队测试邮件，在 `--timeout` 内等待中继接收且不假装可以取消，并把 `email_disabled`、`encryption_key_unavailable` 和 `queue_full` 视为确定的拒绝。`make email-compose-check` 现在用这些命令驱动自有 TLS SMTP，并断言只多送达一封邮件。
+
 - `agctl` 在上传前核对 Maven 会话响应的仓库与声明文件；提交响应丢失时，只接受目标会话的完整回读作为成功证据。响应损坏或身份不符时保留幂等键或会话回读路径并报告未知结果。上传重试期间源文件不可读时也保留先前未知状态，部分失败的恢复提示要求保留原目标和文件参数。
 
 - `agctl` 新增制品发布与登录到私有文件（#132、#129、#140）。`publish raw` 把文件或目录树上传到 Raw Hosted 仓库，在本地计算 SHA-256 并交由 Gateway 校验，仓库中已有相同摘要的对象会跳过，以有限并发流式上传，逐个报告对象的规范坐标，任一对象未确认时退出码 3；重跑是安全的。`publish maven` 在幂等键下通过发布会话发布一个 Maven 坐标（同一 key 可续传，已提交的会话不会被重复使用），并提供 `publish create|upload|commit|status` 分步命令；提交响应丢失时通过回读会话确认。`auth login --secret-output FILE` 把会话 token 写入新的私有文件而不是 profile。请求路径只转义一次，带空格的 Raw 名称保持规范坐标。agent skill `.agents/skills/agctl/SKILL.md` 说明机器契约以及 CI 和管理菜谱，其中出现客户端没有的命令、参数或参数个数时单元测试会失败。命令映射守卫改为按原生协议行自身的路径核对。

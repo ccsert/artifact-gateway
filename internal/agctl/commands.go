@@ -135,6 +135,23 @@ func registry() []command {
 		publishCommitCommand(),
 		publishStatusCommand(),
 		publishMavenCommand(),
+		quotaAlertListCommand(),
+		quotaAlertShowCommand(),
+		quotaAlertCreateCommand(),
+		quotaAlertUpdateCommand(),
+		quotaAlertDeleteCommand(),
+		quotaAlertEventsCommand(),
+		emailCapabilityCommand(),
+		emailTargetListCommand(),
+		emailTargetShowCommand(),
+		emailTargetCreateCommand(),
+		emailTargetUpdateCommand(),
+		emailPreviewCommand(),
+		emailTestCommand(),
+		emailDeliveryListCommand(),
+		emailDeliveryShowCommand(),
+		emailDeliveryWaitCommand(),
+		emailDeliveryReplayCommand(),
 	}
 }
 
