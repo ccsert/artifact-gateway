@@ -56,27 +56,46 @@ func rawWriteCondition(header http.Header) (repository.RawWriteCondition, error)
 // parseRawEntityTags reads "*" or a comma-separated list of entity tags from
 // every field line. "*" must stand alone.
 func parseRawEntityTags(values []string) (bool, []string, error) {
-	wildcard := false
+	value := strings.Trim(strings.Join(values, ","), " \t")
+	if value == "*" {
+		return true, nil, nil
+	}
 	tags := make([]string, 0, len(values))
-	for _, value := range values {
-		for _, member := range strings.Split(value, ",") {
-			member = strings.TrimSpace(member)
-			switch {
-			case member == "":
-				continue
-			case member == "*":
-				wildcard = true
-			case validRawEntityTag(member):
-				tags = append(tags, member)
-			default:
-				return false, nil, errors.New("malformed entity tag in precondition")
-			}
+	for index := 0; index < len(value); {
+		// Empty list members are ignored, as required for received HTTP lists.
+		if value[index] == ' ' || value[index] == '\t' || value[index] == ',' {
+			index++
+			continue
+		}
+		start := index
+		if strings.HasPrefix(value[index:], "W/") {
+			index += 2
+		}
+		if index == len(value) || value[index] != '"' {
+			return false, nil, errors.New("malformed entity tag in precondition")
+		}
+		// An opaque tag can contain commas and backslashes. Only a double
+		// quote ends it; entity tags do not use quoted-string escaping.
+		end := strings.IndexByte(value[index+1:], '"')
+		if end < 0 {
+			return false, nil, errors.New("malformed entity tag in precondition")
+		}
+		index += end + 2
+		if !validRawEntityTag(value[start:index]) {
+			return false, nil, errors.New("malformed entity tag in precondition")
+		}
+		tags = append(tags, value[start:index])
+		for index < len(value) && (value[index] == ' ' || value[index] == '\t') {
+			index++
+		}
+		if index < len(value) && value[index] != ',' {
+			return false, nil, errors.New("malformed entity tag in precondition")
 		}
 	}
-	if (wildcard && len(tags) > 0) || (!wildcard && len(tags) == 0) {
+	if len(tags) == 0 {
 		return false, nil, errors.New("malformed entity tag in precondition")
 	}
-	return wildcard, tags, nil
+	return false, tags, nil
 }
 
 func validRawEntityTag(tag string) bool {
@@ -85,7 +104,7 @@ func validRawEntityTag(tag string) bool {
 		return false
 	}
 	for i := 1; i < len(tag)-1; i++ {
-		if c := tag[i]; c != 0x21 && (c < 0x23 || c > 0x7e) {
+		if c := tag[i]; c != 0x21 && (c < 0x23 || c == 0x7f) {
 			return false
 		}
 	}

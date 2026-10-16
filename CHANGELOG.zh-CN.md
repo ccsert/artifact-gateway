@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Raw 条件写入列表保留实体标签引号内的逗号，并接受 RFC 9110 规定的不透明标签字节（含 obs-text）。通配符必须是字段的唯一值；重复或混用通配符返回 400，且不改变路径引用。
+
 - Raw Hosted 支持条件写入（#313）。`PUT /raw/{repository}/{path}` 与恢复上传的完成请求（`PUT ?uploadId=…&complete=1`）遵循 `If-None-Match: *`（仅在路径没有当前制品时创建）、`If-Match: *` 以及 `If-Match`/`If-None-Match` 实体标签列表，读取返回的 `"sha256-<hex>"` 与写入返回的 `"sha256:<hex>"` 两种标签都可使用。Gateway 在替换路径引用的同一把锁（内存）或同一事务（PostgreSQL）内复查条件，因此持有同一 validator 的两个写者只有一个成功；另一个得到 412，引用不变、不回显当前 validator，被拒的恢复上传保持打开。格式错误的条件列表以及无法原子判定的 `If-Unmodified-Since` 返回 400，而不是退化为无条件写入。不带这些头的请求保持原有无条件替换行为。恢复上传完成时先登记内容对象再写入字节，被拒或失败的提交留下的字节可被回收。
 
 - Group 读取权限与写入一致（#359）。对 Group 引用的每个仓库都有管理权限的主体现在可以读取它——`GET /api/v2/groups/{id}`、`/members`、`/resolution` 和 `/capacity`——并在 `GET /api/v2/groups` 中看到它，该列表按此规则过滤；每次请求最多检查 1000 个 Group，因此一页可能不足甚至为空，此时 `nextPageToken` 继续扫描。其他非平台主体得到 404（此前为 403），如同 Group 不存在，因此只管理部分成员的 Group 对其不可见。`PUT /api/v2/groups/{id}/members` 的契约改为记录服务端实际返回的完整 Group，而非成员列表。`agctl` 同步更新读取权限说明，`group members set` 仍兼容较旧服务端返回的纯成员列表。

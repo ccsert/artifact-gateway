@@ -121,6 +121,67 @@ func TestNativeRawConditionalPutRejectsMalformedPreconditions(t *testing.T) {
 	}
 }
 
+func TestNativeRawConditionalPutEntityTagLists(t *testing.T) {
+	const path = "/raw/downloads/releases/app.txt"
+	for _, tc := range []struct {
+		name    string
+		headers http.Header
+		want    int
+	}{
+		{"quoted comma beside a match", http.Header{"If-Match": {`"other,tag", ` + rawReadETag("base")}}, http.StatusCreated},
+		{"quoted comma without a match", http.Header{"If-Match": {`"other,tag"`}}, http.StatusPreconditionFailed},
+		{"quoted comma in none-match", http.Header{"If-None-Match": {`"other,tag"`}}, http.StatusCreated},
+		{"obs-text beside a match", http.Header{"If-Match": {"\"other\x80\xfftag\", " + rawReadETag("base")}}, http.StatusCreated},
+		{"obs-text without a match", http.Header{"If-Match": {"\"other\x80\xfftag\""}}, http.StatusPreconditionFailed},
+		{"obs-text in none-match", http.Header{"If-None-Match": {"W/\"other\x80\xfftag\""}}, http.StatusCreated},
+		{"multiple field lines", http.Header{"If-Match": {`"other,tag"`, rawReadETag("base")}}, http.StatusCreated},
+		{"empty list members", http.Header{"If-Match": {", , " + rawReadETag("base") + ", "}}, http.StatusCreated},
+		{"wildcard with whitespace", http.Header{"If-Match": {" \t*\t "}}, http.StatusCreated},
+		{"duplicate wildcard", http.Header{"If-Match": {"*, *"}}, http.StatusBadRequest},
+		{"duplicate wildcard field lines", http.Header{"If-None-Match": {"*", "*"}}, http.StatusBadRequest},
+		{"wildcard with empty member", http.Header{"If-Match": {"*,"}}, http.StatusBadRequest},
+		{"wildcard mixed with a tag", http.Header{"If-Match": {"*", rawReadETag("base")}}, http.StatusBadRequest},
+		{"missing delimiter", http.Header{"If-Match": {rawReadETag("base") + ` "other"`}}, http.StatusBadRequest},
+		{"unterminated tag", http.Header{"If-Match": {`"other,tag`}}, http.StatusBadRequest},
+		{"control in opaque tag", http.Header{"If-Match": {"\"other\x1ftag\""}}, http.StatusBadRequest},
+		{"delete in opaque tag", http.Header{"If-Match": {"\"other\x7ftag\""}}, http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := repository.NewMemoryStore()
+			if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "raw-repo", Name: "downloads", Format: repository.FormatRaw}); err != nil {
+				t.Fatal(err)
+			}
+			handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+			request := func(method, body string, headers http.Header) *httptest.ResponseRecorder {
+				r := httptest.NewRequest(method, path, strings.NewReader(body))
+				for name, values := range headers {
+					for _, value := range values {
+						r.Header.Add(name, value)
+					}
+				}
+				authorize(r, "resolver-secret")
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, r)
+				return w
+			}
+			if seeded := request(http.MethodPut, "base", nil); seeded.Code != http.StatusCreated {
+				t.Fatalf("seed=%d %s", seeded.Code, seeded.Body.String())
+			}
+			response := request(http.MethodPut, "next", tc.headers)
+			if response.Code != tc.want {
+				t.Fatalf("conditional PUT=%d %s, want %d", response.Code, response.Body.String(), tc.want)
+			}
+			wantBody := "base"
+			if tc.want == http.StatusCreated {
+				wantBody = "next"
+			}
+			if read := request(http.MethodGet, "", nil); read.Code != http.StatusOK || read.Body.String() != wantBody {
+				t.Fatalf("read after conditional PUT=%d %q, want %q", read.Code, read.Body.String(), wantBody)
+			}
+		})
+	}
+}
+
 func TestNativeRawConditionalPutAdmitsOneWriterPerValidator(t *testing.T) {
 	_, request := newConditionalRawHandler(t)
 	const path = "/raw/downloads/releases/app.txt"
