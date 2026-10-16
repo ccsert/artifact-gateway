@@ -52,7 +52,8 @@ go install github.com/ccsert/artifact-gateway/cmd/agctl@<tag>
 之后的首个发行是最早满足条件的 tag；`v0.9.0` 及更早版本声明的是此前无法解析的旧路径，
 不能这样安装。module 模式安装以 tag 作为版本，但 Go 工具链不为 `pkg@version` 构建
 记录 VCS 信息，因此 `agctl version` 的 revision 显示为 `unknown`；需要 revision 时请
-使用 Release 附件或镜像。
+使用 Release 附件或镜像。发布满足条件的 tag 并验证公开 GitHub 安装仍由
+#347 和 #128 跟踪发行验收。
 
 ### 容器镜像
 

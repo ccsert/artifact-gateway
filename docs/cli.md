@@ -60,7 +60,8 @@ the earliest such tag; `v0.9.0` and older declare the previous, unresolvable
 path and cannot be installed this way. A module-mode install reports the tag as
 its version, but the Go toolchain records no VCS data for `pkg@version` builds,
 so `agctl version` shows the revision as `unknown`. Use a release archive or
-the image when you need the revision.
+the image when you need the revision. Publishing an eligible tag and verifying
+a public GitHub install remain release acceptance work tracked in #347 and #128.
 
 ### Container image
 
