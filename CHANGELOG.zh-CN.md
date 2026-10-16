@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Console 区块重试在刷新数据送达组件后恢复渲染，避免旧响应再次抛错并短暂闪回失败提示。
+
 - `agctl` 在请求前拒绝其他用户可访问的密码文件，核对凭据/API key/会话吊销响应中的目标身份，并拒绝不完整的服务账号列表，避免误报 404。OIDC 身份 subject 与 API 一致按 512 个字符限制，支持 Unicode 字符。
 
 - `agctl` 新增机器身份与用户身份管理（#133、#335）。`service-account list|show|create|update` 管理 CI 主体（没有单个账号的端点，`show` 通过读取列表查找，只有读完整个列表才返回 404）；`credential issue` 和 `api-key create` 只把一次性秘密写入 `--secret-output` 指定的新私有文件（0600 权限，请求前检查，从不覆盖已有文件或链接，从不打印，从不重试），签发后无法保存时报告 `secret_not_delivered` 并给出需要吊销的 ID；`credential revoke` 和 `api-key revoke` 立即让秘密失效。`user list|show|create|update|delete|reset-password` 只从有界 stdin 或文件读取密码，输出、计划和错误中都不含密码；`user sessions list|revoke` 结束单个或全部会话；`user identities list|link|unlink` 管理已链接的 OIDC 身份。条件写入使用刚读到的版本，从不重试。`make cli-e2e` 运行 CI 剧本——服务账号凭据写入 0600 文件、使用、轮换（旧秘密返回 401）、随授权撤销失去访问——以及 API key、用户、会话和密码检查，任何 token 或密码进入 agctl 输出都会失败。
