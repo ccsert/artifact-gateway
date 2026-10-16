@@ -110,3 +110,35 @@ func TestNativeConanPublishSessionResponsesMatchContractKeys(t *testing.T) {
 		t.Fatalf("session=%+v", session)
 	}
 }
+
+// The generated management routes cap JSON bodies, so Conan object uploads must
+// stay exempt like Maven ones.
+func TestNativeConanPublishObjectUploadExceedsManagementJSONLimit(t *testing.T) {
+	store := repository.NewMemoryStore()
+	repo, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: uuid.NewString(), Name: "conan-hosted", Format: repository.FormatConan})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.ReplaceRepositoryGrants(context.Background(), repo.ID, []repository.RepositoryGrant{{Principal: "build-agent", Scopes: []string{"repositories:read", "repositories:write"}}}, "1"); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewGatewayHandler(Dependencies{NativeConanObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	body := bytes.Repeat([]byte("c"), managementJSONBodyLimit+1)
+	sum := sha256.Sum256(body)
+	requestBody, _ := json.Marshal(map[string]any{"kind": "recipe", "reference": "pkg/1.0/user/stable", "recipeRevision": "rrev", "objects": []map[string]any{{"name": "conan_sources.tgz", "digest": "sha256:" + hex.EncodeToString(sum[:]), "size": len(body)}}})
+	create := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repo.ID+"/conan-publish-sessions", bytes.NewReader(requestBody))
+	create.Header.Set("Authorization", "Bearer resolver-secret")
+	created := httptest.NewRecorder()
+	handler.ServeHTTP(created, create)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create=%d body=%s", created.Code, created.Body.String())
+	}
+	sessionID := requirePublishSessionContractKeys(t, created.Body.Bytes())
+	upload := httptest.NewRequest(http.MethodPut, "/api/v2/conan-publish-sessions/"+sessionID+"/objects/conan_sources.tgz", bytes.NewReader(body))
+	upload.Header.Set("Authorization", "Bearer resolver-secret")
+	uploaded := httptest.NewRecorder()
+	handler.ServeHTTP(uploaded, upload)
+	if uploaded.Code != http.StatusNoContent {
+		t.Fatalf("upload=%d body=%s", uploaded.Code, uploaded.Body.String())
+	}
+}
