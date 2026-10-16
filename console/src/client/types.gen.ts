@@ -912,6 +912,35 @@ export type ConanPackageIdList = {
   items: Array<string>;
 };
 
+/**
+ * A recipe session declares recipeRevision only; a package session also declares packageId and packageRevision. The session coordinate is reference#recipeRevision, extended with /packageId#packageRevision for package sessions.
+ */
+export type CreateConanPublishSession = {
+  kind: "recipe" | "package";
+  /**
+   * Conan reference in path form, name/version/user/channel.
+   */
+  reference: string;
+  recipeRevision: string;
+  /**
+   * Required for package sessions; absent or empty for recipe sessions.
+   */
+  packageId?: string;
+  /**
+   * Required for package sessions; absent or empty for recipe sessions.
+   */
+  packageRevision?: string;
+  objects: Array<DeclaredObject>;
+};
+
+export type ConanPublishCommit = {
+  state: "visible";
+  /**
+   * Recipe revision of the committed session, for recipe and package sessions alike.
+   */
+  revision: string;
+};
+
 export type ProxyCacheBrowsePage = {
   items: Array<ProxyCacheBrowseItem>;
   nextPageToken?: string;
@@ -9252,6 +9281,43 @@ export type DeleteConanPackageRevisionResponses = {
 export type DeleteConanPackageRevisionResponse =
   DeleteConanPackageRevisionResponses[keyof DeleteConanPackageRevisionResponses];
 
+export type CreateConanPublishSessionData = {
+  body: CreateConanPublishSession;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/conan-publish-sessions";
+};
+
+export type CreateConanPublishSessionErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type CreateConanPublishSessionError =
+  CreateConanPublishSessionErrors[keyof CreateConanPublishSessionErrors];
+
+export type CreateConanPublishSessionResponses = {
+  /**
+   * Publish session
+   */
+  201: PublishSession;
+};
+
+export type CreateConanPublishSessionResponse =
+  CreateConanPublishSessionResponses[keyof CreateConanPublishSessionResponses];
+
 export type ListProxyCacheEntriesData = {
   body?: never;
   path: {
@@ -9518,3 +9584,111 @@ export type CommitPublishSessionResponses = {
 
 export type CommitPublishSessionResponse =
   CommitPublishSessionResponses[keyof CommitPublishSessionResponses];
+
+export type GetConanPublishSessionData = {
+  body?: never;
+  path: {
+    sessionId: string;
+  };
+  query?: never;
+  url: "/conan-publish-sessions/{sessionId}";
+};
+
+export type GetConanPublishSessionErrors = {
+  /**
+   * Problem response
+   */
+  404: Problem;
+};
+
+export type GetConanPublishSessionError =
+  GetConanPublishSessionErrors[keyof GetConanPublishSessionErrors];
+
+export type GetConanPublishSessionResponses = {
+  /**
+   * Publish session
+   */
+  200: PublishSession;
+};
+
+export type GetConanPublishSessionResponse =
+  GetConanPublishSessionResponses[keyof GetConanPublishSessionResponses];
+
+export type UploadConanPublishObjectData = {
+  body: string;
+  path: {
+    sessionId: string;
+    objectName: string;
+  };
+  query?: never;
+  url: "/conan-publish-sessions/{sessionId}/objects/{objectName}";
+};
+
+export type UploadConanPublishObjectErrors = {
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+};
+
+export type UploadConanPublishObjectError =
+  UploadConanPublishObjectErrors[keyof UploadConanPublishObjectErrors];
+
+export type UploadConanPublishObjectResponses = {
+  /**
+   * Verified and staged
+   */
+  204: void;
+};
+
+export type UploadConanPublishObjectResponse =
+  UploadConanPublishObjectResponses[keyof UploadConanPublishObjectResponses];
+
+export type CommitConanPublishSessionData = {
+  body?: never;
+  path: {
+    sessionId: string;
+  };
+  query?: never;
+  url: "/conan-publish-sessions/{sessionId}:commit";
+};
+
+export type CommitConanPublishSessionErrors = {
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  507: Problem;
+};
+
+export type CommitConanPublishSessionError =
+  CommitConanPublishSessionErrors[keyof CommitConanPublishSessionErrors];
+
+export type CommitConanPublishSessionResponses = {
+  /**
+   * Conan publish session committed
+   */
+  200: ConanPublishCommit;
+};
+
+export type CommitConanPublishSessionResponse =
+  CommitConanPublishSessionResponses[keyof CommitConanPublishSessionResponses];

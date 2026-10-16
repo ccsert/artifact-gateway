@@ -247,6 +247,8 @@ paths:
     "$ref": "./management/conan.yaml#/repositories_repositoryId_conan_package_ids"
   "/repositories/{repositoryId}/conan/package-revisions/{revision}":
     "$ref": "./management/conan.yaml#/repositories_repositoryId_conan_package_revisions_revision"
+  "/repositories/{repositoryId}/conan-publish-sessions":
+    "$ref": "./management/conan.yaml#/repositories_repositoryId_conan_publish_sessions"
   "/repositories/{repositoryId}/cache/entries":
     "$ref": "./management/proxy.yaml#/repositories_repositoryId_cache_entries"
   "/repositories/{repositoryId}/cache/invalidate":
@@ -263,6 +265,12 @@ paths:
     "$ref": "./management/sessions.yaml#/publish_sessions_sessionId_objects_objectName"
   "/publish-sessions/{sessionId}:commit":
     "$ref": "./management/sessions.yaml#/publish_sessions_sessionId_commit"
+  "/conan-publish-sessions/{sessionId}":
+    "$ref": "./management/conan.yaml#/conan_publish_sessions_sessionId"
+  "/conan-publish-sessions/{sessionId}/objects/{objectName}":
+    "$ref": "./management/conan.yaml#/conan_publish_sessions_sessionId_objects_objectName"
+  "/conan-publish-sessions/{sessionId}:commit":
+    "$ref": "./management/conan.yaml#/conan_publish_sessions_sessionId_commit"
 components:
   schemas:
     BrowseNode:
@@ -429,6 +437,10 @@ components:
       "$ref": "./components/schemas.yaml#/ConanPackageRevisionList"
     ConanPackageIdList:
       "$ref": "./components/schemas.yaml#/ConanPackageIdList"
+    CreateConanPublishSession:
+      "$ref": "./components/schemas.yaml#/CreateConanPublishSession"
+    ConanPublishCommit:
+      "$ref": "./components/schemas.yaml#/ConanPublishCommit"
     ProxyCacheBrowsePage:
       "$ref": "./components/schemas.yaml#/ProxyCacheBrowsePage"
     ProxyCacheInvalidateRequest:
@@ -565,6 +577,8 @@ components:
       "$ref": "./components/responses.yaml#/ConanPackageRevisionList"
     ConanPackageIdList:
       "$ref": "./components/responses.yaml#/ConanPackageIdList"
+    ConanPublishCommit:
+      "$ref": "./components/responses.yaml#/ConanPublishCommit"
     ProxyCacheBrowsePage:
       "$ref": "./components/responses.yaml#/ProxyCacheBrowsePage"
     ProxyCacheInvalidateResult:
