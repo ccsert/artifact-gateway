@@ -183,7 +183,9 @@ With `--json`, stdout carries exactly one document — also on failure:
   schema.
 - `error.code` is the server problem code when the response carries one;
   local failures use `usage_error`, `credentials_missing`, `connection_error`,
-  `partial_failure`, or `internal_error`.
+  `partial_failure`, or `internal_error`. `secret_not_delivered` (exit 1)
+  marks a one-time secret that was issued but could not be written to
+  `--secret-output`; `data` names the issued ID to revoke.
 - `error.httpStatus` is null for failures that never reached the server.
 - `error.code` `wait_timeout` marks a bounded `--wait` that ran out of time
   (exit 8); the operation continues on the server. `agctl status` fails with
@@ -280,9 +282,8 @@ Exchanges a local username and password for a session token (`POST
 /auth/login`) and stores the token in an explicitly selected profile. The
 password comes from bounded stdin (`--password-stdin`); missing, empty, or
 oversized input exits 2 before any request. Without `--profile` (or
-`AGCTL_PROFILE`) the command refuses to store the token: a secure
-`--secret-output` destination does not exist yet, and the client never prints
-a token. A profile already bound to a different server is refused before the
+`AGCTL_PROFILE`) the command refuses to store the token: it offers no
+`--secret-output` destination, and the client never prints a token. A profile already bound to a different server is refused before the
 request (`--server` or `AGCTL_SERVER` overrides included), and a profile
 without a server is bound to the actual login target when the token is
 stored, so a token is never sent to the wrong deployment later. When the
@@ -620,6 +621,80 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   --resource releases/app.txt --require read --json
 ```
 
+### Service accounts, credentials, and API keys
+
+Service accounts are the machine principals for CI
+(`service-account:<id>` in grants). Their credentials, and platform API keys,
+carry one-time secrets: the server returns a secret only in the answer that
+issues it.
+
+- `agctl service-account list` pages through the accounts.
+  `agctl service-account show ID` finds one by reading the list, because
+  there is no endpoint for a single account: it answers 404 (exit 4) only
+  after reading the whole list, and exit 3 when `--max-pages` runs out first.
+- `agctl service-account create NAME [--description TEXT]` creates an
+  account; it is not retried (the endpoint has no idempotency key, and a
+  repeat answers 409 for the account it created).
+  `agctl service-account update ID [--description TEXT] [--state
+  active|disabled]` is conditional on `--if-match` or the version read from
+  the list; disabling stops every credential of the account.
+- `agctl credential list --service-account ID` and `agctl api-key list` never
+  show secrets.
+- `agctl credential issue --service-account ID --name NAME --secret-output
+  FILE [--expires-in DURATION]` and `agctl api-key create NAME
+  --secret-output FILE [--role member|admin]…` write the secret only to
+  `FILE`. Without `--secret-output` they exit 2 before any request. Before
+  the request the destination must not exist (files and links alike are
+  never overwritten) and a private temporary file is created in its
+  directory; after the answer the secret is written there with mode 0600,
+  synced, and linked into place. Output reports the ID, expiry, and
+  `secret: {path, mode, delivered}`, never the secret, also with `--json` and
+  `--verbose`. Issuing is never retried, since every request mints a new
+  secret. If the secret cannot be written after it was issued, the command
+  exits 1 with `secret_not_delivered`, keeps the secret out of every message,
+  and names the ID to revoke; it never issues another one automatically.
+  `--dry-run` checks the destination and leaves nothing behind.
+- `agctl credential revoke CREDENTIAL_ID --service-account ID --yes` and
+  `agctl api-key revoke ID --yes` stop the secret at once. Revocation records
+  its time once and answers the same record again, so it is retried; the
+  record stays listed as revoked.
+
+Rotating a CI credential without downtime: issue the new credential to a new
+file, deploy it, confirm it works (for example with `agctl auth whoami`), then
+revoke the old one; the old secret then answers 401 (exit 5).
+
+### Users and sessions
+
+Local users have a global role (`none`, `member`, `admin`); `member` grants
+no repository access by itself — repository access comes from grants
+(`user:<name>`).
+
+- `agctl user list [--search TEXT] [--role R] [--state S] [--limit N]
+  [--offset N]` reads an offset window with the server's total;
+  `agctl user show ID` reads one user.
+- `agctl user create NAME --role R (--password-stdin | --password-file FILE)`
+  creates a user. Passwords come only from bounded stdin or the first line
+  of a private regular file (no group or other permissions; use `chmod 600`),
+  are checked locally (8 characters to 72 bytes), and never appear
+  in output, plans (`--dry-run` shows a placeholder), errors, or verbose
+  logs. Creation is not retried.
+- `agctl user update ID [--role R] [--state S] [--display-name …] [--email …]
+  [--description …]` and `agctl user reset-password ID (--password-stdin |
+  --password-file FILE) [--must-change-password]` are conditional on
+  `--if-match` or the version read just before; neither is retried. The
+  server refuses to demote, disable, or delete the last active
+  administrator (409, exit 7).
+- `agctl user delete ID --yes` deletes a user; disabling with
+  `--state disabled` is the reversible alternative.
+- `agctl user sessions list ID [--include-inactive]` lists sign-in sessions.
+  `agctl user sessions revoke ID --session SESSION_ID --yes` ends one
+  session (retried: ending it twice is harmless); `--all` ends every session,
+  conditional on the user's version and not retried. An ended session's
+  token answers 401 at once.
+- `agctl user identities list|link|unlink ID` manage linked OIDC identities;
+  linking needs the issuer configured on the Gateway, and unlinking needs
+  `--yes`.
+
 ## Verification
 
 - `go test ./internal/agctl/...` runs offline against in-process fakes:
@@ -651,7 +726,13 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   simulation and grant write, unchanged version and absence of mutation audit,
   and the hidden repository after revocation. It reads status, diagnostics, runtime nodes,
   overview, and lifecycle jobs; then deletes the repository (confirmation,
-  dry-run, 202, timed-out wait) and waits for `deleted`. It also checks the exit codes for a wrong token (5), a missing
+  dry-run, 202, timed-out wait) and waits for `deleted`. The CI playbook runs
+  as well: a service account gets a credential only into a 0600 file, reads
+  the repository with it, rotates it (the old secret answers 401), and loses
+  access with its grant; an API key is created and revoked; a pending user
+  becomes a member without repository access until granted, its session is
+  ended and rejected, its password reset from a file, and the user deleted;
+  no token or password may appear in any output. It also checks the exit codes for a wrong token (5), a missing
   repository (4), invalid input (2), and conflicts (7).
 - `make cli-contract-check` verifies that the command map classifies every
   contract operation and that each row marked `implemented` names a
@@ -674,7 +755,9 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   rendering, and are registered for failure redaction.
 - `--insecure` disables TLS certificate verification and is intended only for
   trusted test networks; prefer a valid certificate.
-- One-time secrets (issued API keys, tokens) are governed by the
-  service-account command work: without an explicit secure destination they
-  are never written to stdout, stderr, or history (see
-  [ADR 0007](adr/0007-agctl-cli-shape.md)).
+- One-time secrets (service account credentials and API keys) are written
+  only to the new private file named by `--secret-output`; without it the
+  command refuses before the request. They never reach stdout, stderr, JSON,
+  verbose output, plans, or error text (see
+  [ADR 0007](adr/0007-agctl-cli-shape.md)). Passwords come only from
+  bounded stdin or a file and are redacted the same way.

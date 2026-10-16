@@ -164,7 +164,8 @@ profile，最后是只定义一个 profile 的文件。该文件由 profile 命�
 - `schemaVersion` 从 1 起，仅在本 schema 发生破坏性变更时递增。
 - 服务端响应携带 problem 文档时，`error.code` 即服务端错误码；本地失败使用
   `usage_error`、`credentials_missing`、`connection_error`、
-  `partial_failure` 或 `internal_error`。
+  `partial_failure` 或 `internal_error`。`secret_not_delivered`（退出码 1）表示
+  一次性秘密已签发但未能写入 `--secret-output`，`data` 给出需要吊销的 ID。
 - 未到达服务端的失败，`error.httpStatus` 为 null。
 - `error.code` 为 `wait_timeout` 表示有界的 `--wait` 用完了时间（退出码 8）；
   操作仍在服务端继续。`agctl status` 以 `unhealthy` 失败，或在 `--strict` 下
@@ -247,7 +248,7 @@ dry-run、重试、wait 和 follow 能力。脚本与 agent 通过该树发现�
 用本地用户名与密码换取会话 token（`POST /auth/login`），并存入显式选择的
 profile。密码来自有界 stdin（`--password-stdin`）；缺失、为空或超限都会在发出
 任何请求之前以退出码 2 失败。未给出 `--profile`（或 `AGCTL_PROFILE`）时命令
-拒绝存储 token：安全的 `--secret-output` 目的地尚不存在，且客户端从不打印
+拒绝存储 token：该命令不提供 `--secret-output` 目的地，且客户端从不打印
 token。已绑定其他服务器的 profile 会在请求前被拒绝（包括 `--server` 或
 `AGCTL_SERVER` 覆盖的情形）；未绑定服务器的 profile 在存 token 时会绑定到本次
 实际登录目标，token 之后不会被发往错误部署。服务端报告 `mustChangePassword`
@@ -517,6 +518,64 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   --resource releases/app.txt --require read --json
 ```
 
+### 服务账号、凭据与 API key
+
+服务账号是供 CI 使用的机器主体（授权中写作 `service-account:<id>`）。其凭据和
+平台 API key 带有一次性秘密：服务端只在签发的那次响应中返回秘密。
+
+- `agctl service-account list` 分页读取账号。`agctl service-account show ID`
+  通过读取列表查找账号，因为没有单个账号的端点：只有读完整个列表后才返回 404
+  （退出码 4），`--max-pages` 先用完时退出码 3。
+- `agctl service-account create NAME [--description TEXT]` 创建账号；不重试
+  （端点没有幂等键，重复请求会对已创建的账号返回 409）。
+  `agctl service-account update ID [--description TEXT] [--state
+  active|disabled]` 以 `--if-match` 或从列表读到的版本为条件；禁用会让该账号的
+  全部凭据失效。
+- `agctl credential list --service-account ID` 和 `agctl api-key list` 从不
+  显示秘密。
+- `agctl credential issue --service-account ID --name NAME --secret-output
+  FILE [--expires-in DURATION]` 和 `agctl api-key create NAME --secret-output
+  FILE [--role member|admin]…` 只把秘密写入 `FILE`。缺少 `--secret-output` 时
+  在任何请求之前退出码 2。请求前目的地必须不存在（文件和链接都不会被覆盖），并在
+  其目录中创建私有临时文件；响应后秘密以 0600 权限写入、同步，再链接到目的地。
+  输出只报告 ID、过期时间和 `secret: {path, mode, delivered}`，`--json` 和
+  `--verbose` 下也不含秘密。签发从不重试，因为每次请求都会生成新秘密。秘密签发
+  后无法写入时，命令以 `secret_not_delivered` 退出码 1 结束，任何消息中都不含
+  秘密，并给出需要吊销的 ID；不会自动重新签发。`--dry-run` 检查目的地且不留下
+  任何文件。
+- `agctl credential revoke CREDENTIAL_ID --service-account ID --yes` 和
+  `agctl api-key revoke ID --yes` 立即让秘密失效。吊销只记录一次时间并再次返回
+  同一记录，因此会重试；记录保留在列表中，标为已吊销。
+
+不中断地轮换 CI 凭据：把新凭据签发到新文件并部署，确认可用（例如
+`agctl auth whoami`）后吊销旧凭据；此后旧秘密返回 401（退出码 5）。
+
+### 用户与会话
+
+本地用户有全局角色（`none`、`member`、`admin`）；`member` 本身不带任何仓库
+权限，仓库权限来自授权（`user:<name>`）。
+
+- `agctl user list [--search TEXT] [--role R] [--state S] [--limit N]
+  [--offset N]` 读取带服务端总数的偏移窗口；`agctl user show ID` 读取一个用户。
+- `agctl user create NAME --role R (--password-stdin | --password-file FILE)`
+  创建用户。密码只来自有界 stdin 或私有普通文件的第一行（不得有组或其他用户
+  权限，可用 `chmod 600` 设置），本地校验长度（8 个字符到
+  72 字节），从不出现在输出、计划（`--dry-run` 显示占位符）、错误或 verbose
+  日志中。创建不重试。
+- `agctl user update ID [--role R] [--state S] [--display-name …] [--email …]
+  [--description …]` 和 `agctl user reset-password ID (--password-stdin |
+  --password-file FILE) [--must-change-password]` 以 `--if-match` 或刚读到的
+  版本为条件，都不重试。服务端拒绝降级、禁用或删除最后一个活动管理员（409，
+  退出码 7）。
+- `agctl user delete ID --yes` 删除用户；用 `--state disabled` 禁用是可撤回的
+  替代方式。
+- `agctl user sessions list ID [--include-inactive]` 列出登录会话。
+  `agctl user sessions revoke ID --session SESSION_ID --yes` 结束一个会话（会
+  重试：重复结束无害）；`--all` 结束全部会话，以用户版本为条件且不重试。被结束
+  会话的 token 立即返回 401。
+- `agctl user identities list|link|unlink ID` 管理已链接的 OIDC 身份；链接需要
+  Gateway 已配置该 issuer，解除链接需要 `--yes`。
+
 ## 验证
 
 - `go test ./internal/agctl/...` 离线运行，使用进程内的假服务端：覆盖命令
@@ -539,7 +598,10 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   读取运行日志，用 `--after-cursor` 续读，并验证并发单行授权保留不同主体的记录。
   隔离 Compose 模式还验证真实非管理员本人权限、模拟和写授权被拒、版本不变且
   没有变更类审计，以及撤销后隐藏仓库。读取 status、诊断、运行节点、概览和生命周期任务；再删除仓库（确认、dry-run、
-  202、等待超时）并等待 `deleted`。同时检查错误
+  202、等待超时）并等待 `deleted`。还会运行 CI 剧本：服务账号只把凭据签发到
+  0600 文件，用它读取仓库，轮换后旧秘密返回 401，撤销授权后失去访问；创建并吊销
+  API key；待授权用户升为 member 后在授权前仍无仓库权限，其会话被结束后被拒，
+  从文件重置密码，最后删除用户；任何输出中都不得出现 token 或密码。同时检查错误
   token（5）、仓库不存在（4）、非法输入（2）和冲突（7）的退出码。
 - `make cli-contract-check` 校验命令映射表覆盖全部契约操作，且每个标为
   `implemented` 的行都对应声明了该行端点的已注册命令。
@@ -556,6 +618,7 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   密码与 token 来自有界 stdin，不会被 `--json`、verbose 输出或错误渲染回显，
   并注册进失败脱敏。
 - `--insecure` 关闭 TLS 证书校验，仅用于受信测试网络；优先使用有效证书。
-- 一次性秘密（签发的 API key、token）由服务账号命令的承接工作治理：没有显式
-  安全目的地时，它们不会写入 stdout、stderr 或历史（见
-  [ADR 0007](adr/0007-agctl-cli-shape.zh-CN.md)）。
+- 一次性秘密（服务账号凭据和 API key）只写入 `--secret-output` 指定的新私有
+  文件；缺少该参数时命令在请求前拒绝。它们从不进入 stdout、stderr、JSON、verbose
+  输出、计划或错误文本（见 [ADR 0007](adr/0007-agctl-cli-shape.zh-CN.md)）。
+  密码只来自有界 stdin 或文件，同样被脱敏。
