@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- `agctl` 在邮件测试重试遭拒绝时保留此前可能已入队的未知结果；确认测试或等待完成前核对投递身份、版本与场景。配额事件按最新 50 条窗口报告，邮件等待命令自省明确返回 `cancelSupported: false`。
+
 - `agctl` 新增配额告警与邮件通知管理（#336，M2）。`quota-alert list|show|create|update|delete|events` 要求显式给出全部阈值和时长（没有默认策略），新规则默认停用，每次有条件更新都把未改动的字段（包括启用状态，否则端点会将其清除）按原值发回；启用需要 `--yes`。`email capability`、`email target list|show|create|update`、`email preview`、`email test` 和 `email delivery list|show|wait|replay` 不在任何输出中显示收件人（只从 stdin 或私有文件读取），带 `--yes` 在可复用的幂等键下排队测试邮件，在 `--timeout` 内等待中继接收且不假装可以取消，并把 `email_disabled`、`encryption_key_unavailable` 和 `queue_full` 视为确定的拒绝。`make email-compose-check` 现在用这些命令驱动自有 TLS SMTP，并断言只多送达一封邮件。
 
 - `agctl` 在上传前核对 Maven 会话响应的仓库与声明文件；提交响应丢失时，只接受目标会话的完整回读作为成功证据。响应损坏或身份不符时保留幂等键或会话回读路径并报告未知结果。上传重试期间源文件不可读时也保留先前未知状态，部分失败的恢复提示要求保留原目标和文件参数。

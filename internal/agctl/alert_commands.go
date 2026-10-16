@@ -28,6 +28,7 @@ const (
 	emailDeliveriesPath = managementPrefix + "/email-deliveries"
 	emailRole           = "platform admin"
 	maxEmailDeliveries  = 100
+	maxQuotaEvents      = 50
 )
 
 // definiteEmailRefusals are 503 answers that refuse a request before
@@ -41,6 +42,20 @@ func emailOutcomeUnknown(err error) bool {
 		return false
 	}
 	return outcomeUnknown(err)
+}
+
+func emailRequestOutcomeUnknown(err error, response *apiResponse) bool {
+	if emailOutcomeUnknown(err) {
+		return true
+	}
+	if response != nil {
+		for _, prior := range response.priorErrors {
+			if emailOutcomeUnknown(prior) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // readETagged reads a document and the version its ETag carries.
@@ -269,7 +284,11 @@ func quotaAlertEventsCommand() command {
 			}
 			var typed []adminopenapi.RepositoryQuotaAlertEvent
 			_ = json.Unmarshal(mustJSON(events), &typed)
-			meta := &envelopeMeta{Pagination: &paginationMeta{Mode: "none"}}
+			meta := &envelopeMeta{Pagination: &paginationMeta{Mode: "bounded", Limit: maxQuotaEvents}}
+			if len(events) < maxQuotaEvents {
+				complete := true
+				meta.Pagination.Complete = &complete
+			}
 			return env.render(newListPayload(events), meta, func(w io.Writer) error {
 				if len(typed) == 0 {
 					return emptyLine(w, "events")
@@ -938,6 +957,22 @@ func terminalDelivery(state adminopenapi.EmailDeliveryState) bool {
 	return state == adminopenapi.EmailDeliveryStateAccepted || state == adminopenapi.EmailDeliveryStateDead
 }
 
+func completeEmailDelivery(delivery adminopenapi.EmailDelivery) bool {
+	return delivery.Id != (openapi_types.UUID{}) && delivery.EventId != (openapi_types.UUID{}) &&
+		delivery.TargetId != (openapi_types.UUID{}) && delivery.TargetVersion != "" &&
+		delivery.Scenario.Valid() && delivery.Locale.Valid() && delivery.TemplateVersion != "" &&
+		delivery.State.Valid() && delivery.Version != "" && !delivery.CreatedAt.IsZero() && !delivery.UpdatedAt.IsZero()
+}
+
+func readEmailDelivery(ctx context.Context, client *apiClient, id string) (adminopenapi.EmailDelivery, error) {
+	var delivery adminopenapi.EmailDelivery
+	response, err := client.sendJSON(ctx, http.MethodGet, emailDeliveryPath(id), requestOptions{idempotent: true}, &delivery)
+	if err == nil && (!completeEmailDelivery(delivery) || !strings.EqualFold(delivery.Id.String(), id)) {
+		err = incompleteResponse(response, client, "email delivery")
+	}
+	return delivery, err
+}
+
 func emailTestCommand() command {
 	var target, scenario, key, targetVersion string
 	return command{
@@ -1015,11 +1050,13 @@ func emailTestCommand() command {
 			response, err := client.sendJSON(ctx, http.MethodPost, emailCapabilityPath+":test", requestOptions{
 				body: encoded, idempotent: true, header: http.Header{"If-Match": {version}, "Idempotency-Key": {key}},
 			}, &delivery)
-			if err == nil && (delivery.Id == (openapi_types.UUID{}) || delivery.State == "" || delivery.TargetId != targetID) {
+			if err == nil && (!completeEmailDelivery(delivery) || delivery.TargetId != targetID ||
+				delivery.TargetVersion != strings.Trim(strings.TrimSpace(version), `"`) || delivery.Scenario != adminopenapi.EmailDeliveryScenario(scenario) ||
+				(delivery.Kind != nil && string(*delivery.Kind) != "test")) {
 				err = incompleteResponse(response, client, "email delivery")
 			}
 			if err != nil {
-				if emailOutcomeUnknown(err) {
+				if emailRequestOutcomeUnknown(err, response) {
 					return unknownOutcomeError(err, unknownOutcome{Operation: "email test", ID: target, IdempotencyKey: key, Version: version, ReadBack: "agctl email delivery list"},
 						fmt.Sprintf("a test may have been queued; re-run with --idempotency-key %s --if-match %s (the same scenario and target) to get the same delivery instead of a second email", key, version))
 				}
@@ -1098,6 +1135,7 @@ func emailDeliveryShowCommand() command {
 // relay or dead. There is no cancel endpoint: a timeout leaves the delivery
 // queued on the server.
 func emailDeliveryWaitCommand() command {
+	cancelSupported := false
 	return command{
 		name:        "email delivery wait",
 		synopsis:    "wait until a delivery is accepted by the relay or dead, within --timeout",
@@ -1107,7 +1145,7 @@ func emailDeliveryWaitCommand() command {
 		meta: commandMeta{
 			Resource: "email", Scenarios: []string{"admin"}, Stage: "m2",
 			Endpoints: []string{"GET " + emailDeliveriesPath + "/{deliveryId}"}, MinimumRole: emailRole,
-			OutputSchema: "EmailDelivery", DryRun: "unsupported", Retry: true, Wait: true,
+			OutputSchema: "EmailDelivery", DryRun: "unsupported", Retry: true, Wait: true, CancelSupported: &cancelSupported,
 		},
 		run: func(parent context.Context, env *commandContext) error {
 			id := env.args[0]
@@ -1119,8 +1157,7 @@ func emailDeliveryWaitCommand() command {
 			defer cancel()
 			var last *adminopenapi.EmailDelivery
 			for {
-				var delivery adminopenapi.EmailDelivery
-				err := client.getJSON(ctx, emailDeliveryPath(id), nil, &delivery)
+				delivery, err := readEmailDelivery(ctx, client, id)
 				if err == nil {
 					last = &delivery
 					if terminalDelivery(delivery.State) {
@@ -1200,7 +1237,7 @@ func emailDeliveryReplayCommand() command {
 			// Conditional and therefore not retried.
 			var delivery adminopenapi.EmailDelivery
 			response, err := client.sendJSON(ctx, http.MethodPost, emailDeliveryPath(id)+":replay", requestOptions{header: http.Header{"If-Match": {ifMatch}}}, &delivery)
-			if err == nil && (!strings.EqualFold(delivery.Id.String(), id) || delivery.State == "") {
+			if err == nil && (!completeEmailDelivery(delivery) || !strings.EqualFold(delivery.Id.String(), id)) {
 				err = incompleteResponse(response, client, "email delivery")
 			}
 			if err != nil {

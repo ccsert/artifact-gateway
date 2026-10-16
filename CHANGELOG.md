@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- `agctl` preserves earlier uncertain email-test attempts when a retry is refused, verifies delivery identity/version/scenario before confirming a test or wait, and reports quota-alert event history as the newest 50-event window. Email wait introspection explicitly reports `cancelSupported: false`.
+
 - `agctl` manages quota alerts and email notifications (#336, M2). `quota-alert list|show|create|update|delete|events` need an explicit policy for every threshold and duration (no default), start rules disabled, and send unchanged fields — including the enabled state, which the endpoint otherwise clears — back on every conditional update; enabling needs `--yes`. `email capability`, `email target list|show|create|update`, `email preview`, `email test`, and `email delivery list|show|wait|replay` keep recipients out of every output (they come only from stdin or a private file), queue tests under a reusable idempotency key with `--yes`, wait for relay acceptance within `--timeout` without pretending to cancel, and treat `email_disabled`, `encryption_key_unavailable`, and `queue_full` as definite refusals. `make email-compose-check` now drives these commands against owned TLS SMTP and asserts exactly one extra accepted message.
 
 - `agctl` verifies Maven session responses against the requested repository and declared files before uploading, and confirms a lost commit only from a complete read-back of the requested session. Malformed or mismatched answers retain the idempotency key or session read-back path as an unknown outcome. Upload retries whose source file becomes unreadable also retain the earlier unknown result, and partial-upload recovery instructions preserve the original destination and file arguments.

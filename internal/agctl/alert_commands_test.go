@@ -2,6 +2,7 @@ package agctl
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -176,12 +177,13 @@ func TestEmailTestIsConfirmedConditionalAndKeyed(t *testing.T) {
 		[]string{"email", "test", "--target", targetID, "--scenario", "warning", "--yes", "--idempotency-key", "not-a-uuid"},
 	)
 	api.onETag("GET", "/api/v2/email-targets/"+targetID, 200, targetJSON("ops", true, "7"), "7")
+	testResponse := strings.Replace(deliveryJSON("pending", "1"), `"targetVersion":"1"`, `"targetVersion":"7"`, 1)
 	var attempts atomic.Int32
 	api.onFunc("POST", "/api/v2/email-notifications:test", func(*http.Request) (int, string) {
 		if attempts.Add(1) == 1 {
 			return 502, `{"code":"bad_gateway","message":"upstream"}`
 		}
-		return 202, deliveryJSON("pending", "1")
+		return 202, testResponse
 	})
 	code, stdout, _ := runCLI(t, "email", "test", "--target", targetID, "--scenario", "warning", "--yes", "--json")
 	if code != ExitOK || attempts.Load() != 2 || !strings.Contains(stdout, `"idempotencyKey"`) {
@@ -204,7 +206,7 @@ func TestEmailTestIsConfirmedConditionalAndKeyed(t *testing.T) {
 		t.Fatalf("exit = %d, stdout = %s", code, stdout)
 	}
 	api.onETag("GET", "/api/v2/email-targets/"+targetID, 200, targetJSON("ops", true, "8"), "8")
-	api.on("POST", "/api/v2/email-notifications:test", 202, deliveryJSON("pending", "1"))
+	api.on("POST", "/api/v2/email-notifications:test", 202, testResponse)
 	gets := api.count("GET")
 	code, _, _ = runCLI(t, "email", "test", "--target", targetID, "--scenario", "warning", "--yes", "--idempotency-key", "8f14e45f-ceea-467a-9575-6a3b1f2c9d10", "--if-match", "7")
 	last := api.recorded()[len(api.recorded())-1]
@@ -273,4 +275,107 @@ func TestAlertCommandsAreRegisteredHonestly(t *testing.T) {
 			t.Fatalf("%s meta = %+v", name, cmd.meta)
 		}
 	}
+}
+
+func TestEmailTestRetainsEarlierUnknownAfterRefusal(t *testing.T) {
+	api := newRouteAPI(t, "")
+	api.onETag("GET", "/api/v2/email-targets/"+targetID, 200, targetJSON("ops", true, "7"), "7")
+	var attempts atomic.Int32
+	api.onFunc("POST", "/api/v2/email-notifications:test", func(*http.Request) (int, string) {
+		if attempts.Add(1) == 1 {
+			return 502, `{"code":"bad_gateway"}`
+		}
+		return 503, `{"code":"email_disabled"}`
+	})
+	const key = "8f14e45f-ceea-467a-9575-6a3b1f2c9d10"
+	code, stdout, _ := runCLI(t, "email", "test", "--target", targetID, "--scenario", "warning", "--idempotency-key", key, "--yes", "--json")
+	var recovery unknownOutcome
+	_ = json.Unmarshal(decodeEnvelope(t, stdout).Data, &recovery)
+	if code == ExitOK || recovery.Outcome != "unknown" || recovery.IdempotencyKey != key || recovery.Version != "7" || attempts.Load() < 2 {
+		t.Fatalf("a later refusal cannot disprove the earlier queue: exit=%d, stdout=%s", code, stdout)
+	}
+}
+
+func TestEmailTestRejectsUnrelatedDelivery(t *testing.T) {
+	valid := strings.Replace(deliveryJSON("pending", "1"), `"targetVersion":"1"`, `"targetVersion":"7"`, 1)
+	for name, body := range map[string]string{
+		"missing identity": `{"state":"pending"}`,
+		"target version":   strings.Replace(valid, `"targetVersion":"7"`, `"targetVersion":"8"`, 1),
+		"scenario":         strings.Replace(valid, `"scenario":"warning"`, `"scenario":"resolved"`, 1),
+		"incomplete":       strings.Replace(valid, `"version":"1"`, `"version":""`, 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			api := newRouteAPI(t, "")
+			api.on("POST", "/api/v2/email-notifications:test", 202, body)
+			code, stdout, _ := runCLI(t, "email", "test", "--target", targetID, "--scenario", "warning", "--if-match", "7", "--yes", "--json")
+			var recovery unknownOutcome
+			envelope := decodeEnvelope(t, stdout)
+			_ = json.Unmarshal(envelope.Data, &recovery)
+			if code == ExitOK || envelope.Error == nil || envelope.Error.Code != "invalid_response" || recovery.Outcome != "unknown" || recovery.Version != "7" || recovery.IdempotencyKey == "" {
+				t.Fatalf("an unrelated response does not confirm a test: exit=%d, stdout=%s", code, stdout)
+			}
+		})
+	}
+}
+
+func TestEmailWaitRejectsUnprovenDelivery(t *testing.T) {
+	for name, body := range map[string]string{
+		"missing identity":   `{"state":"accepted"}`,
+		"different identity": strings.Replace(deliveryJSON("accepted", "1"), deliveryID, ruleID, 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			api := newRouteAPI(t, "")
+			api.on("GET", "/api/v2/email-deliveries/"+deliveryID, 200, body)
+			code, stdout, _ := runCLI(t, "email", "delivery", "wait", deliveryID, "--json")
+			envelope := decodeEnvelope(t, stdout)
+			if code == ExitOK || envelope.Error == nil || envelope.Error.Code != "invalid_response" || strings.Contains(stdout, `"outcome": "unknown"`) {
+				t.Fatalf("unrelated read-back cannot end the requested wait: exit=%d, stdout=%s", code, stdout)
+			}
+		})
+	}
+}
+
+func TestQuotaAlertEventsReportsBoundedHistory(t *testing.T) {
+	for _, count := range []int{0, 1, 50} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			api := newRouteAPI(t, "")
+			body := "[" + strings.TrimSuffix(strings.Repeat(`{"sequence":1,"scenario":"warning","usedBytes":1,"quotaBytes":10,"notificationCode":"queued","occurredAt":"2026-10-16T00:00:00Z"},`, count), ",") + "]"
+			api.on("GET", "/api/v2/repository-quota-alert-rules/"+ruleID+"/events", 200, body)
+			code, stdout, _ := runCLI(t, "quota-alert", "events", ruleID, "--json")
+			envelope := decodeEnvelope(t, stdout)
+			var meta envelopeMeta
+			if err := json.Unmarshal(envelope.Meta, &meta); err != nil || code != ExitOK || meta.Pagination == nil {
+				t.Fatalf("exit=%d, stdout=%s", code, stdout)
+			}
+			page := meta.Pagination
+			if page.Mode != "bounded" || page.Limit != 50 || (count == 50 && page.Complete != nil) || (count < 50 && (page.Complete == nil || !*page.Complete)) {
+				t.Fatalf("the latest 50 events are a window: %s", stdout)
+			}
+		})
+	}
+}
+
+func TestEmailWaitIntrospectionDeclaresNoCancel(t *testing.T) {
+	code, stdout, _ := runCLI(t, "commands", "--json")
+	if code != ExitOK {
+		t.Fatalf("exit=%d", code)
+	}
+	var data struct {
+		Items []struct {
+			Name string                     `json:"name"`
+			Meta map[string]json.RawMessage `json:"meta"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(decodeEnvelope(t, stdout).Data, &data); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range data.Items {
+		if item.Name == "email delivery wait" {
+			if string(item.Meta["cancelSupported"]) != "false" {
+				t.Fatalf("cancel support must explicitly be false: %s", stdout)
+			}
+			return
+		}
+	}
+	t.Fatal("missing wait command")
 }

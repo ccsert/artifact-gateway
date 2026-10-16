@@ -617,20 +617,25 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   排队一封真实测试邮件。服务端按 key、目标、目标版本和场景识别重复请求，因此
   结果未知时会报告发送所用的版本，之后的重试用 `--idempotency-key K --if-match VERSION`
   把它带回，而不是读取更新的版本。入队不等于送达：`agctl email delivery wait ID [--timeout D]`
-  轮询直到中继接收或判定失败，超时退出码 8 且投递仍在队列中——没有取消操作。
+  轮询直到中继接收或判定失败，超时退出码 8 且投递仍在队列中——没有取消操作；
+  `commands --json` 明确报告 `cancelSupported: false`。等待只接受目标投递 ID 的
+  完整响应作为完成证据。
   `agctl email delivery list [--limit N]` 读取最新的投递（最多 100，无 cursor）；
   `show` 读取一条，包括尝试次数和 `possibleDuplicate`。
   `agctl email delivery replay ID --yes` 以版本为条件重新排队一条失败的投递，
   从不重试。
 - `agctl quota-alert list|show|events` 读取规则、其状态及告警、严重、恢复事件和
-  投递状态。`agctl quota-alert create --repo ID --target ID` 必须给出全部阈值和
+  投递状态。事件只返回最新 50 条窗口（`meta.pagination.mode: bounded`、
+  `limit: 50`），满窗口时完整性未知，也没有 cursor 读取更早历史。
+  `agctl quota-alert create --repo ID --target ID` 必须给出全部阈值和
   时长（`--warning-bp`、`--critical-bp`、`--recovery-below-bp`、`--warning-for`、
   `--critical-for`、`--recovery-for`、`--max-sample-age`）；没有默认策略，规则
   默认停用，除非 `--enabled --yes`。`agctl quota-alert update RULE_ID` 以刚读到的
   版本为条件修改阈值、目标或启用状态，未改动的字段按原值发回；启用需要 `--yes`。
   `agctl quota-alert delete RULE_ID --yes` 有条件地删除。
 - 503 且错误码为 `email_disabled`、`encryption_key_unavailable` 或 `queue_full`
-  是确定的拒绝（退出码 1），不是结果未知。
+  仅在此前没有可能已入队的尝试时属于确定拒绝（退出码 1）。此前响应丢失或结果
+  不确定时，仍保留未知结果和原始幂等键、目标版本供回读恢复。
 
 ### Agent skill
 

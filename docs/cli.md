@@ -755,12 +755,16 @@ These second-batch (M2) commands need a platform administrator.
   Queued is not delivered:
   `agctl email delivery wait ID [--timeout D]` polls until the relay accepted
   it or it is dead, and a timeout exits 8 with the delivery still queued —
-  there is no cancel. `agctl email delivery list [--limit N]` reads the newest
+  there is no cancel (`commands --json` reports `cancelSupported: false`).
+  A wait accepts only a complete answer for the requested delivery ID.
+  `agctl email delivery list [--limit N]` reads the newest
   deliveries (at most 100, no cursor); `show` reads one, including attempts
   and `possibleDuplicate`. `agctl email delivery replay ID --yes` queues a
   dead delivery again, conditional on its version and never retried.
 - `agctl quota-alert list|show|events` read rules, their state, and their
-  warning, critical, and resolved events with delivery state.
+  warning, critical, and resolved events with delivery state. Events are the
+  newest 50-record window (`meta.pagination.mode: bounded`, `limit: 50`); a full
+  window leaves completeness unknown, and there is no cursor for older history.
   `agctl quota-alert create --repo ID --target ID` needs every threshold and
   duration (`--warning-bp`, `--critical-bp`, `--recovery-below-bp`,
   `--warning-for`, `--critical-for`, `--recovery-for`, `--max-sample-age`);
@@ -770,7 +774,9 @@ These second-batch (M2) commands need a platform administrator.
   sending unchanged fields as they are; enabling needs `--yes`.
   `agctl quota-alert delete RULE_ID --yes` deletes conditionally.
 - A 503 that names `email_disabled`, `encryption_key_unavailable`, or
-  `queue_full` is a definite refusal (exit 1), not an unknown outcome.
+  `queue_full` is a definite refusal (exit 1) only when no earlier attempt may
+  already have queued the test. After a lost or uncertain earlier answer, the
+  result stays unknown with the original key and target version for recovery.
 
 ### Agent skill
 
