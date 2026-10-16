@@ -204,7 +204,9 @@ func TestCommandsPrintsTheTree(t *testing.T) {
 	seen := map[string]bool{}
 	for _, item := range tree.Items {
 		seen[item.Name] = true
-		if (item.Meta.Stage != "m0" && item.Meta.Stage != "m1") || item.Meta.Resource == "" {
+		// Stages follow docs/cli-command-map.md: m0 foundation, m1 first
+		// release, m2 the second batch (for example quota alerts and email).
+		if (item.Meta.Stage != "m0" && item.Meta.Stage != "m1" && item.Meta.Stage != "m2") || item.Meta.Resource == "" {
 			t.Fatalf("item %s meta = %#v", item.Name, item.Meta)
 		}
 		if len(item.Meta.Scenarios) == 0 || len(item.Meta.Scenarios) > 2 {

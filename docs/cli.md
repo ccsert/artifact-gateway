@@ -726,6 +726,60 @@ no repository access by itself — repository access comes from grants
 - Other formats publish with their native clients; `agctl repo connect`
   prints their configuration.
 
+### Quota alerts and email
+
+These second-batch (M2) commands need a platform administrator.
+
+- `agctl email capability` reports whether the answering process can queue
+  email (`ready`, `email_disabled`, `encryption_key_unavailable`). Ready means
+  configured, not that mail reaches an inbox.
+- `agctl email target list|show` never show recipients, only
+  `recipientConfigured`. `agctl email target create NAME --locale en|zh-CN
+  (--recipient-stdin | --recipient-file FILE) [--enabled]` reads the address
+  only from bounded stdin or a private (mode 0600) file and redacts it
+  everywhere, including plans. `agctl email target update ID` changes the
+  name, locale, enabled state, or recipient conditional on the version read
+  just before; fields not given are sent back as they are, because the
+  endpoint treats an omitted `enabled` as disabled. Rules keep the target
+  version they were bound to until updated.
+- `agctl email preview --scenario S --locale L [--html-output FILE]
+  [--text-output FILE]` renders fixed synthetic data and queues nothing; the
+  two parts must go to different files.
+- `agctl email test --target ID --scenario S --yes` queues one real test
+  email for the target's current version under an `Idempotency-Key` (a UUID;
+  `--idempotency-key` reuses one, and the same key answers the same delivery,
+  so the request is retried). The server matches a repeat by key, target,
+  target version, and scenario, so an unknown outcome reports the version it
+  was sent with, and a later retry passes it back as
+  `--idempotency-key K --if-match VERSION` instead of reading a newer one.
+  Queued is not delivered:
+  `agctl email delivery wait ID [--timeout D]` polls until the relay accepted
+  it or it is dead, and a timeout exits 8 with the delivery still queued —
+  there is no cancel (`commands --json` reports `cancelSupported: false`).
+  A wait accepts only a complete answer for the requested delivery ID.
+  `agctl email delivery list [--limit N]` reads the newest
+  deliveries (at most 100, no cursor); `show` reads one, including attempts
+  and `possibleDuplicate`. `agctl email delivery replay ID --yes` queues a
+  dead delivery again, conditional on its version and never retried.
+- `agctl quota-alert list|show|events` read rules, their state, and their
+  warning, critical, and resolved events with delivery state. Events are the
+  newest 50-record window (`meta.pagination.mode: bounded`, `limit: 50`); a full
+  window leaves completeness unknown, and there is no cursor for older history.
+  `agctl quota-alert create --repo ID --target ID` needs every threshold and
+  duration (`--warning-bp`, `--critical-bp`, `--recovery-below-bp`,
+  `--warning-for`, `--critical-for`, `--recovery-for`, `--max-sample-age`);
+  there is no default policy, and a rule starts disabled unless
+  `--enabled --yes`. `agctl quota-alert update RULE_ID` changes thresholds,
+  target, or enabled state conditional on the version read just before,
+  sending unchanged fields as they are; enabling needs `--yes`.
+  `agctl quota-alert delete RULE_ID --yes` deletes conditionally.
+- A 503 that names `email_disabled`, `encryption_key_unavailable`, or
+  `queue_full` is a definite refusal (exit 1) only when no earlier attempt may
+  already have queued the test. After a lost or uncertain earlier answer, the
+  result stays unknown with the original key and target version for recovery.
+  An explicit key/version recovery also stays unknown if channel readiness
+  refuses it before the server can look up the earlier key.
+
 ### Agent skill
 
 `.agents/skills/agctl/SKILL.md` teaches agents the machine contract and the
@@ -789,6 +843,11 @@ command, flag, or argument count the client does not have.
   committed session refused and a repeated commit answering 409); a user signs
   in with `auth login --secret-output` and uses the token. It also checks the exit codes for a wrong token (5), a missing
   repository (4), invalid input (2), and conflicts (7).
+- `make email-compose-check` runs the email commands against an isolated
+  Gateway with owned TLS SMTP: a target from a private recipient file, a
+  rename that keeps it enabled, a preview and a plan that queue nothing, a
+  keyed test delivered exactly once, a refused replay, and a quota rule
+  lifecycle, with the recipient absent from all agctl output.
 - `make cli-contract-check` verifies that the command map classifies every
   contract operation and that each row marked `implemented` names a
   registered command that declares the row's endpoint.

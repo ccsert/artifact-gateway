@@ -315,8 +315,60 @@ def check(render_only):
                 require(auth["password"].encode() not in raw and key.encode() not in raw, "secret entered MIME")
                 require("https://console.example.invalid/system?tab=diagnostics" in parts[1].get_content(), "configured origin missing")
             checks.append("standalone delivers; three real accepted messages contain HTML/plain and synthetic recipient")
+
+            # agctl (#336) drives the same channel: target, preview, keyed test,
+            # bounded wait, replay refusal, and a quota rule lifecycle. The
+            # recipient comes from a private file and never reaches agctl output.
+            agctl = work / "agctl"
+            subprocess.run(["go", "build", "-o", str(agctl), "./cmd/agctl"], cwd=ROOT, check=True)
+            recipient = "synthetic-recipient@example.test"
+            recipient_file = work / "recipient"
+            recipient_file.write_text(recipient + "\n")
+            recipient_file.chmod(0o600)
+
+            def ctl(*args, expected=0):
+                result = subprocess.run([str(agctl), *args, "--json"], cwd=work, capture_output=True, text=True, env={
+                    "PATH": os.environ.get("PATH", ""), "HOME": str(work), "AGCTL_SERVER": base_url, "AGCTL_TOKEN": admin, "AGCTL_PROFILE": "",
+                })
+                require(result.returncode == expected, "agctl " + " ".join(args) + " exited " + str(result.returncode) + ": " + result.stdout[-1500:] + result.stderr[-500:])
+                require(recipient not in result.stdout + result.stderr and admin not in result.stdout + result.stderr, "agctl printed a recipient or credential")
+                return json.loads(result.stdout)
+
+            require(ctl("email", "capability")["data"] == {"enabled": True, "reason": "ready"}, "agctl capability is not ready")
+            agctl_target = ctl("email", "target", "create", "agctl synthetic", "--locale", "zh-CN", "--recipient-file", str(recipient_file), "--enabled")["data"]
+            require(agctl_target["recipientConfigured"] and agctl_target["enabled"], "agctl target not configured")
+            renamed = ctl("email", "target", "update", agctl_target["id"], "--name", "agctl renamed")["data"]
+            require(renamed["enabled"] and renamed["name"] == "agctl renamed", "a rename disabled the target")
+            ctl("email", "target", "update", agctl_target["id"], "--name", "stale", "--if-match", agctl_target["version"], expected=7)
+            ctl("email", "preview", "--scenario", "critical", "--locale", "zh-CN", "--html-output", str(work / "preview.html"), "--text-output", str(work / "preview.txt"))
+            require((work / "preview.html").read_text().strip() and (work / "preview.txt").read_text().strip(), "empty preview files")
+            before = len(ctl("email", "delivery", "list", "--limit", "100")["data"]["items"])
+            ctl("email", "test", "--target", agctl_target["id"], "--scenario", "warning", "--dry-run")
+            ctl("email", "test", "--target", agctl_target["id"], "--scenario", "warning", expected=2)
+            require(len(ctl("email", "delivery", "list", "--limit", "100")["data"]["items"]) == before, "preview or plan queued a delivery")
+            test_key = str(uuid.uuid4())
+            queued = ctl("email", "test", "--target", agctl_target["id"], "--scenario", "warning", "--yes", "--idempotency-key", test_key)["data"]
+            again = ctl("email", "test", "--target", agctl_target["id"], "--scenario", "warning", "--yes", "--idempotency-key", test_key)["data"]
+            require(again["id"] == queued["id"], "same idempotency key queued a second delivery")
+            waited = ctl("email", "delivery", "wait", queued["id"], "--timeout", "60s")["data"]
+            require(waited["state"] == "accepted", "agctl test was not accepted")
+            require(len(list(sink.glob("*.eml"))) == 4, "agctl test did not deliver exactly one more MIME")
+            ctl("email", "delivery", "replay", queued["id"], "--yes", expected=7)
+            quota_repo = api("POST", "/api/v2/repositories", {"name": "owned-agctl-quota", "format": "raw", "type": "hosted"}, 201, {"Idempotency-Key": str(uuid.uuid4())})
+            policy_args = ["--warning-bp", "8500", "--critical-bp", "9500", "--recovery-below-bp", "8000", "--warning-for", "1s",
+                           "--critical-for", "1s", "--recovery-for", "1s", "--max-sample-age", "60s"]
+            created = ctl("quota-alert", "create", "--repo", quota_repo["id"], "--target", agctl_target["id"], *policy_args)["data"]
+            require(not created["enabled"], "a new rule was enabled without --enabled")
+            enabled = ctl("quota-alert", "update", created["id"], "--enabled=true", "--yes")["data"]
+            raised = ctl("quota-alert", "update", created["id"], "--warning-bp", "8700")["data"]
+            require(enabled["enabled"] and raised["enabled"] and raised["policy"]["warningBasisPoints"] == 8700, "a threshold change disabled the rule")
+            ctl("quota-alert", "update", created["id"], "--enabled=false", "--if-match", created["version"], expected=7)
+            ctl("quota-alert", "events", created["id"])
+            ctl("quota-alert", "delete", created["id"], "--yes")
+            require(ctl("quota-alert", "show", created["id"])["data"]["deleted"], "deleted rule still active")
+            checks.append("agctl: private recipient, rename keeps enabled, preview/plan queue nothing, keyed test delivers one MIME, replay refused, quota rule lifecycle")
             return {"status": "passed", "checks": checks, "runtime": True,
-                    "acceptedMIME": 3, "permanentRejection": 1,
+                    "acceptedMIME": 4, "permanentRejection": 1,
                     "limits": "owned internal-network SMTP only; no real relay, client inbox or cross-node readiness guarantee"}
         finally:
             if started:
