@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -866,6 +867,13 @@ func emailPreviewCommand() command {
 			if !adminopenapi.EmailPreviewInputScenario(scenario).Valid() || !adminopenapi.EmailPreviewInputLocale(locale).Valid() {
 				return &UsageError{Message: "--scenario must be warning, critical, or resolved and --locale en or zh-CN", Hint: "previews render fixed synthetic data"}
 			}
+			if htmlOutput != "" && textOutput != "" {
+				html, _ := filepath.Abs(htmlOutput)
+				text, _ := filepath.Abs(textOutput)
+				if filepath.Clean(html) == filepath.Clean(text) {
+					return &UsageError{Message: "--html-output and --text-output name the same file", Hint: "write the HTML and plain-text parts to two different paths"}
+				}
+			}
 			for _, path := range []string{htmlOutput, textOutput} {
 				if path == "" {
 					continue
@@ -931,15 +939,16 @@ func terminalDelivery(state adminopenapi.EmailDeliveryState) bool {
 }
 
 func emailTestCommand() command {
-	var target, scenario, key string
+	var target, scenario, key, targetVersion string
 	return command{
 		name:     "email test",
 		synopsis: "queue a synthetic test email to a target (sends real mail; needs --yes)",
-		usage:    "agctl email test --target ID --scenario warning|critical|resolved --yes [--idempotency-key UUID] [--dry-run] [--json]",
+		usage:    "agctl email test --target ID --scenario warning|critical|resolved --yes [--idempotency-key UUID --if-match TARGET_VERSION] [--dry-run] [--json]",
 		setFlags: func(fs *flag.FlagSet) {
 			fs.StringVar(&target, "target", "", "email target ID")
 			fs.StringVar(&scenario, "scenario", "", "warning, critical, or resolved")
 			fs.StringVar(&key, "idempotency-key", "", "UUID that makes a repeat answer the same delivery (default: a new one)")
+			fs.StringVar(&targetVersion, "if-match", "", "target version to queue against (default: read now); a retry with an earlier key must repeat the version it reported")
 		},
 		meta: commandMeta{
 			Resource: "email", Scenarios: []string{"admin"}, Stage: "m2",
@@ -961,6 +970,9 @@ func emailTestCommand() command {
 			} else {
 				key = uuid.NewString()
 			}
+			if env.flagSet["if-match"] && strings.TrimSpace(targetVersion) == "" {
+				return &UsageError{Message: "--if-match cannot be empty", Hint: "pass the target version an earlier attempt reported"}
+			}
 			if !env.globals.dryRun && !env.globals.yes {
 				return &UsageError{Message: "agctl email test sends real email and needs --yes", Hint: "preview the message with agctl email preview first"}
 			}
@@ -968,12 +980,23 @@ func emailTestCommand() command {
 			if err != nil {
 				return err
 			}
-			current, version, err := readETagged[adminopenapi.EmailTarget](ctx, client, emailTargetPath(target))
-			if err != nil {
-				return err
-			}
-			if version == "" {
-				version = current.Version
+			// The server recognises a repeat by key, target, target version, and
+			// scenario. A retry after an unknown outcome must repeat the version
+			// of the first attempt, not read a newer one.
+			version := targetVersion
+			var current *adminopenapi.EmailTarget
+			if version == "" || env.globals.dryRun {
+				read, readVersion, err := readETagged[adminopenapi.EmailTarget](ctx, client, emailTargetPath(target))
+				if err != nil {
+					return err
+				}
+				current = &read
+				if version == "" {
+					version = readVersion
+					if version == "" {
+						version = read.Version
+					}
+				}
 			}
 			body := adminopenapi.EmailTestInput{TargetId: targetID, Scenario: adminopenapi.EmailTestInputScenario(scenario)}
 			if env.globals.dryRun {
@@ -997,8 +1020,8 @@ func emailTestCommand() command {
 			}
 			if err != nil {
 				if emailOutcomeUnknown(err) {
-					return unknownOutcomeError(err, unknownOutcome{Operation: "email test", ID: target, IdempotencyKey: key, ReadBack: "agctl email delivery list"},
-						fmt.Sprintf("a test may have been queued; re-run with --idempotency-key %s to get the same delivery instead of a second email", key))
+					return unknownOutcomeError(err, unknownOutcome{Operation: "email test", ID: target, IdempotencyKey: key, Version: version, ReadBack: "agctl email delivery list"},
+						fmt.Sprintf("a test may have been queued; re-run with --idempotency-key %s --if-match %s (the same scenario and target) to get the same delivery instead of a second email", key, version))
 				}
 				return err
 			}

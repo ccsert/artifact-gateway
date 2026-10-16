@@ -743,11 +743,16 @@ These second-batch (M2) commands need a platform administrator.
   endpoint treats an omitted `enabled` as disabled. Rules keep the target
   version they were bound to until updated.
 - `agctl email preview --scenario S --locale L [--html-output FILE]
-  [--text-output FILE]` renders fixed synthetic data and queues nothing.
+  [--text-output FILE]` renders fixed synthetic data and queues nothing; the
+  two parts must go to different files.
 - `agctl email test --target ID --scenario S --yes` queues one real test
   email for the target's current version under an `Idempotency-Key` (a UUID;
   `--idempotency-key` reuses one, and the same key answers the same delivery,
-  so the request is retried). Queued is not delivered:
+  so the request is retried). The server matches a repeat by key, target,
+  target version, and scenario, so an unknown outcome reports the version it
+  was sent with, and a later retry passes it back as
+  `--idempotency-key K --if-match VERSION` instead of reading a newer one.
+  Queued is not delivered:
   `agctl email delivery wait ID [--timeout D]` polls until the relay accepted
   it or it is dead, and a timeout exits 8 with the delivery still queued —
   there is no cancel. `agctl email delivery list [--limit N]` reads the newest

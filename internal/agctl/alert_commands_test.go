@@ -158,6 +158,14 @@ func TestEmailPreviewWritesNewFiles(t *testing.T) {
 	if code != ExitOK || string(gotHTML) != "<p>warning</p>" || string(gotText) != "warning" || !strings.Contains(stdout, "Quota warning") {
 		t.Fatalf("exit = %d, html = %q, text = %q", code, gotHTML, gotText)
 	}
+	same := filepath.Join(dir, "same.out")
+	posts := api.count("POST")
+	if code, _, _ = runCLI(t, "email", "preview", "--scenario", "warning", "--locale", "en", "--html-output", same, "--text-output", filepath.Join(dir, ".", "same.out")); code != ExitUsage || api.count("POST") != posts {
+		t.Fatalf("one path for both parts is a usage error before the request: exit = %d", code)
+	}
+	if _, err := os.Stat(same); !os.IsNotExist(err) {
+		t.Fatalf("a rejected preview writes nothing: %v", err)
+	}
 }
 
 func TestEmailTestIsConfirmedConditionalAndKeyed(t *testing.T) {
@@ -187,6 +195,24 @@ func TestEmailTestIsConfirmedConditionalAndKeyed(t *testing.T) {
 	}
 	if len(posts) != 2 || posts[0].IfMatch != "7" || posts[0].Body != posts[1].Body {
 		t.Fatalf("a retried test resends the same request for the target version: %+v", posts)
+	}
+	// An unknown outcome names the version it was sent with, and a retry that
+	// repeats it is sent against that version without reading a newer one.
+	api.on("POST", "/api/v2/email-notifications:test", 502, `{"code":"bad_gateway","message":"upstream"}`)
+	code, stdout, _ = runCLI(t, "email", "test", "--target", targetID, "--scenario", "warning", "--yes", "--json")
+	if envelope := decodeEnvelope(t, stdout); code != ExitFailure || !strings.Contains(stdout, `"outcome": "unknown"`) || !strings.Contains(envelope.Error.Hint, "--if-match 7") {
+		t.Fatalf("exit = %d, stdout = %s", code, stdout)
+	}
+	api.onETag("GET", "/api/v2/email-targets/"+targetID, 200, targetJSON("ops", true, "8"), "8")
+	api.on("POST", "/api/v2/email-notifications:test", 202, deliveryJSON("pending", "1"))
+	gets := api.count("GET")
+	code, _, _ = runCLI(t, "email", "test", "--target", targetID, "--scenario", "warning", "--yes", "--idempotency-key", "8f14e45f-ceea-467a-9575-6a3b1f2c9d10", "--if-match", "7")
+	last := api.recorded()[len(api.recorded())-1]
+	if code != ExitOK || api.count("GET") != gets || last.IfMatch != "7" {
+		t.Fatalf("a retry keeps the first version: exit = %d, gets %d -> %d, if-match = %q", code, gets, api.count("GET"), last.IfMatch)
+	}
+	if code, _, _ = runCLI(t, "email", "test", "--target", targetID, "--scenario", "warning", "--yes", "--if-match", " "); code != ExitUsage {
+		t.Fatalf("an empty --if-match is a usage error: exit = %d", code)
 	}
 	api.on("POST", "/api/v2/email-notifications:test", 503, `{"code":"email_disabled","message":"email channel is unavailable"}`)
 	code, stdout, _ = runCLI(t, "email", "test", "--target", targetID, "--scenario", "warning", "--yes", "--json")

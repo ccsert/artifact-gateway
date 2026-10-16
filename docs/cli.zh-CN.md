@@ -611,10 +611,12 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   为条件修改名称、语言、启用状态或收件人；未给出的字段按原值发回，因为该端点把
   省略的 `enabled` 当作停用。规则在更新前继续绑定原目标版本。
 - `agctl email preview --scenario S --locale L [--html-output FILE]
-  [--text-output FILE]` 渲染固定的合成数据，不入队。
+  [--text-output FILE]` 渲染固定的合成数据，不入队；两部分必须写入不同文件。
 - `agctl email test --target ID --scenario S --yes` 在 `Idempotency-Key`（UUID；
   `--idempotency-key` 可复用，同一 key 返回同一投递，因此会重试）下按目标当前版本
-  排队一封真实测试邮件。入队不等于送达：`agctl email delivery wait ID [--timeout D]`
+  排队一封真实测试邮件。服务端按 key、目标、目标版本和场景识别重复请求，因此
+  结果未知时会报告发送所用的版本，之后的重试用 `--idempotency-key K --if-match VERSION`
+  把它带回，而不是读取更新的版本。入队不等于送达：`agctl email delivery wait ID [--timeout D]`
   轮询直到中继接收或判定失败，超时退出码 8 且投递仍在队列中——没有取消操作。
   `agctl email delivery list [--limit N]` 读取最新的投递（最多 100，无 cursor）；
   `show` 读取一条，包括尝试次数和 `possibleDuplicate`。
