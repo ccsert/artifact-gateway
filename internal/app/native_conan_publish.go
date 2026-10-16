@@ -22,9 +22,14 @@ type nativeConanPublishHandler struct {
 	publicationScanner *publicationScanScheduler
 }
 
+// nativeConanPublishRequest is the CreateConanPublishSession contract body.
 type nativeConanPublishRequest struct {
-	Kind, Reference, RecipeRevision, PackageID, PackageRevision string
-	Objects                                                     []repository.MavenDeclaredObject
+	Kind            string                           `json:"kind"`
+	Reference       string                           `json:"reference"`
+	RecipeRevision  string                           `json:"recipeRevision"`
+	PackageID       string                           `json:"packageId"`
+	PackageRevision string                           `json:"packageRevision"`
+	Objects         []repository.MavenDeclaredObject `json:"objects"`
 }
 
 func newNativeConanPublishHandler(store GatewayStore, objects OCIObjectStore, auth Authenticator) nativeConanPublishHandler {

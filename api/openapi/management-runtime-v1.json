@@ -5956,6 +5956,41 @@
         }
       }
     },
+    "/repositories/{repositoryId}/conan-publish-sessions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        }
+      ],
+      "post": {
+        "operationId": "createConanPublishSession",
+        "description": "Opens a one-hour Conan publish session for a recipe revision or a package revision of a Hosted Conan repository. Declared objects are uploaded and verified individually, and the revision becomes visible only on commit.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConanPublishSession"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/PublishSession"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/cache/entries": {
       "parameters": [
         {
@@ -6210,6 +6245,95 @@
             "$ref": "#/components/responses/Problem"
           },
           "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/conan-publish-sessions/{sessionId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "get": {
+        "operationId": "getConanPublishSession",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/PublishSession"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/conan-publish-sessions/{sessionId}/objects/{objectName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        },
+        {
+          "name": "objectName",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[^/]+$"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "uploadConanPublishObject",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "contentEncoding": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Verified and staged"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/conan-publish-sessions/{sessionId}:commit": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "post": {
+        "operationId": "commitConanPublishSession",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ConanPublishCommit"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "507": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -9005,6 +9129,70 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "CreateConanPublishSession": {
+        "type": "object",
+        "description": "A recipe session declares recipeRevision only; a package session also declares packageId and packageRevision. The session coordinate is reference#recipeRevision, extended with /packageId#packageRevision for package sessions.",
+        "required": [
+          "kind",
+          "reference",
+          "recipeRevision",
+          "objects"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "recipe",
+              "package"
+            ]
+          },
+          "reference": {
+            "type": "string",
+            "description": "Conan reference in path form, name/version/user/channel.",
+            "pattern": "^[^/\\\\#]+/[^/\\\\#]+/[^/\\\\#]+/[^/\\\\#]+$"
+          },
+          "recipeRevision": {
+            "type": "string",
+            "pattern": "^[^/\\\\#]+$"
+          },
+          "packageId": {
+            "type": "string",
+            "pattern": "^[^/\\\\#]*$",
+            "description": "Required for package sessions; absent or empty for recipe sessions."
+          },
+          "packageRevision": {
+            "type": "string",
+            "pattern": "^[^/\\\\#]*$",
+            "description": "Required for package sessions; absent or empty for recipe sessions."
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeclaredObject"
+            }
+          }
+        }
+      },
+      "ConanPublishCommit": {
+        "type": "object",
+        "required": [
+          "state",
+          "revision"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "visible"
+            ]
+          },
+          "revision": {
+            "type": "string",
+            "description": "Recipe revision of the committed session, for recipe and package sessions alike."
           }
         }
       },
@@ -15055,6 +15243,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/ConanPackageIdList"
+            }
+          }
+        }
+      },
+      "ConanPublishCommit": {
+        "description": "Conan publish session committed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ConanPublishCommit"
             }
           }
         }

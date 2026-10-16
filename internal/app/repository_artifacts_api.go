@@ -511,6 +511,24 @@ func (h generatedRepositoryAPIAdapter) ListConanPackageIds(w http.ResponseWriter
 	})
 }
 
+// The Conan publish session operations delegate to the native handler, which
+// authenticates, authorizes the revision resource and parses the path itself.
+func (h generatedRepositoryAPIAdapter) CreateConanPublishSession(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
+	h.conanPublish.ServeHTTP(w, r)
+}
+
+func (h generatedRepositoryAPIAdapter) GetConanPublishSession(w http.ResponseWriter, r *http.Request, _ adminopenapi.SessionId) {
+	h.conanPublish.ServeHTTP(w, r)
+}
+
+func (h generatedRepositoryAPIAdapter) UploadConanPublishObject(w http.ResponseWriter, r *http.Request, _ adminopenapi.SessionId, _ string) {
+	h.conanPublish.ServeHTTP(w, r)
+}
+
+func (h generatedRepositoryAPIAdapter) CommitConanPublishSession(w http.ResponseWriter, r *http.Request, _ adminopenapi.SessionId) {
+	h.conanPublish.ServeHTTP(w, r)
+}
+
 func (h generatedRepositoryAPIAdapter) DeleteConanPackageRevision(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, revision string, params adminopenapi.DeleteConanPackageRevisionParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryWrite, func(principal Principal, repo repository.HostedRepository) {
 		reference, recipeRevision, packageID := strings.TrimSuffix(strings.TrimSpace(params.Reference), "/"), strings.TrimSpace(params.RecipeRevision), strings.TrimSpace(params.PackageId)

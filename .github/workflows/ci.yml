@@ -56,6 +56,8 @@ jobs:
         env:
           GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: make api-change-check
+      - name: Validate agctl command map against the API contracts
+        run: make cli-contract-check
       - name: Run tests
         run: make test
       - name: Validate Cargo C0 with the pinned official client

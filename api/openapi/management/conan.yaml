@@ -100,3 +100,77 @@ repositories_repositoryId_conan_package_revisions_revision:
       '204': {description: Package revision tombstoned}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
+repositories_repositoryId_conan_publish_sessions:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  post:
+    operationId: createConanPublishSession
+    description: Opens a one-hour Conan publish session for a recipe revision or a package revision of a Hosted Conan repository. Declared objects are uploaded and verified individually, and the revision becomes visible only on commit.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/CreateConanPublishSession"
+    responses:
+      '201':
+        "$ref": "../components/responses.yaml#/PublishSession"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+conan_publish_sessions_sessionId:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/SessionId"
+  get:
+    operationId: getConanPublishSession
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/PublishSession"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+conan_publish_sessions_sessionId_objects_objectName:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/SessionId"
+  - name: objectName
+    in: path
+    required: true
+    schema:
+      type: string
+      pattern: "^[^/]+$"
+  put:
+    operationId: uploadConanPublishObject
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            contentEncoding: binary
+    responses:
+      '204':
+        description: Verified and staged
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+conan_publish_sessions_sessionId_commit:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/SessionId"
+  post:
+    operationId: commitConanPublishSession
+    responses:
+      '200':
+        "$ref": "../components/responses.yaml#/ConanPublishCommit"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '409':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+      '507':
+        "$ref": "../components/responses.yaml#/Problem"
