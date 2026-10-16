@@ -8,6 +8,10 @@
 
 ## Unreleased
 
+- Raw 条件写入列表保留实体标签引号内的逗号，并接受 RFC 9110 规定的不透明标签字节（含 obs-text）。通配符必须是字段的唯一值；重复或混用通配符返回 400，且不改变路径引用。
+
+- Raw Hosted 支持条件写入（#313）。`PUT /raw/{repository}/{path}` 与恢复上传的完成请求（`PUT ?uploadId=…&complete=1`）遵循 `If-None-Match: *`（仅在路径没有当前制品时创建）、`If-Match: *` 以及 `If-Match`/`If-None-Match` 实体标签列表，读取返回的 `"sha256-<hex>"` 与写入返回的 `"sha256:<hex>"` 两种标签都可使用。Gateway 在替换路径引用的同一把锁（内存）或同一事务（PostgreSQL）内复查条件，因此持有同一 validator 的两个写者只有一个成功；另一个得到 412，引用不变、不回显当前 validator，被拒的恢复上传保持打开。格式错误的条件列表以及无法原子判定的 `If-Unmodified-Since` 返回 400，而不是退化为无条件写入。不带这些头的请求保持原有无条件替换行为。恢复上传完成时先登记内容对象再写入字节，被拒或失败的提交留下的字节可被回收。
+
 - `agctl` 在邮件测试重试遭拒绝时保留此前可能已入队的未知结果；确认测试或等待完成前核对投递身份、版本与场景。配额事件按最新 50 条窗口报告，邮件等待命令自省明确返回 `cancelSupported: false`。
 
 - `agctl` 新增配额告警与邮件通知管理（#336，M2）。`quota-alert list|show|create|update|delete|events` 要求显式给出全部阈值和时长（没有默认策略），新规则默认停用，每次有条件更新都把未改动的字段（包括启用状态，否则端点会将其清除）按原值发回；启用需要 `--yes`。`email capability`、`email target list|show|create|update`、`email preview`、`email test` 和 `email delivery list|show|wait|replay` 不在任何输出中显示收件人（只从 stdin 或私有文件读取），带 `--yes` 在可复用的幂等键下排队测试邮件，在 `--timeout` 内等待中继接收且不假装可以取消，仅在此前没有可能已入队的尝试时，把首次 `email_disabled`、`encryption_key_unavailable` 或 `queue_full` 视为确定的拒绝。`make email-compose-check` 现在用这些命令驱动自有 TLS SMTP，并断言只多送达一封邮件。
