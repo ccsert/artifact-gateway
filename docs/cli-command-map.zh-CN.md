@@ -10,7 +10,7 @@
 本页是对完整契约的归类，不是对已安装二进制的描述。除 #125 骨架（`version`、
 `info`、`commands`）和阶段列标为 `implemented` 的行（#130 的仓库与 Group 命令、
 #131 的制品与格式视图、#132 的 Raw 与 Maven 发布命令、#133 的服务账号、凭据与 API key 命令、#134 的授权、角色、
-模板、访问检查与匿名开关命令、#335 的用户、会话与身份命令，以及
+模板、访问检查与匿名开关命令、#336 的配额告警与邮件命令（M2）、#335 的用户、会话与身份命令，以及
 #135 的只读审计、status、诊断、运行节点与运行日志、概览和生命周期任务命令，均由 `make cli-e2e` 在真实 Gateway 上验收）外，
 全部为计划，不宣称已实现；只有注册命令、文档/测试和真实 Gateway 验收齐备，
 某一行才转为 implemented/verified。
@@ -68,22 +68,22 @@ server base）。计划命令省略前导 `agctl`。
 
 | API（均相对 /api/v2）/ operationId | 计划命令（省略 agctl） | 承接 | 阶段 | 权限 | 验收 |
 | --- | --- | --- | --- | --- | --- |
-| `GET /repository-quota-alert-rules/{ruleId}/events`<br>`listRepositoryQuotaAlertEvents` | `quota-alert events <rule>` | #336 | M2 | A | Q |
-| `GET /repository-quota-alert-rules/{ruleId}`<br>`getRepositoryQuotaAlertRule` | `quota-alert show <rule>` | #336 | M2 | A | Q |
-| `PUT /repository-quota-alert-rules/{ruleId}`<br>`updateRepositoryQuotaAlertRule` | `quota-alert update <rule>` | #336 | M2 | A | C |
-| `DELETE /repository-quota-alert-rules/{ruleId}`<br>`deleteRepositoryQuotaAlertRule` | `quota-alert delete <rule>` | #336 | M2 | A | C |
-| `POST /repository-quota-alert-rules`<br>`createRepositoryQuotaAlertRule` | `quota-alert create` | #336 | M2 | A | W |
-| `GET /repository-quota-alert-rules`<br>`listRepositoryQuotaAlertRules` | `quota-alert list` | #336 | M2 | A | Q |
-| `GET /email-notifications`<br>`getEmailNotificationCapability` | `email capability` | #336 | M2 | A | Q |
-| `POST /email-notifications:test`<br>`testEmailNotification` | `email test` | #336 | M2 | A | J |
-| `GET /email-targets`<br>`listEmailTargets` | `email target list` | #336 | M2 | A | Q |
-| `POST /email-targets`<br>`createEmailTarget` | `email target create` | #336 | M2 | A | W |
-| `GET /email-targets/{targetId}`<br>`getEmailTarget` | `email target show <id>` | #336 | M2 | A | Q |
-| `PUT /email-targets/{targetId}`<br>`updateEmailTarget` | `email target update <id>` | #336 | M2 | A | C |
-| `GET /email-deliveries`<br>`listEmailDeliveries` | `email delivery list` | #336 | M2 | A | Q |
-| `GET /email-deliveries/{deliveryId}`<br>`getEmailDelivery` | `email delivery show <id>` | #336 | M2 | A | Q |
-| `POST /email-deliveries/{deliveryId}:replay`<br>`replayEmailDelivery` | `email delivery replay <id>` | #336 | M2 | A | J |
-| `POST /email-notifications:preview`<br>`previewEmailNotification` | `email preview` | #336 | M2 | A | D |
+| `GET /repository-quota-alert-rules/{ruleId}/events`<br>`listRepositoryQuotaAlertEvents` | `quota-alert events <rule>` | #336 | M2 implemented | A | Q |
+| `GET /repository-quota-alert-rules/{ruleId}`<br>`getRepositoryQuotaAlertRule` | `quota-alert show <rule>` | #336 | M2 implemented | A | Q |
+| `PUT /repository-quota-alert-rules/{ruleId}`<br>`updateRepositoryQuotaAlertRule` | `quota-alert update <rule>` | #336 | M2 implemented | A | C |
+| `DELETE /repository-quota-alert-rules/{ruleId}`<br>`deleteRepositoryQuotaAlertRule` | `quota-alert delete <rule>` | #336 | M2 implemented | A | C |
+| `POST /repository-quota-alert-rules`<br>`createRepositoryQuotaAlertRule` | `quota-alert create` | #336 | M2 implemented | A | W |
+| `GET /repository-quota-alert-rules`<br>`listRepositoryQuotaAlertRules` | `quota-alert list` | #336 | M2 implemented | A | Q |
+| `GET /email-notifications`<br>`getEmailNotificationCapability` | `email capability` | #336 | M2 implemented | A | Q |
+| `POST /email-notifications:test`<br>`testEmailNotification` | `email test` | #336 | M2 implemented | A | J |
+| `GET /email-targets`<br>`listEmailTargets` | `email target list` | #336 | M2 implemented | A | Q |
+| `POST /email-targets`<br>`createEmailTarget` | `email target create` | #336 | M2 implemented | A | W |
+| `GET /email-targets/{targetId}`<br>`getEmailTarget` | `email target show <id>` | #336 | M2 implemented | A | Q |
+| `PUT /email-targets/{targetId}`<br>`updateEmailTarget` | `email target update <id>` | #336 | M2 implemented | A | C |
+| `GET /email-deliveries`<br>`listEmailDeliveries` | `email delivery list` | #336 | M2 implemented | A | Q |
+| `GET /email-deliveries/{deliveryId}`<br>`getEmailDelivery` | `email delivery show <id>` | #336 | M2 implemented | A | Q |
+| `POST /email-deliveries/{deliveryId}:replay`<br>`replayEmailDelivery` | `email delivery replay <id>` | #336 | M2 implemented | A | J |
+| `POST /email-notifications:preview`<br>`previewEmailNotification` | `email preview` | #336 | M2 implemented | A | D |
 | `GET /formats`<br>`listFormatProfiles` | `formats list（info 复用）` | #125 | M0 | I | Q |
 | `GET /identity`<br>`getCurrentIdentity` | `auth whoami（info 复用）` | #129 | M1 | I | Q |
 | `GET /artifact-search`<br>`searchArtifacts` | `artifact search --global` | #131 | M1 implemented | FR | Q |

@@ -31,6 +31,9 @@ type commandMeta struct {
 	DryRun       string   `json:"dryRun"`
 	Retry        bool     `json:"retry"`
 	Wait         bool     `json:"wait"`
+	// CancelSupported is explicit when a command waits on a remote operation
+	// whose cancellation ability callers need to distinguish from local exit.
+	CancelSupported *bool `json:"cancelSupported,omitempty"`
 	// Follow marks a command that streams new entries as bounded NDJSON
 	// (--follow with --duration or --max-events).
 	Follow bool `json:"follow"`
@@ -135,6 +138,23 @@ func registry() []command {
 		publishCommitCommand(),
 		publishStatusCommand(),
 		publishMavenCommand(),
+		quotaAlertListCommand(),
+		quotaAlertShowCommand(),
+		quotaAlertCreateCommand(),
+		quotaAlertUpdateCommand(),
+		quotaAlertDeleteCommand(),
+		quotaAlertEventsCommand(),
+		emailCapabilityCommand(),
+		emailTargetListCommand(),
+		emailTargetShowCommand(),
+		emailTargetCreateCommand(),
+		emailTargetUpdateCommand(),
+		emailPreviewCommand(),
+		emailTestCommand(),
+		emailDeliveryListCommand(),
+		emailDeliveryShowCommand(),
+		emailDeliveryWaitCommand(),
+		emailDeliveryReplayCommand(),
 	}
 }
 
