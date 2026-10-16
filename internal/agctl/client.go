@@ -61,6 +61,9 @@ type apiResponse struct {
 	StatusCode int
 	Header     http.Header
 	Body       []byte
+	// priorErrors retain earlier attempts when the final response alone cannot
+	// establish whether an idempotent write was already applied.
+	priorErrors []error
 }
 
 // normalizeServerTarget canonicalizes a Gateway server URL for identity
@@ -188,6 +191,7 @@ func (c *apiClient) do(ctx context.Context, method, path string, options request
 	}
 	var lastResponse *apiResponse
 	var lastErr error
+	var priorErrors []error
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 {
 			wait := c.retryWait(lastResponse, attempt)
@@ -258,7 +262,7 @@ func (c *apiClient) do(ctx context.Context, method, path string, options request
 				if c.verbose != nil {
 					_, _ = fmt.Fprintf(c.verbose, "< %d\n", response.StatusCode)
 				}
-				result := &apiResponse{StatusCode: response.StatusCode, Header: response.Header, Body: body}
+				result := &apiResponse{StatusCode: response.StatusCode, Header: response.Header, Body: body, priorErrors: priorErrors}
 				if response.StatusCode < 300 {
 					return result, nil
 				}
@@ -266,6 +270,7 @@ func (c *apiClient) do(ctx context.Context, method, path string, options request
 					return result, nil
 				}
 				lastResponse = result
+				priorErrors = append(priorErrors, parseAPIError(result, c.token))
 				continue
 			}
 		}
@@ -275,6 +280,7 @@ func (c *apiClient) do(ctx context.Context, method, path string, options request
 		if attempt == maxAttempts-1 {
 			return nil, c.transportError(lastErr, requestURL)
 		}
+		priorErrors = append(priorErrors, c.transportError(lastErr, requestURL))
 	}
 	return nil, c.transportError(lastErr, requestURL)
 }

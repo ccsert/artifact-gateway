@@ -246,7 +246,10 @@ type unknownOutcome struct {
 	ID             string `json:"id,omitempty"`
 	Name           string `json:"name,omitempty"`
 	IdempotencyKey string `json:"idempotencyKey,omitempty"`
-	ReadBack       string `json:"readBack"`
+	// Version is the precondition the write was sent with, when a retry has
+	// to repeat it to be recognised as the same request.
+	Version  string `json:"version,omitempty"`
+	ReadBack string `json:"readBack"`
 }
 
 // outcomeUnknown reports whether a failed write may still have been applied:

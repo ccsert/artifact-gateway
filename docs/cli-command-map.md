@@ -16,7 +16,7 @@ rows whose phase says `implemented` (the #130 repository and Group commands,
 the #131 artifact and format views, the #132 Raw and Maven publishing
 commands, the #133 service account, credential,
 and API key commands, the #134 grant, role, template, access check, and
-anonymous-switch commands, the #335 user, session, and identity commands, and the read-only #135 audit, status,
+anonymous-switch commands, the #336 quota alert and email commands (M2), the #335 user, session, and identity commands, and the read-only #135 audit, status,
 diagnostics, runtime-node and runtime-log, overview, and lifecycle-job
 commands, each
 accepted against a real Gateway by `make cli-e2e`), every row is a plan. A
@@ -113,22 +113,22 @@ the contract's server base. Planned commands omit the leading `agctl`.
 
 | API (all under /api/v2) / operationId | Planned command (agctl omitted) | Owning issue | Phase | Permission | Acceptance |
 | --- | --- | --- | --- | --- | --- |
-| `GET /repository-quota-alert-rules/{ruleId}/events`<br>`listRepositoryQuotaAlertEvents` | `quota-alert events <rule>` | #336 | M2 | A | Q |
-| `GET /repository-quota-alert-rules/{ruleId}`<br>`getRepositoryQuotaAlertRule` | `quota-alert show <rule>` | #336 | M2 | A | Q |
-| `PUT /repository-quota-alert-rules/{ruleId}`<br>`updateRepositoryQuotaAlertRule` | `quota-alert update <rule>` | #336 | M2 | A | C |
-| `DELETE /repository-quota-alert-rules/{ruleId}`<br>`deleteRepositoryQuotaAlertRule` | `quota-alert delete <rule>` | #336 | M2 | A | C |
-| `POST /repository-quota-alert-rules`<br>`createRepositoryQuotaAlertRule` | `quota-alert create` | #336 | M2 | A | W |
-| `GET /repository-quota-alert-rules`<br>`listRepositoryQuotaAlertRules` | `quota-alert list` | #336 | M2 | A | Q |
-| `GET /email-notifications`<br>`getEmailNotificationCapability` | `email capability` | #336 | M2 | A | Q |
-| `POST /email-notifications:test`<br>`testEmailNotification` | `email test` | #336 | M2 | A | J |
-| `GET /email-targets`<br>`listEmailTargets` | `email target list` | #336 | M2 | A | Q |
-| `POST /email-targets`<br>`createEmailTarget` | `email target create` | #336 | M2 | A | W |
-| `GET /email-targets/{targetId}`<br>`getEmailTarget` | `email target show <id>` | #336 | M2 | A | Q |
-| `PUT /email-targets/{targetId}`<br>`updateEmailTarget` | `email target update <id>` | #336 | M2 | A | C |
-| `GET /email-deliveries`<br>`listEmailDeliveries` | `email delivery list` | #336 | M2 | A | Q |
-| `GET /email-deliveries/{deliveryId}`<br>`getEmailDelivery` | `email delivery show <id>` | #336 | M2 | A | Q |
-| `POST /email-deliveries/{deliveryId}:replay`<br>`replayEmailDelivery` | `email delivery replay <id>` | #336 | M2 | A | J |
-| `POST /email-notifications:preview`<br>`previewEmailNotification` | `email preview` | #336 | M2 | A | D |
+| `GET /repository-quota-alert-rules/{ruleId}/events`<br>`listRepositoryQuotaAlertEvents` | `quota-alert events <rule>` | #336 | M2 implemented | A | Q |
+| `GET /repository-quota-alert-rules/{ruleId}`<br>`getRepositoryQuotaAlertRule` | `quota-alert show <rule>` | #336 | M2 implemented | A | Q |
+| `PUT /repository-quota-alert-rules/{ruleId}`<br>`updateRepositoryQuotaAlertRule` | `quota-alert update <rule>` | #336 | M2 implemented | A | C |
+| `DELETE /repository-quota-alert-rules/{ruleId}`<br>`deleteRepositoryQuotaAlertRule` | `quota-alert delete <rule>` | #336 | M2 implemented | A | C |
+| `POST /repository-quota-alert-rules`<br>`createRepositoryQuotaAlertRule` | `quota-alert create` | #336 | M2 implemented | A | W |
+| `GET /repository-quota-alert-rules`<br>`listRepositoryQuotaAlertRules` | `quota-alert list` | #336 | M2 implemented | A | Q |
+| `GET /email-notifications`<br>`getEmailNotificationCapability` | `email capability` | #336 | M2 implemented | A | Q |
+| `POST /email-notifications:test`<br>`testEmailNotification` | `email test` | #336 | M2 implemented | A | J |
+| `GET /email-targets`<br>`listEmailTargets` | `email target list` | #336 | M2 implemented | A | Q |
+| `POST /email-targets`<br>`createEmailTarget` | `email target create` | #336 | M2 implemented | A | W |
+| `GET /email-targets/{targetId}`<br>`getEmailTarget` | `email target show <id>` | #336 | M2 implemented | A | Q |
+| `PUT /email-targets/{targetId}`<br>`updateEmailTarget` | `email target update <id>` | #336 | M2 implemented | A | C |
+| `GET /email-deliveries`<br>`listEmailDeliveries` | `email delivery list` | #336 | M2 implemented | A | Q |
+| `GET /email-deliveries/{deliveryId}`<br>`getEmailDelivery` | `email delivery show <id>` | #336 | M2 implemented | A | Q |
+| `POST /email-deliveries/{deliveryId}:replay`<br>`replayEmailDelivery` | `email delivery replay <id>` | #336 | M2 implemented | A | J |
+| `POST /email-notifications:preview`<br>`previewEmailNotification` | `email preview` | #336 | M2 implemented | A | D |
 | `GET /formats`<br>`listFormatProfiles` | `formats list` (info reuses the same read) | #125 | M0 | I | Q |
 | `GET /identity`<br>`getCurrentIdentity` | `auth whoami` (info reuses the same read) | #129 | M1 | I | Q |
 | `GET /artifact-search`<br>`searchArtifacts` | `artifact search --global` | #131 | M1 implemented | FR | Q |
