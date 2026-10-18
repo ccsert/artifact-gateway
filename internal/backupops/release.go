@@ -90,8 +90,14 @@ func VerifyRelease(m backupmanifest.Manifest, release Release, ledger io.Reader)
 				}
 			}
 		}
-		prefix := "github.com/ccsert/artifact-gateway/internal/buildinfo."
-		if bi.Path != "github.com/ccsert/artifact-gateway/cmd/gateway" || bi.Main.Path != "github.com/ccsert/artifact-gateway" || values["GOOS"]+"/"+values["GOARCH"] != m.Gateway.Artifact.Platform {
+		// Published releases retain the module namespace used when built. Bind
+		// the command and linker identity to that same, exact namespace.
+		module := bi.Main.Path
+		if module != "github.com/ccsert/artifact-gateway" && module != "github.com/artifact-gateway/artifact-gateway" {
+			return errRelease
+		}
+		prefix := module + "/internal/buildinfo."
+		if bi.Path != module+"/cmd/gateway" || values["GOOS"]+"/"+values["GOARCH"] != m.Gateway.Artifact.Platform {
 			return errRelease
 		}
 		_, hasLDFlags := values["-ldflags"]

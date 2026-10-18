@@ -61,6 +61,111 @@ func (s *PostgresStore) PublishNPMVersion(ctx context.Context, version NPMVersio
 	return version, nil
 }
 
+// SetNPMDistTag locks the target version row before the package row, the
+// same order TombstoneNPMVersion and RestoreNPMVersion use, so a concurrent
+// tombstone either commits first (and the tag is refused) or waits until the
+// tag commits and then removes it with the version.
+func (s *PostgresStore) SetNPMDistTag(ctx context.Context, mutation NPMDistTagMutation) (NPMDistTagChange, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return NPMDistTagChange{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var visible int
+	err = tx.QueryRowContext(ctx, `
+		SELECT 1 FROM native_npm_versions
+		WHERE repository_id::text=$1 AND package_name=$2 AND version=$3 AND state='visible'
+		FOR SHARE`, mutation.RepositoryID, mutation.PackageName, mutation.Version).Scan(&visible)
+	targetMissing := errors.Is(err, sql.ErrNoRows)
+	if err != nil && !targetMissing {
+		return NPMDistTagChange{}, err
+	}
+	tags, err := lockHostedNPMDistTags(ctx, tx, mutation.RepositoryID, mutation.PackageName)
+	if err != nil {
+		return NPMDistTagChange{}, err
+	}
+	if targetMissing {
+		return NPMDistTagChange{}, ErrNPMDistTagTargetUnavailable
+	}
+	change := NPMDistTagChange{Previous: tags[mutation.Tag], Changed: tags[mutation.Tag] != mutation.Version}
+	if change.Changed {
+		if tags, err = updateHostedNPMDistTags(ctx, tx, `dist_tags || jsonb_build_object($3::text,$4::text)`, mutation.RepositoryID, mutation.PackageName, mutation.Tag, mutation.Version); err != nil {
+			return NPMDistTagChange{}, err
+		}
+	}
+	change.DistTags = tags
+	if err = insertAudit(ctx, tx, mutation.AuditRecord(change, mutation.Version)); err != nil {
+		return NPMDistTagChange{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return NPMDistTagChange{}, err
+	}
+	return change, nil
+}
+
+func (s *PostgresStore) DeleteNPMDistTag(ctx context.Context, mutation NPMDistTagMutation) (NPMDistTagChange, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return NPMDistTagChange{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	tags, err := lockHostedNPMDistTags(ctx, tx, mutation.RepositoryID, mutation.PackageName)
+	if err != nil {
+		return NPMDistTagChange{}, err
+	}
+	previous, ok := tags[mutation.Tag]
+	if !ok {
+		return NPMDistTagChange{}, ErrNotFound
+	}
+	if tags, err = updateHostedNPMDistTags(ctx, tx, `dist_tags - $3::text`, mutation.RepositoryID, mutation.PackageName, mutation.Tag); err != nil {
+		return NPMDistTagChange{}, err
+	}
+	change := NPMDistTagChange{DistTags: tags, Previous: previous, Changed: true}
+	if err = insertAudit(ctx, tx, mutation.AuditRecord(change, "")); err != nil {
+		return NPMDistTagChange{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return NPMDistTagChange{}, err
+	}
+	return change, nil
+}
+
+func updateHostedNPMDistTags(ctx context.Context, tx *sql.Tx, expression string, args ...any) (map[string]string, error) {
+	var raw []byte
+	if err := tx.QueryRowContext(ctx, `
+		UPDATE native_npm_packages SET dist_tags=`+expression+`,updated_at=now()
+		WHERE repository_id::text=$1 AND name=$2
+		RETURNING dist_tags`, args...).Scan(&raw); err != nil {
+		return nil, err
+	}
+	tags := make(map[string]string)
+	if err := json.Unmarshal(raw, &tags); err != nil {
+		return nil, err
+	}
+	return tags, nil
+}
+
+// lockHostedNPMDistTags row-locks a Hosted package for one dist-tag mutation.
+// Proxy-owned and negative cache rows are not Hosted packages.
+func lockHostedNPMDistTags(ctx context.Context, tx *sql.Tx, repositoryID, packageName string) (map[string]string, error) {
+	var raw []byte
+	err := tx.QueryRowContext(ctx, `
+		SELECT dist_tags FROM native_npm_packages
+		WHERE repository_id::text=$1 AND name=$2 AND source_endpoint='' AND NOT negative
+		FOR UPDATE`, repositoryID, packageName).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	tags := make(map[string]string)
+	if err = json.Unmarshal(raw, &tags); err != nil {
+		return nil, err
+	}
+	return tags, nil
+}
+
 func (s *PostgresStore) LockNPMProxy(ctx context.Context, key string) (func(), error) {
 	_, release, err := s.LockNPMProxyWithContext(ctx, key)
 	return release, err

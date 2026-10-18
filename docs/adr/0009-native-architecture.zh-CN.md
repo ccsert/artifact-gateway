@@ -51,8 +51,8 @@ PostgreSQL 实现及其他格式的依赖会失败。共享 `internal/protocol/i
 本地与 CI quality 都通过 `make lint` 执行。评审须拒绝扩大基线；它是债务记录，不能用于
 批准新依赖。不提供自动重建白名单命令。
 
-`make architecture-metrics` 输出可重复的 AST/源码指标。基线 `8b0a3af4`：app 生产文件
-149 个、38,670 行；repository 生产文件 157 个、31,591 行；管理适配器方法 231 个；
+`make architecture-metrics` 输出可重复的 AST/源码指标。基线 `e9f53084`：app 生产文件
+151 个、39,096 行；repository 生产文件 158 个、31,916 行；管理适配器方法 231 个；
 聚合存储成员 49 个；app 中包含 `Format*` selector 的 switch case 140 个。
 行数包含注释与空行、排除测试，不能与历史全文件统计直接比较。指标用于衡量进度，
 不作为任意限制代码增长的阈值。

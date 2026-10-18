@@ -203,6 +203,31 @@ func TestCargoSparseRegistryContractDocumentsNativeMethods(t *testing.T) {
 	}
 }
 
+func TestNPMDistTagContractDocumentsClientMethods(t *testing.T) {
+	spec := loadNativeHostedSpec(t)
+	for _, endpoint := range []struct {
+		path, method, operationID string
+		statuses                  []string
+	}{
+		{"/npm/{repository}/-/package/{package}/dist-tags", "GET", "listNPMDistTags", []string{"200", "401", "404"}},
+		{"/npm/{repository}/-/package/{package}/dist-tags", "HEAD", "headNPMDistTags", []string{"200", "401"}},
+		{"/npm/{repository}/-/package/{package}/dist-tags/{tag}", "PUT", "setNPMDistTag", []string{"200", "400", "401", "403", "404", "405", "409"}},
+		{"/npm/{repository}/-/package/{package}/dist-tags/{tag}", "DELETE", "deleteNPMDistTag", []string{"200", "400", "401", "403", "404", "405"}},
+	} {
+		operation := operation(t, spec, endpoint.path, endpoint.method)
+		if operation.OperationID != endpoint.operationID {
+			t.Fatalf("%s %s operationId=%q want=%q", endpoint.method, endpoint.path, operation.OperationID, endpoint.operationID)
+		}
+		for _, status := range endpoint.statuses {
+			requireResponse(t, operation, status)
+		}
+	}
+	item := spec.Paths.Find("/npm/{repository}/-/package/{package}/dist-tags/{tag}")
+	if item.Extensions["x-gateway-mutation"] != "single_store_transaction_with_audit" {
+		t.Fatalf("dist-tag mutation decision=%v", item.Extensions["x-gateway-mutation"])
+	}
+}
+
 func TestNativeHostedSourceBundlesToThePublishedContract(t *testing.T) {
 	source := loadNativeHostedSource(t)
 	bundle := loadNativeHostedSpec(t)
@@ -228,6 +253,7 @@ func TestNativeHostedSourceBundlesToThePublishedContract(t *testing.T) {
 		filepath.Join("..", "api", "openapi", "protocols", "raw.yaml"),
 		filepath.Join("..", "api", "openapi", "protocols", "maven.yaml"),
 		filepath.Join("..", "api", "openapi", "protocols", "conan.yaml"),
+		filepath.Join("..", "api", "openapi", "protocols", "npm.yaml"),
 		filepath.Join("..", "internal", "admin", "openapi", "generated.go"),
 	} {
 		if _, err := os.Stat(path); err != nil {

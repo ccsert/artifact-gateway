@@ -72,8 +72,8 @@ Reviewers must reject additions to the baseline; it records debt, not permission
 to introduce dependencies. No automatic baseline regeneration command is provided.
 
 `make architecture-metrics` reports reproducible AST/source metrics. At base
-`8b0a3af4`: 149 app production files / 38,670 lines, 157 repository production
-files / 31,591 lines, 231 management adapter methods, 49 aggregate store members,
+`e9f53084`: 151 app production files / 39,096 lines, 158 repository production
+files / 31,916 lines, 231 management adapter methods, 49 aggregate store members,
 and 140 app switch cases containing a `Format*` selector. Lines include comments
 and blanks; counts exclude tests and are not comparable with older all-file
 counts. These are progress indicators, not arbitrary growth limits.

@@ -167,3 +167,12 @@ SnapshotId:
   schema:
     type: string
     format: uuid
+NPMPackageName:
+  name: package
+  in: path
+  required: true
+  description: npm package name; scoped names escape the separator as `@scope%2fname`.
+  schema:
+    type: string
+    minLength: 1
+    maxLength: 214

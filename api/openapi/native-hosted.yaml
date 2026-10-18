@@ -159,6 +159,10 @@ paths:
     "$ref": "./protocols/go.yaml#/go_repository_modulePath"
   "/cargo/{repository}/{path}":
     "$ref": "./protocols/cargo.yaml#/cargo_repository_path"
+  "/npm/{repository}/-/package/{package}/dist-tags":
+    "$ref": "./protocols/npm.yaml#/npm_repository_package_dist_tags"
+  "/npm/{repository}/-/package/{package}/dist-tags/{tag}":
+    "$ref": "./protocols/npm.yaml#/npm_repository_package_dist_tag"
 components:
   schemas:
     Format:
@@ -171,6 +175,10 @@ components:
       "$ref": "./components/schemas.yaml#/RepositoryOperation"
     OCITagList:
       "$ref": "./components/schemas.yaml#/OCITagList"
+    NPMDistTags:
+      "$ref": "./components/schemas.yaml#/NPMDistTags"
+    NPMDistTagResult:
+      "$ref": "./components/schemas.yaml#/NPMDistTagResult"
     RawDirectoryEntry:
       "$ref": "./components/schemas.yaml#/RawDirectoryEntry"
     RawDirectoryPage:
@@ -250,6 +258,8 @@ components:
       "$ref": "./components/parameters.yaml#/RepositoryName"
     OCIName:
       "$ref": "./components/parameters.yaml#/OCIName"
+    NPMPackageName:
+      "$ref": "./components/parameters.yaml#/NPMPackageName"
     OCIReference:
       "$ref": "./components/parameters.yaml#/OCIReference"
     Digest:

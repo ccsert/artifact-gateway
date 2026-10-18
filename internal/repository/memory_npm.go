@@ -57,6 +57,53 @@ func (s *MemoryStore) PublishNPMVersion(_ context.Context, version NPMVersion, d
 	return cloneNPMVersion(version), nil
 }
 
+func (s *MemoryStore) SetNPMDistTag(ctx context.Context, mutation NPMDistTagMutation) (NPMDistTagChange, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	packageKey := npmPackageKey(mutation.RepositoryID, mutation.PackageName)
+	pkg, ok := s.npmPackages[packageKey]
+	if !ok || pkg.SourceEndpoint != "" || pkg.Negative {
+		return NPMDistTagChange{}, ErrNotFound
+	}
+	target, ok := s.npmVersions[npmVersionKey(mutation.RepositoryID, mutation.PackageName, mutation.Version)]
+	if !ok || target.State != "visible" {
+		return NPMDistTagChange{}, ErrNPMDistTagTargetUnavailable
+	}
+	if pkg.DistTags == nil {
+		pkg.DistTags = make(map[string]string)
+	}
+	previous := pkg.DistTags[mutation.Tag]
+	change := NPMDistTagChange{Previous: previous, Changed: previous != mutation.Version}
+	if change.Changed {
+		pkg.DistTags[mutation.Tag] = mutation.Version
+		pkg.UpdatedAt = time.Now().UTC()
+		s.npmPackages[packageKey] = pkg
+	}
+	change.DistTags = cloneStringMap(pkg.DistTags)
+	s.appendAuditLocked(withRequestContextAudit(ctx, mutation.AuditRecord(change, mutation.Version)))
+	return change, nil
+}
+
+func (s *MemoryStore) DeleteNPMDistTag(ctx context.Context, mutation NPMDistTagMutation) (NPMDistTagChange, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	packageKey := npmPackageKey(mutation.RepositoryID, mutation.PackageName)
+	pkg, ok := s.npmPackages[packageKey]
+	if !ok || pkg.SourceEndpoint != "" || pkg.Negative {
+		return NPMDistTagChange{}, ErrNotFound
+	}
+	previous, ok := pkg.DistTags[mutation.Tag]
+	if !ok {
+		return NPMDistTagChange{}, ErrNotFound
+	}
+	delete(pkg.DistTags, mutation.Tag)
+	pkg.UpdatedAt = time.Now().UTC()
+	s.npmPackages[packageKey] = pkg
+	change := NPMDistTagChange{DistTags: cloneStringMap(pkg.DistTags), Previous: previous, Changed: true}
+	s.appendAuditLocked(withRequestContextAudit(ctx, mutation.AuditRecord(change, "")))
+	return change, nil
+}
+
 func (s *MemoryStore) LockNPMProxy(_ context.Context, key string) (func(), error) {
 	s.mu.Lock()
 	lock := s.npmProxyLocks[key]

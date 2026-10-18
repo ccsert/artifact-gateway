@@ -9,6 +9,15 @@ import (
 )
 
 func (s *MemoryStore) RecordAudit(ctx context.Context, record AuditRecord) error {
+	record = withRequestContextAudit(ctx, record)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.appendAuditLocked(record)
+	return nil
+}
+
+// withRequestContextAudit fills request and trace IDs the caller left empty.
+func withRequestContextAudit(ctx context.Context, record AuditRecord) AuditRecord {
 	if ids, ok := requestcontext.FromContext(ctx); ok {
 		if record.RequestID == "" {
 			record.RequestID = ids.RequestID
@@ -17,10 +26,7 @@ func (s *MemoryStore) RecordAudit(ctx context.Context, record AuditRecord) error
 			record.TraceID = ids.TraceID
 		}
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.appendAuditLocked(record)
-	return nil
+	return record
 }
 
 func (s *MemoryStore) appendAuditLocked(record AuditRecord) {

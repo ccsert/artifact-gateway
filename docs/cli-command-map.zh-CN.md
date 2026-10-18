@@ -252,12 +252,16 @@ server base）。计划命令省略前导 `agctl`。
 
 ## 原生 bundle 中的附加协议操作
 
-管理操作在 native bundle 中重复出现时沿用上表，不重复实现。以下 39 个附加
+管理操作在 native bundle 中重复出现时沿用上表，不重复实现。以下 43 个附加
 操作逐项分类；原生 URL 按各 protocol 的 server 覆盖和真实路由使用，不能一律
 拼 `/api/v2`。Nexus 兼容数据路径不是 Nexus 管理 REST API。
 
 | 协议 API / operationId | 计划命令/处理 | 承接 | 阶段 | 权限 | 验收 |
 | --- | --- | --- | --- | --- | --- |
+| `GET /npm/{repository}/-/package/{package}/dist-tags`<br>`listNPMDistTags` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
+| `HEAD /npm/{repository}/-/package/{package}/dist-tags`<br>`headNPMDistTags` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
+| `PUT /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`setNPMDistTag` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
+| `DELETE /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`deleteNPMDistTag` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
 | `GET /raw/{repository}/{path}`<br>`readRawContent` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `HEAD /raw/{repository}/{path}`<br>`headRawContent` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `PUT /raw/{repository}/{path}`<br>`putRawHostedContent` | `publish raw` | #132 | M1 implemented | W | U：大小/摘要与冲突/回读 |

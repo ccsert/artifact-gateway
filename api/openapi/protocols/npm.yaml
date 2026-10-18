@@ -1,0 +1,152 @@
+---
+x-gateway-protocol-overlay:
+  officialSpecification: https://docs.npmjs.com/cli/commands/npm-dist-tag
+  gatewayDecision: >
+    This overlay documents the npm registry dist-tag endpoints used by
+    `npm dist-tag ls/add/rm`. The packument, version, tarball, and publish
+    routes keep the npm registry protocol and are not restated here. Hosted
+    repositories accept tag changes; Proxy and Group repositories only list
+    tags. A tag may name only a visible, committed, non-tombstoned version the
+    quarantine read policy does not block. Each change commits atomically with
+    its audit record and never alters a tarball, digest, or version identity.
+npm_repository_package_dist_tags:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  - "$ref": "../components/parameters.yaml#/NPMPackageName"
+  get:
+    operationId: listNPMDistTags
+    description: >
+      Lists the package's dist-tags as an object of tag name to version. Hosted
+      repositories read committed tags; Proxy repositories answer from the
+      cached upstream packument with the same revalidation and stale rules as
+      the packument; Groups merge members in Group order, where the first
+      member that defines a tag is authoritative for it. Tags naming a
+      quarantine-blocked or invisible version are omitted.
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    - {}
+    responses:
+      '200':
+        description: Visible dist-tags
+        headers:
+          ETag:
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/NPMDistTags"
+      '304':
+        description: The If-None-Match ETag still matches
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Authenticated principal lacks Repository read permission
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+      '503':
+        description: Package metadata is unavailable
+  head:
+    operationId: headNPMDistTags
+    description: Returns the same headers as GET without the body.
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    - {}
+    responses:
+      '200':
+        description: Visible dist-tag headers
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+npm_repository_package_dist_tag:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  - "$ref": "../components/parameters.yaml#/NPMPackageName"
+  - name: tag
+    in: path
+    required: true
+    description: >
+      Dist-tag name. Names that parse as an npm SemVer range, including
+      wildcard forms such as x.x, x.1, and v*, are refused. A digit prefix
+      alone is allowed: 2026-release, 2026-10-16, 1-canary, and v1-release
+      remain ordinary tags so `<pkg>@<tag>` stays unambiguous.
+    schema:
+      type: string
+      minLength: 1
+      maxLength: 128
+  put:
+    operationId: setNPMDistTag
+    description: >
+      Adds or moves a Hosted dist-tag (`npm dist-tag add`). The body is the
+      target version as a JSON string. The store re-checks the target's
+      visibility under the same row locks that tombstone and restore take, so a
+      tag can never be left naming a tombstoned version. Repeating the current
+      state succeeds without a change and is audited with changed=false.
+      Requires Repository write permission.
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: string
+            description: Target SemVer version
+    responses:
+      '200':
+        description: Dist-tag committed
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/NPMDistTagResult"
+      '400':
+        description: The body is not a JSON string naming a valid SemVer version
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Authenticated principal lacks Repository write permission
+      '404':
+        description: The package or target version is not visible
+      '405':
+        description: Proxy and Group repositories do not accept dist-tag changes
+      '409':
+        description: The target version is blocked by the quarantine read policy
+      '503':
+        description: Dist-tag storage is unavailable
+  delete:
+    operationId: deleteNPMDistTag
+    description: >
+      Removes a Hosted dist-tag (`npm dist-tag rm`). `latest` cannot be
+      removed; move it with PUT instead. Requires Repository write permission.
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    responses:
+      '200':
+        description: Dist-tag removed
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/NPMDistTagResult"
+      '400':
+        description: The latest dist-tag cannot be removed
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Authenticated principal lacks Repository write permission
+      '404':
+        description: The package or dist-tag does not exist
+      '405':
+        description: Proxy and Group repositories do not accept dist-tag changes
+      '503':
+        description: Dist-tag storage is unavailable
+  x-gateway-visibility: visible_committed_versions_only
+  x-gateway-mutation: single_store_transaction_with_audit
