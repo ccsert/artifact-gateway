@@ -37,6 +37,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [ADR 0006：账号等级与按仓库授权](adr/0006-account-levels-and-repository-grants.zh-CN.md)
 - [ADR 0007：agctl 命令行形态与横切契约](adr/0007-agctl-cli-shape.zh-CN.md)
 - [ADR 0008：Go 模块路径与源码仓库一致](adr/0008-go-module-path.zh-CN.md)
+- [ADR 0009：原生管理架构](adr/0009-native-architecture.zh-CN.md)
 
 ## 协议与仓库格式
 

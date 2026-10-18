@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Record the native management architecture and retirement of Nexus compatibility requirements in [ADR 0009](docs/adr/0009-native-architecture.md); enforce protocol dependency and aggregate-store boundaries through `make lint` (#277). Existing routes remain until their removal slice.
+
 - The Go module path is now `github.com/ccsert/artifact-gateway`, the source repository (#347, [ADR 0008](docs/adr/0008-go-module-path.md)). Starting with the next release tag, `go install github.com/ccsert/artifact-gateway/cmd/agctl@<tag>` installs the client; `v0.9.0` and older tags declare the previous path, which never resolved, and cannot be installed this way. A module-mode install reports the tag as its version and the revision as `unknown`, because the Go toolchain records no VCS data for `pkg@version` builds. Code that imports Gateway packages must switch to the new path. `make release-version-check` now also fails when `go.mod` differs from the GitHub repository it runs in.
 
 - `agctl` preserves earlier uncertain email-test attempts when a retry is refused, verifies delivery identity/version/scenario before confirming a test or wait, and reports quota-alert event history as the newest 50-event window. Email wait introspection explicitly reports `cancelSupported: false`.

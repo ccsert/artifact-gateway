@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- [ADR 0009](docs/adr/0009-native-architecture.zh-CN.md) 记录原生管理架构与停止 Nexus 兼容要求；`make lint` 自动检查协议依赖和聚合存储边界（#277）。现有路由由后续切片移除。
+
 - Go 模块路径改为源码仓库路径 `github.com/ccsert/artifact-gateway`（#347，[ADR 0008](docs/adr/0008-go-module-path.zh-CN.md)）。从下一个 Release tag 起，`go install github.com/ccsert/artifact-gateway/cmd/agctl@<tag>` 可安装客户端；`v0.9.0` 及更早的 tag 声明的是从未可解析的旧路径，无法这样安装。module 模式安装以 tag 作为版本、revision 显示为 `unknown`，因为 Go 工具链不为 `pkg@version` 构建记录 VCS 信息。引用 Gateway 包的代码须改用新路径。`make release-version-check` 现在还会在 `go.mod` 与所在 GitHub 仓库不一致时失败。
 
 - `agctl` 在邮件测试重试遭拒绝时保留此前可能已入队的未知结果；确认测试或等待完成前核对投递身份、版本与场景。配额事件按最新 50 条窗口报告，邮件等待命令自省明确返回 `cancelSupported: false`。

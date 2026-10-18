@@ -2,6 +2,8 @@
 
 [English](ARCHITECTURE.md)
 
+目标架构与管理 API 破坏性调整策略见 [ADR 0009](docs/adr/0009-native-architecture.zh-CN.md)。`make architecture-check` 阻止新增反向依赖与聚合存储接口扩张。
+
 Artifact Gateway 是面向 OCI、Raw、Maven、Conan 2、npm、PyPI、Go modules 和 APT 的
 制品库。前六种格式具备完整 Hosted 生命周期；Go 同时提供标准 Proxy/Group 读取、原子
 Hosted 发布，以及感知格式的墓碑/恢复、保留、晋升和复制。APT 公开声明的仍只有
