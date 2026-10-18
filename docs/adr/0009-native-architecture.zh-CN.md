@@ -46,8 +46,8 @@ Nexus 管理 API、历史 Gateway 管理 API、认证模型和旧 URL 别名均�
 `make architecture-check` 解析 `internal` 下全部非测试 Go 源码，包括当前 build tag
 未启用的文件，并沿内部 import 图检查直接或间接依赖。协议模块新增对 `internal/app`、
 PostgreSQL 实现及其他格式的依赖会失败。共享 `internal/protocol/identity` 不是格式。
-现存违规逐项记录于 `tools/architecture/baseline.json`，解决后须在同一改动删除对应条目。
-新增 `GatewayStore` 字段或方法按身份拦截，即使成员总数不增加也不能替换扩张。
+现存违规按实际 import 边逐项记录于 `tools/architecture/baseline.json`，新增指向同一旧目标的依赖边仍会失败；解决后须在同一改动删除对应条目。
+新增 `GatewayStore` 字段或方法按身份拦截，即使成员总数不增加也不能替换扩张；递归展开嵌入接口及别名，同时核对方法签名。
 本地与 CI quality 都通过 `make lint` 执行。评审须拒绝扩大基线；它是债务记录，不能用于
 批准新依赖。不提供自动重建白名单命令。
 
@@ -57,6 +57,7 @@ PostgreSQL 实现及其他格式的依赖会失败。共享 `internal/protocol/i
 行数包含注释与空行、排除测试，不能与历史全文件统计直接比较。指标用于衡量进度，
 不作为任意限制代码增长的阈值。
 
-初始五条跨格式间接依赖来自混合 repository 包引用 Cargo（涉及 Conan、Maven、npm、
-OCI、Raw 及适用子包），由 #281/#282 消除。护栏覆盖源码依赖和聚合成员，不证明运行时
+初始跨格式例外是混合 repository 包引用 Cargo 的实际依赖边（被 Conan、Maven、npm、
+OCI、Raw 间接到达），由 #281/#282 消除。49 个嵌入接口当前展开为 436 个带声明接口
+身份的方法签名。护栏覆盖源码依赖和聚合成员，不证明运行时
 语义、不检查动态加载的依赖，也不能代替集成和真实客户端测试。

@@ -65,9 +65,11 @@ including inactive build-tag files, and follows the internal import graph.
 It rejects new direct or transitive protocol dependencies on `internal/app`,
 PostgreSQL implementations, and other format modules. Shared
 `internal/protocol/identity` is not a format. Existing violations are individually
-listed in `tools/architecture/baseline.json`; remove resolved entries in the same
+listed by actual import edge in `tools/architecture/baseline.json`; a new path
+to an already grandfathered target still fails. Remove resolved entries in the same
 change. New `GatewayStore` fields or methods fail by identity, even if the member
-count stays flat. The gate runs through `make lint` in local and CI quality jobs.
+count stays flat. Embedded interfaces and aliases are recursively expanded and
+their declared method signatures compared too. The gate runs through `make lint` in local and CI quality jobs.
 Reviewers must reject additions to the baseline; it records debt, not permission
 to introduce dependencies. No automatic baseline regeneration command is provided.
 
@@ -78,8 +80,9 @@ and 140 app switch cases containing a `Format*` selector. Lines include comments
 and blanks; counts exclude tests and are not comparable with older all-file
 counts. These are progress indicators, not arbitrary growth limits.
 
-The initial five transitive cross-format exceptions arise through the mixed
-repository package's Cargo dependency (Conan, Maven, npm, OCI and Raw sources,
-including the applicable subpackages). Resolve them during #281/#282. This guard
+The initial cross-format exception is the actual edge from the mixed repository
+package to Cargo, reached by Conan, Maven, npm, OCI and Raw. Resolve it during
+#281/#282. The 49 embedded store interfaces currently expand to 436 declared
+method signatures, retained with their declaring interface identity. This guard
 covers source imports and aggregate members; it does not prove runtime semantics,
 inspect dynamically loaded dependencies, or replace integration/client tests.
