@@ -345,6 +345,12 @@ def check(render_only):
                 return json.loads(result.stdout)
 
             require(ctl("email", "capability")["data"] == {"enabled": True, "reason": "ready"}, "agctl capability is not ready")
+            failed_wait = ctl("email", "delivery", "wait", dead["id"], "--timeout", "10s", expected=1)
+            require(not failed_wait["ok"] and failed_wait["error"]["code"] == "delivery_failed" and failed_wait["error"]["httpStatus"] is None, "agctl dead wait reported success or a server refusal")
+            failed_record = failed_wait["data"]
+            require(failed_record == dead and failed_record["errorCode"] == "smtp_permanent_rejection", "agctl failure changed the actual dead delivery record")
+            require(ctl("email", "delivery", "show", dead["id"])["data"] == failed_record, "agctl wait mutated or replayed the dead delivery")
+            checks.append("agctl: SMTP 550 dead wait exits 1 with delivery_failed and the unchanged complete delivery record")
             agctl_target = ctl("email", "target", "create", "agctl synthetic", "--locale", "zh-CN", "--recipient-file", str(recipient_file), "--enabled")["data"]
             require(agctl_target["recipientConfigured"] and agctl_target["enabled"], "agctl target not configured")
             renamed = ctl("email", "target", "update", agctl_target["id"], "--name", "agctl renamed")["data"]
