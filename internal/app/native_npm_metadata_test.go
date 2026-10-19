@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
@@ -19,6 +20,8 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
+
+type npmGroupSummaryOnlyStore struct{ GatewayStore }
 
 func npmMetadataDocument(t *testing.T, handler http.Handler, path string) map[string]any {
 	t.Helper()
@@ -279,10 +282,11 @@ func TestNativeNPMGroupTombstoneAuthority(t *testing.T) {
 	primary, _ := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "npm-primary", Format: repository.FormatNPM, AnonymousRead: true})
 	secondary, _ := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "npm-secondary", Format: repository.FormatNPM, AnonymousRead: true})
 	handler := newTestGateway(t, GatewayOptions{Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}})
-	for _, repo := range []repository.HostedRepository{primary, secondary} {
-		publishNPMDistTagHTTPFixture(t, handler, repo.Name, "widget", "1.0.0", map[string]string{"latest": "1.0.0"})
-	}
-	publishNPMDistTagHTTPFixture(t, handler, secondary.Name, "widget", "2.0.0", map[string]string{"next": "2.0.0"})
+	publishNPMDistTagHTTPFixture(t, handler, primary.Name, "widget", "1.0.0", map[string]string{"latest": "1.0.0"})
+	visibleTarball := publishNPMDistTagHTTPFixture(t, handler, secondary.Name, "widget", "2.0.0", map[string]string{"next": "2.0.0"})
+	// The lower member's most recent publication and latest tag both identify
+	// the withdrawn version; its older v2 must still be discoverable.
+	publishNPMDistTagHTTPFixture(t, handler, secondary.Name, "widget", "1.0.0", map[string]string{"latest": "1.0.0"})
 	groupRecord, _, createErr := store.CreateHostedGroupIdempotently(ctx, repository.HostedGroup{ID: uuid.NewString(), Name: "npm-group", Format: repository.FormatNPM, Members: []repository.GroupMember{{RepositoryID: primary.ID, Position: 0}, {RepositoryID: secondary.ID, Position: 1}}}, "fixture", "npm-group", "fixture")
 	if createErr != nil {
 		t.Fatal(createErr)
@@ -312,14 +316,123 @@ func TestNativeNPMGroupTombstoneAuthority(t *testing.T) {
 	if _, exists := group["versions"].(map[string]any)["1.0.0"]; exists {
 		t.Fatal("Group resurrected tombstone from secondary")
 	}
-	for _, suffix := range []string{"/1.0.0", "/-/widget-1.0.0.tgz"} {
-		if result := npmDistTagRequest(t, handler, http.MethodGet, "/npm/npm-group/widget"+suffix, "resolver-secret", ""); result.Code != 404 {
-			t.Fatalf("Group tombstone %s=%d %s", suffix, result.Code, result.Body.String())
+	if _, exists := group["versions"].(map[string]any)["2.0.0"]; !exists {
+		t.Fatal("Group hid the remaining authoritative version")
+	}
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		for _, target := range []struct{ suffix, resource string }{{"/1.0.0", "widget@1.0.0"}, {"/-/widget-1.0.0.tgz", "widget/-/widget-1.0.0.tgz"}} {
+			suffix := target.suffix
+			query := repository.AuditQuery{GroupName: groupRecord.Name, Format: "npm", Actor: "build-agent", Operation: strings.ToLower(method), Outcome: string(repository.AuditNotFound), Limit: 100}
+			before, err := store.ListAudits(ctx, query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result := npmDistTagRequest(t, handler, method, "/npm/npm-group/widget"+suffix, "resolver-secret", ""); result.Code != http.StatusNotFound {
+				t.Fatalf("Group tombstone %s %s=%d %s", method, suffix, result.Code, result.Body.String())
+			}
+			after, err := store.ListAudits(ctx, query)
+			if err != nil || len(after) != len(before)+1 {
+				t.Fatalf("Group tombstone %s %s lost or duplicated its read audit: before=%d after=%d err=%v", method, suffix, len(before), len(after), err)
+			}
+			audit := after[0]
+			if audit.GroupName != groupRecord.Name || audit.Repository != groupRecord.Name || audit.Resource != target.resource || audit.Actor != "build-agent" || audit.Status != http.StatusNotFound || audit.Outcome != repository.AuditNotFound {
+				t.Fatalf("Group tombstone read audit identifies the wrong target: %+v", audit)
+			}
 		}
 	}
-	search := npmDistTagRequest(t, handler, http.MethodGet, "/api/v2/repositories/"+groupRecord.ID+"/artifact-search?q=widget", "", "")
-	if search.Code != 200 || strings.Contains(search.Body.String(), `"version":"1.0.0"`) {
-		t.Fatalf("Group search resurrected tombstone=%d %s", search.Code, search.Body.String())
+	expectedDigest := sha256.Sum256(visibleTarball)
+	// Both the projection and narrow reader fallback must answer the same
+	// public search contract; this wrapper removes only optional capabilities.
+	summaryOnly := newTestGateway(t, GatewayOptions{Store: npmGroupSummaryOnlyStore{store}, NPMMetadata: store, NPMRestore: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}})
+	for _, gateway := range []http.Handler{handler, summaryOnly} {
+		for _, match := range []string{"prefix", "contains"} {
+			search := npmDistTagRequest(t, gateway, http.MethodGet, "/api/v2/repositories/"+groupRecord.ID+"/artifact-search?q=widget&match="+match+"&pageSize=1", "", "")
+			var page struct {
+				Items []struct {
+					Coordinate   string `json:"coordinate"`
+					Version      string `json:"version"`
+					VersionCount int    `json:"versionCount"`
+					Digest       string `json:"digest"`
+					Size         int64  `json:"size"`
+				} `json:"items"`
+				Next string `json:"nextPageToken"`
+			}
+			if search.Code != http.StatusOK || json.Unmarshal(search.Body.Bytes(), &page) != nil || len(page.Items) != 1 || page.Items[0].Coordinate != "widget" || page.Items[0].Version != "2.0.0" || page.Items[0].VersionCount != 1 || page.Items[0].Digest != "sha256:"+hex.EncodeToString(expectedDigest[:]) || page.Items[0].Size != int64(len(visibleTarball)) || page.Next != "" {
+				t.Fatalf("Group search lost the remaining authoritative version: %d %s", search.Code, search.Body.String())
+			}
+		}
+	}
+	document = npmMetadataDocument(t, handler, "/npm/"+secondary.Name+"/widget")
+	if result := npmDistTagRequest(t, handler, http.MethodDelete, "/npm/"+secondary.Name+"/widget/-rev/"+document["_rev"].(string), "admin-secret", ""); result.Code != http.StatusOK {
+		t.Fatalf("withdraw remaining package=%d %s", result.Code, result.Body.String())
+	}
+	for _, suffix := range []string{"", "/2.0.0", "/-/widget-2.0.0.tgz"} {
+		if result := npmDistTagRequest(t, handler, http.MethodGet, "/npm/npm-group/widget"+suffix, "resolver-secret", ""); result.Code != http.StatusNotFound {
+			t.Fatalf("Group revived a fully withdrawn package via %s: %d %s", suffix, result.Code, result.Body.String())
+		}
+	}
+	for _, gateway := range []http.Handler{handler, summaryOnly} {
+		search := npmDistTagRequest(t, gateway, http.MethodGet, "/api/v2/repositories/"+groupRecord.ID+"/artifact-search?q=widget", "", "")
+		var page struct {
+			Items []json.RawMessage `json:"items"`
+		}
+		if search.Code != http.StatusOK || json.Unmarshal(search.Body.Bytes(), &page) != nil || len(page.Items) != 0 {
+			t.Fatalf("Group search revived a fully withdrawn package: %d %s", search.Code, search.Body.String())
+		}
+	}
+}
+
+func TestNativeNPMGroupTombstoneDoesNotHideDifferentVersionTarball(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	objects := objectstore.NewMemoryStore()
+	primary, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "npm-filename-primary", Format: repository.FormatNPM})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondary, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "npm-filename-secondary", Format: repository.FormatNPM})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := newTestGateway(t, GatewayOptions{Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}})
+	publish := func(repoName, version, filename string) []byte {
+		t.Helper()
+		tarball := npmFixtureTarball(t, "widget", version)
+		body := npmFixturePublishDocumentWithTags(t, "widget", version, filename, tarball, map[string]string{"latest": version})
+		response := npmDistTagRequest(t, handler, http.MethodPut, "/npm/"+repoName+"/widget", "resolver-secret", body)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("publish %s@%s=%d %s", repoName, version, response.Code, response.Body.String())
+		}
+		return tarball
+	}
+	const sharedFilename = "widget-1.0.0.tgz"
+	publish(primary.Name, "1.0.0", sharedFilename)
+	publish(secondary.Name, "1.0.0", "alternate.tgz")
+	visibleTarball := publish(secondary.Name, "2.0.0", sharedFilename)
+	createV2Group(t, store, "npm-filename-group", repository.FormatNPM, repository.GroupMember{RepositoryID: primary.ID}, repository.GroupMember{RepositoryID: secondary.ID, Position: 1})
+	document := npmMetadataDocument(t, handler, "/npm/"+primary.Name+"/widget")
+	if response := npmDistTagRequest(t, handler, http.MethodDelete, "/npm/"+primary.Name+"/widget/-rev/"+document["_rev"].(string), "admin-secret", ""); response.Code != http.StatusOK {
+		t.Fatalf("withdraw primary=%d %s", response.Code, response.Body.String())
+	}
+	groupPath := "/npm/npm-filename-group/widget"
+	document = npmMetadataDocument(t, handler, groupPath)
+	versions := document["versions"].(map[string]any)
+	if _, exists := versions["1.0.0"]; exists || versions["2.0.0"] == nil {
+		t.Fatalf("Group version authority=%v", versions)
+	}
+	if tarballURL := versions["2.0.0"].(map[string]any)["dist"].(map[string]any)["tarball"].(string); !strings.HasSuffix(tarballURL, groupPath+"/-/"+sharedFilename) {
+		t.Fatalf("Group changed the declared tarball name: %s", tarballURL)
+	}
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		response := npmDistTagRequest(t, handler, method, groupPath+"/-/"+sharedFilename, "resolver-secret", "")
+		if response.Code != http.StatusOK || response.Header().Get("Content-Length") == "" || method == http.MethodGet && !bytes.Equal(response.Body.Bytes(), visibleTarball) || method == http.MethodHead && response.Body.Len() != 0 {
+			t.Fatalf("Group %s hid v2 because withdrawn v1 shared its filename: %d %s", method, response.Code, response.Body.String())
+		}
+		for _, suffix := range []string{"/1.0.0", "/-/alternate.tgz"} {
+			if response := npmDistTagRequest(t, handler, method, groupPath+suffix, "resolver-secret", ""); response.Code != http.StatusNotFound {
+				t.Fatalf("Group %s resurrected withdrawn v1 via %s: %d %s", method, suffix, response.Code, response.Body.String())
+			}
+		}
 	}
 }
 
