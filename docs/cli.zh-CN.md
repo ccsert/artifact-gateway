@@ -170,6 +170,9 @@ profile，最后是只定义一个 profile 的文件。该文件由 profile 命�
 - `error.code` 为 `wait_timeout` 表示有界的 `--wait` 用完了时间（退出码 8）；
   操作仍在服务端继续。`agctl status` 以 `unhealthy` 失败，或在 `--strict` 下
   以 `degraded`、`unknown` 失败（退出码 1）。
+- `email delivery wait` 对 `dead` 投递报告 `delivery_failed`（退出码 1）。
+  这是客户端判定的终态结果，`error.httpStatus` 为 null；`data` 保留实际完整投递
+  记录，包括失败码和重复风险。等待不重放、不修改该投递。
 - 列表统一为 `{"items": [...], "nextCursor": null}`；数据来源没有服务端
   分页或列表已读到末尾时 `nextCursor` 为 null，`meta.pagination.mode` 说明
   真实模式：本地命令树和一次返回全部内容的端点为 `none`；服务端分页为
@@ -633,7 +636,8 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   排队一封真实测试邮件。服务端按 key、目标、目标版本和场景识别重复请求，因此
   结果未知时会报告发送所用的版本，之后的重试用 `--idempotency-key K --if-match VERSION`
   把它带回，而不是读取更新的版本。入队不等于送达：`agctl email delivery wait ID [--timeout D]`
-  轮询直到中继接收或判定失败，超时退出码 8 且投递仍在队列中——没有取消操作；
+  轮询直到中继接收（退出码 0）或 `dead` 失败（退出码 1、`delivery_failed`，
+  `data` 保留实际记录），超时退出码 8 且投递仍在队列中——没有取消操作；
   `commands --json` 明确报告 `cancelSupported: false`。等待只接受目标投递 ID 的
   完整响应作为完成证据。
   `agctl email delivery list [--limit N]` 读取最新的投递（最多 100，无 cursor）；

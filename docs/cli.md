@@ -189,6 +189,10 @@ With `--json`, stdout carries exactly one document — also on failure:
 - `error.code` `wait_timeout` marks a bounded `--wait` that ran out of time
   (exit 8); the operation continues on the server. `agctl status` fails with
   `unhealthy`, or under `--strict` with `degraded` or `unknown` (exit 1).
+- `email delivery wait` reports `delivery_failed` (exit 1) for a `dead`
+  delivery. This local terminal result has `error.httpStatus: null`; `data`
+  retains the actual delivery record, including its failure code and duplicate
+  risk. Waiting does not replay or change the delivery.
 - Lists use `{"items": [...], "nextCursor": null}`; `nextCursor` is null when
   the data source has no server-side pagination or the listing reached its
   end, and `meta.pagination.mode` states the real mode (`none` for local
@@ -772,7 +776,8 @@ These second-batch (M2) commands need a platform administrator.
   `--idempotency-key K --if-match VERSION` instead of reading a newer one.
   Queued is not delivered:
   `agctl email delivery wait ID [--timeout D]` polls until the relay accepted
-  it or it is dead, and a timeout exits 8 with the delivery still queued —
+  it (exit 0) or it is dead (exit 1, `delivery_failed`, with the actual record
+  in `data`), and a timeout exits 8 with the delivery still queued —
   there is no cancel (`commands --json` reports `cancelSupported: false`).
   A wait accepts only a complete answer for the requested delivery ID.
   `agctl email delivery list [--limit N]` reads the newest
