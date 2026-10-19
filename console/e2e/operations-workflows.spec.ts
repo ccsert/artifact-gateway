@@ -48,6 +48,13 @@ test("a scheduled task is created, paused, run, and deleted", async ({
 }) => {
   await authenticate(page);
   const name = `e2e-schedule-${suffix}`;
+  const repositoryName = `e2e-schedule-target-${suffix}`;
+  const createdRepository = await request.post("/api/v2/repositories", {
+    headers: admin(),
+    data: { name: repositoryName, format: "raw", type: "hosted" },
+  });
+  expect(createdRepository.status()).toBe(201);
+  const repository = (await createdRepository.json()) as { id: string };
   const stored = async () => {
     const response = await request.get("/api/v2/scheduled-tasks", {
       headers: admin(),
@@ -59,51 +66,87 @@ test("a scheduled task is created, paused, run, and deleted", async ({
         name: string;
         enabled: boolean;
         kind: string;
+        repositoryId?: string;
       }>
     ).find((task) => task.name === name);
   };
 
-  await page.goto("/operations?tab=schedules");
-  await page.getByRole("button", { name: /新建计划/ }).click();
-  const dialog = page.getByRole("dialog", { name: "新建计划任务" });
-  await waitForModalOpen(dialog);
-  await dialog.getByPlaceholder("例如：每日清理快照").fill(name);
-  await dialog.getByText("执行仓库保留策略").click();
-  await page
-    .locator(".ant-select-item-option")
-    .filter({ hasText: "执行审计保留策略" })
-    .click();
-  await dialog.getByRole("button", { name: /^创\s*建$/ }).click();
-  await expect(dialog).toBeHidden();
-  await expect.poll(async () => (await stored())?.kind).toBe("audit-retention");
+  try {
+    // An owned target avoids depending on the global audit-retention policy,
+    // which another browser scenario can legitimately change concurrently.
+    const policyURL = `/api/v2/repositories/${repository.id}/retention-policy`;
+    const currentPolicy = await request.get(policyURL, { headers: admin() });
+    expect(currentPolicy.ok()).toBeTruthy();
+    const policy = (await currentPolicy.json()) as { version: string };
+    const enable = await request.put(policyURL, {
+      headers: { ...admin(), "If-Match": policy.version },
+      data: { ...policy, enabled: true, keepDays: 1 },
+    });
+    expect(enable.ok()).toBeTruthy();
 
-  const row = page.getByRole("row").filter({ hasText: name });
-  await row.getByRole("switch", { name: "启用计划任务" }).click();
-  await expect.poll(async () => (await stored())?.enabled).toBe(false);
+    await page.goto("/operations?tab=schedules");
+    await page.getByRole("button", { name: /新建计划/ }).click();
+    const dialog = page.getByRole("dialog", { name: "新建计划任务" });
+    await waitForModalOpen(dialog);
+    await dialog.getByPlaceholder("例如：每日清理快照").fill(name);
+    await dialog.getByRole("combobox").nth(1).click();
+    await page
+      .getByRole("option", { name: repositoryName, exact: true })
+      .click();
+    await dialog.getByRole("button", { name: /^创\s*建$/ }).click();
+    await expect(dialog).toBeHidden();
+    await expect
+      .poll(async () => (await stored())?.kind)
+      .toBe("repository-retention");
+    expect((await stored())?.repositoryId).toBe(repository.id);
 
-  // A manual run is recorded in the task's dispatch history.
-  await row.getByRole("button", { name: "投递历史" }).click();
-  const runButton = row.getByRole("button", { name: "立即执行" });
-  await expect(runButton).not.toHaveClass(/ant-btn-loading/);
-  const dispatch = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      /\/api\/v2\/scheduled-tasks\/[^/]+\/run$/.test(
-        new URL(response.url()).pathname,
-      ),
-  );
-  await runButton.click();
-  expect((await dispatch).ok()).toBeTruthy();
-  await expect(page.getByText("手动", { exact: true }).first()).toBeVisible();
+    const row = page.getByRole("row").filter({ hasText: name });
+    await row.getByRole("switch", { name: "启用计划任务" }).click();
+    await expect.poll(async () => (await stored())?.enabled).toBe(false);
 
-  await row.getByRole("button", { name: `${name} 的更多操作` }).click();
-  await page.getByRole("menuitem", { name: "删除计划" }).click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: /^删\s*除$/ })
-    .click();
-  await expect(row).toHaveCount(0);
-  expect(await stored()).toBeUndefined();
+    // A manual run is recorded in the task's dispatch history.
+    await row.getByRole("button", { name: "投递历史" }).click();
+    const runButton = row.getByRole("button", { name: "立即执行" });
+    await expect(runButton).not.toHaveClass(/ant-btn-loading/);
+    const dispatch = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        /\/api\/v2\/scheduled-tasks\/[^/]+\/run$/.test(
+          new URL(response.url()).pathname,
+        ),
+    );
+    await runButton.click();
+    const dispatched = await dispatch;
+    expect(dispatched.status()).toBe(202);
+    expect(await dispatched.json()).toMatchObject({
+      trigger: "manual",
+      state: "submitted",
+    });
+    await expect(page.getByText("手动", { exact: true }).first()).toBeVisible();
+
+    await row.getByRole("button", { name: `${name} 的更多操作` }).click();
+    await page.getByRole("menuitem", { name: "删除计划" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^删\s*除$/ })
+      .click();
+    await expect(row).toHaveCount(0);
+    expect(await stored()).toBeUndefined();
+  } finally {
+    const task = await stored();
+    if (task) {
+      const removed = await request.delete(
+        `/api/v2/scheduled-tasks/${task.id}`,
+        { headers: admin() },
+      );
+      expect(removed.ok()).toBeTruthy();
+    }
+    const removed = await request.delete(
+      `/api/v2/repositories/${repository.id}`,
+      { headers: admin() },
+    );
+    expect(removed.status()).toBe(202);
+  }
 });
 
 test("a webhook subscription is created and paused", async ({
