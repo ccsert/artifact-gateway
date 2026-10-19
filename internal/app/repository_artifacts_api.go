@@ -438,8 +438,7 @@ func (h artifactManagementHandler) ListConanRecipeRevisions(w http.ResponseWrite
 				writeHostedProblem(w, http.StatusNotFound, "not_found", "Conan repository not found")
 				return
 			}
-			if !anonymousHostedGroupReadAllowed(r.Context(), h.anonymousPolicy, h.store, group, r.Method) {
-				writeHostedProblem(w, http.StatusForbidden, "access_denied", "group anonymous read is not enabled")
+			if !h.authorizeAnonymousGroupBrowse(w, r, group) {
 				return
 			}
 			h.listHostedGroupConanRecipeRevisions(w, r, group, params)

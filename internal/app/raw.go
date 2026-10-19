@@ -2,14 +2,13 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/ccsert/artifact-gateway/internal/egress"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/requestcontext"
@@ -33,39 +32,7 @@ func rawEgressHooks() egress.Hooks {
 }
 
 func (c UpstreamClient) FetchRaw(ctx context.Context, method string, member repository.Member, path string, headers http.Header) (*http.Response, error) {
-	client := c.HTTPClient
-	if member.Type == repository.MemberProxy {
-		var err error
-		client, err = egress.Apply(client, member.EgressProxy, member.Endpoint, rawEgressHooks())
-		if err != nil {
-			return nil, &rawFetchError{code: "upstream_egress_failed", err: err}
-		}
-	}
-	u, err := url.Parse(member.Endpoint)
-	if err != nil {
-		return nil, &rawFetchError{code: "upstream_configuration_invalid", err: fmt.Errorf("parse Raw endpoint: %w", err)}
-	}
-	decodedPath, err := url.PathUnescape(path)
-	if err != nil {
-		return nil, &rawFetchError{code: "upstream_configuration_invalid", err: fmt.Errorf("decode Raw path: %w", err)}
-	}
-	u.Path = strings.TrimRight(u.Path, "/") + "/" + decodedPath
-	u.RawPath = strings.TrimRight(u.EscapedPath(), "/") + "/" + path
-	r, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
-	if err != nil {
-		return nil, &rawFetchError{code: "upstream_configuration_invalid", err: fmt.Errorf("create Raw request: %w", err)}
-	}
-	// Raw has one cached file representation. Range and content negotiation are
-	// applied locally after the complete canonical representation is fetched.
-	client = tracedHTTPClient(client)
-	// Never follow upstream redirects: a redirect can otherwise bypass the
-	// configured proxy host allowlist (and may disclose hosted credentials).
-	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	response, err := client.Do(r)
-	if err != nil {
-		return response, &rawFetchError{code: "upstream_transport_failed", err: err}
-	}
-	return response, nil
+	return (rawformat.Upstream{HTTPClient: c.HTTPClient, Hooks: rawEgressHooks(), Trace: tracedHTTPClient}).FetchRaw(ctx, method, member, path, headers)
 }
 
 // rawProxyEgressClient returns a client that honors the configured HTTP(S)_PROXY

@@ -15,6 +15,7 @@ type rawRenewalCoordinator struct {
 	mu       sync.Mutex
 	renewals int
 	fail     bool
+	renewed  chan struct{}
 }
 
 func (*rawRenewalCoordinator) Acquire(context.Context, string, time.Duration) (string, bool, error) {
@@ -25,6 +26,10 @@ func (c *rawRenewalCoordinator) Renew(context.Context, string, string, time.Dura
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.renewals++
+	select {
+	case c.renewed <- struct{}{}:
+	default:
+	}
 	return !c.fail, nil
 }
 
@@ -50,7 +55,7 @@ func (c *rawRenewalCoordinator) SetFail() {
 }
 
 func TestRawRequestLockRenewsWhileHeld(t *testing.T) {
-	coordinator := &rawRenewalCoordinator{}
+	coordinator := &rawRenewalCoordinator{renewed: make(chan struct{}, 2)}
 	cache := NewDefaultCache(objectstore.NewMemoryStore(), nil).WithCoordinator(coordinator)
 	cache.lockRenewEvery = 5 * time.Millisecond
 
@@ -58,7 +63,16 @@ func TestRawRequestLockRenewsWhileHeld(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(18 * time.Millisecond)
+	t.Cleanup(func() { _ = release() })
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	for completed := 0; completed < 2; completed++ {
+		select {
+		case <-coordinator.renewed:
+		case <-timer.C:
+			t.Fatalf("request lock renewals=%d, want at least 2 before timeout", coordinator.Renewals())
+		}
+	}
 	if err := release(); err != nil {
 		t.Fatal(err)
 	}

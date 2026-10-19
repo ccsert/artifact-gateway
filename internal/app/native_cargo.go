@@ -255,7 +255,7 @@ func (h nativeCargoHandler) publish(w http.ResponseWriter, r *http.Request, repo
 		return
 	}
 	defer func() { _ = spool.Close() }()
-	inspection, err := inspectCargoPublicationIdentity(r.Context(), repo.ID, spool.file, spool.Size())
+	inspection, err := inspectCargoPublicationIdentity(r.Context(), repo.ID, spool.File(), spool.Size())
 	if err != nil {
 		h.writeError(w, http.StatusUnprocessableEntity, "Cargo publication is invalid")
 		return
@@ -318,7 +318,7 @@ func (h nativeCargoHandler) publish(w http.ResponseWriter, r *http.Request, repo
 		h.writeError(w, http.StatusServiceUnavailable, "check Cargo publication failed")
 		return
 	}
-	created, err := h.ensureObject(objectCtx, spool.file, inspection.Envelope, publication)
+	created, err := h.ensureObject(objectCtx, spool.File(), inspection.Envelope, publication)
 	if err != nil {
 		h.writeError(w, http.StatusServiceUnavailable, "store Cargo crate failed")
 		return
@@ -613,7 +613,7 @@ func (h nativeCargoHandler) download(w http.ResponseWriter, r *http.Request, rep
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("X-Checksum-Sha256", strings.TrimPrefix(publication.Digest, "sha256:"))
 	captured := httpsnoop.CaptureMetricsFn(w, func(output http.ResponseWriter) {
-		http.ServeContent(output, r, name+"-"+version+".crate", publication.PublishedAt, spool.file)
+		http.ServeContent(output, r, name+"-"+version+".crate", publication.PublishedAt, spool.File())
 	})
 	h.recordAudit(r, repo, name+"@"+version, "crate", actor, repository.AuditResolved, captured.Code, captured.Written)
 }

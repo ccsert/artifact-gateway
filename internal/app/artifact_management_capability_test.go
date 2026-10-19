@@ -262,3 +262,50 @@ func TestArtifactManagementSessionLookupsAreSeparateFromPublishers(t *testing.T)
 		}
 	}
 }
+
+func TestArtifactManagementGroupSearchPreservesAccountGatesWithoutCapabilities(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	reset, err := store.CreateUser(ctx, repository.User{ID: uuid.NewString(), Name: "group-cap-reset", Role: string(RoleAdmin), SecretHash: "synthetic-password-hash", MustChangePassword: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := testAuthenticator()
+	auth.Users = store
+	enableAnonymousAccess(t, store)
+	domain := newArtifactManagementHandler(artifactManagementOptions{Scope: newManagementScope(store, store, store, &managementAuditFixture{}, auth, nil), Repositories: store, Groups: store, Grants: store})
+	server := adminopenapi.HandlerWithOptions(managementServer{artifactManagementHandler: domain}, adminopenapi.StdHTTPServerOptions{BaseURL: "/api/v2", BaseRouter: openAPIServeMux{mux: http.NewServeMux()}})
+	for _, format := range []repository.Format{repository.FormatMaven, repository.FormatConan} {
+		repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "group-cap-" + string(format), Format: format, AnonymousRead: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		group, _, err := store.CreateHostedGroupIdempotently(ctx, repository.HostedGroup{ID: uuid.NewString(), Name: "group-cap-all-" + string(format), Format: format, AnonymousRead: true, Members: []repository.GroupMember{{RepositoryID: repo.ID, Position: 0}}}, "admin", string(format), "group-cap-fingerprint")
+		if err != nil {
+			t.Fatal(err)
+		}
+		paths := []string{"/api/v2/repositories/" + group.ID + "/artifact-search?q=pkg"}
+		if format == repository.FormatConan {
+			paths = append(paths, "/api/v2/repositories/"+group.ID+"/conan/recipe-revisions?reference=pkg/1.0/user/channel")
+		}
+		for _, path := range paths {
+			for _, actor := range []struct{ token, code string }{
+				{auth.IssuePrincipalToken(Principal{Actor: "pending", Role: RoleNone}), "authorization_pending"},
+				{auth.IssueUserSession(reset.ID), "password_change_required"},
+			} {
+				request := httptest.NewRequest(http.MethodGet, path, nil)
+				authorize(request, actor.token)
+				response := httptest.NewRecorder()
+				server.ServeHTTP(response, request)
+				if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"`+actor.code+`"`) {
+					t.Fatalf("Group account gate %s=%d %s", path, response.Code, response.Body.String())
+				}
+			}
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+			if response.Code != http.StatusNotImplemented {
+				t.Fatalf("allowed anonymous Group without capability=%d %s", response.Code, response.Body.String())
+			}
+		}
+	}
+}

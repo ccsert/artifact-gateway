@@ -17,10 +17,11 @@ import (
 	"time"
 
 	"github.com/ccsert/artifact-gateway/internal/capacityplan"
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
-	"github.com/ccsert/artifact-gateway/internal/v2contract"
 	"github.com/google/uuid"
 )
 
@@ -91,7 +92,7 @@ func (p *NexusMigrationPublication) target(ctx context.Context, id, format strin
 	}
 	repo, err := p.store.GetHostedRepository(ctx, id)
 	if err != nil || repo.Type != repository.RepositoryTypeHosted || repo.State != repository.RepositoryActive ||
-		(repo.Format != repository.FormatRaw && repo.Format != repository.FormatMaven) || (format != "" && string(repo.Format) != format) {
+		(!supportsMigratedPublication(repo.Format) && repo.Format != repository.FormatMaven) || (format != "" && string(repo.Format) != format) {
 		return repository.HostedRepository{}, nexusmigration.Failed("target_not_active_hosted")
 	}
 	if objectstore.Validate(p.objects[repo.Format]) != nil {
@@ -113,7 +114,8 @@ func nexusNativeAssets(entry nexusmigration.Entry) ([]nexusNativeAsset, error) {
 		return nil, nexusmigration.Failed("invalid_publication")
 	}
 	format := repository.Format(entry.Format)
-	if format != repository.FormatRaw && format != repository.FormatMaven {
+	capability, migrated := formatmodule.Capability[formatmodule.ImmutablePublication](rawFormatRegistry(rawformat.Options{}), format)
+	if !migrated && format != repository.FormatMaven {
 		return nil, nexusmigration.Failed("unsupported_format")
 	}
 	base, pom := "", ""
@@ -124,8 +126,17 @@ func nexusNativeAssets(entry nexusmigration.Entry) ([]nexusNativeAsset, error) {
 		}
 		base = mavenCoordinatePath(entry.Identity)
 		pom = parts[1] + "-" + parts[2] + ".pom"
-	} else if len(entry.Assets) != 1 || entry.Identity != entry.Assets[0].TargetPath {
-		return nil, nexusmigration.Failed("invalid_publication")
+	} else {
+		native := make([]formatmodule.NativeAsset, 0, len(entry.Assets))
+		for _, asset := range entry.Assets {
+			native = append(native, formatmodule.NativeAsset{RepositoryID: entry.TargetRepositoryID, Path: asset.TargetPath, Digest: "sha256:" + asset.SHA256, Size: asset.Size})
+		}
+		if err := capability.ValidatePublication(entry.Identity, native); err != nil {
+			if errors.Is(err, formatmodule.ErrPublicationPath) {
+				return nil, nexusmigration.Failed("raw_path_unsupported")
+			}
+			return nil, nexusmigration.Failed("invalid_publication")
+		}
 	}
 	seen, hasPOM := map[string]bool{}, false
 	out := make([]nexusNativeAsset, 0, len(entry.Assets)*4)
@@ -133,15 +144,7 @@ func nexusNativeAssets(entry nexusmigration.Entry) ([]nexusNativeAsset, error) {
 		if asset.Size < 0 || asset.Size == math.MaxInt64 || !nexusDigest(asset.SHA256, 64) || seen[asset.TargetPath] {
 			return nil, nexusmigration.Failed("invalid_publication")
 		}
-		if format == repository.FormatRaw {
-			// Raw indexes canonical escaped resources and reads EscapedPath.
-			canonical, ok := v2contract.CanonicalRawPath(asset.TargetPath)
-			if !ok || canonical != asset.TargetPath {
-				return nil, nexusmigration.Failed("raw_path_unsupported")
-			}
-		} else if asset.TargetPath == "" || strings.HasPrefix(asset.TargetPath, "/") || path.Clean(asset.TargetPath) != asset.TargetPath || strings.ContainsAny(asset.TargetPath, "\\\r\n\x00%?#") {
-			// Maven indexes decoded paths and reads URL.Path. Encoding a literal
-			// '+' in its stored identity would make a normal client's GET miss it.
+		if !migrated && (asset.TargetPath == "" || strings.HasPrefix(asset.TargetPath, "/") || path.Clean(asset.TargetPath) != asset.TargetPath || strings.ContainsAny(asset.TargetPath, "\\\r\n\x00%?#")) {
 			return nil, nexusmigration.Failed("maven_path_unsupported")
 		}
 		if nexusChecksumSuffix(asset.TargetPath) != "" {
@@ -213,8 +216,8 @@ func (p *NexusMigrationPublication) Lock(ctx context.Context, entry nexusmigrati
 			releases[i]()
 		}
 	}
-	if entry.Format == "raw" {
-		ctx, release, lockErr := repository.LockObjectKeys(ctx, []string{assets[0].Digest}, p.store, repository.FormatRaw, p.store.LockRawObject)
+	if capability, ok := p.publicationModule(entry.Format); ok {
+		ctx, release, lockErr := capability.LockPublication(ctx, []formatmodule.NativeAsset{nativePublicationAsset(assets[0].MavenAsset)})
 		if lockErr != nil {
 			return ctx, nil, nexusmigration.Failed("target_coordination_unavailable")
 		}
@@ -279,7 +282,7 @@ func (p *NexusMigrationPublication) Begin(ctx context.Context, entry nexusmigrat
 	if _, err := p.held(ctx, entry); err != nil {
 		return "", err
 	}
-	if entry.Format == "raw" {
+	if _, ok := p.publicationModule(entry.Format); ok {
 		return "", nil
 	}
 	assets, err := nexusNativeAssets(entry)
@@ -369,11 +372,12 @@ func (p *NexusMigrationPublication) Stage(ctx context.Context, entry nexusmigrat
 	}
 	objects := p.objects[repository.Format(entry.Format)]
 	key := "native/" + entry.Format + "/sha256/" + asset.SHA256
-	if entry.Format == "raw" {
-		if err = p.store.StageRawObject(ctx, repository.RawObject{RepositoryID: entry.TargetRepositoryID, Digest: "sha256:" + asset.SHA256, ObjectKey: key, Size: asset.Size}); err != nil {
+	if capability, ok := p.publicationModule(entry.Format); ok {
+		err = capability.StageVerifiedPublication(ctx, formatmodule.NativeAsset{RepositoryID: entry.TargetRepositoryID, Path: asset.TargetPath, ObjectKey: key, Digest: "sha256:" + asset.SHA256, Size: asset.Size}, input)
+		if errors.Is(err, formatmodule.ErrPublicationStage) {
 			return nexusmigration.Failed("native_stage_failed")
 		}
-		if err = objects.PutVerifiedReader(ctx, key, input, asset.Size, "sha256:"+asset.SHA256); err != nil {
+		if err != nil {
 			return nexusmigration.Failed("target_upload_failed")
 		}
 		return nil
@@ -539,7 +543,7 @@ func (p *NexusMigrationPublication) Readback(ctx context.Context, entry nexusmig
 	for _, expected := range assets {
 		actual, err := p.nativeAsset(ctx, entry.Format, entry.TargetRepositoryID, expected.Path)
 		if errors.Is(err, repository.ErrNotFound) {
-			if entry.Format == "raw" {
+			if _, ok := p.publicationModule(entry.Format); ok {
 				return nexusmigration.Absent, nil
 			}
 			return nexusmigration.Conflict, nil
@@ -604,8 +608,11 @@ func (p *NexusMigrationPublication) nativeAsset(ctx context.Context, format, rep
 	if format == "maven" {
 		return p.store.GetMavenAsset(ctx, repo, assetPath)
 	}
-	asset, err := p.store.GetRawAsset(ctx, repo, assetPath)
-	return repository.MavenAsset{RepositoryID: asset.RepositoryID, Path: asset.Path, ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: asset.Size}, err
+	if capability, ok := p.publicationModule(format); ok {
+		asset, err := capability.ReadPublication(ctx, repo, assetPath)
+		return repository.MavenAsset{RepositoryID: asset.RepositoryID, Path: asset.Path, ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: asset.Size}, err
+	}
+	return repository.MavenAsset{}, repository.ErrDisabled
 }
 
 func (p *NexusMigrationPublication) Publish(ctx context.Context, entry nexusmigration.Entry) error {
@@ -625,10 +632,8 @@ func (p *NexusMigrationPublication) Publish(ctx context.Context, entry nexusmigr
 		return err
 	}
 	digest := assets[0].Digest
-	if entry.Format == "raw" {
-		asset := assets[0]
-		_, err = p.store.PutRawAssetIf(ctx, repository.RawAsset{RepositoryID: entry.TargetRepositoryID, Path: asset.Path,
-			ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: asset.Size, ContentType: "application/octet-stream"}, repository.RawWriteCondition{RequireAbsent: true})
+	if capability, ok := p.publicationModule(entry.Format); ok {
+		err = capability.PublishPublication(ctx, nativePublicationAsset(assets[0].MavenAsset))
 		if errors.Is(err, repository.ErrPreconditionFailed) {
 			return nexusmigration.Failed("target_conflict")
 		}
@@ -743,4 +748,15 @@ func (p *NexusMigrationPublication) Capacity(ctx context.Context, batch nexusmig
 		plan.Peak.DownloadBytes = nil
 	}
 	return capacityplan.Evaluate(plan, time.Now().UTC()), nil
+}
+
+func supportsMigratedPublication(format repository.Format) bool {
+	_, ok := formatmodule.Capability[formatmodule.ImmutablePublication](rawFormatRegistry(rawformat.Options{}), format)
+	return ok
+}
+func (p *NexusMigrationPublication) publicationModule(format string) (formatmodule.ImmutablePublication, bool) {
+	return formatmodule.Capability[formatmodule.ImmutablePublication](rawFormatRegistry(rawformat.Options{Publication: p.store, Objects: p.objects[repository.Format(format)]}), repository.Format(format))
+}
+func nativePublicationAsset(asset repository.MavenAsset) formatmodule.NativeAsset {
+	return formatmodule.NativeAsset{RepositoryID: asset.RepositoryID, Path: asset.Path, ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: asset.Size}
 }

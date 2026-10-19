@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/ccsert/artifact-gateway/internal/operationalog"
@@ -32,20 +31,4 @@ func recordRawFailure(ctx context.Context, code string) {
 		state.code = code
 		state.mu.Unlock()
 	}
-}
-
-type rawFetchError struct {
-	code string
-	err  error
-}
-
-func (e *rawFetchError) Error() string { return e.err.Error() }
-func (e *rawFetchError) Unwrap() error { return e.err }
-
-func rawFetchFailureCode(err error) string {
-	var failure *rawFetchError
-	if errors.As(err, &failure) && operationalog.FailurePhase(failure.code) != "" {
-		return failure.code
-	}
-	return "unknown"
 }

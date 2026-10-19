@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -57,13 +59,16 @@ func (m NativeRepositoryRetention) loadRetentionUsageIndex(ctx context.Context, 
 	wantedPaths := make(map[string]bool)
 	wantedDigests := make(map[string]bool)
 	wantedRevisions := make(map[string]bool)
+	modules := rawFormatRegistry(rawformat.Options{})
 	for _, candidate := range candidates {
+		if capability, ok := formatmodule.Capability[formatmodule.Usage](modules, candidate.Format); ok {
+			wantedPaths[capability.UsageKey(candidate.usagePath)] = true
+			wantedPaths[capability.UsageKey(candidate.Coordinate)] = true
+			continue
+		}
 		switch candidate.Format {
 		case repository.FormatMaven, repository.FormatNPM, repository.FormatPyPI, repository.FormatGo:
 			wantedCoordinates[candidate.Coordinate] = true
-		case repository.FormatRaw:
-			wantedPaths[candidate.rawPath] = true
-			wantedPaths[candidate.Coordinate] = true
 		case repository.FormatOCI:
 			wantedDigests[candidate.Digest] = true
 		case repository.FormatConan:
@@ -72,6 +77,13 @@ func (m NativeRepositoryRetention) loadRetentionUsageIndex(ctx context.Context, 
 	}
 	err := m.Store.WalkArtifactUsage(ctx, repositoryName, func(stat repository.ArtifactUsageStat) error {
 		evidence := usageEvidence{DownloadCount: stat.DownloadCount, LastDownloadedAt: stat.LastDownloadedAt}
+		if capability, ok := formatmodule.Capability[formatmodule.Usage](modules, repository.Format(stat.Format)); ok {
+			key := capability.UsageKey(stat.Resource)
+			if wantedPaths[key] {
+				index.byPath = addUsageEvidence(index.byPath, key, evidence)
+			}
+			return nil
+		}
 		switch repository.Format(stat.Format) {
 		case repository.FormatNPM, repository.FormatPyPI, repository.FormatGo:
 			if wantedCoordinates[stat.Resource] {
@@ -81,10 +93,6 @@ func (m NativeRepositoryRetention) loadRetentionUsageIndex(ctx context.Context, 
 			coordinate := mavenResourceFromPath(stat.Resource)
 			if wantedCoordinates[coordinate] {
 				index.byCoordinate = addUsageEvidence(index.byCoordinate, coordinate, evidence)
-			}
-		case repository.FormatRaw:
-			if wantedPaths[stat.Resource] {
-				index.byPath = addUsageEvidence(index.byPath, stat.Resource, evidence)
 			}
 		case repository.FormatOCI:
 			if digest, ok := ociManifestDigestFromUsageResource(stat.Resource); ok && wantedDigests[digest] {
@@ -119,14 +127,15 @@ func (index *retentionUsageIndex) match(candidate *RepositoryRetentionCandidate)
 	if index == nil {
 		return usageEvidence{}
 	}
+	if capability, ok := formatmodule.Capability[formatmodule.Usage](rawFormatRegistry(rawformat.Options{}), candidate.Format); ok {
+		if evidence, ok := index.byPath[capability.UsageKey(candidate.usagePath)]; ok {
+			return evidence
+		}
+		return index.byPath[capability.UsageKey(candidate.Coordinate)]
+	}
 	switch candidate.Format {
 	case repository.FormatMaven, repository.FormatNPM, repository.FormatPyPI, repository.FormatGo:
 		return index.byCoordinate[candidate.Coordinate]
-	case repository.FormatRaw:
-		if evidence, ok := index.byPath[candidate.rawPath]; ok {
-			return evidence
-		}
-		return index.byPath[candidate.Coordinate]
 	case repository.FormatOCI:
 		return index.byDigest[candidate.Digest]
 	case repository.FormatConan:

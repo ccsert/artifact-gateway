@@ -533,11 +533,11 @@ func (h nativeGoHandler) publishSpool(w http.ResponseWriter, r *http.Request, re
 		h.writePublishError(w, http.StatusUnprocessableEntity, "Go module ZIP is empty")
 		return
 	}
-	if _, err := modzip.CheckZip(module.Version{Path: route.module, Version: route.version}, spool.file.Name()); err != nil {
+	if _, err := modzip.CheckZip(module.Version{Path: route.module, Version: route.version}, spool.File().Name()); err != nil {
 		h.writePublishError(w, http.StatusUnprocessableEntity, "Go module ZIP is invalid")
 		return
 	}
-	mod, err := goModFromModuleZipFile(route.module, route.version, spool.file.Name())
+	mod, err := goModFromModuleZipFile(route.module, route.version, spool.File().Name())
 	if err != nil {
 		h.writePublishError(w, http.StatusUnprocessableEntity, err.Error())
 		return

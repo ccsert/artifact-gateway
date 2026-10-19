@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"unicode"
 
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	npmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/npm"
 	"github.com/ccsert/artifact-gateway/internal/repository"
-	"github.com/ccsert/artifact-gateway/internal/v2contract"
 )
 
 func (h artifactManagementHandler) SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.SearchRepositoryArtifactsParams) {
@@ -24,8 +24,7 @@ func (h artifactManagementHandler) SearchRepositoryArtifacts(w http.ResponseWrit
 	if _, err := h.store.GetHostedRepository(r.Context(), repositoryID.String()); errors.Is(err, repository.ErrNotFound) && h.groups != nil {
 		group, groupErr := h.groups.GetHostedGroup(r.Context(), repositoryID.String())
 		if groupErr == nil {
-			if !anonymousHostedGroupReadAllowed(r.Context(), h.anonymousPolicy, h.store, group, r.Method) {
-				writeHostedProblem(w, http.StatusForbidden, "access_denied", "group anonymous read is not enabled")
+			if !h.authorizeAnonymousGroupBrowse(w, r, group) {
 				return
 			}
 			h.searchHostedGroupArtifacts(w, r, group, params)
@@ -64,173 +63,172 @@ func (h artifactManagementHandler) SearchRepositoryArtifacts(w http.ResponseWrit
 		items := make([]adminopenapi.ArtifactSummary, 0, pageSize)
 		var lastCoordinate string
 		hasMore := false
-		switch repo.Format {
-		case repository.FormatOCI:
-			names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
-			if err != nil {
-				writeHostedProblem(w, 500, "internal_error", "search OCI artifacts failed")
+		if capability, ok := formatmodule.Capability[formatmodule.Browse](rawFormatRegistry(rawformat.Options{Query: h.raw}), repo.Format); ok {
+			summaries, searchErr := capability.Search(r.Context(), repo.ID, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: query, Match: match}, pageSize+1, after.Coordinate)
+			if searchErr != nil {
+				writeHostedProblem(w, 500, "internal_error", "search artifacts failed")
 				return
 			}
-			hasMore = len(names) > pageSize
+			hasMore = len(summaries) > pageSize
 			if hasMore {
-				names = names[:pageSize]
+				summaries = summaries[:pageSize]
 			}
-			for _, name := range names {
-				items = append(items, adminopenapi.ArtifactSummary{Coordinate: name})
-				lastCoordinate = name
+			for _, summary := range summaries {
+				items = append(items, formatArtifactSummaryResponse(summary))
+				lastCoordinate = summary.Coordinate
 			}
-		case repository.FormatMaven:
-			artifacts, err := h.maven.SearchMavenArtifacts(r.Context(), repo.ID, query, pageSize+1, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber}, match)
-			if err != nil {
-				writeHostedProblem(w, 500, "internal_error", "search Maven artifacts failed")
-				return
-			}
-			hasMore = len(artifacts) > pageSize
-			if hasMore {
-				artifacts = artifacts[:pageSize]
-			}
-			for _, a := range artifacts {
-				d := a.Digest
-				created := a.CreatedAt
-				buildNumber := int32(a.BuildNumber)
-				items = append(items, adminopenapi.ArtifactSummary{Coordinate: a.Coordinate, Digest: &d, CreatedAt: &created, BuildNumber: &buildNumber, Publisher: optionalPublisher(a.Publisher), SourceTimestamp: optionalString(a.SourceTimestamp), SourceBuildNumber: optionalBuildNumber(a.SourceBuildNumber)})
-				lastCoordinate = a.Coordinate
-			}
-		case repository.FormatConan:
-			references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
-			if err != nil {
-				writeHostedProblem(w, 500, "internal_error", "search Conan artifacts failed")
-				return
-			}
-			hasMore = len(references) > pageSize
-			if hasMore {
-				references = references[:pageSize]
-			}
-			for _, reference := range references {
-				items = append(items, adminopenapi.ArtifactSummary{Coordinate: reference.Reference, Publisher: optionalPublisher(reference.Publisher)})
-				lastCoordinate = reference.Reference
-			}
-		case repository.FormatRaw:
-			assets, err := h.raw.ListRawAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
-			if err != nil {
-				writeHostedProblem(w, 500, "internal_error", "search Raw artifacts failed")
-				return
-			}
-			hasMore = len(assets) > pageSize
-			if hasMore {
-				assets = assets[:pageSize]
-			}
-			for _, a := range assets {
-				d, ct := a.Digest, a.ContentType
-				size := a.Size
-				updatedAt := a.UpdatedAt
-				items = append(items, adminopenapi.ArtifactSummary{Coordinate: a.Path, Digest: &d, ContentType: &ct, Size: &size, CreatedAt: &updatedAt})
-				lastCoordinate = a.Path
-			}
-		case repository.FormatNPM:
-			packages, err := h.npm.SearchNPMPackages(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
-			if err != nil {
-				writeHostedProblem(w, 500, "internal_error", "search npm packages failed")
-				return
-			}
-			hasMore = len(packages) > pageSize
-			if hasMore {
-				packages = packages[:pageSize]
-			}
-			for _, pkg := range packages {
-				digest, version, createdAt, size := pkg.Latest.Digest, pkg.Latest.Version, pkg.UpdatedAt, pkg.Latest.Size
-				versionCount := int32(pkg.VersionCount)
-				items = append(items, adminopenapi.ArtifactSummary{
-					Coordinate: pkg.Name, Digest: &digest, Version: &version, VersionCount: &versionCount,
-					CreatedAt: &createdAt, Size: &size, Publisher: optionalPublisher(pkg.Latest.Publisher),
-				})
-				lastCoordinate = pkg.Name
-			}
-		case repository.FormatPyPI:
-			projects, err := h.pypi.ListPyPIProjects(r.Context(), repo.ID, pypiSearchKeyword(query, match), pageSize+1, after.Coordinate, match)
-			if err != nil {
-				writeHostedProblem(w, 500, "internal_error", "search PyPI projects failed")
-				return
-			}
-			hasMore = len(projects) > pageSize
-			if hasMore {
-				projects = projects[:pageSize]
-			}
-			for _, project := range projects {
-				digest, version, createdAt, size := project.Latest.Digest, project.Latest.Version, project.UpdatedAt, project.Latest.Size
-				versionCount := int32(project.VersionCount)
-				items = append(items, adminopenapi.ArtifactSummary{
-					Coordinate: project.Project, Digest: &digest, Version: &version, VersionCount: &versionCount,
-					CreatedAt: &createdAt, Size: &size, Publisher: optionalPublisher(project.Latest.Publisher),
-				})
-				lastCoordinate = project.Project
-			}
-		case repository.FormatGo:
-			projected, err := h.searchGroupMemberArtifactsByQuery(r, repo, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: query, Match: match}, pageSize+1, after)
-			if err != nil {
-				writeHostedProblem(w, 500, "internal_error", "search Go modules failed")
-				return
-			}
-			hasMore = len(projected) > pageSize
-			if hasMore {
-				projected = projected[:pageSize]
-			}
-			items = append(items, projected...)
-			if len(items) > 0 {
-				lastCoordinate = items[len(items)-1].Coordinate
-			}
-		case repository.FormatCargo:
-			var crates []repository.CargoCrateSummary
-			var err error
-			if repo.Type == repository.RepositoryTypeProxy {
-				crates, err = h.cargoProxy.SearchCargoProxyCrates(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
-			} else {
-				crates, _, err = h.cargo.SearchCargoCrates(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, true, match)
-			}
-			if err != nil {
-				writeHostedProblem(w, 500, "internal_error", "search Cargo crates failed")
-				return
-			}
-			hasMore = len(crates) > pageSize
-			if hasMore {
-				crates = crates[:pageSize]
-			}
-			for _, crate := range crates {
-				version := crate.MaxVersion
-				versionCount := int32(crate.Versions)
-				items = append(items, adminopenapi.ArtifactSummary{Coordinate: crate.Name, Version: &version, VersionCount: &versionCount})
-				lastCoordinate = crate.Name
-			}
-		case repository.FormatAPT:
-			if repo.Type == repository.RepositoryTypeProxy {
-				assets, err := h.apt.ListAPTAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
+		} else {
+			switch repo.Format {
+			case repository.FormatOCI:
+				names, err := h.oci.SearchOCIManifestNames(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
+				if err != nil {
+					writeHostedProblem(w, 500, "internal_error", "search OCI artifacts failed")
+					return
+				}
+				hasMore = len(names) > pageSize
+				if hasMore {
+					names = names[:pageSize]
+				}
+				for _, name := range names {
+					items = append(items, adminopenapi.ArtifactSummary{Coordinate: name})
+					lastCoordinate = name
+				}
+			case repository.FormatMaven:
+				artifacts, err := h.maven.SearchMavenArtifacts(r.Context(), repo.ID, query, pageSize+1, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber}, match)
+				if err != nil {
+					writeHostedProblem(w, 500, "internal_error", "search Maven artifacts failed")
+					return
+				}
+				hasMore = len(artifacts) > pageSize
+				if hasMore {
+					artifacts = artifacts[:pageSize]
+				}
+				for _, a := range artifacts {
+					d := a.Digest
+					created := a.CreatedAt
+					buildNumber := int32(a.BuildNumber)
+					items = append(items, adminopenapi.ArtifactSummary{Coordinate: a.Coordinate, Digest: &d, CreatedAt: &created, BuildNumber: &buildNumber, Publisher: optionalPublisher(a.Publisher), SourceTimestamp: optionalString(a.SourceTimestamp), SourceBuildNumber: optionalBuildNumber(a.SourceBuildNumber)})
+					lastCoordinate = a.Coordinate
+				}
+			case repository.FormatConan:
+				references, err := h.conan.SearchConanReferences(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
+				if err != nil {
+					writeHostedProblem(w, 500, "internal_error", "search Conan artifacts failed")
+					return
+				}
+				hasMore = len(references) > pageSize
+				if hasMore {
+					references = references[:pageSize]
+				}
+				for _, reference := range references {
+					items = append(items, adminopenapi.ArtifactSummary{Coordinate: reference.Reference, Publisher: optionalPublisher(reference.Publisher)})
+					lastCoordinate = reference.Reference
+				}
+			case repository.FormatNPM:
+				packages, err := h.npm.SearchNPMPackages(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
+				if err != nil {
+					writeHostedProblem(w, 500, "internal_error", "search npm packages failed")
+					return
+				}
+				hasMore = len(packages) > pageSize
+				if hasMore {
+					packages = packages[:pageSize]
+				}
+				for _, pkg := range packages {
+					digest, version, createdAt, size := pkg.Latest.Digest, pkg.Latest.Version, pkg.UpdatedAt, pkg.Latest.Size
+					versionCount := int32(pkg.VersionCount)
+					items = append(items, adminopenapi.ArtifactSummary{
+						Coordinate: pkg.Name, Digest: &digest, Version: &version, VersionCount: &versionCount,
+						CreatedAt: &createdAt, Size: &size, Publisher: optionalPublisher(pkg.Latest.Publisher),
+					})
+					lastCoordinate = pkg.Name
+				}
+			case repository.FormatPyPI:
+				projects, err := h.pypi.ListPyPIProjects(r.Context(), repo.ID, pypiSearchKeyword(query, match), pageSize+1, after.Coordinate, match)
+				if err != nil {
+					writeHostedProblem(w, 500, "internal_error", "search PyPI projects failed")
+					return
+				}
+				hasMore = len(projects) > pageSize
+				if hasMore {
+					projects = projects[:pageSize]
+				}
+				for _, project := range projects {
+					digest, version, createdAt, size := project.Latest.Digest, project.Latest.Version, project.UpdatedAt, project.Latest.Size
+					versionCount := int32(project.VersionCount)
+					items = append(items, adminopenapi.ArtifactSummary{
+						Coordinate: project.Project, Digest: &digest, Version: &version, VersionCount: &versionCount,
+						CreatedAt: &createdAt, Size: &size, Publisher: optionalPublisher(project.Latest.Publisher),
+					})
+					lastCoordinate = project.Project
+				}
+			case repository.FormatGo:
+				projected, err := h.searchGroupMemberArtifactsByQuery(r, repo, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: query, Match: match}, pageSize+1, after)
+				if err != nil {
+					writeHostedProblem(w, 500, "internal_error", "search Go modules failed")
+					return
+				}
+				hasMore = len(projected) > pageSize
+				if hasMore {
+					projected = projected[:pageSize]
+				}
+				items = append(items, projected...)
+				if len(items) > 0 {
+					lastCoordinate = items[len(items)-1].Coordinate
+				}
+			case repository.FormatCargo:
+				var crates []repository.CargoCrateSummary
+				var err error
+				if repo.Type == repository.RepositoryTypeProxy {
+					crates, err = h.cargoProxy.SearchCargoProxyCrates(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
+				} else {
+					crates, _, err = h.cargo.SearchCargoCrates(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, true, match)
+				}
+				if err != nil {
+					writeHostedProblem(w, 500, "internal_error", "search Cargo crates failed")
+					return
+				}
+				hasMore = len(crates) > pageSize
+				if hasMore {
+					crates = crates[:pageSize]
+				}
+				for _, crate := range crates {
+					version := crate.MaxVersion
+					versionCount := int32(crate.Versions)
+					items = append(items, adminopenapi.ArtifactSummary{Coordinate: crate.Name, Version: &version, VersionCount: &versionCount})
+					lastCoordinate = crate.Name
+				}
+			case repository.FormatAPT:
+				if repo.Type == repository.RepositoryTypeProxy {
+					assets, err := h.apt.ListAPTAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
+					if err != nil {
+						writeHostedProblem(w, 500, "internal_error", "search APT assets failed")
+						return
+					}
+					hasMore = len(assets) > pageSize
+					if hasMore {
+						assets = assets[:pageSize]
+					}
+					for _, asset := range assets {
+						d, size, created, cached, sourceURL := asset.Digest, asset.Size, asset.CreatedAt, asset.CachedAt, asset.SourceURL
+						items = append(items, adminopenapi.ArtifactSummary{Coordinate: asset.Path, Digest: &d, Size: &size, CreatedAt: &created, CachedAt: &cached, SourceUrl: &sourceURL, ContentType: optionalString(asset.ContentType)})
+						lastCoordinate = asset.Path
+					}
+					break
+				}
+				projected, err := h.searchGroupMemberArtifactsByQuery(r, repo, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: query, Match: match}, pageSize+1, after)
 				if err != nil {
 					writeHostedProblem(w, 500, "internal_error", "search APT assets failed")
 					return
 				}
-				hasMore = len(assets) > pageSize
+				hasMore = len(projected) > pageSize
 				if hasMore {
-					assets = assets[:pageSize]
+					projected = projected[:pageSize]
 				}
-				for _, asset := range assets {
-					d, size, created, cached, sourceURL := asset.Digest, asset.Size, asset.CreatedAt, asset.CachedAt, asset.SourceURL
-					items = append(items, adminopenapi.ArtifactSummary{Coordinate: asset.Path, Digest: &d, Size: &size, CreatedAt: &created, CachedAt: &cached, SourceUrl: &sourceURL, ContentType: optionalString(asset.ContentType)})
-					lastCoordinate = asset.Path
+				items = append(items, projected...)
+				if len(items) > 0 {
+					lastCoordinate = items[len(items)-1].Coordinate
 				}
-				break
-			}
-			projected, err := h.searchGroupMemberArtifactsByQuery(r, repo, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: query, Match: match}, pageSize+1, after)
-			if err != nil {
-				writeHostedProblem(w, 500, "internal_error", "search APT assets failed")
-				return
-			}
-			hasMore = len(projected) > pageSize
-			if hasMore {
-				projected = projected[:pageSize]
-			}
-			items = append(items, projected...)
-			if len(items) > 0 {
-				lastCoordinate = items[len(items)-1].Coordinate
 			}
 		}
 		var next *string
@@ -376,24 +374,10 @@ func parseConanRestoreCoordinate(value string) (reference, recipeRevision, packa
 	return reference, recipeRevision, packageID, packageRevision, true, validConanSegment(recipeRevision) && validConanSegment(packageID) && validConanSegment(packageRevision)
 }
 
-func validRawAssetPrefix(value string) bool {
-	if len(value) > v2contract.MaxRawPathBytes || strings.HasPrefix(value, "/") || strings.ContainsRune(value, '\\') || strings.IndexFunc(value, invalidRawSearchRune) >= 0 {
-		return false
-	}
-	segments := strings.Split(value, "/")
-	for index, segment := range segments {
-		if segment == "." || segment == ".." || segment == "" && index < len(segments)-1 {
-			return false
-		}
-	}
-	return true
-}
-
-func invalidRawSearchRune(value rune) bool {
-	return unicode.IsControl(value) || value == '\u061c' || value == '\u200e' || value == '\u200f' || value >= '\u202a' && value <= '\u202e' || value >= '\u2066' && value <= '\u2069'
-}
-
 func validArtifactSearchQuery(format repository.Format, query string) bool {
+	if capability, ok := formatmodule.Capability[formatmodule.Browse](rawFormatRegistry(rawformat.Options{}), format); ok {
+		return capability.ValidPrefix(query)
+	}
 	switch format {
 	case repository.FormatOCI:
 		return validOCIImagePrefix(query)
@@ -401,8 +385,6 @@ func validArtifactSearchQuery(format repository.Format, query string) bool {
 		return validMavenCoordinatePrefix(query)
 	case repository.FormatConan:
 		return validConanReferencePrefix(query)
-	case repository.FormatRaw:
-		return validRawAssetPrefix(query)
 	case repository.FormatNPM:
 		return npmprotocol.ValidPackagePrefix(query)
 	case repository.FormatPyPI:

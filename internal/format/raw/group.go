@@ -1,26 +1,19 @@
-package app
+package raw
 
 import (
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/artifacthttp"
+	"github.com/ccsert/artifact-gateway/internal/authorization"
 	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
-// v2GroupRawHandler serves Raw reads against a V2 HostedGroup. Hosted members
-// are served from the native hosted store first; proxy members fall through to
-// the shared upstream fetch and read-through cache. Writes are not supported
-// on groups.
-type v2GroupRawHandler struct {
-	native *nativeRawHandler
-	auth   Authenticator
-}
-
-func (h v2GroupRawHandler) serve(w http.ResponseWriter, r *http.Request, resolver v2GroupResolver, group repository.HostedGroup) {
-	if h.native == nil {
-		http.NotFound(w, r)
+func (h *Module) serveGroup(w http.ResponseWriter, r *http.Request, group repository.HostedGroup) {
+	if h.groupRuntime == nil {
+		http.Error(w, "group runtime unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -34,7 +27,7 @@ func (h v2GroupRawHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 	}
 	principal, authenticated := h.auth.Authenticate(r.Header.Get("Authorization"))
 	if !authenticated {
-		if group.AnonymousRead && anonymousReadMethod(r.Method) && anonymousAccessAllowed(r.Context(), resolver.groups) {
+		if group.AnonymousRead && (r.Method == http.MethodGet || r.Method == http.MethodHead) && h.groupRuntime.AnonymousAllowed(r.Context()) {
 			principal = anonymousPrincipal()
 		} else {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
@@ -42,58 +35,58 @@ func (h v2GroupRawHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 			return
 		}
 	}
-	members, err := resolver.resolveMembers(r.Context(), group)
+	members, err := h.groupRuntime.ResolveMembers(r.Context(), group)
 	if err != nil {
 		http.Error(w, "unable to resolve group members", http.StatusInternalServerError)
 		return
 	}
 	if len(members) == 0 {
-		resolver.auditResolution(r.Context(), group, repository.FormatRaw, path, strings.ToLower(r.Method), principal.Actor, repository.AuditNotFound, http.StatusNotFound)
+		h.groupRuntime.AuditResolution(r.Context(), group, repository.FormatRaw, path, strings.ToLower(r.Method), principal.Actor, repository.AuditNotFound, http.StatusNotFound)
 		http.NotFound(w, r)
 		return
 	}
 	if isAnonymous(principal) {
-		members = anonymousHostedGroupMembers(group, members)
+		members = anonymousMembers(group, members)
 	}
 	var denied bool
-	members, denied = resolver.authorizeMembers(r.Context(), principal, repository.FormatRaw, path, members)
+	members, denied = h.groupRuntime.AuthorizeMembers(r.Context(), principal, repository.FormatRaw, path, members)
 	if denied && len(members) == 0 {
 		http.Error(w, "repository read permission required", http.StatusForbidden)
 		return
 	}
 	if len(members) == 0 {
-		resolver.auditResolution(r.Context(), group, repository.FormatRaw, path, strings.ToLower(r.Method), principal.Actor, repository.AuditAccessDenied, http.StatusUnauthorized)
+		h.groupRuntime.AuditResolution(r.Context(), group, repository.FormatRaw, path, strings.ToLower(r.Method), principal.Actor, repository.AuditAccessDenied, http.StatusUnauthorized)
 		w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway"`)
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
 	for _, member := range members {
 		if member.Type == repository.MemberHosted {
-			repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
+			repo, err := h.repos.GetHostedRepository(r.Context(), member.RepositoryID)
 			if err != nil {
 				continue
 			}
-			if h.native.serveHostedRead(w, r, repo, path, principal) {
+			if h.serveHostedRead(w, r, repo, path, principal) {
 				return
 			}
 			continue
 		}
-		repo, err := resolver.repos.GetHostedRepository(r.Context(), member.RepositoryID)
+		repo, err := h.repos.GetHostedRepository(r.Context(), member.RepositoryID)
 		if err != nil {
 			continue
 		}
-		if h.native.tryProxyRead(w, r, repo, path, principal) {
+		if h.tryProxyRead(w, r, repo, path, principal) {
 			return
 		}
 	}
-	resolver.auditResolution(r.Context(), group, repository.FormatRaw, path, strings.ToLower(r.Method), principal.Actor, repository.AuditNotFound, http.StatusNotFound)
+	h.groupRuntime.AuditResolution(r.Context(), group, repository.FormatRaw, path, strings.ToLower(r.Method), principal.Actor, repository.AuditNotFound, http.StatusNotFound)
 	http.NotFound(w, r)
 }
 
 // serveHostedRead attempts a read against a native hosted Raw repository
 // without writing a response when the asset is absent, so the caller can fall
 // through to the next group member. It reports whether the request was served.
-func (h nativeRawHandler) serveHostedRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string, principal Principal) bool {
+func (h *Module) serveHostedRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, path string, principal authorization.Principal) bool {
 	if rawChecksumExtension(path) != "" {
 		source := rawChecksumSourcePath(path)
 		if rawChecksumExtension(source) != "" {
@@ -121,11 +114,11 @@ func (h nativeRawHandler) serveHostedRead(w http.ResponseWriter, r *http.Request
 	if h.blockQuarantinedRead(w, r, repo, asset, principal) {
 		return true
 	}
-	serveNativeRawObject(w, r, path, asset, h.objects)
+	artifacthttp.ServeObject(w, r, path, artifacthttp.Object{Digest: asset.Digest, ObjectKey: asset.ObjectKey, Size: asset.Size, ContentType: asset.ContentType}, h.objects)
 	return true
 }
 
-func (h nativeRawHandler) blockQuarantinedRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, asset repository.RawAsset, principal Principal) bool {
+func (h *Module) blockQuarantinedRead(w http.ResponseWriter, r *http.Request, repo repository.HostedRepository, asset repository.RawAsset, principal authorization.Principal) bool {
 	blocked, err := repository.QuarantinedArtifactReadBlocked(r.Context(), h.readPolicies, h.quarantine, repo.ID, repository.FormatRaw, asset.Path, asset.Digest)
 	if err != nil {
 		http.Error(w, "evaluate artifact quarantine failed", http.StatusInternalServerError)
@@ -139,4 +132,17 @@ func (h nativeRawHandler) blockQuarantinedRead(w http.ResponseWriter, r *http.Re
 	}
 	http.Error(w, repository.ArtifactQuarantinedReason, http.StatusForbidden)
 	return true
+}
+
+func anonymousMembers(group repository.HostedGroup, members []repository.Member) []repository.Member {
+	if !group.AnonymousRead {
+		return nil
+	}
+	allowed := make([]repository.Member, 0, len(members))
+	for _, member := range members {
+		if member.Anonymous {
+			allowed = append(allowed, member)
+		}
+	}
+	return allowed
 }

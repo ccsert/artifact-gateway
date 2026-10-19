@@ -8,11 +8,11 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
 	"github.com/ccsert/artifact-gateway/internal/config"
 	"github.com/ccsert/artifact-gateway/internal/emailnotification"
-	rawmaintenance "github.com/ccsert/artifact-gateway/internal/maintenance/raw"
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
 	conanprotocol "github.com/ccsert/artifact-gateway/internal/protocol/conan"
 	npmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/npm"
-	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/scanning"
 )
@@ -48,7 +48,10 @@ func (r backgroundRuntime) startSchedulers(ctx context.Context, cfg config.Confi
 	r.taskQueue.StartCacheScheduler(ctx, 5*time.Minute)
 	app.NativeMavenMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativeOCIMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
-	rawmaintenance.Collector{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
+	modules := r.formatModules()
+	if background, ok := formatmodule.Capability[formatmodule.Background](modules, repository.FormatRaw); ok {
+		background.StartScheduler(ctx, time.Hour)
+	}
 	app.NativeConanMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativeNPMMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativePyPIMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
@@ -205,17 +208,21 @@ func (r backgroundRuntime) startOCIWorkers(ctx context.Context, cfg config.Confi
 }
 
 func (r backgroundRuntime) startRawWorkers(ctx context.Context, cfg config.Config) {
+	background, ok := formatmodule.Capability[formatmodule.Background](r.formatModules(), repository.FormatRaw)
+	if !ok {
+		return
+	}
 	if !cfg.WorkerFormatEnabled("raw") {
 		return
 	}
 	if cfg.WorkerKindEnabled("reclaim") {
-		rawmaintenance.Collector{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
+		background.StartReclaimWorker(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("promotion") {
-		rawprotocol.NativePromotion{Store: r.store, Intelligence: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)
+		background.StartPromotionWorker(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("replication") {
-		app.RawReplication{Store: r.store, Source: r.objects, Destination: r.objects, Metrics: r.metrics}.Start(ctx, time.Minute)
+		background.StartReplicationWorker(ctx, time.Minute)
 	}
 }
 
@@ -242,4 +249,12 @@ func migrationWorkerFormats(cfg config.Config) []string {
 		}
 	}
 	return formats
+}
+
+func (r backgroundRuntime) formatModules() *formatmodule.Registry {
+	modules, err := formatmodule.New(rawformat.New(rawformat.Options{Store: r.store, Jobs: r.store, Replications: r.store, Intelligence: r.store, Objects: r.objects, BackgroundMetrics: r.metrics}))
+	if err != nil {
+		panic(err)
+	} // fixed built-in module registration, independent of deployment input
+	return modules
 }

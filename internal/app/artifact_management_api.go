@@ -95,6 +95,20 @@ func newArtifactManagementHandler(options artifactManagementOptions) artifactMan
 	}
 }
 
+func (h artifactManagementHandler) authorizeAnonymousGroupBrowse(w http.ResponseWriter, r *http.Request, group repository.HostedGroup) bool {
+	if principal, authenticated := h.authenticator.AuthenticateContext(r.Context(), r.Header.Get("Authorization")); authenticated {
+		if code, message, blocked := accountStateProblem(principal.AccountStateReason()); blocked {
+			writeHostedProblem(w, http.StatusForbidden, code, message)
+			return false
+		}
+	}
+	if !anonymousHostedGroupReadAllowed(r.Context(), h.anonymousPolicy, h.store, group, r.Method) {
+		writeHostedProblem(w, http.StatusForbidden, "access_denied", "group anonymous read is not enabled")
+		return false
+	}
+	return true
+}
+
 func (h artifactManagementHandler) withSessionScope(w http.ResponseWriter, r *http.Request, sessionID string, operation RepositoryOperation, handler func(Principal, repository.HostedRepository)) {
 	principal, ok := h.authenticateArtifactCaller(w, r)
 	if !ok {
