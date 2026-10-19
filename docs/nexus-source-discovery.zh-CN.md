@@ -46,6 +46,9 @@ PUT/DELETE 必须用 `If-Match` 提交这个版本。PUT 省略 `credentials` �
 GATEWAY_MIGRATION_SOURCE_PRIVATE_ENDPOINTS=nexus.internal=10.20.30.0/24,10.20.30.7=10.20.30.7/32
 ```
 
+默认 Compose 部署会将环境文件中的此项传入 Gateway 及继承它的后台角色；
+省略该配置时，白名单保持为空。
+
 每条规则只允许该主机名以及其 RFC1918/ULA CIDR 内的地址。拒绝通配符、URL/端口
 语法、公网或跨越私网边界的范围、环回、链路本地与元数据地址。仍然绑定解析后的地址，
 证书必须由操作系统信任。源管理员不能通过 API 修改此进程配置。若选择环境代理，

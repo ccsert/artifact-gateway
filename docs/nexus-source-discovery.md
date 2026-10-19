@@ -57,6 +57,9 @@ hostname and private CIDR allowlist, for example:
 GATEWAY_MIGRATION_SOURCE_PRIVATE_ENDPOINTS=nexus.internal=10.20.30.0/24,10.20.30.7=10.20.30.7/32
 ```
 
+The default Compose deployment forwards this setting from its environment file
+to Gateway and inherited background roles; omitting it keeps the allowlist empty.
+
 An entry permits only that hostname and addresses inside its RFC1918/ULA CIDR.
 Wildcards, URL/port syntax, public CIDRs, broader-than-private ranges, loopback,
 link-local and metadata addresses are refused. Resolved addresses are still pinned
