@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "items": [
+      {
+        "publisher": "user:ci",
+        "reference": "widget/1.0/user/stable"
+      },
+      {
+        "reference": "widget/2.0/user/stable"
+      }
+    ],
+    "nextCursor": null
+  },
+  "error": null,
+  "meta": {
+    "pagination": {
+      "mode": "cursor",
+      "pageSize": 1,
+      "pages": 2,
+      "complete": true
+    },
+    "scope": {
+      "q": "widget/",
+      "repositoryId": "00000000-0000-4000-8000-000000000001"
+    }
+  }
+}

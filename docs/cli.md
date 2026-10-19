@@ -480,6 +480,23 @@ addressed by ID with `--repo`.
 - `agctl oci images|manifests` and `agctl maven coordinates` are the format
   views; `oci manifests` needs `--name IMAGE` and includes untagged
   manifests.
+- `agctl conan references --repo ID [--q PREFIX]` and `conan recipe-revisions
+  --repo ID --reference NAME/VERSION/USER/CHANNEL [--q QUERY]` use server
+  cursors and the same `--all` page/time budgets as search. Both views report
+  the selected repository and filters in `meta.scope`.
+- `agctl conan package-ids --repo ID --reference NAME/VERSION/USER/CHANNEL
+  --recipe-revision REVISION` and `conan package-revisions` (also requiring
+  `--package-id ID`) return the whole selected collection: pagination is
+  `none`, with no invented cursor, page size, or total.
+- `agctl conan package-revision delete` requires those exact selectors,
+  `--revision REVISION`, and `--yes`. `--dry-run` only reads the selected
+  revision and states what remains unverified. Success requires the server's
+  HTTP 204 acknowledgement and a matching package list without that revision;
+  an incomplete response, failed read-back, or still-visible revision reports
+  `outcome: unknown` with the exact read-back command. Read-back needs read
+  permission in addition to the write permission needed for deletion. Repeating
+  a tombstone is safe; absence alone does not prove a tombstone, and neither
+  acknowledgement nor absence proves physical byte reclamation.
 - `agctl artifact list|show|delete --repo ID` cover the artifacts the Maven
   hosted publication flow records; other formats answer 404. `list` returns
   every visible artifact at once (`meta.pagination.mode` is `none`). `show`

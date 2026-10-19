@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "data": {
+    "items": [
+      "pkg1",
+      "pkg2"
+    ],
+    "nextCursor": null
+  },
+  "error": null,
+  "meta": {
+    "pagination": {
+      "mode": "none"
+    },
+    "scope": {
+      "recipeRevision": "r1",
+      "reference": "widget/1.0/user/stable",
+      "repositoryId": "00000000-0000-4000-8000-000000000001"
+    }
+  }
+}

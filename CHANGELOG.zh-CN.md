@@ -49,6 +49,8 @@
 
 - Console 区块重试在刷新数据送达组件后恢复渲染，避免旧响应再次抛错并短暂闪回失败提示。
 
+- `agctl` 补齐 Conan 四类管理视图和确认后的包修订墓碑（#131）。reference 与配方修订使用服务端游标，package ID 与包修订如实报告一次性列表范围；删除要求显式确认、支持只读计划，并在 HTTP 204 后回读精确 package 的可见修订。确认或回读不确定时保留未知结果；隔离 CLI E2E 核对已知身份、页预算、授权、审计和对象完整字节。
+
 - 管理 API 契约现在记录 Conan 发布会话路由：`POST /repositories/{repositoryId}/conan-publish-sessions`（请求体 `CreateConanPublishSession`：`kind` 为 `recipe` 或 `package`，以及 `reference`、`recipeRevision`、`packageId`、`packageRevision`、`objects`；201 返回 `PublishSession`）、`GET /conan-publish-sessions/{sessionId}`、`PUT /conan-publish-sessions/{sessionId}/objects/{objectName}`（204）与 `POST /conan-publish-sessions/{sessionId}:commit`（200 返回含 `state` 和 `revision` 的 `ConanPublishCommit`）。Console 生成客户端随之获得这些类型。这些路由现在经过生成的管理路由，格式错误的会话 ID 返回 400 而不是 404，创建请求体与其他管理接口共用 1 MiB JSON 上限；对象上传不受该上限限制。
 
 - Conan 发布会话响应（`POST /api/v2/repositories/{id}/conan-publish-sessions` 与 `GET /api/v2/conan-publish-sessions/{id}`）现在与 Maven 一样使用 `PublishSession` 结构：`id`、`repositoryId`、`coordinate`、`state`、`expiresAt` 和 `objects`（每项含 `name`、`digest`、`size`）。`coordinate` 为 `reference#recipeRevision`，package 会话追加 `/packageId#packageRevision`。此前响应泄露了首字母大写的存储模型字段名（`ID`、`RepositoryID`、`Publisher`、`Kind` 等）并暴露了发布者。读取大写字段的客户端需改用契约字段名。

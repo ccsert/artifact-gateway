@@ -406,6 +406,20 @@ profile 运行验收。
   某个 `--coordinate` 与 `--digest` 的记录；404 表示没有记录。
 - `agctl oci images|manifests` 和 `agctl maven coordinates` 是格式视图；
   `oci manifests` 需要 `--name IMAGE`，并包括没有标签的 manifest。
+- `agctl conan references --repo ID [--q PREFIX]` 与 `conan recipe-revisions
+  --repo ID --reference NAME/VERSION/USER/CHANNEL [--q QUERY]` 使用服务端
+  游标，沿用检索的 `--all` 页数与时间预算；两个视图都在 `meta.scope` 记录
+  本次仓库和筛选范围。
+- `agctl conan package-ids --repo ID --reference NAME/VERSION/USER/CHANNEL
+  --recipe-revision REVISION` 与 `conan package-revisions`（另需
+  `--package-id ID`）一次返回选定范围的完整列表，分页为 `none`，不虚构游标、
+  页大小或总数。
+- `agctl conan package-revision delete` 必须给出上述精确选择条件、
+  `--revision REVISION` 和 `--yes`。`--dry-run` 只读取目标并说明尚未验证的条件。
+  成功必须同时取得 HTTP 204 确认与相同 package 的回读列表，且目标修订已不在
+  列表中；响应不完整、回读失败或目标仍可见时返回 `outcome: unknown` 和精确
+  回读命令。删除需要写权限，回读另需读权限；重复墓碑请求可安全重试。单纯不在
+  列表中不能证明已有墓碑，确认或不再可见也不等于物理字节已回收。
 - `agctl artifact list|show|delete --repo ID` 针对 Maven Hosted 发布流程记录的
   制品，其他格式返回 404。`list` 一次返回全部可见制品（`meta.pagination.mode`
   为 `none`）。`show` 附带制品的情报和隔离记录，每项报告为 `recorded`、
