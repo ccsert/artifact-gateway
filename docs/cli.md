@@ -492,7 +492,9 @@ addressed by ID with `--repo`.
   remotes, APT `sources.list` and `auth.conf`, Cargo `config.toml`), with
   publish snippets for hosted repositories. Credentials are always the
   placeholder `${ARTIFACT_GATEWAY_TOKEN}`; the configured token is never
-  written into a snippet. URLs follow the server the CLI talks to, with
+  written into a snippet. Maven Hosted reads and deploys through
+  `/repository/maven/<repository>/`; Proxy guides use `/maven/<repository>/`.
+  URLs follow the server the CLI talks to, with
   credentials, query, and fragment removed. PyPI `.netrc` entries use the
   bare hostname that pip matches, while index URLs retain any explicit port.
 
@@ -806,7 +808,9 @@ command, flag, or argument count the client does not have.
   create, updates it (dry-run, real update, stale `If-Match`), and finds it in
   the list; builds a Group over it and a second repository (dry-run, replay,
   unknown member, members, resolution order, rename with a stale `If-Match`,
-  reorder, delete that keeps the members); publishes a Raw file and a Maven
+  reorder, delete that keeps the members); creates and updates a Maven Proxy
+  with a synthetic upstream (no fetch), verifies its capabilities and read-only
+  connection guide, refuses a stale update, and accepts deletion; publishes a Raw file and a Maven
   POM through the native protocols and searches, browses, lists, inspects,
   and deletes them; checks that a credential without permissions is refused
   (6), sees an empty global search, and that the refusal is in the audit log

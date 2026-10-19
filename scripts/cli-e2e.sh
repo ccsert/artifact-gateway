@@ -374,9 +374,25 @@ require "$(field "$out" data.items.0.name)" releases "group browse root"
 maven_name="cli-e2e-maven-${suffix}"
 expect 0 "$out" -- repo create "$maven_name" --format maven --json
 maven_id=$(field "$out" data.id)
+# Exercise the deployment URL that agctl actually generates; a valid read
+# mount alone does not prove Maven clients can publish through the snippet.
+expect 0 "$out" -- repo connect "$maven_id" --json
+maven_deploy_url=$(python3 - "$out" <<'PY2'
+import json
+import sys
+import xml.etree.ElementTree as ET
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    snippets = json.load(stream)["data"]["snippets"]
+deployment = next(row["content"] for row in snippets if row["label"] == "Maven deployment")
+print(ET.fromstring(deployment).findtext("repository/url"))
+PY2
+)
 pom='<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>com.example.agctl</groupId><artifactId>e2e</artifactId><version>1.0.0</version><packaging>pom</packaging></project>'
 curl --silent --show-error --fail --output /dev/null -X PUT -H "Authorization: Bearer $admin_token" \
-  --data-binary "$pom" "$server/repository/maven/$maven_name/com/example/agctl/e2e/1.0.0/e2e-1.0.0.pom"
+  --data-binary "$pom" "${maven_deploy_url}com/example/agctl/e2e/1.0.0/e2e-1.0.0.pom"
+curl --silent --show-error --fail --max-time 10 --output "$workdir/connected.pom" -H "Authorization: Bearer $admin_token" "${maven_deploy_url}com/example/agctl/e2e/1.0.0/e2e-1.0.0.pom"
+require "$(cat "$workdir/connected.pom")" "$pom" "Maven snippet endpoint byte read-back"
 expect 0 "$out" -- maven coordinates --repo "$maven_id" --json
 require "$(field "$out" data.items.0.coordinate)" com.example.agctl:e2e:1.0.0 "Maven coordinate"
 expect 0 "$out" -- artifact list --repo "$maven_id" --json
@@ -396,6 +412,50 @@ expect 0 "$out" -- artifact show "$artifact_id" --repo "$maven_id" --json
 require "$(field "$out" data.artifact.state)" deleted "state after delete"
 expect 0 "$out" -- artifact delete "$artifact_id" --repo "$maven_id" --yes --json
 expect 4 "$out" -- artifact show 00000000-0000-4000-8000-000000000000 --repo "$maven_id" --json
+
+# Proxy management uses synthetic .test upstreams and does not fetch them.
+# Capabilities and connect must preserve its read/cache role, without an
+# advertised Hosted publication or silently accepting an old configuration.
+proxy_name="cli-e2e-maven-proxy-${suffix}"
+expect 0 "$out" -- repo create "$proxy_name" --format maven --type proxy --endpoint https://upstream.example.test/maven2 --allowed-host upstream.example.test --json
+proxy_id=$(field "$out" data.id)
+proxy_version=$(field "$out" data.version)
+require "$(field "$out" data.type)" proxy "Proxy repository type"
+expect 0 "$out" -- repo capabilities "$proxy_id" --json
+require "$(field "$out" data.type)" proxy "Proxy capabilities type"
+python3 - "$out" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    operations = json.load(stream)["data"]["operations"]
+if "read" not in operations or "publish" in operations:
+    raise SystemExit(f"Proxy capabilities include unexpected publication: {operations}")
+PY2
+expect 0 "$out" -- repo connect "$proxy_id" --json
+python3 - "$out" "$server/maven/$proxy_name/" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    snippets = json.load(stream)["data"]["snippets"]
+if not any(sys.argv[2] in row["content"] for row in snippets) or any("distributionManagement" in row["content"] for row in snippets):
+    raise SystemExit("Proxy guide changed its native read mount or advertised publication")
+PY2
+expect 0 "$out" -- repo update "$proxy_id" --endpoint https://upstream.example.test/releases --dry-run --json
+expect 0 "$out" -- repo show "$proxy_id" --json
+require "$(field "$out" data.version)" "$proxy_version" "Proxy dry-run leaves configuration unchanged"
+expect 0 "$out" -- repo update "$proxy_id" --endpoint https://upstream.example.test/releases --json
+proxy_updated=$(field "$out" data.version)
+expect 7 "$out" -- repo update "$proxy_id" --endpoint https://upstream.example.test/stale --if-match "$proxy_version" --json
+expect 0 "$out" -- repo show "$proxy_id" --json
+require "$(field "$out" data.version)" "$proxy_updated" "Proxy conflict preserves version"
+require "$(field "$out" data.endpoint)" https://upstream.example.test/releases "Proxy conflict preserves endpoint"
+if [[ -n "$resolver_token" ]]; then
+  cli_test_token=$resolver_token expect 6 "$out" -- repo update "$proxy_id" --endpoint https://upstream.example.test/forbidden --json
+fi
+expect 0 "$out" -- repo delete "$proxy_id" --yes --json
+require "$(field "$out" data.status)" accepted "Proxy deletion accepted"
 
 oci_name="cli-e2e-oci-${suffix}"
 expect 0 "$out" -- repo create "$oci_name" --format oci --json
