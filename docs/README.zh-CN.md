@@ -8,6 +8,8 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 本索引遵循 [`site-map.json`](site-map.json) 的框架中立导航契约。能力声明只有同时符合
 可执行测试与[协议兼容性基线](protocol-compatibility.zh-CN.md)时，才代表当前状态。
 
+- [Nexus 源发现与原生映射](nexus-source-discovery.zh-CN.md)
+
 ## 快速开始
 
 - [项目概览](../README.zh-CN.md) — 定位、能力、快速启动与轻量部署边界。

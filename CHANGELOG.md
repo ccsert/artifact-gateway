@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Add administrator-only Nexus 3 source configuration with encrypted credentials, protected read-only discovery, release/MIXED/SNAPSHOT classification and explicit native repository mapping preview (#381); see [Nexus source discovery](docs/nexus-source-discovery.md). No byte migration or target provisioning is performed.
+
 - Raw memory fixtures now share public storage-contract tests with PostgreSQL (#278, [ADR 0010](docs/adr/0010-memory-store-contracts.md)). Their default read/reclaim batches are bounded at 100, collected bytes restore as not found, and contended locks honor cancellation. Memory remains an explicit test fixture; it does not prove PostgreSQL transaction or recovery behavior.
 
 - Gateway HTTP composition now has a single validated `NewGatewayHandler(GatewayOptions)` entry point (#279). Missing metadata or per-format object storage fails initialization; native handlers and caches no longer create implicit memory stores. OCI and Raw storage are independently injected through the format-independent `ObjectStore` port, and unit tests and native-client fixtures explicitly share `internal/apptest` infrastructure. Internal `NewGatewayHandlerWith*`, `OCIObjectStore`, and per-format `Dependencies.Native*ObjectStore` interfaces are removed.

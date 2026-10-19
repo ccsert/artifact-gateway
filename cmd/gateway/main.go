@@ -21,6 +21,8 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/database"
 	"github.com/ccsert/artifact-gateway/internal/evidence"
 	"github.com/ccsert/artifact-gateway/internal/localcapacity"
+	"github.com/ccsert/artifact-gateway/internal/nexussource"
+	sourcepg "github.com/ccsert/artifact-gateway/internal/nexussource/pgstore"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/operationalog"
 	"github.com/ccsert/artifact-gateway/internal/preflight"
@@ -195,6 +197,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		return 1
 	}
 	defer func() { _ = store.Close() }()
+	dependencies.SourceService = nexussource.New(sourcepg.New(databasePool), store, nexussource.Options{PrivateEndpoints: cfg.MigrationSourcePrivateEndpoints})
 	if dependencies.ArtifactScanner != nil {
 		dependencies.ArtifactScanResolver = app.NewNativeArtifactScanResolver(store, objectStore)
 	}

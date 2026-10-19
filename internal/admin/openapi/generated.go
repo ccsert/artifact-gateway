@@ -1777,6 +1777,201 @@ func (e LocalCapacityStatus) Valid() bool {
 	}
 }
 
+// Defines values for MigrationSourceKind.
+const (
+	Nexus3 MigrationSourceKind = "nexus3"
+)
+
+// Valid indicates whether the value is a known member of the MigrationSourceKind enum.
+func (e MigrationSourceKind) Valid() bool {
+	switch e {
+	case Nexus3:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationSourceDiscoveryState.
+const (
+	MigrationSourceDiscoveryStateComplete MigrationSourceDiscoveryState = "complete"
+)
+
+// Valid indicates whether the value is a known member of the MigrationSourceDiscoveryState enum.
+func (e MigrationSourceDiscoveryState) Valid() bool {
+	switch e {
+	case MigrationSourceDiscoveryStateComplete:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationSourceDiscoveryVisibility.
+const (
+	MigrationSourceDiscoveryVisibilityCredentialVisible MigrationSourceDiscoveryVisibility = "credential_visible"
+)
+
+// Valid indicates whether the value is a known member of the MigrationSourceDiscoveryVisibility enum.
+func (e MigrationSourceDiscoveryVisibility) Valid() bool {
+	switch e {
+	case MigrationSourceDiscoveryVisibilityCredentialVisible:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationSourceFieldDisposition.
+const (
+	MigrationSourceFieldDispositionExpressible MigrationSourceFieldDisposition = "expressible"
+	MigrationSourceFieldDispositionManual      MigrationSourceFieldDisposition = "manual"
+	MigrationSourceFieldDispositionUnsupported MigrationSourceFieldDisposition = "unsupported"
+)
+
+// Valid indicates whether the value is a known member of the MigrationSourceFieldDisposition enum.
+func (e MigrationSourceFieldDisposition) Valid() bool {
+	switch e {
+	case MigrationSourceFieldDispositionExpressible:
+		return true
+	case MigrationSourceFieldDispositionManual:
+		return true
+	case MigrationSourceFieldDispositionUnsupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationSourceMappingFormat.
+const (
+	MigrationSourceMappingFormatMaven MigrationSourceMappingFormat = "maven"
+	MigrationSourceMappingFormatRaw   MigrationSourceMappingFormat = "raw"
+)
+
+// Valid indicates whether the value is a known member of the MigrationSourceMappingFormat enum.
+func (e MigrationSourceMappingFormat) Valid() bool {
+	switch e {
+	case MigrationSourceMappingFormatMaven:
+		return true
+	case MigrationSourceMappingFormatRaw:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationSourceMappingType.
+const (
+	MigrationSourceMappingTypeGroup  MigrationSourceMappingType = "group"
+	MigrationSourceMappingTypeHosted MigrationSourceMappingType = "hosted"
+	MigrationSourceMappingTypeProxy  MigrationSourceMappingType = "proxy"
+)
+
+// Valid indicates whether the value is a known member of the MigrationSourceMappingType enum.
+func (e MigrationSourceMappingType) Valid() bool {
+	switch e {
+	case MigrationSourceMappingTypeGroup:
+		return true
+	case MigrationSourceMappingTypeHosted:
+		return true
+	case MigrationSourceMappingTypeProxy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationSourceMappingPreviewState.
+const (
+	MigrationSourceMappingPreviewStateComplete MigrationSourceMappingPreviewState = "complete"
+)
+
+// Valid indicates whether the value is a known member of the MigrationSourceMappingPreviewState enum.
+func (e MigrationSourceMappingPreviewState) Valid() bool {
+	switch e {
+	case MigrationSourceMappingPreviewStateComplete:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationSourceMappingResultStatus.
+const (
+	MigrationSourceMappingResultStatusInvalid     MigrationSourceMappingResultStatus = "invalid"
+	MigrationSourceMappingResultStatusManual      MigrationSourceMappingResultStatus = "manual"
+	MigrationSourceMappingResultStatusReady       MigrationSourceMappingResultStatus = "ready"
+	MigrationSourceMappingResultStatusUnsupported MigrationSourceMappingResultStatus = "unsupported"
+)
+
+// Valid indicates whether the value is a known member of the MigrationSourceMappingResultStatus enum.
+func (e MigrationSourceMappingResultStatus) Valid() bool {
+	switch e {
+	case MigrationSourceMappingResultStatusInvalid:
+		return true
+	case MigrationSourceMappingResultStatusManual:
+		return true
+	case MigrationSourceMappingResultStatusReady:
+		return true
+	case MigrationSourceMappingResultStatusUnsupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationSourcePreflightState.
+const (
+	MigrationSourcePreflightStateComplete MigrationSourcePreflightState = "complete"
+)
+
+// Valid indicates whether the value is a known member of the MigrationSourcePreflightState enum.
+func (e MigrationSourcePreflightState) Valid() bool {
+	switch e {
+	case MigrationSourcePreflightStateComplete:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationSourcePreflightVisibility.
+const (
+	MigrationSourcePreflightVisibilityCredentialVisible MigrationSourcePreflightVisibility = "credential_visible"
+)
+
+// Valid indicates whether the value is a known member of the MigrationSourcePreflightVisibility enum.
+func (e MigrationSourcePreflightVisibility) Valid() bool {
+	switch e {
+	case MigrationSourcePreflightVisibilityCredentialVisible:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationSourceRepositoryStatus.
+const (
+	MigrationSourceRepositoryStatusPreviewOnly MigrationSourceRepositoryStatus = "preview_only"
+	MigrationSourceRepositoryStatusSupported   MigrationSourceRepositoryStatus = "supported"
+	MigrationSourceRepositoryStatusUnsupported MigrationSourceRepositoryStatus = "unsupported"
+)
+
+// Valid indicates whether the value is a known member of the MigrationSourceRepositoryStatus enum.
+func (e MigrationSourceRepositoryStatus) Valid() bool {
+	switch e {
+	case MigrationSourceRepositoryStatusPreviewOnly:
+		return true
+	case MigrationSourceRepositoryStatusSupported:
+		return true
+	case MigrationSourceRepositoryStatusUnsupported:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OIDCRoleMappingMatchGatewayRole.
 const (
 	OIDCRoleMappingMatchGatewayRoleAdmin  OIDCRoleMappingMatchGatewayRole = "admin"
@@ -2886,16 +3081,16 @@ func (e ScheduledTaskRunTargetKind) Valid() bool {
 
 // Defines values for ScheduledTaskRunTrigger.
 const (
-	Manual    ScheduledTaskRunTrigger = "manual"
-	Scheduled ScheduledTaskRunTrigger = "scheduled"
+	ScheduledTaskRunTriggerManual    ScheduledTaskRunTrigger = "manual"
+	ScheduledTaskRunTriggerScheduled ScheduledTaskRunTrigger = "scheduled"
 )
 
 // Valid indicates whether the value is a known member of the ScheduledTaskRunTrigger enum.
 func (e ScheduledTaskRunTrigger) Valid() bool {
 	switch e {
-	case Manual:
+	case ScheduledTaskRunTriggerManual:
 		return true
-	case Scheduled:
+	case ScheduledTaskRunTriggerScheduled:
 		return true
 	default:
 		return false
@@ -4975,6 +5170,178 @@ type Member struct {
 // MemberList defines model for MemberList.
 type MemberList = []Member
 
+// MigrationSource defines model for MigrationSource.
+type MigrationSource struct {
+	BaseUrl               string              `json:"baseUrl"`
+	CreatedAt             time.Time           `json:"createdAt"`
+	CredentialsConfigured bool                `json:"credentialsConfigured"`
+	Id                    openapi_types.UUID  `json:"id"`
+	Kind                  MigrationSourceKind `json:"kind"`
+	Name                  string              `json:"name"`
+	UpdatedAt             time.Time           `json:"updatedAt"`
+	Version               string              `json:"version"`
+}
+
+// MigrationSourceKind defines model for MigrationSource.Kind.
+type MigrationSourceKind string
+
+// MigrationSourceAsset defines model for MigrationSourceAsset.
+type MigrationSourceAsset struct {
+	Checksum    map[string]string `json:"checksum"`
+	DownloadUrl string            `json:"downloadUrl"`
+	Path        string            `json:"path"`
+	Repository  string            `json:"repository"`
+	Size        int64             `json:"size"`
+}
+
+// MigrationSourceCredentials defines model for MigrationSourceCredentials.
+type MigrationSourceCredentials struct {
+	Password *string `json:"password,omitempty"`
+	Username *string `json:"username,omitempty"`
+}
+
+// MigrationSourceDiscovery defines model for MigrationSourceDiscovery.
+type MigrationSourceDiscovery struct {
+	Assets            []MigrationSourceAsset             `json:"assets"`
+	Repositories      []MigrationSourceRepository        `json:"repositories"`
+	SourceId          openapi_types.UUID                 `json:"sourceId"`
+	SourceVersion     string                             `json:"sourceVersion"`
+	State             MigrationSourceDiscoveryState      `json:"state"`
+	Stats             MigrationSourceStats               `json:"stats"`
+	UnsupportedAssets []MigrationSourceUnsupportedAsset  `json:"unsupportedAssets"`
+	Visibility        MigrationSourceDiscoveryVisibility `json:"visibility"`
+}
+
+// MigrationSourceDiscoveryState defines model for MigrationSourceDiscovery.State.
+type MigrationSourceDiscoveryState string
+
+// MigrationSourceDiscoveryVisibility defines model for MigrationSourceDiscovery.Visibility.
+type MigrationSourceDiscoveryVisibility string
+
+// MigrationSourceDiscoveryInput defines model for MigrationSourceDiscoveryInput.
+type MigrationSourceDiscoveryInput struct {
+	MaxAssets    *int     `json:"maxAssets,omitempty"`
+	MaxPages     *int     `json:"maxPages,omitempty"`
+	Repositories []string `json:"repositories"`
+}
+
+// MigrationSourceField defines model for MigrationSourceField.
+type MigrationSourceField struct {
+	Disposition MigrationSourceFieldDisposition `json:"disposition"`
+	Field       string                          `json:"field"`
+	Reason      string                          `json:"reason"`
+}
+
+// MigrationSourceFieldDisposition defines model for MigrationSourceField.Disposition.
+type MigrationSourceFieldDisposition string
+
+// MigrationSourceInput defines model for MigrationSourceInput.
+type MigrationSourceInput struct {
+	// BaseUrl HTTPS Nexus instance origin and optional context path. User info, query and fragment are rejected.
+	BaseUrl          string                      `json:"baseUrl"`
+	ClearCredentials *bool                       `json:"clearCredentials,omitempty"`
+	Credentials      *MigrationSourceCredentials `json:"credentials,omitempty"`
+	Name             string                      `json:"name"`
+}
+
+// MigrationSourceMapping defines model for MigrationSourceMapping.
+type MigrationSourceMapping struct {
+	Format           MigrationSourceMappingFormat `json:"format"`
+	SourceRepository string                       `json:"sourceRepository"`
+	TargetMembers    *[]string                    `json:"targetMembers,omitempty"`
+	TargetName       string                       `json:"targetName"`
+	Type             MigrationSourceMappingType   `json:"type"`
+}
+
+// MigrationSourceMappingFormat defines model for MigrationSourceMapping.Format.
+type MigrationSourceMappingFormat string
+
+// MigrationSourceMappingType defines model for MigrationSourceMapping.Type.
+type MigrationSourceMappingType string
+
+// MigrationSourceMappingInput defines model for MigrationSourceMappingInput.
+type MigrationSourceMappingInput struct {
+	Mappings []MigrationSourceMapping `json:"mappings"`
+}
+
+// MigrationSourceMappingPreview defines model for MigrationSourceMappingPreview.
+type MigrationSourceMappingPreview struct {
+	Mappings      []MigrationSourceMappingResult     `json:"mappings"`
+	SourceId      openapi_types.UUID                 `json:"sourceId"`
+	SourceVersion string                             `json:"sourceVersion"`
+	State         MigrationSourceMappingPreviewState `json:"state"`
+	Stats         MigrationSourceStats               `json:"stats"`
+	Valid         bool                               `json:"valid"`
+}
+
+// MigrationSourceMappingPreviewState defines model for MigrationSourceMappingPreview.State.
+type MigrationSourceMappingPreviewState string
+
+// MigrationSourceMappingResult defines model for MigrationSourceMappingResult.
+type MigrationSourceMappingResult struct {
+	Fields           []MigrationSourceField             `json:"fields"`
+	Reasons          []string                           `json:"reasons"`
+	SourceRepository string                             `json:"sourceRepository"`
+	Status           MigrationSourceMappingResultStatus `json:"status"`
+	TargetMembers    []string                           `json:"targetMembers"`
+	TargetName       string                             `json:"targetName"`
+}
+
+// MigrationSourceMappingResultStatus defines model for MigrationSourceMappingResult.Status.
+type MigrationSourceMappingResultStatus string
+
+// MigrationSourcePage defines model for MigrationSourcePage.
+type MigrationSourcePage struct {
+	Items      []MigrationSource `json:"items"`
+	NextCursor string            `json:"nextCursor"`
+}
+
+// MigrationSourcePreflight defines model for MigrationSourcePreflight.
+type MigrationSourcePreflight struct {
+	Repositories  []MigrationSourceRepository        `json:"repositories"`
+	SourceId      openapi_types.UUID                 `json:"sourceId"`
+	SourceVersion string                             `json:"sourceVersion"`
+	State         MigrationSourcePreflightState      `json:"state"`
+	Stats         MigrationSourceStats               `json:"stats"`
+	Visibility    MigrationSourcePreflightVisibility `json:"visibility"`
+}
+
+// MigrationSourcePreflightState defines model for MigrationSourcePreflight.State.
+type MigrationSourcePreflightState string
+
+// MigrationSourcePreflightVisibility defines model for MigrationSourcePreflight.Visibility.
+type MigrationSourcePreflightVisibility string
+
+// MigrationSourceRepository defines model for MigrationSourceRepository.
+type MigrationSourceRepository struct {
+	Fields        []MigrationSourceField          `json:"fields"`
+	Format        string                          `json:"format"`
+	Members       []string                        `json:"members"`
+	Name          string                          `json:"name"`
+	Reason        string                          `json:"reason"`
+	RemoteUrl     string                          `json:"remoteUrl"`
+	Status        MigrationSourceRepositoryStatus `json:"status"`
+	Type          string                          `json:"type"`
+	VersionPolicy string                          `json:"versionPolicy"`
+}
+
+// MigrationSourceRepositoryStatus defines model for MigrationSourceRepository.Status.
+type MigrationSourceRepositoryStatus string
+
+// MigrationSourceStats defines model for MigrationSourceStats.
+type MigrationSourceStats struct {
+	Pages         int   `json:"pages"`
+	Requests      int   `json:"requests"`
+	ResponseBytes int64 `json:"responseBytes"`
+}
+
+// MigrationSourceUnsupportedAsset defines model for MigrationSourceUnsupportedAsset.
+type MigrationSourceUnsupportedAsset struct {
+	Path       string `json:"path"`
+	Reason     string `json:"reason"`
+	Repository string `json:"repository"`
+}
+
 // OCIBearer Optional anonymous upstream Bearer challenge exchange for OCI Proxy repositories only. Omitted configuration preserves legacy reads and disables token exchange. The realm and service bind the approved issuer and audience; this object never contains credentials or cached tokens. It does not add the realm to allowedHosts or grant network access. A cross-origin realm still needs explicit permission under the existing egress policy. On update omit the field to preserve it, or send null to clear it. Setting an object replaces both fields together. Hosted and other formats reject this property, including null.
 type OCIBearer struct {
 	// Realm Exact complete HTTPS token-service URL. The first exchange contract rejects userinfo, all query parameters, and fragments.
@@ -6424,6 +6791,24 @@ type ListLifecycleJobsParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListMigrationSourcesParams defines parameters for ListMigrationSources.
+type ListMigrationSourcesParams struct {
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// DeleteMigrationSourceParams defines parameters for DeleteMigrationSource.
+type DeleteMigrationSourceParams struct {
+	// IfMatch Current source version returned by the API.
+	IfMatch string `json:"If-Match"`
+}
+
+// UpdateMigrationSourceParams defines parameters for UpdateMigrationSource.
+type UpdateMigrationSourceParams struct {
+	// IfMatch Current source version returned by the API.
+	IfMatch string `json:"If-Match"`
+}
+
 // ListRepositoriesParams defines parameters for ListRepositories.
 type ListRepositoriesParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
@@ -6891,6 +7276,18 @@ type ReplaceGroupJSONRequestBody = Group
 // ReplaceGroupMembersJSONRequestBody defines body for ReplaceGroupMembers for application/json ContentType.
 type ReplaceGroupMembersJSONRequestBody = MemberList
 
+// CreateMigrationSourceJSONRequestBody defines body for CreateMigrationSource for application/json ContentType.
+type CreateMigrationSourceJSONRequestBody = MigrationSourceInput
+
+// UpdateMigrationSourceJSONRequestBody defines body for UpdateMigrationSource for application/json ContentType.
+type UpdateMigrationSourceJSONRequestBody = MigrationSourceInput
+
+// DiscoverMigrationSourceJSONRequestBody defines body for DiscoverMigrationSource for application/json ContentType.
+type DiscoverMigrationSourceJSONRequestBody = MigrationSourceDiscoveryInput
+
+// PreviewMigrationSourceMappingJSONRequestBody defines body for PreviewMigrationSourceMapping for application/json ContentType.
+type PreviewMigrationSourceMappingJSONRequestBody = MigrationSourceMappingInput
+
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = CreateRepository
 
@@ -7220,6 +7617,30 @@ type ServerInterface interface {
 
 	// (GET /lifecycle-jobs)
 	ListLifecycleJobs(w http.ResponseWriter, r *http.Request, params ListLifecycleJobsParams)
+
+	// (GET /migration-sources)
+	ListMigrationSources(w http.ResponseWriter, r *http.Request, params ListMigrationSourcesParams)
+
+	// (POST /migration-sources)
+	CreateMigrationSource(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /migration-sources/{sourceId})
+	DeleteMigrationSource(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID, params DeleteMigrationSourceParams)
+
+	// (GET /migration-sources/{sourceId})
+	GetMigrationSource(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID)
+
+	// (PUT /migration-sources/{sourceId})
+	UpdateMigrationSource(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID, params UpdateMigrationSourceParams)
+
+	// (POST /migration-sources/{sourceId}/discovery)
+	DiscoverMigrationSource(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID)
+
+	// (POST /migration-sources/{sourceId}/mapping-preview)
+	PreviewMigrationSourceMapping(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID)
+
+	// (POST /migration-sources/{sourceId}/preflight)
+	PreflightMigrationSource(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID)
 	// GetOverviewStatistics Repository protocol request and capacity statistics for the Console
 	// (GET /overview-statistics)
 	GetOverviewStatistics(w http.ResponseWriter, r *http.Request)
@@ -9578,6 +9999,278 @@ func (siw *ServerInterfaceWrapper) ListLifecycleJobs(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListLifecycleJobs(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMigrationSources operation middleware
+func (siw *ServerInterfaceWrapper) ListMigrationSources(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMigrationSourcesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMigrationSources(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMigrationSource operation middleware
+func (siw *ServerInterfaceWrapper) CreateMigrationSource(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMigrationSource(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMigrationSource operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMigrationSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", r.PathValue("sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteMigrationSourceParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMigrationSource(w, r, sourceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMigrationSource operation middleware
+func (siw *ServerInterfaceWrapper) GetMigrationSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", r.PathValue("sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMigrationSource(w, r, sourceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMigrationSource operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMigrationSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", r.PathValue("sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateMigrationSourceParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMigrationSource(w, r, sourceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DiscoverMigrationSource operation middleware
+func (siw *ServerInterfaceWrapper) DiscoverMigrationSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", r.PathValue("sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DiscoverMigrationSource(w, r, sourceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewMigrationSourceMapping operation middleware
+func (siw *ServerInterfaceWrapper) PreviewMigrationSourceMapping(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", r.PathValue("sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewMigrationSourceMapping(w, r, sourceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreflightMigrationSource operation middleware
+func (siw *ServerInterfaceWrapper) PreflightMigrationSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", r.PathValue("sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreflightMigrationSource(w, r, sourceId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14991,6 +15684,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/groups/{groupId}/resolution", wrapper.GetGroupResolution)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/identity", wrapper.GetCurrentIdentity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/lifecycle-jobs", wrapper.ListLifecycleJobs)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/migration-sources", wrapper.ListMigrationSources)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migration-sources", wrapper.CreateMigrationSource)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/migration-sources/{sourceId}", wrapper.DeleteMigrationSource)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/migration-sources/{sourceId}", wrapper.GetMigrationSource)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/migration-sources/{sourceId}", wrapper.UpdateMigrationSource)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migration-sources/{sourceId}/discovery", wrapper.DiscoverMigrationSource)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migration-sources/{sourceId}/mapping-preview", wrapper.PreviewMigrationSourceMapping)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/migration-sources/{sourceId}/preflight", wrapper.PreflightMigrationSource)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/overview-statistics", wrapper.GetOverviewStatistics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/publish-sessions/{sessionId}", wrapper.GetPublishSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/publish-sessions/{sessionId}/objects/{objectName}", wrapper.UploadPublishObject)
@@ -18975,6 +19676,1205 @@ func (response ListLifecycleJobs401ApplicationProblemPlusJSONResponse) VisitList
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMigrationSourcesRequestObject struct {
+	Params ListMigrationSourcesParams
+}
+
+type ListMigrationSourcesResponseObject interface {
+	VisitListMigrationSourcesResponse(w http.ResponseWriter) error
+}
+
+type ListMigrationSources200JSONResponse MigrationSourcePage
+
+func (response ListMigrationSources200JSONResponse) VisitListMigrationSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMigrationSources400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListMigrationSources400ApplicationProblemPlusJSONResponse) VisitListMigrationSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMigrationSources401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMigrationSources401ApplicationProblemPlusJSONResponse) VisitListMigrationSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMigrationSources403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMigrationSources403ApplicationProblemPlusJSONResponse) VisitListMigrationSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMigrationSources404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMigrationSources404ApplicationProblemPlusJSONResponse) VisitListMigrationSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMigrationSources412ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMigrationSources412ApplicationProblemPlusJSONResponse) VisitListMigrationSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMigrationSources422ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMigrationSources422ApplicationProblemPlusJSONResponse) VisitListMigrationSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMigrationSources502ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMigrationSources502ApplicationProblemPlusJSONResponse) VisitListMigrationSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMigrationSources503ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMigrationSources503ApplicationProblemPlusJSONResponse) VisitListMigrationSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMigrationSources504ApplicationProblemPlusJSONResponse Problem
+
+func (response ListMigrationSources504ApplicationProblemPlusJSONResponse) VisitListMigrationSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(504)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMigrationSourceRequestObject struct {
+	Body *CreateMigrationSourceJSONRequestBody
+}
+
+type CreateMigrationSourceResponseObject interface {
+	VisitCreateMigrationSourceResponse(w http.ResponseWriter) error
+}
+
+type CreateMigrationSource201JSONResponse MigrationSource
+
+func (response CreateMigrationSource201JSONResponse) VisitCreateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMigrationSource400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateMigrationSource400ApplicationProblemPlusJSONResponse) VisitCreateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMigrationSource401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateMigrationSource401ApplicationProblemPlusJSONResponse) VisitCreateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMigrationSource403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateMigrationSource403ApplicationProblemPlusJSONResponse) VisitCreateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMigrationSource404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateMigrationSource404ApplicationProblemPlusJSONResponse) VisitCreateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMigrationSource412ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateMigrationSource412ApplicationProblemPlusJSONResponse) VisitCreateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMigrationSource422ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateMigrationSource422ApplicationProblemPlusJSONResponse) VisitCreateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMigrationSource502ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateMigrationSource502ApplicationProblemPlusJSONResponse) VisitCreateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMigrationSource503ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateMigrationSource503ApplicationProblemPlusJSONResponse) VisitCreateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMigrationSource504ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateMigrationSource504ApplicationProblemPlusJSONResponse) VisitCreateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(504)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMigrationSourceRequestObject struct {
+	SourceId openapi_types.UUID `json:"sourceId"`
+	Params   DeleteMigrationSourceParams
+}
+
+type DeleteMigrationSourceResponseObject interface {
+	VisitDeleteMigrationSourceResponse(w http.ResponseWriter) error
+}
+
+type DeleteMigrationSource204Response struct {
+}
+
+func (response DeleteMigrationSource204Response) VisitDeleteMigrationSourceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteMigrationSource400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMigrationSource400ApplicationProblemPlusJSONResponse) VisitDeleteMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMigrationSource401ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteMigrationSource401ApplicationProblemPlusJSONResponse) VisitDeleteMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMigrationSource403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteMigrationSource403ApplicationProblemPlusJSONResponse) VisitDeleteMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMigrationSource404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteMigrationSource404ApplicationProblemPlusJSONResponse) VisitDeleteMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMigrationSource412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteMigrationSource412ApplicationProblemPlusJSONResponse) VisitDeleteMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMigrationSource422ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteMigrationSource422ApplicationProblemPlusJSONResponse) VisitDeleteMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMigrationSource502ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteMigrationSource502ApplicationProblemPlusJSONResponse) VisitDeleteMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMigrationSource503ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteMigrationSource503ApplicationProblemPlusJSONResponse) VisitDeleteMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMigrationSource504ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteMigrationSource504ApplicationProblemPlusJSONResponse) VisitDeleteMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(504)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMigrationSourceRequestObject struct {
+	SourceId openapi_types.UUID `json:"sourceId"`
+}
+
+type GetMigrationSourceResponseObject interface {
+	VisitGetMigrationSourceResponse(w http.ResponseWriter) error
+}
+
+type GetMigrationSource200JSONResponse MigrationSource
+
+func (response GetMigrationSource200JSONResponse) VisitGetMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMigrationSource400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetMigrationSource400ApplicationProblemPlusJSONResponse) VisitGetMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMigrationSource401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetMigrationSource401ApplicationProblemPlusJSONResponse) VisitGetMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMigrationSource403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetMigrationSource403ApplicationProblemPlusJSONResponse) VisitGetMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMigrationSource404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetMigrationSource404ApplicationProblemPlusJSONResponse) VisitGetMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMigrationSource412ApplicationProblemPlusJSONResponse Problem
+
+func (response GetMigrationSource412ApplicationProblemPlusJSONResponse) VisitGetMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMigrationSource422ApplicationProblemPlusJSONResponse Problem
+
+func (response GetMigrationSource422ApplicationProblemPlusJSONResponse) VisitGetMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMigrationSource502ApplicationProblemPlusJSONResponse Problem
+
+func (response GetMigrationSource502ApplicationProblemPlusJSONResponse) VisitGetMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMigrationSource503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetMigrationSource503ApplicationProblemPlusJSONResponse) VisitGetMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMigrationSource504ApplicationProblemPlusJSONResponse Problem
+
+func (response GetMigrationSource504ApplicationProblemPlusJSONResponse) VisitGetMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(504)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMigrationSourceRequestObject struct {
+	SourceId openapi_types.UUID `json:"sourceId"`
+	Params   UpdateMigrationSourceParams
+	Body     *UpdateMigrationSourceJSONRequestBody
+}
+
+type UpdateMigrationSourceResponseObject interface {
+	VisitUpdateMigrationSourceResponse(w http.ResponseWriter) error
+}
+
+type UpdateMigrationSource200JSONResponse MigrationSource
+
+func (response UpdateMigrationSource200JSONResponse) VisitUpdateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMigrationSource400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateMigrationSource400ApplicationProblemPlusJSONResponse) VisitUpdateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMigrationSource401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMigrationSource401ApplicationProblemPlusJSONResponse) VisitUpdateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMigrationSource403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMigrationSource403ApplicationProblemPlusJSONResponse) VisitUpdateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMigrationSource404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMigrationSource404ApplicationProblemPlusJSONResponse) VisitUpdateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMigrationSource412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMigrationSource412ApplicationProblemPlusJSONResponse) VisitUpdateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMigrationSource422ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMigrationSource422ApplicationProblemPlusJSONResponse) VisitUpdateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMigrationSource502ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMigrationSource502ApplicationProblemPlusJSONResponse) VisitUpdateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMigrationSource503ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMigrationSource503ApplicationProblemPlusJSONResponse) VisitUpdateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMigrationSource504ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateMigrationSource504ApplicationProblemPlusJSONResponse) VisitUpdateMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(504)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DiscoverMigrationSourceRequestObject struct {
+	SourceId openapi_types.UUID `json:"sourceId"`
+	Body     *DiscoverMigrationSourceJSONRequestBody
+}
+
+type DiscoverMigrationSourceResponseObject interface {
+	VisitDiscoverMigrationSourceResponse(w http.ResponseWriter) error
+}
+
+type DiscoverMigrationSource200JSONResponse MigrationSourceDiscovery
+
+func (response DiscoverMigrationSource200JSONResponse) VisitDiscoverMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DiscoverMigrationSource400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DiscoverMigrationSource400ApplicationProblemPlusJSONResponse) VisitDiscoverMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DiscoverMigrationSource401ApplicationProblemPlusJSONResponse Problem
+
+func (response DiscoverMigrationSource401ApplicationProblemPlusJSONResponse) VisitDiscoverMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DiscoverMigrationSource403ApplicationProblemPlusJSONResponse Problem
+
+func (response DiscoverMigrationSource403ApplicationProblemPlusJSONResponse) VisitDiscoverMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DiscoverMigrationSource404ApplicationProblemPlusJSONResponse Problem
+
+func (response DiscoverMigrationSource404ApplicationProblemPlusJSONResponse) VisitDiscoverMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DiscoverMigrationSource412ApplicationProblemPlusJSONResponse Problem
+
+func (response DiscoverMigrationSource412ApplicationProblemPlusJSONResponse) VisitDiscoverMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DiscoverMigrationSource422ApplicationProblemPlusJSONResponse Problem
+
+func (response DiscoverMigrationSource422ApplicationProblemPlusJSONResponse) VisitDiscoverMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DiscoverMigrationSource502ApplicationProblemPlusJSONResponse Problem
+
+func (response DiscoverMigrationSource502ApplicationProblemPlusJSONResponse) VisitDiscoverMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DiscoverMigrationSource503ApplicationProblemPlusJSONResponse Problem
+
+func (response DiscoverMigrationSource503ApplicationProblemPlusJSONResponse) VisitDiscoverMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DiscoverMigrationSource504ApplicationProblemPlusJSONResponse Problem
+
+func (response DiscoverMigrationSource504ApplicationProblemPlusJSONResponse) VisitDiscoverMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(504)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewMigrationSourceMappingRequestObject struct {
+	SourceId openapi_types.UUID `json:"sourceId"`
+	Body     *PreviewMigrationSourceMappingJSONRequestBody
+}
+
+type PreviewMigrationSourceMappingResponseObject interface {
+	VisitPreviewMigrationSourceMappingResponse(w http.ResponseWriter) error
+}
+
+type PreviewMigrationSourceMapping200JSONResponse MigrationSourceMappingPreview
+
+func (response PreviewMigrationSourceMapping200JSONResponse) VisitPreviewMigrationSourceMappingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewMigrationSourceMapping400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewMigrationSourceMapping400ApplicationProblemPlusJSONResponse) VisitPreviewMigrationSourceMappingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewMigrationSourceMapping401ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewMigrationSourceMapping401ApplicationProblemPlusJSONResponse) VisitPreviewMigrationSourceMappingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewMigrationSourceMapping403ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewMigrationSourceMapping403ApplicationProblemPlusJSONResponse) VisitPreviewMigrationSourceMappingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewMigrationSourceMapping404ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewMigrationSourceMapping404ApplicationProblemPlusJSONResponse) VisitPreviewMigrationSourceMappingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewMigrationSourceMapping412ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewMigrationSourceMapping412ApplicationProblemPlusJSONResponse) VisitPreviewMigrationSourceMappingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewMigrationSourceMapping422ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewMigrationSourceMapping422ApplicationProblemPlusJSONResponse) VisitPreviewMigrationSourceMappingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewMigrationSourceMapping502ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewMigrationSourceMapping502ApplicationProblemPlusJSONResponse) VisitPreviewMigrationSourceMappingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewMigrationSourceMapping503ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewMigrationSourceMapping503ApplicationProblemPlusJSONResponse) VisitPreviewMigrationSourceMappingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewMigrationSourceMapping504ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewMigrationSourceMapping504ApplicationProblemPlusJSONResponse) VisitPreviewMigrationSourceMappingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(504)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreflightMigrationSourceRequestObject struct {
+	SourceId openapi_types.UUID `json:"sourceId"`
+}
+
+type PreflightMigrationSourceResponseObject interface {
+	VisitPreflightMigrationSourceResponse(w http.ResponseWriter) error
+}
+
+type PreflightMigrationSource200JSONResponse MigrationSourcePreflight
+
+func (response PreflightMigrationSource200JSONResponse) VisitPreflightMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreflightMigrationSource400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PreflightMigrationSource400ApplicationProblemPlusJSONResponse) VisitPreflightMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreflightMigrationSource401ApplicationProblemPlusJSONResponse Problem
+
+func (response PreflightMigrationSource401ApplicationProblemPlusJSONResponse) VisitPreflightMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreflightMigrationSource403ApplicationProblemPlusJSONResponse Problem
+
+func (response PreflightMigrationSource403ApplicationProblemPlusJSONResponse) VisitPreflightMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreflightMigrationSource404ApplicationProblemPlusJSONResponse Problem
+
+func (response PreflightMigrationSource404ApplicationProblemPlusJSONResponse) VisitPreflightMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreflightMigrationSource412ApplicationProblemPlusJSONResponse Problem
+
+func (response PreflightMigrationSource412ApplicationProblemPlusJSONResponse) VisitPreflightMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreflightMigrationSource422ApplicationProblemPlusJSONResponse Problem
+
+func (response PreflightMigrationSource422ApplicationProblemPlusJSONResponse) VisitPreflightMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreflightMigrationSource502ApplicationProblemPlusJSONResponse Problem
+
+func (response PreflightMigrationSource502ApplicationProblemPlusJSONResponse) VisitPreflightMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreflightMigrationSource503ApplicationProblemPlusJSONResponse Problem
+
+func (response PreflightMigrationSource503ApplicationProblemPlusJSONResponse) VisitPreflightMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreflightMigrationSource504ApplicationProblemPlusJSONResponse Problem
+
+func (response PreflightMigrationSource504ApplicationProblemPlusJSONResponse) VisitPreflightMigrationSourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(504)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -27675,6 +29575,30 @@ type StrictServerInterface interface {
 
 	// (GET /lifecycle-jobs)
 	ListLifecycleJobs(ctx context.Context, request ListLifecycleJobsRequestObject) (ListLifecycleJobsResponseObject, error)
+
+	// (GET /migration-sources)
+	ListMigrationSources(ctx context.Context, request ListMigrationSourcesRequestObject) (ListMigrationSourcesResponseObject, error)
+
+	// (POST /migration-sources)
+	CreateMigrationSource(ctx context.Context, request CreateMigrationSourceRequestObject) (CreateMigrationSourceResponseObject, error)
+
+	// (DELETE /migration-sources/{sourceId})
+	DeleteMigrationSource(ctx context.Context, request DeleteMigrationSourceRequestObject) (DeleteMigrationSourceResponseObject, error)
+
+	// (GET /migration-sources/{sourceId})
+	GetMigrationSource(ctx context.Context, request GetMigrationSourceRequestObject) (GetMigrationSourceResponseObject, error)
+
+	// (PUT /migration-sources/{sourceId})
+	UpdateMigrationSource(ctx context.Context, request UpdateMigrationSourceRequestObject) (UpdateMigrationSourceResponseObject, error)
+
+	// (POST /migration-sources/{sourceId}/discovery)
+	DiscoverMigrationSource(ctx context.Context, request DiscoverMigrationSourceRequestObject) (DiscoverMigrationSourceResponseObject, error)
+
+	// (POST /migration-sources/{sourceId}/mapping-preview)
+	PreviewMigrationSourceMapping(ctx context.Context, request PreviewMigrationSourceMappingRequestObject) (PreviewMigrationSourceMappingResponseObject, error)
+
+	// (POST /migration-sources/{sourceId}/preflight)
+	PreflightMigrationSource(ctx context.Context, request PreflightMigrationSourceRequestObject) (PreflightMigrationSourceResponseObject, error)
 	// GetOverviewStatistics Repository protocol request and capacity statistics for the Console
 	// (GET /overview-statistics)
 	GetOverviewStatistics(ctx context.Context, request GetOverviewStatisticsRequestObject) (GetOverviewStatisticsResponseObject, error)
@@ -29669,6 +31593,242 @@ func (sh *strictHandler) ListLifecycleJobs(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListLifecycleJobsResponseObject); ok {
 		if err := validResponse.VisitListLifecycleJobsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMigrationSources operation middleware
+func (sh *strictHandler) ListMigrationSources(w http.ResponseWriter, r *http.Request, params ListMigrationSourcesParams) {
+	var request ListMigrationSourcesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMigrationSources(ctx, request.(ListMigrationSourcesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMigrationSources")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMigrationSourcesResponseObject); ok {
+		if err := validResponse.VisitListMigrationSourcesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateMigrationSource operation middleware
+func (sh *strictHandler) CreateMigrationSource(w http.ResponseWriter, r *http.Request) {
+	var request CreateMigrationSourceRequestObject
+
+	var body CreateMigrationSourceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateMigrationSource(ctx, request.(CreateMigrationSourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateMigrationSource")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateMigrationSourceResponseObject); ok {
+		if err := validResponse.VisitCreateMigrationSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteMigrationSource operation middleware
+func (sh *strictHandler) DeleteMigrationSource(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID, params DeleteMigrationSourceParams) {
+	var request DeleteMigrationSourceRequestObject
+
+	request.SourceId = sourceId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteMigrationSource(ctx, request.(DeleteMigrationSourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteMigrationSource")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteMigrationSourceResponseObject); ok {
+		if err := validResponse.VisitDeleteMigrationSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMigrationSource operation middleware
+func (sh *strictHandler) GetMigrationSource(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID) {
+	var request GetMigrationSourceRequestObject
+
+	request.SourceId = sourceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMigrationSource(ctx, request.(GetMigrationSourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMigrationSource")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMigrationSourceResponseObject); ok {
+		if err := validResponse.VisitGetMigrationSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMigrationSource operation middleware
+func (sh *strictHandler) UpdateMigrationSource(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID, params UpdateMigrationSourceParams) {
+	var request UpdateMigrationSourceRequestObject
+
+	request.SourceId = sourceId
+	request.Params = params
+
+	var body UpdateMigrationSourceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMigrationSource(ctx, request.(UpdateMigrationSourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMigrationSource")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMigrationSourceResponseObject); ok {
+		if err := validResponse.VisitUpdateMigrationSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DiscoverMigrationSource operation middleware
+func (sh *strictHandler) DiscoverMigrationSource(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID) {
+	var request DiscoverMigrationSourceRequestObject
+
+	request.SourceId = sourceId
+
+	var body DiscoverMigrationSourceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DiscoverMigrationSource(ctx, request.(DiscoverMigrationSourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DiscoverMigrationSource")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DiscoverMigrationSourceResponseObject); ok {
+		if err := validResponse.VisitDiscoverMigrationSourceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewMigrationSourceMapping operation middleware
+func (sh *strictHandler) PreviewMigrationSourceMapping(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID) {
+	var request PreviewMigrationSourceMappingRequestObject
+
+	request.SourceId = sourceId
+
+	var body PreviewMigrationSourceMappingJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewMigrationSourceMapping(ctx, request.(PreviewMigrationSourceMappingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewMigrationSourceMapping")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewMigrationSourceMappingResponseObject); ok {
+		if err := validResponse.VisitPreviewMigrationSourceMappingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreflightMigrationSource operation middleware
+func (sh *strictHandler) PreflightMigrationSource(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID) {
+	var request PreflightMigrationSourceRequestObject
+
+	request.SourceId = sourceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreflightMigrationSource(ctx, request.(PreflightMigrationSourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreflightMigrationSource")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreflightMigrationSourceResponseObject); ok {
+		if err := validResponse.VisitPreflightMigrationSourceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

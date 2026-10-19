@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	sourceapi "github.com/ccsert/artifact-gateway/internal/admin/nexussource"
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
 	"github.com/ccsert/artifact-gateway/internal/consoletheme"
@@ -257,6 +258,7 @@ func managementBrowseRepositoryID(path string) (string, bool) {
 // existing handler while the generated OpenAPI wrapper owns route and parameter
 // binding for the active repository-management surface.
 type generatedRepositoryAPIAdapter struct {
+	*sourceapi.Adapter
 	hostedRepositoryAPIHandler
 	sessions               nativeMavenHandler
 	conanPublish           nativeConanPublishHandler

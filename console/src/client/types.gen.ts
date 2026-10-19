@@ -1185,6 +1185,132 @@ export type AuditCleanupJob = {
   lastError?: string;
 };
 
+export type MigrationSource = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  kind: "nexus3";
+  credentialsConfigured: boolean;
+  version: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MigrationSourcePage = {
+  items: Array<MigrationSource>;
+  nextCursor: string;
+};
+
+export type MigrationSourceCredentials = {
+  username: string;
+  password: string;
+};
+
+export type MigrationSourceInput = {
+  name: string;
+  /**
+   * HTTPS Nexus instance origin and optional context path. User info, query and fragment are rejected.
+   */
+  baseUrl: string;
+  clearCredentials?: boolean;
+};
+
+export type MigrationSourceField = {
+  field: string;
+  disposition: "expressible" | "manual" | "unsupported";
+  reason: string;
+};
+
+export type MigrationSourceRepository = {
+  name: string;
+  format: string;
+  type: string;
+  versionPolicy: string;
+  status: "supported" | "preview_only" | "unsupported";
+  reason: string;
+  members: Array<string>;
+  remoteUrl: string;
+  fields: Array<MigrationSourceField>;
+};
+
+export type MigrationSourceStats = {
+  requests: number;
+  pages: number;
+  responseBytes: number;
+};
+
+export type MigrationSourcePreflight = {
+  state: "complete";
+  visibility: "credential_visible";
+  sourceId: string;
+  sourceVersion: string;
+  repositories: Array<MigrationSourceRepository>;
+  stats: MigrationSourceStats;
+};
+
+export type MigrationSourceDiscoveryInput = {
+  repositories: Array<string>;
+  maxPages?: number;
+  maxAssets?: number;
+};
+
+export type MigrationSourceAsset = {
+  repository: string;
+  path: string;
+  downloadUrl: string;
+  size: number;
+  checksum: {
+    [key: string]: string;
+  };
+};
+
+export type MigrationSourceUnsupportedAsset = {
+  repository: string;
+  path: string;
+  reason: string;
+};
+
+export type MigrationSourceDiscovery = {
+  state: "complete";
+  visibility: "credential_visible";
+  sourceId: string;
+  sourceVersion: string;
+  repositories: Array<MigrationSourceRepository>;
+  assets: Array<MigrationSourceAsset>;
+  stats: MigrationSourceStats;
+  unsupportedAssets: Array<MigrationSourceUnsupportedAsset>;
+};
+
+export type MigrationSourceMapping = {
+  sourceRepository: string;
+  targetName: string;
+  format: "raw" | "maven";
+  type: "hosted" | "proxy" | "group";
+  targetMembers?: Array<string>;
+};
+
+export type MigrationSourceMappingInput = {
+  mappings: Array<MigrationSourceMapping>;
+};
+
+export type MigrationSourceMappingResult = {
+  sourceRepository: string;
+  targetName: string;
+  status: "ready" | "manual" | "unsupported" | "invalid";
+  reasons: Array<string>;
+  targetMembers: Array<string>;
+  fields: Array<MigrationSourceField>;
+};
+
+export type MigrationSourceMappingPreview = {
+  state: "complete";
+  sourceId: string;
+  sourceVersion: string;
+  valid: boolean;
+  mappings: Array<MigrationSourceMappingResult>;
+  stats: MigrationSourceStats;
+};
+
 export type RepositoryQuotaAlertPolicy = {
   warningBasisPoints: number;
   criticalBasisPoints: number;
@@ -2613,6 +2739,16 @@ export type OidcSettingsUpdateWritable = {
   jitDefaultRole: "none" | "member" | "admin";
 };
 
+export type MigrationSourceInputWritable = {
+  name: string;
+  /**
+   * HTTPS Nexus instance origin and optional context path. User info, query and fragment are rejected.
+   */
+  baseUrl: string;
+  credentials?: MigrationSourceCredentials;
+  clearCredentials?: boolean;
+};
+
 export type EmailTargetInputWritable = {
   name: string;
   locale: "en" | "zh-CN";
@@ -2784,6 +2920,505 @@ export type SnapshotId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type ListMigrationSourcesData = {
+  body?: never;
+  path?: never;
+  query?: {
+    limit?: number;
+    cursor?: string;
+  };
+  url: "/migration-sources";
+};
+
+export type ListMigrationSourcesErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  502: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  504: Problem;
+};
+
+export type ListMigrationSourcesError =
+  ListMigrationSourcesErrors[keyof ListMigrationSourcesErrors];
+
+export type ListMigrationSourcesResponses = {
+  /**
+   * Success
+   */
+  200: MigrationSourcePage;
+};
+
+export type ListMigrationSourcesResponse =
+  ListMigrationSourcesResponses[keyof ListMigrationSourcesResponses];
+
+export type CreateMigrationSourceData = {
+  body: MigrationSourceInputWritable;
+  path?: never;
+  query?: never;
+  url: "/migration-sources";
+};
+
+export type CreateMigrationSourceErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  502: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  504: Problem;
+};
+
+export type CreateMigrationSourceError =
+  CreateMigrationSourceErrors[keyof CreateMigrationSourceErrors];
+
+export type CreateMigrationSourceResponses = {
+  /**
+   * Success
+   */
+  201: MigrationSource;
+};
+
+export type CreateMigrationSourceResponse =
+  CreateMigrationSourceResponses[keyof CreateMigrationSourceResponses];
+
+export type DeleteMigrationSourceData = {
+  body?: never;
+  headers: {
+    /**
+     * Current source version returned by the API.
+     */
+    "If-Match": string;
+  };
+  path: {
+    sourceId: string;
+  };
+  query?: never;
+  url: "/migration-sources/{sourceId}";
+};
+
+export type DeleteMigrationSourceErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  502: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  504: Problem;
+};
+
+export type DeleteMigrationSourceError =
+  DeleteMigrationSourceErrors[keyof DeleteMigrationSourceErrors];
+
+export type DeleteMigrationSourceResponses = {
+  /**
+   * Deleted
+   */
+  204: void;
+};
+
+export type DeleteMigrationSourceResponse =
+  DeleteMigrationSourceResponses[keyof DeleteMigrationSourceResponses];
+
+export type GetMigrationSourceData = {
+  body?: never;
+  path: {
+    sourceId: string;
+  };
+  query?: never;
+  url: "/migration-sources/{sourceId}";
+};
+
+export type GetMigrationSourceErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  502: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  504: Problem;
+};
+
+export type GetMigrationSourceError =
+  GetMigrationSourceErrors[keyof GetMigrationSourceErrors];
+
+export type GetMigrationSourceResponses = {
+  /**
+   * Success
+   */
+  200: MigrationSource;
+};
+
+export type GetMigrationSourceResponse =
+  GetMigrationSourceResponses[keyof GetMigrationSourceResponses];
+
+export type UpdateMigrationSourceData = {
+  body: MigrationSourceInputWritable;
+  headers: {
+    /**
+     * Current source version returned by the API.
+     */
+    "If-Match": string;
+  };
+  path: {
+    sourceId: string;
+  };
+  query?: never;
+  url: "/migration-sources/{sourceId}";
+};
+
+export type UpdateMigrationSourceErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  502: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  504: Problem;
+};
+
+export type UpdateMigrationSourceError =
+  UpdateMigrationSourceErrors[keyof UpdateMigrationSourceErrors];
+
+export type UpdateMigrationSourceResponses = {
+  /**
+   * Success
+   */
+  200: MigrationSource;
+};
+
+export type UpdateMigrationSourceResponse =
+  UpdateMigrationSourceResponses[keyof UpdateMigrationSourceResponses];
+
+export type PreflightMigrationSourceData = {
+  body?: never;
+  path: {
+    sourceId: string;
+  };
+  query?: never;
+  url: "/migration-sources/{sourceId}/preflight";
+};
+
+export type PreflightMigrationSourceErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  502: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  504: Problem;
+};
+
+export type PreflightMigrationSourceError =
+  PreflightMigrationSourceErrors[keyof PreflightMigrationSourceErrors];
+
+export type PreflightMigrationSourceResponses = {
+  /**
+   * Success
+   */
+  200: MigrationSourcePreflight;
+};
+
+export type PreflightMigrationSourceResponse =
+  PreflightMigrationSourceResponses[keyof PreflightMigrationSourceResponses];
+
+export type DiscoverMigrationSourceData = {
+  body: MigrationSourceDiscoveryInput;
+  path: {
+    sourceId: string;
+  };
+  query?: never;
+  url: "/migration-sources/{sourceId}/discovery";
+};
+
+export type DiscoverMigrationSourceErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  502: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  504: Problem;
+};
+
+export type DiscoverMigrationSourceError =
+  DiscoverMigrationSourceErrors[keyof DiscoverMigrationSourceErrors];
+
+export type DiscoverMigrationSourceResponses = {
+  /**
+   * Success
+   */
+  200: MigrationSourceDiscovery;
+};
+
+export type DiscoverMigrationSourceResponse =
+  DiscoverMigrationSourceResponses[keyof DiscoverMigrationSourceResponses];
+
+export type PreviewMigrationSourceMappingData = {
+  body: MigrationSourceMappingInput;
+  path: {
+    sourceId: string;
+  };
+  query?: never;
+  url: "/migration-sources/{sourceId}/mapping-preview";
+};
+
+export type PreviewMigrationSourceMappingErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  502: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+  /**
+   * Problem response
+   */
+  504: Problem;
+};
+
+export type PreviewMigrationSourceMappingError =
+  PreviewMigrationSourceMappingErrors[keyof PreviewMigrationSourceMappingErrors];
+
+export type PreviewMigrationSourceMappingResponses = {
+  /**
+   * Success
+   */
+  200: MigrationSourceMappingPreview;
+};
+
+export type PreviewMigrationSourceMappingResponse =
+  PreviewMigrationSourceMappingResponses[keyof PreviewMigrationSourceMappingResponses];
 
 export type ListRepositoryQuotaAlertEventsData = {
   body?: never;

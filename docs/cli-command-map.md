@@ -25,7 +25,7 @@ registered, its documentation and tests exist, and it passed acceptance
 against a real Gateway.
 
 Baseline: `api/openapi/management-runtime-v1.json` at commit
-`a504ba48cd93371badcb1f2781b120b359e57b69` (127 paths / 177 operations), extended by the four Conan session operations in #366 (currently 131 paths / 181 operations), plus
+`a504ba48cd93371badcb1f2781b120b359e57b69` (127 paths / 177 operations), extended by the four Conan session operations in #366 (131 paths / 181 operations), extended by #381 source discovery (currently 136 paths / 189 operations), plus
 the protocol endpoints of `api/openapi/native-hosted-v1.json` the CLI needs to
 reach. Counts are re-derived by the drift guard below, not frozen here; the
 map is updated first whenever the contract changes. Last reviewed: 2026-10-11
@@ -106,13 +106,21 @@ just an HTTP 200:
 
 ## Management contract operation map
 
-All 181 rows below cover the complete operation set of the baseline
+All 189 rows below cover the complete operation set of the baseline
 `api/openapi/management-runtime-v1.json`; the drift guard re-derives the set
 from the file rather than trusting this count. Paths are relative to `/api/v2`,
 the contract's server base. Planned commands omit the leading `agctl`.
 
 | API (all under /api/v2) / operationId | Planned command (agctl omitted) | Owning issue | Phase | Permission | Acceptance |
 | --- | --- | --- | --- | --- | --- |
+| `GET /migration-sources`<br>`listMigrationSources` | N: API-only source service; CLI deferred | #381 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `POST /migration-sources`<br>`createMigrationSource` | N: API-only source service; CLI deferred | #381 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `GET /migration-sources/{sourceId}`<br>`getMigrationSource` | N: API-only source service; CLI deferred | #381 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `PUT /migration-sources/{sourceId}`<br>`updateMigrationSource` | N: API-only source service; CLI deferred | #381 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `DELETE /migration-sources/{sourceId}`<br>`deleteMigrationSource` | N: API-only source service; CLI deferred | #381 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `POST /migration-sources/{sourceId}/preflight`<br>`preflightMigrationSource` | N: API-only source service; CLI deferred | #381 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `POST /migration-sources/{sourceId}/discovery`<br>`discoverMigrationSource` | N: API-only source service; CLI deferred | #381 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `POST /migration-sources/{sourceId}/mapping-preview`<br>`previewMigrationSourceMapping` | N: API-only source service; CLI deferred | #381 | N/A | A | N: no CLI command is registered; use the supported management API |
 | `GET /repository-quota-alert-rules/{ruleId}/events`<br>`listRepositoryQuotaAlertEvents` | `quota-alert events <rule>` | #336 | M2 implemented | A | Q |
 | `GET /repository-quota-alert-rules/{ruleId}`<br>`getRepositoryQuotaAlertRule` | `quota-alert show <rule>` | #336 | M2 implemented | A | Q |
 | `PUT /repository-quota-alert-rules/{ruleId}`<br>`updateRepositoryQuotaAlertRule` | `quota-alert update <rule>` | #336 | M2 implemented | A | C |
@@ -368,7 +376,7 @@ only, never that agctl implements it:
 | gateway apt-snapshot verify | #138 documentation; remote archive/restore see the table above | LOCAL, already exists | local archive read and digest integrity; the output signatures=not_checked must not pretend trusted signature verification passed |
 | gateway theme validate/install/list | #139 distinguishes the local directory from remote managed | LOCAL, already exists | explicit local directory/file privileges; package validation and ownership; a remote admin token does not buy local write access |
 | complete system backup/restore, host/deployment configuration, worker/PG/S3/SMTP relay/auth/CA | #126/#137/#139 define the deployment entry points; remote needs a dedicated API | LOCAL/remote BLOCKED | no generic remote management endpoint yet; no implicit SSH/container/database access; no automatic probing from real secrets |
-| Nexus source connection, online full and continuous incremental migration jobs | #269, related to #199/#202/#204/#205; a future #137 accepts the real API | BLOCKED | no durable server-side migration contract has shipped; source read-only and artifact/principal permission migration are separated by default; offline import commands cannot claim online synchronization completed |
+| Online full and continuous incremental byte migration jobs | #269, related to #199/#202/#204/#205; a future #137 accepts the real API | BLOCKED | source discovery and mapping are API-only (#381); durable byte jobs have not shipped; source read-only and artifact/principal permission migration are separated by default; offline import commands cannot claim online synchronization completed |
 | physical mount alerts, cluster sender readiness/backlog, and more complete notifications | #255/#256 and #209–#213/#229/#230; a future #336 extends it | BLOCKED | the existing partial capability/heartbeat is not proof that every role shipped; wait for real API/schema/deployment acceptance; do not fabricate fields or commands |
 
 Sources: `cmd/gateway/main.go`; `internal/{backupops,snapshotimport,preflight,evidence,aptpublication,consoletheme}/cli*.go`;

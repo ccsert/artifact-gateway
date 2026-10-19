@@ -16,7 +16,7 @@
 某一行才转为 implemented/verified。
 
 覆盖基线：`api/openapi/management-runtime-v1.json`（提交
-`a504ba48cd93371badcb1f2781b120b359e57b69`，127 路径 / 177 操作），加上 #366 新纳入契约的四条 Conan 会话操作（当前 131 路径 / 181 操作），以及
+`a504ba48cd93371badcb1f2781b120b359e57b69`，127 路径 / 177 操作），加上 #366 新纳入契约的四条 Conan 会话操作（131 路径 / 181 操作）以及 #381 源发现操作（当前 136 路径 / 189 操作），以及
 `api/openapi/native-hosted-v1.json` 中 CLI 需要触达的协议端点。计数由下方
 漂移守卫重新推导，不固定在本页；契约变化时先更新本页。最近一次核对：
 2026-10-11（#126 补充）。
@@ -62,12 +62,20 @@ Gateway E2E，不只检查 HTTP 200：
 
 ## 管理契约逐操作映射
 
-下表 181 行覆盖基线 `api/openapi/management-runtime-v1.json` 的完整操作集；
+下表 189 行覆盖基线 `api/openapi/management-runtime-v1.json` 的完整操作集；
 守卫从文件重新推导该集合，不信任此计数。路径均相对 `/api/v2`（契约的
 server base）。计划命令省略前导 `agctl`。
 
 | API（均相对 /api/v2）/ operationId | 计划命令（省略 agctl） | 承接 | 阶段 | 权限 | 验收 |
 | --- | --- | --- | --- | --- | --- |
+| `GET /migration-sources`<br>`listMigrationSources` | N：当前仅提供源管理 API，CLI 暂缓 | #381 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `POST /migration-sources`<br>`createMigrationSource` | N：当前仅提供源管理 API，CLI 暂缓 | #381 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `GET /migration-sources/{sourceId}`<br>`getMigrationSource` | N：当前仅提供源管理 API，CLI 暂缓 | #381 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `PUT /migration-sources/{sourceId}`<br>`updateMigrationSource` | N：当前仅提供源管理 API，CLI 暂缓 | #381 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `DELETE /migration-sources/{sourceId}`<br>`deleteMigrationSource` | N：当前仅提供源管理 API，CLI 暂缓 | #381 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `POST /migration-sources/{sourceId}/preflight`<br>`preflightMigrationSource` | N：当前仅提供源管理 API，CLI 暂缓 | #381 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `POST /migration-sources/{sourceId}/discovery`<br>`discoverMigrationSource` | N：当前仅提供源管理 API，CLI 暂缓 | #381 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `POST /migration-sources/{sourceId}/mapping-preview`<br>`previewMigrationSourceMapping` | N：当前仅提供源管理 API，CLI 暂缓 | #381 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
 | `GET /repository-quota-alert-rules/{ruleId}/events`<br>`listRepositoryQuotaAlertEvents` | `quota-alert events <rule>` | #336 | M2 implemented | A | Q |
 | `GET /repository-quota-alert-rules/{ruleId}`<br>`getRepositoryQuotaAlertRule` | `quota-alert show <rule>` | #336 | M2 implemented | A | Q |
 | `PUT /repository-quota-alert-rules/{ruleId}`<br>`updateRepositoryQuotaAlertRule` | `quota-alert update <rule>` | #336 | M2 implemented | A | C |
@@ -319,7 +327,7 @@ server base）。计划命令省略前导 `agctl`。
 | gateway apt-snapshot verify | #138 文档；远程归档/恢复见上表 | LOCAL 已有 | 本地归档读/摘要完整性；输出 signatures=not_checked 不冒充可信签名已通过 |
 | gateway theme validate/install/list | #139 区分本地 directory 与远程 managed | LOCAL 已有 | 显式本地目录/文件权限；包校验/ownership；不以远端 admin token 获得本地写入权 |
 | 完整系统备份/恢复、主机/部署配置、worker/PG/S3/SMTP relay/auth/CA | #126/#137/#139 明确部署入口；远程需求待独立 API | LOCAL/远程 BLOCKED | 尚无通用远程管理端点；不做隐式 SSH/容器/数据库直连，不从真实 secrets 自动探测 |
-| Nexus 源连接/在线全量与持续增量迁移任务 | #269，关联 #199/#202/#204/#205；未来 #137 接受实际 API | BLOCKED | 未实现持久服务端迁移契约；默认源只读/制品与用户权限秘密迁移分离；不能由离线导入命令宣称在线同步完成 |
+| 在线全量与持续增量字节迁移任务 | #269，关联 #199/#202/#204/#205；未来 #137 接受实际 API | BLOCKED | 源发现与映射当前仅提供 API（#381）；持久字节任务仍未实现；默认源只读/制品与用户权限秘密迁移分离；不能由离线导入命令宣称在线同步完成 |
 | 物理挂载告警、集群 sender 就绪/积压与更完整通知 | #255/#256 及 #209–#213/#229/#230；未来 #336 扩展 | BLOCKED | 现有局部 capability/心跳不是全部角色交付证明；待实际 API/schema/部署验收，不伪造字段或命令 |
 
 来源：`cmd/gateway/main.go`、`internal/{backupops,snapshotimport,preflight,evidence,aptpublication,consoletheme}/cli*.go`；
