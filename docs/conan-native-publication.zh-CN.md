@@ -51,6 +51,12 @@ Conan Basic 登录接受本地机器账户凭据或配置的 Resolver 凭据，�
 验证期间的并发指针变化。同内容重放只保留一个可见身份；已有身份不同字节返回 409。
 缺失或错误资产、manifest 或身份不一致返回 422，权限拒绝不会公开修订。
 
+若提交后最终 manifest 的应答丢失，可只重试同一 manifest。新原生会话原子取得当前可见
+Recipe/Package 的精确完整资产快照，也支持晋升目标保留的共享不可变 key。
+本次 manifest 仍写入新 key，服务端重新校验每个资产及完整展开树，再做不可变重放提交。
+快照不依赖前次会话的有效期或发布者；已有 open 会话保留其自身上传指针，重试不会补写
+覆盖并发 PUT。不同字节、不可用对象、墓碑和隔离仍拒绝发布，重放审计记录真实调用者。
+
 管理发布保留原有 HTTP 请求和响应形状：
 `POST /api/v2/repositories/{id}/conan-publish-sessions` 声明完整 Recipe/Package
 文件集合及精确 SHA-256、大小；
@@ -69,6 +75,14 @@ PostgreSQL 和 S3 服务重启继续；过期会话被 fencing，重试获得全
 解除后可合法重试。Retention 只评估可见修订；未过期 open 会话对象不回收，遗弃 intent
 经过 collector 宽限期后可回收，已提交可见引用保留物理字节。没有新增存储后端或另一套
 发布系统；既有完整修订晋升、复制、墓碑/恢复与回收契约继续生效。
+
+回收先原子检查所有仓库的可见引用（包含晋升共享 key）及未过期 open 会话，再持久标记对象
+`collecting`（#421）。引用先取得此边界会阻止删除；回收先取得后，恢复、重试快照创建、
+发布和分发都拒绝该 key。对象删除或元数据完成失败、Worker 重启都保留此栅栏，幂等重试
+完成回收，不会让旧 key 再次可见。
+
+Conan 回收任务因引用保护而跳过并完成后，最后一个引用再次撤下时可调度确定性后继任务
+（#422）；同一已完成前驱上的重复或并发调度收敛为一个后继，保留原有任务历史。
 
 成功 PUT 返回 `X-Artifact-Gateway-Publish-Session` 和 `X-Artifact-Gateway-Publish-State`
 （open/committed）；管理 Session GET 可查同一会话，但管理对象 PUT/commit 不得修改原生会话或绕过
@@ -90,7 +104,7 @@ metadata 上传、其他压缩格式和任意远程索引聚合。
 `make conan-e2e` 创建私有固定客户端、唯一 PostgreSQL/RustFS Compose 工程与每轮动态端口。
 真实 create/upload/list/download/install 覆盖 Memory 与 PostgreSQL/S3；主动切断上传，
 恢复前重启两个持久服务，读取前再次重启；从生产者本地缓存冻结 RREV/Package ID/PREV，并在进入 Gateway 前捕获精确七个上传输入；
-以这些独立输入核 HTTP/S3 完整字节及元数据 size/SHA-256/身份，再核 publication audit
+重启后只重试两个原始 manifest，以这些独立输入核 HTTP/S3 完整字节及元数据 size/SHA-256/身份，再核 publication audit
 和扫描调度，最后从 Group 做空缓存 target-only 安装。
 脚本要求指定 fixture 实际 pass，skip 不能变绿；完成清理进程、凭据、容器、卷和网络。
 不访问生产或外部 Nexus。

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,9 +30,31 @@ func (s *MemoryStore) BeginConanNativeSession(ctx context.Context, incoming Cona
 		s.conanSessions[id] = session
 	}
 	incoming.ID, incoming.Native, incoming.Version = uuid.NewString(), true, 1
-	incoming.State, incoming.ExpiresAt, incoming.Objects = "open", now.Add(time.Hour), nil
-	s.conanSessions[incoming.ID] = incoming
-	s.conanUploads[incoming.ID] = make(map[string]string)
+	incoming.State, incoming.ExpiresAt, incoming.Objects = "open", now.Add(time.Hour), make([]MavenDeclaredObject, 0)
+	uploads := make(map[string]string)
+	recipe := s.conanRecipes[conanRecipeKey(incoming.RepositoryID, incoming.Reference, incoming.RecipeRevision)]
+	visible := recipe.State == "visible"
+	if incoming.Kind == "package" {
+		pkg := s.conanPackages[conanPackageKey(incoming.RepositoryID, incoming.Reference, incoming.RecipeRevision, incoming.PackageID, incoming.PackageRevision)]
+		visible = visible && pkg.State == "visible"
+	}
+	// A fresh retry owns a snapshot of the already published tree. Existing
+	// open sessions return above: never repair over another in-flight PUT.
+	if visible {
+		for _, asset := range s.conanAssets {
+			if asset.RepositoryID == incoming.RepositoryID && asset.Reference == incoming.Reference && asset.RecipeRevision == incoming.RecipeRevision && asset.PackageID == incoming.PackageID && asset.PackageRevision == incoming.PackageRevision {
+				intent, ok := s.conanObjects[asset.ObjectKey]
+				if !ok || intent.Digest != asset.Digest || intent.Size != asset.Size || !intent.CollectingAt.IsZero() || !intent.CollectedAt.IsZero() {
+					return ConanPublishSession{}, ErrDisabled
+				}
+				incoming.Objects = append(incoming.Objects, MavenDeclaredObject{Name: asset.Path, Digest: asset.Digest, Size: asset.Size})
+				uploads[asset.Path] = asset.ObjectKey
+			}
+		}
+		sort.Slice(incoming.Objects, func(i, j int) bool { return incoming.Objects[i].Name < incoming.Objects[j].Name })
+	}
+	s.conanSessions[incoming.ID] = cloneConanSession(incoming)
+	s.conanUploads[incoming.ID] = uploads
 	return incoming, nil
 }
 
@@ -49,7 +72,7 @@ func (s *MemoryStore) StageConanPublicationObject(ctx context.Context, id string
 		return ConanPublishSession{}, ErrDisabled
 	}
 	intent, ok := s.conanObjects[key]
-	if !ok || intent.RepositoryID != session.RepositoryID || intent.Digest != object.Digest || intent.Size != object.Size || !intent.ClaimedAt.IsZero() || !intent.CollectedAt.IsZero() {
+	if !ok || intent.RepositoryID != session.RepositoryID || intent.Digest != object.Digest || intent.Size != object.Size || !intent.ClaimedAt.IsZero() || !intent.CollectingAt.IsZero() || !intent.CollectedAt.IsZero() {
 		return ConanPublishSession{}, ErrDisabled
 	}
 	var err error
@@ -85,7 +108,11 @@ func (s *MemoryStore) CommitConanPublicationSession(ctx context.Context, id stri
 	}
 	for _, asset := range assets {
 		intent, ok := s.conanObjects[asset.ObjectKey]
-		if !ok || intent.Digest != asset.Digest || intent.Size != asset.Size || !intent.CollectedAt.IsZero() {
+		published, mapped := s.conanAssets[conanAssetKey(asset)]
+		// Promotion keeps source-owned immutable keys. Only the current
+		// target's exact published mapping may retain such a shared key.
+		shared := mapped && published.ObjectKey == asset.ObjectKey && published.Digest == asset.Digest && published.Size == asset.Size
+		if !ok || intent.RepositoryID != session.RepositoryID && !shared || intent.Digest != asset.Digest || intent.Size != asset.Size || !intent.CollectingAt.IsZero() || !intent.CollectedAt.IsZero() {
 			return ConanPublishSession{}, false, ErrDisabled
 		}
 	}

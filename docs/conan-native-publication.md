@@ -71,6 +71,16 @@ concurrent pointer change. Identical retries keep one visible identity; changed
 bytes at an existing identity return 409. Missing or wrong assets/manifest and
 identity mismatch return 422. Permission denial does not expose a revision.
 
+If the final manifest acknowledgement is lost after commit, retrying only that
+same manifest is supported. A new native session atomically snapshots the exact
+currently visible recipe/package assets, including a promoted target's shared
+immutable keys. The incoming manifest still receives a fresh key; the Gateway
+revalidates every asset and the complete tree before an immutable replay commit.
+The snapshot does not depend on the previous session's lifetime or publisher.
+An existing open session keeps its own uploaded pointers: retry never repairs
+over a concurrent PUT. Changed bytes, unavailable objects, tombstones and
+quarantine continue to reject publication, and replay audits name the caller.
+
 Management publication retains its HTTP request and response shapes:
 `POST /api/v2/repositories/{id}/conan-publish-sessions` declares the complete
 recipe or package file set with exact SHA-256 and size;
@@ -101,6 +111,19 @@ references retain bytes. No new storage backend or second publication system is
 introduced. Existing promotion, replication, tombstone/restore and collection
 contracts still apply to complete revisions.
 
+Collection atomically checks visible references in every Repository, including
+promoted shared keys, and unexpired open sessions before durably marking an
+object `collecting` (#421). A reference that wins this boundary prevents deletion.
+Once collection wins, restore, retry snapshot creation, publication and
+distribution reject the key. This fence remains across worker restarts and
+object-delete or metadata-finalization failures; idempotent retries complete
+collection without allowing the old key to become visible again.
+
+After a protected-reference skip completes a Conan collection job, withdrawing
+the last reference can schedule a deterministic successor job (#422). Repeated
+or concurrent scheduling for the same completed predecessor converges on one
+successor and retains the original job history.
+
 Successful PUTs return `X-Artifact-Gateway-Publish-Session` and
 `X-Artifact-Gateway-Publish-State` (`open` or `committed`). The management session
 GET can inspect that same session. Management object PUT/commit cannot mutate a
@@ -128,7 +151,7 @@ compression and remote index federation are not implemented.
 Compose project with per-run loopback ports. It runs real `create/upload/list/
 download/install` against Memory and PostgreSQL/S3, cuts an upload connection,
 restarts both persistence services before retry and again before read, verifies
-the producer's local-cache RREV/package ID/PREV and captures its exact seven upload inputs before the Gateway. It compares each complete HTTP/S3 object and metadata size/SHA-256/identity to those independent producer inputs, checks
+the producer's local-cache RREV/package ID/PREV and captures its exact seven upload inputs before the Gateway. After restart it retries only the two original manifests and compares each complete HTTP/S3 object and metadata size/SHA-256/identity to those independent producer inputs, checks
 publish audits and scan scheduling, then performs an empty-cache target-only
 install through a Group. The script requires the named fixtures to pass (skips
 cannot produce green) and removes its processes, credentials, containers, volumes

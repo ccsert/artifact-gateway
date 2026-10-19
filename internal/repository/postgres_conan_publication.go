@@ -76,10 +76,62 @@ func (s *PostgresStore) BeginConanNativeSession(ctx context.Context, incoming Co
 		return ConanPublishSession{}, err
 	}
 	incoming.ID, incoming.Native, incoming.Version = uuid.NewString(), true, 1
-	incoming.State, incoming.ExpiresAt, incoming.Objects = "open", time.Now().UTC().Add(time.Hour), nil
-	_, err = tx.ExecContext(ctx, `INSERT INTO native_conan_publish_sessions(id,repository_id,publisher,kind,reference,recipe_revision,package_id,package_revision,state,expires_at,objects,native,version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'open',$9,'[]',true,1)`, incoming.ID, incoming.RepositoryID, incoming.Publisher, incoming.Kind, incoming.Reference, incoming.RecipeRevision, incoming.PackageID, incoming.PackageRevision, incoming.ExpiresAt)
+	incoming.State, incoming.ExpiresAt, incoming.Objects = "open", time.Now().UTC().Add(time.Hour), make([]MavenDeclaredObject, 0)
+	// Seed only a newly created session, under the publication locks. An open
+	// session's uploads must never be overwritten by retry snapshot repair.
+	rows, err := tx.QueryContext(ctx, `SELECT a.path,a.object_key,a.digest,a.size FROM native_conan_assets a
+		JOIN native_conan_recipe_revisions r ON r.repository_id=a.repository_id AND r.reference=a.reference AND r.revision=a.recipe_revision
+		LEFT JOIN native_conan_package_revisions p ON p.repository_id=a.repository_id AND p.reference=a.reference AND p.recipe_revision=a.recipe_revision AND p.package_id=a.package_id AND p.revision=a.package_revision
+		WHERE a.repository_id=$1 AND a.reference=$2 AND a.recipe_revision=$3 AND a.package_id=$4 AND a.package_revision=$5
+		AND r.state='visible' AND (a.package_id='' OR p.state='visible') ORDER BY a.path`, incoming.RepositoryID, incoming.Reference, incoming.RecipeRevision, incoming.PackageID, incoming.PackageRevision)
 	if err != nil {
 		return ConanPublishSession{}, err
+	}
+	uploads := make(map[string]string)
+	for rows.Next() {
+		var object MavenDeclaredObject
+		var key string
+		if err = rows.Scan(&object.Name, &key, &object.Digest, &object.Size); err != nil {
+			_ = rows.Close()
+			return ConanPublishSession{}, err
+		}
+		incoming.Objects = append(incoming.Objects, object)
+		uploads[object.Name] = key
+	}
+	err = rows.Err()
+	_ = rows.Close()
+	if err != nil {
+		return ConanPublishSession{}, err
+	}
+	keys := make([]string, 0, len(uploads))
+	for _, key := range uploads {
+		keys = append(keys, key)
+	}
+	if err = lockConanObjectsTx(ctx, tx, keys...); err != nil {
+		return ConanPublishSession{}, err
+	}
+	for _, object := range incoming.Objects {
+		var available bool
+		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM native_conan_object_intents WHERE object_key=$1 AND digest=$2 AND size=$3 AND collecting_at IS NULL AND collected_at IS NULL)`, uploads[object.Name], object.Digest, object.Size).Scan(&available)
+		if err != nil {
+			return ConanPublishSession{}, err
+		}
+		if !available {
+			return ConanPublishSession{}, ErrDisabled
+		}
+	}
+	objects, err := json.Marshal(incoming.Objects)
+	if err != nil {
+		return ConanPublishSession{}, err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO native_conan_publish_sessions(id,repository_id,publisher,kind,reference,recipe_revision,package_id,package_revision,state,expires_at,objects,native,version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'open',$9,$10,true,1)`, incoming.ID, incoming.RepositoryID, incoming.Publisher, incoming.Kind, incoming.Reference, incoming.RecipeRevision, incoming.PackageID, incoming.PackageRevision, incoming.ExpiresAt, objects)
+	if err != nil {
+		return ConanPublishSession{}, err
+	}
+	for name, key := range uploads {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO native_conan_publish_uploads(session_id,object_name,object_key) VALUES($1,$2,$3)`, incoming.ID, name, key); err != nil {
+			return ConanPublishSession{}, err
+		}
 	}
 	return incoming, tx.Commit()
 }
@@ -97,8 +149,11 @@ func (s *PostgresStore) StageConanPublicationObject(ctx context.Context, id stri
 	if session.State != "open" || !session.ExpiresAt.After(time.Now()) {
 		return ConanPublishSession{}, ErrDisabled
 	}
+	if err = lockConanObjectsTx(ctx, tx, key); err != nil {
+		return ConanPublishSession{}, err
+	}
 	var verified bool
-	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM native_conan_object_intents WHERE object_key=$1 AND repository_id=$2 AND digest=$3 AND size=$4 AND claimed_at IS NULL AND collected_at IS NULL)`, key, session.RepositoryID, object.Digest, object.Size).Scan(&verified)
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM native_conan_object_intents WHERE object_key=$1 AND repository_id=$2 AND digest=$3 AND size=$4 AND claimed_at IS NULL AND collecting_at IS NULL AND collected_at IS NULL)`, key, session.RepositoryID, object.Digest, object.Size).Scan(&verified)
 	if err != nil {
 		return ConanPublishSession{}, err
 	}
@@ -170,9 +225,18 @@ func (s *PostgresStore) CommitConanPublicationSession(ctx context.Context, id st
 	if err != nil {
 		return ConanPublishSession{}, false, err
 	}
+	keys := make([]string, 0, len(assets))
+	for _, asset := range assets {
+		keys = append(keys, asset.ObjectKey)
+	}
+	if err = lockConanObjectsTx(ctx, tx, keys...); err != nil {
+		return ConanPublishSession{}, false, err
+	}
 	for _, asset := range assets {
 		var valid bool
-		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM native_conan_object_intents WHERE object_key=$1 AND repository_id=$2 AND digest=$3 AND size=$4 AND collected_at IS NULL)`, asset.ObjectKey, repo.ID, asset.Digest, asset.Size).Scan(&valid)
+		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM native_conan_object_intents i WHERE i.object_key=$1 AND i.digest=$3 AND i.size=$4 AND i.collecting_at IS NULL AND i.collected_at IS NULL AND (i.repository_id=$2 OR EXISTS(
+			SELECT 1 FROM native_conan_assets a WHERE a.repository_id=$2 AND a.reference=$5 AND a.recipe_revision=$6 AND a.package_id=$7 AND a.package_revision=$8 AND a.path=$9 AND a.object_key=i.object_key AND a.digest=i.digest AND a.size=i.size
+		)))`, asset.ObjectKey, repo.ID, asset.Digest, asset.Size, session.Reference, session.RecipeRevision, session.PackageID, session.PackageRevision, asset.Path).Scan(&valid)
 		if err != nil {
 			return ConanPublishSession{}, false, err
 		}

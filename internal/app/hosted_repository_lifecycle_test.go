@@ -505,7 +505,10 @@ func TestRepositoryRestoreRestoresConanTombstoneAndRejectsCollectedObjects(t *te
 	if _, err = store.TombstoneConanRecipeRevision(ctx, conan.ID, second.Reference, second.Revision); err != nil {
 		t.Fatal(err)
 	}
-	if err = store.MarkConanObjectCollected(ctx, "native/conan/restore/second"); err != nil {
+	if collect, err := store.BeginConanObjectCollection(ctx, "native/conan/restore/second"); err != nil || !collect {
+		t.Fatalf("claim deleted Conan object: collect=%t err=%v", collect, err)
+	}
+	if err = store.CompleteConanObjectCollection(ctx, "native/conan/restore/second"); err != nil {
 		t.Fatal(err)
 	}
 	if response := request(conan.ID, "admin-secret", second.Reference+"#"+second.Revision); response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "restore_unavailable") {

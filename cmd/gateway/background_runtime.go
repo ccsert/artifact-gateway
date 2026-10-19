@@ -52,7 +52,7 @@ func (r backgroundRuntime) startSchedulers(ctx context.Context, cfg config.Confi
 	if background, ok := formatmodule.Capability[formatmodule.Background](modules, repository.FormatRaw); ok {
 		background.StartScheduler(ctx, time.Hour)
 	}
-	app.NativeConanMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
+	app.NativeConanMaintenance{Store: r.store, Collections: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativeNPMMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativePyPIMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
 	app.NativeGoMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartScheduler(ctx, time.Hour)
@@ -231,7 +231,7 @@ func (r backgroundRuntime) startConanWorkers(ctx context.Context, cfg config.Con
 		return
 	}
 	if cfg.WorkerKindEnabled("reclaim") {
-		app.NativeConanMaintenance{Store: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
+		app.NativeConanMaintenance{Store: r.store, Collections: r.store, Objects: r.objects, Metrics: r.metrics}.StartWorker(ctx, time.Minute)
 	}
 	if cfg.WorkerKindEnabled("promotion") {
 		conanprotocol.NativePromotion{Store: r.store, Intelligence: r.store, Metrics: r.metrics}.Start(ctx, time.Minute)

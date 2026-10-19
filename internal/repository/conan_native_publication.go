@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"slices"
 	"strconv"
 )
 
@@ -35,7 +36,7 @@ func stageConanPublication(session ConanPublishSession, object MavenDeclaredObje
 }
 
 func cloneConanSession(session ConanPublishSession) ConanPublishSession {
-	session.Objects = append([]MavenDeclaredObject(nil), session.Objects...)
+	session.Objects = slices.Clone(session.Objects)
 	return session
 }
 

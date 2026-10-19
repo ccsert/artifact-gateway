@@ -578,7 +578,6 @@ type NativeConanStore interface {
 	ListConanPublishUploads(context.Context, string) (map[string]string, error)
 	ListReclaimableConanObjects(context.Context, time.Time, int) ([]ConanObjectIntent, error)
 	ConanObjectHasVisibleReference(context.Context, string) (bool, error)
-	MarkConanObjectCollected(context.Context, string) error
 	StageConanObject(context.Context, ConanObjectIntent) error
 	PutConanRecipeRevision(context.Context, ConanRecipeRevision, []ConanAsset) (ConanRecipeRevision, error)
 	PutConanPackageRevision(context.Context, ConanPackageRevision, []ConanAsset) (ConanPackageRevision, error)

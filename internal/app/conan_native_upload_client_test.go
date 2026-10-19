@@ -3,9 +3,11 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -295,6 +297,29 @@ class Fixture(ConanFile):
 			t.Fatalf("official producer did not supply required fixture input %s", path)
 		}
 	}
+	// The client has already published both trees and the backend has been
+	// reopened (real PostgreSQL/RustFS restarts in the persistence fixture).
+	// Treat the successful final acknowledgements as lost, retry only those
+	// exact producer manifests, and keep verifying all seven original assets.
+	for _, root := range []string{recipeRoot, packageRoot} {
+		path := root + "/files/conanmanifest.txt"
+		manifest := expectedInputs[path]
+		request, err := http.NewRequestWithContext(ctx, http.MethodPut, server.URL+path, bytes.NewReader(manifest))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.SetBasicAuth("fixture", credential)
+		request.Header.Set("X-Checksum-Sha1", fmt.Sprintf("%x", sha1.Sum(manifest)))
+		response, err := server.Client().Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if readErr != nil || response.StatusCode != http.StatusCreated || response.Header.Get("X-Artifact-Gateway-Publish-State") != "committed" {
+			t.Fatalf("post-restart manifest-only retry %s=%d %s err=%v", path, response.StatusCode, data, readErr)
+		}
+	}
 	seenPaths := map[string]bool{}
 	for _, asset := range append(recipeAssets, packageAssets...) {
 		root := recipeRoot
@@ -340,25 +365,28 @@ class Fixture(ConanFile):
 	if err != nil {
 		t.Fatal(err)
 	}
-	publications := 0
+	publications, replays := 0, 0
 	for _, audit := range audits {
 		if audit.Operation != "publish" {
 			continue
 		}
 		publications++
+		if audit.Evidence["replay"] == "true" {
+			replays++
+		}
 		session, err := store.GetConanPublishSession(ctx, audit.Evidence["publicationSessionId"])
 		if err != nil || !session.Native || session.State != "committed" || audit.Actor != "service-account:"+account.ID || session.Publisher != audit.Actor {
 			t.Fatalf("publication audit disconnected from durable session: %+v %v", audit, err)
 		}
 	}
-	if publications != 2 {
-		t.Fatalf("publication audits=%d, want one recipe and one package", publications)
+	if publications != 4 || replays != 2 {
+		t.Fatalf("publication audits=%d replays=%d, want initial recipe/package and two manifest-only replays", publications, replays)
 	}
 	jobs, err := store.ListLifecycleJobs(ctx, repo.ID, 100)
 	if err != nil || len(jobs) != 2 {
 		t.Fatalf("native publication bypassed automatic recipe/package scanning: jobs=%v err=%v", jobs, err)
 	}
-	t.Logf("official Conan 2.21.0 interrupted/restarted publication and cold install: %s; %d complete assets verified", fullRef, len(recipeAssets)+len(packageAssets))
+	t.Logf("official Conan 2.21.0 interrupted/restarted publication, manifest-only replay and cold install: %s; %d complete assets verified", fullRef, len(recipeAssets)+len(packageAssets))
 }
 
 func conanFixtureEnvironment(home string) []string {
