@@ -64,29 +64,39 @@ type Counts struct {
 	SourceMissing int64 `json:"sourceMissing"`
 	SourceDeleted int64 `json:"sourceDeleted"`
 }
+type ScanFailure struct {
+	Stage              string    `json:"stage"`
+	SourceRepositories []string  `json:"sourceRepositories"`
+	SourceRepository   string    `json:"sourceRepository"`
+	SourcePath         string    `json:"sourcePath"`
+	Identity           string    `json:"identity"`
+	Code               string    `json:"code"`
+	OccurredAt         time.Time `json:"occurredAt"`
+}
 type Batch struct {
 	StartInput
-	ID                      string    `json:"id"`
-	Version                 string    `json:"version"`
-	State                   string    `json:"state"`
-	ManifestSHA256          string    `json:"manifestSha256"`
-	ScanComplete            bool      `json:"scanComplete"`
-	MetadataDiscovered      int64     `json:"metadataDiscovered"`
-	SourceVerificationBytes int64     `json:"sourceVerificationBytes"`
-	EntryCount              int64     `json:"entryCount"`
-	TotalBytes              *int64    `json:"totalBytes"`
-	TransferredBytes        int64     `json:"transferredBytes"`
-	VerifiedBytes           int64     `json:"verifiedBytes"`
-	VisibleIdentities       int64     `json:"visibleIdentities"`
-	Counts                  Counts    `json:"counts"`
-	LastError               string    `json:"lastError"`
-	CreatedAt               time.Time `json:"createdAt"`
-	UpdatedAt               time.Time `json:"updatedAt"`
-	Actor                   string    `json:"-"`
-	LeaseToken              string    `json:"-"`
-	LeaseEpoch              int64     `json:"-"`
-	PauseRequested          bool      `json:"-"`
-	CancelRequested         bool      `json:"-"`
+	ID                      string       `json:"id"`
+	Version                 string       `json:"version"`
+	State                   string       `json:"state"`
+	ManifestSHA256          string       `json:"manifestSha256"`
+	ScanComplete            bool         `json:"scanComplete"`
+	MetadataDiscovered      int64        `json:"metadataDiscovered"`
+	SourceVerificationBytes int64        `json:"sourceVerificationBytes"`
+	EntryCount              int64        `json:"entryCount"`
+	TotalBytes              *int64       `json:"totalBytes"`
+	TransferredBytes        int64        `json:"transferredBytes"`
+	VerifiedBytes           int64        `json:"verifiedBytes"`
+	VisibleIdentities       int64        `json:"visibleIdentities"`
+	Counts                  Counts       `json:"counts"`
+	LastError               string       `json:"lastError"`
+	LastScanFailure         *ScanFailure `json:"lastScanFailure,omitempty"`
+	CreatedAt               time.Time    `json:"createdAt"`
+	UpdatedAt               time.Time    `json:"updatedAt"`
+	Actor                   string       `json:"-"`
+	LeaseToken              string       `json:"-"`
+	LeaseEpoch              int64        `json:"-"`
+	PauseRequested          bool         `json:"-"`
+	CancelRequested         bool         `json:"-"`
 }
 type Asset struct {
 	SourcePath string `json:"sourcePath"`
@@ -169,10 +179,11 @@ type Store interface {
 	Claim(context.Context, []string) (Batch, error)
 	Renew(context.Context, string, string) error
 	RecordScanProgress(context.Context, string, string, int64, int64) error
+	RecordScanFailure(context.Context, string, string, ScanFailure) error
 	Seal(context.Context, Batch, []Entry, string, int64, int64) error
 	BeginEntry(context.Context, Entry, string) error
 	Checkpoint(context.Context, Entry, string) error
 	AddTransferred(context.Context, string, string, string, int64) error
-	Fence(context.Context, string, string) (func(), error)
+	PublicationContext(context.Context, string, string) context.Context
 	Finish(context.Context, string, string, string, string) error
 }

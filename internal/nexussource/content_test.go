@@ -69,17 +69,41 @@ func TestSourceContentSlowBodyHonorsBoundedDeadline(t *testing.T) {
 		if !strings.HasPrefix(r.URL.Path, "/repository/raw-a/") {
 			return false
 		}
+		_, _ = io.WriteString(w, "a")
 		w.(http.Flusher).Flush()
 		<-r.Context().Done()
 		return true
 	})
-	service.options.OperationTimeout = 25 * time.Millisecond
-	content, err := service.OpenAsset(context.Background(), id, "1", "raw-a", AssetRequest{Path: "slow.bin", Size: 4})
+	// Leave room for DNS pinning and a real TLS handshake under the race
+	// detector; the received prefix proves the timeout occurs in the body.
+	service.options.OperationTimeout = time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	started := time.Now()
+	content, err := service.OpenAsset(ctx, id, "1", "raw-a", AssetRequest{Path: "slow.bin", Size: 4})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = content.Body.Close() }()
-	if _, err = io.ReadAll(content.Body); err == nil {
-		t.Fatal("slow body exceeded source request deadline")
+	body, err := io.ReadAll(content.Body)
+	if string(body) != "a" {
+		t.Fatalf("slow-body fixture must deliver its prefix before timing out: %q", body)
 	}
+	requireCode(t, err, "source_timeout")
+	if time.Since(started) >= 4*time.Second {
+		t.Fatal("body read exhausted the outer context instead of its operation budget")
+	}
+}
+
+func TestSourceContentDelayedHeadersReturnBoundedTimeout(t *testing.T) {
+	service, id, _ := fixtureService(t, func(_ http.ResponseWriter, r *http.Request) bool {
+		if !strings.HasPrefix(r.URL.Path, "/repository/raw-a/") {
+			return false
+		}
+		<-r.Context().Done()
+		return true
+	})
+	service.options.OperationTimeout = 25 * time.Millisecond
+	_, err := service.OpenAsset(context.Background(), id, "1", "raw-a", AssetRequest{Path: "slow.bin", Size: 4})
+	requireCode(t, err, "source_timeout")
 }

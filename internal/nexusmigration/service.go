@@ -442,6 +442,24 @@ func code(err error) string {
 }
 
 func (s *Service) scan(ctx context.Context, b Batch) ([]Entry, string, int64, int64, error) {
+	failure := ScanFailure{Stage: "metadata_discovery", SourceRepositories: make([]string, 0, len(b.Mappings))}
+	for _, mapping := range b.Mappings {
+		failure.SourceRepositories = append(failure.SourceRepositories, mapping.SourceRepository)
+	}
+	entries, hash, metadata, total, err := s.scanManifest(ctx, b, &failure)
+	if err != nil && !errors.Is(err, ErrStopped) {
+		failure.Code, failure.OccurredAt = code(err), s.options.Now().UTC()
+		recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		recordErr := s.store.RecordScanFailure(recordCtx, b.ID, b.LeaseToken, failure)
+		cancel()
+		if recordErr != nil {
+			return nil, "", 0, 0, recordErr
+		}
+	}
+	return entries, hash, metadata, total, err
+}
+
+func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailure) ([]Entry, string, int64, int64, error) {
 	names := make([]string, 0, len(b.Mappings))
 	targets := map[string]string{}
 	for _, mp := range b.Mappings {
@@ -455,8 +473,10 @@ func (s *Service) scan(ctx context.Context, b Batch) ([]Entry, string, int64, in
 	if discovery.SourceVersion != b.SourceVersion {
 		return nil, "", 0, 0, Failed("source_version_changed")
 	}
+	failure.Stage = "manifest_planning"
 	formats := map[string]string{}
 	for _, repo := range discovery.Repositories {
+		failure.SourceRepository = repo.Name
 		format := repo.Format
 		if format == "maven2" {
 			format = "maven"
@@ -479,6 +499,7 @@ func (s *Service) scan(ctx context.Context, b Batch) ([]Entry, string, int64, in
 		unsupported(a.Repository, a.Path, a.Reason)
 	}
 	for _, a := range discovery.Assets {
+		failure.Stage, failure.SourceRepository, failure.SourcePath, failure.Identity = "manifest_planning", a.Repository, a.Path, ""
 		current, err := s.store.Get(ctx, b.ID)
 		if err != nil {
 			return nil, "", 0, 0, err
@@ -518,6 +539,7 @@ func (s *Service) scan(ctx context.Context, b Batch) ([]Entry, string, int64, in
 				continue
 			}
 		}
+		failure.Identity = identity
 		asset := Asset{SourcePath: a.Path, TargetPath: a.Path, Size: a.Size, SHA256: a.Checksum["sha256"], SHA1: a.Checksum["sha1"], MD5: a.Checksum["md5"]}
 		if format == "raw" {
 			asset.TargetPath = identity
@@ -525,11 +547,13 @@ func (s *Service) scan(ctx context.Context, b Batch) ([]Entry, string, int64, in
 		if asset.SHA256 == "" || format == "maven" && (asset.SHA1 == "" || asset.MD5 == "") {
 			// Missing mandatory hashes trigger a separately counted, read-only source
 			// verification. Complete metadata hashes avoid this extra transfer.
+			failure.Stage = "source_verification_open"
 			content, err := s.source.OpenAsset(ctx, b.SourceID, b.SourceVersion, a.Repository, AssetRequest{Path: a.Path, Size: a.Size})
 			if err != nil {
 				return nil, "", 0, 0, err
 			}
 			h256, h1, hm, h512 := sha256.New(), sha1.New(), md5.New(), sha512.New()
+			failure.Stage = "source_verification_read"
 			written, readErr := io.Copy(io.MultiWriter(h256, h1, hm, h512, &scanByteWriter{ctx: ctx, store: s.store, batch: b.ID, token: b.LeaseToken}), io.LimitReader(content.Body, a.Size+1))
 			closeErr := content.Body.Close()
 			if readErr != nil || closeErr != nil || written != a.Size {
@@ -539,6 +563,7 @@ func (s *Service) scan(ctx context.Context, b Batch) ([]Entry, string, int64, in
 			asset.SHA1 = hex.EncodeToString(h1.Sum(nil))
 			asset.MD5 = hex.EncodeToString(hm.Sum(nil))
 			asset.Validator = content.Validator
+			failure.Stage = "source_verification_digest"
 			for alg, want := range a.Checksum {
 				got := ""
 				switch alg {
@@ -567,6 +592,7 @@ func (s *Service) scan(ctx context.Context, b Batch) ([]Entry, string, int64, in
 		}
 		entry.Assets = append(entry.Assets, asset)
 	}
+	failure.Stage, failure.SourceRepository, failure.SourcePath, failure.Identity = "manifest_planning", "", "", ""
 	for _, entry := range byIdentity {
 		sort.Slice(entry.Assets, func(i, j int) bool { return entry.Assets[i].TargetPath < entry.Assets[j].TargetPath })
 		if entry.Format == "maven" {
@@ -647,6 +673,7 @@ func (s *Service) scan(ctx context.Context, b Batch) ([]Entry, string, int64, in
 		Mappings                        []Mapping
 		Entries                         []manifestEntry
 	}{b.SourceID, b.SourceVersion, b.PolicyVersion, b.Mappings, frozen}
+	failure.Stage = "source_version_validation"
 	if err = s.sourceUnchanged(ctx, b); err != nil {
 		return nil, "", 0, 0, err
 	}
@@ -802,13 +829,9 @@ func (s *Service) execute(ctx context.Context, b Batch, e *Entry) error {
 	if err = s.store.Checkpoint(ctx, *e, b.LeaseToken); err != nil {
 		return err
 	}
-	// The same advisory fence is taken by recovery and administrative controls.
-	// It stays held across final verification, native metadata commit and ledger.
-	releaseFence, err := s.store.Fence(ctx, b.ID, b.LeaseToken)
-	if err != nil {
-		return err
-	}
-	defer releaseFence()
+	// The actual native metadata transaction locks and validates this owner.
+	// A separate session lock cannot protect publication after that session dies.
+	ctx = s.store.PublicationContext(ctx, b.ID, b.LeaseToken)
 	if err = s.sourceUnchanged(ctx, b); err != nil {
 		return err
 	}

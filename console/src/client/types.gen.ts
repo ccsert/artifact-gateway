@@ -1225,6 +1225,25 @@ export type NexusMigrationCounts = {
   sourceDeleted: number;
 };
 
+/**
+ * Last failed scan diagnostic. No partial inventory is made executable. Empty asset fields identify failure before an individual asset was known; sourceRepositories bounds the selected repository scope. Contains no upstream URL or credential.
+ */
+export type NexusMigrationScanFailure = {
+  stage:
+    | "metadata_discovery"
+    | "manifest_planning"
+    | "source_verification_open"
+    | "source_verification_read"
+    | "source_verification_digest"
+    | "source_version_validation";
+  sourceRepositories: Array<string>;
+  sourceRepository: string;
+  sourcePath: string;
+  identity: string;
+  code: string;
+  occurredAt: string;
+};
+
 export type NexusMigrationBatch = {
   id: string;
   version: string;
@@ -1262,6 +1281,7 @@ export type NexusMigrationBatch = {
    * Actual source bytes read to fill missing manifest hashes during source verification, separately persisted even if the scan fails. Discovery-provided required hashes avoid this transfer.
    */
   sourceVerificationBytes: number;
+  lastScanFailure?: NexusMigrationScanFailure;
 };
 
 export type NexusMigrationBatchPage = {

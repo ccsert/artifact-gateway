@@ -2,6 +2,7 @@ package nexussource
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -21,7 +22,19 @@ type Content struct {
 type contentBody struct {
 	io.Reader
 	io.Closer
+	ctx  context.Context
 	done context.CancelFunc
+}
+
+func (b *contentBody) Read(p []byte) (int, error) {
+	n, err := b.Reader.Read(p)
+	if sourceTimedOut(b.ctx, err) {
+		return n, fail("source_timeout")
+	}
+	if err != nil && !errors.Is(err, io.EOF) {
+		return n, fail("source_download_failed")
+	}
+	return n, err
 }
 
 func (b *contentBody) Close() error { err := b.Closer.Close(); b.done(); return err }
@@ -53,7 +66,9 @@ func (s *Service) OpenAsset(ctx context.Context, id, version, repository string,
 	}
 	resp, err := remote.client.Do(req)
 	if err != nil {
-		return bad("source_unreachable")
+		requestErr := sourceRequestError(remote.ctx, err)
+		done()
+		return nil, requestErr
 	}
 	if resp.StatusCode != http.StatusOK {
 		_ = resp.Body.Close()
@@ -80,5 +95,5 @@ func (s *Service) OpenAsset(ctx context.Context, id, version, repository string,
 		_ = resp.Body.Close()
 		return bad("source_changed")
 	}
-	return &Content{Body: &contentBody{Reader: io.LimitReader(resp.Body, in.Size+1), Closer: resp.Body, done: done}, Validator: validator}, nil
+	return &Content{Body: &contentBody{Reader: io.LimitReader(resp.Body, in.Size+1), Closer: resp.Body, ctx: remote.ctx, done: done}, Validator: validator}, nil
 }

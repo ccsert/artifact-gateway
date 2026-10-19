@@ -2086,6 +2086,36 @@ func (e NexusMigrationEntryState) Valid() bool {
 	}
 }
 
+// Defines values for NexusMigrationScanFailureStage.
+const (
+	ManifestPlanning         NexusMigrationScanFailureStage = "manifest_planning"
+	MetadataDiscovery        NexusMigrationScanFailureStage = "metadata_discovery"
+	SourceVerificationDigest NexusMigrationScanFailureStage = "source_verification_digest"
+	SourceVerificationOpen   NexusMigrationScanFailureStage = "source_verification_open"
+	SourceVerificationRead   NexusMigrationScanFailureStage = "source_verification_read"
+	SourceVersionValidation  NexusMigrationScanFailureStage = "source_version_validation"
+)
+
+// Valid indicates whether the value is a known member of the NexusMigrationScanFailureStage enum.
+func (e NexusMigrationScanFailureStage) Valid() bool {
+	switch e {
+	case ManifestPlanning:
+		return true
+	case MetadataDiscovery:
+		return true
+	case SourceVerificationDigest:
+		return true
+	case SourceVerificationOpen:
+		return true
+	case SourceVerificationRead:
+		return true
+	case SourceVersionValidation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NexusMigrationStartPolicyVersion.
 const (
 	ReleaseRawV1 NexusMigrationStartPolicyVersion = "release-raw-v1"
@@ -5484,18 +5514,21 @@ type NexusMigrationAsset struct {
 
 // NexusMigrationBatch defines model for NexusMigrationBatch.
 type NexusMigrationBatch struct {
-	CapacityEvidence   NexusMigrationCapacityEvidence `json:"capacityEvidence"`
-	Counts             NexusMigrationCounts           `json:"counts"`
-	CreatedAt          time.Time                      `json:"createdAt"`
-	EntryCount         int64                          `json:"entryCount"`
-	Id                 openapi_types.UUID             `json:"id"`
-	LastError          string                         `json:"lastError"`
-	ManifestSha256     string                         `json:"manifestSha256"`
-	Mappings           []NexusMigrationMapping        `json:"mappings"`
-	MetadataDiscovered int64                          `json:"metadataDiscovered"`
-	PolicyVersion      string                         `json:"policyVersion"`
-	ScanComplete       bool                           `json:"scanComplete"`
-	SourceId           openapi_types.UUID             `json:"sourceId"`
+	CapacityEvidence NexusMigrationCapacityEvidence `json:"capacityEvidence"`
+	Counts           NexusMigrationCounts           `json:"counts"`
+	CreatedAt        time.Time                      `json:"createdAt"`
+	EntryCount       int64                          `json:"entryCount"`
+	Id               openapi_types.UUID             `json:"id"`
+	LastError        string                         `json:"lastError"`
+
+	// LastScanFailure Last failed scan diagnostic. No partial inventory is made executable. Empty asset fields identify failure before an individual asset was known; sourceRepositories bounds the selected repository scope. Contains no upstream URL or credential.
+	LastScanFailure    *NexusMigrationScanFailure `json:"lastScanFailure,omitempty"`
+	ManifestSha256     string                     `json:"manifestSha256"`
+	Mappings           []NexusMigrationMapping    `json:"mappings"`
+	MetadataDiscovered int64                      `json:"metadataDiscovered"`
+	PolicyVersion      string                     `json:"policyVersion"`
+	ScanComplete       bool                       `json:"scanComplete"`
+	SourceId           openapi_types.UUID         `json:"sourceId"`
 
 	// SourceVerificationBytes Actual source bytes read to fill missing manifest hashes during source verification, separately persisted even if the scan fails. Discovery-provided required hashes avoid this transfer.
 	SourceVerificationBytes int64                    `json:"sourceVerificationBytes"`
@@ -5601,6 +5634,20 @@ type NexusMigrationMapping struct {
 type NexusMigrationResume struct {
 	CapacityEvidence NexusMigrationCapacityEvidence `json:"capacityEvidence"`
 }
+
+// NexusMigrationScanFailure Last failed scan diagnostic. No partial inventory is made executable. Empty asset fields identify failure before an individual asset was known; sourceRepositories bounds the selected repository scope. Contains no upstream URL or credential.
+type NexusMigrationScanFailure struct {
+	Code               string                         `json:"code"`
+	Identity           string                         `json:"identity"`
+	OccurredAt         time.Time                      `json:"occurredAt"`
+	SourcePath         string                         `json:"sourcePath"`
+	SourceRepositories []string                       `json:"sourceRepositories"`
+	SourceRepository   string                         `json:"sourceRepository"`
+	Stage              NexusMigrationScanFailureStage `json:"stage"`
+}
+
+// NexusMigrationScanFailureStage defines model for NexusMigrationScanFailure.Stage.
+type NexusMigrationScanFailureStage string
 
 // NexusMigrationStart defines model for NexusMigrationStart.
 type NexusMigrationStart struct {

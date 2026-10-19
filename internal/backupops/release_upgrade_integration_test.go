@@ -92,8 +92,10 @@ func TestLocalAlertReleaseUpgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 	newMigrations := fixtureLedger(t, forward)
-	if len(newMigrations) != 145 {
-		t.Fatalf("candidate ledger entries = %d, want 145", len(newMigrations))
+	// Bind the database to every migration shipped by this exact candidate,
+	// including newly appended schemas, rather than a stale schema count.
+	if err = VerifyRelease(backupmanifest.Manifest{SchemaVersion: 2, Gateway: candidate.Identity}, candidate, bytes.NewReader(forward)); err != nil {
+		t.Fatalf("candidate artifact and complete migration ledger differ: %v", err)
 	}
 	for name, sum := range oldMigrations {
 		if newMigrations[name] != sum {
@@ -154,7 +156,7 @@ func TestLocalAlertReleaseUpgrade(t *testing.T) {
 	if err != nil || !bytes.Equal(protected, stillProtected) || fixtureObjectFingerprint(t, ctx, source.objects) != sourceObjects || fixtureObjectFingerprint(t, ctx, rollback.objects) != sourceObjects {
 		t.Fatal("rollback/rollforward changed source or object format")
 	}
-	t.Logf("formal v0.5.0 %s -> candidate: 136 old checksums preserved, 145 candidate entries including contains search indexes verified, replay complete no-op; object bytes/Group order/repository IDs/grants preserved; new alert API readback passed; isolated pre-upgrade snapshot rollback and rollforward passed; expanded-DB old-binary rollback NOT tested/supported by this gate", alertUpgradeBaseline)
+	t.Logf("formal v0.5.0 %s -> candidate: 136 old checksums preserved, all %d candidate entries verified against the shipped migrations, replay complete no-op; object bytes/Group order/repository IDs/grants preserved; new alert API readback passed; isolated pre-upgrade snapshot rollback and rollforward passed; expanded-DB old-binary rollback NOT tested/supported by this gate", alertUpgradeBaseline, len(newMigrations))
 }
 
 func formalUpgradeRelease(t *testing.T) Release {

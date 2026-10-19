@@ -6,7 +6,8 @@
 与 Raw Hosted 发布。它不执行生产切流、不删除制品、不覆盖冲突，也不迁移 Proxy
 历史缓存、OCI 或在线 SNAPSHOT 历史。已交付的离线 SNAPSHOT 导入器保持独立。
 
-先应用 `000147_nexus_migration_batches.sql`。将
+先应用 `000147_nexus_migration_batches.sql` 和
+`000148_nexus_migration_scan_diagnostics.sql`。将
 `GATEWAY_MIGRATION_STORAGE_POOL_ID` 配置为真实对象存储池标识；Compose 转发给所有
 继承的 Gateway 角色。不配置时仅禁止迁移写入，其他网关功能和迁移报告仍可读。
 源 HTTPS、凭据加密、精确内部地址 allowlist、DNS 固定及禁止重定向均复用源发现，
@@ -43,9 +44,11 @@
 PostgreSQL 持久保存不可变批次输入、完整 manifest 摘要、每个对象的摘要/validator、
 尝试次数与 checkpoint。单个 worker 持有一个批次租约，不同批次可并行。必须启用 worker 角色和 `migration` kind，格式过滤必须同时允许该
 批次所有格式。争抢使用
-`SKIP LOCKED`、新 token 和递增 epoch，旧/过期持有者不能更新账本。恢复、控制和最终
-发布共享租约 fence，从最终完整字节验证持续持锁到原生提交和条目落账；格式对象锁覆盖
-暂存到发布并与 GC 协调。
+`SKIP LOCKED`、新 token 和递增 epoch，旧/过期持有者不能更新账本。实际原生发布事务
+先取得与恢复/控制相同的事务 advisory fence，锁批次行并校验有效 token、过期时间及取消
+状态，再改变可见引用；该物理事务连接丢失时发布也必然回滚，不再依赖另一条会话连接
+持锁。格式对象锁覆盖暂存到发布并与 GC 协调。原生提交后条目 checkpoint 丢失仍通过
+完整读回恢复。
 
 暂停确认后不再启动新条目，已记录的在途条目可完成并落账，排空后由 `pausing` 变为
 `paused`。取消使用同一发布 fence，保留已经提交的目标；取消成功后旧 worker 无法越过
@@ -76,6 +79,11 @@ Maven 为生成旁文件缺 SHA-1/MD5 时，执行有界源验证，真实读取
 `visibleIdentities` 独立计原生 Raw 路径/Maven GAV 的已提交或读回确认数量。
 `totalBytes` 在清单完整封存前为 null，之后计支持范围内唯一原始字节。Unsupported 与
 源删除项保留独立报告，不能把这些计数称为官方客户端验收。
+
+扫描失败时，`lastScanFailure` 独立于可执行条目持久保存有界阶段、选定仓库范围、
+已知的精确源仓库/资产路径/身份、公开错误码与发生时间，进程重启后仍可读。尚未确定
+资产时路径和身份为空；元数据阶段记录选定仓库范围，不回显上游 URL 或凭据。半扫描
+仍没有可执行 manifest 或条目，`totalBytes=null`；后续完整扫描成功才清除旧诊断。
 
 首版保留源发现上限：十个仓库、100 页、10,000 个资产、16 MiB 元数据，每次源操作/
 单文件最长 30 秒。单文件最多 1 GiB，以 size+1 有界读取并完整求摘要；慢文件可能先

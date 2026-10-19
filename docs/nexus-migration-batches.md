@@ -7,7 +7,8 @@ to real Maven release and Raw Hosted publication. It does not execute a producti
 cutover, delete artifacts, overwrite conflicts, or migrate Proxy caches, OCI or
 online SNAPSHOT history. The offline SNAPSHOT importer remains independent.
 
-Apply migration `000147_nexus_migration_batches.sql`. Configure
+Apply migrations `000147_nexus_migration_batches.sql` and
+`000148_nexus_migration_scan_diagnostics.sql`. Configure
 `GATEWAY_MIGRATION_STORAGE_POOL_ID` with the real object-storage pool identity.
 Compose forwards it to every inherited Gateway role. Without it migration writes
 are disabled; the rest of Gateway and migration reports remain available. Source
@@ -54,13 +55,17 @@ PostgreSQL stores immutable batch inputs, the complete manifest hash, per-asset
 hashes/validators, entry attempts and checkpoints. One worker owns a batch lease;
 different batches can run in parallel. The worker role and `migration` kind must
 be enabled, and its format filter must admit every format in that batch. Claims use `SKIP LOCKED`, tokens and epochs.
-Expired owners cannot update checkpoints. Recovery, controls and final publication
-share a lease fence held through final full-byte verification, native commit and
-entry completion. Format locks cover staging through publication and coordinate GC.
+Expired owners cannot update checkpoints. The actual native publication transaction
+takes the same transaction advisory fence as recovery and controls, locks the batch
+row and validates its live token, expiry and cancellation state before changing
+visible references. Losing that physical transaction also aborts publication;
+there is no independent session fence whose loss could permit an old publisher.
+Format locks cover staging through publication and coordinate GC. A native commit
+followed by a lost entry checkpoint remains a full-readback recovery window.
 
 Pause acknowledges a stop on new entries. An already recorded in-flight entry can
 finish; `pausing` becomes `paused` after it drains. Cancellation takes the same
-publication fence and preserves any committed target. No new publication crosses
+transaction publication fence and preserves any committed target. No new publication crosses
 a successful cancellation. Failures have at most three attempts; explicit retry
 only requeues eligible failed/missing entries, never conflicts or unsupported work.
 
@@ -96,6 +101,14 @@ counts committed or readback-confirmed native Raw paths/Maven GAVs separately.
 `totalBytes` is null until the complete manifest is sealed, then counts unique
 supported primary bytes. Unsupported and source-deleted entries remain explicit
 report rows. These counters do not constitute official-client acceptance.
+
+A failed scan persists `lastScanFailure` independently of executable entries. It
+records the bounded stage, selected repository scope, exact known source repository,
+asset path and identity, public error code and occurrence time, and survives a
+process restart. Before an asset is known its path and identity remain empty; the
+metadata stage identifies the selected repository scope without leaking upstream
+URLs or credentials. A partial scan still has no executable manifest or entries
+and `totalBytes=null`. A later complete scan clears the old failure diagnostic.
 
 The first version retains source bounds: up to ten repositories, 100 pages and
 10,000 assets, 16 MiB metadata, and 30 seconds per source operation/file. Each file

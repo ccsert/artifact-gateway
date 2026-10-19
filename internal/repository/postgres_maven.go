@@ -410,6 +410,9 @@ func (s *PostgresStore) commitMavenPublishSession(ctx context.Context, id, key, 
 		return MavenArtifact{}, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = checkNativePublicationGuard(ctx, tx); err != nil {
+		return MavenArtifact{}, false, err
+	}
 	initial, err := scanMavenDeployment(tx.QueryRowContext(ctx, `SELECT `+mavenDeploymentColumns+` FROM native_maven_publish_sessions WHERE id=$1`, id))
 	if err != nil {
 		return MavenArtifact{}, false, err

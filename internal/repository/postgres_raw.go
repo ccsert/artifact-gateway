@@ -183,6 +183,9 @@ func (s *PostgresStore) PutRawAssetIf(ctx context.Context, v RawAsset, condition
 		return v, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = checkNativePublicationGuard(ctx, tx); err != nil {
+		return v, err
+	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO native_raw_objects (digest,repository_id,object_key,size) VALUES ($1,$2,$3,$4) ON CONFLICT (digest) DO UPDATE SET repository_id=EXCLUDED.repository_id,collected_at=NULL`, v.Digest, v.RepositoryID, v.ObjectKey, v.Size); err != nil {
 		return v, err
 	}

@@ -365,7 +365,7 @@ func TestPostgresMigrationTwoWorkersAndExpiredLeaseCannotPublishFromOldOwner(t *
 		t.Fatalf("visible=%d err=%v", count, err)
 	}
 }
-func TestPostgresMigrationPublicationFenceBlocksRecoveryAndCancellation(t *testing.T) {
+func TestPostgresMigrationCommittedTargetSurvivesCancellationBeforeCheckpoint(t *testing.T) {
 	f := newFixture(t, "raw", map[string][]byte{"fence.bin": []byte("visible-once")})
 	entered, release := make(chan struct{}), make(chan struct{})
 	f.service = f.newService(m.Options{AfterPublish: func(context.Context, m.Entry) error { close(entered); <-release; return nil }, HeartbeatInterval: time.Hour})
@@ -377,35 +377,16 @@ func TestPostgresMigrationPublicationFenceBlocksRecoveryAndCancellation(t *testi
 	case <-time.After(10 * time.Second):
 		t.Fatal("worker did not reach publication")
 	}
-	if _, err := f.db.Exec(`UPDATE nexus_migration_batches SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1`, b.ID); err != nil {
-		t.Fatal(err)
-	}
 	other := f.newService(m.Options{})
-	if err := other.RunOnce(context.Background(), []string{"raw"}); err != nil {
-		t.Fatal(err)
-	}
 	current, err := other.Get(context.Background(), b.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if current.State != "running" {
-		t.Fatal("recovery crossed publication fence")
-	}
-	cancelled := make(chan error, 1)
-	go func() {
-		_, err := other.Control(context.Background(), b.ID, current.Version, "synthetic-admin", uuid.NewString(), "cancel", nil)
-		cancelled <- err
-	}()
-	select {
-	case err := <-cancelled:
-		t.Fatalf("cancellation crossed held publication fence: %v", err)
-	case <-time.After(30 * time.Millisecond):
+	if _, err = other.Control(context.Background(), b.ID, current.Version, "synthetic-admin", uuid.NewString(), "cancel", nil); err != nil {
+		t.Fatal(err)
 	}
 	close(release)
 	if err := <-done; err != nil {
-		t.Fatal(err)
-	}
-	if err := <-cancelled; err != nil {
 		t.Fatal(err)
 	}
 	got, err := other.Get(context.Background(), b.ID)

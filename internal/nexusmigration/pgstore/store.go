@@ -4,13 +4,13 @@ package pgstore
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"strconv"
 	"time"
 
 	m "github.com/ccsert/artifact-gateway/internal/nexusmigration"
+	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
 
@@ -22,12 +22,12 @@ var _ m.Store = (*Store)(nil)
 
 type scanner interface{ Scan(...any) error }
 
-const batchColumns = `b.id::text,b.actor,b.request,b.capacity_evidence,b.state,b.version::text,b.manifest_sha256,b.scan_complete,b.metadata_discovered,b.source_verification_bytes,b.entry_count,b.total_bytes,b.last_error,b.created_at,b.updated_at,b.lease_token,b.lease_epoch,b.pause_requested,b.cancel_requested`
+const batchColumns = `b.id::text,b.actor,b.request,b.capacity_evidence,b.state,b.version::text,b.manifest_sha256,b.scan_complete,b.metadata_discovered,b.source_verification_bytes,b.entry_count,b.total_bytes,b.last_error,b.last_scan_failure,b.created_at,b.updated_at,b.lease_token,b.lease_epoch,b.pause_requested,b.cancel_requested`
 
 func scanBatch(row scanner) (m.Batch, error) {
 	var b m.Batch
-	var request, evidence []byte
-	err := row.Scan(&b.ID, &b.Actor, &request, &evidence, &b.State, &b.Version, &b.ManifestSHA256, &b.ScanComplete, &b.MetadataDiscovered, &b.SourceVerificationBytes, &b.EntryCount, &b.TotalBytes, &b.LastError, &b.CreatedAt, &b.UpdatedAt, &b.LeaseToken, &b.LeaseEpoch, &b.PauseRequested, &b.CancelRequested)
+	var request, evidence, failure []byte
+	err := row.Scan(&b.ID, &b.Actor, &request, &evidence, &b.State, &b.Version, &b.ManifestSHA256, &b.ScanComplete, &b.MetadataDiscovered, &b.SourceVerificationBytes, &b.EntryCount, &b.TotalBytes, &b.LastError, &failure, &b.CreatedAt, &b.UpdatedAt, &b.LeaseToken, &b.LeaseEpoch, &b.PauseRequested, &b.CancelRequested)
 	if errors.Is(err, sql.ErrNoRows) {
 		return b, m.ErrNotFound
 	}
@@ -36,6 +36,11 @@ func scanBatch(row scanner) (m.Batch, error) {
 	}
 	if err = json.Unmarshal(request, &b.StartInput); err != nil {
 		return b, err
+	}
+	if len(failure) > 0 {
+		if err = json.Unmarshal(failure, &b.LastScanFailure); err != nil {
+			return b, err
+		}
 	}
 	err = json.Unmarshal(evidence, &b.CapacityEvidence)
 	return b, err
@@ -336,7 +341,7 @@ func (s *Store) Seal(ctx context.Context, b m.Batch, entries []m.Entry, hash str
 			return err
 		}
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE nexus_migration_batches SET manifest_sha256=$3,scan_complete=true,metadata_discovered=$4,entry_count=$5,total_bytes=$6,version=version+1,updated_at=clock_timestamp() WHERE id::text=$1 AND lease_token=$2 AND lease_expires_at>clock_timestamp() AND NOT scan_complete`, b.ID, b.LeaseToken, hash, metadata, len(entries), total)
+	result, err := tx.ExecContext(ctx, `UPDATE nexus_migration_batches SET manifest_sha256=$3,scan_complete=true,metadata_discovered=$4,entry_count=$5,total_bytes=$6,last_scan_failure=NULL,version=version+1,updated_at=clock_timestamp() WHERE id::text=$1 AND lease_token=$2 AND lease_expires_at>clock_timestamp() AND NOT scan_complete`, b.ID, b.LeaseToken, hash, metadata, len(entries), total)
 	if err = changed(result, err); err != nil {
 		return err
 	}
@@ -353,34 +358,23 @@ func (s *Store) AddTransferred(ctx context.Context, id, batch, token string, n i
 	result, err := s.db.ExecContext(ctx, `UPDATE nexus_migration_entries e SET transferred_bytes=e.transferred_bytes+$4,updated_at=clock_timestamp() FROM nexus_migration_batches b WHERE e.batch_id=b.id AND e.id::text=$1 AND b.id::text=$2 AND b.lease_token=$3 AND b.lease_expires_at>clock_timestamp() AND b.state IN ('running','pausing')`, id, batch, token, n)
 	return changed(result, err)
 }
-func (s *Store) Fence(ctx context.Context, id, token string) (func(), error) {
-	conn, err := s.db.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	key := "nexus-migration-lease:" + id
-	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1,0))`, key); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	release := func() {
-		unlockCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		if _, err := conn.ExecContext(unlockCtx, `SELECT pg_advisory_unlock(hashtextextended($1,0))`, key); err != nil {
-			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+func (s *Store) PublicationContext(ctx context.Context, id, token string) context.Context {
+	return repository.WithNativePublicationGuard(ctx, func(ctx context.Context, tx *sql.Tx) error {
+		// Recovery and controls take this same key. It is owned by the native
+		// transaction itself: losing its backend also aborts native publication.
+		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('nexus-migration-lease:'||$1,0))`, id); err != nil {
+			return err
 		}
-		_ = conn.Close()
-	}
-	var ok bool
-	err = conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM nexus_migration_batches WHERE id::text=$1 AND lease_token=$2 AND lease_expires_at>clock_timestamp() AND state IN ('running','pausing') AND NOT cancel_requested)`, id, token).Scan(&ok)
-	if err != nil || !ok {
-		release()
-		if err == nil {
-			err = m.ErrLeaseLost
+		var valid bool
+		err := tx.QueryRowContext(ctx, `SELECT lease_token=$2 AND lease_expires_at>clock_timestamp() AND state IN ('running','pausing') AND NOT cancel_requested FROM nexus_migration_batches WHERE id::text=$1 FOR UPDATE`, id, token).Scan(&valid)
+		if err != nil {
+			return err
 		}
-		return nil, err
-	}
-	return release, nil
+		if !valid {
+			return m.ErrLeaseLost
+		}
+		return nil
+	})
 }
 func (s *Store) Finish(ctx context.Context, id, token, state, message string) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE nexus_migration_batches SET state=CASE WHEN cancel_requested THEN 'cancelled' WHEN pause_requested THEN 'paused' ELSE $3 END,lease_token='',lease_expires_at=NULL,last_error=$4,version=version+1,updated_at=clock_timestamp() WHERE id::text=$1 AND lease_token=$2 AND lease_expires_at>clock_timestamp()`, id, token, state, message)
@@ -434,6 +428,11 @@ func (s *Store) RecordScanProgress(ctx context.Context, id, token string, metada
 		return m.Failed("invalid_request")
 	}
 	result, err := s.db.ExecContext(ctx, `UPDATE nexus_migration_batches SET metadata_discovered=GREATEST(metadata_discovered,$3),source_verification_bytes=source_verification_bytes+$4,updated_at=clock_timestamp() WHERE id::text=$1 AND lease_token=$2 AND lease_expires_at>clock_timestamp() AND state IN ('running','pausing')`, id, token, metadata, bytes)
+	return changed(result, err)
+}
+
+func (s *Store) RecordScanFailure(ctx context.Context, id, token string, failure m.ScanFailure) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE nexus_migration_batches SET last_scan_failure=$3,version=version+1,updated_at=clock_timestamp() WHERE id::text=$1 AND lease_token=$2 AND lease_expires_at>clock_timestamp() AND state IN ('running','pausing') AND NOT scan_complete`, id, token, mustJSON(failure))
 	return changed(result, err)
 }
 
