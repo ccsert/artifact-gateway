@@ -23,10 +23,6 @@ type generatedRepositoryAPIAdapter struct {
 	aptSnapshotImporter    *aptpublication.SnapshotArchiveImporter
 	aptSnapshotExporter    aptpublication.SnapshotArchiveExporter
 	aptPublications        repository.NativeAPTPublicationStore
-	groups                 repository.HostedGroupStore
-	grants                 repository.RepositoryGrantStore
-	templates              repository.AuthorizationTemplateStore
-	authorizationRoles     repository.AuthorizationRoleStore
 	retentionPolicies      repository.RepositoryRetentionPolicyStore
 	securityPolicies       repository.RepositorySecurityPolicyStore
 	quarantineReadPolicies repository.RepositoryQuarantineReadPolicyStore

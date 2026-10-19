@@ -72,6 +72,15 @@ repositories first. Without global session or Group metadata, administrators get
 a publisher still permits resource authorization before reporting 501. Group
 recursive search and browse also report missing capabilities for readable members.
 
+## Access control
+
+The third slice (#400) extracts `accessManagementHandler` for grants, roles,
+templates and effective access. Its only domain stores are those four ports;
+repository authorization, principal-wide blocks and denial audit use the shared
+scope. Aggregated grant records are an explicit optional read port, rather than
+a runtime assertion on the grants writer. Cross-repository scope filtering and
+audit actor resolution are shared authorization helpers.
+
 ## Verification and limits
 
 Construct domain handlers directly with only their repository/Group ports and

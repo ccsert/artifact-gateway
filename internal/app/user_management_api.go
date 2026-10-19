@@ -593,13 +593,6 @@ func (h generatedRepositoryAPIAdapter) recordUserIdentityAudit(r *http.Request, 
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) auditActor(r *http.Request) string {
-	if principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization")); ok {
-		return principal.Actor
-	}
-	return "unknown"
-}
-
 func normalizeOIDCIssuerForAPI(value string) string {
 	return strings.TrimRight(strings.TrimSpace(value), "/")
 }

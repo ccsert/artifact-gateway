@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.GetRepositoryEffectiveAccessParams) {
+func (h accessManagementHandler) GetRepositoryEffectiveAccess(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.GetRepositoryEffectiveAccessParams) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
@@ -56,7 +56,7 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.Respo
 		}
 		simulated = true
 	}
-	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID.String())
+	repo, err := h.repositories.GetHostedRepository(r.Context(), repositoryID.String())
 	if errors.Is(err, repository.ErrNotFound) {
 		writeHostedProblem(w, http.StatusNotFound, "not_found", "repository not found")
 		return
@@ -83,7 +83,7 @@ func (h generatedRepositoryAPIAdapter) GetRepositoryEffectiveAccess(w http.Respo
 // repository at the requested resource. Intelligence is checked alongside read
 // because a scanning credential manages intelligence without read access, and
 // hiding the repository from it would break its own access explanation.
-func (h generatedRepositoryAPIAdapter) canRevealRepository(ctx context.Context, principal Principal, repo repository.HostedRepository, resource string) bool {
+func (h accessManagementHandler) canRevealRepository(ctx context.Context, principal Principal, repo repository.HostedRepository, resource string) bool {
 	if h.authorizer.AuthorizeResource(ctx, principal, repo, RepositoryRead, resource).Allowed {
 		return true
 	}
@@ -129,11 +129,11 @@ func currentIdentityResponse(principal Principal) adminopenapi.CurrentIdentity {
 	return response
 }
 
-func (h generatedRepositoryAPIAdapter) repositoryEffectiveAccess(ctx context.Context, principal Principal, repo repository.HostedRepository, resource string, simulated bool) adminopenapi.RepositoryEffectiveAccess {
+func (h accessManagementHandler) repositoryEffectiveAccess(ctx context.Context, principal Principal, repo repository.HostedRepository, resource string, simulated bool) adminopenapi.RepositoryEffectiveAccess {
 	decision := func(operation RepositoryOperation) adminopenapi.EffectiveAccessDecision {
 		return effectiveAccessDecision(h.authorizer.AuthorizeResource(ctx, principal, repo, operation, resource))
 	}
-	anonymousReason := anonymousRepositoryReason(ctx, h.store, repo)
+	anonymousReason := anonymousRepositoryReason(ctx, h.anonymousPolicy, repo)
 	response := adminopenapi.RepositoryEffectiveAccess{
 		Actor: principal.Actor, Identity: currentIdentityResponse(principal),
 		Resource: resource, Simulated: simulated,
@@ -174,7 +174,7 @@ func anonymousRepositoryReason(ctx context.Context, source any, repo repository.
 	return "repository_anonymous_read_enabled"
 }
 
-func (h generatedRepositoryAPIAdapter) ListGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+func (h accessManagementHandler) ListGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(Principal, repository.HostedRepository) {
 		set, err := h.grants.GetRepositoryGrants(r.Context(), repositoryID.String())
 		if err != nil {
@@ -186,43 +186,13 @@ func (h generatedRepositoryAPIAdapter) ListGrants(w http.ResponseWriter, r *http
 	})
 }
 
-// repositoryViewPrincipal authenticates a cross-repository management view and
-// answers the principal-wide blocks before any row is considered, so a pending
-// or password-change account is refused rather than shown an empty list.
-func (h generatedRepositoryAPIAdapter) repositoryViewPrincipal(w http.ResponseWriter, r *http.Request) (Principal, bool) {
-	principal, ok := h.authenticate(w, r)
-	if !ok {
-		return Principal{}, false
-	}
-	if code, message, blocked := accountStateProblem(principal.AccountStateReason()); blocked {
-		writeHostedProblem(w, http.StatusForbidden, code, message)
-		return Principal{}, false
-	}
-	return principal, true
-}
-
-// mayAdministerRepository reports whether the principal may administer one
-// repository. A cross-repository management view filters on this, so a
-// repository the caller cannot administer contributes no rows and is therefore
-// indistinguishable from one that does not exist.
-func (h generatedRepositoryAPIAdapter) mayAdministerRepository(r *http.Request, principal Principal, repositoryID string) bool {
-	if principal.Admin {
-		return true
-	}
-	repo, err := h.store.GetHostedRepository(r.Context(), repositoryID)
-	if err != nil {
-		return false
-	}
-	return h.authorizer.Authorize(r.Context(), principal, repo, RepositoryAdmin).Allowed
-}
-
-func (h generatedRepositoryAPIAdapter) ListRepositoryGrants(w http.ResponseWriter, r *http.Request) {
+func (h accessManagementHandler) ListRepositoryGrants(w http.ResponseWriter, r *http.Request) {
 	principal, ok := h.repositoryViewPrincipal(w, r)
 	if !ok {
 		return
 	}
-	store, ok := h.grants.(repository.RepositoryGrantRecordStore)
-	if !ok {
+	store := h.grantRecords
+	if store == nil {
 		writeHostedProblem(w, http.StatusNotImplemented, "not_supported", "repository grant aggregation is unavailable")
 		return
 	}
@@ -362,7 +332,7 @@ func validAuthorizationTemplateGrants(grants []repository.RepositoryGrant) bool 
 	return true
 }
 
-func (h generatedRepositoryAPIAdapter) ListAuthorizationRoles(w http.ResponseWriter, r *http.Request) {
+func (h accessManagementHandler) ListAuthorizationRoles(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -378,7 +348,7 @@ func (h generatedRepositoryAPIAdapter) ListAuthorizationRoles(w http.ResponseWri
 	writeNativeMavenJSON(w, http.StatusOK, response)
 }
 
-func (h generatedRepositoryAPIAdapter) CreateAuthorizationRole(w http.ResponseWriter, r *http.Request) {
+func (h accessManagementHandler) CreateAuthorizationRole(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -411,7 +381,7 @@ func (h generatedRepositoryAPIAdapter) CreateAuthorizationRole(w http.ResponseWr
 	writeNativeMavenJSON(w, http.StatusCreated, authorizationRoleResponse(role))
 }
 
-func (h generatedRepositoryAPIAdapter) GetAuthorizationRole(w http.ResponseWriter, r *http.Request, roleID adminopenapi.AuthorizationRoleId) {
+func (h accessManagementHandler) GetAuthorizationRole(w http.ResponseWriter, r *http.Request, roleID adminopenapi.AuthorizationRoleId) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -428,7 +398,7 @@ func (h generatedRepositoryAPIAdapter) GetAuthorizationRole(w http.ResponseWrite
 	writeNativeMavenJSON(w, http.StatusOK, authorizationRoleResponse(role))
 }
 
-func (h generatedRepositoryAPIAdapter) UpdateAuthorizationRole(w http.ResponseWriter, r *http.Request, roleID adminopenapi.AuthorizationRoleId, params adminopenapi.UpdateAuthorizationRoleParams) {
+func (h accessManagementHandler) UpdateAuthorizationRole(w http.ResponseWriter, r *http.Request, roleID adminopenapi.AuthorizationRoleId, params adminopenapi.UpdateAuthorizationRoleParams) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -470,7 +440,7 @@ func (h generatedRepositoryAPIAdapter) UpdateAuthorizationRole(w http.ResponseWr
 	writeNativeMavenJSON(w, http.StatusOK, authorizationRoleResponse(role))
 }
 
-func (h generatedRepositoryAPIAdapter) DeleteAuthorizationRole(w http.ResponseWriter, r *http.Request, roleID adminopenapi.AuthorizationRoleId) {
+func (h accessManagementHandler) DeleteAuthorizationRole(w http.ResponseWriter, r *http.Request, roleID adminopenapi.AuthorizationRoleId) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -487,7 +457,7 @@ func (h generatedRepositoryAPIAdapter) DeleteAuthorizationRole(w http.ResponseWr
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h generatedRepositoryAPIAdapter) ListAuthorizationTemplates(w http.ResponseWriter, r *http.Request) {
+func (h accessManagementHandler) ListAuthorizationTemplates(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -503,7 +473,7 @@ func (h generatedRepositoryAPIAdapter) ListAuthorizationTemplates(w http.Respons
 	writeNativeMavenJSON(w, http.StatusOK, response)
 }
 
-func (h generatedRepositoryAPIAdapter) CreateAuthorizationTemplate(w http.ResponseWriter, r *http.Request) {
+func (h accessManagementHandler) CreateAuthorizationTemplate(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -536,7 +506,7 @@ func (h generatedRepositoryAPIAdapter) CreateAuthorizationTemplate(w http.Respon
 	writeNativeMavenJSON(w, http.StatusCreated, authorizationTemplateResponse(template))
 }
 
-func (h generatedRepositoryAPIAdapter) GetAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateID adminopenapi.AuthorizationTemplateId) {
+func (h accessManagementHandler) GetAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateID adminopenapi.AuthorizationTemplateId) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -553,7 +523,7 @@ func (h generatedRepositoryAPIAdapter) GetAuthorizationTemplate(w http.ResponseW
 	writeNativeMavenJSON(w, http.StatusOK, authorizationTemplateResponse(template))
 }
 
-func (h generatedRepositoryAPIAdapter) UpdateAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateID adminopenapi.AuthorizationTemplateId, params adminopenapi.UpdateAuthorizationTemplateParams) {
+func (h accessManagementHandler) UpdateAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateID adminopenapi.AuthorizationTemplateId, params adminopenapi.UpdateAuthorizationTemplateParams) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -595,7 +565,7 @@ func (h generatedRepositoryAPIAdapter) UpdateAuthorizationTemplate(w http.Respon
 	writeNativeMavenJSON(w, http.StatusOK, authorizationTemplateResponse(template))
 }
 
-func (h generatedRepositoryAPIAdapter) DeleteAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateID adminopenapi.AuthorizationTemplateId) {
+func (h accessManagementHandler) DeleteAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateID adminopenapi.AuthorizationTemplateId) {
 	if _, ok := h.authorize(w, r); !ok {
 		return
 	}
@@ -612,7 +582,7 @@ func (h generatedRepositoryAPIAdapter) DeleteAuthorizationTemplate(w http.Respon
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h generatedRepositoryAPIAdapter) ApplyAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateID adminopenapi.AuthorizationTemplateId, params adminopenapi.ApplyAuthorizationTemplateParams) {
+func (h accessManagementHandler) ApplyAuthorizationTemplate(w http.ResponseWriter, r *http.Request, templateID adminopenapi.AuthorizationTemplateId, params adminopenapi.ApplyAuthorizationTemplateParams) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
@@ -659,7 +629,7 @@ func (h generatedRepositoryAPIAdapter) ApplyAuthorizationTemplate(w http.Respons
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceGrantsParams) {
+func (h accessManagementHandler) ReplaceGrants(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceGrantsParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
 		var grants []repository.RepositoryGrant
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
@@ -692,7 +662,7 @@ func (h generatedRepositoryAPIAdapter) ReplaceGrants(w http.ResponseWriter, r *h
 // prefix) key, so two administrators editing different principals cannot
 // clobber each other, which is what made the whole-list replace risky once a
 // repository accumulates many grants.
-func (h generatedRepositoryAPIAdapter) UpsertGrant(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
+func (h accessManagementHandler) UpsertGrant(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
 		var body adminopenapi.Grant
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
@@ -729,7 +699,7 @@ func (h generatedRepositoryAPIAdapter) UpsertGrant(w http.ResponseWriter, r *htt
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) DeleteGrant(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.DeleteGrantParams) {
+func (h accessManagementHandler) DeleteGrant(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.DeleteGrantParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
 		principal := strings.TrimSpace(params.Principal)
 		prefix := ""
@@ -755,7 +725,7 @@ func (h generatedRepositoryAPIAdapter) DeleteGrant(w http.ResponseWriter, r *htt
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) recordAuthorizationAudit(r *http.Request, repositoryName, resource, operation string, status int) {
+func (h accessManagementHandler) recordAuthorizationAudit(r *http.Request, repositoryName, resource, operation string, status int) {
 	if h.audit == nil {
 		return
 	}
