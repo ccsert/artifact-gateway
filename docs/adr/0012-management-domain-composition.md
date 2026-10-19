@@ -28,7 +28,7 @@ splitting domain dependencies, and are not a prerequisite for #280.
 `managementServer` composes domain handlers by embedding. Each domain owns its
 operations once, declares its store ports, and has an independent constructor.
 The generated `ServerInterface` assertion rejects missing or duplicate methods.
-Generated routing and parameter binding stay at the HTTP edge. This slice does
+Generated routing and parameter binding stay at the HTTP edge. The first slice does
 not change OpenAPI, Console or agctl behavior and introduces no second API.
 
 `managementScope` contains only repository lookup, an explicit anonymous-policy
@@ -43,6 +43,34 @@ repository egress probe. Artifact browsing, access, identity, lifecycle,
 operations, site and APT follow in separate PRs. The temporary legacy adapter
 owns only operations that have not moved. It is removed after the last domain;
 it is not a compatibility surface.
+
+## Artifact discovery and publishing
+
+The second slice (#396) extracts `artifactManagementHandler`. Catalog lookup,
+per-format search, browse, usage and identity queries are explicit ports. Search
+no longer obtains a full store through the native Maven publisher. Usage and
+identity capability checks happen in composition and are injected explicitly;
+missing optional capabilities still return their documented `not_supported`.
+The native Maven/Conan publishers own streaming and transactional publication;
+the domain receives only their operation interfaces. Indexed proxy directory
+queries and the Maven navigation cache are also explicit dependencies.
+
+Shared Group authorization/resolution only requires repository lookup. The
+anonymous-policy read path requires only a read method, so a domain does not
+need policy-write permission to serve an allowed anonymous browse request.
+Signed pagination, repository/actor scope and cache/configuration revisions
+retain their existing semantics.
+
+The repository catalog and authorization scope are construction requirements;
+format queries, publishers and aggregate queries can be supplied independently.
+An authorized request needing an unconfigured capability returns
+`501/not_supported`, explicitly described by the contract and generated outputs.
+It neither panics nor treats missing capabilities as empty inventories. Account
+state and repository permission checks run first; global search filters unreadable
+repositories first. Without global session or Group metadata, administrators get
+501 and other authenticated callers retain an opaque 404. Session metadata without
+a publisher still permits resource authorization before reporting 501. Group
+recursive search and browse also report missing capabilities for readable members.
 
 ## Verification and limits
 

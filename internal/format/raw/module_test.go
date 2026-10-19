@@ -28,7 +28,7 @@ func fixture(t *testing.T) (*repository.MemoryStore, *rawformat.Module, *http.Se
 		t.Fatal(err)
 	}
 	auth := authorization.Authenticator{AdminToken: "fixture-admin"}
-	module := rawformat.New(rawformat.Options{Store: store, Publication: store, Jobs: store, Replications: store, Repositories: store, Groups: store, Objects: objectstore.NewMemoryStore(), Authenticator: auth, Authorizer: authorization.RepositoryAuthorizer{Grants: store, Legacy: auth}, Anonymous: store, Audit: store, ReadPolicies: store, Quarantine: store})
+	module := rawformat.New(rawformat.Options{Store: store, Query: store, Publication: store, Jobs: store, Replications: store, Repositories: store, Groups: store, Objects: objectstore.NewMemoryStore(), Authenticator: auth, Authorizer: authorization.RepositoryAuthorizer{Grants: store, Legacy: auth}, Anonymous: store, Audit: store, ReadPolicies: store, Quarantine: store})
 	registry, err := formatmodule.New(module)
 	if err != nil {
 		t.Fatal(err)
@@ -217,6 +217,11 @@ func TestRawModuleMissingPortsNeverCreateStorage(t *testing.T) {
 	}
 	if _, _, err := module.EnqueuePromotion(context.Background(), "source", "target", "file", "digest", "key"); !errors.Is(err, repository.ErrDisabled) {
 		t.Fatalf("invented promotion=%v", err)
+	}
+	// Supplying native publication storage does not implicitly grant query access.
+	module = rawformat.New(rawformat.Options{Store: repository.NewMemoryStore()})
+	if _, err := module.Search(context.Background(), "id", repository.ArtifactSearchQuery{}, 1, ""); !errors.Is(err, repository.ErrDisabled) {
+		t.Fatalf("invented query capability=%v", err)
 	}
 }
 

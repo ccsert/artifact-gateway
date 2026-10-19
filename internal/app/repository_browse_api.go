@@ -16,14 +16,16 @@ import (
 	"github.com/google/uuid"
 )
 
-func (h generatedRepositoryAPIAdapter) BrowseRepository(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.BrowseRepositoryParams) {
+func (h artifactManagementHandler) BrowseRepository(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.BrowseRepositoryParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(principal Principal, repo repository.HostedRepository) {
 		if repo.Format != repository.FormatMaven && repo.Format != repository.FormatRaw && repo.Format != repository.FormatCargo {
 			writeHostedProblem(w, http.StatusBadRequest, "unsupported_format", "directory browsing is not available for this repository format")
 			return
 		}
-		if repo.Type == repository.RepositoryTypeProxy && h.proxyCache.directoryStore() == nil {
-			writeHostedProblem(w, http.StatusBadRequest, "unsupported_repository_type", "directory browsing is not available for this proxy repository")
+		if repo.Type == repository.RepositoryTypeProxy && !requireArtifactCapability(w, h.proxyDirectory != nil) {
+			return
+		}
+		if repo.Type != repository.RepositoryTypeProxy && !requireArtifactCapability(w, h.browse != nil) {
 			return
 		}
 		pageSize := 50
@@ -55,7 +57,7 @@ func (h generatedRepositoryAPIAdapter) BrowseRepository(w http.ResponseWriter, r
 		}
 		var items []repository.ArtifactBrowseNode
 		if repo.Type == repository.RepositoryTypeProxy {
-			items, err = h.proxyCache.directoryStore().ListProxyBrowseNodes(r.Context(), repo, parent, pageSize+1, after)
+			items, err = h.proxyDirectory.ListProxyBrowseNodes(r.Context(), repo, parent, pageSize+1, after)
 		} else {
 			items, err = h.browse.ListArtifactBrowseNodes(r.Context(), repo.ID, repo.Format, parent, pageSize+1, after)
 		}

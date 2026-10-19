@@ -11,6 +11,8 @@ repositories_repositoryId_maven_coordinates:
     - "$ref": "../components/parameters.yaml#/PageSize"
     - "$ref": "../components/parameters.yaml#/PageToken"
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200':
         "$ref": "../components/responses.yaml#/MavenCoordinateList"
       '400':

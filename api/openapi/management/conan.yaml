@@ -10,6 +10,8 @@ repositories_repositoryId_conan_references:
     - "$ref": "../components/parameters.yaml#/PageSize"
     - "$ref": "../components/parameters.yaml#/PageToken"
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200':
         "$ref": "../components/responses.yaml#/ConanReferenceList"
       '400':
@@ -31,6 +33,8 @@ repositories_repositoryId_conan_recipe_revisions:
     - "$ref": "../components/parameters.yaml#/PageSize"
     - "$ref": "../components/parameters.yaml#/PageToken"
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200': {"$ref": "../components/responses.yaml#/ConanRecipeRevisionList"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
@@ -53,6 +57,8 @@ repositories_repositoryId_conan_package_revisions:
       required: true
       schema: {type: string, minLength: 1, maxLength: 255}
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200': {"$ref": "../components/responses.yaml#/ConanPackageRevisionList"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
@@ -71,6 +77,8 @@ repositories_repositoryId_conan_package_ids:
       required: true
       schema: {type: string, minLength: 1, maxLength: 255}
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200': {"$ref": "../components/responses.yaml#/ConanPackageIdList"}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
@@ -97,6 +105,8 @@ repositories_repositoryId_conan_package_revisions_revision:
       required: true
       schema: {type: string, minLength: 1, maxLength: 255}
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '204': {description: Package revision tombstoned}
       '400': {"$ref": "../components/responses.yaml#/Problem"}
       '404': {"$ref": "../components/responses.yaml#/Problem"}
@@ -113,6 +123,8 @@ repositories_repositoryId_conan_publish_sessions:
           schema:
             "$ref": "../components/schemas.yaml#/CreateConanPublishSession"
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '201':
         "$ref": "../components/responses.yaml#/PublishSession"
       '400':
@@ -127,6 +139,8 @@ conan_publish_sessions_sessionId:
   get:
     operationId: getConanPublishSession
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200':
         "$ref": "../components/responses.yaml#/PublishSession"
       '404':
@@ -150,6 +164,8 @@ conan_publish_sessions_sessionId_objects_objectName:
             type: string
             contentEncoding: binary
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '204':
         description: Verified and staged
       '404':
@@ -164,6 +180,8 @@ conan_publish_sessions_sessionId_commit:
   post:
     operationId: commitConanPublishSession
     responses:
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
       '200':
         "$ref": "../components/responses.yaml#/ConanPublishCommit"
       '404':

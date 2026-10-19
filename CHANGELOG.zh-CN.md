@@ -12,6 +12,8 @@
 
 - Maven / OCI Proxy 拒绝超过整链截止时间或已取消后收到的响应，即使运行时尚未送达 deadline 取消通知也不会接受迟到响应（#403）。被拒响应关闭 body、释放 transport 资源，并在上游追踪中记录安全的错误；及时响应的 body 保持可读，直到调用方关闭。
 
+- 制品管理 handler 可独立注入格式查询与发布能力（#396）。获准操作需要未配置能力时返回已在 OpenAPI 明确列出的 `501/not_supported`；搜索或 Group browse 缺少依赖不会 panic 或伪装为空库存。账户与仓库权限检查保持优先，缺失的全局会话元数据对普通主体保持隐藏。
+
 - `agctl repo connect` 为 Maven Hosted 的读取与发布生成原生 `/repository/maven/<repository>/` 端点（#130）。真实 E2E 用生成的发布地址上传 POM 并逐字节回读；Proxy 指引仍使用 `/maven/<repository>/`。
 
 - Console 管理员可将 Nexus Hosted 显式映射绑定真实原生目标，凭操作员容量证据、CAS 和幂等请求控制持久迁移批次（#383）。扫描、源校验、复制、目标读回与可见身份分别展示；观察报告包含完整摘要、端点调整与库存不完整标记。冷客户端验收、冻结源后的最终追平与生产切流在另行取得证据前保持未验证。见 [Console Nexus 迁移](docs/nexus-migration-console.zh-CN.md)。

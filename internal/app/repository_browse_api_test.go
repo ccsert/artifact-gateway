@@ -87,7 +87,7 @@ func TestRepositoryBrowseProjectsMavenNamespaceComponentVersionAndAssets(t *test
 	}
 }
 
-func TestRepositoryBrowseRejectsUnboundedProxyProjection(t *testing.T) {
+func TestRepositoryBrowseReportsUnconfiguredProxyDirectory(t *testing.T) {
 	store := repository.NewMemoryStore()
 	ctx := context.Background()
 	repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{
@@ -103,7 +103,7 @@ func TestRepositoryBrowseRejectsUnboundedProxyProjection(t *testing.T) {
 	authenticator := testAuthenticator()
 	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	response, _ := browseRepositoryForTest(t, handler, authenticator.IssueToken("proxy-browser"), repo.ID, "", "", 50)
-	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"unsupported_repository_type"`) {
+	if response.Code != http.StatusNotImplemented || !strings.Contains(response.Body.String(), `"code":"not_supported"`) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }

@@ -23,7 +23,7 @@ type globalArtifactSearchCursor struct {
 	Match                                                           string `json:",omitempty"`
 }
 
-func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r *http.Request, params adminopenapi.SearchArtifactsParams) {
+func (h artifactManagementHandler) SearchArtifacts(w http.ResponseWriter, r *http.Request, params adminopenapi.SearchArtifactsParams) {
 	principal, ok := h.authenticate(w, r)
 	if !ok {
 		return
@@ -82,7 +82,7 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 
 	repositories, err := h.readableSearchRepositories(r.Context(), principal, format, searchQuery)
 	if err != nil {
-		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list searchable repositories failed")
+		writeArtifactQueryFailure(w, err, "list searchable repositories failed")
 		return
 	}
 	start := 0
@@ -111,7 +111,7 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 		remaining := pageSize - len(items)
 		summaries, searchErr := h.searchGroupMemberArtifactsByQuery(r, repo, searchQuery, remaining+1, after)
 		if searchErr != nil {
-			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "search repository artifacts failed")
+			writeArtifactQueryFailure(w, searchErr, "search repository artifacts failed")
 			return
 		}
 		hasMoreInRepository := len(summaries) > remaining
@@ -129,7 +129,7 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 			}
 			hasLaterResults, searchErr := h.hasSearchResultsAfter(r, repositories, index+1, searchQuery)
 			if searchErr != nil {
-				writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "search repository artifacts failed")
+				writeArtifactQueryFailure(w, searchErr, "search repository artifacts failed")
 				return
 			}
 			if hasMoreInRepository || hasLaterResults {
@@ -145,7 +145,10 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.GlobalArtifactSearchPage{Items: items, NextPageToken: next, SearchedRepositories: len(repositories)})
 }
 
-func (h generatedRepositoryAPIAdapter) readableSearchRepositories(ctx context.Context, principal Principal, format repository.Format, query repository.ArtifactSearchQuery) ([]repository.HostedRepository, error) {
+func (h artifactManagementHandler) readableSearchRepositories(ctx context.Context, principal Principal, format repository.Format, query repository.ArtifactSearchQuery) ([]repository.HostedRepository, error) {
+	if h.store == nil {
+		return nil, errArtifactCapabilityUnavailable
+	}
 	repositories := make([]repository.HostedRepository, 0)
 	after := ""
 	for {
@@ -174,7 +177,7 @@ func (h generatedRepositoryAPIAdapter) readableSearchRepositories(ctx context.Co
 	}
 }
 
-func (h generatedRepositoryAPIAdapter) hasSearchResultsAfter(r *http.Request, repositories []repository.HostedRepository, start int, query repository.ArtifactSearchQuery) (bool, error) {
+func (h artifactManagementHandler) hasSearchResultsAfter(r *http.Request, repositories []repository.HostedRepository, start int, query repository.ArtifactSearchQuery) (bool, error) {
 	for index := start; index < len(repositories); index++ {
 		items, err := h.searchGroupMemberArtifactsByQuery(r, repositories[index], query, 1, artifactSearchPosition{})
 		if err != nil {

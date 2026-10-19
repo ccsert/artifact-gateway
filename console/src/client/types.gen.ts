@@ -783,6 +783,7 @@ export type Problem = {
   code:
     | "invalid_request"
     | "invalid_state"
+    | "not_supported"
     | "encryption_key_unavailable"
     | "invalid_page_token"
     | "name_exists"
@@ -5022,6 +5023,10 @@ export type SearchArtifactsErrors = {
    * Problem response
    */
   403: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type SearchArtifactsError =
@@ -9050,6 +9055,10 @@ export type BrowseGroupErrors = {
    * Problem response
    */
   500: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type BrowseGroupError = BrowseGroupErrors[keyof BrowseGroupErrors];
@@ -9208,6 +9217,10 @@ export type CreatePublishSessionErrors = {
    * Problem response
    */
   409: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type CreatePublishSessionError =
@@ -9234,6 +9247,15 @@ export type ListArtifactsData = {
   };
   url: "/repositories/{repositoryId}/artifacts";
 };
+
+export type ListArtifactsErrors = {
+  /**
+   * Problem response
+   */
+  501: Problem;
+};
+
+export type ListArtifactsError = ListArtifactsErrors[keyof ListArtifactsErrors];
 
 export type ListArtifactsResponses = {
   /**
@@ -9274,6 +9296,10 @@ export type ListRepositoryArtifactUsageErrors = {
    * Problem response
    */
   403: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type ListRepositoryArtifactUsageError =
@@ -9314,6 +9340,10 @@ export type SearchRepositoryArtifactsErrors = {
    * Problem response
    */
   400: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type SearchRepositoryArtifactsError =
@@ -9366,6 +9396,10 @@ export type BrowseRepositoryErrors = {
    * Problem response
    */
   500: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type BrowseRepositoryError =
@@ -9451,6 +9485,16 @@ export type DeleteArtifactData = {
   url: "/repositories/{repositoryId}/artifacts/{artifactId}";
 };
 
+export type DeleteArtifactErrors = {
+  /**
+   * Problem response
+   */
+  501: Problem;
+};
+
+export type DeleteArtifactError =
+  DeleteArtifactErrors[keyof DeleteArtifactErrors];
+
 export type DeleteArtifactResponses = {
   /**
    * Accepted asynchronous deletion. The repository is immediately unavailable to protocol traffic and is finalized by the background deletion worker; audit metadata is retained.
@@ -9470,6 +9514,15 @@ export type GetArtifactData = {
   query?: never;
   url: "/repositories/{repositoryId}/artifacts/{artifactId}";
 };
+
+export type GetArtifactErrors = {
+  /**
+   * Problem response
+   */
+  501: Problem;
+};
+
+export type GetArtifactError = GetArtifactErrors[keyof GetArtifactErrors];
 
 export type GetArtifactResponses = {
   /**
@@ -9506,6 +9559,10 @@ export type GetArtifactIntelligenceErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type GetArtifactIntelligenceError =
@@ -9553,6 +9610,10 @@ export type ReplaceArtifactIntelligenceErrors = {
    * Problem response
    */
   412: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type ReplaceArtifactIntelligenceError =
@@ -9720,6 +9781,10 @@ export type ListOciImagesErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type ListOciImagesError = ListOciImagesErrors[keyof ListOciImagesErrors];
@@ -9759,6 +9824,10 @@ export type ListOciManifestsErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type ListOciManifestsError =
@@ -9799,6 +9868,10 @@ export type ListMavenCoordinatesErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type ListMavenCoordinatesError =
@@ -10458,6 +10531,10 @@ export type ListConanReferencesErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type ListConanReferencesError =
@@ -10499,6 +10576,10 @@ export type ListConanRecipeRevisionsErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type ListConanRecipeRevisionsError =
@@ -10536,6 +10617,10 @@ export type ListConanPackageRevisionsErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type ListConanPackageRevisionsError =
@@ -10572,6 +10657,10 @@ export type ListConanPackageIdsErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type ListConanPackageIdsError =
@@ -10610,6 +10699,10 @@ export type DeleteConanPackageRevisionErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type DeleteConanPackageRevisionError =
@@ -10647,6 +10740,10 @@ export type CreateConanPublishSessionErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type CreateConanPublishSessionError =
@@ -10686,6 +10783,10 @@ export type ListProxyCacheEntriesErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type ListProxyCacheEntriesError =
@@ -10719,6 +10820,10 @@ export type InvalidateProxyCacheErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type InvalidateProxyCacheError =
@@ -10752,6 +10857,10 @@ export type ClearProxyNegativeCacheErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type ClearProxyNegativeCacheError =
@@ -10785,6 +10894,10 @@ export type RefreshProxyCacheErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type RefreshProxyCacheError =
@@ -10818,6 +10931,10 @@ export type GetProxyHealthErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type GetProxyHealthError =
@@ -10847,6 +10964,10 @@ export type GetPublishSessionErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type GetPublishSessionError =
@@ -10881,6 +11002,10 @@ export type UploadPublishObjectErrors = {
    * Problem response
    */
   422: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type UploadPublishObjectError =
@@ -10914,6 +11039,10 @@ export type CommitPublishSessionErrors = {
    * Problem response
    */
   422: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type CommitPublishSessionError =
@@ -10943,6 +11072,10 @@ export type GetConanPublishSessionErrors = {
    * Problem response
    */
   404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type GetConanPublishSessionError =
@@ -10981,6 +11114,10 @@ export type UploadConanPublishObjectErrors = {
    * Problem response
    */
   422: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
 };
 
 export type UploadConanPublishObjectError =
@@ -11018,6 +11155,10 @@ export type CommitConanPublishSessionErrors = {
    * Problem response
    */
   422: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
   /**
    * Problem response
    */

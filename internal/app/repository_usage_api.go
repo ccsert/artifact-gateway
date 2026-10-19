@@ -13,10 +13,10 @@ import (
 // that RecordAudit folds in on every successful download. Usage is keyed by
 // the artifact address clients resolved, so a V2 group download counts for
 // the group while direct member downloads count for the member repository.
-func (h generatedRepositoryAPIAdapter) ListRepositoryArtifactUsage(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListRepositoryArtifactUsageParams) {
+func (h artifactManagementHandler) ListRepositoryArtifactUsage(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListRepositoryArtifactUsageParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
-		usage, ok := h.audit.(repository.ArtifactUsageStore)
-		if !ok {
+		usage := h.usage
+		if usage == nil {
 			writeHostedProblem(w, http.StatusNotImplemented, "not_supported", "artifact usage aggregation is unavailable")
 			return
 		}

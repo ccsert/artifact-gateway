@@ -63,10 +63,10 @@ func (*Module) SearchQuery(query repository.ArtifactSearchQuery) repository.Arti
 }
 func (*Module) UsageKey(resource string) string { return resource }
 func (m *Module) Search(ctx context.Context, repositoryID string, query repository.ArtifactSearchQuery, limit int, after string) ([]formatmodule.ArtifactSummary, error) {
-	if m.store == nil {
+	if m.query == nil {
 		return nil, repository.ErrDisabled
 	}
-	assets, err := m.store.ListRawAssets(ctx, repositoryID, query.Value, limit, after, query.Match)
+	assets, err := m.query.ListRawAssets(ctx, repositoryID, query.Value, limit, after, query.Match)
 	if err != nil {
 		return nil, err
 	}

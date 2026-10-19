@@ -34,6 +34,11 @@ type PublicationScanner interface {
 	Schedule(context.Context, repository.HostedRepository, string, string, string) error
 }
 
+// QueryStore supplies discovery without publication or native HTTP storage.
+type QueryStore interface {
+	ListRawAssets(context.Context, string, string, int, string, ...repository.ArtifactSearchMatch) ([]repository.RawAsset, error)
+}
+
 // GroupRuntime supplies shared member ordering/authorization and durable audit;
 // Raw owns the format-specific resolution and response decisions.
 type GroupRuntime interface {
@@ -68,6 +73,7 @@ type Options struct {
 	Intelligence      repository.ArtifactIntelligenceStore
 	BackgroundMetrics repository.BackgroundOperationMetrics
 	Store             repository.NativeRawStore
+	Query             QueryStore
 	Repositories      RepositoryLookup
 	Groups            GroupLookup
 	Objects           objectstore.Store
@@ -94,6 +100,7 @@ type Module struct {
 	intelligence       repository.ArtifactIntelligenceStore
 	backgroundMetrics  repository.BackgroundOperationMetrics
 	store              repository.NativeRawStore
+	query              QueryStore
 	repos              RepositoryLookup
 	groups             GroupLookup
 	objects            objectstore.Store
@@ -113,7 +120,7 @@ type Module struct {
 }
 
 func New(options Options) *Module {
-	return &Module{publication: options.Publication, jobs: options.Jobs, replications: options.Replications, intelligence: options.Intelligence, backgroundMetrics: options.BackgroundMetrics, store: options.Store, repos: options.Repositories, groups: options.Groups, objects: options.Objects,
+	return &Module{publication: options.Publication, jobs: options.Jobs, replications: options.Replications, intelligence: options.Intelligence, backgroundMetrics: options.BackgroundMetrics, store: options.Store, query: options.Query, repos: options.Repositories, groups: options.Groups, objects: options.Objects,
 		auth: options.Authenticator, authorizer: options.Authorizer, audit: options.Audit, anonymous: options.Anonymous,
 		readPolicies: options.ReadPolicies, quarantine: options.Quarantine, proxyClient: options.Client, proxyCache: options.Cache,
 		metrics: options.Metrics, publicationScanner: options.Scanner, groupRuntime: options.GroupRuntime,

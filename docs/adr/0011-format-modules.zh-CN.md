@@ -46,6 +46,8 @@ handler 和无效 HTTP pattern。应用组合保留请求观测、凭据、共�
 
 ## 窄接口与持久约束
 
+管理搜索显式注入单方法 `Query` 口（`ListRawAssets`），不依赖原生存储或发布器；缺失时返回 `ErrDisabled`，不会隐式回退到原生 store。
+
 Raw 原生读写依赖 `repository.NativeRawStore`、小型仓库/Group 查询接口、对象存储、
 读取策略/隔离查询以及共享授权。扫描/发布回调、指标和诊断适配不暴露组合根。
 迁移发布使用独立的四方法 Raw store port，不接收迁移台账或 SQL 实现。

@@ -18,7 +18,6 @@ type generatedRepositoryAPIAdapter struct {
 	managementScope
 	store                  repository.HostedRepositoryStore
 	sessions               nativeMavenHandler
-	conanPublish           nativeConanPublishHandler
 	aptPublication         *aptpublication.Manager
 	aptSnapshotPublisher   *aptpublication.Publisher
 	aptSnapshotImporter    *aptpublication.SnapshotArchiveImporter
@@ -43,15 +42,12 @@ type generatedRepositoryAPIAdapter struct {
 	replication            repository.ReplicationStore
 	oci                    repository.NativeOCIStore
 	cargo                  repository.NativeCargoStore
-	cargoProxy             repository.CargoProxyStore
 	conan                  repository.NativeConanStore
 	apiKeys                repository.APIKeyStore
 	serviceAccounts        repository.ServiceAccountStore
 	users                  userManagementStore
 	audit                  repository.Store
 	maintenance            *CacheMaintenance
-	proxyCache             proxyCacheBrowseHandler
-	mavenProxy             mavenProxyOperationsHandler
 	searchProjection       repository.ArtifactSearchStore
 	intelligence           repository.ArtifactIntelligenceStore
 	quarantine             repository.ArtifactQuarantineStore
@@ -61,7 +57,6 @@ type generatedRepositoryAPIAdapter struct {
 	quotaAlerts            repository.RepositoryQuotaAlertStore
 	webhooks               repository.WebhookStore
 	queueStats             repository.BackgroundOperationQueueStore
-	browse                 repository.ArtifactBrowseStore
 	diagnostics            Dependencies
 	objects                ObjectStores
 	logBuffer              *operationalog.Buffer

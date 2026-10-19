@@ -59,6 +59,9 @@ and Group lookup ports, object storage, read-policy/quarantine readers and share
 authorization. Scanner/publication callbacks and metric/diagnostic adapters do
 not expose the composition root. Migration publication has a separate four-method
 Raw store port and does not receive the migration ledger or SQL implementation.
+Management search uses an explicit single-method `Query` port (`ListRawAssets`),
+independently of native storage or publishers. Missing `Query` returns
+`ErrDisabled`; it never falls back to the native store.
 `StageVerifiedPublication` accepts bytes whose full size and hash the migration
 coordinator has already checked. Object-store `PutVerifiedReader` records that
 verified metadata; it does not perform digest verification. Visibility and final

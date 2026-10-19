@@ -3414,6 +3414,7 @@ Problem:
       enum:
       - invalid_request
       - invalid_state
+      - not_supported
       - encryption_key_unavailable
       - invalid_page_token
       - name_exists

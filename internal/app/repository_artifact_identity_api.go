@@ -9,7 +9,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
-func (h generatedRepositoryAPIAdapter) ListRepositoryArtifactIdentities(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListRepositoryArtifactIdentitiesParams) {
+func (h artifactManagementHandler) ListRepositoryArtifactIdentities(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListRepositoryArtifactIdentitiesParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryRead, func(_ Principal, repo repository.HostedRepository) {
 		purpose := repository.ArtifactIdentityPurpose(params.Purpose)
 		if purpose != repository.ArtifactIdentityScan && purpose != repository.ArtifactIdentityDistribution {
@@ -24,8 +24,8 @@ func (h generatedRepositoryAPIAdapter) ListRepositoryArtifactIdentities(w http.R
 			writeHostedProblem(w, http.StatusConflict, "unsupported_operation", "scan identities are unavailable for this repository format")
 			return
 		}
-		store, ok := h.store.(repository.ArtifactIdentityStore)
-		if !ok {
+		store := h.identities
+		if store == nil {
 			writeHostedProblem(w, http.StatusNotImplemented, "not_supported", "artifact identity listing is unavailable")
 			return
 		}
