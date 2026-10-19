@@ -611,7 +611,8 @@ expect 0 "$out" -- runtime logs --after-cursor "$after_cursor" --follow --durati
 # Machine identity (#133), the #127 CI playbook: a service account gets a
 # credential whose secret only reaches a private file, is granted read on the
 # Raw repository, reads with that credential, is rotated (the old credential
-# answers 401, exit 5), and loses access with its grant. No secret may reach
+# answers 401, exit 5), publishes Maven with repository-scoped read/write,
+# and loses access with its grant. No secret may reach
 # any output.
 nosecret() {
   local secret=$1
@@ -665,6 +666,55 @@ states = {item["name"]: bool(item.get("revokedAt")) for item in items}
 if states != {"e2e-old": True, "e2e-new": False} or "token" in json.dumps(items):
     raise SystemExit(f"credential list after rotation: {states}")
 PY2
+# The CI credential, rather than the administrator, publishes a full Maven
+# session with only read/write on one repository. Read the committed bytes
+# through the native endpoint and find that access under the exact actor.
+ci_maven="cli-e2e-ci-publisher-${suffix}"
+expect 0 "$out" -- repo create "$ci_maven" --format maven --json
+ci_maven_id=$(field "$out" data.id)
+expect 0 "$out" -- grant upsert --repo "$ci_maven_id" --principal "service-account:$account_id" --scope repositories:read --scope repositories:write --json
+cli_test_token=$new_token expect 0 "$out" -- access check --repo "$ci_maven_id" --require write --json
+cli_test_token=$new_token expect 6 "$out" -- grant list --repo "$ci_maven_id" --json
+mkdir -p "$workdir/ci-maven"
+printf '%s' '<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>com.example.agctl</groupId><artifactId>ci</artifactId><version>1.0.0</version></project>' >"$workdir/ci-maven/ci-1.0.0.pom"
+printf '%s' 'owned CI publisher artifact' >"$workdir/ci-maven/ci-1.0.0.jar"
+ci_key="cli-e2e-ci-${suffix}"
+cli_test_token=$new_token expect 0 "$out" -- publish create --repo "$ci_maven_id" --coordinate com.example.agctl:ci:1.0.0 --pom "$workdir/ci-maven/ci-1.0.0.pom" --file "$workdir/ci-maven/ci-1.0.0.jar" --idempotency-key "$ci_key" --json
+ci_session=$(field "$out" data.id)
+require "$(field "$out" data.state)" open "machine publisher session"
+cli_test_token=$new_token expect 0 "$out" -- publish create --repo "$ci_maven_id" --coordinate com.example.agctl:ci:1.0.0 --pom "$workdir/ci-maven/ci-1.0.0.pom" --file "$workdir/ci-maven/ci-1.0.0.jar" --idempotency-key "$ci_key" --json
+require "$(field "$out" data.id)" "$ci_session" "same key replays the open session"
+cli_test_token=$new_token expect 0 "$out" -- publish upload "$ci_session" --file "$workdir/ci-maven/ci-1.0.0.pom" --file "$workdir/ci-maven/ci-1.0.0.jar" --json
+cli_test_token=$new_token expect 0 "$out" -- publish commit "$ci_session" --json
+require "$(field "$out" data.artifact.coordinate)" com.example.agctl:ci:1.0.0 "machine publisher commit"
+cli_test_token=$new_token expect 0 "$out" -- publish status "$ci_session" --json
+require "$(field "$out" data.state)" committed "machine publisher terminal state"
+cli_test_token=$new_token expect 0 "$out" -- artifact search --repo "$ci_maven_id" --q com.example.agctl:ci:1.0.0 --json
+require "$(field "$out" data.items.0.coordinate)" com.example.agctl:ci:1.0.0 "machine publisher search"
+for object in ci-1.0.0.pom ci-1.0.0.jar; do
+  curl --silent --show-error --fail --max-time 10 --output "$workdir/ci-maven/read-$object" -H "Authorization: Bearer $new_token" "$server/repository/maven/$ci_maven/com/example/agctl/ci/1.0.0/$object"
+  cmp "$workdir/ci-maven/$object" "$workdir/ci-maven/read-$object"
+done
+expect 0 "$out" -- audit list --actor "service-account:$account_id" --repository "$ci_maven" --operation get --from "$grant_started" --all --json
+python3 - "$out" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    rows = json.load(stream)["data"]["items"]
+expected = {"com/example/agctl/ci/1.0.0/ci-1.0.0.pom", "com/example/agctl/ci/1.0.0/ci-1.0.0.jar"}
+if {row["resource"] for row in rows if row["status"] == 200} != expected:
+    raise SystemExit("the machine publisher's native read-back is absent from its audit scope")
+PY2
+expect 0 "$out" -- grant delete --repo "$ci_maven_id" --principal "service-account:$account_id" --yes --json
+cli_test_token=$new_token expect 6 "$out" -- publish create --repo "$ci_maven_id" --coordinate com.example.agctl:ci:1.0.0 --pom "$workdir/ci-maven/ci-1.0.0.pom" --file "$workdir/ci-maven/ci-1.0.0.jar" --idempotency-key "refused-$ci_key" --json
+require "$(field "$out" error.httpStatus)" 403 "publisher refuses after grant removal"
+expect 0 "$out" -- audit list --actor "service-account:$account_id" --repository "$ci_maven" --outcome access_denied --from "$grant_started" --all --json
+require "$(field "$out" data.items.0.status)" 403 "publisher refusal is audited"
+expect 0 "$out" -- artifact search --repo "$ci_maven_id" --q com.example.agctl:ci:1.0.0 --json
+require "$(field "$out" data.items.0.coordinate)" com.example.agctl:ci:1.0.0 "revocation keeps the committed artifact"
+expect 0 "$out" -- repo delete "$ci_maven_id" --yes --json
+
 # Group reads follow Group writes (#359): administering every member lets the
 # account read, list, and replace the members of a Group; a Group it only
 # partly administers answers 404 and stays out of its list.

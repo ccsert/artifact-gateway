@@ -645,7 +645,8 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
 
 ## 验证
 
-- `go test ./internal/agctl/...` 离线运行，使用进程内的假服务端：覆盖命令
+- `make cli-test` 离线运行命令入口与 `internal/agctl` 测试，CI 和 `ci-local`
+  也调用相同目标；使用进程内的假服务端，覆盖命令
   解析、退出码、脱敏和 JSON 信封。golden 信封位于
   `internal/agctl/testdata/golden/`；有意修改输出后，用
   `go test ./internal/agctl/ -update` 重写并审阅差异。
@@ -669,7 +670,10 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   没有变更类审计，以及撤销后隐藏仓库。读取 status、诊断、运行节点、概览和生命周期任务；再删除仓库（确认、dry-run、
   202、等待超时）并等待 `deleted`。还会运行 CI 剧本：服务账号只把凭据签发到
   0600 文件，用它读取仓库，轮换后旧秘密返回 401，撤销授权后失去访问；创建并吊销
-  API key；待授权用户升为 member 后在授权前仍无仓库权限，其会话被结束后被拒，
+  API key。新凭据只获得另一个 Maven 仓库的 read/write，创建并重放会话、上传和
+  提交 POM/JAR、检索坐标，并通过原生端点逐字节回读两份文件；回读可按 actor/operation
+  在审计中查到。撤销授权后新建会话返回 403，已提交制品仍保留。待授权用户升为
+  member 后在授权前仍无仓库权限，其会话被结束后被拒，
   从文件重置密码，最后删除用户，上述每次变更（创建、角色更新、会话列出与吊销、
   重置密码、删除）都以管理员为 actor 记录在审计日志的 `users/<id>` 下；该用户
   为 member 时，其会话管理账号与身份均被拒绝（6）。为该用户链接一个 OIDC 身份（先 dry-run）并列出；同一 subject 链接到
