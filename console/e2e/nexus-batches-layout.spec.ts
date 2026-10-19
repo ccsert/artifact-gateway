@@ -1,5 +1,6 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { authenticateAsAdmin, authenticateAsMember } from "./support/auth";
+import { waitForModalOpen } from "./support/motion";
 import { defaultSiteSettings } from "../src/lib/siteSettings";
 import {
   migrationPreflight,
@@ -10,6 +11,7 @@ import {
   nexusCapabilities,
   nexusEntries,
   nexusTargets,
+  nexusScanFailure,
 } from "../src/test/nexusBatchFixtures";
 
 async function setup(page: Page, width: number, theme: string) {
@@ -245,3 +247,72 @@ test("member batch deep links are denied before capabilities, tasks or source AP
   await expect(page).toHaveURL(/\/repositories$/);
   expect(calls).toBe(0);
 });
+
+for (const width of [1440, 390])
+  test(`unsealed scan diagnosis and fresh retry dialog preserve geometry at ${width}px`, async ({
+    page,
+  }, info) => {
+    const errors = await setup(
+      page,
+      width,
+      width === 1440 ? "gateway-dark" : "gateway-light",
+    );
+    await page.route(
+      `**/api/v2/migrations/nexus/batches/${nexusBatch.id}`,
+      (route) =>
+        route.fulfill({
+          json: {
+            ...nexusBatch,
+            state: "failed",
+            scanComplete: false,
+            totalBytes: null,
+            metadataDiscovered: 5,
+            entryCount: 0,
+            manifestSha256: "",
+            visibleIdentities: 0,
+            counts: { ...nexusBatch.counts, committed: 0 },
+            lastScanFailure: nexusScanFailure,
+          },
+        }),
+    );
+    await page.route(
+      `**/api/v2/migrations/nexus/batches/${nexusBatch.id}/entries?**`,
+      (route) => route.fulfill({ json: { items: [], nextCursor: "" } }),
+    );
+    await page.goto(
+      `/operations?tab=migrations&view=batches&batch=${nexusBatch.id}`,
+    );
+    const diagnostic = page.getByRole("region", {
+      name: "最近的持久扫描失败定位",
+      exact: true,
+    });
+    await expect(
+      diagnostic.getByText("source_missing", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      diagnostic.getByText(nexusScanFailure.sourcePath, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("未知；完整清单尚未封存", { exact: true }),
+    ).toBeVisible();
+    await geometry(page, width);
+    await capture(page, info, "scan-diagnosis");
+    await page
+      .getByRole("button", { name: "重试可重试失败项", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "重试可重试失败项",
+      exact: true,
+    });
+    await waitForModalOpen(dialog);
+    await expect(
+      dialog.getByRole("textbox", { name: "存储池可用字节", exact: true }),
+    ).toHaveValue("");
+    await expect(
+      dialog.getByRole("button", { name: "重试可重试失败项", exact: true }),
+    ).toBeDisabled();
+    await geometry(page, width);
+    await capture(page, info, "retry-unknown-capacity");
+    expect(errors.pageErrors).toEqual([]);
+    expect(errors.consoleErrors).toEqual([]);
+  });
