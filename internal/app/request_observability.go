@@ -32,13 +32,7 @@ func (d Dependencies) requestObservability(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, runtimeLogRouteContextKey{}, route)
 		failure := &rawFailureState{}
 		ctx = context.WithValue(ctx, rawFailureContextKey{}, failure)
-		state, ok := ctx.Value(requestClassStateContextKey{}).(*requestClassState)
-		if !ok {
-			// Standalone handlers still share the resolved compatibility class,
-			// without creating or updating any metrics counters.
-			state = &requestClassState{class: classifyRequest(r.URL.Path)}
-			ctx = context.WithValue(ctx, requestClassStateContextKey{}, state)
-		}
+		class := classifyRequest(r.URL.Path)
 		r = r.WithContext(ctx)
 		w.Header().Set("X-Request-ID", ids.RequestID)
 		w.Header().Set("X-Trace-ID", ids.TraceID)
@@ -58,7 +52,7 @@ func (d Dependencies) requestObservability(next http.Handler) http.Handler {
 			slog.String("component", "http"), slog.String("operation", "http.request"),
 			slog.String("requestId", ids.RequestID), slog.String("traceId", ids.TraceID),
 			slog.String("method", r.Method), slog.String("route", route.current()),
-			slog.String("requestClass", requestClassNames[state.current()]),
+			slog.String("requestClass", requestClassNames[class]),
 			slog.Int("status", captured.Code), slog.Int64("durationMs", duration.Milliseconds()),
 		}
 		if code := failure.current(); code != "" && captured.Code >= http.StatusBadRequest {

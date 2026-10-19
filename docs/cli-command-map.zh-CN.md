@@ -252,9 +252,9 @@ server base）。计划命令省略前导 `agctl`。
 
 ## 原生 bundle 中的附加协议操作
 
-管理操作在 native bundle 中重复出现时沿用上表，不重复实现。以下 43 个附加
+管理操作在 native bundle 中重复出现时沿用上表，不重复实现。以下 36 个附加
 操作逐项分类；原生 URL 按各 protocol 的 server 覆盖和真实路由使用，不能一律
-拼 `/api/v2`。Nexus 兼容数据路径不是 Nexus 管理 REST API。
+拼 `/api/v2`。已退役的 Nexus Repository 别名不属于此契约。
 
 | 协议 API / operationId | 计划命令/处理 | 承接 | 阶段 | 权限 | 验收 |
 | --- | --- | --- | --- | --- | --- |
@@ -286,13 +286,6 @@ server base）。计划命令省略前导 `agctl`。
 | `HEAD /v2/{name}/tags/list`<br>`headOCITags` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `GET /repository/maven/{repository}/{assetPath}`<br>`readMavenAsset` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `PUT /repository/maven/{repository}/{assetPath}`<br>`stageMavenProtocolAsset` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
-| `GET /repository/{repository}/{path}`<br>`readNexusCompatibleRepositoryPath` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
-| `HEAD /repository/{repository}/{path}`<br>`headNexusCompatibleRepositoryPath` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
-| `PUT /repository/{repository}/{path}`<br>`putNexusCompatibleRepositoryPath` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
-| `POST /repository/{repository}/{path}`<br>`postNexusCompatibleRepositoryPath` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
-| `PATCH /repository/{repository}/{path}`<br>`patchNexusCompatibleRepositoryPath` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
-| `DELETE /repository/{repository}/{path}`<br>`deleteNexusCompatibleRepositoryPath` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
-| `POST /repository/{repository}/`<br>`uploadNexusCompatiblePyPIDistribution` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `POST /repository/maven/{repository}/coordinates/{coordinate}:commit`<br>`commitMavenCoordinate` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `GET /go/{repository}/{modulePath}`<br>`readGoModuleRepresentation` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `HEAD /go/{repository}/{modulePath}`<br>`headGoModuleRepresentation` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |

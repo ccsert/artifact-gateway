@@ -317,7 +317,7 @@ func TestNativeGoRealClientVerifiesChecksumsThroughSumDBMirror(t *testing.T) {
 		childEnv = append(childEnv, entry)
 	}
 	command.Env = append(childEnv,
-		"GOPROXY="+gateway.URL+"/repository/"+repo.Name,
+		"GOPROXY="+gateway.URL+"/go/"+repo.Name,
 		"GOSUMDB="+verifierKey,
 		"GONOPROXY=none",
 		"GONOSUMDB=",

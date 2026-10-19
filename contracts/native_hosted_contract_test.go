@@ -36,6 +36,24 @@ func loadNativeHostedSource(t *testing.T) *openapi3.T {
 	return spec
 }
 
+func TestNativeProtocolContractRetiresNexusRepositoryAliases(t *testing.T) {
+	for name, load := range map[string]func(*testing.T) *openapi3.T{"source": loadNativeHostedSource, "bundle": loadNativeHostedSpec} {
+		t.Run(name, func(t *testing.T) {
+			spec := load(t)
+			for _, path := range []string{"/repository/{repository}/{path}", "/repository/{repository}/"} {
+				if spec.Paths.Value(path) != nil {
+					t.Errorf("retired Nexus route %s is still declared", path)
+				}
+			}
+			for _, path := range []string{"/repository/maven/{repository}/{assetPath}", "/go/{repository}/{modulePath}", "/raw/{repository}/{path}", "/v2/{name}/manifests/{reference}", "/npm/{repository}/-/package/{package}/dist-tags"} {
+				if spec.Paths.Value(path) == nil {
+					t.Errorf("native protocol route %s is missing", path)
+				}
+			}
+		})
+	}
+}
+
 func operation(t *testing.T, spec *openapi3.T, path, method string) *openapi3.Operation {
 	t.Helper()
 	item := spec.Paths.Find(path)
@@ -449,39 +467,6 @@ func TestNativeHostedProtocolReadLifecycleFixtures(t *testing.T) {
 		challenge := requireResponse(t, operation(t, spec, path, "GET"), "401").Headers["WWW-Authenticate"]
 		if challenge == nil || challenge.Value.Schema.Value.Pattern != "^Basic " {
 			t.Errorf("%s must return a Basic challenge", path)
-		}
-	}
-}
-
-func TestNativeHostedAPICompatibility(t *testing.T) {
-	baseline := os.Getenv("API_BASELINE")
-	if baseline == "" {
-		t.Skip("no prior API baseline")
-	}
-	prior, err := openapi3.NewLoader().LoadFromFile(baseline)
-	if err != nil {
-		t.Fatalf("load API baseline: %v", err)
-	}
-	current := loadNativeHostedSpec(t)
-	for path, priorItem := range prior.Paths.Map() {
-		currentItem := current.Paths.Find(path)
-		if currentItem == nil {
-			t.Errorf("breaking API change: removed path %s", path)
-			continue
-		}
-		for _, method := range []struct {
-			name           string
-			prior, current *openapi3.Operation
-		}{
-			{"GET", priorItem.Get, currentItem.Get},
-			{"PUT", priorItem.Put, currentItem.Put},
-			{"POST", priorItem.Post, currentItem.Post},
-			{"DELETE", priorItem.Delete, currentItem.Delete},
-			{"PATCH", priorItem.Patch, currentItem.Patch},
-		} {
-			if method.prior != nil && method.current == nil {
-				t.Errorf("breaking API change: removed %s %s", method.name, path)
-			}
 		}
 	}
 }

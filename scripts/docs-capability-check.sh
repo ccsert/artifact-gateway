@@ -61,9 +61,9 @@ if ! contains_fixed_string 'PostgreSQL is the only coordination and database dep
   exit 1
 fi
 
-if ! contains_fixed_string 'Nexus-compatible direct publication' README.md ||
+if ! contains_fixed_string 'standard direct publication' README.md ||
   ! contains_fixed_string 'mavenStrictPublication' docs/maven-hosted-publication.md ||
-  ! contains_fixed_string 'Maven Hosted 默认采用与 Nexus 兼容的直接发布' README.zh-CN.md ||
+  ! contains_fixed_string 'Maven Hosted 默认采用标准直接发布' README.zh-CN.md ||
   ! contains_fixed_string 'mavenStrictPublication' docs/maven-hosted-publication.zh-CN.md; then
   printf 'Maven direct-by-default and strict opt-in documentation is missing\n' >&2
   exit 1

@@ -298,10 +298,9 @@ the contract's server base. Planned commands omit the leading `agctl`.
 ## Additional protocol operations in the native bundle
 
 Management operations repeat in the native bundle and reuse the table above;
-they are not implemented twice. The 43 additional operations below are
+they are not implemented twice. The 36 additional operations below are
 classified one by one. Native URLs follow each protocol's server override and
-real routes and must not be joined to `/api/v2` blindly. Nexus-compatible data
-paths are not the Nexus management REST API.
+real routes and must not be joined to `/api/v2` blindly. Retired Nexus repository aliases are not part of this contract.
 
 | Protocol API / operationId | Planned command / handling | Owning issue | Phase | Permission | Acceptance |
 | --- | --- | --- | --- | --- | --- |
@@ -333,13 +332,6 @@ paths are not the Nexus management REST API.
 | `HEAD /v2/{name}/tags/list`<br>`headOCITags` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `GET /repository/maven/{repository}/{assetPath}`<br>`readMavenAsset` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `PUT /repository/maven/{repository}/{assetPath}`<br>`stageMavenProtocolAsset` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
-| `GET /repository/{repository}/{path}`<br>`readNexusCompatibleRepositoryPath` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
-| `HEAD /repository/{repository}/{path}`<br>`headNexusCompatibleRepositoryPath` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
-| `PUT /repository/{repository}/{path}`<br>`putNexusCompatibleRepositoryPath` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
-| `POST /repository/{repository}/{path}`<br>`postNexusCompatibleRepositoryPath` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
-| `PATCH /repository/{repository}/{path}`<br>`patchNexusCompatibleRepositoryPath` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
-| `DELETE /repository/{repository}/{path}`<br>`deleteNexusCompatibleRepositoryPath` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
-| `POST /repository/{repository}/`<br>`uploadNexusCompatiblePyPIDistribution` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `POST /repository/maven/{repository}/coordinates/{coordinate}:commit`<br>`commitMavenCoordinate` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `GET /go/{repository}/{modulePath}`<br>`readGoModuleRepresentation` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `HEAD /go/{repository}/{modulePath}`<br>`headGoModuleRepresentation` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |

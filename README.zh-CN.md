@@ -59,25 +59,25 @@ Artifact Gateway 有意把运维控制面保持得足够精简：
 | Maven | ✓ | ✓ | ✓ | 默认支持标准 Maven/Gradle 直接发布；可选[严格坐标提交](docs/maven-hosted-publication.zh-CN.md) |
 | Conan 2 | ✓ | ✓ | ✓ | 感知 Revision 的发布与生命周期 |
 | npm | ✓ | ✓ | ✓ | 原生发布、可信缓存与 Packument 合并 |
-| PyPI | ✓ | ✓ | ✓ | Nexus 根路径 twine 上传与 PEP 503/691 读取 |
-| Go modules | ✓ | ✓ | ✓ | 标准 GOPROXY 读取；兼容 Nexus 的版本 ZIP 发布 |
+| PyPI | ✓ | ✓ | ✓ | 原生 twine 上传与 PEP 503/691 读取 |
+| Go modules | ✓ | ✓ | ✓ | 标准 GOPROXY 读取；显式模块/版本 ZIP 发布 |
 | Cargo | ✓ | ✓ | ✓ | Sparse Registry；Hosted 发布与 yank、可信 Proxy 缓存、有序 Group owner；[客户端配置](docs/cargo-usage.zh-CN.md) |
 | APT | 仅预览 | ✓ | ✓ | 生产密钥托管门禁通过前不公开声明 Hosted 能力 |
 
 NuGet 仍属于路线图工作。准确且受测试约束的说明以
 [协议兼容性基线](docs/protocol-compatibility.zh-CN.md)为准。
 
-Maven Hosted 默认采用与 Nexus 兼容的直接发布，普通 `mvn deploy` 和 Gradle `publish`
+Maven Hosted 默认采用标准直接发布，普通 `mvn deploy` 和 Gradle `publish`
 不需要 companion 步骤。需要单坐标原子可见性时，可以按仓库开启严格发布，并由 CI 或
 发布集成额外调用 Gateway commit。
 
-为降低客户端迁移成本，Maven、npm、PyPI、Raw、Go 的 Hosted/Proxy/Group 也接受
-Nexus 风格根路径 `/repository/<name>/...`。兼容入口仍复用原协议的鉴权、校验、审计和
-生命周期处理；npm 生成的 Tarball URL、Raw 分页与断点上传地址、PyPI 上传结果和 Go
-发布结果都会保持在同一兼容根路径。`maven` 仍由 Gateway 原有 Maven canonical 前缀
-保留；Nexus 中同名目标迁移时需要改用其他 Repository 名称。OCI 必须遵守规范固定的
-`/v2/` Registry 根路径，因此需要通过
-镜像名称或 Ingress 映射迁移，不能伪装成普通 HTTP Base Path。
+客户端使用[原生协议根路径](docs/protocol-compatibility.zh-CN.md#原生客户端根路径)：
+Maven Hosted 使用 `/repository/maven/<repository>/`，Maven Proxy/Group 使用
+`/maven/<repository>/`，npm 使用 `/npm/<repository>/`，PyPI 使用 `/pypi/<repository>/`
+（上传为 `legacy/`，读取为 `simple/`），Raw 使用 `/raw/<repository>/`，Go 使用
+`/go/<repository>/`。Go 发布需显式模块/版本 ZIP 路径，OCI 使用 `/v2/`。
+已退役的 Nexus `/repository/<name>/...` 别名返回 404；需更新客户端 URL 并重新生成
+仍保留旧根路径的 lockfile。
 
 除协议读写外，当前基础还包括仓库授权、本地用户与 OIDC、Service Account、匿名读取
 策略、审计、搜索与浏览、保留策略、可恢复删除、晋升、复制、Webhook、扫描器集成、

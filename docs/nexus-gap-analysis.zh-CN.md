@@ -14,15 +14,11 @@ Artifact Gateway 已覆盖 OCI、Maven、Raw、Conan、npm、PyPI 的 Hosted/Pro
 
 ## 客户端迁移边界
 
-Artifact Gateway 现已为 Maven、npm、PyPI、Raw、Go 的 Hosted/Proxy/Group 接受 Nexus
-风格 `/repository/<name>/...` 根路径。普通 Maven/Gradle、npm、twine/pip、Raw HTTP 和
-GOPROXY 迁移不再需要改写 Base Path；Go Hosted 还接受 Nexus 3.93+ 的版本 ZIP 上传，
-并从归档推导经过授权的模块身份，以上流程都有真实客户端门禁覆盖。`maven` 这个精确
-名称仍由旧 canonical Maven 前缀保留，迁移时必须改名。这不负责导入 Nexus
-元数据，也不模拟 Nexus 管理 API。OCI 仍属于有条件迁移：Registry V2 把 `/v2/` 固定
-在 Host 根路径，而 Nexus 常用 Connector 端口或虚拟主机选择 Docker Repository；部署
-时需要把外部端点映射到 Gateway Repository 名称前缀，或对镜像重新命名。精确路径与
-证据见[协议兼容性矩阵](protocol-compatibility.zh-CN.md#nexus-风格-repository-根路径)。
+Artifact Gateway 使用自身的 canonical 协议入口。Nexus 风格
+`/repository/<name>/...` 别名与仅含版本的 Go ZIP 上传已退役；客户端需要更新 Base
+URL，并重新生成保留旧根路径的 lockfile。标准 Maven/Gradle、npm、twine/pip、Raw
+HTTP、GOPROXY 与 OCI 协议继续通过[原生客户端根路径](protocol-compatibility.zh-CN.md#原生客户端根路径)提供。
+Nexus 发现与导入仍作为独立的只读迁移输入；这不表示生产客户端切换或数据验收已完成。
 
 ## 差距摘要
 

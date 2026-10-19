@@ -1086,9 +1086,6 @@ func (h nativeNPMHandler) tarballURL(r *http.Request, repositoryName, packageNam
 		scheme = forwarded
 	}
 	prefix := "/npm/" + repositoryName
-	if externalName, ok := nexusRepositoryCompatibilityExternalName(r.Context(), repositoryName); ok {
-		prefix = "/repository/" + externalName
-	}
 	return (&url.URL{Scheme: scheme, Host: r.Host, Path: prefix + "/" + npmprotocol.PackagePath(packageName) + "/-/" + tarballName}).String()
 }
 

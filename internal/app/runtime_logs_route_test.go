@@ -29,7 +29,7 @@ func TestRuntimeLogsPreserveRegisteredRouteAndResolvedRepositoryClass(t *testing
 			if instrument {
 				handler = metrics.Instrument(handler)
 			}
-			r := httptest.NewRequest(http.MethodGet, "/repository/raw-releases/private-artifact?token=private-query", strings.NewReader("private-body"))
+			r := httptest.NewRequest(http.MethodGet, "/raw/raw-releases/private-artifact?token=private-query", strings.NewReader("private-body"))
 			r.Header.Set("X-Request-ID", "route-regression")
 			authorize(r, "resolver-secret")
 			w := httptest.NewRecorder()
@@ -47,8 +47,8 @@ func TestRuntimeLogsPreserveRegisteredRouteAndResolvedRepositoryClass(t *testing
 			if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &page) != nil || len(page.Items) != 1 {
 				t.Fatalf("query status=%d body=%s", response.Code, response.Body.String())
 			}
-			if got := page.Items[0]; got["route"] != "/repository/" || got["requestClass"] != "raw" {
-				t.Errorf("access diagnostics=%v, want registered route /repository/ and resolved raw class", got)
+			if got := page.Items[0]; got["route"] != "/raw/" || got["requestClass"] != "raw" {
+				t.Errorf("access diagnostics=%v, want registered route /raw/ and raw class", got)
 			}
 			for _, marker := range []string{"private-artifact", "private-query", "private-body", "resolver-secret"} {
 				if strings.Contains(response.Body.String()+output.String(), marker) {
@@ -62,40 +62,40 @@ func TestRuntimeLogsPreserveRegisteredRouteAndResolvedRepositoryClass(t *testing
 	}
 }
 
-func TestResolvedRepositoryAccessClassUsesExistingFormatCoverage(t *testing.T) {
-	for _, format := range []repository.Format{repository.FormatMaven, repository.FormatRaw, repository.FormatNPM, repository.FormatPyPI, repository.FormatGo} {
+func TestCanonicalProtocolAccessClassUsesRegisteredRoute(t *testing.T) {
+	for _, test := range []struct {
+		prefix string
+		class  requestClass
+	}{
+		{"/repository/maven/", requestClassMaven}, {"/maven/", requestClassMaven},
+		{"/raw/", requestClassRaw}, {"/npm/", requestClassNPM},
+		{"/pypi/", requestClassPyPI}, {"/go/", requestClassGo}, {"/cargo/", requestClassCargo},
+	} {
 		for _, instrument := range []bool{false, true} {
-			t.Run(string(format)+map[bool]string{false: "/standalone", true: "/metrics"}[instrument], func(t *testing.T) {
-				store := repository.NewMemoryStore()
-				if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{Name: "opaque-repository", Format: format}); err != nil {
-					t.Fatal(err)
-				}
+			t.Run(test.prefix+map[bool]string{false: "/standalone", true: "/metrics"}[instrument], func(t *testing.T) {
 				var output bytes.Buffer
 				d := Dependencies{AccessLog: AccessLogOptions{Mode: "full", Logger: operationalog.NewLogger(&output, "node", "session")}}
 				mux := newRuntimeLogMux(nil)
-				mux.Handle("/repository/", nexusRepositoryCompatibilityRouter{repositories: store, routes: map[repository.Format]nexusRepositoryCompatibilityRoute{format: {repositoryPrefix: "/native/", repositoryHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// A forwarded clone must retain the shared classification;
-					// changing Pattern must not change the registered outer route.
+				mux.Handle(test.prefix, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					r.Pattern = "/private-handler-path?token=private-query"
 					w.WriteHeader(http.StatusBadGateway)
-				})}}})
+				}))
 				handler := d.requestObservability(mux)
 				metrics := &Metrics{}
 				if instrument {
 					handler = metrics.Instrument(handler)
 				}
-				handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/repository/opaque-repository/private-object", nil))
+				handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, test.prefix+"opaque-repository/private-object", nil))
 				var record map[string]any
 				if err := json.Unmarshal(output.Bytes(), &record); err != nil {
 					t.Fatal(err)
 				}
-				if record["requestClass"] != string(format) || record["route"] != "/repository/" || strings.Contains(output.String(), "private-") {
-					t.Fatalf("resolved log=%v", record)
+				if record["requestClass"] != requestClassNames[test.class] || record["route"] != test.prefix || strings.Contains(output.String(), "private-") {
+					t.Fatalf("canonical log=%v", record)
 				}
 				if instrument {
-					class, _ := requestClassForRepositoryFormat(format)
-					if metrics.httpRequests.requests[class][4].Load() != 1 || metrics.httpRequests.requests[requestClassOther][4].Load() != 0 {
-						t.Fatal("resolved 5xx metrics changed")
+					if metrics.httpRequests.requests[test.class][4].Load() != 1 || metrics.httpRequests.requests[requestClassOther][4].Load() != 0 {
+						t.Fatal("canonical 5xx metrics changed")
 					}
 					for index := range metrics.httpRequests.inFlight {
 						if metrics.httpRequests.inFlight[index].Load() != 0 {
@@ -112,7 +112,7 @@ func TestRuntimeLogsRouteTemplatesDoNotGuessRepositoryFormat(t *testing.T) {
 	buffer := operationalog.NewBuffer(8)
 	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{LogBuffer: buffer, Runtime: DiagnosticRuntime{InstanceID: "node", SessionID: "session"}, AccessLog: AccessLogOptions{Mode: "full", Logger: operationalog.NewLogger(buffer, "node", "session")}}, Store: repository.NewMemoryStore(), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	for _, test := range []struct{ path, route, class string }{
-		{"/repository/raw-private-name/private-object", "/repository/", "other"},
+		{"/repository/raw-private-name/private-object", "unmatched", "other"},
 		{"/raw/private-name/private-object", "/raw/", "raw"},
 		{"/cargo/private-name/private-object", "/cargo/", "cargo"},
 		{"/api/v2/repositories/private-id", "GET /api/v2/repositories/{repositoryId}", "management"},

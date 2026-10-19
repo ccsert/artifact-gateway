@@ -1,5 +1,7 @@
 package app
 
+import "github.com/ccsert/artifact-gateway/internal/objectstore"
+
 import (
 	"bytes"
 	"context"
@@ -13,7 +15,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/operationalog"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/getkin/kin-openapi/openapi3"
@@ -88,7 +89,7 @@ func TestRawFailureDiagnosticsAtHTTPBoundary(t *testing.T) {
 		{"body", "https://example.com/body", "upstream_body_failed", "body", 502, []string{"GET"}},
 	} {
 		for _, method := range test.methods {
-			for _, prefix := range []string{"/raw/", "/repository/"} {
+			for _, prefix := range []string{"/raw/"} {
 				t.Run(test.name+"/"+method+prefix, func(t *testing.T) {
 					store := repository.NewMemoryStore()
 					_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{Name: "private-repo", Format: repository.FormatRaw, Type: repository.RepositoryTypeProxy, Endpoint: test.endpoint, AllowedHosts: []string{"example.com"}})
@@ -241,7 +242,7 @@ func TestRawFailureDiagnosticsGroupsAndAuthorization(t *testing.T) {
 				}}
 				var output bytes.Buffer
 				handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{AccessLog: AccessLogOptions{Mode: "full", Logger: operationalog.NewLogger(&output, "node", "session")}}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: client})
-				request := httptest.NewRequest(method, "/repository/private-group/private-object", nil)
+				request := httptest.NewRequest(method, "/raw/private-group/private-object", nil)
 				authorize(request, "resolver-secret")
 				response := httptest.NewRecorder()
 				handler.ServeHTTP(response, request)
@@ -273,7 +274,7 @@ func TestRawFailureDiagnosticsGroupsAndAuthorization(t *testing.T) {
 	}{
 		{"unauthenticated", "", "/raw/private-repo/private-object", 401, true},
 		{"unauthorized", "resolver-secret", "/raw/private-repo/private-object", 401, false},
-		{"unresolved", "resolver-secret", "/repository/private-missing/private-object", 404, true},
+		{"unresolved", "resolver-secret", "/raw/private-missing/private-object", 404, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := repository.NewMemoryStore()

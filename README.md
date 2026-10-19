@@ -63,29 +63,26 @@ byte plane, and Gateway connects the two without adding a middleware fleet.
 | Maven | ✓ | ✓ | ✓ | Standard Maven/Gradle publication by default; [strict coordinate commit](docs/maven-hosted-publication.md) is optional |
 | Conan 2 | ✓ | ✓ | ✓ | Revision-aware publication and lifecycle |
 | npm | ✓ | ✓ | ✓ | Native publication, verified cache, merged packuments |
-| PyPI | ✓ | ✓ | ✓ | Nexus-root twine upload plus PEP 503/691 reads |
-| Go modules | ✓ | ✓ | ✓ | Standard GOPROXY reads; Nexus-compatible version-ZIP publication |
+| PyPI | ✓ | ✓ | ✓ | Native twine upload plus PEP 503/691 reads |
+| Go modules | ✓ | ✓ | ✓ | Standard GOPROXY reads; Explicit module/version ZIP publication |
 | Cargo | ✓ | ✓ | ✓ | Sparse registry; Hosted publish/yank, verified Proxy cache, ordered Group ownership; [client setup](docs/cargo-usage.md) |
 | APT | Preview only | ✓ | ✓ | Hosted signing remains unadvertised until production custody gates pass |
 
 NuGet remains roadmap work. The detailed, test-bound compatibility statement lives in the
 [protocol compatibility baseline](docs/protocol-compatibility.md).
 
-Maven Hosted defaults to Nexus-compatible direct publication, so ordinary
+Maven Hosted defaults to standard direct publication, so ordinary
 `mvn deploy` and Gradle `publish` require no companion step. A repository can
 opt in to strict publication when atomic per-coordinate visibility is worth an
 additional Gateway commit integration.
 
-For client migration, Maven, npm, PyPI, Raw, and Go Hosted/Proxy/Group targets
-also accept the Nexus-style root `/repository/<name>/...`. Requests still use
-the canonical protocol authorization, validation, audit, and lifecycle paths;
-npm metadata keeps generated tarball URLs on the same compatibility root so
-npm lockfiles do not switch route families. Raw pagination and upload discovery,
-PyPI uploads, and Go publication also keep response URLs on that root. The name
-`maven` remains reserved by Gateway's older canonical Maven prefix; migrate a
-Nexus target with that exact name under a different repository name. OCI remains on the specification-
-required `/v2/` registry root and therefore needs registry-name or ingress
-mapping rather than an HTTP base-path alias.
+Clients use the [canonical protocol roots](docs/protocol-compatibility.md#native-client-roots):
+Maven Hosted at `/repository/maven/<repository>/`, Maven Proxy/Group at
+`/maven/<repository>/`, npm at `/npm/<repository>/`, PyPI at `/pypi/<repository>/`
+(upload at `legacy/`, reads at `simple/`), Raw at `/raw/<repository>/`, and Go at
+`/go/<repository>/`. Go publication requires the explicit module/version ZIP
+path. OCI uses `/v2/`. Retired Nexus `/repository/<name>/...` aliases return 404;
+update client URLs and regenerate lockfiles that retain the old roots.
 
 Beyond protocol reads and writes, the current foundation includes repository
 grants, local users and OIDC, service accounts, anonymous-read policy, audit,

@@ -44,7 +44,7 @@ OTLP is an export protocol, not a log-query API. Receiver storage, retention and
 
 The private session directory is exclusively managed by its output instance; administrators and same-UID/root tools must not concurrently replace its paths. Identity checks reject replacements observed before rotation or retention, but are not filesystem transactions against concurrent privileged path mutation.
 
-Gateway runtime events are newline-delimited JSON on stdout. Each record has `time`, `level`, `msg`, `instanceId`, `sessionId`, `component`, `operation`, `requestId`, and `traceId`. A process event without request context has empty correlation IDs. HTTP access events add `method`, the server-registered route template (or `unmatched`), request class, status, and duration in milliseconds. The template is captured at router dispatch, independent of a handler changing `r.Pattern`; compatibility aliases retain the outer `/repository/` template. Their request class reuses the resolved Maven/Raw/npm/PyPI/Go classification already used by metrics, including when metrics are not configured. An unresolved repository does not infer its class from its name. The shared class mapping also supports Cargo; Cargo retains its native `/cargo/` root with no Nexus alias. Raw URL paths, resolved parameter values, query strings, request bodies, `Authorization`, and `Cookie` are never access-log fields. Attributes named like secrets, credentials, tokens, bodies, URLs, queries, or errors are redacted before output.
+Gateway runtime events are newline-delimited JSON on stdout. Each record has `time`, `level`, `msg`, `instanceId`, `sessionId`, `component`, `operation`, `requestId`, and `traceId`. A process event without request context has empty correlation IDs. HTTP access events add `method`, the server-registered route template (or `unmatched`), request class, status, and duration in milliseconds. The template is captured at router dispatch, independent of a handler changing `r.Pattern`. Request classes follow the canonical protocol root, including when metrics are not configured. Retired `/repository/<name>/...` aliases are unmatched and classified as `other`; a repository name never determines the class. Raw URL paths, resolved parameter values, query strings, request bodies, `Authorization`, and `Cookie` are never access-log fields. Attributes named like secrets, credentials, tokens, bodies, URLs, queries, or errors are redacted before output.
 
 Runtime logging has an explicit output lifecycle: writes, flushes, and closes are serialized, and close attempts both cleanup callbacks once even if flush fails. The default stdout and memory buffer are borrowed destinations: close is a no-op that does not wait for writes, flush, sync, or close stdout. Configured runtime errors and graceful shutdown finish existing HTTP and resource cleanup before closing log output. Worker cancellation remains context-based; resource-owning destinations will need their own bounded cleanup and delivery behavior.
 
@@ -76,7 +76,7 @@ and this projection.
 ### Raw Proxy failure reasons
 
 Raw Proxy Repository GET/HEAD access events can add the optional pair
-`errorCode` / `phase`. The same native path covers Nexus compatibility URLs
+`errorCode` / `phase`. The same native path covers canonical Raw Repository URLs
 and native Groups; legacy Group handlers and other protocols do not add these
 fields. They describe the final claimed failure, without exposing a repository
 ID, endpoint, path, headers, body, credentials or raw error text.

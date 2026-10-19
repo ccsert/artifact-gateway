@@ -118,8 +118,10 @@ advisory lock、`FOR UPDATE SKIP LOCKED` 和尽力而为的 `LISTEN/NOTIFY` 唤�
 `console/src/client` 下的 Console 客户端和 `internal/admin/openapi` 下的 Go 服务端契约
 统一生成。
 
-所有管理接口演进都必须通过 `make openapi-check` 与接口兼容性检查。生成文件需要提交，
-以便评审者看到契约变更对客户端和服务端的精确影响。
+管理接口演进必须通过 `make openapi-check`；ADR 0009 允许服务端和调用方同步进行破坏性调整。
+历史管理 API 与 URL 路径不再冻结。当前 OpenAPI 源与生成 bundle 必须一致，专属协议契约
+和真实客户端 E2E 在配置的端点验证包协议标准行为。生成文件需要提交，方便审查者确认
+客户端和服务端的实际影响。
 
 ## 一致性与故障模型
 
