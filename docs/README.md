@@ -11,6 +11,8 @@ This index follows the framework-neutral navigation contract in
 agree with executable tests and the
 [protocol compatibility baseline](protocol-compatibility.md).
 
+- [Nexus source discovery and native mapping](nexus-source-discovery.md)
+
 ## Start here
 
 - [Project overview](../README.md) — positioning, capabilities, quick start, and lightweight deployment boundary.

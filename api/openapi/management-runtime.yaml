@@ -9,6 +9,16 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/migration-sources":
+    "$ref": "./management/nexus-sources.yaml#/migration_sources"
+  "/migration-sources/{sourceId}":
+    "$ref": "./management/nexus-sources.yaml#/migration_source"
+  "/migration-sources/{sourceId}/preflight":
+    "$ref": "./management/nexus-sources.yaml#/migration_source_preflight"
+  "/migration-sources/{sourceId}/discovery":
+    "$ref": "./management/nexus-sources.yaml#/migration_source_discover"
+  "/migration-sources/{sourceId}/mapping-preview":
+    "$ref": "./management/nexus-sources.yaml#/migration_source_mapping_preview"
   "/repository-quota-alert-rules/{ruleId}/events":
     "$ref": "./management/quota-alerts.yaml#/quota_events"
   "/repository-quota-alert-rules/{ruleId}":

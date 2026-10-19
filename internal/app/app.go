@@ -17,6 +17,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/emailnotification"
 	"github.com/ccsert/artifact-gateway/internal/httperrorrate"
 	"github.com/ccsert/artifact-gateway/internal/localcapacity"
+	"github.com/ccsert/artifact-gateway/internal/nexussource"
 	"github.com/ccsert/artifact-gateway/internal/operationalog"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/scanning"
@@ -28,6 +29,7 @@ type Checker interface {
 }
 
 type Dependencies struct {
+	SourceService                 *nexussource.Service
 	checkers                      []Checker
 	BuildVersion                  string
 	BuildRevision                 string

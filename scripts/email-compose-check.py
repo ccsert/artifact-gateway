@@ -86,6 +86,15 @@ def check(render_only):
                 "default Compose unexpectedly enables email")
         require("gateway-email-worker" not in baseline["services"], "default adds worker")
         checks.append("default Compose stays disconnected/disabled")
+        private_key = "GATEWAY_MIGRATION_SOURCE_PRIVATE_ENDPOINTS"
+        require(baseline["services"]["gateway"]["environment"].get(private_key, "") == "",
+                "default Compose unexpectedly approves private migration sources")
+        values[private_key] = "nexus.example.test=10.20.30.0/24"
+        environment_file.write_text("".join(k + "=" + v + "\n" for k, v in values.items()))
+        configured = json.loads(run(base + ["config", "--format", "json"]))
+        require(configured["services"]["gateway"]["environment"].get(private_key) == values[private_key],
+                "Compose drops the operator migration-source allowlist")
+        checks.append("private migration sources default denied; explicit operator allowlist reaches Gateway")
         compose = base + ["-f", str(ROOT / "compose.email.yml"), "--profile", "email-roles"]
         rendered = json.loads(run(compose + ["config", "--format", "json"]))
         for name, role in (("gateway", "api"), ("gateway-scheduler", "scheduler"),
@@ -93,6 +102,7 @@ def check(render_only):
             node = rendered["services"][name]
             require(node["environment"]["GATEWAY_NODE_ROLES"] == role, "role drift")
             require(node["environment"]["GATEWAY_SETTINGS_ENCRYPTION_KEY"] == key, "key drift")
+            require(node["environment"].get(private_key) == values[private_key], "migration-source allowlist drift")
             require(node["environment"]["GATEWAY_EMAIL_CONFIG_FILE"] == "/etc/gateway-email/relay.json", "config drift")
             mount = next(v for v in node["volumes"] if v["target"] == "/etc/gateway-email")
             # Compose's canonical JSON may omit a false create_host_path value.

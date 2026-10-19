@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"reflect"
 	"strings"
@@ -22,6 +23,9 @@ import (
 // Hooks captures the low-level network operations the factory depends on so
 // protocol packages (and tests) can inject their own implementations.
 type Hooks struct {
+	// PrivateEndpointCIDRs is an operator-controlled exact hostname and CIDR policy.
+	// It permits only private unicast addresses; DNS remains pinned and TLS verified.
+	PrivateEndpointCIDRs map[string][]netip.Prefix
 	LookupIP             func(ctx context.Context, network, host string) ([]net.IP, error)
 	DialContext          func(ctx context.Context, network, address string) (net.Conn, error)
 	ProxyFromEnvironment func(*http.Request) (*url.URL, error)
@@ -138,7 +142,7 @@ func pinnedClientContext(ctx context.Context, client *http.Client, u *url.URL, h
 		return nil, fmt.Errorf("resolve egress endpoint: %w", err)
 	}
 	for _, ip := range ips {
-		if PrivateAddress(ip) {
+		if PrivateAddress(ip) && !privateEndpointAllowed(u.Hostname(), ip, hooks.PrivateEndpointCIDRs) {
 			return nil, errors.New("egress endpoint resolves to a private address")
 		}
 	}
@@ -344,4 +348,21 @@ func hasLegacyDialTLS(transport *http.Transport) bool {
 // unspecified, or multicast.
 func PrivateAddress(ip net.IP) bool {
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast()
+}
+
+func privateEndpointAllowed(host string, ip net.IP, rules map[string][]netip.Prefix) bool {
+	if !ip.IsPrivate() {
+		return false
+	}
+	address, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return false
+	}
+	address = address.Unmap()
+	for _, prefix := range rules[strings.ToLower(host)] {
+		if prefix.Contains(address) {
+			return true
+		}
+	}
+	return false
 }

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"math"
+	"net/netip"
 	"net/url"
 	"os"
 	"sort"
@@ -60,6 +61,7 @@ var supportedWorkerKinds = map[string]struct{}{
 }
 
 type Config struct {
+	MigrationSourcePrivateEndpoints map[string][]netip.Prefix
 	Email                           emailnotification.Config
 	ListenAddress                   string
 	ConsoleThemeDir                 string
@@ -457,6 +459,10 @@ func Load() (Config, error) {
 		return Config{}, err
 	} else {
 		cfg.RuntimeNodePruneInterval = interval
+	}
+	cfg.MigrationSourcePrivateEndpoints, err = parseMigrationSourcePrivateEndpoints(os.Getenv("GATEWAY_MIGRATION_SOURCE_PRIVATE_ENDPOINTS"))
+	if err != nil {
+		return Config{}, err
 	}
 	return cfg, nil
 }

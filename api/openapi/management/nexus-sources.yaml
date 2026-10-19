@@ -1,0 +1,759 @@
+---
+migration_sources:
+  get:
+    operationId: listMigrationSources
+    description: Administrator-only Nexus 3 read-only source. Credentials are encrypted
+      using GATEWAY_SETTINGS_ENCRYPTION_KEY; responses and audits never include them.
+      No source writes or target mutations occur.
+    parameters:
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    - name: cursor
+      in: query
+      schema:
+        type: string
+        maxLength: 36
+    responses:
+      '200':
+        description: Success
+        content:
+          application/json:
+            schema:
+              "$ref": "./nexus-sources.yaml#/schemas/MigrationSourcePage"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+      '502':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '504':
+        "$ref": "../components/responses.yaml#/Problem"
+  post:
+    operationId: createMigrationSource
+    description: Administrator-only Nexus 3 read-only source. Credentials are encrypted
+      using GATEWAY_SETTINGS_ENCRYPTION_KEY; responses and audits never include them.
+      No source writes or target mutations occur.
+    parameters: []
+    responses:
+      '201':
+        description: Success
+        content:
+          application/json:
+            schema:
+              "$ref": "./nexus-sources.yaml#/schemas/MigrationSource"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+      '502':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '504':
+        "$ref": "../components/responses.yaml#/Problem"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceInput"
+migration_source:
+  parameters:
+  - name: sourceId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  get:
+    operationId: getMigrationSource
+    description: Administrator-only Nexus 3 read-only source. Credentials are encrypted
+      using GATEWAY_SETTINGS_ENCRYPTION_KEY; responses and audits never include them.
+      No source writes or target mutations occur.
+    parameters: []
+    responses:
+      '200':
+        description: Success
+        content:
+          application/json:
+            schema:
+              "$ref": "./nexus-sources.yaml#/schemas/MigrationSource"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+      '502':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '504':
+        "$ref": "../components/responses.yaml#/Problem"
+  put:
+    operationId: updateMigrationSource
+    description: Administrator-only Nexus 3 read-only source. Credentials are encrypted
+      using GATEWAY_SETTINGS_ENCRYPTION_KEY; responses and audits never include them.
+      No source writes or target mutations occur. Omitted credentials retain the current
+      encrypted value; clearCredentials removes it. Changing the source origin requires
+      explicitly replacing or clearing configured credentials.
+    parameters:
+    - name: If-Match
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: "^[1-9][0-9]*$"
+      description: Current source version returned by the API.
+    responses:
+      '200':
+        description: Success
+        content:
+          application/json:
+            schema:
+              "$ref": "./nexus-sources.yaml#/schemas/MigrationSource"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+      '502':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '504':
+        "$ref": "../components/responses.yaml#/Problem"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceInput"
+  delete:
+    operationId: deleteMigrationSource
+    description: Administrator-only Nexus 3 read-only source. Credentials are encrypted
+      using GATEWAY_SETTINGS_ENCRYPTION_KEY; responses and audits never include them.
+      No source writes or target mutations occur. Removes encrypted credentials and
+      connection configuration.
+    parameters:
+    - name: If-Match
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: "^[1-9][0-9]*$"
+      description: Current source version returned by the API.
+    responses:
+      '204':
+        description: Deleted
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+      '502':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '504':
+        "$ref": "../components/responses.yaml#/Problem"
+migration_source_preflight:
+  parameters:
+  - name: sourceId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  post:
+    operationId: preflightMigrationSource
+    description: Administrator-only Nexus 3 read-only source. Credentials are encrypted
+      using GATEWAY_SETTINGS_ENCRYPTION_KEY; responses and audits never include them.
+      No source writes or target mutations occur. Fetches only credential-visible
+      repositories and their supported read-only configuration. It does not prove
+      global inventory completeness. A failed request is a problem response, never
+      an empty success.
+    parameters: []
+    responses:
+      '200':
+        description: Success
+        content:
+          application/json:
+            schema:
+              "$ref": "./nexus-sources.yaml#/schemas/MigrationSourcePreflight"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+      '502':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '504':
+        "$ref": "../components/responses.yaml#/Problem"
+migration_source_discover:
+  parameters:
+  - name: sourceId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  post:
+    operationId: discoverMigrationSource
+    description: Administrator-only Nexus 3 read-only source. Credentials are encrypted
+      using GATEWAY_SETTINGS_ENCRYPTION_KEY; responses and audits never include them.
+      No source writes or target mutations occur. Exhausts asset pagination for selected
+      supported Hosted repositories with bounded requests (128), response bytes (16
+      MiB total, 2 MiB per response), repositories (500) and time (30 seconds). Cyclic
+      tokens, untrusted download URLs and exhausted budgets fail explicitly without
+      partial success. Proxy/Group/unknown formats and Maven SNAPSHOT repositories
+      are explicitly unsupported for asset discovery. MIXED repositories return release-version
+      paths; SNAPSHOT paths, shared metadata and unclassifiable Maven paths are listed
+      explicitly in unsupportedAssets. Budgets count both supported and unsupported
+      assets.
+    parameters: []
+    responses:
+      '200':
+        description: Success
+        content:
+          application/json:
+            schema:
+              "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceDiscovery"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+      '502':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '504':
+        "$ref": "../components/responses.yaml#/Problem"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceDiscoveryInput"
+migration_source_mapping_preview:
+  parameters:
+  - name: sourceId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  post:
+    operationId: previewMigrationSourceMapping
+    description: Administrator-only Nexus 3 read-only source. Credentials are encrypted
+      using GATEWAY_SETTINGS_ENCRYPTION_KEY; responses and audits never include them.
+      No source writes or target mutations occur. Validates explicit native target
+      names, formats/types, existing-name conflicts and ordered Group member mappings.
+      Re-reads source configuration; performs no target writes. Permissions, credentials
+      and source-specific fields require manual reconfiguration.
+    parameters: []
+    responses:
+      '200':
+        description: Success
+        content:
+          application/json:
+            schema:
+              "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceMappingPreview"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+      '422':
+        "$ref": "../components/responses.yaml#/Problem"
+      '502':
+        "$ref": "../components/responses.yaml#/Problem"
+      '503':
+        "$ref": "../components/responses.yaml#/Problem"
+      '504':
+        "$ref": "../components/responses.yaml#/Problem"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceMappingInput"
+schemas:
+  MigrationSourceCredentials:
+    type: object
+    additionalProperties: false
+    properties:
+      username:
+        type: string
+        minLength: 1
+        maxLength: 256
+        writeOnly: true
+      password:
+        type: string
+        minLength: 1
+        maxLength: 4096
+        writeOnly: true
+    required:
+    - username
+    - password
+  MigrationSourceInput:
+    type: object
+    additionalProperties: false
+    properties:
+      name:
+        type: string
+        minLength: 1
+        maxLength: 128
+      baseUrl:
+        type: string
+        format: uri
+        maxLength: 2048
+        description: HTTPS Nexus instance origin and optional context path. User info,
+          query and fragment are rejected.
+      credentials:
+        "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceCredentials"
+      clearCredentials:
+        type: boolean
+        default: false
+    required:
+    - name
+    - baseUrl
+  MigrationSource:
+    type: object
+    additionalProperties: false
+    properties:
+      id:
+        type: string
+        format: uuid
+      name:
+        type: string
+      baseUrl:
+        type: string
+        format: uri
+      kind:
+        type: string
+        enum:
+        - nexus3
+      credentialsConfigured:
+        type: boolean
+      version:
+        type: string
+      createdAt:
+        type: string
+        format: date-time
+      updatedAt:
+        type: string
+        format: date-time
+    required:
+    - id
+    - name
+    - baseUrl
+    - kind
+    - credentialsConfigured
+    - version
+    - createdAt
+    - updatedAt
+  MigrationSourcePage:
+    type: object
+    additionalProperties: false
+    properties:
+      items:
+        type: array
+        items:
+          "$ref": "./nexus-sources.yaml#/schemas/MigrationSource"
+      nextCursor:
+        type: string
+    required:
+    - items
+    - nextCursor
+  MigrationSourceField:
+    type: object
+    additionalProperties: false
+    properties:
+      field:
+        type: string
+      disposition:
+        type: string
+        enum:
+        - expressible
+        - manual
+        - unsupported
+      reason:
+        type: string
+    required:
+    - field
+    - disposition
+    - reason
+  MigrationSourceRepository:
+    type: object
+    additionalProperties: false
+    properties:
+      name:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+      format:
+        type: string
+      type:
+        type: string
+      versionPolicy:
+        type: string
+      status:
+        type: string
+        enum:
+        - supported
+        - preview_only
+        - unsupported
+      reason:
+        type: string
+      members:
+        type: array
+        items:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+      remoteUrl:
+        type: string
+      fields:
+        type: array
+        items:
+          "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceField"
+    required:
+    - name
+    - format
+    - type
+    - versionPolicy
+    - status
+    - reason
+    - members
+    - remoteUrl
+    - fields
+  MigrationSourceStats:
+    type: object
+    additionalProperties: false
+    properties:
+      requests:
+        type: integer
+      pages:
+        type: integer
+      responseBytes:
+        type: integer
+        format: int64
+    required:
+    - requests
+    - pages
+    - responseBytes
+  MigrationSourcePreflight:
+    type: object
+    additionalProperties: false
+    properties:
+      state:
+        type: string
+        enum:
+        - complete
+      visibility:
+        type: string
+        enum:
+        - credential_visible
+      sourceId:
+        type: string
+        format: uuid
+      sourceVersion:
+        type: string
+      repositories:
+        type: array
+        items:
+          "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceRepository"
+      stats:
+        "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceStats"
+    required:
+    - state
+    - visibility
+    - sourceId
+    - sourceVersion
+    - repositories
+    - stats
+  MigrationSourceDiscoveryInput:
+    type: object
+    additionalProperties: false
+    properties:
+      repositories:
+        type: array
+        items:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+        minItems: 1
+        maxItems: 10
+        uniqueItems: true
+      maxPages:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+      maxAssets:
+        type: integer
+        minimum: 1
+        maximum: 10000
+        default: 10000
+    required:
+    - repositories
+  MigrationSourceAsset:
+    type: object
+    additionalProperties: false
+    properties:
+      repository:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+      path:
+        type: string
+      downloadUrl:
+        type: string
+        format: uri
+      size:
+        type: integer
+        format: int64
+        minimum: 0
+      checksum:
+        type: object
+        additionalProperties:
+          type: string
+    required:
+    - repository
+    - path
+    - downloadUrl
+    - size
+    - checksum
+  MigrationSourceDiscovery:
+    type: object
+    additionalProperties: false
+    properties:
+      state:
+        type: string
+        enum:
+        - complete
+      visibility:
+        type: string
+        enum:
+        - credential_visible
+      sourceId:
+        type: string
+        format: uuid
+      sourceVersion:
+        type: string
+      repositories:
+        type: array
+        items:
+          "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceRepository"
+      assets:
+        type: array
+        items:
+          "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceAsset"
+      stats:
+        "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceStats"
+      unsupportedAssets:
+        type: array
+        items:
+          "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceUnsupportedAsset"
+    required:
+    - state
+    - visibility
+    - sourceId
+    - sourceVersion
+    - repositories
+    - assets
+    - stats
+    - unsupportedAssets
+  MigrationSourceMapping:
+    type: object
+    additionalProperties: false
+    properties:
+      sourceRepository:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+      targetName:
+        type: string
+        pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+      format:
+        type: string
+        enum:
+        - raw
+        - maven
+      type:
+        type: string
+        enum:
+        - hosted
+        - proxy
+        - group
+      targetMembers:
+        type: array
+        items:
+          type: string
+    required:
+    - sourceRepository
+    - targetName
+    - format
+    - type
+  MigrationSourceMappingInput:
+    type: object
+    additionalProperties: false
+    properties:
+      mappings:
+        type: array
+        items:
+          "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceMapping"
+        minItems: 1
+        maxItems: 10
+    required:
+    - mappings
+  MigrationSourceMappingResult:
+    type: object
+    additionalProperties: false
+    properties:
+      sourceRepository:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+      targetName:
+        type: string
+      status:
+        type: string
+        enum:
+        - ready
+        - manual
+        - unsupported
+        - invalid
+      reasons:
+        type: array
+        items:
+          type: string
+      targetMembers:
+        type: array
+        items:
+          type: string
+      fields:
+        type: array
+        items:
+          "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceField"
+    required:
+    - sourceRepository
+    - targetName
+    - status
+    - reasons
+    - targetMembers
+    - fields
+  MigrationSourceMappingPreview:
+    type: object
+    additionalProperties: false
+    properties:
+      state:
+        type: string
+        enum:
+        - complete
+      sourceId:
+        type: string
+        format: uuid
+      sourceVersion:
+        type: string
+      valid:
+        type: boolean
+      mappings:
+        type: array
+        items:
+          "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceMappingResult"
+      stats:
+        "$ref": "./nexus-sources.yaml#/schemas/MigrationSourceStats"
+    required:
+    - state
+    - sourceId
+    - sourceVersion
+    - valid
+    - mappings
+    - stats
+  MigrationSourceUnsupportedAsset:
+    type: object
+    additionalProperties: false
+    required:
+    - repository
+    - path
+    - reason
+    properties:
+      repository:
+        type: string
+      path:
+        type: string
+      reason:
+        type: string

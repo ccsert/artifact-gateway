@@ -8,6 +8,10 @@
 
 ## Unreleased
 
+- Nexus 资产 URL 在解码路径与安全 metadata 精确匹配后规范化重建（#381）。Maven release 名称中的 `+` 可用 `%2B` 或 `%2b` 表示；源地址、路径穿越和含秘密 URL 的限制保持生效。
+
+- 新增管理员专用的 Nexus 3 源配置，提供加密凭据、受保护只读发现、release/MIXED/SNAPSHOT 分类及原生仓库显式映射预览（#381）；见 [Nexus 源发现](docs/nexus-source-discovery.zh-CN.md)。不执行字节迁移或目标创建。
+
 - Raw memory fixture 与 PostgreSQL 共用公开存储契约测试（#278，[ADR 0010](docs/adr/0010-memory-store-contracts.zh-CN.md)）。默认读取/回收批次上限为 100，已回收字节恢复返回未找到，争用锁沿请求取消。Memory 仅为显式测试 fixture，不能证明 PG 事务或恢复行为。
 
 - Gateway HTTP 装配收敛为唯一的 `NewGatewayHandler(GatewayOptions)` 校验入口（#279）。缺少元数据或逐格式对象存储时初始化直接失败；原生处理器与缓存不再隐式创建内存存储。OCI 与 Raw 通过格式无关的 `ObjectStore` 端口分别注入存储，单元测试与原生客户端 fixture 显式复用 `internal/apptest` 设施。内部 `NewGatewayHandlerWith*`、`OCIObjectStore` 与逐格式的 `Dependencies.Native*ObjectStore` 接口已移除。
