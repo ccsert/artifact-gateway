@@ -15,17 +15,32 @@ func (s *MemoryStore) CreateRawUpload(_ context.Context, upload RawUpload) (RawU
 	s.rawUploads[upload.ID] = upload
 	return upload, nil
 }
-func (s *MemoryStore) LockRawUpload(_ context.Context, id string) (func(), error) {
+func (s *MemoryStore) LockRawUpload(ctx context.Context, id string) (func(), error) {
+	return s.lockRaw(ctx, s.rawUploadLocks, id)
+}
+
+// lockRaw preserves the caller's cancellation while waiting for a keyed lock.
+func (s *MemoryStore) lockRaw(ctx context.Context, locks map[string]chan struct{}, key string) (func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
-	lock := s.rawUploadLocks[id]
+	lock := locks[key]
 	if lock == nil {
-		lock = &sync.Mutex{}
-		s.rawUploadLocks[id] = lock
+		lock = make(chan struct{}, 1)
+		lock <- struct{}{}
+		locks[key] = lock
 	}
 	s.mu.Unlock()
-	lock.Lock()
-	return lock.Unlock, nil
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-lock:
+		var released sync.Once
+		return func() { released.Do(func() { lock <- struct{}{} }) }, nil
+	}
 }
+
 func (s *MemoryStore) GetRawUpload(_ context.Context, id string) (RawUpload, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -132,16 +147,8 @@ func (s *MemoryStore) MarkRawUploadCollected(_ context.Context, id string) error
 	return nil
 }
 
-func (s *MemoryStore) LockRawObject(_ context.Context, digest string) (func(), error) {
-	s.mu.Lock()
-	lock := s.rawObjectLocks[digest]
-	if lock == nil {
-		lock = &sync.Mutex{}
-		s.rawObjectLocks[digest] = lock
-	}
-	s.mu.Unlock()
-	lock.Lock()
-	return lock.Unlock, nil
+func (s *MemoryStore) LockRawObject(ctx context.Context, digest string) (func(), error) {
+	return s.lockRaw(ctx, s.rawObjectLocks, digest)
 }
 
 func (s *MemoryStore) StageRawObject(_ context.Context, object RawObject) error {
@@ -192,6 +199,9 @@ func (s *MemoryStore) GetRawAsset(_ context.Context, repositoryID, path string) 
 	return asset, nil
 }
 func (s *MemoryStore) ListRawAssets(_ context.Context, repositoryID, prefix string, limit int, after string, matches ...ArtifactSearchMatch) ([]RawAsset, error) {
+	if limit <= 0 {
+		limit = 100
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	assets := make([]RawAsset, 0)
@@ -238,7 +248,7 @@ func (s *MemoryStore) RestoreRawAsset(_ context.Context, repositoryID, path stri
 	}
 	object, ok := s.rawObjects[asset.Digest]
 	if !ok || !object.CollectedAt.IsZero() {
-		return RawAsset{}, ErrDisabled
+		return RawAsset{}, ErrNotFound
 	}
 	asset.ObjectKey, asset.Size, asset.UpdatedAt = object.ObjectKey, object.Size, time.Now().UTC()
 	s.rawAssets[key] = asset
@@ -247,6 +257,9 @@ func (s *MemoryStore) RestoreRawAsset(_ context.Context, repositoryID, path stri
 	return asset, nil
 }
 func (s *MemoryStore) ListUnreferencedRawObjects(_ context.Context, before time.Time, limit int) ([]RawObject, error) {
+	if limit <= 0 {
+		limit = 100
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var objects []RawObject

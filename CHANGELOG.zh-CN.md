@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Raw memory fixture 与 PostgreSQL 共用公开存储契约测试（#278，[ADR 0010](docs/adr/0010-memory-store-contracts.zh-CN.md)）。默认读取/回收批次上限为 100，已回收字节恢复返回未找到，争用锁沿请求取消。Memory 仅为显式测试 fixture，不能证明 PG 事务或恢复行为。
+
 - [ADR 0009](docs/adr/0009-native-architecture.zh-CN.md) 记录原生管理架构与停止 Nexus 兼容要求；`make lint` 自动检查协议依赖和聚合存储边界（#277）。现有路由由后续切片移除。
 
 - 备份发布校验继续兼容以旧模块路径构建的原始二进制。模块路径、命令路径与保留的构建信息链接参数必须属于同一个明确允许的命名空间；制品摘要、平台、批准归档、版本、revision 与完整迁移账本校验仍全部必需。
