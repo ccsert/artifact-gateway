@@ -962,10 +962,6 @@ func renderDeliveries(w io.Writer, deliveries []adminopenapi.EmailDelivery) erro
 	return writeColumns(w, table)
 }
 
-func terminalDelivery(state adminopenapi.EmailDeliveryState) bool {
-	return state == adminopenapi.EmailDeliveryStateAccepted || state == adminopenapi.EmailDeliveryStateDead
-}
-
 func completeEmailDelivery(delivery adminopenapi.EmailDelivery) bool {
 	return delivery.Id != (openapi_types.UUID{}) && delivery.EventId != (openapi_types.UUID{}) &&
 		delivery.TargetId != (openapi_types.UUID{}) && delivery.TargetVersion != "" &&
@@ -1140,6 +1136,10 @@ func emailDeliveryShowCommand() command {
 	}
 }
 
+type emailDeliveryFailedError struct{}
+
+func (*emailDeliveryFailedError) Error() string { return "email delivery failed" }
+
 // emailDeliveryWaitCommand polls a delivery until it is accepted by the SMTP
 // relay or dead. There is no cancel endpoint: a timeout leaves the delivery
 // queued on the server.
@@ -1147,7 +1147,7 @@ func emailDeliveryWaitCommand() command {
 	cancelSupported := false
 	return command{
 		name:        "email delivery wait",
-		synopsis:    "wait until a delivery is accepted by the relay or dead, within --timeout",
+		synopsis:    "wait for relay acceptance within --timeout; fail if the delivery is dead",
 		usage:       "agctl email delivery wait ID [--timeout DURATION] [--json]",
 		positionals: 1,
 		argsUsage:   "ID",
@@ -1169,7 +1169,17 @@ func emailDeliveryWaitCommand() command {
 				delivery, err := readEmailDelivery(ctx, client, id)
 				if err == nil {
 					last = &delivery
-					if terminalDelivery(delivery.State) {
+					if delivery.State == adminopenapi.EmailDeliveryStateDead {
+						return &resultError{
+							err:  &emailDeliveryFailedError{},
+							data: delivery,
+							hint: "the delivery remains dead; inspect agctl email delivery show " + id + ". Replaying requires an explicit agctl email delivery replay " + id + " --yes and may send a duplicate",
+							human: func(w io.Writer) error {
+								return renderDeliveries(w, []adminopenapi.EmailDelivery{delivery})
+							},
+						}
+					}
+					if delivery.State == adminopenapi.EmailDeliveryStateAccepted {
 						return env.render(delivery, nil, func(w io.Writer) error {
 							_, err := fmt.Fprintf(w, "delivery %s is %s after %d attempts (accepted means the relay took it, not that it reached an inbox)\n", id, delivery.State, delivery.Attempts)
 							return err
