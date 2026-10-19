@@ -405,8 +405,8 @@ profile 运行验收。
   `oci manifests` 需要 `--name IMAGE`，并包括没有标签的 manifest。
 - `agctl conan references --repo ID [--q PREFIX]` 与 `conan recipe-revisions
   --repo ID --reference NAME/VERSION/USER/CHANNEL [--q QUERY]` 使用服务端
-  游标，沿用检索的 `--all` 页数与时间预算；配方修订结果在 `meta.scope` 记录
-  本次 reference 与查询条件。
+  游标，沿用检索的 `--all` 页数与时间预算；两个视图都在 `meta.scope` 记录
+  本次仓库和筛选范围。
 - `agctl conan package-ids --repo ID --reference NAME/VERSION/USER/CHANNEL
   --recipe-revision REVISION` 与 `conan package-revisions`（另需
   `--package-id ID`）一次返回选定范围的完整列表，分页为 `none`，不虚构游标、

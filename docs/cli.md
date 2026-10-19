@@ -478,8 +478,8 @@ addressed by ID with `--repo`.
   manifests.
 - `agctl conan references --repo ID [--q PREFIX]` and `conan recipe-revisions
   --repo ID --reference NAME/VERSION/USER/CHANNEL [--q QUERY]` use server
-  cursors and the same `--all` page/time budgets as search. Recipe revision
-  results report the selected reference and query in `meta.scope`.
+  cursors and the same `--all` page/time budgets as search. Both views report
+  the selected repository and filters in `meta.scope`.
 - `agctl conan package-ids --repo ID --reference NAME/VERSION/USER/CHANNEL
   --recipe-revision REVISION` and `conan package-revisions` (also requiring
   `--package-id ID`) return the whole selected collection: pagination is

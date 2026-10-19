@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -207,5 +208,40 @@ func TestConanCommandDiscoveryDeclaresActualCapabilities(t *testing.T) {
 	code, stdout, _ := runCLI(t, "commands", "--json")
 	if code != ExitOK || !json.Valid([]byte(stdout)) || !strings.Contains(stdout, `"name": "conan package-revision delete"`) {
 		t.Fatalf("discovery exit=%d %s", code, stdout)
+	}
+}
+
+func TestConanReferencesKeepSelectedScope(t *testing.T) {
+	api := newRouteAPI(t, "")
+	api.on("GET", repoBase+"/conan/references", 200, `{"items":[]}`)
+	code, stdout, _ := runCLI(t, "conan", "references", "--repo", testRepoID, "--q", "widget/", "--json")
+	var result struct {
+		Meta struct {
+			Scope map[string]any `json:"scope"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatal(err)
+	}
+	if code != ExitOK || result.Meta.Scope["repositoryId"] != testRepoID || result.Meta.Scope["q"] != "widget/" {
+		t.Fatalf("selected repository and filter must survive in scope: exit=%d %s", code, stdout)
+	}
+}
+
+func TestConanDeleteKeepsUnknownAfterUncertainAttemptThenRefusal(t *testing.T) {
+	api := newRouteAPI(t, "")
+	var attempts atomic.Int32
+	api.onFunc("DELETE", repoBase+"/conan/package-revisions/p1", func(*http.Request) (int, string) {
+		if attempts.Add(1) == 1 {
+			return 503, `{"code":"internal_error","message":"possibly applied before upstream failure"}`
+		}
+		return 403, `{"code":"access_denied","message":"permission revoked before retry"}`
+	})
+	code, stdout, _ := runCLI(t, append(conanPackageArgs("package-revision delete"), "--revision", "p1", "--yes", "--json")...)
+	if code == ExitOK || !strings.Contains(stdout, `"outcome": "unknown"`) || !strings.Contains(stdout, `"readBack":`) {
+		t.Fatalf("later refusal cannot disprove the first deletion attempt: attempts=%d exit=%d %s", attempts.Load(), code, stdout)
+	}
+	if api.count("GET") != 0 {
+		t.Fatal("must not probe a now-inaccessible scope")
 	}
 }

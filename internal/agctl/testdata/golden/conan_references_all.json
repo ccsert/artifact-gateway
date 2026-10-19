@@ -20,6 +20,10 @@
       "pageSize": 1,
       "pages": 2,
       "complete": true
+    },
+    "scope": {
+      "q": "widget/",
+      "repositoryId": "00000000-0000-4000-8000-000000000001"
     }
   }
 }

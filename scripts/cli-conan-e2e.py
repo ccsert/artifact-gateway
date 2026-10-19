@@ -104,11 +104,13 @@ try:
     refs = cli("conan", "references", "--repo", repo_id, "--q", "widget/", "--page-size", "1")
     assert [item["reference"] for item in refs["data"]["items"]] == [reference]
     assert refs["data"]["nextCursor"] and not refs["meta"]["pagination"]["complete"]
+    assert refs["meta"]["scope"] == {"repositoryId": repo_id, "q": "widget/"}
     next_refs = cli("conan", "references", "--repo", repo_id, "--q", "widget/", "--page-size", "1", "--cursor", refs["data"]["nextCursor"])
     assert [item["reference"] for item in next_refs["data"]["items"]] == ["widget/2.0/user/stable"]
     assert next_refs["data"]["nextCursor"] is None
     partial = cli("conan", "references", "--repo", repo_id, "--q", "widget/", "--page-size", "1", "--all", "--max-pages", "1", want=3)
     assert partial["data"]["nextCursor"] and len(partial["data"]["items"]) == 1
+    assert partial["meta"]["scope"] == {"repositoryId": repo_id, "q": "widget/"}
     all_refs = cli("conan", "references", "--repo", repo_id, "--page-size", "1", "--all")
     assert [item["reference"] for item in all_refs["data"]["items"]] == [reference, "widget/2.0/user/stable"]
     assert all_refs["meta"]["pagination"]["pages"] == 2

@@ -72,19 +72,41 @@ func conanReadMeta(sub, schema string, paged bool) commandMeta {
 }
 
 func conanReferencesCommand() command {
-	cmd := formatViewCommand("conan references", "list visible Conan recipe references", "conan/references", "ConanReferencePage", "references", "",
-		func(w io.Writer, items []adminopenapi.ConanReference) error {
-			if len(items) == 0 {
-				return emptyLine(w, "Conan references")
-			}
-			rows := [][]string{{"REFERENCE", "PUBLISHER"}}
-			for _, item := range items {
-				rows = append(rows, []string{item.Reference, optional(item.Publisher)})
-			}
-			return writeColumns(w, rows)
-		})
-	cmd.meta.Stage = "m2"
-	return cmd
+	var repo, query string
+	list := &cursorList[adminopenapi.ConanReference]{noun: "references", render: func(w io.Writer, items []adminopenapi.ConanReference) error {
+		if len(items) == 0 {
+			return emptyLine(w, "Conan references")
+		}
+		rows := [][]string{{"REFERENCE", "PUBLISHER"}}
+		for _, item := range items {
+			rows = append(rows, []string{item.Reference, optional(item.Publisher)})
+		}
+		return writeColumns(w, rows)
+	}}
+	list.request = func(*commandContext) (string, url.Values, error) {
+		if err := requireRepo(repo); err != nil {
+			return "", nil, err
+		}
+		values := url.Values{}
+		if query != "" {
+			values.Set("q", query)
+		}
+		return repositorySubPath(repo, "conan/references"), values, nil
+	}
+	list.scope = func(json.RawMessage) map[string]any {
+		scope := map[string]any{"repositoryId": repo}
+		if query != "" {
+			scope["q"] = query
+		}
+		return scope
+	}
+	return command{name: "conan references", synopsis: "list visible Conan recipe references",
+		usage: "agctl conan references --repo ID [--q PREFIX] [--page-size N] [--cursor TOKEN | --all] [--json]",
+		setFlags: func(fs *flag.FlagSet) {
+			fs.StringVar(&repo, "repo", "", "repository ID")
+			fs.StringVar(&query, "q", "", "reference prefix filter")
+			list.setFlags(fs)
+		}, meta: conanReadMeta("references", "ConanReferencePage", true), run: list.run}
 }
 
 func conanRecipeRevisionsCommand() command {
@@ -269,6 +291,16 @@ func conanPackageRevisionDeleteCommand() command {
 			if err != nil {
 				if outcomeUnknown(err) {
 					return unknown(err)
+				}
+				// A refusal after an uncertain attempt cannot disprove a
+				// tombstone already applied by that earlier attempt. Keep the
+				// final refusal's status and do not probe the revoked scope.
+				if response != nil {
+					for _, prior := range response.priorErrors {
+						if outcomeUnknown(prior) {
+							return unknown(err)
+						}
+					}
 				}
 				return err
 			}
