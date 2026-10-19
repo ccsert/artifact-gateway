@@ -41,28 +41,29 @@ add any missing fixtures, and run `make console-visual-update`.
 
 The behaviour each refactor must preserve, and where it is proven.
 
-| Flow                                         | Specs                                                                                                                          |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Sign-in modes, theme and language on sign-in | `theme-consistency`, `user-governance`, `oidc-keycloak`                                                                        |
-| Identity and role-based navigation           | `identity-authorization`, `repository-administrator`                                                                           |
-| App shell and navigation rail                | `app-shell-layout`, `route-error-page`                                                                                         |
-| Dashboard data, windows, partial failure     | `admin-dashboard`, `dashboard-charts-layout`, `dashboard-loading`                                                              |
-| Repository list, pagination, empty states    | `admin-list-behavior`, `empty-state`                                                                                           |
-| Repository detail tabs, grants, settings     | `repository-detail-layout`, `repository-administrator`, `repository-usage-pagination`                                          |
-| Artifact detail and version selection        | `public-version-selection` (Maven, OCI, Conan), `repository-detail-layout` (npm, Cargo), `oci-size-display`                    |
-| Proxy and group directory browse             | `proxy-directory-browse`, `group-directory-browse`, `groups-resolution-layout`                                                 |
-| Retention, tombstone restore, lifecycle jobs | `artifact-workflows`                                                                                                           |
-| Public browse and search deep links          | `artifact-workflows`, `global-search`, `public-version-selection`                                                              |
-| Access control and authorization templates   | `access-control-theme`, `authorization-template-dialog`                                                                        |
-| Grant, credential and API key writes         | `access-identity-workflows` (live Gateway, confirmed through the API)                                                          |
-| Audit log and retention                      | `audit-layout`, `audits-date-filter`, `admin-list-behavior`                                                                    |
-| Service accounts and API keys                | `service-accounts-layout`, `admin-list-behavior`, `artifact-workflows`                                                         |
-| Operations, runtime nodes, logs, diagnostics | `runtime-nodes-health`, `runtime-logs-layout`, `runtime-log-window`, `http-error-rate-layout`, `local-capacity-layout`         |
-| Job history, schedules and webhook writes    | `operations-workflows` (live Gateway; webhooks need `GATEWAY_SETTINGS_ENCRYPTION_KEY`)                                         |
-| Nexus source observations and credentials    | `migration-sources-layout` (real route, typed fixtures), `migration-sources-live` (live Gateway + approved TLS source fixture) |
-| Quota alerts and email notifications         | `quota-alerts`, `email-notifications`                                                                                          |
-| Site settings and themes                     | `site-settings`, `gateway-theme-compatibility`, `theme-motion`                                                                 |
-| APT signed snapshots                         | `apt-snapshot-operations`                                                                                                      |
+| Flow                                            | Specs                                                                                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Sign-in modes, theme and language on sign-in    | `theme-consistency`, `user-governance`, `oidc-keycloak`                                                                        |
+| Identity and role-based navigation              | `identity-authorization`, `repository-administrator`                                                                           |
+| App shell and navigation rail                   | `app-shell-layout`, `route-error-page`                                                                                         |
+| Dashboard data, windows, partial failure        | `admin-dashboard`, `dashboard-charts-layout`, `dashboard-loading`                                                              |
+| Repository list, pagination, empty states       | `admin-list-behavior`, `empty-state`                                                                                           |
+| Repository detail tabs, grants, settings        | `repository-detail-layout`, `repository-administrator`, `repository-usage-pagination`                                          |
+| Artifact detail and version selection           | `public-version-selection` (Maven, OCI, Conan), `repository-detail-layout` (npm, Cargo), `oci-size-display`                    |
+| Proxy and group directory browse                | `proxy-directory-browse`, `group-directory-browse`, `groups-resolution-layout`                                                 |
+| Retention, tombstone restore, lifecycle jobs    | `artifact-workflows`                                                                                                           |
+| Public browse and search deep links             | `artifact-workflows`, `global-search`, `public-version-selection`                                                              |
+| Access control and authorization templates      | `access-control-theme`, `authorization-template-dialog`                                                                        |
+| Grant, credential and API key writes            | `access-identity-workflows` (live Gateway, confirmed through the API)                                                          |
+| Audit log and retention                         | `audit-layout`, `audits-date-filter`, `admin-list-behavior`                                                                    |
+| Service accounts and API keys                   | `service-accounts-layout`, `admin-list-behavior`, `artifact-workflows`                                                         |
+| Operations, runtime nodes, logs, diagnostics    | `runtime-nodes-health`, `runtime-logs-layout`, `runtime-log-window`, `http-error-rate-layout`, `local-capacity-layout`         |
+| Job history, schedules and webhook writes       | `operations-workflows` (live Gateway; webhooks need `GATEWAY_SETTINGS_ENCRYPTION_KEY`)                                         |
+| Nexus source observations and credentials       | `migration-sources-layout` (real route, typed fixtures), `migration-sources-live` (live Gateway + approved TLS source fixture) |
+| Nexus batch control and acceptance observations | `nexus-batches-layout` (real route, both themes/widths), `nexus-batches-live` (opt-in owned PG/S3/TLS runtime, real worker)    |
+| Quota alerts and email notifications            | `quota-alerts`, `email-notifications`                                                                                          |
+| Site settings and themes                        | `site-settings`, `gateway-theme-compatibility`, `theme-motion`                                                                 |
+| APT signed snapshots                            | `apt-snapshot-operations`                                                                                                      |
 
 ### Known gaps
 

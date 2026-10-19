@@ -164,15 +164,17 @@ Group member targets follow the source's declared member order and must all be
 mapped explicitly. Discovery distinguishes supported assets and unsupported
 paths, and labels summed asset size as source metadata, not transferred or
 verified bytes. Mapping results distinguish validation, manual configuration,
-unsupported fields and conflicts; no action applies the preview.
+unsupported fields and conflicts. Supported Hosted mappings can continue to the
+[batch form](nexus-migration-console.md), where existing target IDs and fresh
+capacity evidence must be explicitly confirmed before a durable batch is created.
 
 Refresh failures keep the previous successful observation with an error. Changing
 the source, its connection version, selected repositories or target inputs
 invalidates the observations that depend on them; late responses cannot replace
 another source's result. Reopening reads the saved connection but does not invent
-a persisted discovery snapshot. This source slice has no batch start/control,
-transfer percentage or migration-complete report. Durable execution and
-target-only cold-client acceptance remain separate work in #382/#383.
+a persisted discovery snapshot. The source view does not copy bytes. Use the
+separate batch view for durable execution and honest acceptance observations;
+target-only cold-client evidence remains unverified until obtained for that batch.
 
 Focused state tests cover initial/refetch failures, retained data, pagination,
 source/version races, ordered mapping and credential lifecycle. The real-route
