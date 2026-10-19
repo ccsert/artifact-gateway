@@ -9,6 +9,8 @@ export const pypiViews: FormatViews = {
     artifact,
     initialVersion,
     canQuarantine,
+    canWrite,
+    repositoryType,
     onVersionChange,
   }) => (
     <PyPIProjectDetail
@@ -19,6 +21,7 @@ export const pypiViews: FormatViews = {
       size={artifact.size}
       publisher={artifact.publisher}
       canQuarantine={canQuarantine}
+      canWrite={canWrite && repositoryType === "hosted"}
       onVersionChange={onVersionChange}
     />
   ),

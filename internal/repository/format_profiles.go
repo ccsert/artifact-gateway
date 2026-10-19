@@ -13,6 +13,7 @@ const (
 	RepositoryOperationReclaim   RepositoryOperation = "reclaim"
 	RepositoryOperationPromote   RepositoryOperation = "promote"
 	RepositoryOperationReplicate RepositoryOperation = "replicate"
+	RepositoryOperationYank      RepositoryOperation = "yank"
 	RepositoryOperationDeprecate RepositoryOperation = "deprecate"
 )
 
@@ -64,6 +65,7 @@ var supportedFormatProfiles = []FormatProfile{
 		AnonymousRead:       true,
 		PublicationScanning: true,
 		HostedOperations: []RepositoryOperation{
+			RepositoryOperationYank,
 			RepositoryOperationRead,
 			RepositoryOperationPublish,
 			RepositoryOperationBrowse,

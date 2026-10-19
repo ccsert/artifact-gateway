@@ -103,6 +103,7 @@ export interface PyPIFile {
   filename: string;
   url: string;
   hashes: { sha256?: string };
+  yanked?: boolean | string;
   "requires-python"?: string;
   "_artifact-gateway"?: {
     version?: string;

@@ -2249,6 +2249,7 @@ func (e OIDCSettingsUpdateProvisioningMode) Valid() bool {
 const (
 	ProblemCodeAccessDenied                 ProblemCode = "access_denied"
 	ProblemCodeArtifactQuarantined          ProblemCode = "artifact_quarantined"
+	ProblemCodeAuthorizationPending         ProblemCode = "authorization_pending"
 	ProblemCodeCoordinateExists             ProblemCode = "coordinate_exists"
 	ProblemCodeDigestMismatch               ProblemCode = "digest_mismatch"
 	ProblemCodeEncryptionKeyUnavailable     ProblemCode = "encryption_key_unavailable"
@@ -2288,6 +2289,8 @@ func (e ProblemCode) Valid() bool {
 	case ProblemCodeAccessDenied:
 		return true
 	case ProblemCodeArtifactQuarantined:
+		return true
+	case ProblemCodeAuthorizationPending:
 		return true
 	case ProblemCodeCoordinateExists:
 		return true
@@ -2635,6 +2638,7 @@ const (
 	RepositoryOperationReplicate RepositoryOperation = "replicate"
 	RepositoryOperationRestore   RepositoryOperation = "restore"
 	RepositoryOperationRetain    RepositoryOperation = "retain"
+	RepositoryOperationYank      RepositoryOperation = "yank"
 )
 
 // Valid indicates whether the value is a known member of the RepositoryOperation enum.
@@ -2659,6 +2663,8 @@ func (e RepositoryOperation) Valid() bool {
 	case RepositoryOperationRestore:
 		return true
 	case RepositoryOperationRetain:
+		return true
+	case RepositoryOperationYank:
 		return true
 	default:
 		return false
@@ -5927,6 +5933,34 @@ type PublishSession struct {
 // PublishSessionState defines model for PublishSession.State.
 type PublishSessionState string
 
+// PyPIYankFile defines model for PyPIYankFile.
+type PyPIYankFile struct {
+	Digest   string `json:"digest"`
+	Filename string `json:"filename"`
+	Reason   string `json:"reason"`
+	Size     int64  `json:"size"`
+	Yanked   bool   `json:"yanked"`
+}
+
+// PyPIYankState defines model for PyPIYankState.
+type PyPIYankState struct {
+	Files        []PyPIYankFile     `json:"files"`
+	Project      string             `json:"project"`
+	RepositoryId openapi_types.UUID `json:"repositoryId"`
+	Revision     string             `json:"revision"`
+	Version      string             `json:"version"`
+}
+
+// PyPIYankUpdate defines model for PyPIYankUpdate.
+type PyPIYankUpdate struct {
+	// Filename Exact filename; omit to update all visible files atomically.
+	Filename *string `json:"filename,omitempty"`
+
+	// Reason Optional UTF-8 reason, at most 1024 bytes without control characters. Cleared when unyanking.
+	Reason *string `json:"reason,omitempty"`
+	Yanked bool    `json:"yanked"`
+}
+
 // QuarantineReadPolicy Hosted repository policy controlling protocol reads of quarantined artifacts. It is disabled by default.
 type QuarantineReadPolicy struct {
 	Enabled bool   `json:"enabled"`
@@ -7436,6 +7470,11 @@ type CreatePublishSessionParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
+// UpdatePyPIYankStateParams defines parameters for UpdatePyPIYankState.
+type UpdatePyPIYankStateParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // ReplaceQuarantineReadPolicyParams defines parameters for ReplaceQuarantineReadPolicy.
 type ReplaceQuarantineReadPolicyParams struct {
 	IfMatch IfMatch `json:"If-Match"`
@@ -7719,6 +7758,9 @@ type CreateRepositoryPromotionJSONRequestBody = PromotionRequest
 
 // CreatePublishSessionJSONRequestBody defines body for CreatePublishSession for application/json ContentType.
 type CreatePublishSessionJSONRequestBody = CreatePublishSession
+
+// UpdatePyPIYankStateJSONRequestBody defines body for UpdatePyPIYankState for application/json ContentType.
+type UpdatePyPIYankStateJSONRequestBody = PyPIYankUpdate
 
 // ReplaceQuarantineReadPolicyJSONRequestBody defines body for ReplaceQuarantineReadPolicy for application/json ContentType.
 type ReplaceQuarantineReadPolicyJSONRequestBody = QuarantineReadPolicy
@@ -8235,6 +8277,12 @@ type ServerInterface interface {
 
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, params CreatePublishSessionParams)
+
+	// (GET /repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank)
+	GetPyPIYankState(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, project string, version string)
+
+	// (PATCH /repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank)
+	UpdatePyPIYankState(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, project string, version string, params UpdatePyPIYankStateParams)
 
 	// (GET /repositories/{repositoryId}/quarantine-read-policy)
 	GetQuarantineReadPolicy(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId)
@@ -14133,6 +14181,122 @@ func (siw *ServerInterfaceWrapper) CreatePublishSession(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// GetPyPIYankState operation middleware
+func (siw *ServerInterfaceWrapper) GetPyPIYankState(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "project" -------------
+	var project string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPyPIYankState(w, r, repositoryId, project, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePyPIYankState operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePyPIYankState(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryId RepositoryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "project" -------------
+	var project string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdatePyPIYankStateParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePyPIYankState(w, r, repositoryId, project, version, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetQuarantineReadPolicy operation middleware
 func (siw *ServerInterfaceWrapper) GetQuarantineReadPolicy(w http.ResponseWriter, r *http.Request) {
 
@@ -16661,6 +16825,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/promotions", wrapper.CreateRepositoryPromotion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/proxy/health", wrapper.GetProxyHealth)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/repositories/{repositoryId}/publish-sessions", wrapper.CreatePublishSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank", wrapper.GetPyPIYankState)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank", wrapper.UpdatePyPIYankState)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/quarantine-read-policy", wrapper.GetQuarantineReadPolicy)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/repositories/{repositoryId}/quarantine-read-policy", wrapper.ReplaceQuarantineReadPolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/repositories/{repositoryId}/replications", wrapper.ListRepositoryReplications)
@@ -28120,6 +28286,234 @@ func (response CreatePublishSession501ApplicationProblemPlusJSONResponse) VisitC
 	return err
 }
 
+type GetPyPIYankStateRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Project      string       `json:"project"`
+	Version      string       `json:"version"`
+}
+
+type GetPyPIYankStateResponseObject interface {
+	VisitGetPyPIYankStateResponse(w http.ResponseWriter) error
+}
+
+type GetPyPIYankState200ResponseHeaders struct {
+	ETag *string
+}
+
+type GetPyPIYankState200JSONResponse struct {
+	Body    PyPIYankState
+	Headers GetPyPIYankState200ResponseHeaders
+}
+
+func (response GetPyPIYankState200JSONResponse) VisitGetPyPIYankStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPyPIYankState400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetPyPIYankState400ApplicationProblemPlusJSONResponse) VisitGetPyPIYankStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPyPIYankState401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPyPIYankState401ApplicationProblemPlusJSONResponse) VisitGetPyPIYankStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPyPIYankState403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPyPIYankState403ApplicationProblemPlusJSONResponse) VisitGetPyPIYankStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPyPIYankState404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPyPIYankState404ApplicationProblemPlusJSONResponse) VisitGetPyPIYankStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPyPIYankState501ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPyPIYankState501ApplicationProblemPlusJSONResponse) VisitGetPyPIYankStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePyPIYankStateRequestObject struct {
+	RepositoryId RepositoryId `json:"repositoryId"`
+	Project      string       `json:"project"`
+	Version      string       `json:"version"`
+	Params       UpdatePyPIYankStateParams
+	Body         *UpdatePyPIYankStateJSONRequestBody
+}
+
+type UpdatePyPIYankStateResponseObject interface {
+	VisitUpdatePyPIYankStateResponse(w http.ResponseWriter) error
+}
+
+type UpdatePyPIYankState200ResponseHeaders struct {
+	ETag *string
+}
+
+type UpdatePyPIYankState200JSONResponse struct {
+	Body    PyPIYankState
+	Headers UpdatePyPIYankState200ResponseHeaders
+}
+
+func (response UpdatePyPIYankState200JSONResponse) VisitUpdatePyPIYankStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePyPIYankState400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePyPIYankState400ApplicationProblemPlusJSONResponse) VisitUpdatePyPIYankStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePyPIYankState401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdatePyPIYankState401ApplicationProblemPlusJSONResponse) VisitUpdatePyPIYankStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePyPIYankState403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdatePyPIYankState403ApplicationProblemPlusJSONResponse) VisitUpdatePyPIYankStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePyPIYankState404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdatePyPIYankState404ApplicationProblemPlusJSONResponse) VisitUpdatePyPIYankStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePyPIYankState412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdatePyPIYankState412ApplicationProblemPlusJSONResponse) VisitUpdatePyPIYankStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePyPIYankState501ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdatePyPIYankState501ApplicationProblemPlusJSONResponse) VisitUpdatePyPIYankStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetQuarantineReadPolicyRequestObject struct {
 	RepositoryId RepositoryId `json:"repositoryId"`
 }
@@ -32499,6 +32893,12 @@ type StrictServerInterface interface {
 	// (POST /repositories/{repositoryId}/publish-sessions)
 	CreatePublishSession(ctx context.Context, request CreatePublishSessionRequestObject) (CreatePublishSessionResponseObject, error)
 
+	// (GET /repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank)
+	GetPyPIYankState(ctx context.Context, request GetPyPIYankStateRequestObject) (GetPyPIYankStateResponseObject, error)
+
+	// (PATCH /repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank)
+	UpdatePyPIYankState(ctx context.Context, request UpdatePyPIYankStateRequestObject) (UpdatePyPIYankStateResponseObject, error)
+
 	// (GET /repositories/{repositoryId}/quarantine-read-policy)
 	GetQuarantineReadPolicy(ctx context.Context, request GetQuarantineReadPolicyRequestObject) (GetQuarantineReadPolicyResponseObject, error)
 
@@ -36641,6 +37041,70 @@ func (sh *strictHandler) CreatePublishSession(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreatePublishSessionResponseObject); ok {
 		if err := validResponse.VisitCreatePublishSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPyPIYankState operation middleware
+func (sh *strictHandler) GetPyPIYankState(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, project string, version string) {
+	var request GetPyPIYankStateRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Project = project
+	request.Version = version
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPyPIYankState(ctx, request.(GetPyPIYankStateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPyPIYankState")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPyPIYankStateResponseObject); ok {
+		if err := validResponse.VisitGetPyPIYankStateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdatePyPIYankState operation middleware
+func (sh *strictHandler) UpdatePyPIYankState(w http.ResponseWriter, r *http.Request, repositoryId RepositoryId, project string, version string, params UpdatePyPIYankStateParams) {
+	var request UpdatePyPIYankStateRequestObject
+
+	request.RepositoryId = repositoryId
+	request.Project = project
+	request.Version = version
+	request.Params = params
+
+	var body UpdatePyPIYankStateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdatePyPIYankState(ctx, request.(UpdatePyPIYankStateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdatePyPIYankState")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdatePyPIYankStateResponseObject); ok {
+		if err := validResponse.VisitUpdatePyPIYankStateResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

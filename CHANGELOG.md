@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- PyPI supports file yank/unyank and atomic version operations with strong revisions, repository write grants and transactional success audit (#311). HTML/JSON Simple, Proxy revalidation, Group authority, lifecycle and backup preserve the declaration without changing archive bytes. Console operators can choose files, enter reasons and restore; pinned pip 26.2 tests range skips and exact-pin warnings. See [PyPI file yanking](docs/pypi-yank.md).
+
 - npm Group tombstones now preserve discovery of other visible versions when a lower member's summary selects a withdrawn version. Tarball barriers compare package/version identity, allowing a different visible version with the same flat filename while still blocking same-version aliases (#309, #310).
 
 - npm Hosted supports native deprecate/undeprecate and single-version or whole-package unpublish (#309, #310). Package revisions fence concurrent metadata and publication, mutations commit with actor/version audits, and Group tombstones prevent lower-priority members from reviving withdrawn identities. Existing management restore verifies the retained object and durable collection fence; a partial S3 reclaim cannot restore missing bytes. Tarballs and published identities remain immutable. Console shows warnings, permits Hosted writers to edit them and administrators to unpublish; see [npm version governance](docs/npm-version-governance.md). Official npm 11.6.2 acceptance verifies all four scoped/unscoped tarballs before and after recovery.

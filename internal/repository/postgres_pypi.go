@@ -22,7 +22,8 @@ func scanPyPIFile(row pypiRowScanner, file *PyPIFile) error {
 	var cachedAt, deletedAt, collectedAt sql.NullTime
 	err := row.Scan(&file.RepositoryID, &file.Project, &file.Version, &file.Filename, &file.FileType,
 		&file.PythonVersion, &file.RequiresPython, &file.Digest, &file.ObjectKey, &file.Size,
-		&file.Publisher, &file.SourceURL, &file.State, &cachedAt, &deletedAt, &collectedAt, &file.CreatedAt)
+		&file.Publisher, &file.SourceURL, &file.State, &cachedAt, &deletedAt, &collectedAt, &file.CreatedAt,
+		&file.Yanked, &file.YankReason, &file.YankRevision)
 	if cachedAt.Valid {
 		file.CachedAt = cachedAt.Time
 	}
@@ -36,7 +37,7 @@ func scanPyPIFile(row pypiRowScanner, file *PyPIFile) error {
 }
 
 const pypiFileColumns = `repository_id::text,project,version,filename,file_type,python_version,
-requires_python,digest,object_key,size,publisher,source_url,state,cached_at,deleted_at,collected_at,created_at`
+requires_python,digest,object_key,size,publisher,source_url,state,cached_at,deleted_at,collected_at,created_at,yanked,yank_reason,yank_revision`
 
 func pypiNullableTime(value time.Time) any {
 	if value.IsZero() {
@@ -46,6 +47,9 @@ func pypiNullableTime(value time.Time) any {
 }
 
 func (s *PostgresStore) PublishPyPIFile(ctx context.Context, file PyPIFile) (PyPIFile, error) {
+	if !ValidPyPIYankReason(file.YankReason) || !file.Yanked && file.YankReason != "" {
+		return PyPIFile{}, ErrInvalidPyPIYank
+	}
 	releaseDistribution, err := lockArtifactDistributionCoordinates(ctx, s, file.RepositoryID, FormatPyPI, []string{file.Project + "@" + file.Version})
 	if err != nil {
 		return PyPIFile{}, err
@@ -60,16 +64,19 @@ func (s *PostgresStore) PublishPyPIFile(ctx context.Context, file PyPIFile) (PyP
 	if file.State == "" {
 		file.State = "visible"
 	}
+	if file.YankRevision < 1 {
+		file.YankRevision = 1
+	}
 	var stored PyPIFile
 	err = scanPyPIFile(s.db.QueryRowContext(ctx, `
 		INSERT INTO native_pypi_files
-		(repository_id,project,version,filename,file_type,python_version,requires_python,digest,object_key,size,publisher,source_url,state,cached_at,created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+		(repository_id,project,version,filename,file_type,python_version,requires_python,digest,object_key,size,publisher,source_url,state,cached_at,created_at,yanked,yank_reason,yank_revision)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
 		ON CONFLICT (repository_id,filename) DO NOTHING
 		RETURNING `+pypiFileColumns,
 		file.RepositoryID, file.Project, file.Version, file.Filename, file.FileType, file.PythonVersion,
 		file.RequiresPython, file.Digest, file.ObjectKey, file.Size, file.Publisher, file.SourceURL,
-		file.State, pypiNullableTime(file.CachedAt), file.CreatedAt), &stored)
+		file.State, pypiNullableTime(file.CachedAt), file.CreatedAt, file.Yanked, file.YankReason, file.YankRevision), &stored)
 	if errors.Is(err, sql.ErrNoRows) {
 		existing, lookupErr := s.getPyPIFileAnyState(ctx, file.RepositoryID, file.Filename)
 		if lookupErr == nil && existing.Digest == file.Digest && existing.Project == file.Project && existing.Version == file.Version {
@@ -100,6 +107,9 @@ func (s *PostgresStore) PublishPyPIVersion(ctx context.Context, files []PyPIFile
 	now := time.Now().UTC()
 	result := make([]PyPIFile, 0, len(files))
 	for _, file := range files {
+		if !ValidPyPIYankReason(file.YankReason) || !file.Yanked && file.YankReason != "" {
+			return nil, ErrInvalidPyPIYank
+		}
 		if file.RepositoryID != files[0].RepositoryID || file.Project != files[0].Project || file.Version != files[0].Version || file.ObjectKey == "" {
 			return nil, ErrDisabled
 		}
@@ -122,12 +132,15 @@ func (s *PostgresStore) PublishPyPIVersion(ctx context.Context, files []PyPIFile
 			file.CachedAt = now
 		}
 		file.State = "visible"
+		if file.YankRevision < 1 {
+			file.YankRevision = 1
+		}
 		var stored PyPIFile
 		err = scanPyPIFile(tx.QueryRowContext(ctx, `INSERT INTO native_pypi_files
-			(repository_id,project,version,filename,file_type,python_version,requires_python,digest,object_key,size,publisher,source_url,state,cached_at,created_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'visible',$13,$14) RETURNING `+pypiFileColumns,
+			(repository_id,project,version,filename,file_type,python_version,requires_python,digest,object_key,size,publisher,source_url,state,cached_at,created_at,yanked,yank_reason,yank_revision)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'visible',$13,$14,$15,$16,$17) RETURNING `+pypiFileColumns,
 			file.RepositoryID, file.Project, file.Version, file.Filename, file.FileType, file.PythonVersion,
-			file.RequiresPython, file.Digest, file.ObjectKey, file.Size, file.Publisher, file.SourceURL, file.CachedAt, file.CreatedAt), &stored)
+			file.RequiresPython, file.Digest, file.ObjectKey, file.Size, file.Publisher, file.SourceURL, file.CachedAt, file.CreatedAt, file.Yanked, file.YankReason, file.YankRevision), &stored)
 		if err != nil {
 			return nil, err
 		}
@@ -140,6 +153,9 @@ func (s *PostgresStore) PublishPyPIVersion(ctx context.Context, files []PyPIFile
 }
 
 func (s *PostgresStore) SyncPyPIProxyFiles(ctx context.Context, repositoryID, project string, files []PyPIFile) error {
+	if err := validatePyPIProxyFiles(files); err != nil {
+		return err
+	}
 	coordinates := make([]string, 0, len(files))
 	for _, file := range files {
 		coordinates = append(coordinates, project+"@"+file.Version)
@@ -161,17 +177,18 @@ func (s *PostgresStore) SyncPyPIProxyFiles(ctx context.Context, repositoryID, pr
 		case errors.Is(err, sql.ErrNoRows):
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO native_pypi_files
-				(repository_id,project,version,filename,file_type,python_version,requires_python,digest,publisher,source_url,state)
-				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'visible')`, repositoryID, project, file.Version,
-				file.Filename, file.FileType, file.PythonVersion, file.RequiresPython, file.Digest, file.Publisher, file.SourceURL)
+				(repository_id,project,version,filename,file_type,python_version,requires_python,digest,publisher,source_url,state,yanked,yank_reason)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'visible',$11,$12)`, repositoryID, project, file.Version,
+				file.Filename, file.FileType, file.PythonVersion, file.RequiresPython, file.Digest, file.Publisher, file.SourceURL, file.Yanked, file.YankReason)
 		case err != nil:
 			return err
 		case digest != file.Digest:
 			return ErrUpstreamChanged
 		default:
 			_, err = tx.ExecContext(ctx, `
-				UPDATE native_pypi_files SET requires_python=$3,publisher=$4,source_url=$5
-				WHERE repository_id::text=$1 AND filename=$2`, repositoryID, file.Filename, file.RequiresPython, file.Publisher, file.SourceURL)
+				UPDATE native_pypi_files SET requires_python=$3,publisher=$4,source_url=$5,
+				yank_revision=yank_revision+CASE WHEN yanked<>$6 OR yank_reason<>$7 THEN 1 ELSE 0 END,yanked=$6,yank_reason=$7
+				WHERE repository_id::text=$1 AND filename=$2`, repositoryID, file.Filename, file.RequiresPython, file.Publisher, file.SourceURL, file.Yanked, file.YankReason)
 		}
 		if err != nil {
 			return err
@@ -317,7 +334,7 @@ func (s *PostgresStore) TombstonePyPIVersion(ctx context.Context, repositoryID, 
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	rows, err := tx.QueryContext(ctx, `UPDATE native_pypi_files SET state='deleted',deleted_at=now()
+	rows, err := tx.QueryContext(ctx, `UPDATE native_pypi_files SET state='deleted',deleted_at=now(),yank_revision=yank_revision+1
 		WHERE repository_id::text=$1 AND project=$2 AND version=$3 AND state='visible'
 		RETURNING `+pypiFileColumns, repositoryID, project, version)
 	if err != nil {
@@ -446,7 +463,7 @@ func (s *PostgresStore) restorePyPIVersionLocked(ctx context.Context, repository
 	if !slices.Equal(expectedObjectKeys, currentObjectKeys) {
 		return nil, true, nil
 	}
-	rows, err = tx.QueryContext(ctx, `UPDATE native_pypi_files SET state='visible',deleted_at=NULL
+	rows, err = tx.QueryContext(ctx, `UPDATE native_pypi_files SET state='visible',deleted_at=NULL,yank_revision=yank_revision+1
 		WHERE repository_id::text=$1 AND project=$2 AND version=$3 AND state='deleted' AND collected_at IS NULL
 		RETURNING `+pypiFileColumns, repositoryID, project, version)
 	if err != nil {

@@ -1,4 +1,25 @@
 export const artifactDetailZhCN = {
+  "artifactDetail.yankState": "撤回状态",
+  "artifactDetail.yanked": "已撤回",
+  "artifactDetail.notYanked": "可正常选择",
+  "artifactDetail.yankManage": "管理撤回",
+  "artifactDetail.yankSummary": "已撤回 {yanked} / {total} 个文件",
+  "artifactDetail.yankTarget": "操作范围",
+  "artifactDetail.yankAllFiles": "当前版本的全部 {total} 个文件",
+  "artifactDetail.yankAction": "操作",
+  "artifactDetail.yankFiles": "撤回文件",
+  "artifactDetail.unyankFiles": "恢复文件",
+  "artifactDetail.yankReason": "撤回原因（可选）",
+  "artifactDetail.yankReasonLimit":
+    "最多 1024 字节，不含控制字符。恢复会清除原因。",
+  "artifactDetail.yankExplanation":
+    "撤回影响 pip 的版本选择；精确指定版本仍可下载。文件内容、隔离和墓碑状态不变。",
+  "artifactDetail.yankConfirm": "确认撤回",
+  "artifactDetail.unyankConfirm": "确认恢复",
+  "artifactDetail.yankRefresh": "刷新后重新确认",
+  "artifactDetail.yankMissingResponse":
+    "未收到完整的撤回状态，请刷新后核实结果。",
+  "artifactDetail.yankFailed": "读取撤回状态失败",
   "artifactDetail.npmSaveDeprecation": "保存提示",
   "artifactDetail.npmDeprecated": "此版本已弃用",
   "artifactDetail.npmEditDeprecation": "编辑弃用提示",

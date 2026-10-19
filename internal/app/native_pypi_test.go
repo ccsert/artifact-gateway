@@ -377,7 +377,7 @@ func TestNativePyPIGroupMergesMembersAndPrefersHostedConflict(t *testing.T) {
 	if err = objects.Put(ctx, hostedKey, hostedBytes); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = store.PublishPyPIFile(ctx, repository.PyPIFile{RepositoryID: hosted.ID, Project: project, Version: "1.0.0", Filename: hostedFilename, FileType: "bdist_wheel", Digest: "sha256:" + hex.EncodeToString(hostedSum[:]), ObjectKey: hostedKey, Size: int64(len(hostedBytes))}); err != nil {
+	if _, err = store.PublishPyPIFile(ctx, repository.PyPIFile{RepositoryID: hosted.ID, Project: project, Version: "1.0.0", Filename: hostedFilename, FileType: "bdist_wheel", Digest: "sha256:" + hex.EncodeToString(hostedSum[:]), ObjectKey: hostedKey, Size: int64(len(hostedBytes)), Yanked: true, YankReason: "authoritative hosted warning"}); err != nil {
 		t.Fatal(err)
 	}
 	group, _, err := store.CreateHostedGroupIdempotently(ctx, repository.HostedGroup{ID: "pypi-group", Name: "python-all", Format: repository.FormatPyPI, Members: []repository.GroupMember{{RepositoryID: proxy.ID, Position: 0}, {RepositoryID: hosted.ID, Position: 1}}}, "admin", "pypi-group", "payload")
@@ -396,6 +396,9 @@ func TestNativePyPIGroupMergesMembersAndPrefersHostedConflict(t *testing.T) {
 	if response.Code != http.StatusOK || strings.Count(response.Body.String(), hostedFilename) != 2 || !strings.Contains(response.Body.String(), latestFilename) {
 		// Each filename appears in href and link text; the conflict must not add a second anchor.
 		t.Fatalf("simple=%d body=%s", response.Code, response.Body.String())
+	}
+	if strings.Count(response.Body.String(), `data-yanked="authoritative hosted warning"`) != 1 {
+		t.Fatalf("lower priority member erased authoritative yank: %s", response.Body.String())
 	}
 	if downloaded := get("/pypi/" + group.Name + "/packages/" + hostedFilename); downloaded.Code != http.StatusOK || !bytes.Equal(downloaded.Body.Bytes(), hostedBytes) {
 		t.Fatalf("hosted conflict=%d body=%q", downloaded.Code, downloaded.Body.Bytes())

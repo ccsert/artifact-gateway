@@ -3930,6 +3930,127 @@
         }
       }
     },
+    "/repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryId"
+        },
+        {
+          "name": "project",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getPyPIYankState",
+        "description": "Reads file-level yank state for a Hosted PyPI version. The strong ETag covers the complete visible file set, including concurrent uploads.",
+        "responses": {
+          "200": {
+            "description": "Current file states and revision.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PyPIYankState"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updatePyPIYankState",
+        "description": "Requires repository write permission. Updates one filename, or atomically all currently visible files in the version when filename is omitted. If-Match must name the complete current file set. Unyanking clears the reason; archive bytes remain immutable. Mutation and success audit commit together.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PyPIYankUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed states and new revision, including unchanged files.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PyPIYankState"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "501": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/repositories/{repositoryId}/oci/images": {
       "parameters": [
         {
@@ -6211,6 +6332,7 @@
           "reclaim",
           "promote",
           "replicate",
+          "yank",
           "deprecate"
         ]
       },
@@ -7257,6 +7379,7 @@
               "name_exists",
               "access_denied",
               "password_change_required",
+              "authorization_pending",
               "log_buffer_unavailable",
               "log_source_identity_unavailable",
               "remote_log_query_unavailable",
@@ -10949,6 +11072,88 @@
             "items": {
               "$ref": "#/components/schemas/ArtifactIdentity"
             }
+          }
+        }
+      },
+      "PyPIYankFile": {
+        "type": "object",
+        "required": [
+          "filename",
+          "yanked",
+          "reason",
+          "digest",
+          "size"
+        ],
+        "properties": {
+          "filename": {
+            "type": "string"
+          },
+          "yanked": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "PyPIYankState": {
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "project",
+          "version",
+          "revision",
+          "files"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PyPIYankFile"
+            }
+          }
+        }
+      },
+      "PyPIYankUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "yanked"
+        ],
+        "properties": {
+          "yanked": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Optional UTF-8 reason, at most 1024 bytes without control characters. Cleared when unyanking."
+          },
+          "filename": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "description": "Exact filename; omit to update all visible files atomically."
           }
         }
       },

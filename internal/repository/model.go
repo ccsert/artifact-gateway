@@ -465,6 +465,9 @@ type PyPIFile struct {
 	DeletedAt      time.Time
 	CollectedAt    time.Time
 	CreatedAt      time.Time
+	Yanked         bool
+	YankReason     string
+	YankRevision   int64
 }
 
 type PyPIProjectSummary struct {

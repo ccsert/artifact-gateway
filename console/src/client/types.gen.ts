@@ -93,6 +93,7 @@ export type RepositoryOperation =
   | "reclaim"
   | "promote"
   | "replicate"
+  | "yank"
   | "deprecate";
 
 export type OciTagList = {
@@ -790,6 +791,7 @@ export type Problem = {
     | "name_exists"
     | "access_denied"
     | "password_change_required"
+    | "authorization_pending"
     | "log_buffer_unavailable"
     | "log_source_identity_unavailable"
     | "remote_log_query_unavailable"
@@ -2710,6 +2712,34 @@ export type ArtifactQuarantine = {
 export type ArtifactQuarantineUpdate = {
   state: "quarantined" | "released";
   reason: string;
+};
+
+export type PyPiYankFile = {
+  filename: string;
+  yanked: boolean;
+  reason: string;
+  digest: string;
+  size: number;
+};
+
+export type PyPiYankState = {
+  repositoryId: string;
+  project: string;
+  version: string;
+  revision: string;
+  files: Array<PyPiYankFile>;
+};
+
+export type PyPiYankUpdate = {
+  yanked: boolean;
+  /**
+   * Optional UTF-8 reason, at most 1024 bytes without control characters. Cleared when unyanking.
+   */
+  reason?: string;
+  /**
+   * Exact filename; omit to update all visible files atomically.
+   */
+  filename?: string;
 };
 
 export type OciManifestSummary = {
@@ -9766,6 +9796,107 @@ export type ReplaceArtifactQuarantineResponses = {
 
 export type ReplaceArtifactQuarantineResponse =
   ReplaceArtifactQuarantineResponses[keyof ReplaceArtifactQuarantineResponses];
+
+export type GetPyPiYankStateData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    project: string;
+    version: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank";
+};
+
+export type GetPyPiYankStateErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
+};
+
+export type GetPyPiYankStateError =
+  GetPyPiYankStateErrors[keyof GetPyPiYankStateErrors];
+
+export type GetPyPiYankStateResponses = {
+  /**
+   * Current file states and revision.
+   */
+  200: PyPiYankState;
+};
+
+export type GetPyPiYankStateResponse =
+  GetPyPiYankStateResponses[keyof GetPyPiYankStateResponses];
+
+export type UpdatePyPiYankStateData = {
+  body: PyPiYankUpdate;
+  headers: {
+    "If-Match": string;
+  };
+  path: {
+    repositoryId: string;
+    project: string;
+    version: string;
+  };
+  query?: never;
+  url: "/repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank";
+};
+
+export type UpdatePyPiYankStateErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  501: Problem;
+};
+
+export type UpdatePyPiYankStateError =
+  UpdatePyPiYankStateErrors[keyof UpdatePyPiYankStateErrors];
+
+export type UpdatePyPiYankStateResponses = {
+  /**
+   * Committed states and new revision, including unchanged files.
+   */
+  200: PyPiYankState;
+};
+
+export type UpdatePyPiYankStateResponse =
+  UpdatePyPiYankStateResponses[keyof UpdatePyPiYankStateResponses];
 
 export type ListOciImagesData = {
   body?: never;

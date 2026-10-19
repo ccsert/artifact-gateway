@@ -1,0 +1,76 @@
+---
+repositories_repositoryId_pypi_projects_project_versions_version_yank:
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryId"
+  - name: project
+    in: path
+    required: true
+    schema:
+      type: string
+      minLength: 1
+      maxLength: 255
+  - name: version
+    in: path
+    required: true
+    schema:
+      type: string
+      minLength: 1
+      maxLength: 256
+  get:
+    operationId: getPyPIYankState
+    description: Reads file-level yank state for a Hosted PyPI version. The strong ETag covers the complete visible file set, including concurrent uploads.
+    responses:
+      '200':
+        description: Current file states and revision.
+        headers:
+          ETag:
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/PyPIYankState"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
+  patch:
+    operationId: updatePyPIYankState
+    description: Requires repository write permission. Updates one filename, or atomically all currently visible files in the version when filename is omitted. If-Match must name the complete current file set. Unyanking clears the reason; archive bytes remain immutable. Mutation and success audit commit together.
+    parameters:
+    - "$ref": "../components/parameters.yaml#/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/PyPIYankUpdate"
+    responses:
+      '200':
+        description: Committed states and new revision, including unchanged files.
+        headers:
+          ETag:
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/PyPIYankState"
+      '400':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/Problem"
+      '403':
+        "$ref": "../components/responses.yaml#/Problem"
+      '404':
+        "$ref": "../components/responses.yaml#/Problem"
+      '412':
+        "$ref": "../components/responses.yaml#/Problem"
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
