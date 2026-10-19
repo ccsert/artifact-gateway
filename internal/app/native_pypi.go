@@ -319,9 +319,6 @@ func (h nativePyPIHandler) upload(w http.ResponseWriter, r *http.Request, repo r
 		return
 	}
 	prefix := "/pypi/" + url.PathEscape(repo.Name)
-	if externalName, ok := nexusRepositoryCompatibilityExternalName(r.Context(), repo.Name); ok {
-		prefix = "/repository/" + url.PathEscape(externalName)
-	}
 	w.Header().Set("Location", prefix+"/packages/"+url.PathEscape(published.Filename))
 	if h.publicationScanner != nil {
 		_ = h.publicationScanner.Schedule(r.Context(), repo, project+"@"+version, published.Digest, publisher)

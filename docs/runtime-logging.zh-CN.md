@@ -44,7 +44,7 @@ OTLP 是输出协议，不是日志查询 API。接收端存储、保留和检�
 
 独立 session 目录由对应输出实例独占管理，管理员及同 UID/root 工具不能并发替换其路径。身份检查会拒绝轮转或保留操作之前观察到的替换，但不是抵御有权限并发路径变更的文件系统事务。
 
-Gateway 运行事件以每行一个 JSON 对象写入 stdout。每条记录包含 `time`、`level`、`msg`、`instanceId`、`sessionId`、`component`、`operation`、`requestId` 和 `traceId`。没有请求上下文的进程事件，其关联 ID 为空。HTTP 访问事件另含方法、服务端已注册的路由模板（或 `unmatched`）、请求类别、状态码和毫秒耗时。模板在路由分发时记录，不受 handler 修改 `r.Pattern` 影响；兼容别名保留外层 `/repository/` 模板。其请求类别复用指标已有的 Maven/Raw/npm/PyPI/Go 解析结果，未配置 metrics 时仍可正确分类；未解析仓库不从名称猜测类别。共享分类映射还支持 Cargo；Cargo 仍使用原生 `/cargo/` 根路径，不新增 Nexus 别名。访问日志不会记录原始 URL 路径、实际参数值、查询串、请求体、`Authorization` 或 `Cookie`。名称涉及密钥、凭据、token、请求体、URL、查询串或错误的属性在输出前遮蔽。
+Gateway 运行事件以每行一个 JSON 对象写入 stdout。每条记录包含 `time`、`level`、`msg`、`instanceId`、`sessionId`、`component`、`operation`、`requestId` 和 `traceId`。没有请求上下文的进程事件，其关联 ID 为空。HTTP 访问事件另含方法、服务端已注册的路由模板（或 `unmatched`）、请求类别、状态码和毫秒耗时。模板在路由分发时记录，不受 handler 修改 `r.Pattern` 影响。请求类别由 canonical 协议根路径确定，未配置 metrics 时仍可正确分类。已退役的 `/repository/<name>/...` 别名记录为 `unmatched` 和 `other`，不会从仓库名称推断类别。访问日志不会记录原始 URL 路径、实际参数值、查询串、请求体、`Authorization` 或 `Cookie`。名称涉及密钥、凭据、token、请求体、URL、查询串或错误的属性在输出前遮蔽。
 
 运行日志具有显式的输出生命周期：写入、flush 和 close 串行执行；即使 flush 失败，close 仍会尝试两个清理回调各一次。默认 stdout 与内存 buffer 为借用输出，close 为 no-op，不等待正在写入的记录，也不会 flush、sync 或关闭 stdout。配置完成后的运行错误和优雅退出先完成既有 HTTP 与资源清理，再关闭日志输出。Worker 仍通过 context 取消；后续拥有资源的输出需要明确各自的清理时限和交付行为。
 
@@ -71,7 +71,7 @@ Console 默认展示关键词、时间范围、级别、精确组件和 Request 
 ### Raw Proxy 失败原因
 
 Raw Proxy Repository 的 GET/HEAD 访问事件可增加可选配对字段
-`errorCode` / `phase`。同一原生路径覆盖 Nexus 兼容 URL 和原生 Group；
+`errorCode` / `phase`。同一原生路径覆盖 canonical Raw Repository URL 和原生 Group；
 legacy Group 实现和其他协议不增加这些字段。字段描述最终已认领响应的失败，
 不暴露仓库 ID、endpoint、路径、header、body、凭据或原始 error 文本。
 

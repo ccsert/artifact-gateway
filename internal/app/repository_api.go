@@ -344,7 +344,6 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 		raw:        &v2GroupRawHandler{native: &nativeRaw, auth: authenticator},
 		next:       rawRepositoryHandler}
 	rawProtocol := hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: rawGroupRouter}
-	rawRepositoryProtocol := hostedRepositoryGuard{store: store, authenticator: authenticator, format: repository.FormatRaw, next: rawRepositoryHandler}
 	mux.Handle("/raw/", rawProtocol)
 	npmGroupRouter := v2GroupRouter{format: repository.FormatNPM, groups: store, repos: store, audit: store, auth: authenticator,
 		authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator},
@@ -380,36 +379,6 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 		next:  conan}
 	mux.Handle("/conan/v2/", conanGroupRouter)
 	mux.Handle("/conan/", conan)
-	nexusCompatibility := nexusRepositoryCompatibilityRouter{
-		repositories: store,
-		groups:       store,
-		routes: map[repository.Format]nexusRepositoryCompatibilityRoute{
-			repository.FormatMaven: {
-				repositoryPrefix: "/repository/maven/", repositoryHandler: nativeMaven,
-				groupPrefix: "/maven/", groupHandler: mavenProtocol,
-			},
-			repository.FormatNPM: {
-				repositoryPrefix: "/npm/", repositoryHandler: npmGroupRouter,
-				groupPrefix: "/npm/", groupHandler: npmGroupRouter,
-			},
-			repository.FormatPyPI: {
-				repositoryPrefix: "/pypi/", repositoryHandler: pypiGroupRouter,
-				groupPrefix: "/pypi/", groupHandler: pypiGroupRouter,
-			},
-			repository.FormatRaw: {
-				repositoryPrefix: "/raw/", repositoryHandler: rawRepositoryProtocol,
-				groupPrefix: "/raw/", groupHandler: rawProtocol,
-			},
-			repository.FormatGo: {
-				repositoryPrefix: "/go/", repositoryHandler: nexusGoRepositoryCompatibilityHandler{native: nativeGo},
-				groupPrefix: "/go/", groupHandler: goGroupRouter,
-			},
-		},
-	}
-	mux.Handle("/repository/", nexusCompatibility)
-	// This legacy canonical Maven prefix is intentionally more specific than
-	// the Nexus-style catch-all. A compatibility target named "maven" is
-	// therefore reserved rather than ambiguously routing artifact path segments.
 	mux.Handle("/repository/maven/", nativeMaven)
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	mux.HandleFunc("POST /auth/login", userLoginHandler(store, store, authenticator))

@@ -13,7 +13,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/operationalog"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/getkin/kin-openapi/openapi3"
@@ -88,7 +87,7 @@ func TestRawFailureDiagnosticsAtHTTPBoundary(t *testing.T) {
 		{"body", "https://example.com/body", "upstream_body_failed", "body", 502, []string{"GET"}},
 	} {
 		for _, method := range test.methods {
-			for _, prefix := range []string{"/raw/", "/repository/"} {
+			for _, prefix := range []string{"/raw/"} {
 				t.Run(test.name+"/"+method+prefix, func(t *testing.T) {
 					store := repository.NewMemoryStore()
 					_, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{Name: "private-repo", Format: repository.FormatRaw, Type: repository.RepositoryTypeProxy, Endpoint: test.endpoint, AllowedHosts: []string{"example.com"}})
@@ -106,7 +105,7 @@ func TestRawFailureDiagnosticsAtHTTPBoundary(t *testing.T) {
 					b := operationalog.NewBuffer(10)
 					var stdout bytes.Buffer
 					d := Dependencies{LogBuffer: b, Runtime: DiagnosticRuntime{InstanceID: "node", SessionID: "session"}, AccessLog: AccessLogOptions{Mode: "full", Logger: operationalog.NewLogger(io.MultiWriter(b, &stdout), "node", "session")}}
-					h := newTestGateway(t, GatewayOptions{Dependencies: d, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: UpstreamClient{HTTPClient: client}})
+					h := NewGatewayHandler(d, store, TestAdapter{}, testAuthenticator(), UpstreamClient{HTTPClient: client})
 					r := httptest.NewRequest(method, prefix+"private-repo/private-object?token=private-query", strings.NewReader("private-request-body"))
 					r.Header.Set("X-Request-ID", "failure-request")
 					r.Header.Set("Cookie", "private-cookie")
@@ -188,9 +187,9 @@ func TestRawFailureDiagnosticsUnknownBodyAndFinalResponse(t *testing.T) {
 			d := Dependencies{AccessLog: AccessLogOptions{Mode: "full", Logger: operationalog.NewLogger(&stdout, "node", "session")}}
 			var cache *RawCache
 			if tc.releaseFails {
-				cache = NewDefaultRawCache(objectstore.NewMemoryStore(), nil).WithCoordinator(&rawDiagnosticCoordinator{})
+				cache = NewDefaultRawCache(NewMemoryOCIObjectStore(), nil).WithCoordinator(&rawDiagnosticCoordinator{})
 			}
-			h := newTestGateway(t, GatewayOptions{Dependencies: d, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: nil, Maven: nil, Raw: cache, Maintenance: nil}, Upstream: rawDiagnosticClient{fetch: tc.fetch}})
+			h := NewGatewayHandlerWithRawCache(d, store, TestAdapter{}, testAuthenticator(), nil, nil, cache, nil, rawDiagnosticClient{fetch: tc.fetch})
 			r := httptest.NewRequest("GET", "/raw/private-repo/private-object", nil)
 			authorize(r, "resolver-secret")
 			w := httptest.NewRecorder()
@@ -240,8 +239,8 @@ func TestRawFailureDiagnosticsGroupsAndAuthorization(t *testing.T) {
 					return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("artifact"))}, nil
 				}}
 				var output bytes.Buffer
-				handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{AccessLog: AccessLogOptions{Mode: "full", Logger: operationalog.NewLogger(&output, "node", "session")}}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Upstream: client})
-				request := httptest.NewRequest(method, "/repository/private-group/private-object", nil)
+				handler := NewGatewayHandler(Dependencies{AccessLog: AccessLogOptions{Mode: "full", Logger: operationalog.NewLogger(&output, "node", "session")}}, store, TestAdapter{}, testAuthenticator(), client)
+				request := httptest.NewRequest(method, "/raw/private-group/private-object", nil)
 				authorize(request, "resolver-secret")
 				response := httptest.NewRecorder()
 				handler.ServeHTTP(response, request)
@@ -273,7 +272,7 @@ func TestRawFailureDiagnosticsGroupsAndAuthorization(t *testing.T) {
 	}{
 		{"unauthenticated", "", "/raw/private-repo/private-object", 401, true},
 		{"unauthorized", "resolver-secret", "/raw/private-repo/private-object", 401, false},
-		{"unresolved", "resolver-secret", "/repository/private-missing/private-object", 404, true},
+		{"unresolved", "resolver-secret", "/raw/private-missing/private-object", 404, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := repository.NewMemoryStore()
@@ -293,7 +292,7 @@ func TestRawFailureDiagnosticsGroupsAndAuthorization(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{AccessLog: AccessLogOptions{Mode: "full", Logger: operationalog.NewLogger(&output, "node", "session")}}, Store: store, Adapter: TestAdapter{}, Authenticator: auth, Upstream: rawDiagnosticClient{fetch: func() (*http.Response, error) { calls++; return nil, errors.New("private-error") }}})
+			h := NewGatewayHandler(Dependencies{AccessLog: AccessLogOptions{Mode: "full", Logger: operationalog.NewLogger(&output, "node", "session")}}, store, TestAdapter{}, auth, rawDiagnosticClient{fetch: func() (*http.Response, error) { calls++; return nil, errors.New("private-error") }})
 			r := httptest.NewRequest("GET", tc.path, nil)
 			if tc.token != "" {
 				authorize(r, tc.token)
@@ -316,16 +315,16 @@ func TestRawFailureDiagnosticsIncludeLocalStagingLimits(t *testing.T) {
 		t.Run(tc, func(t *testing.T) {
 			store := repository.NewMemoryStore()
 			_, _ = store.CreateHostedRepository(context.Background(), repository.HostedRepository{Name: "private-repo", Format: repository.FormatRaw, Type: repository.RepositoryTypeProxy, Endpoint: "https://example.com", AllowedHosts: []string{"example.com"}})
-			cache := NewDefaultRawCache(objectstore.NewMemoryStore(), nil)
+			cache := NewDefaultRawCache(NewMemoryOCIObjectStore(), nil)
 			if tc == "size limit" {
 				cache.WithMaxObjectBytes(3)
 			} else {
 				t.Setenv("TMPDIR", t.TempDir()+"/private-missing-directory")
 			}
 			var output bytes.Buffer
-			h := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{AccessLog: AccessLogOptions{Mode: "full", Logger: operationalog.NewLogger(&output, "node", "session")}}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Caches: GatewayCaches{OCI: nil, Maven: nil, Raw: cache, Maintenance: nil}, Upstream: rawDiagnosticClient{fetch: func() (*http.Response, error) {
+			h := NewGatewayHandlerWithRawCache(Dependencies{AccessLog: AccessLogOptions{Mode: "full", Logger: operationalog.NewLogger(&output, "node", "session")}}, store, TestAdapter{}, testAuthenticator(), nil, nil, cache, nil, rawDiagnosticClient{fetch: func() (*http.Response, error) {
 				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("artifact"))}, nil
-			}}})
+			}})
 			r := httptest.NewRequest("GET", "/raw/private-repo/private-object", nil)
 			authorize(r, "resolver-secret")
 			w := httptest.NewRecorder()

@@ -36,6 +36,24 @@ func loadNativeHostedSource(t *testing.T) *openapi3.T {
 	return spec
 }
 
+func TestNativeProtocolContractRetiresNexusRepositoryAliases(t *testing.T) {
+	for name, load := range map[string]func(*testing.T) *openapi3.T{"source": loadNativeHostedSource, "bundle": loadNativeHostedSpec} {
+		t.Run(name, func(t *testing.T) {
+			spec := load(t)
+			for _, path := range []string{"/repository/{repository}/{path}", "/repository/{repository}/"} {
+				if spec.Paths.Value(path) != nil {
+					t.Errorf("retired Nexus route %s is still declared", path)
+				}
+			}
+			for _, path := range []string{"/repository/maven/{repository}/{assetPath}", "/go/{repository}/{modulePath}", "/raw/{repository}/{path}", "/v2/{name}/manifests/{reference}", "/npm/{repository}/-/package/{package}/dist-tags"} {
+				if spec.Paths.Value(path) == nil {
+					t.Errorf("native protocol route %s is missing", path)
+				}
+			}
+		})
+	}
+}
+
 func operation(t *testing.T, spec *openapi3.T, path, method string) *openapi3.Operation {
 	t.Helper()
 	item := spec.Paths.Find(path)

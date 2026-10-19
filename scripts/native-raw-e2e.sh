@@ -12,14 +12,14 @@ token=$(curl --silent --show-error --fail --user fixture:fixture-secret "$base/a
 auth=(-H "Authorization: Bearer $token")
 status() { curl --silent --show-error --output "$workdir/response" --write-out '%{http_code}' "$@"; }
 expect() { local want=$1; shift; local got; got=$(status "$@"); [[ "$got" == "$want" ]] || { printf 'Expected HTTP %s, got %s\n' "$want" "$got" >&2; cat "$workdir/response" >&2; exit 1; }; }
-path="$base/repository/downloads/releases/app.txt"
+path="$base/raw/downloads/releases/app.txt"
 expect 201 "${auth[@]}" -H 'Content-Type: text/plain' -X PUT --data-binary 'native raw artifact' "$path"
 expect 206 "${auth[@]}" -H 'Range: bytes=7-9' "$path"; [[ $(cat "$workdir/response") == raw ]] || exit 1
 expect 200 "${auth[@]}" -I "$path"
 # Conditional writes: create-only, If-Match on the read ETag, one winner among
 # writers holding the same validator, and a guarded resumable completion.
 etag() { curl --silent --show-error --fail --head "${auth[@]}" "$1" | tr -d '\r' | sed -n 's/^[Ee][Tt][Aa][Gg]: //p'; }
-created="$base/repository/downloads/releases/create-only.txt"
+created="$base/raw/downloads/releases/create-only.txt"
 expect 201 "${auth[@]}" -H 'If-None-Match: *' -X PUT --data-binary 'first' "$created"
 expect 412 "${auth[@]}" -H 'If-None-Match: *' -X PUT --data-binary 'second' "$created"
 expect 200 "${auth[@]}" "$created"; [[ $(cat "$workdir/response") == first ]] || exit 1
@@ -41,4 +41,4 @@ expect 201 "${auth[@]}" -H "Digest: $digest" -H "If-Match: $current" -X PUT "$ba
 expect 200 "${auth[@]}" "$path"; [[ $(cat "$workdir/response") == resumed ]] || exit 1
 expect 204 "${auth[@]}" -X DELETE "$path"
 expect 404 "${auth[@]}" "$path"
-printf 'Native Raw Hosted E2E passed through Nexus-compatible repository root at %s\n' "$base"
+printf 'Native Raw Hosted E2E passed through native Raw repository root at %s\n' "$base"

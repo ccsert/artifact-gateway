@@ -31,19 +31,13 @@ the Console described in `console/src/app/router.tsx`.
 
 ## Client Migration Boundary
 
-Artifact Gateway now accepts the Nexus-style `/repository/<name>/...` root for
-Maven, npm, PyPI, Raw, and Go Hosted/Proxy/Group clients. This removes the base-
-path rewrite from ordinary Maven/Gradle, npm, twine/pip, Raw HTTP, and GOPROXY
-configuration changes; Go Hosted also accepts Nexus 3.93+'s version-only ZIP
-upload and derives the authorized module identity from the archive. Real-client
-gates cover those flows. The exact target name `maven` remains reserved by the
-older canonical Maven prefix and must be renamed during migration. This does not import
-Nexus metadata or emulate Nexus management APIs. OCI remains a conditional
-migration because Registry V2 fixes `/v2/` at the host root and Nexus often
-binds Docker repositories to connector ports or virtual hosts. OCI deployments
-must map that external endpoint to the Gateway repository-name prefix or retag
-image names. See the exact paths and evidence in
-[the protocol compatibility matrix](protocol-compatibility.md#nexus-style-repository-roots).
+Artifact Gateway uses its own canonical protocol roots. Nexus-style
+`/repository/<name>/...` aliases and version-only Go ZIP uploads are retired;
+clients must update their base URLs and regenerate lockfiles that retain the
+old roots. Standard Maven/Gradle, npm, twine/pip, Raw HTTP, GOPROXY and OCI
+protocols remain supported at the [native client roots](protocol-compatibility.md#native-client-roots).
+Nexus discovery and import remain independent read-only migration inputs.
+This does not imply production client cutover or data validation has completed.
 
 ## Gap Summary
 

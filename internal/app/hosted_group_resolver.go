@@ -226,11 +226,7 @@ func (r v2GroupRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	resolver := v2GroupResolver{groups: r.groups, repos: r.repos, audit: r.audit, authorizer: r.authorizer}
-	group, resolved := nexusRepositoryCompatibilityResolvedGroup(req.Context(), name, r.format)
-	var err error
-	if !resolved {
-		group, err = resolver.resolveHostedGroup(req.Context(), name, r.format)
-	}
+	group, err := resolver.resolveHostedGroup(req.Context(), name, r.format)
 	if errors.Is(err, repository.ErrNotFound) {
 		r.next.ServeHTTP(w, req)
 		return

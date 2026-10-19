@@ -1,20 +1,16 @@
 package app
 
 import (
-	"context"
 	"database/sql"
 	"io"
 	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/felixge/httpsnoop"
-
-	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
 type requestClass uint8
@@ -53,40 +49,6 @@ type namedDatabaseStats struct {
 	stats DatabaseStatsFunc
 }
 
-type requestClassStateContextKey struct{}
-
-type requestClassState struct {
-	mu      sync.Mutex
-	metrics *requestMetrics
-	class   requestClass
-}
-
-func (s *requestClassState) override(class requestClass) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if class == s.class {
-		return
-	}
-	if s.metrics != nil {
-		s.metrics.inFlight[s.class].Add(-1)
-		s.metrics.inFlight[class].Add(1)
-	}
-	s.class = class
-}
-
-func (s *requestClassState) finish() requestClass {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.metrics.inFlight[s.class].Add(-1)
-	return s.class
-}
-
-func (s *requestClassState) current() requestClass {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.class
-}
-
 func (m *Metrics) WithDatabaseStats(stats DatabaseStatsFunc) *Metrics {
 	return m.WithDatabasePoolStats("primary", stats)
 }
@@ -108,49 +70,17 @@ func (m *Metrics) Instrument(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		class := classifyRequest(r.URL.Path)
-		state := &requestClassState{metrics: &m.httpRequests, class: class}
-		state.metrics.inFlight[class].Add(1)
-		r = r.WithContext(context.WithValue(r.Context(), requestClassStateContextKey{}, state))
+		m.httpRequests.inFlight[class].Add(1)
 		started := time.Now()
 		captured := httpsnoop.Metrics{Code: http.StatusOK}
 		defer func() {
-			class = state.finish()
+			m.httpRequests.inFlight[class].Add(-1)
 			m.httpRequests.observe(class, captured.Code, time.Since(started))
 		}()
 		captured.CaptureMetrics(w, func(wrapped http.ResponseWriter) {
 			next.ServeHTTP(wrapped, r)
 		})
 	})
-}
-
-func overrideRepositoryRequestClass(ctx context.Context, format repository.Format) {
-	state, ok := ctx.Value(requestClassStateContextKey{}).(*requestClassState)
-	if !ok {
-		return
-	}
-	class, ok := requestClassForRepositoryFormat(format)
-	if ok {
-		state.override(class)
-	}
-}
-
-func requestClassForRepositoryFormat(format repository.Format) (requestClass, bool) {
-	switch format {
-	case repository.FormatMaven:
-		return requestClassMaven, true
-	case repository.FormatRaw:
-		return requestClassRaw, true
-	case repository.FormatNPM:
-		return requestClassNPM, true
-	case repository.FormatPyPI:
-		return requestClassPyPI, true
-	case repository.FormatGo:
-		return requestClassGo, true
-	case repository.FormatCargo:
-		return requestClassCargo, true
-	default:
-		return requestClassOther, false
-	}
 }
 
 func (m *requestMetrics) observe(class requestClass, status int, duration time.Duration) {

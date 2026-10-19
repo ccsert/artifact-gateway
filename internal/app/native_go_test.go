@@ -856,7 +856,7 @@ func TestNativeGoRealClientDownloadsThroughProxyAndOfflineCache(t *testing.T) {
 		command := exec.CommandContext(context.Background(), "go", "mod", "download", "-json", modulePath+"@"+version)
 		command.Dir = temporary
 		command.Env = append(os.Environ(),
-			"GOPROXY="+server.URL+"/repository/"+repo.Name,
+			"GOPROXY="+server.URL+"/go/"+repo.Name,
 			"GOSUMDB=off",
 			"GONOPROXY=none",
 			"GOMODCACHE="+cache,
@@ -906,7 +906,7 @@ func TestNativeGoRealClientDownloadsHostedPublication(t *testing.T) {
 	grantGoPublisher(t, store, repo.ID)
 	server := httptest.NewServer(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectstore.NewMemoryStore()}}))
 	defer server.Close()
-	publish, err := http.NewRequest(http.MethodPut, server.URL+"/repository/"+repo.Name+"/"+version+".zip", bytes.NewReader(archive))
+	publish, err := http.NewRequest(http.MethodPut, server.URL+"/go/"+repo.Name+"/"+escapedModule+"/@v/"+version+".zip", bytes.NewReader(archive))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -934,7 +934,7 @@ func TestNativeGoRealClientDownloadsHostedPublication(t *testing.T) {
 	command := exec.CommandContext(context.Background(), "go", "mod", "download", "-json", modulePath+"@"+version)
 	command.Dir = temporary
 	command.Env = append(os.Environ(),
-		"GOPROXY="+server.URL+"/repository/"+repo.Name,
+		"GOPROXY="+server.URL+"/go/"+repo.Name,
 		"GOSUMDB=off",
 		"GONOSUMDB=*",
 		"GOMODCACHE="+filepath.Join(temporary, "gomodcache"),

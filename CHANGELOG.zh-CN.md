@@ -14,6 +14,10 @@
 
 - [ADR 0009](docs/adr/0009-native-architecture.zh-CN.md) 记录原生管理架构与停止 Nexus 兼容要求；`make lint` 自动检查协议依赖和聚合存储边界（#277）。现有路由由后续切片移除。
 
+- 退役 Nexus 风格 `/repository/<name>/...` 别名和仅含版本的 Go ZIP 发布入口（#385），旧别名返回 404。Maven Hosted 改用 `/repository/maven/<repository>/`，Maven Proxy/Group 改用 `/maven/<repository>/`，npm 使用 `/npm/<repository>/`，PyPI 上传使用 `/pypi/<repository>/legacy/`、Simple 读取使用 `/pypi/<repository>/simple/`，Raw 使用 `/raw/<repository>/`，`GOPROXY` 使用 `/go/<repository>`。Go Hosted 发布需使用 `PUT /go/<repository>/<escaped-module>/@v/<version>.zip`，OCI 保持 `/v2/`。仍含旧 URL 的 lockfile 或缓存元数据需要重新生成。Nexus 只读发现与历史迁移证据保留，生产 URL 切换单独执行。
+
+- [ADR 0009](docs/adr/0009-native-architecture.zh-CN.md) 记录原生管理架构与停止 Nexus 兼容要求；`make lint` 自动检查协议依赖和聚合存储边界（#277）。
+
 - 备份发布校验继续兼容以旧模块路径构建的原始二进制。模块路径、命令路径与保留的构建信息链接参数必须属于同一个明确允许的命名空间；制品摘要、平台、批准归档、版本、revision 与完整迁移账本校验仍全部必需。
 
 - Go 模块路径改为源码仓库路径 `github.com/ccsert/artifact-gateway`（#347，[ADR 0008](docs/adr/0008-go-module-path.zh-CN.md)）。从下一个 Release tag 起，`go install github.com/ccsert/artifact-gateway/cmd/agctl@<tag>` 可安装客户端；`v0.9.0` 及更早的 tag 声明的是从未可解析的旧路径，无法这样安装。module 模式安装以 tag 作为版本、revision 显示为 `unknown`，因为 Go 工具链不为 `pkg@version` 构建记录 VCS 信息。引用 Gateway 包的代码须改用新路径。`make release-version-check` 现在还会在 `go.mod` 与所在 GitHub 仓库不一致时失败。
