@@ -17,7 +17,7 @@ import (
 // members of the same kind keep their configured position order.
 type v2GroupResolver struct {
 	groups     repository.HostedGroupStore
-	repos      repository.HostedRepositoryStore
+	repos      managementRepositoryReader
 	audit      repository.Store
 	authorizer RepositoryAuthorizer
 }

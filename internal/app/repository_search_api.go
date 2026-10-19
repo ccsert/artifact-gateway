@@ -13,7 +13,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/v2contract"
 )
 
-func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.SearchRepositoryArtifactsParams) {
+func (h artifactManagementHandler) SearchRepositoryArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.SearchRepositoryArtifactsParams) {
 	match, valid := artifactSearchMatch(params.Match)
 	if !valid {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "match must be prefix or contains")
@@ -24,7 +24,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 	if _, err := h.store.GetHostedRepository(r.Context(), repositoryID.String()); errors.Is(err, repository.ErrNotFound) {
 		group, groupErr := h.groups.GetHostedGroup(r.Context(), repositoryID.String())
 		if groupErr == nil {
-			if !anonymousHostedGroupReadAllowed(r.Context(), h.store, h.store, group, r.Method) {
+			if !anonymousHostedGroupReadAllowed(r.Context(), h.anonymousPolicy, h.store, group, r.Method) {
 				writeHostedProblem(w, http.StatusForbidden, "access_denied", "group anonymous read is not enabled")
 				return
 			}
@@ -77,7 +77,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = name
 			}
 		case repository.FormatMaven:
-			artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, query, pageSize+1, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber}, match)
+			artifacts, err := h.maven.SearchMavenArtifacts(r.Context(), repo.ID, query, pageSize+1, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber}, match)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search Maven artifacts failed")
 				return
@@ -108,7 +108,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = reference.Reference
 			}
 		case repository.FormatRaw:
-			assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
+			assets, err := h.raw.ListRawAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search Raw artifacts failed")
 				return
@@ -125,7 +125,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = a.Path
 			}
 		case repository.FormatNPM:
-			packages, err := h.sessions.store.SearchNPMPackages(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
+			packages, err := h.npm.SearchNPMPackages(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search npm packages failed")
 				return
@@ -144,7 +144,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 				lastCoordinate = pkg.Name
 			}
 		case repository.FormatPyPI:
-			projects, err := h.sessions.store.ListPyPIProjects(r.Context(), repo.ID, pypiSearchKeyword(query, match), pageSize+1, after.Coordinate, match)
+			projects, err := h.pypi.ListPyPIProjects(r.Context(), repo.ID, pypiSearchKeyword(query, match), pageSize+1, after.Coordinate, match)
 			if err != nil {
 				writeHostedProblem(w, 500, "internal_error", "search PyPI projects failed")
 				return
@@ -200,7 +200,7 @@ func (h generatedRepositoryAPIAdapter) SearchRepositoryArtifacts(w http.Response
 			}
 		case repository.FormatAPT:
 			if repo.Type == repository.RepositoryTypeProxy {
-				assets, err := h.sessions.store.ListAPTAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
+				assets, err := h.apt.ListAPTAssets(r.Context(), repo.ID, query, pageSize+1, after.Coordinate, match)
 				if err != nil {
 					writeHostedProblem(w, 500, "internal_error", "search APT assets failed")
 					return

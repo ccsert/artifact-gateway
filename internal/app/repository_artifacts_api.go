@@ -13,19 +13,19 @@ import (
 	"github.com/google/uuid"
 )
 
-func (h generatedRepositoryAPIAdapter) CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.CreatePublishSessionParams) {
+func (h artifactManagementHandler) CreatePublishSession(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.CreatePublishSessionParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryWrite, func(principal Principal, _ repository.HostedRepository) {
 		h.sessions.createWithIdempotencyKey(w, r, principal, repositoryID.String(), string(params.IdempotencyKey))
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) ListArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, _ adminopenapi.ListArtifactsParams) {
+func (h artifactManagementHandler) ListArtifacts(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, _ adminopenapi.ListArtifactsParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(Principal, repository.HostedRepository) {
 		h.sessions.listArtifacts(w, r, repositoryID.String())
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) GetArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.GetArtifactIntelligenceParams) {
+func (h artifactManagementHandler) GetArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.GetArtifactIntelligenceParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		coordinate := strings.TrimSpace(params.Coordinate)
 		digest := strings.TrimSpace(params.Digest)
@@ -46,7 +46,7 @@ func (h generatedRepositoryAPIAdapter) GetArtifactIntelligence(w http.ResponseWr
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) ReplaceArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceArtifactIntelligenceParams) {
+func (h artifactManagementHandler) ReplaceArtifactIntelligence(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ReplaceArtifactIntelligenceParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryIntelligence, func(principal Principal, repo repository.HostedRepository) {
 		coordinate := strings.TrimSpace(params.Coordinate)
 		digest := strings.TrimSpace(params.Digest)
@@ -204,7 +204,7 @@ func writeArtifactIntelligence(w http.ResponseWriter, value repository.ArtifactI
 	writeNativeMavenJSON(w, http.StatusOK, response)
 }
 
-func (h generatedRepositoryAPIAdapter) ListOCIImages(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListOCIImagesParams) {
+func (h artifactManagementHandler) ListOCIImages(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListOCIImagesParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		if repo.Format != repository.FormatOCI {
 			writeHostedProblem(w, http.StatusNotFound, "not_found", "OCI repository not found")
@@ -254,7 +254,7 @@ func (h generatedRepositoryAPIAdapter) ListOCIImages(w http.ResponseWriter, r *h
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) ListOCIManifests(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListOCIManifestsParams) {
+func (h artifactManagementHandler) ListOCIManifests(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListOCIManifestsParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		name := strings.TrimSpace(params.Name)
 		if repo.Format != repository.FormatOCI || name == "" || !validOCIImagePrefix(name) {
@@ -305,7 +305,7 @@ func (h generatedRepositoryAPIAdapter) ListOCIManifests(w http.ResponseWriter, r
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) ListMavenCoordinates(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListMavenCoordinatesParams) {
+func (h artifactManagementHandler) ListMavenCoordinates(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListMavenCoordinatesParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		if repo.Format != repository.FormatMaven {
 			writeHostedProblem(w, http.StatusNotFound, "not_found", "Maven repository not found")
@@ -336,7 +336,7 @@ func (h generatedRepositoryAPIAdapter) ListMavenCoordinates(w http.ResponseWrite
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
 			return
 		}
-		artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, prefix, pageSize+1, after)
+		artifacts, err := h.maven.SearchMavenArtifacts(r.Context(), repo.ID, prefix, pageSize+1, after)
 		if err != nil {
 			writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "list Maven coordinates failed")
 			return
@@ -356,7 +356,7 @@ func (h generatedRepositoryAPIAdapter) ListMavenCoordinates(w http.ResponseWrite
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) ListConanReferences(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanReferencesParams) {
+func (h artifactManagementHandler) ListConanReferences(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanReferencesParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		if repo.Format != repository.FormatConan {
 			writeHostedProblem(w, http.StatusNotFound, "not_found", "Conan repository not found")
@@ -406,7 +406,7 @@ func (h generatedRepositoryAPIAdapter) ListConanReferences(w http.ResponseWriter
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) ListConanRecipeRevisions(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanRecipeRevisionsParams) {
+func (h artifactManagementHandler) ListConanRecipeRevisions(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanRecipeRevisionsParams) {
 	if _, err := h.store.GetHostedRepository(r.Context(), repositoryID.String()); errors.Is(err, repository.ErrNotFound) {
 		group, groupErr := h.groups.GetHostedGroup(r.Context(), repositoryID.String())
 		if groupErr == nil {
@@ -414,7 +414,7 @@ func (h generatedRepositoryAPIAdapter) ListConanRecipeRevisions(w http.ResponseW
 				writeHostedProblem(w, http.StatusNotFound, "not_found", "Conan repository not found")
 				return
 			}
-			if !anonymousHostedGroupReadAllowed(r.Context(), h.store, h.store, group, r.Method) {
+			if !anonymousHostedGroupReadAllowed(r.Context(), h.anonymousPolicy, h.store, group, r.Method) {
 				writeHostedProblem(w, http.StatusForbidden, "access_denied", "group anonymous read is not enabled")
 				return
 			}
@@ -472,7 +472,7 @@ func (h generatedRepositoryAPIAdapter) ListConanRecipeRevisions(w http.ResponseW
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) ListConanPackageRevisions(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanPackageRevisionsParams) {
+func (h artifactManagementHandler) ListConanPackageRevisions(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanPackageRevisionsParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		reference, recipeRevision, packageID := strings.TrimSuffix(strings.TrimSpace(params.Reference), "/"), strings.TrimSpace(params.RecipeRevision), strings.TrimSpace(params.PackageId)
 		if repo.Format != repository.FormatConan || repo.Type == repository.RepositoryTypeProxy || !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 || !validConanSegment(recipeRevision) || !validConanSegment(packageID) {
@@ -492,7 +492,7 @@ func (h generatedRepositoryAPIAdapter) ListConanPackageRevisions(w http.Response
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) ListConanPackageIds(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanPackageIdsParams) {
+func (h artifactManagementHandler) ListConanPackageIds(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, params adminopenapi.ListConanPackageIdsParams) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(_ Principal, repo repository.HostedRepository) {
 		reference, recipeRevision := strings.TrimSuffix(strings.TrimSpace(params.Reference), "/"), strings.TrimSpace(params.RecipeRevision)
 		if repo.Format != repository.FormatConan || repo.Type == repository.RepositoryTypeProxy || !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 || !validConanSegment(recipeRevision) {
@@ -513,23 +513,23 @@ func (h generatedRepositoryAPIAdapter) ListConanPackageIds(w http.ResponseWriter
 
 // The Conan publish session operations delegate to the native handler, which
 // authenticates, authorizes the revision resource and parses the path itself.
-func (h generatedRepositoryAPIAdapter) CreateConanPublishSession(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
+func (h artifactManagementHandler) CreateConanPublishSession(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
 	h.conanPublish.ServeHTTP(w, r)
 }
 
-func (h generatedRepositoryAPIAdapter) GetConanPublishSession(w http.ResponseWriter, r *http.Request, _ adminopenapi.SessionId) {
+func (h artifactManagementHandler) GetConanPublishSession(w http.ResponseWriter, r *http.Request, _ adminopenapi.SessionId) {
 	h.conanPublish.ServeHTTP(w, r)
 }
 
-func (h generatedRepositoryAPIAdapter) UploadConanPublishObject(w http.ResponseWriter, r *http.Request, _ adminopenapi.SessionId, _ string) {
+func (h artifactManagementHandler) UploadConanPublishObject(w http.ResponseWriter, r *http.Request, _ adminopenapi.SessionId, _ string) {
 	h.conanPublish.ServeHTTP(w, r)
 }
 
-func (h generatedRepositoryAPIAdapter) CommitConanPublishSession(w http.ResponseWriter, r *http.Request, _ adminopenapi.SessionId) {
+func (h artifactManagementHandler) CommitConanPublishSession(w http.ResponseWriter, r *http.Request, _ adminopenapi.SessionId) {
 	h.conanPublish.ServeHTTP(w, r)
 }
 
-func (h generatedRepositoryAPIAdapter) DeleteConanPackageRevision(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, revision string, params adminopenapi.DeleteConanPackageRevisionParams) {
+func (h artifactManagementHandler) DeleteConanPackageRevision(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, revision string, params adminopenapi.DeleteConanPackageRevisionParams) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryWrite, func(principal Principal, repo repository.HostedRepository) {
 		reference, recipeRevision, packageID := strings.TrimSuffix(strings.TrimSpace(params.Reference), "/"), strings.TrimSpace(params.RecipeRevision), strings.TrimSpace(params.PackageId)
 		if repo.Format != repository.FormatConan || repo.Type == repository.RepositoryTypeProxy || !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 || !validConanSegment(recipeRevision) || !validConanSegment(packageID) || !validConanSegment(revision) {
@@ -548,51 +548,51 @@ func (h generatedRepositoryAPIAdapter) DeleteConanPackageRevision(w http.Respons
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) ListProxyCacheEntries(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId, _ adminopenapi.ListProxyCacheEntriesParams) {
+func (h artifactManagementHandler) ListProxyCacheEntries(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId, _ adminopenapi.ListProxyCacheEntriesParams) {
 	h.proxyCache.ServeHTTP(w, r)
 }
 
-func (h generatedRepositoryAPIAdapter) InvalidateProxyCache(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
+func (h artifactManagementHandler) InvalidateProxyCache(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
 	h.proxyCache.Invalidate(w, r)
 }
 
-func (h generatedRepositoryAPIAdapter) ClearProxyNegativeCache(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
+func (h artifactManagementHandler) ClearProxyNegativeCache(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
 	h.proxyCache.ClearNegative(w, r)
 }
 
-func (h generatedRepositoryAPIAdapter) RefreshProxyCache(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
+func (h artifactManagementHandler) RefreshProxyCache(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
 	h.mavenProxy.Refresh(w, r)
 }
 
-func (h generatedRepositoryAPIAdapter) GetProxyHealth(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
+func (h artifactManagementHandler) GetProxyHealth(w http.ResponseWriter, r *http.Request, _ adminopenapi.RepositoryId) {
 	h.mavenProxy.Health(w, r)
 }
 
-func (h generatedRepositoryAPIAdapter) GetArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
+func (h artifactManagementHandler) GetArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
 	h.withRepositoryBrowseScope(w, r, repositoryID.String(), func(Principal, repository.HostedRepository) {
 		h.sessions.getArtifact(w, r, repositoryID.String(), artifactID.String())
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) DeleteArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
+func (h artifactManagementHandler) DeleteArtifact(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId, artifactID uuid.UUID) {
 	h.withRepositoryScope(w, r, repositoryID.String(), RepositoryWrite, func(Principal, repository.HostedRepository) {
 		h.sessions.deleteArtifact(w, r, repositoryID.String(), artifactID.String())
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) GetPublishSession(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId) {
+func (h artifactManagementHandler) GetPublishSession(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId) {
 	h.withSessionScope(w, r, sessionID.String(), RepositoryRead, func(Principal, repository.HostedRepository) {
 		h.sessions.getSession(w, r, sessionID.String())
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) UploadPublishObject(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId, objectName string) {
+func (h artifactManagementHandler) UploadPublishObject(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId, objectName string) {
 	h.withSessionScope(w, r, sessionID.String(), RepositoryWrite, func(Principal, repository.HostedRepository) {
 		h.sessions.upload(w, r, sessionID.String(), objectName)
 	})
 }
 
-func (h generatedRepositoryAPIAdapter) CommitPublishSession(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId) {
+func (h artifactManagementHandler) CommitPublishSession(w http.ResponseWriter, r *http.Request, sessionID adminopenapi.SessionId) {
 	h.withSessionScope(w, r, sessionID.String(), RepositoryWrite, func(Principal, repository.HostedRepository) {
 		h.sessions.commit(w, r, sessionID.String())
 	})

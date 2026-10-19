@@ -44,6 +44,23 @@ operations, site and APT follow in separate PRs. The temporary legacy adapter
 owns only operations that have not moved. It is removed after the last domain;
 it is not a compatibility surface.
 
+## Artifact discovery and publishing
+
+The second slice (#396) extracts `artifactManagementHandler`. Catalog lookup,
+per-format search, browse, usage and identity queries are explicit ports. Search
+no longer obtains a full store through the native Maven publisher. Usage and
+identity capability checks happen in composition and are injected explicitly;
+missing optional capabilities still return their documented `not_supported`.
+The native Maven/Conan publishers own streaming and transactional publication;
+the domain receives only their operation interfaces. Indexed proxy directory
+queries and the Maven navigation cache are also explicit dependencies.
+
+Shared Group authorization/resolution only requires repository lookup. The
+anonymous-policy read path requires only a read method, so a domain does not
+need policy-write permission to serve an allowed anonymous browse request.
+Signed pagination, repository/actor scope and cache/configuration revisions
+retain their existing semantics.
+
 ## Verification and limits
 
 Construct domain handlers directly with only their repository/Group ports and

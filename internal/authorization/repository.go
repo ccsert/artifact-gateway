@@ -234,7 +234,9 @@ func grantAllows(scopes []string, operation RepositoryOperation) bool {
 
 // ManagedGroupMemberDecision evaluates only an explicit member-to-Repository
 // binding. Empty bindings deliberately retain legacy Group behavior.
-func ManagedGroupMemberDecision(ctx context.Context, repositories repository.HostedRepositoryStore, authorizer RepositoryAuthorizer, principal Principal, member repository.Member, format repository.Format, resource string) (AuthorizationDecision, bool) {
+func ManagedGroupMemberDecision(ctx context.Context, repositories interface {
+	GetHostedRepository(context.Context, string) (repository.HostedRepository, error)
+}, authorizer RepositoryAuthorizer, principal Principal, member repository.Member, format repository.Format, resource string) (AuthorizationDecision, bool) {
 	if member.RepositoryID == "" {
 		return AuthorizationDecision{}, false
 	}

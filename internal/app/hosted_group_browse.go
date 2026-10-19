@@ -18,7 +18,7 @@ type artifactIdentity struct {
 
 // searchHostedGroupArtifacts exposes the same format-aware projection as a
 // repository search, but merges only members that are explicitly anonymous.
-func (h generatedRepositoryAPIAdapter) searchHostedGroupArtifacts(w http.ResponseWriter, r *http.Request, group repository.HostedGroup, params adminopenapi.SearchRepositoryArtifactsParams) {
+func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWriter, r *http.Request, group repository.HostedGroup, params adminopenapi.SearchRepositoryArtifactsParams) {
 	match, valid := artifactSearchMatch(params.Match)
 	if !valid {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "match must be prefix or contains")
@@ -52,7 +52,7 @@ func (h generatedRepositoryAPIAdapter) searchHostedGroupArtifacts(w http.Respons
 		return
 	}
 
-	resolver := v2GroupResolver{groups: h.groups, repos: h.store}
+	resolver := v2GroupResolver{repos: h.store}
 	members, err := resolver.resolveMembers(r.Context(), group)
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "resolve group members failed")
@@ -112,7 +112,7 @@ func (h generatedRepositoryAPIAdapter) searchHostedGroupArtifacts(w http.Respons
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ArtifactSummaryPage{Items: items, NextPageToken: next})
 }
 
-func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http.Request, repo repository.HostedRepository, query repository.ArtifactSearchQuery, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {
+func (h artifactManagementHandler) searchGroupMemberArtifactsByQuery(r *http.Request, repo repository.HostedRepository, query repository.ArtifactSearchQuery, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {
 	query = repositorySearchQueryForFormat(repo.Format, query)
 	items := make([]adminopenapi.ArtifactSummary, 0, limit)
 	if repo.Format == repository.FormatCargo {
@@ -181,7 +181,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: name})
 		}
 	case repository.FormatMaven:
-		artifacts, err := h.sessions.store.SearchMavenArtifacts(r.Context(), repo.ID, query.Value, limit, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber}, query.Match)
+		artifacts, err := h.maven.SearchMavenArtifacts(r.Context(), repo.ID, query.Value, limit, repository.MavenArtifactCursor{Coordinate: after.Coordinate, BuildNumber: after.BuildNumber}, query.Match)
 		if err != nil {
 			return nil, err
 		}
@@ -199,7 +199,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: reference.Reference, Publisher: optionalPublisher(reference.Publisher)})
 		}
 	case repository.FormatRaw:
-		assets, err := h.sessions.store.ListRawAssets(r.Context(), repo.ID, query.Value, limit, after.Coordinate, query.Match)
+		assets, err := h.raw.ListRawAssets(r.Context(), repo.ID, query.Value, limit, after.Coordinate, query.Match)
 		if err != nil {
 			return nil, err
 		}
@@ -209,7 +209,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: asset.Path, Digest: &digest, ContentType: &contentType, Size: &size, CreatedAt: &updatedAt})
 		}
 	case repository.FormatNPM:
-		packages, err := h.sessions.store.SearchNPMPackages(r.Context(), repo.ID, query.Value, limit, after.Coordinate, query.Match)
+		packages, err := h.npm.SearchNPMPackages(r.Context(), repo.ID, query.Value, limit, after.Coordinate, query.Match)
 		if err != nil {
 			return nil, err
 		}
@@ -219,7 +219,7 @@ func (h generatedRepositoryAPIAdapter) searchGroupMemberArtifactsByQuery(r *http
 			items = append(items, adminopenapi.ArtifactSummary{Coordinate: pkg.Name, Version: &version, VersionCount: &versionCount, Digest: &digest, Size: &size, CreatedAt: &updatedAt, Publisher: optionalPublisher(pkg.Latest.Publisher)})
 		}
 	case repository.FormatPyPI:
-		projects, err := h.sessions.store.ListPyPIProjects(r.Context(), repo.ID, normalizePyPIProject(query.Value), limit, after.Coordinate, query.Match)
+		projects, err := h.pypi.ListPyPIProjects(r.Context(), repo.ID, normalizePyPIProject(query.Value), limit, after.Coordinate, query.Match)
 		if err != nil {
 			return nil, err
 		}
@@ -255,7 +255,7 @@ func repositorySearchQueryForFormat(format repository.Format, query repository.A
 	return query
 }
 
-func (h generatedRepositoryAPIAdapter) listHostedGroupConanRecipeRevisions(w http.ResponseWriter, r *http.Request, group repository.HostedGroup, params adminopenapi.ListConanRecipeRevisionsParams) {
+func (h artifactManagementHandler) listHostedGroupConanRecipeRevisions(w http.ResponseWriter, r *http.Request, group repository.HostedGroup, params adminopenapi.ListConanRecipeRevisionsParams) {
 	reference := strings.TrimSuffix(strings.TrimSpace(params.Reference), "/")
 	if !validConanReferencePrefix(reference) || strings.Count(reference, "/") != 3 {
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "reference must be a valid Conan recipe reference")
@@ -286,7 +286,7 @@ func (h generatedRepositoryAPIAdapter) listHostedGroupConanRecipeRevisions(w htt
 		writeHostedProblem(w, http.StatusBadRequest, "invalid_page_token", "page token is invalid or expired")
 		return
 	}
-	resolver := v2GroupResolver{groups: h.groups, repos: h.store}
+	resolver := v2GroupResolver{repos: h.store}
 	members, err := resolver.resolveMembers(r.Context(), group)
 	if err != nil {
 		writeHostedProblem(w, http.StatusInternalServerError, "internal_error", "resolve group members failed")

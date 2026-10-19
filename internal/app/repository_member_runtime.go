@@ -7,7 +7,7 @@ import (
 )
 
 type groupMemberAccess struct {
-	Repositories repository.HostedRepositoryStore
+	Repositories managementRepositoryReader
 	Authorizer   RepositoryAuthorizer
 	Format       repository.Format
 }
