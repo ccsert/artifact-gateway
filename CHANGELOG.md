@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Maven / OCI Proxy rejects responses received after the complete request deadline or after cancellation, even when the runtime has not delivered the deadline notification yet (#403). Rejected response bodies are closed and their transport resources released; timely bodies remain readable until the caller closes them.
+
 - `agctl repo connect` now emits the native `/repository/maven/<repository>/` endpoint for Maven Hosted reads and publication (#130). Generated deployment snippets are exercised by a real POM PUT and byte read-back; Proxy guides retain `/maven/<repository>/`.
 
 - Console administrators can bind explicit Nexus Hosted mappings to real native targets and control durable migration batches with operator capacity evidence, CAS and idempotent requests (#383). Scan, source verification, copy, target read-back and visible identities remain separate; full hashes, endpoint adjustments and incomplete inventory appear in observation reports. Cold-client acceptance, a final catch-up after source freeze and production cutover stay unverified until separately established. See [Console Nexus migration](docs/nexus-migration-console.md).

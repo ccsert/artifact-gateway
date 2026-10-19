@@ -109,6 +109,13 @@ func (c UpstreamClient) doProxyUpstream(ctx context.Context, member repository.M
 			release = func() {}
 		}
 		response, fetchErr := doProxyHTTP(&client, current)
+		// Timer delivery can lag behind the fixed deadline. A transport response
+		// must not win that race or override an already canceled context.
+		if err := ctx.Err(); err != nil {
+			fetchErr = err
+		} else if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) {
+			fetchErr = context.DeadlineExceeded
+		}
 		if fetchErr != nil {
 			if response != nil && response.Body != nil {
 				_ = response.Body.Close()
