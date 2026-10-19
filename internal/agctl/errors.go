@@ -170,6 +170,10 @@ func localErrorCode(err error) string {
 	if errors.As(err, &wait) {
 		return "wait_timeout"
 	}
+	var emailFailed *emailDeliveryFailedError
+	if errors.As(err, &emailFailed) {
+		return "delivery_failed"
+	}
 	var status *statusError
 	if errors.As(err, &status) {
 		return status.overall

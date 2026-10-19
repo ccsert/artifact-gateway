@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "data": {
+    "attempts": 4,
+    "createdAt": "2026-10-15T08:00:00Z",
+    "errorCode": "smtp_permanent_rejection",
+    "eventId": "00000000-0000-4000-f000-000000000001",
+    "id": "00000000-0000-4000-f000-0000000000d1",
+    "kind": "test",
+    "locale": "en",
+    "possibleDuplicate": true,
+    "scenario": "warning",
+    "state": "dead",
+    "targetId": "00000000-0000-4000-f000-0000000000e1",
+    "targetVersion": "1",
+    "templateVersion": "t1",
+    "updatedAt": "2026-10-15T08:00:00Z",
+    "version": "4"
+  },
+  "error": {
+    "code": "delivery_failed",
+    "httpStatus": null,
+    "message": "email delivery failed",
+    "hint": "the delivery remains dead; inspect agctl email delivery show 00000000-0000-4000-f000-0000000000d1. Replaying requires an explicit agctl email delivery replay 00000000-0000-4000-f000-0000000000d1 --yes and may send a duplicate",
+    "requestId": ""
+  },
+  "meta": null
+}
