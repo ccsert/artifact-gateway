@@ -270,3 +270,114 @@ func TestPostgresMigrationFrozenManifestRejectsCheckpointMutation(t *testing.T) 
 	f.run(b)
 	requireState(t, *b, "completed")
 }
+
+func TestPostgresMigrationScanFailuresStayTraceableWithoutExecutablePartialManifest(t *testing.T) {
+	for _, test := range []struct {
+		name, format, stage, code string
+		configure                 func(*sourceFixture)
+	}{
+		{"metadata", "raw", "metadata_discovery", "source_http_error", func(s *sourceFixture) { s.failScan = true }},
+		{"missing", "raw", "source_verification_open", "source_missing", func(s *sourceFixture) {
+			s.forceProbe = true
+			s.change = func(string, int, []byte) ([]byte, int, string) { return nil, 404, "" }
+		}},
+		{"truncated", "raw", "source_verification_read", "source_changed", func(s *sourceFixture) {
+			s.forceProbe, s.stream = true, true
+			s.change = func(_ string, _ int, data []byte) ([]byte, int, string) { return data[:len(data)-1], 200, `"fixed"` }
+		}},
+		{"same-size-wrong-digest", "maven2", "source_verification_digest", "source_changed", func(s *sourceFixture) {
+			s.change = func(_ string, _ int, data []byte) ([]byte, int, string) {
+				return bytes.Repeat([]byte("x"), len(data)), 200, `"fixed"`
+			}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			assetPath := "failure.bin"
+			if test.format == "maven2" {
+				assetPath = "org/example/lib/1.0/lib-1.0.jar"
+			}
+			f := newFixture(t, test.format, map[string][]byte{assetPath: []byte("fixed-scan-bytes")})
+			test.configure(f.remote)
+			b := f.start()
+			f.run(b)
+			requireState(t, *b, "failed")
+			if b.ScanComplete || b.TotalBytes != nil || b.EntryCount != 0 || b.ManifestSHA256 != "" || len(f.entries(b.ID)) != 0 {
+				t.Fatalf("partial failed scan became executable: %+v", *b)
+			}
+			if b.LastScanFailure == nil || b.LastScanFailure.Stage != test.stage || b.LastScanFailure.Code != test.code || b.LastScanFailure.OccurredAt.IsZero() {
+				t.Fatalf("missing bounded scan diagnostic: %+v", b.LastScanFailure)
+			}
+			if got := b.LastScanFailure.SourceRepositories; len(got) != 1 || got[0] != "source" {
+				t.Fatalf("metadata repository scope=%v", got)
+			}
+			if test.name != "metadata" && (b.LastScanFailure.SourceRepository != "source" || b.LastScanFailure.SourcePath != assetPath || b.LastScanFailure.Identity == "") {
+				t.Fatalf("asset failure lost identity: %+v", b.LastScanFailure)
+			}
+			h, err := app.NewGatewayHandler(app.GatewayOptions{Dependencies: app.Dependencies{MigrationService: f.newService(m.Options{}), SourceService: f.source}, Store: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: "owned-admin", AdminActor: "owned-admin"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest(http.MethodGet, "/api/v2/migrations/nexus/batches/"+b.ID, nil)
+			r.Header.Set("Authorization", "Bearer owned-admin")
+			response := httptest.NewRecorder()
+			h.ServeHTTP(response, r)
+			var public m.Batch
+			if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &public) != nil || public.LastScanFailure == nil || public.LastScanFailure.Stage != test.stage {
+				t.Fatalf("restart/public GET lost diagnostic: %d %s", response.Code, response.Body.String())
+			}
+			if err = f.ledger.RecordScanFailure(context.Background(), b.ID, "stale-token", m.ScanFailure{Code: "must-not-overwrite"}); err != m.ErrLeaseLost {
+				t.Fatalf("unleased diagnostic mutation=%v", err)
+			}
+			if test.name == "metadata" {
+				f.remote.mu.Lock()
+				f.remote.failScan = false
+				f.remote.mu.Unlock()
+				f.retry(b)
+				f.run(b)
+				requireState(t, *b, "completed")
+				if b.LastScanFailure != nil {
+					t.Fatalf("complete rescan retained stale diagnostic: %+v", b.LastScanFailure)
+				}
+			}
+		})
+	}
+}
+
+func TestPostgresMigrationInterruptedScanRetainsAssetDiagnosticWithoutSealing(t *testing.T) {
+	f := newFixture(t, "raw", map[string][]byte{"interrupted.bin": []byte("owned-source")})
+	f.remote.forceProbe = true
+	entered, release := make(chan struct{}), make(chan struct{})
+	defer close(release)
+	f.remote.change = func(_ string, _ int, data []byte) ([]byte, int, string) {
+		close(entered)
+		<-release
+		return data, 200, `"fixed"`
+	}
+	b := f.start()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- f.service.RunOnce(ctx, []string{"raw"}) }()
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("scan did not start source verification")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("cancelled scan did not finish")
+	}
+	current, err := f.newService(m.Options{}).Get(context.Background(), b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trace := current.LastScanFailure
+	if current.ScanComplete || current.TotalBytes != nil || current.EntryCount != 0 || len(f.entries(b.ID)) != 0 || trace == nil || trace.SourcePath != "interrupted.bin" || trace.Identity != "interrupted.bin" || trace.Stage != "source_verification_open" {
+		t.Fatalf("interrupted scan lost durable trace or became executable: %+v", current)
+	}
+}

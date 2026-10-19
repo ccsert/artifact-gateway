@@ -947,6 +947,9 @@
           "format": "int64",
           "minimum": 0,
           "description": "Actual source bytes read to fill missing manifest hashes during source verification, separately persisted even if the scan fails. Discovery-provided required hashes avoid this transfer."
+        },
+        "lastScanFailure": {
+          "$ref": "./nexus-batches.yaml#/schemas/NexusMigrationScanFailure"
         }
       },
       "required": [
@@ -1179,6 +1182,61 @@
           "minimum": 1
         }
       }
+    },
+    "NexusMigrationScanFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Last failed scan diagnostic. No partial inventory is made executable. Empty asset fields identify failure before an individual asset was known; sourceRepositories bounds the selected repository scope. Contains no upstream URL or credential.",
+      "properties": {
+        "stage": {
+          "type": "string",
+          "enum": [
+            "metadata_discovery",
+            "manifest_planning",
+            "source_verification_open",
+            "source_verification_read",
+            "source_verification_digest",
+            "source_version_validation"
+          ]
+        },
+        "sourceRepositories": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "sourceRepository": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "sourcePath": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "identity": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "stage",
+        "sourceRepositories",
+        "sourceRepository",
+        "sourcePath",
+        "identity",
+        "code",
+        "occurredAt"
+      ]
     }
   },
   "capabilities": {
