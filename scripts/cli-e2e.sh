@@ -166,6 +166,27 @@ suffix="${RANDOM}${RANDOM}"
 name="cli-e2e-npm-${suffix}"
 out="$workdir/out.json"
 
+# The agent skill begins with machine introspection. Exercise that recipe
+# against this same real Gateway before using its resource commands.
+expect 0 "$out" -- commands --json
+python3 - "$out" <<'PY2'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    report = json.load(stream)
+commands = {row["name"]: row for row in report["data"]["items"]}
+required = {"info", "commands", "publish maven", "service-account create", "credential issue", "grant upsert", "runtime logs", "email delivery wait"}
+if report["schemaVersion"] != 1 or not required.issubset(commands):
+    raise SystemExit("agent introspection omitted an implemented recipe")
+if commands["email delivery wait"]["meta"]["cancelSupported"] is not False:
+    raise SystemExit("agent introspection invented email cancellation")
+PY2
+expect 0 "$out" -- info --json
+require "$(field "$out" data.readyz.status)" ok "agent introspection readiness"
+require "$(field "$out" data.identity.administrator)" true "agent introspection administrator identity"
+require "$(field "$out" data.formats.status)" ok "agent introspection format capability"
+
 # Exit-code matrix before any change.
 got=0
 HOME="$workdir/home" AGCTL_SERVER="$server" AGCTL_TOKEN="wrong-token" AGCTL_PROFILE="" \
