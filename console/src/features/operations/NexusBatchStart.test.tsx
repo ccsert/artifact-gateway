@@ -90,6 +90,7 @@ function show(
   return accepted;
 }
 async function fillCapacity() {
+  const user = userEvent.setup();
   for (const label of [
     "存储池可用字节",
     "下载峰值字节",
@@ -97,19 +98,18 @@ async function fillCapacity() {
     "备份峰值字节",
     "恢复峰值字节",
     "保留余量字节",
-  ])
-    await userEvent.type(
-      screen.getByRole("textbox", { name: label }),
-      label === "存储池可用字节" ? "1000000" : "0",
-    );
-  await userEvent.type(
+  ]) {
+    await user.click(screen.getByRole("textbox", { name: label }));
+    await user.paste(label === "存储池可用字节" ? "1000000" : "0");
+  }
+  await user.click(
     screen.getByRole("textbox", { name: "容量观察时间（含时区）" }),
-    new Date(Date.now() - 1000).toISOString(),
   );
-  await userEvent.type(
+  await user.paste(new Date(Date.now() - 1000).toISOString());
+  await user.click(
     screen.getByRole("textbox", { name: "证据有效截止时间（含时区）" }),
-    new Date(Date.now() + 600000).toISOString(),
   );
+  await user.paste(new Date(Date.now() + 600000).toISOString());
 }
 describe("explicit start", () => {
   for (const status of [401, 403])
