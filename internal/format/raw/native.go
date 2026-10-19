@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ccsert/artifact-gateway/internal/artifacthttp"
 	"github.com/ccsert/artifact-gateway/internal/authorization"
 	"github.com/ccsert/artifact-gateway/internal/cache"
 	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
@@ -104,7 +103,7 @@ func (h *Module) serveRepository(w http.ResponseWriter, r *http.Request) bool {
 		if h.blockQuarantinedRead(w, r, repo, asset, principal) {
 			return true
 		}
-		artifacthttp.ServeObject(w, r, path, artifacthttp.Object{Digest: asset.Digest, ObjectKey: asset.ObjectKey, Size: asset.Size, ContentType: asset.ContentType}, h.objects)
+		h.serveAsset(w, r, path, asset)
 	case http.MethodPut:
 		condition, ok := h.checkRawWriteCondition(w, r, repo, path)
 		if !ok {

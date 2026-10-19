@@ -2,6 +2,11 @@
 set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd); cd "$repo_root"
 for binary in curl go python3; do command -v "$binary" >/dev/null || { printf 'Native Raw E2E requires %s\n' "$binary" >&2; exit 1; }; done
+curl --version | head -1
+python3 - "$(command -v curl)" <<'PY'
+import hashlib, pathlib, sys
+print('curl executable SHA-256:', hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
 base="http://127.0.0.1:${port}"; workdir=$(mktemp -d); pid=""
 cleanup() { local status=$?; [[ -z "$pid" ]] || { kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; }; rm -rf "$workdir"; trap - EXIT; exit "$status"; }; trap cleanup EXIT
@@ -16,6 +21,48 @@ path="$base/raw/downloads/releases/app.txt"
 expect 201 "${auth[@]}" -H 'Content-Type: text/plain' -X PUT --data-binary 'native raw artifact' "$path"
 expect 206 "${auth[@]}" -H 'Range: bytes=7-9' "$path"; [[ $(cat "$workdir/response") == raw ]] || exit 1
 expect 200 "${auth[@]}" -I "$path"
+# A large fixed-byte fixture exercises bounded multipart responses with the
+# real curl executable. No client cache or upstream is involved.
+python3 - "$workdir/large.bin" <<'PY'
+import pathlib, sys
+with pathlib.Path(sys.argv[1]).open('wb') as f:
+    for _ in range(512):
+        f.write(bytes(range(256)) * 256)
+PY
+large="$base/raw/downloads/releases/large.bin"
+expect 201 "${auth[@]}" -H 'Content-Type: application/octet-stream' -X PUT --data-binary "@$workdir/large.bin" "$large"
+expect 200 "${auth[@]}" "$large"
+cmp "$workdir/large.bin" "$workdir/response"
+curl --silent --show-error --fail --head "${auth[@]}" "$large" >"$workdir/large.headers"
+validator=$(tr -d '\r' <"$workdir/large.headers" | sed -n 's/^[Ee][Tt][Aa][Gg]: //p'); test -n "$validator"
+expect 206 "${auth[@]}" -H 'Range: bytes=0-65535,16777216-16842751,-65536' -H "If-Range: $validator" --dump-header "$workdir/ranges.headers" "$large"
+python3 - "$workdir" <<'PY'
+import base64, email.parser, email.policy, hashlib, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+headers = root.joinpath('ranges.headers').read_bytes().split(b'\r\n', 1)[1]
+body = root.joinpath('response').read_bytes()
+message = email.parser.BytesParser(policy=email.policy.default).parsebytes(headers + body)
+source = root.joinpath('large.bin').read_bytes()
+assert len(source) == 32 * 1024 * 1024
+assert message.get_content_type() == 'multipart/byteranges'
+assert message['Content-Range'] is None
+assert int(message['Content-Length']) == len(body)
+assert message['Digest'] == 'sha-256=' + base64.b64encode(hashlib.sha256(source).digest()).decode()
+parts = list(message.iter_parts())
+intervals = [(0, 65535), (16777216, 16842751), (len(source)-65536, len(source)-1)]
+assert len(parts) == len(intervals)
+for part, (start, end) in zip(parts, intervals):
+    assert part['Content-Range'] == f'bytes {start}-{end}/{len(source)}'
+    data = part.get_payload(decode=True)
+    assert data == source[start:end+1]
+    assert hashlib.sha256(data).digest() == hashlib.sha256(source[start:end+1]).digest()
+print('Verified 32 MiB Raw object and all three multipart byte identities')
+PY
+expect 200 "${auth[@]}" -H 'Range: bytes=0-1,8-9' -H 'If-Range: "stale"' "$large"
+cmp "$workdir/large.bin" "$workdir/response"
+expect 200 "${auth[@]}" -I -H 'Range: bytes=0-1,8-9' "$large"
+expect 416 "${auth[@]}" -H 'Range: bytes=9223372036854775808-' "$large"
+expect 401 -H 'Range: bytes=0-1,8-9' "$large"
 # Conditional writes: create-only, If-Match on the read ETag, one winner among
 # writers holding the same validator, and a guarded resumable completion.
 etag() { curl --silent --show-error --fail --head "${auth[@]}" "$1" | tr -d '\r' | sed -n 's/^[Ee][Tt][Aa][Gg]: //p'; }

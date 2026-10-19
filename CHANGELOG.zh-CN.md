@@ -10,6 +10,8 @@
 
 - `agctl publish raw --resumable` 支持原生偏移校验分块上传，并用返回的 `--upload-id` 续传（#132）。PATCH 响应丢失先回读状态再决定重放，完成响应丢失须核对最终摘要及大小；不确定结果保留恢复身份并退出 3。Raw 批次共享总时限。真实 Raw/Maven 发布在写入前核对目标身份、活跃 Hosted 格式与公开 publish 能力。
 
+- Raw Hosted、Proxy 和 Group 支持有界多段 Range（#314）：至多 16 个区间，先合并重复、重叠与相邻范围，再顺序流式读取，多段有效载荷至多 64 MiB。所有分段绑定选定的不可变对象，路径在读取期间移动也不混用字节；HEAD 忽略 Range，If-Range 只接受当前强 ETag。冷 Proxy 先校验完整对象，再在本地分段。参见 [Raw HTTP Range](docs/raw-http-ranges.zh-CN.md)。
+
 - `agctl email delivery wait` 遇到 `dead` 投递时以退出码 1 和 `delivery_failed` 报告失败（#406），失败信封保留完整投递记录。中继接收仍退出 0，超时仍退出 8，不自动重放或取消已入队工作。
 
 - Maven / OCI Proxy 拒绝超过整链截止时间或已取消后收到的响应，即使运行时尚未送达 deadline 取消通知也不会接受迟到响应（#403）。被拒响应关闭 body、释放 transport 资源，并在上游追踪中记录安全的错误；及时响应的 body 保持可读，直到调用方关闭。

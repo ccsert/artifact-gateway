@@ -13,6 +13,8 @@ their meaning.
 
 - `agctl publish raw --resumable` completes native offset-checked chunk uploads and resumes a returned `--upload-id` (#132). Lost PATCH responses are settled through status before replay, and a lost completion requires exact digest/size read-back; uncertain results retain recovery identity and exit 3. Raw batches share one deadline. Real Raw/Maven publishing also verifies target identity, active Hosted format and advertised publish capability before writing.
 
+- Raw Hosted, Proxy and Group support bounded multipart byte ranges (#314): up to 16 intervals, coalesced before streaming, and at most 64 MiB of multipart payload. Every interval reads the captured immutable object, even when its path moves; HEAD ignores Range, and If-Range requires the current strong ETag. Cold Proxy reads verify the complete canonical object before applying ranges. See [Raw HTTP ranges](docs/raw-http-ranges.md).
+
 - `agctl email delivery wait` now fails with exit 1 and `delivery_failed` when the delivery is `dead` (#406). Its failure envelope retains the complete delivery record; accepted still exits 0, and timeout still exits 8 without replaying or canceling the queued work.
 
 - Maven / OCI Proxy rejects responses received after the complete request deadline or after cancellation, even when the runtime has not delivered the deadline notification yet (#403). Rejected response bodies are closed and their transport resources released, and their upstream trace records a safe error; timely bodies remain readable until the caller closes them.
