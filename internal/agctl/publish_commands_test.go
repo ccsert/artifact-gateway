@@ -30,6 +30,7 @@ type rawGateway struct {
 	puts    map[string]int
 	fail    map[string]int // PUT answers 503 this many times
 	badETag bool
+	calls   int
 }
 
 func newRawGateway(t *testing.T) *rawGateway {
@@ -40,8 +41,13 @@ func newRawGateway(t *testing.T) *rawGateway {
 		body, _ := io.ReadAll(r.Body)
 		gateway.mu.Lock()
 		defer gateway.mu.Unlock()
+		gateway.calls++
 		if r.URL.Path == "/api/v2/repositories/"+testRepoID {
 			writeJSON(w, http.StatusOK, map[string]any{"id": testRepoID, "name": "raw-hosted", "format": "raw", "type": "hosted", "state": "active", "version": "1", "anonymousRead": false, "mavenStrictPublication": false})
+			return
+		}
+		if r.URL.Path == "/api/v2/repositories/"+testRepoID+"/capabilities" {
+			writeJSON(w, 200, map[string]any{"format": "raw", "type": "hosted", "operations": []string{"read", "publish"}})
 			return
 		}
 		key := strings.TrimPrefix(r.URL.EscapedPath(), "/raw/raw-hosted/")
@@ -205,6 +211,11 @@ func mavenFiles(t *testing.T) (string, string) {
 	return filepath.Join(dir, "app-1.0.0.pom"), filepath.Join(dir, "app-1.0.0.jar")
 }
 
+func allowMavenPublication(api *routeAPI) {
+	api.on("GET", repoBase, 200, `{"id":"`+testRepoID+`","name":"maven-hosted","format":"maven","type":"hosted","state":"active","version":"1"}`)
+	api.on("GET", repoBase+"/capabilities", 200, `{"format":"maven","type":"hosted","operations":["read","publish"]}`)
+}
+
 func TestPublishMavenOrchestrates(t *testing.T) {
 	api := newRouteAPI(t, "")
 	pom, jar := mavenFiles(t)
@@ -213,6 +224,7 @@ func TestPublishMavenOrchestrates(t *testing.T) {
 		[]string{"publish", "maven", "--repo", testRepoID, "--coordinate", "com.example:app:1.0.0"},
 		[]string{"publish", "maven", "--repo", testRepoID, "--coordinate", "com.example:app:1.0.0", "--pom", pom, "--file", pom},
 	)
+	allowMavenPublication(api)
 	api.on("POST", repoBase+"/publish-sessions", 201, sessionBody("open"))
 	api.on("PUT", "/api/v2/publish-sessions/"+sessionID+"/objects/app-1.0.0.pom", 204, "")
 	api.on("PUT", "/api/v2/publish-sessions/"+sessionID+"/objects/app-1.0.0.jar", 204, "")
@@ -223,10 +235,10 @@ func TestPublishMavenOrchestrates(t *testing.T) {
 	}
 	requests := api.recorded()
 	pomDigest, _ := sha("pom")
-	if !strings.Contains(requests[0].Body, `"pomObject":"app-1.0.0.pom"`) || !strings.Contains(requests[0].Body, pomDigest) {
-		t.Fatalf("create body = %s", requests[0].Body)
+	if !strings.Contains(requests[2].Body, `"pomObject":"app-1.0.0.pom"`) || !strings.Contains(requests[2].Body, pomDigest) {
+		t.Fatalf("create body = %s", requests[2].Body)
 	}
-	for _, request := range requests[1:3] {
+	for _, request := range requests[3:5] {
 		if request.Method != "PUT" || (request.Body != "pom" && request.Body != "jar") {
 			t.Fatalf("upload = %+v", request)
 		}
@@ -235,6 +247,7 @@ func TestPublishMavenOrchestrates(t *testing.T) {
 
 func TestPublishMavenRefusesClosedSessionAndKeepsOpenOne(t *testing.T) {
 	api := newRouteAPI(t, "")
+	allowMavenPublication(api)
 	pom, jar := mavenFiles(t)
 	api.on("POST", repoBase+"/publish-sessions", 201, sessionBody("committed"))
 	code, stdout, _ := runCLI(t, "publish", "maven", "--repo", testRepoID, "--coordinate", "com.example:app:1.0.0", "--pom", pom, "--file", jar, "--json")
@@ -324,6 +337,7 @@ func TestPublishCreationRejectsMismatchedSession(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			api := newRouteAPI(t, "")
 			pom, jar := mavenFiles(t)
+			allowMavenPublication(api)
 			api.on("POST", repoBase+"/publish-sessions", 201, body)
 			code, stdout, _ := runCLI(t, "publish", "maven", "--repo", testRepoID, "--coordinate", "com.example:app:1.0.0", "--pom", pom, "--file", jar, "--idempotency-key", "recover-key", "--json")
 			var recovery unknownOutcome
@@ -359,6 +373,7 @@ func TestPublishRawRetryKeepsUnknownWhenSourceDisappears(t *testing.T) {
 	api := newRouteAPI(t, "")
 	file := filepath.Join(writeTree(t, map[string]string{"a.txt": "alpha"}), "a.txt")
 	api.on("GET", repoBase, 200, `{"id":"`+testRepoID+`","name":"raw-hosted","format":"raw","type":"hosted","state":"active","version":"1"}`)
+	api.on("GET", repoBase+"/capabilities", 200, `{"format":"raw","type":"hosted","operations":["read","publish"]}`)
 	api.onFunc("PUT", "/raw/raw-hosted/releases/a.txt", func(*http.Request) (int, string) {
 		if err := os.Remove(file); err != nil {
 			t.Error(err)
