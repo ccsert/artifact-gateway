@@ -492,7 +492,9 @@ addressed by ID with `--repo`.
   remotes, APT `sources.list` and `auth.conf`, Cargo `config.toml`), with
   publish snippets for hosted repositories. Credentials are always the
   placeholder `${ARTIFACT_GATEWAY_TOKEN}`; the configured token is never
-  written into a snippet. URLs follow the server the CLI talks to, with
+  written into a snippet. Maven Hosted reads and deploys through
+  `/repository/maven/<repository>/`; Proxy guides use `/maven/<repository>/`.
+  URLs follow the server the CLI talks to, with
   credentials, query, and fragment removed. PyPI `.netrc` entries use the
   bare hostname that pip matches, while index URLs retain any explicit port.
 

@@ -414,7 +414,9 @@ profile 运行验收。
   `.pypirc`、Maven `settings.xml` 与 `pom.xml`、`GOPROXY` 与 `.netrc`、
   `docker login`、Raw `curl`、Conan remote、APT `sources.list` 与 `auth.conf`、
   Cargo `config.toml`），Hosted 仓库附带发布片段。凭据一律是占位符
-  `${ARTIFACT_GATEWAY_TOKEN}`，已配置的 token 绝不写进片段。URL 取 CLI 所连
+  `${ARTIFACT_GATEWAY_TOKEN}`，已配置的 token 绝不写进片段。Maven Hosted 的
+  读取与发布使用 `/repository/maven/<repository>/`，Proxy 指引使用
+  `/maven/<repository>/`。URL 取 CLI 所连
   服务端，去掉凭据、查询参数和片段。PyPI `.netrc` 使用 pip 匹配的纯主机名，
   索引 URL 仍保留显式端口。
 

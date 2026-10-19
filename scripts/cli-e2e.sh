@@ -374,9 +374,25 @@ require "$(field "$out" data.items.0.name)" releases "group browse root"
 maven_name="cli-e2e-maven-${suffix}"
 expect 0 "$out" -- repo create "$maven_name" --format maven --json
 maven_id=$(field "$out" data.id)
+# Exercise the deployment URL that agctl actually generates; a valid read
+# mount alone does not prove Maven clients can publish through the snippet.
+expect 0 "$out" -- repo connect "$maven_id" --json
+maven_deploy_url=$(python3 - "$out" <<'PY2'
+import json
+import sys
+import xml.etree.ElementTree as ET
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    snippets = json.load(stream)["data"]["snippets"]
+deployment = next(row["content"] for row in snippets if row["label"] == "Maven deployment")
+print(ET.fromstring(deployment).findtext("repository/url"))
+PY2
+)
 pom='<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>com.example.agctl</groupId><artifactId>e2e</artifactId><version>1.0.0</version><packaging>pom</packaging></project>'
 curl --silent --show-error --fail --output /dev/null -X PUT -H "Authorization: Bearer $admin_token" \
-  --data-binary "$pom" "$server/repository/maven/$maven_name/com/example/agctl/e2e/1.0.0/e2e-1.0.0.pom"
+  --data-binary "$pom" "${maven_deploy_url}com/example/agctl/e2e/1.0.0/e2e-1.0.0.pom"
+curl --silent --show-error --fail --max-time 10 --output "$workdir/connected.pom" -H "Authorization: Bearer $admin_token" "${maven_deploy_url}com/example/agctl/e2e/1.0.0/e2e-1.0.0.pom"
+require "$(cat "$workdir/connected.pom")" "$pom" "Maven snippet endpoint byte read-back"
 expect 0 "$out" -- maven coordinates --repo "$maven_id" --json
 require "$(field "$out" data.items.0.coordinate)" com.example.agctl:e2e:1.0.0 "Maven coordinate"
 expect 0 "$out" -- artifact list --repo "$maven_id" --json
