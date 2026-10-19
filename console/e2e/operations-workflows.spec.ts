@@ -50,7 +50,7 @@ test("a scheduled task is created, paused, run, and deleted", async ({
   const name = `e2e-schedule-${suffix}`;
   const repositoryName = `e2e-schedule-target-${suffix}`;
   const createdRepository = await request.post("/api/v2/repositories", {
-    headers: admin(),
+    headers: { ...admin(), "Idempotency-Key": `e2e-schedule-target-${suffix}` },
     data: { name: repositoryName, format: "raw", type: "hosted" },
   });
   expect(createdRepository.status()).toBe(201);
