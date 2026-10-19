@@ -606,7 +606,17 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   部分失败后重跑是安全的。上传按 `--parallel`（默认 4）并发并从磁盘流式读取，单个
   对象上限 1 GiB。结果逐个列出对象的 `path`、规范 `coordinate`（每段按 Go 的
   `url.PathEscape` 转义，与检索结果一致）、大小、摘要和状态；任一对象 `failed` 或
-  `unknown` 时退出码 3。Raw PUT 会替换该路径原有内容：目前没有条件写入。
+  `unknown` 时退出码 3。此 CLI 使用无条件替换；原生 Raw HTTP 同时支持条件写入。真实 Raw/Maven 发布前会核对目标身份、活跃 Hosted 格式与服务端声明的 publish 能力。
+- `agctl publish raw SOURCE --repo ID --resumable [--chunk-size BYTES]`
+  创建原生恢复上传，分块发送并核对 offset（默认 4 MiB，最大 16 MiB），仅以整个文件的
+  SHA-256 完成发布。每项返回 `uploadId`、最后确认的 `uploadOffset` 和 `readBack`；
+  人类可读表格也显示 ID 和偏移。用 `--upload-id ID` 恢复单个文件，保留原始源文件、仓库
+  和目标路径。PATCH 响应丢失后先查询同一上传的状态，再决定是否有限重放。创建和完成
+  都不会盲目重发，完成响应丢失时只有最终路径的摘要和大小均一致才确认成功。无法确认的
+  进度报告 `unknown`（退出 3），包括不确定 PATCH 后状态查询被拒绝。创建响应丢失且没有
+  可用 ID 时仍为未知，不能盲目重新创建。Dry-run 不发送上传请求。本地散列完成后，能力
+  查询与整个上传批次共享 `--timeout`；超时或 Ctrl-C 不会取消或删除服务端上传。发现、
+  状态及结果回读需要仓库读取权限，上传需要写入权限。
 - `agctl publish maven --repo ID --coordinate G:A:V --pom FILE [--file
   FILE]…` 通过发布会话发布一个 Maven 坐标：在 `Idempotency-Key` 下声明每个文件的
   大小和摘要，上传后提交。用同一 `--idempotency-key` 重跑会继续同一个打开的会话；

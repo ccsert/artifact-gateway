@@ -37,6 +37,36 @@ func TestMemoryStoreReturnsStableNotFoundError(t *testing.T) {
 	}
 }
 
+func TestMemoryStoreStreamsRetainSnapshotAcrossReplaceAndDelete(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if err := store.Put(ctx, "object", []byte("original")); err != nil {
+		t.Fatal(err)
+	}
+	whole, _, err := store.Open(ctx, "object")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = whole.Close() }()
+	part, _, err := store.OpenRange(ctx, "object", 1, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = part.Close() }()
+	if err := store.Put(ctx, "object", []byte("replaced")); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Delete(ctx, "object"); err != nil {
+		t.Fatal(err)
+	}
+	for reader, want := range map[io.Reader]string{whole: "original", part: "rig"} {
+		body, err := io.ReadAll(reader)
+		if err != nil || string(body) != want {
+			t.Fatalf("snapshot=%q want=%q error=%v", body, want, err)
+		}
+	}
+}
+
 func TestSeekableObjectReaderSpoolsNonSeekableInputAndValidatesSize(t *testing.T) {
 	body := []byte("streamed object body")
 	reader, cleanup, err := seekableObjectReader(nonSeekReader{Reader: bytes.NewReader(body)}, int64(len(body)))

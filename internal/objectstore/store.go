@@ -73,10 +73,18 @@ func (s *MemoryStore) Put(_ context.Context, key string, value []byte) error {
 }
 
 func (s *MemoryStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
-	value, err := s.Get(ctx, key)
-	if err != nil {
+	if err := ctx.Err(); err != nil {
 		return nil, 0, err
 	}
+	s.mu.RLock()
+	value, ok := s.objects[key]
+	s.mu.RUnlock()
+	if !ok {
+		return nil, 0, ErrNotFound
+	}
+	// Put always allocates a fresh backing slice. A reader can safely retain
+	// this immutable snapshot across replacement/deletion without copying the
+	// entire object, including when serving small ranges of a large object.
 	return io.NopCloser(bytes.NewReader(value)), int64(len(value)), nil
 }
 
@@ -90,9 +98,14 @@ func (s *MemoryStore) Stat(ctx context.Context, key string) (Info, error) {
 }
 
 func (s *MemoryStore) OpenRange(ctx context.Context, key string, offset, length int64) (io.ReadCloser, int64, error) {
-	value, err := s.Get(ctx, key)
-	if err != nil {
+	if err := ctx.Err(); err != nil {
 		return nil, 0, err
+	}
+	s.mu.RLock()
+	value, ok := s.objects[key]
+	s.mu.RUnlock()
+	if !ok {
+		return nil, 0, ErrNotFound
 	}
 	size := int64(len(value))
 	if offset < 0 || length < 0 || offset > size || length > size-offset {

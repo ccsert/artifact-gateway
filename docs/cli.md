@@ -734,7 +734,25 @@ no repository access by itself — repository access comes from grants
   Results list every object with its `path`, canonical `coordinate` (each
   segment escaped like Go's `url.PathEscape`, as search reports it), size,
   digest, and status; any `failed` or `unknown` object exits 3. A Raw PUT
-  replaces whatever the path held: there is no conditional write yet.
+  uses unconditional replacement in this CLI; native Raw HTTP also supports
+  conditional writes. Before a real Raw or Maven publication, agctl verifies
+  the target identity, active Hosted format and advertised publish capability.
+- `agctl publish raw SOURCE --repo ID --resumable [--chunk-size BYTES]`
+  starts a native upload, sends offset-checked chunks (default 4 MiB, maximum
+  16 MiB), and completes only with the full file SHA-256. Each item reports
+  `uploadId`, last confirmed `uploadOffset`, and `readBack`; human output also
+  shows the ID and offset. Resume one file with `--upload-id ID`, preserving
+  its original source, repository and target path. A lost PATCH response is
+  reconciled through the same upload's status before any bounded replay.
+  Creation and completion are never blindly repeated; a lost completion is
+  accepted only after the final path's digest and size agree. Unconfirmed
+  progress remains `unknown` (exit 3), including when status is denied after
+  an uncertain PATCH. A lost start without a usable ID is unknown and must
+  not be blindly repeated. Dry-run sends no upload requests. After hashing
+  local input, the capability reads and entire upload batch share `--timeout`;
+  timing out or pressing Ctrl-C does not cancel or delete server uploads.
+  Repository read permission is needed for discovery/status/read-back, and
+  write permission is needed for upload.
 - `agctl publish maven --repo ID --coordinate G:A:V --pom FILE [--file
   FILE]…` publishes one Maven coordinate through a publish session: it
   declares every file with its size and digest under an `Idempotency-Key`,

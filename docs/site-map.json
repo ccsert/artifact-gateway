@@ -53,6 +53,7 @@
       "title": { "en": "Protocols and formats", "zh-CN": "协议与仓库格式" },
       "items": [
         { "id": "protocol-compatibility", "title": { "en": "Protocol compatibility", "zh-CN": "协议兼容性" }, "en": "docs/protocol-compatibility.md", "zh-CN": "docs/protocol-compatibility.zh-CN.md" },
+        { "id": "raw-http-ranges", "title": { "en": "Raw HTTP ranges", "zh-CN": "Raw HTTP Range" }, "en": "docs/raw-http-ranges.md", "zh-CN": "docs/raw-http-ranges.zh-CN.md" },
         { "id": "maven-publication", "title": { "en": "Maven Hosted publication", "zh-CN": "Maven Hosted 发布" }, "en": "docs/maven-hosted-publication.md", "zh-CN": "docs/maven-hosted-publication.zh-CN.md" },
         { "id": "npm-version-governance", "title": { "en": "npm version governance", "zh-CN": "npm 版本治理" }, "en": "docs/npm-version-governance.md", "zh-CN": "docs/npm-version-governance.zh-CN.md" },
         { "id": "apt-proxy", "title": { "en": "APT Proxy and Group", "zh-CN": "APT Proxy 与 Group" }, "en": "docs/apt-proxy.md", "zh-CN": "docs/apt-proxy.zh-CN.md" },

@@ -15,11 +15,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -67,13 +69,17 @@ type objectResult struct {
 	Path string `json:"path"`
 	// Coordinate is the canonical Raw coordinate (each segment escaped like
 	// Go's url.PathEscape), the form search and browse report.
-	Coordinate string `json:"coordinate,omitempty"`
-	File       string `json:"file"`
-	Size       int64  `json:"size"`
-	Digest     string `json:"digest"`
-	Status     string `json:"status"` // uploaded, skipped, planned, failed, unknown
-	Error      string `json:"error,omitempty"`
-	Code       string `json:"code,omitempty"`
+	Coordinate   string `json:"coordinate,omitempty"`
+	File         string `json:"file"`
+	Size         int64  `json:"size"`
+	Digest       string `json:"digest"`
+	Status       string `json:"status"` // uploaded, skipped, planned, failed, unknown
+	Error        string `json:"error,omitempty"`
+	Code         string `json:"code,omitempty"`
+	UploadID     string `json:"uploadId,omitempty"`
+	UploadOffset *int64 `json:"uploadOffset,omitempty"`
+	ReadBack     string `json:"readBack,omitempty"`
+	ConfirmedBy  string `json:"confirmedBy,omitempty"`
 }
 
 // validRawPath rejects paths a Raw repository cannot address safely.
@@ -221,13 +227,14 @@ func putRawObject(ctx context.Context, client *apiClient, objectPath string, obj
 }
 
 func publishRawCommand() command {
-	var repo, to string
+	var repo, to, uploadID string
 	var parallel int
-	var force bool
+	var force, resumable bool
+	var chunkSize int64
 	return command{
 		name:        "publish raw",
 		synopsis:    "upload a file or a directory tree to a Raw hosted repository",
-		usage:       "agctl publish raw SOURCE --repo ID [--to PATH_OR_PREFIX] [--parallel N] [--force] [--dry-run] [--json]",
+		usage:       "agctl publish raw SOURCE --repo ID [--to PATH_OR_PREFIX] [--parallel N] [--resumable] [--upload-id UUID] [--chunk-size BYTES] [--force] [--dry-run] [--json]",
 		positionals: 1,
 		argsUsage:   "SOURCE",
 		setFlags: func(fs *flag.FlagSet) {
@@ -235,15 +242,22 @@ func publishRawCommand() command {
 			fs.StringVar(&to, "to", "", "repository path for a file, or prefix for a directory (default: the file name, or the repository root)")
 			fs.IntVar(&parallel, "parallel", 4, "uploads in flight (1-16)")
 			fs.BoolVar(&force, "force", false, "upload objects whose repository copy already has the same digest")
+			fs.BoolVar(&resumable, "resumable", false, "upload in bounded offset-addressed chunks")
+			fs.StringVar(&uploadID, "upload-id", "", "resume one file's existing upload (implies --resumable)")
+			fs.Int64Var(&chunkSize, "chunk-size", 4<<20, "resumable chunk bytes (1-16777216, default 4194304)")
 		},
 		meta: commandMeta{
 			Resource:  "artifact",
 			Scenarios: []string{"ci"},
-			Stage:     "m1",
+			Stage:     "m2",
 			Endpoints: []string{
 				"GET " + repositoriesPath + "/{repositoryId}",
+				"GET " + repositoriesPath + "/{repositoryId}/capabilities",
 				"HEAD /raw/{repository}/{path}",
 				"PUT /raw/{repository}/{path}",
+				"GET /raw/{repository}/{path}",
+				"POST /raw/{repository}/{path}",
+				"PATCH /raw/{repository}/{path}",
 			},
 			Mutating:     true,
 			MinimumRole:  "repositories:write",
@@ -262,6 +276,16 @@ func publishRawCommand() command {
 			if err != nil {
 				return err
 			}
+			if uploadID != "" {
+				id, err := uuid.Parse(uploadID)
+				if err != nil || id == uuid.Nil || len(objects) != 1 {
+					return &UsageError{Message: "--upload-id requires a nonzero UUID and exactly one source file", Hint: "resume the returned uploadId with the same file, --repo and --to"}
+				}
+				uploadID, resumable = id.String(), true
+			}
+			if chunkSize < 1 || chunkSize > 16<<20 || (!resumable && env.flagSet["chunk-size"]) {
+				return &UsageError{Message: "--chunk-size requires --resumable and must be 1-16777216", Hint: "for example --resumable --chunk-size 4194304"}
+			}
 			for _, object := range objects {
 				if object.size > maxRawObjectBytes {
 					return &UsageError{Message: fmt.Sprintf("%s is larger than the 1 GiB a Raw upload accepts", object.file), Hint: "split the file"}
@@ -271,12 +295,13 @@ func publishRawCommand() command {
 			if err != nil {
 				return err
 			}
-			var repository adminopenapi.Repository
-			if err := client.getJSON(ctx, repositoryPath(repo), nil, &repository); err != nil {
+			// Capability reads, a directory's bounded parallelism and all resumed
+			// chunks share one deadline, including retries and read-back.
+			ctx, cancel := context.WithTimeout(ctx, env.globals.timeout)
+			defer cancel()
+			repository, err := publicationTarget(ctx, client, repo, adminopenapi.FormatRaw)
+			if err != nil {
 				return err
-			}
-			if repository.Format != adminopenapi.FormatRaw || repositoryType(repository) != string(adminopenapi.RepositoryTypeHosted) || repository.State != adminopenapi.RepositoryStateActive {
-				return &UsageError{Message: fmt.Sprintf("repository %s is %s %s (%s), not an active Raw hosted repository", repository.Name, repository.Format, repositoryType(repository), repository.State), Hint: "Raw publishing needs an active Raw hosted repository; other formats use their native clients (agctl repo connect)"}
 			}
 			results := make([]objectResult, len(objects))
 			var wait sync.WaitGroup
@@ -304,7 +329,13 @@ func publishRawCommand() command {
 						result.Status = "planned"
 						return
 					}
-					if err := putRawObject(ctx, client, target, object); err != nil {
+					var uploadErr error
+					if resumable {
+						uploadErr = putResumableRawObject(ctx, client, target, object, chunkSize, uploadID, result)
+					} else {
+						uploadErr = putRawObject(ctx, client, target, object)
+					}
+					if err := uploadErr; err != nil {
 						result.Status, result.Error, result.Code = "failed", redactText(err.Error(), client.token), localErrorCode(err)
 						if outcomeUnknown(err) {
 							result.Status = "unknown"
@@ -315,9 +346,37 @@ func publishRawCommand() command {
 				}(&results[index], object)
 			}
 			wait.Wait()
-			return renderObjectResults(env, results, "re-run the original publish raw command with the same SOURCE, --repo and --to values; objects already in place are skipped by digest")
+			hint := "re-run the original publish raw command with the same SOURCE, --repo and --to values; objects already in place are skipped by digest"
+			if resumable {
+				hint += "; for an item with uploadId, resume that single file using --upload-id ID; an unconfirmed start without an ID is unknown and must not be blindly repeated"
+			}
+			return renderObjectResults(env, results, hint)
 		},
 	}
+}
+
+func publicationTarget(ctx context.Context, client *apiClient, id string, format adminopenapi.Format) (adminopenapi.Repository, error) {
+	var repo adminopenapi.Repository
+	if err := client.getJSON(ctx, repositoryPath(id), nil, &repo); err != nil {
+		return repo, err
+	}
+	if !strings.EqualFold(repo.Id, id) || repo.Name == "" {
+		return repo, &APIError{Code: "invalid_response", HTTPStatus: http.StatusOK, Message: "repository response does not identify the requested target"}
+	}
+	if repo.Format != format || repositoryType(repo) != string(adminopenapi.RepositoryTypeHosted) || repo.State != adminopenapi.RepositoryStateActive {
+		return repo, &UsageError{Message: fmt.Sprintf("repository %s is not an active %s Hosted repository", repo.Name, format), Hint: "use a publish-capable Hosted repository; other formats use their native clients (agctl repo connect)"}
+	}
+	var capabilities adminopenapi.RepositoryCapabilities
+	if err := client.getJSON(ctx, repositorySubPath(id, "capabilities"), nil, &capabilities); err != nil {
+		return repo, err
+	}
+	if capabilities.Format != format || string(capabilities.Type) != string(adminopenapi.RepositoryTypeHosted) {
+		return repo, &APIError{Code: "invalid_response", HTTPStatus: http.StatusOK, Message: "publication capabilities do not match the requested repository"}
+	}
+	if !slices.Contains(capabilities.Operations, adminopenapi.RepositoryOperationPublish) {
+		return repo, &APIError{Code: "not_supported", HTTPStatus: http.StatusNotImplemented, Message: "the target does not advertise the publish operation"}
+	}
+	return repo, nil
 }
 
 // renderObjectResults prints per-object outcomes. Any failed or unknown
@@ -330,13 +389,28 @@ func renderObjectResults(env *commandContext, results []objectResult, rerun stri
 	}
 	human := func(w io.Writer) error {
 		table := [][]string{{"STATUS", "PATH", "SIZE", "DIGEST"}}
+		resumable := false
+		for _, result := range results {
+			resumable = resumable || result.UploadID != ""
+		}
+		if resumable {
+			table[0] = append(table[0], "UPLOAD", "OFFSET")
+		}
 		for _, result := range results {
 			size := result.Size
 			status := result.Status
 			if result.Error != "" {
 				status += ": " + result.Error
 			}
-			table = append(table, []string{status, result.Path, formatBytes(&size), shortDigest(result.Digest)})
+			row := []string{status, result.Path, formatBytes(&size), shortDigest(result.Digest)}
+			if resumable {
+				offset := "unknown"
+				if result.UploadOffset != nil {
+					offset = fmt.Sprint(*result.UploadOffset)
+				}
+				row = append(row, result.UploadID, offset)
+			}
+			table = append(table, row)
 		}
 		return writeColumns(w, table)
 	}
@@ -573,7 +647,7 @@ func publishCreateCommand() command {
 		setFlags: mavenFlags(&repo, &coordinate, &pom, &files, &key),
 		meta: commandMeta{
 			Resource: "publish-session", Scenarios: []string{"ci"}, Stage: "m1",
-			Endpoints: []string{"POST " + repositoriesPath + "/{repositoryId}/publish-sessions"}, Mutating: true,
+			Endpoints: []string{"GET " + repositoriesPath + "/{repositoryId}", "GET " + repositoriesPath + "/{repositoryId}/capabilities", "POST " + repositoriesPath + "/{repositoryId}/publish-sessions"}, Mutating: true,
 			MinimumRole: "repositories:write", InputSchema: "CreatePublishSession", OutputSchema: "PublishSession", DryRun: "client-plan", Retry: true,
 		},
 		run: func(ctx context.Context, env *commandContext) error {
@@ -596,6 +670,9 @@ func publishCreateCommand() command {
 			}
 			client, err := env.client()
 			if err != nil {
+				return err
+			}
+			if _, err := publicationTarget(ctx, client, repo, adminopenapi.FormatMaven); err != nil {
 				return err
 			}
 			session, err := createSession(ctx, client, repo, key, request)
@@ -750,6 +827,8 @@ func publishMavenCommand() command {
 			Scenarios: []string{"ci"},
 			Stage:     "m1",
 			Endpoints: []string{
+				"GET " + repositoriesPath + "/{repositoryId}",
+				"GET " + repositoriesPath + "/{repositoryId}/capabilities",
 				"POST " + repositoriesPath + "/{repositoryId}/publish-sessions",
 				"PUT " + publishSessionsPath + "/{sessionId}/objects/{objectName}",
 				"POST " + publishSessionsPath + "/{sessionId}:commit",
@@ -781,6 +860,9 @@ func publishMavenCommand() command {
 			}
 			client, err := env.client()
 			if err != nil {
+				return err
+			}
+			if _, err := publicationTarget(ctx, client, repo, adminopenapi.FormatMaven); err != nil {
 				return err
 			}
 			session, err := createSession(ctx, client, repo, key, request)

@@ -52,6 +52,7 @@ agree with executable tests and the
 ## Protocols and formats
 
 - [Protocol compatibility](protocol-compatibility.md) — implemented behavior and explicit limits by format.
+- [Raw HTTP ranges](raw-http-ranges.md) — bounded multipart reads and immutable validators.
 - [Maven Hosted publication](maven-hosted-publication.md) — Nexus-compatible direct mode and strict opt-in commit.
 - [npm version governance](npm-version-governance.md) — native deprecation, unpublish, authority barriers, recovery and immutable bytes.
 - [APT Proxy and Group](apt-proxy.md) — byte-preserving reads, caching, authorization, and limits.
