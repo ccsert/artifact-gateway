@@ -7,6 +7,7 @@ import adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
 type managementServer struct {
 	repositoryManagementHandler
 	artifactManagementHandler
+	accessManagementHandler
 	generatedRepositoryAPIAdapter
 }
 

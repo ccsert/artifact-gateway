@@ -175,3 +175,40 @@ func (h managementScope) recordAuthorizationDenial(r *http.Request, principal Pr
 		AuthorizationSource: decision.Source, AuthorizationReason: decision.Reason,
 	})
 }
+
+// repositoryViewPrincipal authenticates a cross-repository management view and
+// answers the principal-wide blocks before any row is considered, so a pending
+// or password-change account is refused rather than shown an empty list.
+func (h managementScope) repositoryViewPrincipal(w http.ResponseWriter, r *http.Request) (Principal, bool) {
+	principal, ok := h.authenticate(w, r)
+	if !ok {
+		return Principal{}, false
+	}
+	if code, message, blocked := accountStateProblem(principal.AccountStateReason()); blocked {
+		writeHostedProblem(w, http.StatusForbidden, code, message)
+		return Principal{}, false
+	}
+	return principal, true
+}
+
+// mayAdministerRepository reports whether the principal may administer one
+// repository. A cross-repository management view filters on this, so a
+// repository the caller cannot administer contributes no rows and is therefore
+// indistinguishable from one that does not exist.
+func (h managementScope) mayAdministerRepository(r *http.Request, principal Principal, repositoryID string) bool {
+	if principal.Admin {
+		return true
+	}
+	repo, err := h.repositories.GetHostedRepository(r.Context(), repositoryID)
+	if err != nil {
+		return false
+	}
+	return h.authorizer.Authorize(r.Context(), principal, repo, RepositoryAdmin).Allowed
+}
+
+func (h managementScope) auditActor(r *http.Request) string {
+	if principal, ok := h.authenticator.Authenticate(r.Header.Get("Authorization")); ok {
+		return principal.Actor
+	}
+	return "unknown"
+}
