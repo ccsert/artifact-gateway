@@ -54,6 +54,10 @@ func TestArtifactManagementMissingCapabilitiesAreBoundedAndAuthorized(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	reader, err := store.CreateUser(ctx, repository.User{ID: uuid.NewString(), Name: "cap-proxy-reader", Role: string(RoleMember), SecretHash: "synthetic-password-hash"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	auth := testAuthenticator()
 	auth.Users = store
 	auth.LegacyReadPermissive = false
@@ -106,12 +110,32 @@ func TestArtifactManagementMissingCapabilitiesAreBoundedAndAuthorized(t *testing
 			denied             int
 		}{"search " + string(format), http.MethodGet, base(format) + "/artifact-search", 403})
 	}
+	proxyPaths := map[string]bool{}
+	for _, format := range []repository.Format{repository.FormatMaven, repository.FormatRaw} {
+		repo, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: uuid.NewString(), Name: "cap-proxy-" + string(format), Format: format, Type: repository.RepositoryTypeProxy, Endpoint: "https://proxy.fixture.example", AllowedHosts: []string{"proxy.fixture.example"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.ReplaceRepositoryGrants(ctx, repo.ID, []repository.RepositoryGrant{{Principal: "user:" + reader.Name, Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+			t.Fatal(err)
+		}
+		path := "/api/v2/repositories/" + repo.ID + "/browse"
+		proxyPaths[path] = true
+		tests = append(tests, struct {
+			name, method, path string
+			denied             int
+		}{"browse proxy " + string(format), http.MethodGet, path, 403})
+	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			readerWant := test.denied
+			if proxyPaths[test.path] {
+				readerWant = 501
+			}
 			for _, actor := range []struct {
 				token string
 				want  int
-			}{{"admin-secret", 501}, {auth.IssueUserSession(ungranted.ID), test.denied}, {auth.IssuePrincipalToken(Principal{Actor: "pending", Role: RoleNone}), 403}, {auth.IssueUserSession(reset.ID), 403}, {"", 401}} {
+			}{{"admin-secret", 501}, {auth.IssueUserSession(reader.ID), readerWant}, {auth.IssueUserSession(ungranted.ID), test.denied}, {auth.IssuePrincipalToken(Principal{Actor: "pending", Role: RoleNone}), 403}, {auth.IssueUserSession(reset.ID), 403}, {"", 401}} {
 				request := httptest.NewRequest(test.method, "https://gateway.example.com"+test.path, strings.NewReader(`{}`))
 				if actor.token != "" {
 					authorize(request, actor.token)
