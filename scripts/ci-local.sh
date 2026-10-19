@@ -137,6 +137,7 @@ run_contract() {
   run "original published native backup recovery" make published-native-backup-test
   run "v0.5.0 upgrade and snapshot rollback" make upgrade-readiness
   run "integration tests" make integration-test
+  run "target-only Nexus migration clients" make nexus-migration-client-e2e
   run "agctl CLI E2E (isolated Compose stack)" make cli-e2e
   run "release readiness entrypoints" make release-readiness-check
 }

@@ -99,6 +99,9 @@ jobs:
         timeout-minutes: 10
       - name: Run integration tests
         run: make integration-test
+      - name: Verify target-only Nexus migration with official clients
+        run: make nexus-migration-client-e2e
+        timeout-minutes: 10
       - name: Check release readiness entrypoints
         run: make release-readiness-check
   quality:

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -117,6 +118,10 @@ func TestPostgresMigrationPublicHTTPContractCASIdempotencyPauseResumeCancel(t *t
 		t.Fatalf("resume=%d %s", status, body)
 	}
 	_ = json.Unmarshal(body, &b)
+	status, replay, _ = call("POST", path+"/resume", map[string]any{"capacityEvidence": evidence}, b.Version, "resume-key", "owned-admin")
+	if status != 200 || !bytes.Equal(body, replay) {
+		t.Fatalf("current-version resume replay=%d %s", status, replay)
+	}
 	status, _, _ = call("POST", path+"/cancel", nil, paused.Version, "stale-control", "owned-admin")
 	if status != 412 {
 		t.Fatalf("stale CAS=%d", status)
@@ -222,4 +227,46 @@ func TestPostgresMigrationRawCanonicalPathsAreReadableAndCompleteMetadataAvoidsE
 	if err != nil || response.StatusCode != 200 || !bytes.Equal(actual, body) {
 		t.Fatalf("canonical native GET=%d %q err=%v", response.StatusCode, actual, err)
 	}
+}
+
+func TestPostgresMigrationGracefulWorkerRestartReclaimsSealedBatch(t *testing.T) {
+	f := newFixture(t, "raw", map[string][]byte{"restart.bin": []byte("restart-from-durable-state")})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f.service = f.newService(m.Options{AfterUpload: func(context.Context, m.Entry) error { cancel(); return context.Canceled }})
+	b := f.start()
+	if err := f.service.RunOnce(ctx, []string{"raw"}); err != nil {
+		t.Fatal(err)
+	}
+	current, err := f.service.Get(context.Background(), b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireState(t, current, "ready")
+	f.service = f.newService(m.Options{})
+	f.run(&current)
+	requireState(t, current, "completed")
+	if current.VisibleIdentities != 1 || current.Counts.Committed != 1 {
+		t.Fatalf("restart duplicated/lost visible identity: %+v", current)
+	}
+}
+
+func TestPostgresMigrationFrozenManifestRejectsCheckpointMutation(t *testing.T) {
+	f := newFixture(t, "raw", map[string][]byte{"immutable.bin": []byte("fixed-manifest")})
+	f.service = f.newService(m.Options{AfterUpload: func(ctx context.Context, e m.Entry) error {
+		batch, err := f.service.Get(ctx, e.BatchID)
+		if err != nil {
+			return err
+		}
+		changed := e
+		changed.Assets = append([]m.Asset(nil), e.Assets...)
+		changed.Assets[0].SHA256 = strings.Repeat("a", 64)
+		if err = f.ledger.Checkpoint(ctx, changed, batch.LeaseToken); err != m.ErrLeaseLost {
+			return fmt.Errorf("immutable manifest mutation accepted: %v", err)
+		}
+		return nil
+	}})
+	b := f.start()
+	f.run(b)
+	requireState(t, *b, "completed")
 }

@@ -436,3 +436,21 @@ func (s *Store) RecordScanProgress(ctx context.Context, id, token string, metada
 	result, err := s.db.ExecContext(ctx, `UPDATE nexus_migration_batches SET metadata_discovered=GREATEST(metadata_discovered,$3),source_verification_bytes=source_verification_bytes+$4,updated_at=clock_timestamp() WHERE id::text=$1 AND lease_token=$2 AND lease_expires_at>clock_timestamp() AND state IN ('running','pausing')`, id, token, metadata, bytes)
 	return changed(result, err)
 }
+
+func (s *Store) ReplayControl(ctx context.Context, id, actor, key, action, hash string) (m.Batch, bool, error) {
+	var storedAction, storedHash string
+	var raw []byte
+	err := s.db.QueryRowContext(ctx, `SELECT operation,request_hash,response FROM nexus_migration_controls WHERE batch_id::text=$1 AND actor=$2 AND idempotency_key=$3`, id, actor, key).Scan(&storedAction, &storedHash, &raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return m.Batch{}, false, nil
+	}
+	if err != nil {
+		return m.Batch{}, false, err
+	}
+	if storedAction != action || storedHash != hash {
+		return m.Batch{}, true, m.ErrIdempotencyConflict
+	}
+	var b m.Batch
+	err = json.Unmarshal(raw, &b)
+	return b, true, err
+}

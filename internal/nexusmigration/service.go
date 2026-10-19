@@ -150,6 +150,13 @@ func (s *Service) Control(ctx context.Context, id, expected, actor, key, action 
 	if !validKey(key) || expected == "" {
 		return Batch{}, Failed("invalid_request")
 	}
+	hash := digest(struct {
+		Action   string
+		Evidence *CapacityEvidence
+	}{action, evidence})
+	if prior, found, err := s.store.ReplayControl(ctx, id, actor, key, action, hash); err != nil || found {
+		return prior, err
+	}
 	b, err := s.store.Get(ctx, id)
 	if err != nil {
 		return b, err
@@ -182,10 +189,7 @@ func (s *Service) Control(ctx context.Context, id, expected, actor, key, action 
 			}
 		}
 	}
-	return s.store.Control(ctx, id, expected, actor, key, action, digest(struct {
-		Action   string
-		Evidence *CapacityEvidence
-	}{action, evidence}), evidence)
+	return s.store.Control(ctx, id, expected, actor, key, action, hash, evidence)
 }
 func (s *Service) allEntries(ctx context.Context, id string) ([]Entry, error) {
 	out := []Entry{}
