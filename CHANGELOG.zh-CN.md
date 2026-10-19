@@ -10,7 +10,7 @@
 
 - `agctl email delivery wait` 遇到 `dead` 投递时以退出码 1 和 `delivery_failed` 报告失败（#406），失败信封保留完整投递记录。中继接收仍退出 0，超时仍退出 8，不自动重放或取消已入队工作。
 
-- Maven / OCI Proxy 拒绝超过整链截止时间或已取消后收到的响应，即使运行时尚未送达 deadline 取消通知也不会接受迟到响应（#403）。被拒响应关闭 body 并释放 transport 资源；及时响应的 body 保持可读，直到调用方关闭。
+- Maven / OCI Proxy 拒绝超过整链截止时间或已取消后收到的响应，即使运行时尚未送达 deadline 取消通知也不会接受迟到响应（#403）。被拒响应关闭 body、释放 transport 资源，并在上游追踪中记录安全的错误；及时响应的 body 保持可读，直到调用方关闭。
 
 - `agctl repo connect` 为 Maven Hosted 的读取与发布生成原生 `/repository/maven/<repository>/` 端点（#130）。真实 E2E 用生成的发布地址上传 POM 并逐字节回读；Proxy 指引仍使用 `/maven/<repository>/`。
 
