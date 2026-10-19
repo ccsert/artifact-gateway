@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- npm Group tombstones now preserve discovery of other visible versions when a lower member's summary selects a withdrawn version. Tarball barriers compare package/version identity, allowing a different visible version with the same flat filename while still blocking same-version aliases (#309, #310).
+
 - npm Hosted supports native deprecate/undeprecate and single-version or whole-package unpublish (#309, #310). Package revisions fence concurrent metadata and publication, mutations commit with actor/version audits, and Group tombstones prevent lower-priority members from reviving withdrawn identities. Existing management restore verifies the retained object and durable collection fence; a partial S3 reclaim cannot restore missing bytes. Tarballs and published identities remain immutable. Console shows warnings, permits Hosted writers to edit them and administrators to unpublish; see [npm version governance](docs/npm-version-governance.md). Official npm 11.6.2 acceptance verifies all four scoped/unscoped tarballs before and after recovery.
 
 - `agctl publish raw --resumable` completes native offset-checked chunk uploads and resumes a returned `--upload-id` (#132). Lost PATCH responses are settled through status before replay, and a lost completion requires exact digest/size read-back; uncertain results retain recovery identity and exit 3. Raw batches share one deadline. Real Raw/Maven publishing also verifies target identity, active Hosted format and advertised publish capability before writing.

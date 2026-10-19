@@ -75,7 +75,7 @@ func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWri
 		}
 		for _, item := range items {
 			if group.Format == repository.FormatNPM {
-				hidden, lookupErr := h.npmGroupSearchTombstoned(r, higherPriority, item, npmAuthority)
+				summary, hidden, lookupErr := h.npmGroupSearchSummary(r, higherPriority, repo, item, npmAuthority)
 				if lookupErr != nil {
 					writeArtifactQueryFailure(w, lookupErr, "read npm Group authority failed")
 					return
@@ -83,6 +83,7 @@ func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWri
 				if hidden {
 					continue
 				}
+				item = summary
 			}
 			identity := artifactIdentity{Coordinate: item.Coordinate}
 			if item.BuildNumber != nil {
@@ -126,13 +127,14 @@ func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWri
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ArtifactSummaryPage{Items: items, NextPageToken: next})
 }
 
-func (h artifactManagementHandler) npmGroupSearchTombstoned(r *http.Request, higher []repository.HostedRepository, item adminopenapi.ArtifactSummary, cache map[string]repository.NPMPackage) (bool, error) {
+func (h artifactManagementHandler) npmGroupSearchSummary(r *http.Request, higher []repository.HostedRepository, member repository.HostedRepository, item adminopenapi.ArtifactSummary, cache map[string]repository.NPMPackage) (adminopenapi.ArtifactSummary, bool, error) {
 	if item.Version == nil {
-		return false, nil
+		return item, false, nil
 	}
 	if h.npm == nil {
-		return false, errArtifactCapabilityUnavailable
+		return item, false, errArtifactCapabilityUnavailable
 	}
+	hiddenVersions := make(map[string]bool)
 	for _, repo := range higher {
 		key := repo.ID + "\x00" + item.Coordinate
 		pkg, loaded := cache[key]
@@ -140,17 +142,52 @@ func (h artifactManagementHandler) npmGroupSearchTombstoned(r *http.Request, hig
 			var err error
 			pkg, err = h.npm.GetNPMPackage(r.Context(), repo.ID, item.Coordinate)
 			if err != nil && !errors.Is(err, repository.ErrNotFound) {
-				return false, err
+				return item, false, err
 			}
 			cache[key] = pkg
 		}
 		for _, hidden := range pkg.TombstonedVersions {
-			if hidden.Version == *item.Version {
-				return true, nil
-			}
+			hiddenVersions[hidden.Version] = true
 		}
 	}
-	return false, nil
+	if len(hiddenVersions) == 0 {
+		return item, false, nil
+	}
+	key := member.ID + "\x00" + item.Coordinate
+	pkg, loaded := cache[key]
+	if !loaded {
+		var err error
+		pkg, err = h.npm.GetNPMPackage(r.Context(), member.ID, item.Coordinate)
+		if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			return item, false, err
+		}
+		cache[key] = pkg
+	}
+	// The member's chosen summary can name a withdrawn version while other
+	// versions remain authoritative. Rebuild it from the unblocked identities.
+	var latest repository.NPMVersion
+	var count int32
+	latestTag := pkg.DistTags["latest"]
+	for _, version := range pkg.Versions {
+		if hiddenVersions[version.Version] {
+			continue
+		}
+		count++
+		if latest.Version == "" || version.Version == latestTag || latest.Version != latestTag && (version.CreatedAt.After(latest.CreatedAt) || version.CreatedAt.Equal(latest.CreatedAt) && version.Version > latest.Version) {
+			latest = version
+		}
+	}
+	if count == 0 {
+		return item, true, nil
+	}
+	if *item.Version != latest.Version || item.Digest == nil || *item.Digest != latest.Digest {
+		// Intelligence belongs to an immutable version, not the package name.
+		item.Intelligence = nil
+	}
+	item.Version, item.VersionCount = &latest.Version, &count
+	item.Digest, item.Size = &latest.Digest, &latest.Size
+	item.CreatedAt, item.Publisher = &latest.CreatedAt, optionalPublisher(latest.Publisher)
+	return item, false, nil
 }
 
 func (h artifactManagementHandler) searchGroupMemberArtifactsByQuery(r *http.Request, repo repository.HostedRepository, query repository.ArtifactSearchQuery, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {

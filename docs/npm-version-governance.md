@@ -74,6 +74,10 @@ A higher-priority Hosted tombstone remains an authority barrier even after its
 last visible version disappears: lower Hosted or Proxy members cannot revive
 that version through a Group. Restoring the same identity removes its barrier.
 Quarantine decisions remain attached to the same immutable identity.
+Group search rebuilds summaries from the remaining authoritative versions;
+a withdrawn `latest` does not hide a package with another visible version.
+Tarball barriers match package/version identity after resolving the candidate,
+so a different visible version can use the same flat filename in another member.
 
 Restore through the existing Console Tombstones task or
 `POST /api/v2/repositories/<id>/restore` with `{"coordinate":"widget@1.0.0"}`.

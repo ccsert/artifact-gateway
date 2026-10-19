@@ -58,6 +58,8 @@ Console 向读者展示所选版本的提示，Hosted 写入者可编辑或清�
 Packument、精确版本、Tarball、标签和搜索均隐藏墓碑。高优先级 Hosted 的墓碑始终
 拥有该版本身份，即使最后一个可见版本已经消失，低优先级 Hosted 或 Proxy 成员也不能
 经 Group 复活它。恢复同一身份后屏障解除。隔离决策继续绑定原有不可变身份。
+Group 搜索从剩余权威版本重算摘要，已撤下的 `latest` 不会隐藏仍有可见版本的包。
+Tarball 屏障在解析候选后按包和版本身份匹配；其他成员的不同可见版本可使用相同平面文件名。
 
 通过 Console 的仓库墓碑任务，或携带 `{"coordinate":"widget@1.0.0"}` 调用
 `POST /api/v2/repositories/<id>/restore` 恢复。恢复核对保留对象大小和摘要，取得对象
