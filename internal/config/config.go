@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -57,11 +58,12 @@ var supportedScannerFormats = func() map[string]struct{} {
 var supportedWorkerKinds = map[string]struct{}{
 	"promotion": {}, "replication": {}, "retention": {}, "reclaim": {},
 	"intelligence": {}, "scan": {}, "deletion": {}, "recovery": {}, "cache": {}, "audit": {},
-	"webhook": {}, "email": {},
+	"webhook": {}, "email": {}, "migration": {},
 }
 
 type Config struct {
 	MigrationSourcePrivateEndpoints map[string][]netip.Prefix
+	MigrationStoragePoolID          string
 	Email                           emailnotification.Config
 	ListenAddress                   string
 	ConsoleThemeDir                 string
@@ -152,6 +154,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
+		MigrationStoragePoolID:          strings.TrimSpace(os.Getenv("GATEWAY_MIGRATION_STORAGE_POOL_ID")),
 		ListenAddress:                   value("GATEWAY_LISTEN_ADDRESS", ":8080"),
 		ConsoleThemeDir:                 strings.TrimSpace(os.Getenv("GATEWAY_CONSOLE_THEME_DIR")),
 		NodeRoles:                       parseNodeRoles(os.Getenv("GATEWAY_NODE_ROLES")),
@@ -459,6 +462,9 @@ func Load() (Config, error) {
 		return Config{}, err
 	} else {
 		cfg.RuntimeNodePruneInterval = interval
+	}
+	if cfg.MigrationStoragePoolID != "" && !regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`).MatchString(cfg.MigrationStoragePoolID) {
+		return Config{}, fmt.Errorf("invalid migration storage pool ID")
 	}
 	cfg.MigrationSourcePrivateEndpoints, err = parseMigrationSourcePrivateEndpoints(os.Getenv("GATEWAY_MIGRATION_SOURCE_PRIVATE_ENDPOINTS"))
 	if err != nil {

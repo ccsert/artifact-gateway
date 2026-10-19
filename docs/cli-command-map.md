@@ -106,13 +106,22 @@ just an HTTP 200:
 
 ## Management contract operation map
 
-All 189 rows below cover the complete operation set of the baseline
+All 198 rows below cover the complete operation set of the baseline
 `api/openapi/management-runtime-v1.json`; the drift guard re-derives the set
 from the file rather than trusting this count. Paths are relative to `/api/v2`,
 the contract's server base. Planned commands omit the leading `agctl`.
 
 | API (all under /api/v2) / operationId | Planned command (agctl omitted) | Owning issue | Phase | Permission | Acceptance |
 | --- | --- | --- | --- | --- | --- |
+| `GET /migrations/nexus/capabilities`<br>`getNexusMigrationCapabilities` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `GET /migrations/nexus/batches`<br>`listNexusMigrationBatches` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `POST /migrations/nexus/batches`<br>`startNexusMigrationBatch` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `GET /migrations/nexus/batches/{batchId}`<br>`getNexusMigrationBatch` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `GET /migrations/nexus/batches/{batchId}/entries`<br>`listNexusMigrationEntries` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `POST /migrations/nexus/batches/{batchId}/pause`<br>`pauseNexusMigrationBatch` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `POST /migrations/nexus/batches/{batchId}/resume`<br>`resumeNexusMigrationBatch` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `POST /migrations/nexus/batches/{batchId}/retry`<br>`retryNexusMigrationBatch` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
+| `POST /migrations/nexus/batches/{batchId}/cancel`<br>`cancelNexusMigrationBatch` | N: API-only migration batch service; CLI deferred | #382 | N/A | A | N: no CLI command is registered; use the supported management API |
 | `GET /migration-sources`<br>`listMigrationSources` | N: API-only source service; CLI deferred | #381 | N/A | A | N: no CLI command is registered; use the supported management API |
 | `POST /migration-sources`<br>`createMigrationSource` | N: API-only source service; CLI deferred | #381 | N/A | A | N: no CLI command is registered; use the supported management API |
 | `GET /migration-sources/{sourceId}`<br>`getMigrationSource` | N: API-only source service; CLI deferred | #381 | N/A | A | N: no CLI command is registered; use the supported management API |

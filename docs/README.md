@@ -12,6 +12,7 @@ agree with executable tests and the
 [protocol compatibility baseline](protocol-compatibility.md).
 
 - [Nexus source discovery and native mapping](nexus-source-discovery.md)
+- [Durable Nexus migration batches](nexus-migration-batches.md)
 
 ## Start here
 

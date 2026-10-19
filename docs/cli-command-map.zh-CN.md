@@ -62,12 +62,21 @@ Gateway E2E，不只检查 HTTP 200：
 
 ## 管理契约逐操作映射
 
-下表 189 行覆盖基线 `api/openapi/management-runtime-v1.json` 的完整操作集；
+下表 198 行覆盖基线 `api/openapi/management-runtime-v1.json` 的完整操作集；
 守卫从文件重新推导该集合，不信任此计数。路径均相对 `/api/v2`（契约的
 server base）。计划命令省略前导 `agctl`。
 
 | API（均相对 /api/v2）/ operationId | 计划命令（省略 agctl） | 承接 | 阶段 | 权限 | 验收 |
 | --- | --- | --- | --- | --- | --- |
+| `GET /migrations/nexus/capabilities`<br>`getNexusMigrationCapabilities` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `GET /migrations/nexus/batches`<br>`listNexusMigrationBatches` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `POST /migrations/nexus/batches`<br>`startNexusMigrationBatch` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `GET /migrations/nexus/batches/{batchId}`<br>`getNexusMigrationBatch` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `GET /migrations/nexus/batches/{batchId}/entries`<br>`listNexusMigrationEntries` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `POST /migrations/nexus/batches/{batchId}/pause`<br>`pauseNexusMigrationBatch` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `POST /migrations/nexus/batches/{batchId}/resume`<br>`resumeNexusMigrationBatch` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `POST /migrations/nexus/batches/{batchId}/retry`<br>`retryNexusMigrationBatch` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
+| `POST /migrations/nexus/batches/{batchId}/cancel`<br>`cancelNexusMigrationBatch` | N：当前仅提供迁移批次 API，CLI 暂缓 | #382 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
 | `GET /migration-sources`<br>`listMigrationSources` | N：当前仅提供源管理 API，CLI 暂缓 | #381 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
 | `POST /migration-sources`<br>`createMigrationSource` | N：当前仅提供源管理 API，CLI 暂缓 | #381 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |
 | `GET /migration-sources/{sourceId}`<br>`getMigrationSource` | N：当前仅提供源管理 API，CLI 暂缓 | #381 | N/A | A | N：未注册 CLI 命令，使用受支持管理 API |

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	migrationapi "github.com/ccsert/artifact-gateway/internal/admin/nexusmigration"
 	sourceapi "github.com/ccsert/artifact-gateway/internal/admin/nexussource"
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
@@ -259,6 +260,7 @@ func managementBrowseRepositoryID(path string) (string, bool) {
 // binding for the active repository-management surface.
 type generatedRepositoryAPIAdapter struct {
 	*sourceapi.Adapter
+	*migrationapi.BatchAdapter
 	hostedRepositoryAPIHandler
 	sessions               nativeMavenHandler
 	conanPublish           nativeConanPublishHandler

@@ -1185,6 +1185,164 @@ export type AuditCleanupJob = {
   lastError?: string;
 };
 
+export type NexusMigrationCapabilities = {
+  targetId: string;
+  poolId: string;
+  executionEnabled: boolean;
+  capacityEvidenceSource: "operator-reported";
+  policyVersion: string;
+  maxAttempts: number;
+};
+
+export type NexusMigrationMapping = {
+  sourceRepository: string;
+  targetRepositoryId: string;
+};
+
+export type NexusMigrationCapacityEvidence = {
+  targetId: string;
+  poolId: string;
+  observedAt: string;
+  validUntil: string;
+  freeBytes: number | null;
+  downloadBytes: number | null;
+  uploadBytes: number | null;
+  backupBytes: number | null;
+  restoreBytes: number | null;
+  headroomBytes: number | null;
+};
+
+export type NexusMigrationCounts = {
+  pending: number;
+  uploaded: number;
+  verified: number;
+  committed: number;
+  skipped: number;
+  conflict: number;
+  failed: number;
+  unsupported: number;
+  sourceMissing: number;
+  sourceDeleted: number;
+};
+
+/**
+ * Last failed scan diagnostic. No partial inventory is made executable. Empty asset fields identify failure before an individual asset was known; sourceRepositories bounds the selected repository scope. Contains no upstream URL or credential.
+ */
+export type NexusMigrationScanFailure = {
+  stage:
+    | "metadata_discovery"
+    | "manifest_planning"
+    | "source_verification_open"
+    | "source_verification_read"
+    | "source_verification_digest"
+    | "source_version_validation";
+  sourceRepositories: Array<string>;
+  sourceRepository: string;
+  sourcePath: string;
+  identity: string;
+  code: string;
+  occurredAt: string;
+};
+
+export type NexusMigrationBatch = {
+  id: string;
+  version: string;
+  sourceId: string;
+  sourceVersion: string;
+  mappings: Array<NexusMigrationMapping>;
+  policyVersion: string;
+  capacityEvidence: NexusMigrationCapacityEvidence;
+  state:
+    | "scanning"
+    | "ready"
+    | "running"
+    | "pausing"
+    | "paused"
+    | "blocked"
+    | "completed"
+    | "failed"
+    | "cancelled";
+  manifestSha256: string;
+  scanComplete: boolean;
+  metadataDiscovered: number;
+  entryCount: number;
+  totalBytes: number | null;
+  /**
+   * Copy-stage source bytes actually read, including retries and revalidation of existing identities. Separate from pre-copy sourceVerificationBytes; neither counter implies target visibility.
+   */
+  transferredBytes: number;
+  verifiedBytes: number;
+  visibleIdentities: number;
+  counts: NexusMigrationCounts;
+  lastError: string;
+  createdAt: string;
+  updatedAt: string;
+  /**
+   * Actual source bytes read to fill missing manifest hashes during source verification, separately persisted even if the scan fails. Discovery-provided required hashes avoid this transfer.
+   */
+  sourceVerificationBytes: number;
+  lastScanFailure?: NexusMigrationScanFailure;
+};
+
+export type NexusMigrationBatchPage = {
+  items: Array<NexusMigrationBatch>;
+  nextCursor: string;
+};
+
+export type NexusMigrationStart = {
+  sourceId: string;
+  sourceVersion: string;
+  mappings: Array<NexusMigrationMapping>;
+  policyVersion: "release-raw-v1";
+  capacityEvidence: NexusMigrationCapacityEvidence;
+};
+
+export type NexusMigrationAsset = {
+  sourcePath: string;
+  targetPath: string;
+  size: number;
+  sha256: string;
+  validator: string;
+  uploaded: boolean;
+  verified: boolean;
+};
+
+export type NexusMigrationEntry = {
+  id: string;
+  batchId: string;
+  sourceRepository: string;
+  targetRepositoryId: string;
+  format: "maven" | "raw";
+  identity: string;
+  state:
+    | "pending"
+    | "uploaded"
+    | "verified"
+    | "committed"
+    | "skipped"
+    | "conflict"
+    | "failed"
+    | "unsupported"
+    | "source_missing"
+    | "source_deleted";
+  attempts: number;
+  assets: Array<NexusMigrationAsset>;
+  transferredBytes: number;
+  verifiedBytes: number;
+  visibleIdentities: number;
+  lastError: string;
+  updatedAt: string;
+};
+
+export type NexusMigrationEntryPage = {
+  items: Array<NexusMigrationEntry>;
+  nextCursor: string;
+};
+
+export type NexusMigrationResume = {
+  capacityEvidence: NexusMigrationCapacityEvidence;
+};
+
 export type MigrationSource = {
   id: string;
   name: string;
@@ -2920,6 +3078,538 @@ export type SnapshotId = string;
  * Case-insensitive substring used to filter Conan recipe revision IDs and digests.
  */
 export type ConanRevisionQuery = string;
+
+export type GetNexusMigrationCapabilitiesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/migrations/nexus/capabilities";
+};
+
+export type GetNexusMigrationCapabilitiesErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type GetNexusMigrationCapabilitiesError =
+  GetNexusMigrationCapabilitiesErrors[keyof GetNexusMigrationCapabilitiesErrors];
+
+export type GetNexusMigrationCapabilitiesResponses = {
+  /**
+   * Durable migration state. ETag carries the current batch version.
+   */
+  200: NexusMigrationCapabilities;
+};
+
+export type GetNexusMigrationCapabilitiesResponse =
+  GetNexusMigrationCapabilitiesResponses[keyof GetNexusMigrationCapabilitiesResponses];
+
+export type ListNexusMigrationBatchesData = {
+  body?: never;
+  path?: never;
+  query?: {
+    limit?: number;
+    cursor?: string;
+  };
+  url: "/migrations/nexus/batches";
+};
+
+export type ListNexusMigrationBatchesErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type ListNexusMigrationBatchesError =
+  ListNexusMigrationBatchesErrors[keyof ListNexusMigrationBatchesErrors];
+
+export type ListNexusMigrationBatchesResponses = {
+  /**
+   * Durable migration state. ETag carries the current batch version.
+   */
+  200: NexusMigrationBatchPage;
+};
+
+export type ListNexusMigrationBatchesResponse =
+  ListNexusMigrationBatchesResponses[keyof ListNexusMigrationBatchesResponses];
+
+export type StartNexusMigrationBatchData = {
+  body: NexusMigrationStart;
+  headers: {
+    "Idempotency-Key": string;
+  };
+  path?: never;
+  query?: never;
+  url: "/migrations/nexus/batches";
+};
+
+export type StartNexusMigrationBatchErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type StartNexusMigrationBatchError =
+  StartNexusMigrationBatchErrors[keyof StartNexusMigrationBatchErrors];
+
+export type StartNexusMigrationBatchResponses = {
+  /**
+   * Durable migration state. ETag carries the current batch version.
+   */
+  202: NexusMigrationBatch;
+};
+
+export type StartNexusMigrationBatchResponse =
+  StartNexusMigrationBatchResponses[keyof StartNexusMigrationBatchResponses];
+
+export type GetNexusMigrationBatchData = {
+  body?: never;
+  path: {
+    batchId: string;
+  };
+  query?: never;
+  url: "/migrations/nexus/batches/{batchId}";
+};
+
+export type GetNexusMigrationBatchErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type GetNexusMigrationBatchError =
+  GetNexusMigrationBatchErrors[keyof GetNexusMigrationBatchErrors];
+
+export type GetNexusMigrationBatchResponses = {
+  /**
+   * Durable migration state. ETag carries the current batch version.
+   */
+  200: NexusMigrationBatch;
+};
+
+export type GetNexusMigrationBatchResponse =
+  GetNexusMigrationBatchResponses[keyof GetNexusMigrationBatchResponses];
+
+export type ListNexusMigrationEntriesData = {
+  body?: never;
+  path: {
+    batchId: string;
+  };
+  query?: {
+    limit?: number;
+    cursor?: string;
+  };
+  url: "/migrations/nexus/batches/{batchId}/entries";
+};
+
+export type ListNexusMigrationEntriesErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type ListNexusMigrationEntriesError =
+  ListNexusMigrationEntriesErrors[keyof ListNexusMigrationEntriesErrors];
+
+export type ListNexusMigrationEntriesResponses = {
+  /**
+   * Durable migration state. ETag carries the current batch version.
+   */
+  200: NexusMigrationEntryPage;
+};
+
+export type ListNexusMigrationEntriesResponse =
+  ListNexusMigrationEntriesResponses[keyof ListNexusMigrationEntriesResponses];
+
+export type PauseNexusMigrationBatchData = {
+  body?: never;
+  headers: {
+    "If-Match": string;
+    "Idempotency-Key": string;
+  };
+  path: {
+    batchId: string;
+  };
+  query?: never;
+  url: "/migrations/nexus/batches/{batchId}/pause";
+};
+
+export type PauseNexusMigrationBatchErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type PauseNexusMigrationBatchError =
+  PauseNexusMigrationBatchErrors[keyof PauseNexusMigrationBatchErrors];
+
+export type PauseNexusMigrationBatchResponses = {
+  /**
+   * Durable migration state. ETag carries the current batch version.
+   */
+  200: NexusMigrationBatch;
+};
+
+export type PauseNexusMigrationBatchResponse =
+  PauseNexusMigrationBatchResponses[keyof PauseNexusMigrationBatchResponses];
+
+export type ResumeNexusMigrationBatchData = {
+  body: NexusMigrationResume;
+  headers: {
+    "If-Match": string;
+    "Idempotency-Key": string;
+  };
+  path: {
+    batchId: string;
+  };
+  query?: never;
+  url: "/migrations/nexus/batches/{batchId}/resume";
+};
+
+export type ResumeNexusMigrationBatchErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type ResumeNexusMigrationBatchError =
+  ResumeNexusMigrationBatchErrors[keyof ResumeNexusMigrationBatchErrors];
+
+export type ResumeNexusMigrationBatchResponses = {
+  /**
+   * Durable migration state. ETag carries the current batch version.
+   */
+  200: NexusMigrationBatch;
+};
+
+export type ResumeNexusMigrationBatchResponse =
+  ResumeNexusMigrationBatchResponses[keyof ResumeNexusMigrationBatchResponses];
+
+export type RetryNexusMigrationBatchData = {
+  body: NexusMigrationResume;
+  headers: {
+    "If-Match": string;
+    "Idempotency-Key": string;
+  };
+  path: {
+    batchId: string;
+  };
+  query?: never;
+  url: "/migrations/nexus/batches/{batchId}/retry";
+};
+
+export type RetryNexusMigrationBatchErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type RetryNexusMigrationBatchError =
+  RetryNexusMigrationBatchErrors[keyof RetryNexusMigrationBatchErrors];
+
+export type RetryNexusMigrationBatchResponses = {
+  /**
+   * Durable migration state. ETag carries the current batch version.
+   */
+  200: NexusMigrationBatch;
+};
+
+export type RetryNexusMigrationBatchResponse =
+  RetryNexusMigrationBatchResponses[keyof RetryNexusMigrationBatchResponses];
+
+export type CancelNexusMigrationBatchData = {
+  body?: never;
+  headers: {
+    "If-Match": string;
+    "Idempotency-Key": string;
+  };
+  path: {
+    batchId: string;
+  };
+  query?: never;
+  url: "/migrations/nexus/batches/{batchId}/cancel";
+};
+
+export type CancelNexusMigrationBatchErrors = {
+  /**
+   * Problem response
+   */
+  400: Problem;
+  /**
+   * Problem response
+   */
+  401: Problem;
+  /**
+   * Problem response
+   */
+  403: Problem;
+  /**
+   * Problem response
+   */
+  404: Problem;
+  /**
+   * Problem response
+   */
+  409: Problem;
+  /**
+   * Problem response
+   */
+  412: Problem;
+  /**
+   * Problem response
+   */
+  422: Problem;
+  /**
+   * Problem response
+   */
+  503: Problem;
+};
+
+export type CancelNexusMigrationBatchError =
+  CancelNexusMigrationBatchErrors[keyof CancelNexusMigrationBatchErrors];
+
+export type CancelNexusMigrationBatchResponses = {
+  /**
+   * Durable migration state. ETag carries the current batch version.
+   */
+  200: NexusMigrationBatch;
+};
+
+export type CancelNexusMigrationBatchResponse =
+  CancelNexusMigrationBatchResponses[keyof CancelNexusMigrationBatchResponses];
 
 export type ListMigrationSourcesData = {
   body?: never;

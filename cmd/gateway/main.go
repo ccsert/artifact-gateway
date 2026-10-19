@@ -21,6 +21,8 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/database"
 	"github.com/ccsert/artifact-gateway/internal/evidence"
 	"github.com/ccsert/artifact-gateway/internal/localcapacity"
+	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
+	migrationpg "github.com/ccsert/artifact-gateway/internal/nexusmigration/pgstore"
 	"github.com/ccsert/artifact-gateway/internal/nexussource"
 	sourcepg "github.com/ccsert/artifact-gateway/internal/nexussource/pgstore"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
@@ -247,6 +249,9 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		WithDatabasePoolStats("coordinator", coordinatorPool.Stats).
 		WithDatabasePoolStats("notifications", notificationPool.Stats).
 		WithNodeIdentity(cfg.InstanceID, nodeRoleStrings(cfg.NodeRoles))
+	migrationTargetID := nexusmigration.TargetBinding(cfg.RustFSEndpoint, cfg.RustFSBucket)
+	migrationPublication := app.NewNexusMigrationPublication(store, app.SharedObjectStores(objectStore), migrationTargetID, cfg.MigrationStoragePoolID).WithPublicationScanner(app.NewPublicationScanScheduler(store, dependencies.ArtifactScanner != nil, dependencies.ArtifactScannerFormats, metrics))
+	dependencies.MigrationService = nexusmigration.New(migrationpg.New(databasePool), dependencies.SourceService, migrationPublication, nexusmigration.Options{TargetID: migrationTargetID, PoolID: cfg.MigrationStoragePoolID})
 	runtimeContext, stopRuntime := signalContext()
 	defer stopRuntime()
 	startAPI := cfg.HasRole(config.NodeRoleAPI)
@@ -281,6 +286,7 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		scannerFormats:  dependencies.ArtifactScannerFormats,
 		workerSessionID: runtimeSessionID,
 		aptPublisher:    aptPublisher,
+		migration:       dependencies.MigrationService,
 	}).Start(runtimeContext, cfg)
 	handler := http.Handler(app.NewOperationalHandler(dependencies, metrics))
 	if startAPI {
