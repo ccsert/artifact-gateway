@@ -126,7 +126,12 @@ Synthetic Nexus fixtures cover pagination, release/MIXED/SNAPSHOT, multiple
 repositories, unknown types, interruption/cycles, hostile links, permissions, TLS,
 timeouts, budgets and operator private-address policy. Real PostgreSQL tests cover
 HTTP create/read/restart/update/clear/rotate/delete, ciphertext, stale versions,
-paging and concurrent compare-and-swap. These are local fixture evidence; they do
+paging and concurrent compare-and-swap. `make integration-test` (also run by CI)
+executes the source HTTP tests in `internal/app` and the independent
+`internal/nexussource/pgstore` package against a newly created PostgreSQL/RustFS
+fixture. The contract gate verifies that every package requiring the integration
+build tag is included in that authoritative Compose test command. These are local
+fixture evidence; they do
 not constitute real-source migration, remote CI or production acceptance.
 
 Source API behavior follows Sonatype's official

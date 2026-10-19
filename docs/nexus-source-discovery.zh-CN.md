@@ -95,7 +95,10 @@ Proxy/Group 的 `manual` 表示仍需明确配置原生策略/凭据。`invalid`
 数据库迁移为只追加的 `000146_nexus_migration_sources.sql`。合成 Nexus fixture
 覆盖分页、release/MIXED/SNAPSHOT、多仓、未知类型、中断/循环、恶意链接、权限、TLS、
 超时、预算和操作员私网策略。真实 PostgreSQL 测试覆盖 HTTP 创建/读取/重启/更新/
-清空/轮换/删除、密文、旧版本、分页与并发 CAS。这些是本机 fixture 证据，不代表真实
+清空/轮换/删除、密文、旧版本、分页与并发 CAS。CI 同样运行的 `make integration-test`
+通过权威 Compose 测试命令，在全新 PostgreSQL/RustFS fixture 中执行 `internal/app`
+的源 HTTP 测试及独立 `internal/nexussource/pgstore` 包。契约门禁还检查所有依赖
+integration build tag 的包均包含在该命令中。这些是本机 fixture 证据，不代表真实
 源迁移、远端 CI 或生产验收。
 
 源 API 依据 Sonatype 官方的
