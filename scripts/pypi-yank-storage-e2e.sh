@@ -4,7 +4,24 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
 temporary=$(mktemp -d)
 project="ag-pypi-yank-$(python3 -c 'import uuid; print(uuid.uuid4().hex[:12])')"
-compose=(docker compose --env-file /dev/null --project-name "$project" -f compose.integration.yml)
+read -r postgres_port rustfs_port < <(python3 - <<'PY'
+import socket
+with socket.socket() as postgres, socket.socket() as rustfs:
+    postgres.bind(("127.0.0.1", 0))
+    rustfs.bind(("127.0.0.1", 0))
+    print(postgres.getsockname()[1], rustfs.getsockname()[1])
+PY
+)
+cat >"$temporary/ports.yml" <<YAML
+services:
+  postgres:
+    ports: !override
+      - "127.0.0.1:$postgres_port:5432"
+  rustfs:
+    ports: !override
+      - "127.0.0.1:$rustfs_port:9000"
+YAML
+compose=(docker compose --env-file /dev/null --project-name "$project" -f compose.integration.yml -f "$temporary/ports.yml")
 cleanup() {
   status=$?
   "${compose[@]}" down -v --remove-orphans >/dev/null 2>&1 || true

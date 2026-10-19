@@ -81,7 +81,7 @@ func TestPyPIYankRealPipHostedProxyGroup(t *testing.T) {
 					files := make([]map[string]any, 0, len(records))
 					for _, file := range records {
 						var yank any = false
-						if file.Yanked && !(file.Version == "2.0" && unyanked.Load()) {
+						if file.Yanked && (file.Version != "2.0" || !unyanked.Load()) {
 							yank = file.YankReason
 						}
 						files = append(files, map[string]any{"filename": file.Filename, "url": "/packages/" + file.Filename, "hashes": map[string]string{"sha256": strings.TrimPrefix(file.Digest, "sha256:")}, "yanked": yank})
