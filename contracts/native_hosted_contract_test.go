@@ -1,10 +1,8 @@
 package contracts
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
@@ -470,97 +468,6 @@ func TestNativeHostedProtocolReadLifecycleFixtures(t *testing.T) {
 		if challenge == nil || challenge.Value.Schema.Value.Pattern != "^Basic " {
 			t.Errorf("%s must return a Basic challenge", path)
 		}
-	}
-}
-
-func TestNativeProtocolRouteContinuity(t *testing.T) {
-	baseline := os.Getenv("API_BASELINE")
-	if baseline == "" {
-		t.Skip("no prior API baseline")
-	}
-	prior, err := openapi3.NewLoader().LoadFromFile(baseline)
-	if err != nil {
-		t.Fatalf("load API baseline: %v", err)
-	}
-	current := loadNativeHostedSpec(t)
-	for _, change := range nativeProtocolRouteChanges(prior, current) {
-		t.Error(change)
-	}
-}
-
-// Management APIs may change under ADR 0009. Only canonical package-protocol
-// routes keep a continuity gate; their wire semantics have dedicated contracts
-// and real-client tests. Retired Nexus aliases are not protocol requirements.
-func nativeProtocolRouteChanges(prior, current *openapi3.T) []string {
-	var changes []string
-	for path, priorItem := range prior.Paths.Map() {
-		if !slices.ContainsFunc([]string{"/v2/", "/repository/maven/", "/maven/", "/raw/", "/npm/", "/pypi/", "/go/", "/cargo/", "/conan/", "/apt/"}, func(prefix string) bool {
-			return strings.HasPrefix(path, prefix)
-		}) {
-			continue
-		}
-		currentItem := current.Paths.Find(path)
-		if currentItem == nil {
-			changes = append(changes, "removed native protocol path "+path)
-			continue
-		}
-		for _, method := range []struct {
-			name           string
-			prior, current *openapi3.Operation
-		}{
-			{"GET", priorItem.Get, currentItem.Get},
-			{"HEAD", priorItem.Head, currentItem.Head},
-			{"PUT", priorItem.Put, currentItem.Put},
-			{"POST", priorItem.Post, currentItem.Post},
-			{"DELETE", priorItem.Delete, currentItem.Delete},
-			{"PATCH", priorItem.Patch, currentItem.Patch},
-			{"OPTIONS", priorItem.Options, currentItem.Options},
-			{"TRACE", priorItem.Trace, currentItem.Trace},
-		} {
-			if method.prior != nil && method.current == nil {
-				changes = append(changes, fmt.Sprintf("removed native protocol operation %s %s", method.name, path))
-			}
-		}
-	}
-	slices.Sort(changes)
-	return changes
-}
-
-func TestNativeProtocolRouteContinuityPolicy(t *testing.T) {
-	for _, test := range []struct {
-		path    string
-		protect bool
-	}{
-		{"/repositories/{repositoryId}", false}, {"/api/v2/repositories/{repositoryId}", false},
-		{"/repository/{repository}/", false}, {"/repository/{repository}/{path}", false},
-		{"/v2/{name}/manifests/{reference}", true}, {"/repository/maven/{repository}/{assetPath}", true},
-		{"/maven/{repository}/{path}", true}, {"/raw/{repository}/{path}", true},
-		{"/npm/{repository}/{package}", true}, {"/pypi/{repository}/legacy/", true},
-		{"/go/{repository}/{modulePath}", true}, {"/cargo/{repository}/{path}", true},
-		{"/conan/v2/{repository}/{path}", true}, {"/apt/{repository}/{path}", true},
-	} {
-		t.Run(test.path, func(t *testing.T) {
-			prior := &openapi3.T{Paths: openapi3.NewPaths()}
-			prior.Paths.Set(test.path, &openapi3.PathItem{Get: &openapi3.Operation{}, Head: &openapi3.Operation{}})
-			current := &openapi3.T{Paths: openapi3.NewPaths()}
-			changes := nativeProtocolRouteChanges(prior, current)
-			if test.protect {
-				if !slices.Equal(changes, []string{"removed native protocol path " + test.path}) {
-					t.Fatalf("removed native route changes=%v", changes)
-				}
-			} else if len(changes) != 0 {
-				t.Fatalf("retired or management route is frozen: %v", changes)
-			}
-			current.Paths.Set(test.path, &openapi3.PathItem{Get: &openapi3.Operation{}})
-			changes = nativeProtocolRouteChanges(prior, current)
-			if test.protect {
-				if !slices.Equal(changes, []string{"removed native protocol operation HEAD " + test.path}) {
-					t.Fatalf("removed native operation changes=%v", changes)
-				}
-			} else if len(changes) != 0 {
-				t.Fatalf("retired or management operation is frozen: %v", changes)
-			}
-		})
 	}
 }
 

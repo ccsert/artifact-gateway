@@ -119,9 +119,9 @@ advisory lock、`FOR UPDATE SKIP LOCKED` 和尽力而为的 `LISTEN/NOTIFY` 唤�
 统一生成。
 
 管理接口演进必须通过 `make openapi-check`；ADR 0009 允许服务端和调用方同步进行破坏性调整。
-`make api-change-check` 按提供的基线保护 canonical 原生协议路由与操作，不冻结管理 API 或
-已退役的 Nexus 别名。专属协议契约和真实客户端 E2E 验证 wire 语义。生成文件需要提交，
-以便评审者看到契约变更对客户端和服务端的精确影响。
+历史管理 API 与 URL 路径不再冻结。当前 OpenAPI 源与生成 bundle 必须一致，专属协议契约
+和真实客户端 E2E 在配置的端点验证包协议标准行为。生成文件需要提交，方便审查者确认
+客户端和服务端的实际影响。
 
 ## 一致性与故障模型
 

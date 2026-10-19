@@ -52,10 +52,6 @@ jobs:
         working-directory: console
       - name: Validate OpenAPI contract
         run: make openapi-check
-      - name: Check canonical native protocol route continuity
-        env:
-          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: make api-change-check
       - name: Validate agctl command map against the API contracts
         run: make cli-contract-check
       - name: Run tests

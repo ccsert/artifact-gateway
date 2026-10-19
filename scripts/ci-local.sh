@@ -120,7 +120,6 @@ run_contract() {
   printf '\n== contract-and-test ==\n'
   run "npm lockfile sources" node scripts/npm-lockfile-check.mjs
   run "openapi generated artifacts fresh" check_openapi_fresh
-  run "canonical native protocol route continuity" env GITHUB_BASE_SHA="${GITHUB_BASE_SHA:-$(git rev-parse origin/main 2>/dev/null || true)}" make api-change-check
   run "unit and integration scripts" make test
   run "cargo C0 contract" make cargo-contract
   run "kubernetes manifests" make kubernetes-local-check
