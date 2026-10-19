@@ -30,10 +30,30 @@ export TEST_RUSTFS_ENDPOINT="http://${rustfs_address}" TEST_RUSTFS_ACCESS_KEY=in
 ARTIFACT_GATEWAY_PYPI_BACKUP_MANIFEST="$temporary/manifest.json" \
   go test -v -count=1 -p=1 -tags=integration ./internal/repository ./internal/app \
   -run '^TestPyPIYankPostgres|^TestPostgresRustFSPyPIPublication|^TestPyPIYankFile|^TestPyPIYankRevision|^TestPyPIYankAuthorization'
+postgres_container=$("${compose[@]}" ps -q postgres)
+rustfs_container=$("${compose[@]}" ps -q rustfs)
+postgres_started=$(docker inspect --format '{{.State.StartedAt}}' "$postgres_container")
+rustfs_started=$(docker inspect --format '{{.State.StartedAt}}' "$rustfs_container")
+"${compose[@]}" restart --no-deps postgres rustfs
+"${compose[@]}" up -d --no-deps --wait postgres
+"${compose[@]}" run --rm --no-deps rustfs-ready
+test "$("${compose[@]}" ps -q postgres)" = "$postgres_container"
+test "$("${compose[@]}" ps -q rustfs)" = "$rustfs_container"
+test "$("${compose[@]}" port postgres 5432)" = "$postgres_address"
+test "$("${compose[@]}" port rustfs 9000)" = "$rustfs_address"
+postgres_restarted=$(docker inspect --format '{{.State.StartedAt}}' "$postgres_container")
+rustfs_restarted=$(docker inspect --format '{{.State.StartedAt}}' "$rustfs_container")
+test "$postgres_restarted" != "$postgres_started"
+test "$rustfs_restarted" != "$rustfs_started"
+printf 'Owned service restart confirmed: PostgreSQL=%s RustFS=%s; container identities and ports retained.\n' "$postgres_container" "$rustfs_container"
+printf 'PostgreSQL StartedAt: %s -> %s on %s\n' "$postgres_started" "$postgres_restarted" "$postgres_address"
+printf 'RustFS StartedAt: %s -> %s on %s\n' "$rustfs_started" "$rustfs_restarted" "$rustfs_address"
+ARTIFACT_GATEWAY_PYPI_RESTART_MANIFEST="$temporary/manifest.json" \
+  go test -v -count=1 -tags=integration ./internal/app -run '^TestPyPIYankRestartedServicesPreserveState$'
 "${compose[@]}" exec -T postgres pg_dump -U gateway -d gateway_test -Fc --no-owner >"$temporary/metadata.dump"
 "${compose[@]}" exec -T postgres createdb -U gateway -T template0 gateway_yank_restore_test
 "${compose[@]}" exec -T postgres pg_restore -U gateway -d gateway_yank_restore_test --no-owner <"$temporary/metadata.dump"
 TEST_DATABASE_URL="postgres://gateway:integration-password@${postgres_address}/gateway_yank_restore_test?sslmode=disable" \
 ARTIFACT_GATEWAY_PYPI_RESTORE_MANIFEST="$temporary/manifest.json" \
   go test -v -count=1 -tags=integration ./internal/app -run '^TestPyPIYankRestoredDatabaseAndIndependentObjects$'
-printf '%s\n' 'PyPI yank: PostgreSQL transactions, cross-Gateway restart, RustFS, distribution and isolated pg_dump restore verified.'
+printf '%s\n' 'PyPI yank: PostgreSQL transactions, Gateway reconstruction, PostgreSQL/RustFS service restart, distribution and isolated pg_dump restore verified.'

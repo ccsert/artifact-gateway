@@ -21,6 +21,7 @@ import (
 type pypiYankBackup struct {
 	Repository repository.HostedRepository
 	Group      string
+	Bucket     string
 	Files      []repository.PyPIFile
 	Objects    map[string][]byte
 }
@@ -151,7 +152,7 @@ func TestPyPIYankPostgresRustFSRestartDistributionAndBackup(t *testing.T) {
 		t.Fatalf("durable mutation audit=%+v %v", audits, err)
 	}
 	if destination := os.Getenv("ARTIFACT_GATEWAY_PYPI_BACKUP_MANIFEST"); destination != "" {
-		manifest := pypiYankBackup{Repository: repo, Group: group.Name, Files: files, Objects: map[string][]byte{file.ObjectKey: data}}
+		manifest := pypiYankBackup{Repository: repo, Group: group.Name, Bucket: bucket, Files: files, Objects: map[string][]byte{file.ObjectKey: data}}
 		encoded, marshalErr := json.Marshal(manifest)
 		if marshalErr != nil {
 			t.Fatal(marshalErr)
@@ -165,7 +166,42 @@ func TestPyPIYankPostgresRustFSRestartDistributionAndBackup(t *testing.T) {
 // The owned acceptance runner restores an actual pg_dump into an empty
 // database. This test uses only that database and a separate empty S3 bucket.
 func TestPyPIYankRestoredDatabaseAndIndependentObjects(t *testing.T) {
-	path := os.Getenv("ARTIFACT_GATEWAY_PYPI_RESTORE_MANIFEST")
+	manifest := readPyPIYankBackup(t, "ARTIFACT_GATEWAY_PYPI_RESTORE_MANIFEST")
+	store, objects := pypiYankDurableFixture(t, "pypi-restored-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
+	for key, data := range manifest.Objects {
+		if err := objects.Put(t.Context(), key, data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertPyPIYankBackup(t, manifest, store, objects)
+}
+
+// The runner restarts the original PostgreSQL and RustFS containers before
+// this process starts. No object is uploaded here: reads use the original bucket.
+func TestPyPIYankRestartedServicesPreserveState(t *testing.T) {
+	manifest := readPyPIYankBackup(t, "ARTIFACT_GATEWAY_PYPI_RESTART_MANIFEST")
+	store, objects := pypiYankDurableFixture(t, manifest.Bucket)
+	assertPyPIYankBackup(t, manifest, store, objects)
+	handler := newTestGateway(t, GatewayOptions{Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objects}})
+	file := manifest.Files[0]
+	path := "/api/v2/repositories/" + manifest.Repository.ID + "/pypi/projects/" + file.Project + "/versions/" + file.Version + "/yank"
+	state := pypiYankRequest(handler, "GET", path, "", "", "resolver-secret")
+	if state.Code != 200 || state.Header().Get("ETag") != `"`+repository.PyPIYankRevision(manifest.Files)+`"` {
+		t.Fatalf("restarted management revision=%d %s", state.Code, state.Body.String())
+	}
+	denied := pypiYankRequest(handler, "PATCH", path, `{"yanked":false}`, state.Header().Get("ETag"), "resolver-secret")
+	if denied.Code != 403 || strings.Contains(denied.Body.String(), file.YankReason) {
+		t.Fatalf("restarted service lost grant revocation=%d %s", denied.Code, denied.Body.String())
+	}
+	audits, err := store.ListAudits(t.Context(), repository.AuditQuery{Repository: manifest.Repository.Name, Operation: "pypi.yank"})
+	if err != nil || len(audits) != 1 || audits[0].Actor != "build-agent" || audits[0].RequestID == "" {
+		t.Fatalf("restarted service lost committed audit=%+v %v", audits, err)
+	}
+}
+
+func readPyPIYankBackup(t *testing.T, environment string) pypiYankBackup {
+	t.Helper()
+	path := os.Getenv(environment)
 	if path == "" {
 		t.Skip("owned pg_dump restore manifest is required")
 	}
@@ -177,21 +213,23 @@ func TestPyPIYankRestoredDatabaseAndIndependentObjects(t *testing.T) {
 	if err = json.Unmarshal(encoded, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	store, objects := pypiYankDurableFixture(t, "pypi-restored-"+strings.ReplaceAll(uuid.NewString(), "-", "")[:20])
-	for key, data := range manifest.Objects {
-		if err = objects.Put(t.Context(), key, data); err != nil {
-			t.Fatal(err)
-		}
+	if manifest.Bucket == "" || len(manifest.Files) == 0 || len(manifest.Objects) == 0 {
+		t.Fatal("durable PyPI fixture manifest is incomplete")
 	}
+	return manifest
+}
+
+func assertPyPIYankBackup(t *testing.T, manifest pypiYankBackup, store *repository.PostgresStore, objects ObjectStore) {
+	t.Helper()
 	handler := newTestGateway(t, GatewayOptions{Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objects}})
 	for _, expected := range manifest.Files {
 		actual, readErr := store.GetPyPIFile(t.Context(), manifest.Repository.ID, expected.Filename)
 		if readErr != nil || !actual.CreatedAt.Equal(expected.CreatedAt) || !actual.CachedAt.Equal(expected.CachedAt) || !actual.DeletedAt.Equal(expected.DeletedAt) || !actual.CollectedAt.Equal(expected.CollectedAt) {
-			t.Fatalf("pg_dump lost timestamps=%+v want=%+v err=%v", actual, expected, readErr)
+			t.Fatalf("durable snapshot lost timestamps=%+v want=%+v err=%v", actual, expected, readErr)
 		}
 		actual.CreatedAt, actual.CachedAt, actual.DeletedAt, actual.CollectedAt = expected.CreatedAt, expected.CachedAt, expected.DeletedAt, expected.CollectedAt
 		if actual != expected {
-			t.Fatalf("pg_dump lost file metadata=%+v want=%+v", actual, expected)
+			t.Fatalf("durable snapshot lost file metadata=%+v want=%+v", actual, expected)
 		}
 		for _, root := range []string{manifest.Repository.Name, manifest.Group} {
 			index := pypiYankRequest(handler, "GET", "/pypi/"+root+"/simple/"+expected.Project+"/", "", "", "resolver-secret")

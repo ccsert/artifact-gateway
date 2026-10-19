@@ -84,7 +84,8 @@ Every selected archive is compared in full, by size and SHA-256, with its fixtur
 
 `scripts/pypi-yank-storage-e2e.sh` creates an owned Compose project on dynamic
 ports and removes it afterward. It tests PostgreSQL CAS between Gateway
-instances, transactional audit failure, durable grants, RustFS restart,
+instances, transactional audit failure, durable grants and actual PostgreSQL/
+RustFS container restarts with unchanged ports and retained data. It also tests
 promotion/replication and tombstone/restore. An actual `pg_dump` is restored into
 an empty database, and verified archive bytes are read through a fresh S3 bucket.
 This is isolated acceptance evidence, not a production restore or deployment.

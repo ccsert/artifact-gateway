@@ -64,7 +64,8 @@ Proxy、Group 使用新的下载目录、无客户端缓存，验证 wheel/sdist
 SHA-256。
 
 `scripts/pypi-yank-storage-e2e.sh` 使用动态端口创建并清理自有 Compose 工程，覆盖
-PostgreSQL 跨 Gateway CAS、事务内审计失败、持久授权、RustFS 重启、晋升复制与墓碑
-恢复。真实 `pg_dump` 恢复到空数据库，已验证字节通过新 S3 bucket 回读。这是隔离验收，
+PostgreSQL 跨 Gateway CAS、事务内审计失败、持久授权，以及保持端口和原有数据的真实
+PostgreSQL/RustFS 容器重启；同时覆盖晋升复制与墓碑恢复。真实 `pg_dump` 恢复到空
+数据库，已验证字节通过新 S3 bucket 回读。这是隔离验收，
 不是生产恢复或部署。不新增 Warehouse JSON API、漏洞数据库或私有上游认证。命令映射
 中的 agctl yank 命令仍明确标为计划。
