@@ -370,7 +370,7 @@ func TestNexusFailuresAreExplicitAndBounded(t *testing.T) {
 	}
 }
 func TestNexusRejectsUntrustedDownloadAddressesWithoutContactingThem(t *testing.T) {
-	for _, download := range []string{"https://evil.example/repository/raw-a/a.txt", "https://user:secret@example.com/repository/raw-a/a.txt", "http://example.com/repository/raw-a/a.txt", "https://example.com/repository/raw-a/a.txt?token=secret", "https://example.com/security/users", "https://example.com/repository/raw-a/%2e%2e/secret"} {
+	for _, download := range []string{"https://evil.example/repository/raw-a/a.txt", "https://user:secret@example.com/repository/raw-a/a.txt", "http://example.com/repository/raw-a/a.txt", "https://example.com/repository/raw-a/a.txt?token=secret", "https://example.com/security/users", "https://example.com/repository/raw-a/%2e%2e/secret", "https://example.com/repository/raw-a/x/%2E%2E/a.txt", "https://example.com/repository/raw-a/%252e%252e/secret", "https://example.com/repository/raw-a/a.txt#secret", "https://example.com/repository/raw-a/a.txt%3ftoken=secret", "https://example.com/repository/raw-a/a.txt%23secret"} {
 		t.Run(download, func(t *testing.T) {
 			service, id, _ := fixtureService(t, func(w http.ResponseWriter, r *http.Request) bool {
 				if r.URL.Path != "/service/rest/v1/assets" {
@@ -477,4 +477,51 @@ func (f *nexusFixture) recordedRequests() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return slices.Clone(f.requests)
+}
+
+func TestNexusDiscoveryNormalizesEquivalentEncodedReleasePaths(t *testing.T) {
+	const metadataPath = "com/acme/lib/1.0+build/lib-1.0+build.jar"
+	const canonical = "https://example.com/repository/releases/" + metadataPath
+	for _, download := range []string{
+		"https://example.com/repository/releases/com/acme/lib/1.0+build/lib-1.0%2Bbuild.jar",
+		"https://example.com/repository/releases/com/acme/lib/1.0+build/lib-1.0%2bbuild.jar",
+		"https://example.com/repository/releases/com/acme/lib/1.0%2Bbuild/lib-1.0%2bbuild.jar",
+		canonical,
+	} {
+		t.Run(download, func(t *testing.T) {
+			service, id, fixture := fixtureService(t, func(w http.ResponseWriter, r *http.Request) bool {
+				if r.URL.Path != "/service/rest/v1/assets" {
+					return false
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{map[string]any{"repository": "releases", "format": "maven2", "path": metadataPath, "fileSize": 1, "downloadUrl": download}}, "continuationToken": nil})
+				return true
+			})
+			out, err := service.Discover(context.Background(), id, DiscoveryInput{Repositories: []string{"releases"}})
+			if err != nil {
+				t.Fatalf("equivalent release URL was refused: %v", err)
+			}
+			if len(out.Assets) != 1 || out.Assets[0].Path != metadataPath || out.Assets[0].DownloadURL != canonical {
+				t.Fatalf("release URL was not reconstructed from its safe metadata path: %#v", out.Assets)
+			}
+			if out.Stats.Requests != 3 || len(fixture.recordedRequests()) != 3 {
+				t.Fatal("discovery must validate the download URL without fetching artifact bytes")
+			}
+		})
+	}
+}
+
+func TestNexusDiscoveryKeepsLiteralReservedMetadataPathsUnsupported(t *testing.T) {
+	for _, metadataPath := range []string{"literal%name.txt", "literal#name.txt", "literal?name.txt", "%2e%2e/secret", "%252e%252e/secret"} {
+		t.Run(metadataPath, func(t *testing.T) {
+			service, id, _ := fixtureService(t, func(w http.ResponseWriter, r *http.Request) bool {
+				if r.URL.Path != "/service/rest/v1/assets" {
+					return false
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{map[string]any{"repository": "raw-a", "format": "raw", "path": metadataPath, "fileSize": 1, "downloadUrl": "https://example.com/repository/raw-a/a.txt"}}, "continuationToken": nil})
+				return true
+			})
+			_, err := service.Discover(context.Background(), id, DiscoveryInput{Repositories: []string{"raw-a"}})
+			requireCode(t, err, "source_invalid_response")
+		})
+	}
 }

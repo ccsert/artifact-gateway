@@ -177,7 +177,7 @@ func TestPostgresMigrationSourceReadOnlyDiscoveryAndMappingHTTP(t *testing.T) {
 		case "/service/rest/v1/repositories/raw/hosted/raw-source":
 			_, _ = w.Write([]byte(`{"name":"raw-source","online":true,"storage":{"blobStoreName":"source-only","writePolicy":"ALLOW"}}`))
 		case "/service/rest/v1/assets":
-			_, _ = w.Write([]byte(`{"items":[{"repository":"raw-source","format":"raw","path":"a.txt","fileSize":3,"downloadUrl":"https://example.com/repository/raw-source/a.txt"}],"continuationToken":null}`))
+			_, _ = w.Write([]byte(`{"items":[{"repository":"raw-source","format":"raw","path":"a+build.txt","fileSize":3,"downloadUrl":"https://example.com/repository/raw-source/a%2Bbuild.txt"}],"continuationToken":null}`))
 		default:
 			t.Errorf("source operation outside read-only allowlist %s", r.URL.Path)
 			w.WriteHeader(500)
@@ -230,7 +230,7 @@ func TestPostgresMigrationSourceReadOnlyDiscoveryAndMappingHTTP(t *testing.T) {
 		t.Fatalf("preflight=%d %s", preflight.Code, preflight.Body.String())
 	}
 	discovery := call("POST", root+"/discovery", `{"repositories":["raw-source"],"maxPages":2,"maxAssets":5}`)
-	if discovery.Code != 200 || !strings.Contains(discovery.Body.String(), `"downloadUrl":"https://example.com/repository/raw-source/a.txt"`) || !strings.Contains(discovery.Body.String(), `"unsupportedAssets":[]`) {
+	if discovery.Code != 200 || !strings.Contains(discovery.Body.String(), `"downloadUrl":"https://example.com/repository/raw-source/a+build.txt"`) || !strings.Contains(discovery.Body.String(), `"unsupportedAssets":[]`) {
 		t.Fatalf("discovery=%d %s", discovery.Code, discovery.Body.String())
 	}
 	preview := call("POST", root+"/mapping-preview", `{"mappings":[{"sourceRepository":"raw-source","targetName":"source-mapping-preview-only","format":"raw","type":"hosted"}]}`)

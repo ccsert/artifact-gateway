@@ -454,7 +454,7 @@ func (s *session) asset(repo Repository, raw assetRaw) (Asset, error) {
 	}
 	u, err := url.Parse(raw.DownloadURL)
 	expected := s.base.Path + "/repository/" + repo.Name + "/" + raw.Path
-	if err != nil || u.Scheme != "https" || !strings.EqualFold(u.Host, s.base.Host) || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Path != expected || u.Opaque != "" || u.RawPath != "" {
+	if err != nil || u.Scheme != "https" || !strings.EqualFold(u.Host, s.base.Host) || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Path != expected || u.Opaque != "" {
 		return Asset{}, fail("source_download_url_denied")
 	}
 	checksum := map[string]string{}
@@ -477,7 +477,11 @@ func (s *session) asset(repo Repository, raw assetRaw) (Asset, error) {
 		}
 		checksum[algorithm] = strings.ToLower(value)
 	}
-	return Asset{repo.Name, raw.Path, u.String(), *raw.FileSize, checksum}, nil
+	// Equivalent source escaping (such as %2B or %2b for a literal +) is
+	// acceptable only after the decoded path exactly matches safe metadata.
+	// Reconstruct the URL so source RawPath aliases never cross this boundary.
+	downloadURL := (&url.URL{Scheme: s.base.Scheme, Host: s.base.Host, Path: expected}).String()
+	return Asset{repo.Name, raw.Path, downloadURL, *raw.FileSize, checksum}, nil
 }
 func validAssetPath(value string) bool {
 	if value == "" || len(value) > 2048 || strings.HasPrefix(value, "/") || path.Clean(value) != value || strings.ContainsAny(value, "\\\r\n\x00?#%") {

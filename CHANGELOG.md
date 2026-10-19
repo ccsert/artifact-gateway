@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Normalize equivalent percent-encoded Nexus asset paths after matching decoded paths against safe metadata (#381). Maven release names containing `+` now accept `%2B` and `%2b`; origin, path-traversal and secret-bearing URL restrictions remain enforced.
+
 - Add administrator-only Nexus 3 source configuration with encrypted credentials, protected read-only discovery, release/MIXED/SNAPSHOT classification and explicit native repository mapping preview (#381); see [Nexus source discovery](docs/nexus-source-discovery.md). No byte migration or target provisioning is performed.
 
 - Raw memory fixtures now share public storage-contract tests with PostgreSQL (#278, [ADR 0010](docs/adr/0010-memory-store-contracts.md)). Their default read/reclaim batches are bounded at 100, collected bytes restore as not found, and contended locks honor cancellation. Memory remains an explicit test fixture; it does not prove PostgreSQL transaction or recovery behavior.

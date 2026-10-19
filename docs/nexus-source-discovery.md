@@ -43,8 +43,12 @@ the deployment's audit monitoring and retention policy.
 The client reuses the Gateway egress factory, environment proxy policy, TLS
 verification and DNS pinning. Every redirect is refused. Asset URLs must match the
 configured HTTPS origin and exact `/repository/<source-name>/<asset-path>`;
-userinfo, query/fragment, traversal, encoded aliases and a foreign origin fail.
-Discovery validates these URLs without downloading them.
+userinfo, query/fragment, traversal and a foreign origin fail. Equivalent percent
+encoding is accepted only when its decoded path exactly matches safe asset
+metadata: `%2B`/`%2b` may represent a literal `+`, and the returned URL is rebuilt
+from the approved origin and metadata path. Encoded dot traversal and double
+encoding cannot satisfy that exact match. Metadata paths containing literal `%`,
+`#` or `?` remain unsupported. Discovery validates these URLs without downloading them.
 
 Direct private endpoints are denied by default. An operator can set an exact
 hostname and private CIDR allowlist, for example:
