@@ -1,6 +1,20 @@
 import type { ArtifactDetailMessageKey } from "./artifact-detail.zh-CN";
 
 export const artifactDetailEnUS: Record<ArtifactDetailMessageKey, string> = {
+  "artifactDetail.npmSaveDeprecation": "Save message",
+  "artifactDetail.npmDeprecated": "This version is deprecated",
+  "artifactDetail.npmEditDeprecation": "Edit deprecation",
+  "artifactDetail.npmUnpublishVersion": "Unpublish version {version}?",
+  "artifactDetail.npmUnpublishExplanation":
+    "The version and tags pointing to it become invisible to native clients. Retention controls byte reclamation; restore from the repository’s Tombstones page before reclamation.",
+  "artifactDetail.npmUnpublish": "Unpublish",
+  "artifactDetail.npmGovernanceFailed":
+    "Update failed (HTTP {status}). Read the current package state before deciding whether to submit again.",
+  "artifactDetail.npmGovernanceUnknown":
+    "The update outcome is unknown. Read the package state before deciding whether to submit again.",
+  "artifactDetail.npmDeprecationMessage": "Message for version {version}",
+  "artifactDetail.npmDeprecationExplanation":
+    "The message does not change package bytes. Maximum 4096 bytes. Save an empty message to clear it.",
   "artifactDetail.severity": "Severity",
   "artifactDetail.vulnerability": "Vulnerability",
   "artifactDetail.affectedComponent": "Affected component",

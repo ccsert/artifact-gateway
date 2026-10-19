@@ -53,6 +53,7 @@ agree with executable tests and the
 
 - [Protocol compatibility](protocol-compatibility.md) — implemented behavior and explicit limits by format.
 - [Maven Hosted publication](maven-hosted-publication.md) — Nexus-compatible direct mode and strict opt-in commit.
+- [npm version governance](npm-version-governance.md) — native deprecation, unpublish, authority barriers, recovery and immutable bytes.
 - [APT Proxy and Group](apt-proxy.md) — byte-preserving reads, caching, authorization, and limits.
 - [APT Hosted signing](apt-hosted-signing.md) — H2 preview, external signer, H3 rotation, and production boundary.
 - [APT snapshot archives](apt-snapshot-archive.md) — signed-byte export, offline integrity checks, trusted same-repository restore, and staged legacy migration.

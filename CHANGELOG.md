@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- npm Hosted supports native deprecate/undeprecate and single-version or whole-package unpublish (#309, #310). Package revisions fence concurrent metadata and publication, mutations commit with actor/version audits, and Group tombstones prevent lower-priority members from reviving withdrawn identities. Existing management restore verifies the retained object and durable collection fence; a partial S3 reclaim cannot restore missing bytes. Tarballs and published identities remain immutable. Console shows warnings, permits Hosted writers to edit them and administrators to unpublish; see [npm version governance](docs/npm-version-governance.md). Official npm 11.6.2 acceptance verifies all four scoped/unscoped tarballs before and after recovery.
+
 - `agctl email delivery wait` now fails with exit 1 and `delivery_failed` when the delivery is `dead` (#406). Its failure envelope retains the complete delivery record; accepted still exits 0, and timeout still exits 8 without replaying or canceling the queued work.
 
 - Maven / OCI Proxy rejects responses received after the complete request deadline or after cancellation, even when the runtime has not delivered the deadline notification yet (#403). Rejected response bodies are closed and their transport resources released, and their upstream trace records a safe error; timely bodies remain readable until the caller closes them.

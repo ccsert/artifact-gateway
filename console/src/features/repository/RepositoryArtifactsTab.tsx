@@ -175,6 +175,7 @@ export function RepositoryArtifactsTab({
         }
         initialReference={referenceTarget}
         managed={repo.type !== "proxy"}
+        canWrite={canWrite}
         canDelete={canWrite && repo.type === "hosted"}
         canQuarantine={canQuarantine}
         onDeleted={() => void load(q)}

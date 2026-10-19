@@ -18,6 +18,7 @@ type generatedRepositoryAPIAdapter struct {
 	managementScope
 	store                  repository.HostedRepositoryStore
 	sessions               nativeMavenHandler
+	npmRestore             repository.NPMRestoreStore
 	aptPublication         *aptpublication.Manager
 	aptSnapshotPublisher   *aptpublication.Publisher
 	aptSnapshotImporter    *aptpublication.SnapshotArchiveImporter

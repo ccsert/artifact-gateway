@@ -275,6 +275,11 @@ server base）。计划命令省略前导 `agctl`。
 
 | 协议 API / operationId | 计划命令/处理 | 承接 | 阶段 | 权限 | 验收 |
 | --- | --- | --- | --- | --- | --- |
+| `GET /npm/{repository}/{package}`<br>`getNPMRegistryPackage` | 原生 npm 元数据与版本治理；agctl 不另建 Registry 客户端 | #309 / #310 | N/A | R | N：由官方 npm 执行该协议操作 |
+| `PUT /npm/{repository}/{package}`<br>`putNPMRegistryPackage` | 原生 npm 元数据与版本治理；agctl 不另建 Registry 客户端 | #309 | N/A | W | N：由官方 npm 执行该协议操作 |
+| `PUT /npm/{repository}/{package}/-rev/{revision}`<br>`unpublishNPMRegistryVersions` | 原生 npm 元数据与版本治理；agctl 不另建 Registry 客户端 | #310 | N/A | RA | N：由官方 npm 执行该协议操作 |
+| `DELETE /npm/{repository}/{package}/-rev/{revision}`<br>`unpublishNPMRegistryPackage` | 原生 npm 元数据与版本治理；agctl 不另建 Registry 客户端 | #310 | N/A | RA | N：由官方 npm 执行该协议操作 |
+| `DELETE /npm/{repository}/{package}/-/{tarball}/-rev/{revision}`<br>`acknowledgeNPMUnpublishTarball` | 原生 npm 元数据与版本治理；agctl 不另建 Registry 客户端 | #310 | N/A | RA | N：由官方 npm 执行该协议操作 |
 | `GET /npm/{repository}/-/package/{package}/dist-tags`<br>`listNPMDistTags` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
 | `HEAD /npm/{repository}/-/package/{package}/dist-tags`<br>`headNPMDistTags` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
 | `PUT /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`setNPMDistTag` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |

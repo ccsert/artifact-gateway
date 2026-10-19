@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- npm Hosted 支持原生弃用/清除提示及单版本、整包撤包（#309、#310）。包修订号保护并发元数据与发布，变更和操作者/版本审计原子提交，Group 墓碑阻止低优先级成员复活已撤包身份。既有管理恢复核对保留对象与持久回收栅栏，S3 部分回收不会恢复缺字节版本，Tarball 和发布身份保持不可变。Console 展示提示、允许 Hosted 写入者编辑及管理员撤包，详见 [npm 版本治理](docs/npm-version-governance.zh-CN.md)；官方 npm 11.6.2 验收在恢复前后核对四份 scope/非 scope 完整 Tarball。
+
 - `agctl email delivery wait` 遇到 `dead` 投递时以退出码 1 和 `delivery_failed` 报告失败（#406），失败信封保留完整投递记录。中继接收仍退出 0，超时仍退出 8，不自动重放或取消已入队工作。
 
 - Maven / OCI Proxy 拒绝超过整链截止时间或已取消后收到的响应，即使运行时尚未送达 deadline 取消通知也不会接受迟到响应（#403）。被拒响应关闭 body、释放 transport 资源，并在上游追踪中记录安全的错误；及时响应的 body 保持可读，直到调用方关闭。

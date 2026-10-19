@@ -38,7 +38,7 @@ func TestPostgresRustFSGatewayExplicitCompositionAcrossRestart(t *testing.T) {
 		if err = objects.EnsureBucket(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		handler, err := NewGatewayHandler(GatewayOptions{Store: store, Storage: SharedObjectStores(objects), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
+		handler, err := NewGatewayHandler(GatewayOptions{Store: store, NPMMetadata: store, NPMRestore: store, Storage: SharedObjectStores(objects), Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 		if err != nil {
 			t.Fatal(err)
 		}

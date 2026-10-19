@@ -13,9 +13,59 @@ import (
 )
 
 func explicitGatewayOptions() GatewayOptions {
+	store := repository.NewMemoryStore()
 	return GatewayOptions{
-		Store: repository.NewMemoryStore(), Storage: apptest.MemoryObjectStores(nil),
+		Store: store, NPMMetadata: store, NPMRestore: store, Storage: apptest.MemoryObjectStores(nil),
 		Adapter: TestAdapter{}, Authenticator: testAuthenticator(),
+	}
+}
+
+type npmMetadataFailurePort struct{}
+
+func (npmMetadataFailurePort) UpdateNPMMetadata(context.Context, repository.NPMMetadataMutation) (repository.NPMMetadataChange, error) {
+	return repository.NPMMetadataChange{}, repository.ErrDisabled
+}
+
+type npmRestoreFailurePort struct{ repository.NPMRestoreStore }
+
+func (npmRestoreFailurePort) RestoreNPMVersion(context.Context, repository.NPMRestoreRequest) (repository.NPMVersion, error) {
+	return repository.NPMVersion{}, repository.ErrDisabled
+}
+
+func TestGatewayNPMGovernanceUsesIndependentPorts(t *testing.T) {
+	options := explicitGatewayOptions()
+	store := options.NPMRestore
+	repo, err := options.Store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: "ad425c06-7156-467c-8d3f-734a36212577", Name: "npm-ports", Format: repository.FormatNPM})
+	if err != nil {
+		t.Fatal(err)
+	}
+	options.NPMMetadata = npmMetadataFailurePort{}
+	handler, err := NewGatewayHandler(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishNPMDistTagHTTPFixture(t, handler, repo.Name, "widget", "1.0.0", map[string]string{"latest": "1.0.0"})
+	path := "/npm/" + repo.Name + "/widget"
+	document := npmMetadataDocument(t, handler, path)
+	document["versions"].(map[string]any)["1.0.0"].(map[string]any)["deprecated"] = "must use the mutation port"
+	if response := npmDistTagRequest(t, handler, http.MethodPut, path, "resolver-secret", npmMetadataJSON(t, document)); response.Code != 503 {
+		t.Fatalf("metadata bypassed its injected port: %d %s", response.Code, response.Body.String())
+	}
+	options.NPMMetadata = options.Store.(repository.NPMMetadataStore)
+	options.NPMRestore = npmRestoreFailurePort{store}
+	handler, err = NewGatewayHandler(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response := npmDistTagRequest(t, handler, http.MethodDelete, path+"/-rev/"+document["_rev"].(string), "admin-secret", ""); response.Code != 200 {
+		t.Fatalf("unpublish=%d", response.Code)
+	}
+	if response := npmDistTagRequest(t, handler, http.MethodPost, "/api/v2/repositories/"+repo.ID+"/restore", "admin-secret", `{"coordinate":"widget@1.0.0"}`); response.Code != 409 {
+		t.Fatalf("restore bypassed its injected port: %d %s", response.Code, response.Body.String())
+	}
+	pkg, err := store.GetNPMPackage(context.Background(), repo.ID, "widget")
+	if err != nil || len(pkg.Versions) != 0 || len(pkg.TombstonedVersions) != 1 || pkg.TombstonedVersions[0].Deprecated != "" {
+		t.Fatalf("failed ports changed metadata: %#v %v", pkg, err)
 	}
 }
 
@@ -26,6 +76,10 @@ func TestGatewayCompositionRejectsMissingDependenciesBeforeServing(t *testing.T)
 		message string
 	}{
 		{"metadata", func(o *GatewayOptions) { o.Store = nil }, "metadata store is required"},
+		{"npm mutation", func(o *GatewayOptions) { o.NPMMetadata = nil }, "npm metadata mutation store is required"},
+		{"typed nil npm mutation", func(o *GatewayOptions) { o.NPMMetadata = (*repository.PostgresStore)(nil) }, "npm metadata mutation store is required"},
+		{"npm restore", func(o *GatewayOptions) { o.NPMRestore = nil }, "npm restore store is required"},
+		{"typed nil npm restore", func(o *GatewayOptions) { o.NPMRestore = (*repository.PostgresStore)(nil) }, "npm restore store is required"},
 		{"typed nil metadata", func(o *GatewayOptions) { o.Store = (*repository.PostgresStore)(nil) }, "metadata store is required"},
 		{"adapter", func(o *GatewayOptions) { o.Adapter = nil }, "repository availability adapter is required"},
 		{"typed nil adapter", func(o *GatewayOptions) { o.Adapter = (*TestAdapter)(nil) }, "repository availability adapter is required"},

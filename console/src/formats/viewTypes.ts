@@ -30,6 +30,7 @@ export interface ArtifactDetailProps {
   initialReference?: string;
   /** The repository's own content, which its administrators manage. */
   managed?: boolean;
+  canWrite?: boolean;
   canDelete?: boolean;
   canQuarantine?: boolean;
   onDeleted?: () => void;

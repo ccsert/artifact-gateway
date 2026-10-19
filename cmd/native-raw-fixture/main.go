@@ -21,6 +21,6 @@ func main() {
 	if address == "" {
 		address = "127.0.0.1:18082"
 	}
-	handler := apptest.NewGateway(log.Default(), app.GatewayOptions{Store: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{ResolverToken: "fixture-secret"}}, app.NewGatewayHandler)
+	handler := apptest.NewGateway(log.Default(), app.GatewayOptions{Store: store, NPMMetadata: store, NPMRestore: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{ResolverToken: "fixture-secret"}}, app.NewGatewayHandler)
 	log.Fatal(http.ListenAndServe(address, handler))
 }

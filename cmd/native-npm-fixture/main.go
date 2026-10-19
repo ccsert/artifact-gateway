@@ -57,7 +57,7 @@ func main() {
 		address = "127.0.0.1:18083"
 	}
 	handler := apptest.NewGateway(log.Default(), app.GatewayOptions{
-		Store: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{},
+		Store: store, NPMMetadata: store, NPMRestore: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{},
 		Authenticator: app.Authenticator{ResolverToken: "fixture-secret", ResolverActor: "npm-fixture"},
 	}, app.NewGatewayHandler)
 	log.Printf("Native npm %s fixture listening on %s", packages.Type, address)

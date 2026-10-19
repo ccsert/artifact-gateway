@@ -321,6 +321,11 @@ real routes and must not be joined to `/api/v2` blindly. Retired Nexus repositor
 
 | Protocol API / operationId | Planned command / handling | Owning issue | Phase | Permission | Acceptance |
 | --- | --- | --- | --- | --- | --- |
+| `GET /npm/{repository}/{package}`<br>`getNPMRegistryPackage` | Native npm metadata and governance; no duplicate agctl registry client | #309 / #310 | N/A | R | N: official npm owns the protocol operation |
+| `PUT /npm/{repository}/{package}`<br>`putNPMRegistryPackage` | Native npm metadata and governance; no duplicate agctl registry client | #309 | N/A | W | N: official npm owns the protocol operation |
+| `PUT /npm/{repository}/{package}/-rev/{revision}`<br>`unpublishNPMRegistryVersions` | Native npm metadata and governance; no duplicate agctl registry client | #310 | N/A | RA | N: official npm owns the protocol operation |
+| `DELETE /npm/{repository}/{package}/-rev/{revision}`<br>`unpublishNPMRegistryPackage` | Native npm metadata and governance; no duplicate agctl registry client | #310 | N/A | RA | N: official npm owns the protocol operation |
+| `DELETE /npm/{repository}/{package}/-/{tarball}/-rev/{revision}`<br>`acknowledgeNPMUnpublishTarball` | Native npm metadata and governance; no duplicate agctl registry client | #310 | N/A | RA | N: official npm owns the protocol operation |
 | `GET /npm/{repository}/-/package/{package}/dist-tags`<br>`listNPMDistTags` | native npm client manages dist-tags; agctl does not orchestrate this protocol action | #308 | N/A | native-format authorization | N: npm dist-tag owns this action; no separate agctl command |
 | `HEAD /npm/{repository}/-/package/{package}/dist-tags`<br>`headNPMDistTags` | native npm client manages dist-tags; agctl does not orchestrate this protocol action | #308 | N/A | native-format authorization | N: npm dist-tag owns this action; no separate agctl command |
 | `PUT /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`setNPMDistTag` | native npm client manages dist-tags; agctl does not orchestrate this protocol action | #308 | N/A | native-format authorization | N: npm dist-tag owns this action; no separate agctl command |

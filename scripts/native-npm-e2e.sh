@@ -400,5 +400,5 @@ for line in Path(sys.argv[1]).read_text().splitlines():
         passed = True
 if not passed:
     raise SystemExit("required PostgreSQL/RustFS official npm proof was missing or skipped")
-print("Official npm 11.6.2 persistent dist-tag gate passed; empty-cache target-only installation and complete SHA-256 bytes verified. Loopback HTTP fixture; production TLS/cutover is not asserted.")
+print("Official npm 11.6.2 persistent governance gate passed; dist-tags, exact/range warnings and clearing, single/whole unpublish, Group authority, management restore, empty-cache target-only installation and all four complete SHA-256 tarballs verified. Loopback HTTP fixture; production TLS/cutover is not asserted.")
 PY

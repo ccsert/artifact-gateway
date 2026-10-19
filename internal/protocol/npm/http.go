@@ -28,6 +28,8 @@ const (
 	// RouteDistTags is npm's dist-tag API: `/-/package/<name>/dist-tags` lists
 	// tags and `/-/package/<name>/dist-tags/<tag>` sets or removes one.
 	RouteDistTags
+	RoutePackageRevision
+	RouteTarballRevision
 )
 
 type Route struct {
@@ -36,6 +38,7 @@ type Route struct {
 	Version    string
 	Tarball    string
 	Tag        string
+	Revision   string
 	Kind       RouteKind
 }
 
@@ -70,6 +73,23 @@ func ParsePath(escapedPath string) (Route, bool) {
 	if strings.HasPrefix(resource, "-/package/") {
 		return parseDistTagsPath(repositoryName, strings.TrimPrefix(resource, "-/package/"))
 	}
+	if marker := strings.LastIndex(resource, "/-rev/"); marker >= 0 {
+		base, revision := resource[:marker], resource[marker+6:]
+		if !ValidRevision(revision) {
+			return Route{}, false
+		}
+		if tarballMarker := strings.LastIndex(base, "/-/"); tarballMarker >= 0 {
+			name, tarball := base[:tarballMarker], base[tarballMarker+3:]
+			if !ValidPackageName(name) || !ValidTarballName(tarball) {
+				return Route{}, false
+			}
+			return Route{Repository: repositoryName, Package: name, Tarball: tarball, Revision: revision, Kind: RouteTarballRevision}, true
+		}
+		if !ValidPackageName(base) {
+			return Route{}, false
+		}
+		return Route{Repository: repositoryName, Package: base, Revision: revision, Kind: RoutePackageRevision}, true
+	}
 	if marker := strings.LastIndex(resource, "/-/"); marker >= 0 {
 		packageName, tarballName := resource[:marker], resource[marker+3:]
 		if !ValidPackageName(packageName) || !ValidTarballName(tarballName) {
@@ -87,6 +107,19 @@ func ParsePath(escapedPath string) (Route, bool) {
 		return Route{}, false
 	}
 	return Route{Repository: repositoryName, Package: resource, Kind: RoutePackage}, true
+}
+
+func ValidRevision(revision string) bool {
+	if revision == "" || revision[0] == '0' || strings.TrimSpace(revision) != revision {
+		return false
+	}
+	for _, r := range revision {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	value, err := strconv.ParseInt(revision, 10, 64)
+	return err == nil && value > 0
 }
 
 func parseDistTagsPath(repositoryName, rest string) (Route, bool) {
