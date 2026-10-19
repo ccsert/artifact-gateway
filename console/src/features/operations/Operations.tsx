@@ -6,7 +6,7 @@ import { usePreferences } from "../../lib/preferences";
 import { JobHistoryPanel } from "./JobHistoryPanel";
 import { ScheduledTasksPanel } from "./ScheduledTasksPanel";
 import { WebhookDeliveriesPanel } from "./WebhookDeliveriesPanel";
-import { MigrationSourcesPanel } from "./MigrationSourcesPanel";
+import { NexusMigrationWorkspace } from "./NexusMigrationWorkspace";
 
 /** Operations: scheduled tasks, webhook delivery and the job history. */
 export function OperationsPage() {
@@ -64,7 +64,7 @@ export function OperationsPage() {
             key: "migrations",
             label: t("migration.tab"),
             children:
-              activeTab === "migrations" ? <MigrationSourcesPanel /> : null,
+              activeTab === "migrations" ? <NexusMigrationWorkspace /> : null,
           },
         ]}
       />

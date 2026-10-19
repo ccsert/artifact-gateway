@@ -26,13 +26,16 @@ import {
   observation,
 } from "./migrationModel";
 import { useMigrationRead } from "./migrationQueries";
+import type { BatchDraft } from "./nexusBatchModel";
 
 export function MigrationRepositoryPlanning({
   source,
   preflight,
+  onPlanBatch,
 }: {
   source: MigrationSource;
   preflight: MigrationSourcePreflight;
+  onPlanBatch?: (draft: BatchDraft) => void;
 }) {
   const { t } = usePreferences();
   const [selected, setSelected] = useState<string[]>([]);
@@ -395,6 +398,37 @@ export function MigrationRepositoryPlanning({
               <p className="text-sm text-fg-secondary">
                 {t("migration.mappingHint")}
               </p>
+              {onPlanBatch &&
+                preview.data.valid &&
+                !preview.error &&
+                hosted.length > 0 && (
+                  <div className="ag-migration-actions">
+                    <Button
+                      type="primary"
+                      disabled={busy}
+                      onClick={() =>
+                        onPlanBatch({
+                          sourceId: source.id,
+                          mappings: mappings
+                            .filter(
+                              (mapping) =>
+                                mapping.type === "hosted" &&
+                                hosted.some(
+                                  (item) =>
+                                    item.name === mapping.sourceRepository,
+                                ),
+                            )
+                            .map(({ sourceRepository, targetName }) => ({
+                              sourceRepository,
+                              targetName,
+                            })),
+                        })
+                      }
+                    >
+                      {t("nexusBatch.useMappings", { count: hosted.length })}
+                    </Button>
+                  </div>
+                )}
               <p className="text-xs text-fg-tertiary">
                 {observation(preview.data.stats, t)}
               </p>

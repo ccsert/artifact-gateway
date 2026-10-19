@@ -28,9 +28,14 @@ import {
   useMigrationSources,
 } from "./migrationQueries";
 import "./migration.css";
+import type { BatchDraft } from "./nexusBatchModel";
 
 /** Administrator route owns access. URL state contains only the source ID. */
-export function MigrationSourcesPanel() {
+export function MigrationSourcesPanel({
+  onPlanBatch,
+}: {
+  onPlanBatch?: (draft: BatchDraft) => void;
+}) {
   const { t } = usePreferences();
   const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
@@ -200,6 +205,7 @@ export function MigrationSourcesPanel() {
               <MigrationSourceInspection
                 key={`${detail.data.id}:${detail.data.version}`}
                 source={detail.data}
+                onPlanBatch={onPlanBatch}
               />
             </>
           )}

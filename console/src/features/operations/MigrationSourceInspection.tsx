@@ -10,11 +10,14 @@ import { usePreferences } from "../../lib/preferences";
 import { assertSourceSnapshot, migrationRequest } from "./migrationModel";
 import { useMigrationRead } from "./migrationQueries";
 import { MigrationRepositoryPlanning } from "./MigrationRepositoryPlanning";
+import type { BatchDraft } from "./nexusBatchModel";
 
 export function MigrationSourceInspection({
   source,
+  onPlanBatch,
 }: {
   source: MigrationSource;
+  onPlanBatch?: (draft: BatchDraft) => void;
 }) {
   const { t } = usePreferences();
   const preflight = useMigrationRead<MigrationSourcePreflight>();
@@ -71,6 +74,7 @@ export function MigrationSourceInspection({
             key={preflight.revision}
             source={source}
             preflight={preflight.data}
+            onPlanBatch={onPlanBatch}
           />
         )}
       </Card>
