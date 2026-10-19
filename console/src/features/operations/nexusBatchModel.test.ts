@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createTranslator } from "../../messages/translate";
 import {
   nexusBatch,
   nexusCapabilities,
@@ -7,6 +8,7 @@ import {
 } from "../../test/nexusBatchFixtures";
 import {
   batchError,
+  batchReason,
   batchRequest,
   canCancel,
   canPause,
@@ -181,5 +183,23 @@ describe("batch truth and safe reports", () => {
     await expect(batchRequest(Promise.resolve({}))).rejects.toMatchObject({
       key: "nexusBatch.requestFailed",
     });
+  });
+  it("maps the actual source boundary codes without confusing changed asset bytes with a changed connection version", () => {
+    const t = createTranslator("zh-CN");
+    expect(batchReason("source_missing", t)).toBe(
+      t("nexusBatch.sourceMissing"),
+    );
+    for (const code of [
+      "source_changed",
+      "source_download_failed",
+      "source_invalid_response",
+      "source_timeout",
+      "source_tls_failed",
+      "source_unreachable",
+    ])
+      expect(batchReason(code, t)).toBe(t("nexusBatch.sourceFailure"));
+    expect(batchReason("source_version_changed", t)).toBe(
+      t("nexusBatch.sourceChanged"),
+    );
   });
 });

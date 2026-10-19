@@ -21,7 +21,7 @@ export const nexusScanFailure: NexusMigrationScanFailure = {
   sourceRepository: "releases",
   sourcePath: "org/example/ui-widget/1.0+build/ui-widget-1.0+build.jar",
   identity: "org.example:ui-widget:1.0+build",
-  code: "source_not_found",
+  code: "source_missing",
   occurredAt: "2026-10-19T00:01:00Z",
 };
 export const nexusTargets: Repository[] = [

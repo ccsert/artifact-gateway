@@ -182,6 +182,7 @@ export function NexusBatchStart({
         )}
         <Field label={t("nexusBatch.source")}>
           <Select
+            showSearch={{ optionFilterProp: "label" }}
             aria-label={t("nexusBatch.source")}
             className="w-full"
             value={sourceId || undefined}
@@ -284,6 +285,7 @@ export function NexusBatchStart({
                       label={t("nexusBatch.targetFor", { name: item.name })}
                     >
                       <Select
+                        showSearch={{ optionFilterProp: "label" }}
                         aria-label={t("nexusBatch.targetFor", {
                           name: item.name,
                         })}

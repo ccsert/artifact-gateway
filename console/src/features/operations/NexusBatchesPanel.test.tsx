@@ -445,6 +445,46 @@ describe("real batch read/control states", () => {
       screen.getByRole("button", { name: "重试可重试失败项" }),
     ).toBeEnabled();
   });
+  it("retains the real source_missing scan code in the view and export while distinguishing asset changes from connection versions", async () => {
+    const report = vi.spyOn(batchModel, "observationReport");
+    vi.stubGlobal(
+      "URL",
+      class extends URL {
+        static createObjectURL() {
+          return "blob:observation";
+        }
+        static revokeObjectURL() {}
+      },
+    );
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+      () => undefined,
+    );
+    detail.mockResolvedValue({
+      data: {
+        ...nexusBatch,
+        state: "failed",
+        scanComplete: false,
+        totalBytes: null,
+        entryCount: 0,
+        lastScanFailure: nexusScanFailure,
+      },
+    } as never);
+    entries.mockResolvedValue({ data: { items: [], nextCursor: "" } } as never);
+    show();
+    const diagnostic = await screen.findByRole("region", {
+      name: "最近的持久扫描失败定位",
+    });
+    expect(within(diagnostic).getByText("source_missing")).toBeInTheDocument();
+    expect(within(diagnostic).getByText("源读取时缺失")).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "导出当前观察报告" }),
+    );
+    await waitFor(() => expect(report).toHaveBeenCalled());
+    expect(report.mock.results[0].value.lastScanFailure?.code).toBe(
+      "source_missing",
+    );
+    expect(report.mock.results[0].value.inventoryComplete).toBe(false);
+  });
   it("exports freshly read checkpoints and refuses to call an unfinished cursor a complete inventory", async () => {
     const report = vi.spyOn(batchModel, "observationReport");
     vi.stubGlobal(
