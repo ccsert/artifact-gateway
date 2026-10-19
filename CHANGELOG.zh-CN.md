@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Console 管理员可将 Nexus Hosted 显式映射绑定真实原生目标，凭操作员容量证据、CAS 和幂等请求控制持久迁移批次（#383）。扫描、源校验、复制、目标读回与可见身份分别展示；观察报告包含完整摘要、端点调整与库存不完整标记。冷客户端验收、冻结源后的最终追平与生产切流在另行取得证据前保持未验证。见 [Console Nexus 迁移](docs/nexus-migration-console.zh-CN.md)。
+
 - Nexus 资产 URL 在解码路径与安全 metadata 精确匹配后规范化重建（#381）。Maven release 名称中的 `+` 可用 `%2B` 或 `%2b` 表示；源地址、路径穿越和含秘密 URL 的限制保持生效。
 
 - 新增管理员专用的 Nexus 3 源配置，提供加密凭据、受保护只读发现、release/MIXED/SNAPSHOT 分类及原生仓库显式映射预览（#381）；见 [Nexus 源发现](docs/nexus-source-discovery.zh-CN.md)。不执行字节迁移或目标创建。

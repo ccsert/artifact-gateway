@@ -6,6 +6,7 @@ import { usePreferences } from "../../lib/preferences";
 import { JobHistoryPanel } from "./JobHistoryPanel";
 import { ScheduledTasksPanel } from "./ScheduledTasksPanel";
 import { WebhookDeliveriesPanel } from "./WebhookDeliveriesPanel";
+import { NexusMigrationWorkspace } from "./NexusMigrationWorkspace";
 
 /** Operations: scheduled tasks, webhook delivery and the job history. */
 export function OperationsPage() {
@@ -13,7 +14,8 @@ export function OperationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const activeTab =
-    requestedTab && ["schedules", "webhooks", "jobs"].includes(requestedTab)
+    requestedTab &&
+    ["schedules", "webhooks", "jobs", "migrations"].includes(requestedTab)
       ? requestedTab
       : "schedules";
 
@@ -57,6 +59,12 @@ export function OperationsPage() {
                 <JobHistoryPanel active={activeTab === "jobs"} />
               </SectionBoundary>
             ),
+          },
+          {
+            key: "migrations",
+            label: t("migration.tab"),
+            children:
+              activeTab === "migrations" ? <NexusMigrationWorkspace /> : null,
           },
         ]}
       />

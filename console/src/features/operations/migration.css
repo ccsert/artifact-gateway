@@ -1,0 +1,202 @@
+.ag-migration-panel,
+.ag-migration-inspection,
+.ag-migration-content,
+.ag-migration-form {
+  min-width: 0;
+}
+.ag-migration-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+}
+.ag-migration-header h2,
+.ag-migration-content h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ag-content-strong);
+}
+.ag-migration-header p {
+  margin: 4px 0 0;
+}
+.ag-migration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ag-migration-source-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid var(--ag-border-subtle);
+}
+.ag-migration-source-list li + li {
+  border-top: 1px solid var(--ag-border-row);
+}
+.ag-migration-source-choice {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  text-align: start;
+  padding: 16px 20px;
+  cursor: pointer;
+}
+.ag-migration-source-choice[aria-pressed="true"],
+.ag-migration-source-choice:hover {
+  background: var(--ag-surface-hover);
+}
+.ag-migration-source-choice:focus-visible {
+  outline: 2px solid var(--ag-focus-ring);
+  outline-offset: -2px;
+}
+.ag-migration-technical {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ag-content-secondary);
+}
+.ag-migration-form,
+.ag-migration-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+.ag-migration-content {
+  padding: 0 20px 20px;
+}
+.ag-migration-repositories {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.ag-migration-repository {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--ag-border-row);
+}
+.ag-migration-repository > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ag-migration-notes {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  color: var(--ag-content-secondary);
+  font-size: 12px;
+}
+.ag-migration-repository > .ag-migration-notes {
+  margin: 0;
+}
+.ag-migration-result {
+  display: grid;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ag-border-subtle);
+  min-width: 0;
+}
+.ag-migration-result p,
+.ag-migration-result ul {
+  margin: 0;
+}
+.ag-migration-wrap {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.ag-nexus-fields,
+.ag-nexus-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+  min-width: 0;
+}
+.ag-nexus-observations {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  min-width: 0;
+}
+.ag-nexus-observations > div {
+  min-width: 0;
+}
+.ag-nexus-observations dt {
+  font-size: 12px;
+  color: var(--ag-content-secondary);
+}
+.ag-nexus-observations dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.ag-nexus-observations p {
+  margin: 4px 0 0;
+}
+.ag-nexus-status-counts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--ag-content-secondary);
+}
+.ag-nexus-status-counts li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.ag-nexus-status-counts strong {
+  font-variant-numeric: tabular-nums;
+  color: var(--ag-content-strong);
+}
+.ag-nexus-checks {
+  margin: 0;
+  padding-inline-start: 20px;
+  color: var(--ag-content-secondary);
+  font-size: 13px;
+}
+.ag-nexus-checks li + li {
+  padding-top: 8px;
+}
+.ag-nexus-snippet {
+  margin: 4px 0 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ag-content-secondary);
+}
+@media (max-width: 640px) {
+  .ag-migration-header {
+    padding-inline: 16px;
+  }
+  .ag-migration-content {
+    padding-inline: 16px;
+  }
+  .ag-migration-repository {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ag-nexus-fields,
+  .ag-nexus-stat-grid,
+  .ag-nexus-status-counts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ag-migration-actions .ant-btn {
+    max-width: 100%;
+    height: auto;
+    min-height: 32px;
+    white-space: normal;
+  }
+}

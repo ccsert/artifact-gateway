@@ -13,6 +13,7 @@ agree with executable tests and the
 
 - [Nexus source discovery and native mapping](nexus-source-discovery.md)
 - [Durable Nexus migration batches](nexus-migration-batches.md)
+- [Console Nexus migration and acceptance observations](nexus-migration-console.md)
 
 ## Start here
 

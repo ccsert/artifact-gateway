@@ -4,7 +4,7 @@
 
 #381 新增仅管理员可用的 Nexus 3 只读源服务。契约源为
 `api/openapi/native-hosted.yaml`，管理服务端与 Console/CLI SDK 类型统一生成。
-目前没有对应 `agctl` 命令或迁移 Console 页面。此服务不复制字节、不创建仓库、不调度
+目前没有对应 `agctl` 命令；Console 源工作流见下文。此服务不复制字节、不创建仓库、不调度
 任务，也不执行生产迁移或切流。
 
 ## 连接与凭据
@@ -106,6 +106,42 @@ Proxy/Group 的 `manual` 表示仍需明确配置原生策略/凭据。`invalid`
 的源 HTTP 测试及独立 `internal/nexussource/pgstore` 包。契约门禁还检查所有依赖
 integration build tag 的包均包含在该命令中。这些是本机 fixture 证据，不代表真实
 源迁移、远端 CI 或生产验收。
+
+## Console 源工作流
+
+打开 **运维 → 迁移源**，或使用
+`/operations?tab=migrations&source=<源 UUID>` 直达已保存的连接。
+页面、深链及 API 均要求平台管理员。Console 使用生成的管理客户端完成源分页列表/
+详情、创建/更新/删除、预检、发现和映射预览。
+
+凭据是仅写表单输入：保留时省略字段，替换时提交新凭据对，清除时提交
+`clearCredentials: true`。每次提交（包括失败）、关闭编辑器或切出页签后清空输入。
+凭据不进入浏览器存储、URL、查询键或查询/变更缓存。更新携带 `If-Match` 连接版本；
+冲突时要求先读取最新版本，不静默覆盖。错误文案由有限错误码选择，不回显传输或上游
+响应正文。
+
+预检明确标注凭据可见范围。最多选择十个仓库，逐个显式填写原生目标名。只有选中的
+受支持 Hosted 仓库进入资产发现；Proxy/Group 仅预览配置。Group 目标成员遵循源声明
+的顺序，且必须逐个显式映射。发现结果区分受支持资产和未支持路径，资产大小合计明确
+标为源元数据，不当作已传输或已校验字节。映射结果区分形状验证、手动配置、未支持字段
+和冲突。受支持 Hosted 映射可继续进入[批次表单](nexus-migration-console.zh-CN.md)，
+显式确认已有目标 ID 和更新的容量证据后才会创建持久批次。
+
+刷新失败保留上次成功观察并显示错误。切换源、连接版本、选定仓库或目标输入会使依赖
+它们的观察失效；迟到响应不会替换另一源的结果。重新打开页面会读取已保存连接，
+不会虚构持久发现快照。源视图不复制字节；独立批次视图负责持久执行和如实记录验收
+观察，target-only 冷客户端证据在针对该批次取得之前保持未验证。
+
+状态测试覆盖首次/刷新失败、旧数据保留、分页、源/版本竞争、有序映射和凭据生命周期。
+真实路由 Playwright 布局测试覆盖 1440px 和 390px、双语/主题、16/24px 有界间距、
+列布局、长路径、溢出及普通用户深链拒绝。
+`console/e2e/migration-sources-live.spec.ts` 另通过真实 Gateway/PostgreSQL 和
+`console/e2e/support/nexusSourceFixture.mjs` 验证创建/回读、预检、多仓发现/预览、
+页面重开、凭据轮换/清除、读取拒绝与删除。对隔离 Gateway 设置
+`GATEWAY_ADMIN_TOKEN`、`GATEWAY_RESOLVER_TOKEN` 和
+`MIGRATION_SOURCE_FIXTURE_URL` 后运行。TLS fixture 需要 Gateway 信任的测试证书及
+操作员明确设置的主机名/私网地址白名单；没有绕过 TLS 或私网保护。此 fixture 门禁
+不证明真实 Nexus 库存完整、字节迁移、远端 CI 或生产就绪。
 
 源 API 依据 Sonatype 官方的
 [Repositories API](https://help.sonatype.com/en/repositories-api.html)、

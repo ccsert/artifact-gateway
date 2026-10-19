@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { FIXED_NOW } from "./fixtures";
 import { mockGateway } from "./mockGateway";
+import { migrationSource } from "../../src/test/migrationFixtures";
+import { nexusBatch } from "../../src/test/nexusBatchFixtures";
 
 /**
  * Visual baseline for the Console refactor (#270). Structural refactors must
@@ -137,6 +139,36 @@ const surfaces: Surface[] = [
     name: "api-keys",
     path: "/keys",
     ready: (page) => page.getByText("legacy-ci").first(),
+  },
+  {
+    name: "migration-sources",
+    path: `/operations?tab=migrations&source=${migrationSource.id}`,
+    ready: (page) => page.getByText("尚未运行预检", { exact: true }),
+  },
+  {
+    name: "migration-batches",
+    path: `/operations?tab=migrations&view=batches&batch=${nexusBatch.id}`,
+    ready: (page) =>
+      page.getByRole("heading", { name: "native-raw · raw", exact: true }),
+    prepare: async (page) => {
+      await expect(page.getByText(/库存尚未完整加载/)).toHaveCount(0);
+    },
+  },
+  {
+    name: "migration-batches-mobile",
+    path: `/operations?tab=migrations&view=batches&batch=${nexusBatch.id}`,
+    mobile: true,
+    ready: (page) =>
+      page.getByRole("heading", { name: "native-raw · raw", exact: true }),
+    prepare: async (page) => {
+      await expect(page.getByText(/库存尚未完整加载/)).toHaveCount(0);
+    },
+  },
+  {
+    name: "migration-sources-mobile",
+    path: `/operations?tab=migrations&source=${migrationSource.id}`,
+    ready: (page) => page.getByText("尚未运行预检", { exact: true }),
+    mobile: true,
   },
   {
     name: "operations",

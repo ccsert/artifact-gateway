@@ -16,6 +16,10 @@ import { searchZhCN } from "./search.zh-CN";
 import { searchEnUS } from "./search.en-US";
 import { operationsZhCN } from "./operations.zh-CN";
 import { operationsEnUS } from "./operations.en-US";
+import { migrationZhCN } from "./migration.zh-CN";
+import { migrationEnUS } from "./migration.en-US";
+import { nexusBatchZhCN } from "./nexus-batch.zh-CN";
+import { nexusBatchEnUS } from "./nexus-batch.en-US";
 import { systemZhCN } from "./system.zh-CN";
 import { systemEnUS } from "./system.en-US";
 import { groupsZhCN } from "./groups.zh-CN";
@@ -44,6 +48,8 @@ export const zhCN = {
   ...dashboardZhCN,
   ...searchZhCN,
   ...operationsZhCN,
+  ...migrationZhCN,
+  ...nexusBatchZhCN,
   ...systemZhCN,
   ...groupsZhCN,
   ...settingsZhCN,
@@ -66,6 +72,8 @@ export const enUS: Record<MessageKey, string> = {
   ...dashboardEnUS,
   ...searchEnUS,
   ...operationsEnUS,
+  ...migrationEnUS,
+  ...nexusBatchEnUS,
   ...systemEnUS,
   ...groupsEnUS,
   ...settingsEnUS,

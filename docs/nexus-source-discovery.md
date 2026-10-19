@@ -4,8 +4,8 @@
 
 Issue #381 adds an administrator-only, read-only Nexus 3 source service. The
 contract lives in `api/openapi/native-hosted.yaml` and generates the management
-server and Console/CLI SDK types together. There is no `agctl` command or migration
-Console page yet. This service does not copy bytes, create repositories, schedule
+server and Console/CLI SDK types together. There is no `agctl` command yet; the
+Console source workflow is described below. This service does not copy bytes, create repositories, schedule
 jobs or perform production migration/cutover.
 
 ## Connection and credentials
@@ -140,6 +140,55 @@ fixture. The contract gate verifies that every package requiring the integration
 build tag is included in that authoritative Compose test command. These are local
 fixture evidence; they do
 not constitute real-source migration, remote CI or production acceptance.
+
+## Console source workflow
+
+Open **Operations → Migration sources**, or use
+`/operations?tab=migrations&source=<source UUID>` for a saved connection. The
+route and its deep links require a platform administrator, as do the APIs. The
+Console uses the generated management client for paginated source list/detail,
+create/update/delete, preflight, discovery and mapping preview.
+
+Credentials are write-only form inputs. Keeping credentials omits the field;
+replacement sends a new pair; clearing sends `clearCredentials: true`. Inputs
+clear after every submission, including failures, and when the editor or tab
+closes. They never enter browser storage, URL state, query keys or query/mutation
+caches. Connection versions travel in `If-Match`; a conflict asks the operator
+to read the latest version rather than silently overwriting it. Error text is
+selected from bounded failure codes and never echoes a transport/upstream body.
+
+Preflight labels its credential-visible scope. Select at most ten repositories
+and enter each native target name explicitly. Only selected supported Hosted
+repositories enter asset discovery; Proxy/Group remain configuration previews.
+Group member targets follow the source's declared member order and must all be
+mapped explicitly. Discovery distinguishes supported assets and unsupported
+paths, and labels summed asset size as source metadata, not transferred or
+verified bytes. Mapping results distinguish validation, manual configuration,
+unsupported fields and conflicts. Supported Hosted mappings can continue to the
+[batch form](nexus-migration-console.md), where existing target IDs and fresh
+capacity evidence must be explicitly confirmed before a durable batch is created.
+
+Refresh failures keep the previous successful observation with an error. Changing
+the source, its connection version, selected repositories or target inputs
+invalidates the observations that depend on them; late responses cannot replace
+another source's result. Reopening reads the saved connection but does not invent
+a persisted discovery snapshot. The source view does not copy bytes. Use the
+separate batch view for durable execution and honest acceptance observations;
+target-only cold-client evidence remains unverified until obtained for that batch.
+
+Focused state tests cover initial/refetch failures, retained data, pagination,
+source/version races, ordered mapping and credential lifecycle. The real-route
+Playwright layout gate covers 1440px and 390px, both languages/themes, bounded
+16/24px flow, columns, long paths, overflow and administrator deep-link denial.
+`console/e2e/migration-sources-live.spec.ts` additionally exercises the real
+Gateway and PostgreSQL against `console/e2e/support/nexusSourceFixture.mjs`:
+create/read, preflight, multi-repository discovery/preview, page reopen, credential
+rotation/clear, read refusal and deletion. Run it with `GATEWAY_ADMIN_TOKEN`,
+`GATEWAY_RESOLVER_TOKEN` and `MIGRATION_SOURCE_FIXTURE_URL` against an isolated
+Gateway. The TLS fixture needs a test certificate trusted by that Gateway and an
+operator-owned exact-host/private-address allowlist; neither TLS nor private
+network enforcement is bypassed. This fixture gate does not prove real Nexus
+inventory completeness, byte migration, remote CI or production readiness.
 
 Source API behavior follows Sonatype's official
 [Repositories API](https://help.sonatype.com/en/repositories-api.html),

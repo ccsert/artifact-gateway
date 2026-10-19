@@ -1,6 +1,13 @@
 import type { Page } from "@playwright/test";
 import { defaultSiteSettings } from "../../src/lib/siteSettings";
 import { authenticateAsAdmin } from "../support/auth";
+import { migrationSource } from "../../src/test/migrationFixtures";
+import {
+  nexusBatch,
+  nexusCapabilities,
+  nexusEntries,
+  nexusTargets,
+} from "../../src/test/nexusBatchFixtures";
 import * as fixtures from "./fixtures";
 
 type Json = unknown;
@@ -16,6 +23,15 @@ const routes: Record<string, Json> = {
   "/api/v2/audits/page": fixtures.auditPage,
   "/api/v2/artifact-search": fixtures.artifactSearch,
   "/api/v2/scheduled-tasks": fixtures.scheduledTasks,
+  "/api/v2/migration-sources": { items: [migrationSource], nextCursor: "" },
+  [`/api/v2/migration-sources/${migrationSource.id}`]: migrationSource,
+  "/api/v2/migrations/nexus/capabilities": nexusCapabilities,
+  "/api/v2/migrations/nexus/batches": { items: [nexusBatch], nextCursor: "" },
+  [`/api/v2/migrations/nexus/batches/${nexusBatch.id}`]: nexusBatch,
+  [`/api/v2/migrations/nexus/batches/${nexusBatch.id}/entries`]: {
+    items: nexusEntries,
+    nextCursor: "",
+  },
   "/api/v2/runtime/nodes": fixtures.runtimeNodes,
   "/api/v2/diagnostics": fixtures.diagnostics,
   "/api/v2/anonymous-access-policy": fixtures.anonymousAccessPolicy,
@@ -34,6 +50,8 @@ const routes: Record<string, Json> = {
 for (const item of fixtures.repositories) {
   routes[`/api/v2/repositories/${item.id}`] = item;
 }
+for (const target of nexusTargets)
+  routes[`/api/v2/repositories/${target.id}`] = target;
 const mavenReleasesPath = `/api/v2/repositories/${fixtures.mavenReleases.id}`;
 routes[`${mavenReleasesPath}/capabilities`] =
   fixtures.mavenReleasesCapabilities;
