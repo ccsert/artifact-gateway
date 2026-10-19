@@ -61,6 +61,8 @@ func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWri
 	}
 	members = anonymousHostedGroupMembers(group, members)
 	byIdentity := make(map[artifactIdentity]adminopenapi.ArtifactSummary)
+	higherPriority := make([]repository.HostedRepository, 0, len(members))
+	npmAuthority := make(map[string]repository.NPMPackage)
 	for _, member := range members {
 		repo, err := h.store.GetHostedRepository(r.Context(), member.RepositoryID)
 		if err != nil {
@@ -72,6 +74,17 @@ func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWri
 			return
 		}
 		for _, item := range items {
+			if group.Format == repository.FormatNPM {
+				summary, hidden, lookupErr := h.npmGroupSearchSummary(r, higherPriority, repo, item, npmAuthority)
+				if lookupErr != nil {
+					writeArtifactQueryFailure(w, lookupErr, "read npm Group authority failed")
+					return
+				}
+				if hidden {
+					continue
+				}
+				item = summary
+			}
 			identity := artifactIdentity{Coordinate: item.Coordinate}
 			if item.BuildNumber != nil {
 				identity.BuildNumber = *item.BuildNumber
@@ -80,6 +93,7 @@ func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWri
 				byIdentity[identity] = item
 			}
 		}
+		higherPriority = append(higherPriority, repo)
 	}
 
 	items := make([]adminopenapi.ArtifactSummary, 0, len(byIdentity))
@@ -111,6 +125,69 @@ func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWri
 		next = &token
 	}
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ArtifactSummaryPage{Items: items, NextPageToken: next})
+}
+
+func (h artifactManagementHandler) npmGroupSearchSummary(r *http.Request, higher []repository.HostedRepository, member repository.HostedRepository, item adminopenapi.ArtifactSummary, cache map[string]repository.NPMPackage) (adminopenapi.ArtifactSummary, bool, error) {
+	if item.Version == nil {
+		return item, false, nil
+	}
+	if h.npm == nil {
+		return item, false, errArtifactCapabilityUnavailable
+	}
+	hiddenVersions := make(map[string]bool)
+	for _, repo := range higher {
+		key := repo.ID + "\x00" + item.Coordinate
+		pkg, loaded := cache[key]
+		if !loaded {
+			var err error
+			pkg, err = h.npm.GetNPMPackage(r.Context(), repo.ID, item.Coordinate)
+			if err != nil && !errors.Is(err, repository.ErrNotFound) {
+				return item, false, err
+			}
+			cache[key] = pkg
+		}
+		for _, hidden := range pkg.TombstonedVersions {
+			hiddenVersions[hidden.Version] = true
+		}
+	}
+	if len(hiddenVersions) == 0 {
+		return item, false, nil
+	}
+	key := member.ID + "\x00" + item.Coordinate
+	pkg, loaded := cache[key]
+	if !loaded {
+		var err error
+		pkg, err = h.npm.GetNPMPackage(r.Context(), member.ID, item.Coordinate)
+		if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			return item, false, err
+		}
+		cache[key] = pkg
+	}
+	// The member's chosen summary can name a withdrawn version while other
+	// versions remain authoritative. Rebuild it from the unblocked identities.
+	var latest repository.NPMVersion
+	var count int32
+	latestTag := pkg.DistTags["latest"]
+	for _, version := range pkg.Versions {
+		if hiddenVersions[version.Version] {
+			continue
+		}
+		count++
+		if latest.Version == "" || version.Version == latestTag || latest.Version != latestTag && (version.CreatedAt.After(latest.CreatedAt) || version.CreatedAt.Equal(latest.CreatedAt) && version.Version > latest.Version) {
+			latest = version
+		}
+	}
+	if count == 0 {
+		return item, true, nil
+	}
+	if *item.Version != latest.Version || item.Digest == nil || *item.Digest != latest.Digest {
+		// Intelligence belongs to an immutable version, not the package name.
+		item.Intelligence = nil
+	}
+	item.Version, item.VersionCount = &latest.Version, &count
+	item.Digest, item.Size = &latest.Digest, &latest.Size
+	item.CreatedAt, item.Publisher = &latest.CreatedAt, optionalPublisher(latest.Publisher)
+	return item, false, nil
 }
 
 func (h artifactManagementHandler) searchGroupMemberArtifactsByQuery(r *http.Request, repo repository.HostedRepository, query repository.ArtifactSearchQuery, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {

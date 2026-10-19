@@ -52,6 +52,10 @@ The detailed rules below cover the original Native Hosted Raw, OCI, and Maven
 scope. Current Conan, npm, PyPI, Go, and APT boundaries are owned by the
 compatibility baseline and their executable tests. Group and Proxy behavior
 follows the current runtime overlay rather than stale V2 inventory statements.
+See [npm version governance](npm-version-governance.md) for native deprecation,
+revision-based unpublish, atomic audit, Group tombstone authority and the
+restore/collection fence. These reuse the existing immutable publication and
+lifecycle records.
 
 ## Metadata, object lifecycle, and transactions
 

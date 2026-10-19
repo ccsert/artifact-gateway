@@ -23,7 +23,7 @@ func TestPublishRawResumableUsesRealProtocolAndReconcilesLostPatchResponse(t *te
 	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: testRepoID, Name: "downloads", Format: repository.FormatRaw}); err != nil {
 		t.Fatal(err)
 	}
-	handler := apptest.NewGateway(t, app.GatewayOptions{Store: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: repoTestToken}}, app.NewGatewayHandler)
+	handler := apptest.NewGateway(t, app.GatewayOptions{Store: store, NPMMetadata: store, NPMRestore: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: repoTestToken}}, app.NewGatewayHandler)
 	var mu sync.Mutex
 	posts, patches, completes := 0, 0, 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +110,7 @@ func TestPublishRawResumableDirectoryAndChangedSource(t *testing.T) {
 			if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: testRepoID, Name: "downloads", Format: repository.FormatRaw}); err != nil {
 				t.Fatal(err)
 			}
-			handler := apptest.NewGateway(t, app.GatewayOptions{Store: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: repoTestToken}}, app.NewGatewayHandler)
+			handler := apptest.NewGateway(t, app.GatewayOptions{Store: store, NPMMetadata: store, NPMRestore: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: repoTestToken}}, app.NewGatewayHandler)
 			dir := writeTree(t, map[string]string{"empty": "", "file.txt": "abcdef"})
 			file := filepath.Join(dir, "file.txt")
 			var once sync.Once
@@ -168,7 +168,7 @@ func TestPublishRawResumableSharesDeadlineAcrossChunks(t *testing.T) {
 	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: testRepoID, Name: "downloads", Format: repository.FormatRaw}); err != nil {
 		t.Fatal(err)
 	}
-	handler := apptest.NewGateway(t, app.GatewayOptions{Store: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: repoTestToken}}, app.NewGatewayHandler)
+	handler := apptest.NewGateway(t, app.GatewayOptions{Store: store, NPMMetadata: store, NPMRestore: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: repoTestToken}}, app.NewGatewayHandler)
 	var mu sync.Mutex
 	patches, commits := 0, 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -331,7 +331,7 @@ func TestPublishRawResumeExistingUploadAndFinalResponseLoss(t *testing.T) {
 	if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: testRepoID, Name: "downloads", Format: repository.FormatRaw}); err != nil {
 		t.Fatal(err)
 	}
-	handler := apptest.NewGateway(t, app.GatewayOptions{Store: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: repoTestToken}}, app.NewGatewayHandler)
+	handler := apptest.NewGateway(t, app.GatewayOptions{Store: store, NPMMetadata: store, NPMRestore: store, Storage: apptest.MemoryObjectStores(nil), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: repoTestToken}}, app.NewGatewayHandler)
 	const target = "/raw/downloads/file.txt"
 	request := func(method, path, body string, headers map[string]string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))

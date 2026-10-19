@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 	"net/http"
@@ -373,15 +374,16 @@ func TestRepositoryNPMRetentionAndRestoreLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	publishNPMGroupTestVersion(t, store, repo, "widget", "1.0.0")
-	publishNPMGroupTestVersion(t, store, repo, "widget", "2.0.0")
+	objects := objectstore.NewMemoryStore()
+	handler := newTestGateway(t, GatewayOptions{Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatNPM: objects}})
+	publishNPMDistTagHTTPFixture(t, handler, repo.Name, "widget", "1.0.0", map[string]string{"latest": "1.0.0"})
+	publishNPMDistTagHTTPFixture(t, handler, repo.Name, "widget", "2.0.0", map[string]string{"latest": "2.0.0"})
 	policy, err := store.ReplaceRepositoryRetentionPolicy(ctx, repo.ID, repository.RepositoryRetentionPolicy{
 		Enabled: true, KeepDays: 36500, MinimumVersions: 1, MaximumVersions: 1,
 	}, "1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator()})
 	request := func(method, target, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, target, strings.NewReader(body))
 		authorize(req, "admin-secret")
@@ -438,8 +440,13 @@ func TestRepositoryNPMArtifactCanBeTombstonedThroughManagementAPI(t *testing.T) 
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("npm tombstone=%d body=%s", response.Code, response.Body.String())
 	}
-	if _, err = store.GetNPMPackage(ctx, repo.ID, "widget"); !errors.Is(err, repository.ErrNotFound) {
-		t.Fatalf("deleted npm package remained visible: %v", err)
+	pkg, err := store.GetNPMPackage(ctx, repo.ID, "widget")
+	if err != nil || len(pkg.Versions) != 0 || len(pkg.TombstonedVersions) != 1 {
+		t.Fatalf("deleted npm package lost its authority barrier: %#v %v", pkg, err)
+	}
+	response = npmDistTagRequest(t, handler, http.MethodGet, "/npm/"+repo.Name+"/widget", "resolver-secret", "")
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("deleted npm package remained protocol-visible: %d %s", response.Code, response.Body.String())
 	}
 }
 

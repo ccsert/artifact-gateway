@@ -14,6 +14,7 @@ import (
 type NativeNPMMaintenance struct {
 	Store interface {
 		repository.NativeNPMStore
+		repository.NPMCollectionStore
 		repository.LifecycleJobStore
 	}
 	Objects ObjectStore
@@ -94,6 +95,19 @@ func (m NativeNPMMaintenance) runReclaimJob(ctx context.Context, job repository.
 		}
 		m.end("completed")
 		return nil
+	}
+	if err := m.Store.MarkNPMObjectCollecting(ctx, payload.ObjectKey); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			if completeErr := m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken); completeErr != nil {
+				m.end("failed")
+				return completeErr
+			}
+			m.end("completed")
+			return nil
+		}
+		jobErr := m.fail(ctx, job, "mark npm object collecting failed")
+		m.end("failed")
+		return jobErr
 	}
 	if err := m.Objects.Delete(ctx, payload.ObjectKey); err != nil {
 		jobErr := m.fail(ctx, job, fmt.Sprintf("delete npm object: %v", err))

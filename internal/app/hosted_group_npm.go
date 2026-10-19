@@ -78,6 +78,9 @@ func (h v2GroupNPMHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 	if route.Kind == npmprotocol.RouteDistTags && route.Tag != "" && isNPMWriteMethod(r.Method) {
 		operation = RepositoryWrite
 	}
+	if route.Kind == npmprotocol.RoutePackageRevision || route.Kind == npmprotocol.RouteTarballRevision {
+		operation = RepositoryAdmin
+	}
 	members, denied := resolver.authorizeRepositoryMembers(r.Context(), principal, group.Name, repository.FormatNPM, route.Package, members, operation)
 	if denied && len(members) == 0 {
 		h.native.challenge(w, http.StatusForbidden, "repository permission required")
@@ -89,6 +92,8 @@ func (h v2GroupNPMHandler) serve(w http.ResponseWriter, r *http.Request, resolve
 	}
 
 	switch route.Kind {
+	case npmprotocol.RoutePackageRevision, npmprotocol.RouteTarballRevision:
+		h.native.writeError(w, http.StatusMethodNotAllowed, "npm Groups are read-only")
 	case npmprotocol.RoutePing:
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -269,6 +274,12 @@ func (h v2GroupNPMHandler) resolvePackage(r *http.Request, resolver v2GroupResol
 				continue
 			}
 		}
+		// A higher-priority Hosted tombstone owns the version identity just
+		// like a visible or quarantined publication. Lower members cannot
+		// resurrect it, including after the last visible version is removed.
+		for _, version := range pkg.TombstonedVersions {
+			seenVersions[version.Version] = true
+		}
 		unfiltered := pkg
 		pkg, blockedVersions, filterErr := h.native.filterQuarantinedNPMVersions(r.Context(), repo, pkg)
 		if filterErr != nil {
@@ -334,6 +345,8 @@ func (h v2GroupNPMHandler) tarball(w http.ResponseWriter, r *http.Request, resol
 		if err != nil {
 			continue
 		}
+		// Resolve the candidate identity first: different package versions may
+		// legitimately declare the same flat tarball name in different members.
 		version, err := h.native.store.GetNPMVersionByTarball(r.Context(), repo.ID, packageName, tarballName)
 		if errors.Is(err, repository.ErrNotFound) && repo.Type == repository.RepositoryTypeProxy {
 			target := npmAuditTarget{GroupName: group.Name, Repository: group.Name, MemberName: repo.Name}
@@ -371,6 +384,18 @@ func (h v2GroupNPMHandler) tarball(w http.ResponseWriter, r *http.Request, resol
 			return
 		}
 		for _, higher := range higherPriority {
+			pkg, pkgErr := h.native.store.GetNPMPackage(r.Context(), higher.ID, packageName)
+			if pkgErr != nil && !errors.Is(pkgErr, repository.ErrNotFound) {
+				h.native.writeError(w, http.StatusServiceUnavailable, "package metadata unavailable")
+				return
+			}
+			for _, hidden := range pkg.TombstonedVersions {
+				if hidden.Version == version.Version {
+					resolver.auditResolution(r.Context(), group, repository.FormatNPM, packageName+"/-/"+tarballName, strings.ToLower(r.Method), actor, repository.AuditNotFound, http.StatusNotFound)
+					h.native.writeError(w, http.StatusNotFound, "package tarball not found")
+					return
+				}
+			}
 			higherVersion, lookupErr := h.native.store.GetNPMVersion(r.Context(), higher.ID, packageName, version.Version)
 			if errors.Is(lookupErr, repository.ErrNotFound) {
 				continue

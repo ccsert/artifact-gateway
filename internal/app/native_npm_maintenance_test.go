@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -43,8 +44,60 @@ func TestNativeNPMMaintenanceReclaimsUnreferencedTombstone(t *testing.T) {
 	if _, err = objects.Get(ctx, version.ObjectKey); err == nil {
 		t.Fatal("reclaimed npm object remained in object storage")
 	}
-	if _, err = store.RestoreNPMVersion(ctx, repo.ID, version.PackageName, version.Version); !errors.Is(err, repository.ErrDisabled) {
+	if _, err = store.RestoreNPMVersion(ctx, repository.NPMRestoreRequest{RepositoryID: repo.ID, PackageName: version.PackageName, Version: version.Version}); !errors.Is(err, repository.ErrDisabled) {
 		t.Fatalf("collected npm version restored: %v", err)
+	}
+}
+
+type npmCollectionMarkFailure struct{ *repository.MemoryStore }
+
+func (s npmCollectionMarkFailure) MarkNPMObjectCollected(context.Context, string) error {
+	return errors.New("fixture metadata commit unavailable after S3 delete")
+}
+
+func TestNativeNPMRestoreCannotResurrectAfterReclaimPartialFailure(t *testing.T) {
+	ctx := context.Background()
+	store := repository.NewMemoryStore()
+	objects := objectstore.NewMemoryStore()
+	version := repository.NPMVersion{RepositoryID: "npm-partial-reclaim", PackageName: "widget", Version: "1.0.0", Digest: "sha256:" + strings.Repeat("a", 64), ObjectKey: "native/npm/sha256/partial-reclaim", Size: 3, Manifest: []byte(`{"name":"widget","version":"1.0.0"}`)}
+	if err := objects.Put(ctx, version.ObjectKey, []byte("npm")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.PublishNPMVersion(ctx, version, map[string]string{"latest": version.Version}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.TombstoneNPMVersion(ctx, version.RepositoryID, version.PackageName, version.Version); err != nil {
+		t.Fatal(err)
+	}
+	maintenance := NativeNPMMaintenance{Store: npmCollectionMarkFailure{store}, Objects: objects, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}
+	if err := maintenance.Collect(ctx); err == nil {
+		t.Fatal("fixture failed to inject the metadata failure")
+	}
+	if _, err := objects.Get(ctx, version.ObjectKey); err == nil {
+		t.Fatal("fixture did not delete S3 bytes")
+	}
+	if _, err := store.RestoreNPMVersion(ctx, repository.NPMRestoreRequest{RepositoryID: version.RepositoryID, PackageName: version.PackageName, Version: version.Version}); !errors.Is(err, repository.ErrDisabled) {
+		t.Fatalf("restore after lost collection commit must fail closed, got %v", err)
+	}
+	jobs, err := store.ListLifecycleJobs(ctx, version.RepositoryID, 10)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("retry inventory=%#v %v", jobs, err)
+	}
+	// A failed attempt is queued with backoff. Operator cancellation/retry
+	// makes it immediately runnable through the real control contract.
+	if _, err = store.CancelLifecycleJob(ctx, version.RepositoryID, jobs[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.RetryLifecycleJob(ctx, version.RepositoryID, jobs[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	maintenance.Store = store
+	if err = maintenance.RunReclaimJobs(ctx, 10); err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := store.GetNPMPackage(ctx, version.RepositoryID, version.PackageName)
+	if err != nil || len(pkg.TombstonedVersions) != 1 || pkg.TombstonedVersions[0].CollectedAt.IsZero() || !pkg.TombstonedVersions[0].CollectingAt.IsZero() {
+		t.Fatalf("retry did not finish collection: %#v %v", pkg, err)
 	}
 }
 
@@ -89,7 +142,7 @@ func TestNativeNPMMaintenanceSerializesReclaimAndRestore(t *testing.T) {
 	restoreResult := make(chan error, 1)
 	go func() {
 		close(restoreStarted)
-		_, restoreErr := store.RestoreNPMVersion(ctx, repo.ID, version.PackageName, version.Version)
+		_, restoreErr := store.RestoreNPMVersion(ctx, repository.NPMRestoreRequest{RepositoryID: repo.ID, PackageName: version.PackageName, Version: version.Version})
 		restoreResult <- restoreErr
 	}()
 	<-restoreStarted

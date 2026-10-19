@@ -3111,6 +3111,7 @@
       ],
       "post": {
         "operationId": "restoreRepositoryArtifact",
+        "description": "Restores a tombstoned identity under Repository admin permission. For npm, this reuses the original version, warning, manifest and tarball identity; object size/digest and the collection fence are checked before visibility returns, and the actor's restore audit commits with metadata. A version whose collection has started or whose bytes are missing cannot be restored.\n",
         "requestBody": {
           "required": true,
           "content": {
@@ -3124,6 +3125,16 @@
         "responses": {
           "204": {
             "description": "Tombstoned artifact restored"
+          },
+          "409": {
+            "description": "Collection has started or retained object bytes are unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         }
       }
@@ -5787,6 +5798,328 @@
       },
       "x-gateway-visibility": "visible_committed_versions_only",
       "x-gateway-mutation": "single_store_transaction_with_audit"
+    },
+    "/npm/{repository}/{package}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryName"
+        },
+        {
+          "$ref": "#/components/parameters/NPMPackageName"
+        }
+      ],
+      "get": {
+        "operationId": "getNPMRegistryPackage",
+        "description": "Native packument, including per-version deprecated warnings. Hosted answers include _rev from a consistent package/version snapshot. npm 11.6.2 uses ?write=true before deprecate and unpublish. Hosted tombstones suppress the same version in lower-priority Group members. Proxy deprecated fields follow the normal metadata revalidation/cache contract.\n",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Visible npm package metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NPMRegistryMetadata"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "ETag still matches"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "403": {
+            "description": "Repository read permission or account state denies access"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          },
+          "503": {
+            "description": "Package metadata is unavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "putNPMRegistryPackage",
+        "description": "npm publish with one tarball attachment, or npm deprecate/undeprecate with a full packument and no attachments. Both require Repository write permission. Metadata changes require current _rev and preserve every visible version, dist-tag and immutable manifest field except deprecated. npm's own SemVer range selection is honored as the exact changed-version set, not reinterpreted as another range language. Messages are plain text, at most 4096 UTF-8 bytes; empty clears. At most 1000 versions per metadata document. One invalid/unknown target rejects the whole mutation. Changes and their actor/version/reason audit commit together. A lost response or stale retry must be resolved by reading current state; old revisions get 409 and never overwrite later publications, tags, deletes or restores.\n",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Native npm publication or full packument with _rev; no alternate management publication model.",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata committed; bytes, digest, publisher and publication time are unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NPMMetadataResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Immutable version publication committed"
+          },
+          "400": {
+            "description": "Invalid document, message, selection or attempted immutable-field/tag change"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "403": {
+            "description": "Repository write permission or account state denies access"
+          },
+          "404": {
+            "description": "Package or selected version is unavailable"
+          },
+          "405": {
+            "description": "Proxy and Group repositories are read-only"
+          },
+          "409": {
+            "description": "Stale revision or immutable version already published"
+          },
+          "422": {
+            "description": "Tarball identity or integrity does not match the publication"
+          },
+          "503": {
+            "description": "Metadata storage is unavailable"
+          },
+          "507": {
+            "description": "Publication exceeds capacity quota"
+          }
+        }
+      },
+      "x-gateway-mutation": "single_store_transaction_with_audit"
+    },
+    "/npm/{repository}/{package}/-rev/{revision}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryName"
+        },
+        {
+          "$ref": "#/components/parameters/NPMPackageName"
+        },
+        {
+          "name": "revision",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "unpublishNPMRegistryVersions",
+        "description": "npm 11.6.2 single-version unpublish. Requires Repository admin permission, current path/body _rev, and a full packument retaining unchanged version documents. Removed versions become existing lifecycle tombstones; tags are updated in the same transaction. Invalid retained targets reject the complete change. Tarballs remain under retention, object leases, reference-safe reclaim and the existing management restore operation. No Proxy/Group mutation or upstream delete is performed.\n",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NPMRegistryMetadata"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Selected versions, tags, tombstones and audit committed together",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NPMMetadataResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid selection, tags or changed immutable fields"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "403": {
+            "description": "Repository admin permission or account state denies deletion"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          },
+          "405": {
+            "description": "Only Hosted repositories accept unpublish"
+          },
+          "409": {
+            "description": "Revision changed; re-read before deciding whether to retry"
+          },
+          "503": {
+            "description": "Metadata storage is unavailable"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "unpublishNPMRegistryPackage",
+        "description": "npm whole-package unpublish or removal of its only remaining version. Requires Repository admin permission and current revision. At most 1000 visible versions are atomically tombstoned with tags and audit; no bytes are physically deleted. Identity reservations prevent republishing even after reclaim. Restore individual versions through the existing /repositories/{repositoryId}/restore management operation before reclaim; restore preserves deprecation and immutable bytes, creates latest only if absent, and does not recreate all removed custom tags.\n",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whole package tombstoned with its audit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NPMMetadataResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Package exceeds the bounded mutation selection"
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "403": {
+            "description": "Repository admin permission or account state denies deletion"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          },
+          "405": {
+            "description": "Only Hosted repositories accept unpublish"
+          },
+          "409": {
+            "description": "Revision changed; no mutation committed"
+          },
+          "503": {
+            "description": "Metadata storage is unavailable"
+          }
+        }
+      },
+      "x-gateway-mutation": "single_store_transaction_with_audit"
+    },
+    "/npm/{repository}/{package}/-/{tarball}/-rev/{revision}": {
+      "servers": [
+        {
+          "url": "https://gateway.example.com"
+        }
+      ],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RepositoryName"
+        },
+        {
+          "$ref": "#/components/parameters/NPMPackageName"
+        },
+        {
+          "name": "tarball",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "maxLength": 255
+          }
+        },
+        {
+          "name": "revision",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "acknowledgeNPMUnpublishTarball",
+        "description": "npm's follow-up cleanup acknowledgement. Requires Repository admin, current package revision and an already-tombstoned tarball identity. Repeating acknowledgement is safe. This never deletes bytes; retention and reference-safe reclaim own physical deletion. A still-visible version must first be unpublished atomically through its packument.\n",
+        "security": [
+          {
+            "protocolBasicAuth": []
+          },
+          {
+            "protocolBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tombstone acknowledged; bytes retained",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NPMMetadataResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/BasicUnauthorized"
+          },
+          "403": {
+            "description": "Repository admin permission or account state denies deletion"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProtocolNotFound"
+          },
+          "405": {
+            "description": "Only Hosted repositories accept unpublish"
+          },
+          "409": {
+            "description": "Stale revision or tarball version has not been tombstoned"
+          },
+          "503": {
+            "description": "Metadata storage is unavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5877,7 +6210,8 @@
           "retain",
           "reclaim",
           "promote",
-          "replicate"
+          "replicate",
+          "deprecate"
         ]
       },
       "OCITagList": {
@@ -10791,6 +11125,64 @@
           },
           "nextPageToken": {
             "type": "string"
+          }
+        }
+      },
+      "NPMRegistryMetadata": {
+        "type": "object",
+        "required": [
+          "name",
+          "versions",
+          "dist-tags"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "_rev": {
+            "type": "string",
+            "description": "Hosted package revision, required for metadata changes; never a tarball digest.",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "versions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "deprecated": {
+                  "type": "string",
+                  "description": "Plain-text install warning, at most 4096 UTF-8 bytes; an empty string clears the warning."
+                }
+              }
+            }
+          },
+          "dist-tags": {
+            "$ref": "#/components/schemas/NPMDistTags"
+          }
+        }
+      },
+      "NPMMetadataResult": {
+        "type": "object",
+        "required": [
+          "ok",
+          "rev"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "id": {
+            "type": "string"
+          },
+          "rev": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
           }
         }
       }

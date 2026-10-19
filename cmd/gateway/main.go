@@ -298,6 +298,8 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 		handler, err = app.NewGatewayHandler(app.GatewayOptions{
 			Dependencies: dependencies,
 			Store:        store,
+			NPMMetadata:  store,
+			NPMRestore:   store,
 			Storage:      app.SharedObjectStores(objectStore),
 			Adapter:      app.TestAdapter{},
 			Authenticator: app.Authenticator{

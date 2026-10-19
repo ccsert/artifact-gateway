@@ -167,7 +167,7 @@ func (r *migrationClientRequests) requested(path string) bool {
 func migrationClientGateway(t *testing.T, f *fixture) (*httptest.Server, string, *migrationClientRequests) {
 	t.Helper()
 	token := uuid.NewString()
-	handler, err := app.NewGatewayHandler(app.GatewayOptions{Store: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{ResolverToken: token, RepositoryReaders: map[string][]string{"migration-reader": {f.repo.Name}}}})
+	handler, err := app.NewGatewayHandler(app.GatewayOptions{Store: f.native, NPMMetadata: f.native, NPMRestore: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{ResolverToken: token, RepositoryReaders: map[string][]string{"migration-reader": {f.repo.Name}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

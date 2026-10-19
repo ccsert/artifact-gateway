@@ -8,7 +8,10 @@ export const npmViews: FormatViews = {
     repositoryName,
     artifact,
     initialVersion,
+    managed,
+    canWrite,
     canQuarantine,
+    onDeleted,
     onVersionChange,
   }) => (
     <NpmPackageDetail
@@ -19,6 +22,9 @@ export const npmViews: FormatViews = {
       size={artifact.size}
       publisher={artifact.publisher}
       canQuarantine={canQuarantine}
+      canWrite={Boolean(managed && canWrite)}
+      canUnpublish={Boolean(managed && canQuarantine)}
+      onUnpublished={onDeleted}
       onVersionChange={onVersionChange}
     />
   ),
