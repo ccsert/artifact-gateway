@@ -38,14 +38,16 @@ import (
 )
 
 type sourceFixture struct {
-	mu         sync.Mutex
-	files      map[string][]byte
-	format     string
-	gets       map[string]int
-	change     func(string, int, []byte) ([]byte, int, string)
-	failScan   bool
-	forceProbe bool
-	stream     bool
+	mu                sync.Mutex
+	files             map[string][]byte
+	format            string
+	gets              map[string]int
+	change            func(string, int, []byte) ([]byte, int, string)
+	failScan          bool
+	forceProbe        bool
+	stream            bool
+	metadataSizes     map[string]int64
+	duplicateMetadata bool
 }
 
 func (f *sourceFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +86,14 @@ func (f *sourceFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if f.forceProbe {
 				checksums = map[string]string{}
 			}
-			items = append(items, map[string]any{"repository": "source", "format": f.format, "path": p, "downloadUrl": "https://example.com/repository/source/" + p, "fileSize": len(f.files[p]), "checksum": checksums})
+			size := int64(len(f.files[p]))
+			if override, ok := f.metadataSizes[p]; ok {
+				size = override
+			}
+			items = append(items, map[string]any{"repository": "source", "format": f.format, "path": p, "downloadUrl": "https://example.com/repository/source/" + p, "fileSize": size, "checksum": checksums})
+		}
+		if f.duplicateMetadata && len(items) > 0 {
+			items = append(items, items[0])
 		}
 		var next any
 		if end < len(paths) {

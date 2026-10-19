@@ -101,6 +101,10 @@ counts committed or readback-confirmed native Raw paths/Maven GAVs separately.
 `totalBytes` is null until the complete manifest is sealed, then counts unique
 supported primary bytes. Unsupported and source-deleted entries remain explicit
 report rows. These counters do not constitute official-client acceptance.
+Unsupported paths use synthetic `/unsupported/<decoded source path>` report
+identities, disjoint from native relative Raw paths and Maven GAVs. Duplicate
+source paths fail discovery; a complete rescan emits one report per unsupported
+path in that batch without renaming or discarding a legitimate native identity.
 
 A failed scan persists `lastScanFailure` independently of executable entries. It
 records the bounded stage, selected repository scope, exact known source repository,

@@ -493,7 +493,9 @@ func (s *Service) scanManifest(ctx context.Context, b Batch, failure *ScanFailur
 		return nil, "", 0, 0, err
 	}
 	unsupported := func(repo, p, reason string) {
-		entries = append(entries, Entry{ID: uuid.NewString(), BatchID: b.ID, SourceRepository: repo, TargetRepositoryID: targets[repo], Format: formats[repo], Identity: "unsupported:" + p, State: "unsupported", Assets: []Asset{}, LastError: reason})
+		// Report identities are absolute, so they cannot equal a native relative
+		// Raw path or Maven GAV. Retain the decoded source path for traceability.
+		entries = append(entries, Entry{ID: uuid.NewString(), BatchID: b.ID, SourceRepository: repo, TargetRepositoryID: targets[repo], Format: formats[repo], Identity: "/unsupported/" + p, State: "unsupported", Assets: []Asset{}, LastError: reason})
 	}
 	for _, a := range discovery.UnsupportedAssets {
 		unsupported(a.Repository, a.Path, a.Reason)
