@@ -93,7 +93,8 @@ export type RepositoryOperation =
   | "reclaim"
   | "promote"
   | "replicate"
-  | "yank";
+  | "yank"
+  | "deprecate";
 
 export type OciTagList = {
   name: string;
@@ -8464,6 +8465,16 @@ export type RestoreRepositoryArtifactData = {
   query?: never;
   url: "/repositories/{repositoryId}/restore";
 };
+
+export type RestoreRepositoryArtifactErrors = {
+  /**
+   * Collection has started or retained object bytes are unavailable
+   */
+  409: Problem;
+};
+
+export type RestoreRepositoryArtifactError =
+  RestoreRepositoryArtifactErrors[keyof RestoreRepositoryArtifactErrors];
 
 export type RestoreRepositoryArtifactResponses = {
   /**

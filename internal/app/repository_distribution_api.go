@@ -502,7 +502,7 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 				_, err = h.oci.RestoreOCIManifest(r.Context(), repo.ID, name, digest)
 			case repository.FormatNPM:
 				name, version, _ := parseNPMVersionCoordinate(request.Coordinate)
-				_, err = h.sessions.store.RestoreNPMVersion(r.Context(), repo.ID, name, version)
+				err = h.restoreNPMVersion(r, repo, name, version, principal.Actor)
 			case repository.FormatPyPI:
 				project, version, _ := parsePyPIVersionCoordinate(request.Coordinate)
 				_, err = h.sessions.store.RestorePyPIVersion(r.Context(), repo.ID, project, version)
@@ -549,6 +549,39 @@ func (h generatedRepositoryAPIAdapter) RestoreRepositoryArtifact(w http.Response
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+}
+
+func (h generatedRepositoryAPIAdapter) restoreNPMVersion(r *http.Request, repo repository.HostedRepository, name, version, actor string) error {
+	objects := h.objects[repository.FormatNPM]
+	if objects == nil {
+		return repository.ErrDisabled
+	}
+	pkg, err := h.npmRestore.GetNPMPackage(r.Context(), repo.ID, name)
+	if err != nil {
+		return err
+	}
+	for _, item := range pkg.TombstonedVersions {
+		if item.Version != version {
+			continue
+		}
+		if !item.CollectingAt.IsZero() || !item.CollectedAt.IsZero() {
+			return repository.ErrDisabled
+		}
+		info, statErr := objects.Stat(r.Context(), item.ObjectKey)
+		if errors.Is(statErr, objectstore.ErrNotFound) {
+			return repository.ErrDisabled
+		}
+		if statErr != nil {
+			return statErr
+		}
+		if info.Digest != item.Digest || info.Size != item.Size {
+			return repository.ErrDisabled
+		}
+		_, err = h.npmRestore.RestoreNPMVersion(r.Context(), repository.NPMRestoreRequest{RepositoryID: repo.ID, PackageName: name, Version: version,
+			Audit: repository.AuditRecord{GroupName: repo.Name, Repository: repo.Name, Actor: actor, Status: http.StatusNoContent, CacheDisposition: "bypass", Evidence: map[string]string{"reason": "management_restore"}}})
+		return err
+	}
+	return repository.ErrNotFound
 }
 
 func (h generatedRepositoryAPIAdapter) restoreConanCoordinate(r *http.Request, repositoryID, coordinate string) error {

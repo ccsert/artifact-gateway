@@ -2630,6 +2630,7 @@ func (e RepositoryGrantRecordScopes) Valid() bool {
 const (
 	RepositoryOperationBrowse    RepositoryOperation = "browse"
 	RepositoryOperationDelete    RepositoryOperation = "delete"
+	RepositoryOperationDeprecate RepositoryOperation = "deprecate"
 	RepositoryOperationPromote   RepositoryOperation = "promote"
 	RepositoryOperationPublish   RepositoryOperation = "publish"
 	RepositoryOperationRead      RepositoryOperation = "read"
@@ -2646,6 +2647,8 @@ func (e RepositoryOperation) Valid() bool {
 	case RepositoryOperationBrowse:
 		return true
 	case RepositoryOperationDelete:
+		return true
+	case RepositoryOperationDeprecate:
 		return true
 	case RepositoryOperationPromote:
 		return true
@@ -28886,6 +28889,20 @@ type RestoreRepositoryArtifact204Response struct {
 func (response RestoreRepositoryArtifact204Response) VisitRestoreRepositoryArtifactResponse(w http.ResponseWriter) error {
 	w.WriteHeader(204)
 	return nil
+}
+
+type RestoreRepositoryArtifact409ApplicationProblemPlusJSONResponse Problem
+
+func (response RestoreRepositoryArtifact409ApplicationProblemPlusJSONResponse) VisitRestoreRepositoryArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type GetRetentionPolicyRequestObject struct {

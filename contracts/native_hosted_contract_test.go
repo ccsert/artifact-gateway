@@ -231,6 +231,11 @@ func TestNPMDistTagContractDocumentsClientMethods(t *testing.T) {
 		{"/npm/{repository}/-/package/{package}/dist-tags", "HEAD", "headNPMDistTags", []string{"200", "401"}},
 		{"/npm/{repository}/-/package/{package}/dist-tags/{tag}", "PUT", "setNPMDistTag", []string{"200", "400", "401", "403", "404", "405", "409"}},
 		{"/npm/{repository}/-/package/{package}/dist-tags/{tag}", "DELETE", "deleteNPMDistTag", []string{"200", "400", "401", "403", "404", "405"}},
+		{"/npm/{repository}/{package}", "GET", "getNPMRegistryPackage", []string{"200", "401", "403", "404"}},
+		{"/npm/{repository}/{package}", "PUT", "putNPMRegistryPackage", []string{"200", "201", "400", "401", "403", "404", "405", "409"}},
+		{"/npm/{repository}/{package}/-rev/{revision}", "PUT", "unpublishNPMRegistryVersions", []string{"200", "400", "401", "403", "404", "405", "409"}},
+		{"/npm/{repository}/{package}/-rev/{revision}", "DELETE", "unpublishNPMRegistryPackage", []string{"200", "400", "401", "403", "404", "405", "409"}},
+		{"/npm/{repository}/{package}/-/{tarball}/-rev/{revision}", "DELETE", "acknowledgeNPMUnpublishTarball", []string{"200", "401", "403", "404", "405", "409"}},
 	} {
 		operation := operation(t, spec, endpoint.path, endpoint.method)
 		if operation.OperationID != endpoint.operationID {

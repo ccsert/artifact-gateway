@@ -419,7 +419,6 @@ type NativeNPMStore interface {
 	ListNPMVersions(context.Context, string, string) ([]NPMVersion, error)
 	GetNPMVersion(context.Context, string, string, string) (NPMVersion, error)
 	TombstoneNPMVersion(context.Context, string, string, string) (NPMVersion, error)
-	RestoreNPMVersion(context.Context, string, string, string) (NPMVersion, error)
 	ListReclaimableNPMObjects(context.Context, time.Time, int) ([]NPMObject, error)
 	NPMObjectHasVisibleReference(context.Context, string) (bool, error)
 	MarkNPMObjectCollected(context.Context, string) error

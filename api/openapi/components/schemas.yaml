@@ -24,6 +24,7 @@ RepositoryOperation:
   - promote
   - replicate
   - yank
+  - deprecate
 FormatProfile:
   type: object
   required:
@@ -4031,6 +4032,42 @@ NPMDistTags:
   example:
     latest: 1.0.0
     next: 1.1.0
+NPMMetadataResult:
+  type: object
+  required: [ok, rev]
+  properties:
+    ok:
+      type: boolean
+      const: true
+    id:
+      type: string
+    rev:
+      type: string
+      pattern: '^[1-9][0-9]*$'
+NPMRegistryMetadata:
+  type: object
+  required: [name, versions, dist-tags]
+  additionalProperties: true
+  properties:
+    _id:
+      type: string
+    _rev:
+      type: string
+      description: Hosted package revision, required for metadata changes; never a tarball digest.
+      pattern: '^[1-9][0-9]*$'
+    name:
+      type: string
+    versions:
+      type: object
+      additionalProperties:
+        type: object
+        additionalProperties: true
+        properties:
+          deprecated:
+            type: string
+            description: Plain-text install warning, at most 4096 UTF-8 bytes; an empty string clears the warning.
+    dist-tags:
+      "$ref": "#/NPMDistTags"
 NPMDistTagResult:
   type: object
   required:

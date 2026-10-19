@@ -20,6 +20,21 @@ export const artifactDetailZhCN = {
   "artifactDetail.yankMissingResponse":
     "未收到完整的撤回状态，请刷新后核实结果。",
   "artifactDetail.yankFailed": "读取撤回状态失败",
+  "artifactDetail.npmSaveDeprecation": "保存提示",
+  "artifactDetail.npmDeprecated": "此版本已弃用",
+  "artifactDetail.npmEditDeprecation": "编辑弃用提示",
+  "artifactDetail.npmUnpublishVersion": "撤下版本 {version}？",
+  "artifactDetail.npmUnpublishExplanation":
+    "版本和引用它的标签将从原生协议中隐藏。包字节按保留策略回收；回收前可在仓库的墓碑页面恢复。",
+  "artifactDetail.npmUnpublish": "撤包",
+  "artifactDetail.npmGovernanceFailed":
+    "更新失败（HTTP {status}）。请重新读取当前包状态，再决定是否重新提交。",
+  "artifactDetail.npmGovernanceUnknown":
+    "无法确认更新结果。请重新读取包状态后再决定是否提交，避免重复操作。",
+  "artifactDetail.npmDeprecationMessage": "版本 {version} 的提示",
+  "artifactDetail.npmDeprecationExplanation":
+    "提示不改变包字节，最多 4096 字节。留空并保存可清除提示。",
+
   "artifactDetail.severity": "严重级别",
   "artifactDetail.vulnerability": "漏洞",
   "artifactDetail.affectedComponent": "受影响组件",

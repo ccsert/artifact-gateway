@@ -16,6 +16,7 @@ import { ArtifactQuarantinePanel } from "./ArtifactQuarantinePanel";
 import { useClipboardAction } from "../../components/ui/ConsolePrimitives";
 import { errorText } from "../../messages/translate";
 import { useNpmPackument } from "./protocolDetailQueries";
+import { NpmVersionGovernance } from "./NpmVersionGovernance";
 
 export function NpmPackageDetail({
   repositoryId,
@@ -26,6 +27,9 @@ export function NpmPackageDetail({
   publisher,
   onVersionChange,
   canQuarantine = false,
+  canWrite = false,
+  canUnpublish = false,
+  onUnpublished,
 }: {
   repositoryId?: string;
   repoName: string;
@@ -35,6 +39,9 @@ export function NpmPackageDetail({
   publisher?: string;
   onVersionChange?: (version: string) => void;
   canQuarantine?: boolean;
+  canWrite?: boolean;
+  canUnpublish?: boolean;
+  onUnpublished?: () => void;
 }) {
   const { locale, t } = usePreferences();
   const packumentQuery = useNpmPackument(repoName, packageName);
@@ -117,6 +124,16 @@ export function NpmPackageDetail({
         coordinate={`${packageName}@${selectedVersion}`}
         digest={artifactMetadata?.digest}
         canManage={canQuarantine}
+      />
+      <NpmVersionGovernance
+        key={`${repoName}:${packageName}:${selectedVersion}`}
+        repoName={repoName}
+        packument={packument}
+        version={selectedVersion}
+        canWrite={canWrite}
+        canUnpublish={canUnpublish}
+        onChanged={() => packumentQuery.refetch()}
+        onUnpublished={onUnpublished}
       />
       <ArtifactScanStatus
         repositoryId={repositoryId}

@@ -36,7 +36,10 @@ func npmDistTagMutation(repositoryID, packageName, tag, version string) NPMDistT
 
 // exerciseNPMDistTagContract is shared by the Memory test and the PostgreSQL
 // integration test so both stores keep one dist-tag contract.
-func exerciseNPMDistTagContract(t *testing.T, store NativeNPMStore, repositoryID string) {
+func exerciseNPMDistTagContract(t *testing.T, store interface {
+	NativeNPMStore
+	NPMRestoreStore
+}, repositoryID string) {
 	t.Helper()
 	ctx := context.Background()
 	const name = "@scope/tagged"
@@ -76,7 +79,7 @@ func exerciseNPMDistTagContract(t *testing.T, store NativeNPMStore, repositoryID
 	if err != nil || pkg.DistTags["beta"] != "" || pkg.DistTags["latest"] != "" || pkg.DistTags["next"] != "1.1.0" {
 		t.Fatalf("tags after tombstone=%#v err=%v", pkg.DistTags, err)
 	}
-	if _, err = store.RestoreNPMVersion(ctx, repositoryID, name, first.Version); err != nil {
+	if _, err = store.RestoreNPMVersion(ctx, NPMRestoreRequest{RepositoryID: repositoryID, PackageName: name, Version: first.Version}); err != nil {
 		t.Fatal(err)
 	}
 	if change, err = store.SetNPMDistTag(ctx, npmDistTagMutation(repositoryID, name, "beta", first.Version)); err != nil || change.DistTags["beta"] != first.Version {

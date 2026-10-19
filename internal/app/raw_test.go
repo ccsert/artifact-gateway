@@ -88,7 +88,7 @@ func TestRawHostedFirstCacheAndRange(t *testing.T) {
 	}
 }
 
-func TestRawRejectsMultipartRangeOverHTTP(t *testing.T) {
+func TestRawMultipartRangeOverHTTPRejectsDuplicateFields(t *testing.T) {
 	store := repository.NewMemoryStore()
 	_, err := store.CreateRawGroup(context.Background(), repository.Group{Name: "downloads", Members: []repository.Member{{Name: "hosted", Type: repository.MemberHosted, Endpoint: "http://legacy.local"}}})
 	if err != nil {
@@ -109,9 +109,12 @@ func TestRawRejectsMultipartRangeOverHTTP(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		body, readErr := io.ReadAll(response.Body)
 		_ = response.Body.Close()
-		if response.StatusCode != http.StatusRequestedRangeNotSatisfiable {
-			t.Fatalf("multipart ranges %v status = %d", values, response.StatusCode)
+		if len(values) == 1 {
+			assertRawMultipart(t, response.StatusCode, response.Header, body, []string{"ar", "if"}, []string{"bytes 0-1/8", "bytes 3-4/8"})
+		} else if response.StatusCode != http.StatusRequestedRangeNotSatisfiable || readErr != nil {
+			t.Fatalf("duplicate fields %v status=%d error=%v", values, response.StatusCode, readErr)
 		}
 	}
 }

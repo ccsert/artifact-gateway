@@ -4971,6 +4971,7 @@
       ],
       "post": {
         "operationId": "restoreRepositoryArtifact",
+        "description": "Restores a tombstoned identity under Repository admin permission. For npm, this reuses the original version, warning, manifest and tarball identity; object size/digest and the collection fence are checked before visibility returns, and the actor's restore audit commits with metadata. A version whose collection has started or whose bytes are missing cannot be restored.\n",
         "requestBody": {
           "required": true,
           "content": {
@@ -4984,6 +4985,16 @@
         "responses": {
           "204": {
             "description": "Tombstoned artifact restored"
+          },
+          "409": {
+            "description": "Collection has started or retained object bytes are unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         }
       }
@@ -7925,7 +7936,8 @@
           "reclaim",
           "promote",
           "replicate",
-          "yank"
+          "yank",
+          "deprecate"
         ]
       },
       "OCITagList": {
