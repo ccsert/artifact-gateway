@@ -22,8 +22,7 @@ func (h artifactManagementHandler) BrowseRepository(w http.ResponseWriter, r *ht
 			writeHostedProblem(w, http.StatusBadRequest, "unsupported_format", "directory browsing is not available for this repository format")
 			return
 		}
-		if repo.Type == repository.RepositoryTypeProxy && h.proxyDirectory == nil {
-			writeHostedProblem(w, http.StatusBadRequest, "unsupported_repository_type", "directory browsing is not available for this proxy repository")
+		if repo.Type == repository.RepositoryTypeProxy && !requireArtifactCapability(w, h.proxyDirectory != nil) {
 			return
 		}
 		if repo.Type != repository.RepositoryTypeProxy && !requireArtifactCapability(w, h.browse != nil) {
