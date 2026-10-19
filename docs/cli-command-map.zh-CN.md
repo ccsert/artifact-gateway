@@ -279,11 +279,11 @@ server base）。计划命令省略前导 `agctl`。
 | `HEAD /npm/{repository}/-/package/{package}/dist-tags`<br>`headNPMDistTags` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
 | `PUT /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`setNPMDistTag` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
 | `DELETE /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`deleteNPMDistTag` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
-| `GET /raw/{repository}/{path}`<br>`readRawContent` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
-| `HEAD /raw/{repository}/{path}`<br>`headRawContent` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
+| `GET /raw/{repository}/{path}`<br>`readRawContent` | `publish raw --resumable` (upload status) | #132 | M2 implemented | R / W | U: 核对目标、uploadId 与 offset；完整文件下载仍用原生客户端 |
+| `HEAD /raw/{repository}/{path}`<br>`headRawContent` | `publish raw` | #132 | M1 implemented | R | U: 回读摘要与大小，不下载对象字节 |
 | `PUT /raw/{repository}/{path}`<br>`putRawHostedContent` | `publish raw` | #132 | M1 implemented | W | U：大小/摘要与冲突/回读 |
-| `POST /raw/{repository}/{path}`<br>`startRawHostedResumableUpload` | publish raw resumable 适配 | #132 | M2 | W | U：offset/摘要/中断重放 |
-| `PATCH /raw/{repository}/{path}`<br>`appendRawHostedResumableUpload` | publish raw resumable 适配 | #132 | M2 | W | U：offset/摘要/中断重放 |
+| `POST /raw/{repository}/{path}`<br>`startRawHostedResumableUpload` | publish raw resumable 适配 | #132 | M2 implemented | W | U：offset/摘要/中断重放 |
+| `PATCH /raw/{repository}/{path}`<br>`appendRawHostedResumableUpload` | publish raw resumable 适配 | #132 | M2 implemented | W | U：offset/摘要/中断重放 |
 | `DELETE /raw/{repository}/{path}`<br>`deleteRawHostedContent` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `GET /raw/{repository}/`<br>`listRawRootDirectory` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `GET /apt/{repository}/{path}`<br>`getAptAsset` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
