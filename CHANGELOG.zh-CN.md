@@ -12,9 +12,7 @@
 
 - Gateway HTTP 装配收敛为唯一的 `NewGatewayHandler(GatewayOptions)` 校验入口（#279）。缺少元数据或逐格式对象存储时初始化直接失败；原生处理器与缓存不再隐式创建内存存储。OCI 与 Raw 通过格式无关的 `ObjectStore` 端口分别注入存储，单元测试与原生客户端 fixture 显式复用 `internal/apptest` 设施。内部 `NewGatewayHandlerWith*`、`OCIObjectStore` 与逐格式的 `Dependencies.Native*ObjectStore` 接口已移除。
 
-- [ADR 0009](docs/adr/0009-native-architecture.zh-CN.md) 记录原生管理架构与停止 Nexus 兼容要求；`make lint` 自动检查协议依赖和聚合存储边界（#277）。现有路由由后续切片移除。
-
-- 退役 Nexus 风格 `/repository/<name>/...` 别名和仅含版本的 Go ZIP 发布入口（#385），旧别名返回 404。Maven Hosted 改用 `/repository/maven/<repository>/`，Maven Proxy/Group 改用 `/maven/<repository>/`，npm 使用 `/npm/<repository>/`，PyPI 上传使用 `/pypi/<repository>/legacy/`、Simple 读取使用 `/pypi/<repository>/simple/`，Raw 使用 `/raw/<repository>/`，`GOPROXY` 使用 `/go/<repository>`。Go Hosted 发布需使用 `PUT /go/<repository>/<escaped-module>/@v/<version>.zip`，OCI 保持 `/v2/`。仍含旧 URL 的 lockfile 或缓存元数据需要重新生成。Nexus 只读发现与历史迁移证据保留，生产 URL 切换单独执行。
+- 退役 Nexus 风格 `/repository/<name>/...` 别名和仅含版本的 Go ZIP 发布入口（#385），旧别名返回 404。Maven Hosted 改用 `/repository/maven/<repository>/`，Maven Proxy/Group 改用 `/maven/<repository>/`，npm 使用 `/npm/<repository>/`，PyPI 上传使用 `/pypi/<repository>/legacy/`、Simple 读取使用 `/pypi/<repository>/simple/`，Raw 使用 `/raw/<repository>/`，`GOPROXY` 使用 `/go/<repository>`。Go Hosted 发布需使用 `PUT /go/<repository>/<escaped-module>/@v/<version>.zip`，OCI 保持 `/v2/`。仍含旧 URL 的 lockfile 或缓存元数据需要重新生成。Nexus 只读发现与历史迁移证据保留，生产 URL 切换单独执行。提供基线的 API 门禁现仅保护 canonical 原生协议路径与方法，按 ADR 0009 允许管理 API 调整及退役别名删除。
 
 - [ADR 0009](docs/adr/0009-native-architecture.zh-CN.md) 记录原生管理架构与停止 Nexus 兼容要求；`make lint` 自动检查协议依赖和聚合存储边界（#277）。
 

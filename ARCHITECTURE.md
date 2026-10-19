@@ -142,9 +142,12 @@ The normative lifecycle decisions are recorded in `docs/adr/` and
 contract. Bundled JSON, the Console client under `console/src/client`, and the
 Go server contract under `internal/admin/openapi` are generated together.
 
-All management API evolution must pass `make openapi-check` and the API
-compatibility check. Generated files are committed so reviewers can see the
-exact client and server impact of a contract change.
+Management API evolution must pass `make openapi-check`; ADR 0009 permits
+breaking changes when server and consumers move together. `make api-change-check`
+protects canonical native protocol routes and operations against a supplied
+baseline; it does not freeze management APIs or retired Nexus aliases. Dedicated
+protocol contracts and real-client E2E cover wire semantics. Generated files are
+committed so reviewers can see the exact client and server impact of a change.
 
 ## Consistency and failure model
 

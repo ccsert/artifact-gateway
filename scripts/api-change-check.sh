@@ -5,7 +5,7 @@ spec=api/openapi/native-hosted-v1.json
 base_sha=${GITHUB_BASE_SHA:-}
 
 if [ -z "$base_sha" ]; then
-  echo "No API baseline supplied; skipping compatibility comparison."
+  echo "No API baseline supplied; skipping native protocol route comparison."
   exit 0
 fi
 
@@ -17,4 +17,4 @@ fi
 baseline=$(mktemp)
 trap 'rm -f "$baseline"' EXIT
 git show "$base_sha:$spec" > "$baseline"
-API_BASELINE="$baseline" go test ./contracts -run '^TestNativeHostedAPICompatibility$'
+API_BASELINE="$baseline" go test ./contracts -run '^TestNativeProtocolRouteContinuity$'

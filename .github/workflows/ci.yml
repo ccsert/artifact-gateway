@@ -52,7 +52,7 @@ jobs:
         working-directory: console
       - name: Validate OpenAPI contract
         run: make openapi-check
-      - name: Check Native Hosted API compatibility
+      - name: Check canonical native protocol route continuity
         env:
           GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: make api-change-check

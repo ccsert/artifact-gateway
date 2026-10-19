@@ -118,7 +118,9 @@ advisory lock、`FOR UPDATE SKIP LOCKED` 和尽力而为的 `LISTEN/NOTIFY` 唤�
 `console/src/client` 下的 Console 客户端和 `internal/admin/openapi` 下的 Go 服务端契约
 统一生成。
 
-所有管理接口演进都必须通过 `make openapi-check` 与接口兼容性检查。生成文件需要提交，
+管理接口演进必须通过 `make openapi-check`；ADR 0009 允许服务端和调用方同步进行破坏性调整。
+`make api-change-check` 按提供的基线保护 canonical 原生协议路由与操作，不冻结管理 API 或
+已退役的 Nexus 别名。专属协议契约和真实客户端 E2E 验证 wire 语义。生成文件需要提交，
 以便评审者看到契约变更对客户端和服务端的精确影响。
 
 ## 一致性与故障模型

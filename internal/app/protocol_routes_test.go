@@ -1,5 +1,7 @@
 package app
 
+import "github.com/ccsert/artifact-gateway/internal/objectstore"
+
 import (
 	"bytes"
 	"context"
@@ -25,7 +27,7 @@ func TestRetiredNexusRepositoryRootsReturnNotFound(t *testing.T) {
 		}
 		createV2Group(t, store, "group-"+string(format), format, repository.GroupMember{RepositoryID: repo.ID, Position: 0})
 	}
-	handler := NewGatewayHandler(Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()}, store, TestAdapter{}, testAuthenticator())
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	for _, path := range []string{
 		"/repository/", "/repository/native-maven/org/example/widget/1.0/widget-1.0.pom",
 		"/repository/native-raw/releases/app.txt", "/repository/group-raw/releases/app.txt",
@@ -60,12 +62,7 @@ func TestCanonicalRepositoryRoutesPreservesRawProtocolBehavior(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(
-		Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()},
-		store,
-		TestAdapter{},
-		testAuthenticator(),
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 
 	request := func(method, path string, body []byte) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, bytes.NewReader(body))
@@ -108,12 +105,7 @@ func TestCanonicalRepositoryRoutesReportsResolvedProtocolMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 	metrics := &Metrics{}
-	handler := metrics.Instrument(NewGatewayHandler(
-		Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()},
-		store,
-		TestAdapter{},
-		testAuthenticator(),
-	))
+	handler := metrics.Instrument(newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}}))
 	request := httptest.NewRequest(http.MethodGet, "/raw/raw-releases/missing.txt", nil)
 	authorize(request, "resolver-secret")
 	handler.ServeHTTP(httptest.NewRecorder(), request)
@@ -140,12 +132,7 @@ func TestCanonicalRepositoryRoutesResolvesRawGroups(t *testing.T) {
 	createV2Group(t, store, "raw-all", repository.FormatRaw,
 		repository.GroupMember{RepositoryID: member.ID, Position: 0},
 	)
-	handler := NewGatewayHandler(
-		Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()},
-		store,
-		TestAdapter{},
-		testAuthenticator(),
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 
 	put := httptest.NewRequest(http.MethodPut, "/raw/raw-releases/releases/app.txt", strings.NewReader("group artifact"))
 	authorize(put, "resolver-secret")
@@ -171,12 +158,7 @@ func TestCanonicalRepositoryRoutesKeepsRawDiscoveryURLsOnCanonicalRoot(t *testin
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(
-		Dependencies{NativeOCIObjectStore: NewMemoryOCIObjectStore()},
-		store,
-		TestAdapter{},
-		testAuthenticator(),
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatOCI: objectstore.NewMemoryStore(), repository.FormatRaw: objectstore.NewMemoryStore()}})
 	request := func(method, path, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, strings.NewReader(body))
 		authorize(req, "resolver-secret")
@@ -220,12 +202,7 @@ func TestCanonicalRepositoryRoutesPreservesMavenDirectPublication(t *testing.T) 
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(
-		Dependencies{NativeMavenObjectStore: NewMemoryOCIObjectStore()},
-		store,
-		TestAdapter{},
-		testAuthenticator(),
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatMaven: objectstore.NewMemoryStore()}})
 
 	const (
 		assetPath = "/repository/maven/releases/org/example/widget/1.2.0/widget-1.2.0.pom"
@@ -257,12 +234,7 @@ func TestCanonicalMavenPrefixDoesNotInferRepositoryName(t *testing.T) {
 	}
 	authenticator := testAuthenticator()
 	authenticator.RepositoryWriters["maven"] = append(authenticator.RepositoryWriters["maven"], "maven")
-	handler := NewGatewayHandler(
-		Dependencies{NativeMavenObjectStore: NewMemoryOCIObjectStore()},
-		store,
-		TestAdapter{},
-		authenticator,
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatMaven: objectstore.NewMemoryStore()}})
 
 	const assetPath = "/repository/maven/missing/org/example/widget/1.2.0/widget-1.2.0.pom"
 	const pom = "<project><groupId>org.example</groupId><artifactId>widget</artifactId><version>1.2.0</version></project>"
@@ -286,12 +258,7 @@ func TestCanonicalRepositoryRoutesResolvesMavenGroups(t *testing.T) {
 	createV2Group(t, store, "maven-all", repository.FormatMaven,
 		repository.GroupMember{RepositoryID: member.ID, Position: 0},
 	)
-	handler := NewGatewayHandler(
-		Dependencies{NativeMavenObjectStore: NewMemoryOCIObjectStore()},
-		store,
-		TestAdapter{},
-		testAuthenticator(),
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatMaven: objectstore.NewMemoryStore()}})
 
 	const (
 		assetPath = "org/example/widget/1.2.0/widget-1.2.0.pom"
@@ -323,12 +290,7 @@ func TestCanonicalRepositoryRoutesPreservesNPMScopedPackagePaths(t *testing.T) {
 	}
 	authenticator := testAuthenticator()
 	authenticator.RepositoryWriters["build-agent"] = []string{"releases"}
-	handler := NewGatewayHandler(
-		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()},
-		store,
-		TestAdapter{},
-		authenticator,
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}})
 
 	tarball := npmFixtureTarball(t, "@scope/widget", "1.2.3")
 	publishBody := npmFixturePublishDocument(t, "@scope/widget", "1.2.3", "@scope/widget-1.2.3.tgz", tarball)
@@ -365,12 +327,7 @@ func TestCanonicalRepositoryRoutesResolvesNPMGroups(t *testing.T) {
 	)
 	authenticator := testAuthenticator()
 	authenticator.RepositoryWriters["build-agent"] = []string{"releases"}
-	handler := NewGatewayHandler(
-		Dependencies{NativeNPMObjectStore: NewMemoryOCIObjectStore()},
-		store,
-		TestAdapter{},
-		authenticator,
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatNPM: objectstore.NewMemoryStore()}})
 
 	tarball := npmFixtureTarball(t, "@scope/widget", "1.2.3")
 	publishBody := npmFixturePublishDocument(t, "@scope/widget", "1.2.3", "@scope/widget-1.2.3.tgz", tarball)
@@ -402,14 +359,9 @@ func TestCanonicalRepositoryRoutesPreservesPyPISimpleReads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	file := publishPyPITestFile(t, store, objects, repo, "gateway-widget", "1.2.3")
-	handler := NewGatewayHandler(
-		Dependencies{NativePyPIObjectStore: objects},
-		store,
-		TestAdapter{},
-		testAuthenticator(),
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objects}})
 
 	simple := httptest.NewRequest(http.MethodGet, "/pypi/python/simple/gateway-widget/", nil)
 	authorize(simple, "resolver-secret")
@@ -449,12 +401,7 @@ func TestCanonicalRepositoryRoutesAcceptsPyPITwineLegacyUpload(t *testing.T) {
 	if err = writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewGatewayHandler(
-		Dependencies{NativePyPIObjectStore: NewMemoryOCIObjectStore()},
-		store,
-		TestAdapter{},
-		testAuthenticator(),
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objectstore.NewMemoryStore()}})
 	upload := httptest.NewRequest(http.MethodPost, "/pypi/python/legacy/", body)
 	upload.Header.Set("Content-Type", writer.FormDataContentType())
 	authorize(upload, "resolver-secret")
@@ -487,14 +434,9 @@ func TestCanonicalRepositoryRoutesResolvesPyPIGroups(t *testing.T) {
 	createV2Group(t, store, "python-all", repository.FormatPyPI,
 		repository.GroupMember{RepositoryID: repo.ID, Position: 0},
 	)
-	objects := NewMemoryOCIObjectStore()
+	objects := objectstore.NewMemoryStore()
 	file := publishPyPITestFile(t, store, objects, repo, "gateway-widget", "1.2.3")
-	handler := NewGatewayHandler(
-		Dependencies{NativePyPIObjectStore: objects},
-		store,
-		TestAdapter{},
-		testAuthenticator(),
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatPyPI: objects}})
 
 	simple := httptest.NewRequest(http.MethodGet, "/pypi/python-all/simple/gateway-widget/", nil)
 	authorize(simple, "resolver-secret")
@@ -519,12 +461,7 @@ func TestCanonicalRepositoryRoutesPreservesGOPROXYReads(t *testing.T) {
 		t.Fatal(err)
 	}
 	grantGoPublisher(t, store, repo.ID)
-	handler := NewGatewayHandler(
-		Dependencies{NativeGoObjectStore: NewMemoryOCIObjectStore()},
-		store,
-		TestAdapter{},
-		testAuthenticator(),
-	)
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatGo: objectstore.NewMemoryStore()}})
 	archive := goModuleFixtureZip(t, modulePath, version, map[string]string{
 		"go.mod":    "module " + modulePath + "\n\ngo 1.26\n",
 		"widget.go": "package widget\n",
