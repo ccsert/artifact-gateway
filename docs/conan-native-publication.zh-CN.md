@@ -61,9 +61,11 @@ PostgreSQL 和 S3 服务重启继续；过期会话被 fencing，重试获得全
 发布系统；既有完整修订晋升、复制、墓碑/恢复与回收契约继续生效。
 
 成功 PUT 返回 `X-Artifact-Gateway-Publish-Session` 和 `X-Artifact-Gateway-Publish-State`
-（open/committed）；管理 Session GET 可查同一会话，但管理对象 PUT/commit 不得修改原生会话或绕过 manifest 校验。Console 制品视图只显示 committed
-修订，审计视图可用 publish 的 `publicationSessionId`、`publicationState`、坐标、摘要与
-稳定机器 Actor 关联。本单不声明新增 Console 上传表单。
+（open/committed）；管理 Session GET 可查同一会话，但管理对象 PUT/commit 不得修改原生会话或绕过
+manifest 校验。Console 制品视图只显示 committed 修订；展开 Conan `publish` 审计记录可看到
+持久发布会话 UUID 和本地化的“已提交”状态，并结合既有坐标、机器 Actor 关联。
+摘要等其他 Evidence 仍可通过审计 API 获取；缺失或格式错误的发布证据显示为不可用。
+本单不声明新增 Console 上传表单。
 
 ## 支持范围与验证
 

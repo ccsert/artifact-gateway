@@ -1,0 +1,21 @@
+{
+  "groupName": "conan-upload-f09686ff",
+  "repository": "conan-upload-f09686ff",
+  "memberName": "native",
+  "outcome": "resolved",
+  "actor": "service-account:ec6f1563-6d19-415b-920a-0ad6304123e6",
+  "occurredAt": "2026-10-19T14:47:28.400653Z",
+  "format": "conan",
+  "resource": "gateway-upload/1.0/fixture/stable#628af26171a7883c34262f47a20851fb/da39a3ee5e6b4b0d3255bfef95601890afd80709#8efe18e31af659b07f48dc84d80810ab",
+  "memberType": "hosted",
+  "operation": "publish",
+  "status": 201,
+  "evidence": {
+    "digest": "sha256:7816646074233542de198c5440f3bc721b8a5f856036d6593dae3b583a60f474",
+    "publicationSessionId": "371480dd-8038-4d09-bb51-62df7c518583",
+    "publicationState": "committed",
+    "replay": "false"
+  },
+  "requestId": "00aa1757-f4d0-46b3-8edb-a3f27a37e8af",
+  "traceId": "45ed8d55c5cd4862af7eef03249bd01f"
+}

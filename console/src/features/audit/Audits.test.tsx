@@ -157,3 +157,34 @@ it("reveals an actor supplied by navigation after advanced filters were collapse
   );
   expect(screen.getByRole("button", { name: /清\s*除/ })).toBeDisabled();
 });
+
+it("expands a native Conan publication to its persisted session and state", async () => {
+  const sessionId = "31b59e86-51c7-4bbc-989c-cf130ea5f9ae";
+  const user = userEvent.setup();
+  vi.mocked(listAuditPage).mockResolvedValue({
+    data: {
+      items: [
+        {
+          ...record("service-account:conan-producer"),
+          format: "conan",
+          operation: "publish",
+          resource: "widget/1.0@team/stable#" + "a".repeat(32),
+          evidence: {
+            publicationSessionId: sessionId,
+            publicationState: "committed",
+            digest: `sha256:${"b".repeat(64)}`,
+            replay: "false",
+          },
+        },
+      ],
+    },
+  } as never);
+  renderPage();
+
+  await user.click(await screen.findByText("service-account:conan-producer"));
+  expect(screen.getByText(sessionId)).toBeVisible();
+  expect(screen.getByText("已提交")).toBeVisible();
+  expect(
+    screen.queryByText(`sha256:${"b".repeat(64)}`),
+  ).not.toBeInTheDocument();
+});

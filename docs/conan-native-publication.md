@@ -88,10 +88,13 @@ contracts still apply to complete revisions.
 
 Successful PUTs return `X-Artifact-Gateway-Publish-Session` and
 `X-Artifact-Gateway-Publish-State` (`open` or `committed`). The management session
-GET can inspect that same session. Management object PUT/commit cannot mutate a native session or bypass its manifest validation. Console artifact views show only committed
-revisions; its audit view can correlate `publish` with `publicationSessionId`,
-`publicationState`, coordinate, digest and the stable machine actor. No new
-Console upload form is claimed.
+GET can inspect that same session. Management object PUT/commit cannot mutate a
+native session or bypass its manifest validation. Console artifact views show
+only committed revisions. Expanding a Conan `publish` audit shows its persisted
+publication session UUID and localized `committed` state alongside the existing
+coordinate and machine actor. Other evidence, including the digest, remains
+available through the audit API. Missing or malformed publication evidence is
+shown as unavailable. No new Console upload form is claimed.
 
 ## Supported boundary and verification
 

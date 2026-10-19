@@ -8,7 +8,7 @@
 
 ## Unreleased
 
-- 官方 Conan 2.21.0 upload 现在复用持久 Session 发布完整 Recipe/Package revision（#312）。规范远程入口为 `/conan/<repository>`，旧版号在名称前的布局返回 404；完整 manifest、包身份和全部资产校验后才事务可见、关联审计及调度扫描。中断后可跨 PostgreSQL/对象存储重启续传，短期令牌使用独立 `GATEWAY_CONAN_TOKEN_SECRET` 并逐请求复查机器凭据。Group/Proxy 禁写。见[发布边界与验收](docs/conan-native-publication.zh-CN.md)。
+- 官方 Conan 2.21.0 upload 现在复用持久 Session 发布完整 Recipe/Package revision（#312）。规范远程入口为 `/conan/<repository>`，旧版号在名称前的布局返回 404；完整 manifest、包身份和全部资产校验后才事务可见、关联审计及调度扫描。Console 审计展开详情显示关联会话 UUID 和本地化的已提交状态。中断后可跨 PostgreSQL/对象存储重启续传，短期令牌使用独立 `GATEWAY_CONAN_TOKEN_SECRET` 并逐请求复查机器凭据。Group/Proxy 禁写。见[发布边界与验收](docs/conan-native-publication.zh-CN.md)。
 
 - PyPI 支持文件撤回/恢复与版本原子操作，以强修订、仓库写入授权和事务内成功审计保护变更（#311）。HTML/JSON Simple、Proxy 重验、Group 来源优先级、生命周期与备份保留声明，不改档案字节。Console 可选文件、填写原因并恢复，固定 pip 26.2 验证范围跳过与精确锁定警告。参见 [PyPI 文件撤回](docs/pypi-yank.zh-CN.md)。
 

@@ -227,6 +227,7 @@ export function AuditsPage() {
             }}
             rowClassName="cursor-pointer"
             expandable={{
+              fixed: "left",
               expandedRowKeys: expanded === null ? [] : [expanded],
               expandedRowRender: ({ record }) => (
                 <AuditRecordDetail record={record} t={t} />
