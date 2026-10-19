@@ -153,11 +153,12 @@ func connectSnippets(target connectTarget, name string, format adminopenapi.Form
 				"curl --fail -H \"Authorization: Bearer $ARTIFACT_GATEWAY_TOKEN\" --upload-file <file> %s/<path>", root)})
 		}
 	case adminopenapi.FormatConan:
+		notes = append(notes, "official Conan 2 authentication requires an independent GATEWAY_CONAN_TOKEN_SECRET on the server; use a local service-account or resolver credential")
 		snippets = append(snippets,
-			connectSnippet{Label: "add remote", Content: fmt.Sprintf("conan remote add %s %s/conan/v2/%s", name, base, name)},
+			connectSnippet{Label: "add remote", Content: fmt.Sprintf("conan remote add %s %s/conan/%s", name, base, name)},
 			connectSnippet{Label: "sign in", Content: fmt.Sprintf("conan remote login %s %s -p \"$ARTIFACT_GATEWAY_TOKEN\"", name, clientUser)})
 		if hosted {
-			snippets = append(snippets, connectSnippet{Label: "upload", Content: fmt.Sprintf("conan upload \"<reference>\" -r %s", name)})
+			snippets = append(snippets, connectSnippet{Label: "upload", Content: fmt.Sprintf("conan upload \"<reference>:*\" -r %s --confirm", name)})
 		}
 	case adminopenapi.FormatApt:
 		snippets = append(snippets,

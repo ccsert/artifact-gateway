@@ -52,6 +52,7 @@ agree with executable tests and the
 ## Protocols and formats
 
 - [Protocol compatibility](protocol-compatibility.md) — implemented behavior and explicit limits by format.
+- [Conan 2 native publication](conan-native-publication.md) — canonical remote, manifest visibility and client acceptance.
 - [PyPI file yanking](pypi-yank.md) — file selection, atomic management, pip and recovery evidence.
 - [Raw HTTP ranges](raw-http-ranges.md) — bounded multipart reads and immutable validators.
 - [Maven Hosted publication](maven-hosted-publication.md) — Nexus-compatible direct mode and strict opt-in commit.

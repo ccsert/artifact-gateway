@@ -296,15 +296,17 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 				"change", "unset GATEWAY_LEGACY_READ_DEFAULT to deny unmatched readers once every reading actor has a reader pattern or a per-repository grant")
 		}
 		handler, err = app.NewGatewayHandler(app.GatewayOptions{
-			Dependencies: dependencies,
-			Store:        store,
-			NPMMetadata:  store,
-			NPMRestore:   store,
-			Storage:      app.SharedObjectStores(objectStore),
-			Adapter:      app.TestAdapter{},
+			Dependencies:      dependencies,
+			Store:             store,
+			ConanPublications: store,
+			NPMMetadata:       store,
+			NPMRestore:        store,
+			Storage:           app.SharedObjectStores(objectStore),
+			Adapter:           app.TestAdapter{},
 			Authenticator: app.Authenticator{
 				AdminToken:           cfg.AdminToken,
 				ResolverToken:        cfg.ResolverToken,
+				ConanTokenSecret:     cfg.ConanTokenSecret,
 				AdminActor:           cfg.AdminActor,
 				ResolverActor:        cfg.ResolverActor,
 				LocalAuthMaxAttempts: cfg.LocalAuthMaxFailedAttempts,

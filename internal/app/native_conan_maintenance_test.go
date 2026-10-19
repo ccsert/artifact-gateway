@@ -47,7 +47,7 @@ func TestNativeConanMaintenanceRetriesFailedReclaimJob(t *testing.T) {
 		t.Fatal(err)
 	}
 	metrics := &Metrics{}
-	maintenance := NativeConanMaintenance{Store: store, Objects: objects, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }, Metrics: metrics}
+	maintenance := NativeConanMaintenance{Store: store, Collections: store, Objects: objects, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }, Metrics: metrics}
 	if err = maintenance.Collect(ctx); err == nil {
 		t.Fatal("first reclaim must fail")
 	}

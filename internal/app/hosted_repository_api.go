@@ -544,7 +544,7 @@ func (h hostedRepositoryAPIHandler) update(w http.ResponseWriter, r *http.Reques
 }
 
 func validHostedRepository(request createHostedRepositoryRequest) bool {
-	if !hostedRepositoryName.MatchString(request.Name) {
+	if !hostedRepositoryName.MatchString(request.Name) || request.Format == repository.FormatConan && request.Name == "v2" {
 		return false
 	}
 	repoType := request.Type

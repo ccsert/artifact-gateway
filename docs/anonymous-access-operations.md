@@ -78,7 +78,7 @@ Conan 2 remotes retain the Group in their URL. Do not use anonymous access for
 any endpoint other than the Gateway's normal revision reads.
 
 ```sh
-conan remote add public https://gateway.example.com/conan/v2/public
+conan remote add public https://gateway.example.com/conan/public
 conan install --requires=widget/1.0@team/stable
 ```
 

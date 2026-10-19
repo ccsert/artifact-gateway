@@ -119,10 +119,40 @@ export function AuditRecordDetail({
   record: AuditRecord;
   t: Translate;
 }) {
+  const publication =
+    record.format === "conan" && record.operation === "publish";
+  const evidence = record.evidence;
+  // Evidence crosses a JSON boundary. Only the two fields emitted by native
+  // Conan publication are meaningful here; never render arbitrary evidence.
+  const sessionId =
+    publication &&
+    evidence !== null &&
+    typeof evidence === "object" &&
+    !Array.isArray(evidence) &&
+    typeof evidence.publicationSessionId === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      evidence.publicationSessionId,
+    )
+      ? evidence.publicationSessionId
+      : undefined;
+  const publicationFields: ReadonlyArray<
+    readonly [string, string | undefined]
+  > = publication
+    ? [
+        [t("audit.publicationSession"), sessionId],
+        [
+          t("audit.publicationState"),
+          sessionId && evidence?.publicationState === "committed"
+            ? t("audit.publicationCommitted")
+            : undefined,
+        ],
+      ]
+    : [];
   return (
-    <div className="grid grid-cols-3 gap-x-8 gap-y-2 px-2 py-1 text-xs">
+    <div className="grid grid-cols-1 gap-x-8 gap-y-2 px-2 py-1 text-xs md:grid-cols-2 xl:grid-cols-3">
       {(
         [
+          ...publicationFields,
           [t("audit.resource"), record.resource],
           [t("audit.representation"), record.representation],
           [t("audit.member"), record.memberName],

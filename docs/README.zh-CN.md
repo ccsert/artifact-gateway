@@ -49,6 +49,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 ## 协议与仓库格式
 
 - [协议兼容性](protocol-compatibility.zh-CN.md) — 各格式已实现行为和明确限制。
+- [Conan 2 原生发布](conan-native-publication.zh-CN.md) — canonical remote, manifest visibility and client acceptance.
 - [PyPI 文件撤回](pypi-yank.zh-CN.md) — 文件选择、原子管理、pip 与恢复证据。
 - [Raw HTTP Range](raw-http-ranges.zh-CN.md) — 有界多段读取与不可变 validator。
 - [Maven Hosted 发布](maven-hosted-publication.zh-CN.md) — 默认 Nexus 兼容直接模式与严格可选提交。

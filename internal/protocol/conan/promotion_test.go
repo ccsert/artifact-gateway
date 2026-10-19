@@ -24,6 +24,11 @@ func (s *failOnceConanPromotionStore) PromoteConanRecipeRevision(ctx context.Con
 func TestNativePromotionRetriesFailedConanPublication(t *testing.T) {
 	ctx := context.Background()
 	base := repository.NewMemoryStore()
+	for _, id := range []string{"source", "target"} {
+		if _, err := base.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: id, Name: id, Format: repository.FormatConan}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	store := &failOnceConanPromotionStore{MemoryStore: base, fail: true}
 	asset := repository.ConanAsset{RepositoryID: "source", Reference: "pkg/1.0/user/stable", RecipeRevision: "rrev", Path: "conanfile.py", ObjectKey: "conan/widget", Digest: "sha256:widget", Size: 7}
 	if err := base.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: "source", ObjectKey: asset.ObjectKey, Digest: asset.Digest, Size: asset.Size}); err != nil {

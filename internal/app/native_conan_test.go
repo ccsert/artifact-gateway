@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
@@ -50,9 +49,9 @@ func TestNativeConanHostedReadsRecipeRevisionWithoutGroup(t *testing.T) {
 		path string
 		want string
 	}{
-		{"/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions", `"revision":"rrev"`},
-		{"/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions/rrev/files", `"conanfile.py"`},
-		{"/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py", "recipe"},
+		{"/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions", `"revision":"rrev"`},
+		{"/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions/rrev/files", `"conanfile.py"`},
+		{"/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py", "recipe"},
 	} {
 		recorder := httptest.NewRecorder()
 		request := conanRequest(test.path)
@@ -62,7 +61,7 @@ func TestNativeConanHostedReadsRecipeRevisionWithoutGroup(t *testing.T) {
 		}
 	}
 	denied := httptest.NewRecorder()
-	deniedRequest := conanRequest("/conan/v2/conan-hosted/conans/other/1.0/user/stable/revisions/rrev/files/conanfile.py")
+	deniedRequest := conanRequest("/conan/conan-hosted/v2/conans/other/1.0/user/stable/revisions/rrev/files/conanfile.py")
 	handler.ServeHTTP(denied, deniedRequest)
 	if denied.Code != http.StatusForbidden {
 		t.Fatalf("denied status=%d body=%s", denied.Code, denied.Body.String())
@@ -96,7 +95,7 @@ func TestNativeConanHostedDeletesRecipeRevisionWithWriteGrant(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: testAuthenticator()}, Authenticator: testAuthenticator(), NativeObjects: objects, Client: &conanAnonymousClient{}}
-	request := httptest.NewRequest(http.MethodDelete, "/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions/rrev", nil)
+	request := httptest.NewRequest(http.MethodDelete, "/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions/rrev", nil)
 	request.Header.Set("Authorization", "Bearer resolver-secret")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
@@ -107,14 +106,14 @@ func TestNativeConanHostedDeletesRecipeRevisionWithWriteGrant(t *testing.T) {
 		t.Fatalf("tombstone: %v", err)
 	}
 	read := httptest.NewRecorder()
-	readRequest := conanRequest("/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py")
+	readRequest := conanRequest("/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py")
 	readRequest.Header.Set("Authorization", "Bearer resolver-secret")
 	handler.ServeHTTP(read, readRequest)
 	if read.Code != http.StatusNotFound {
 		t.Fatalf("read after delete status=%d body=%s", read.Code, read.Body.String())
 	}
 	restore := httptest.NewRecorder()
-	restoreRequest := httptest.NewRequest(http.MethodPost, "/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions/rrev:restore", nil)
+	restoreRequest := httptest.NewRequest(http.MethodPost, "/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions/rrev:restore", nil)
 	restoreRequest.Header.Set("Authorization", "Bearer resolver-secret")
 	handler.ServeHTTP(restore, restoreRequest)
 	if restore.Code != http.StatusNoContent {
@@ -139,30 +138,14 @@ func TestNativeConanReferenceBrowseSearchProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticator := testAuthenticator()
-	if _, err = store.ReplaceRepositoryGrants(ctx, conanRepo.ID, []repository.RepositoryGrant{{Principal: "conan-browser", Scopes: []string{"repositories:read"}}}, "1"); err != nil {
+	if _, err = store.ReplaceRepositoryGrants(ctx, conanRepo.ID, []repository.RepositoryGrant{{Principal: "conan-browser", Scopes: []string{"repositories:read"}}, {Principal: "conan-publisher", Scopes: []string{"repositories:write"}}}, "1"); err != nil {
 		t.Fatal(err)
 	}
-	for i, reference := range []string{"pkg/1.0/user/stable", "pkg/2.0/user/stable", "other/1.0/user/stable"} {
-		key := "native/conan/search/" + string(rune('a'+i))
-		digest := "sha256:" + strings.Repeat(string(rune('a'+i)), 64)
-		if err = store.StageConanObject(ctx, repository.ConanObjectIntent{RepositoryID: conanRepo.ID, ObjectKey: key, Digest: digest, Size: 1}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err = store.PutConanRecipeRevision(ctx, repository.ConanRecipeRevision{RepositoryID: conanRepo.ID, Reference: reference, Revision: "rrev", Digest: digest}, []repository.ConanAsset{{RepositoryID: conanRepo.ID, Reference: reference, RecipeRevision: "rrev", Path: "conanfile.py", ObjectKey: key, Digest: digest, Size: 1}}); err != nil {
-			t.Fatal(err)
-		}
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, ConanPublications: store, Adapter: TestAdapter{}, Authenticator: authenticator, Storage: ObjectStores{repository.FormatConan: objectstore.NewMemoryStore()}})
+	for _, reference := range []string{"pkg/1.0/user/stable", "pkg/2.0/user/stable", "other/1.0/user/stable"} {
+		declaration, bodies := conanRecipePublicationFixture(reference, []byte("recipe"))
+		publishConanPublicationFixture(t, handler, conanRepo.ID, authenticator.IssueToken("conan-publisher"), declaration, bodies)
 	}
-	session := repository.ConanPublishSession{ID: uuid.NewString(), RepositoryID: conanRepo.ID, Publisher: "conan-publisher", Kind: "recipe", Reference: "pkg/1.0/user/stable", RecipeRevision: "rrev", State: "open", ExpiresAt: time.Now().Add(time.Hour), Objects: []repository.MavenDeclaredObject{{Name: "conanfile.py", Digest: "sha256:" + strings.Repeat("a", 64), Size: 1}}}
-	if _, err = store.CreateConanPublishSession(ctx, session); err != nil {
-		t.Fatal(err)
-	}
-	if err = store.MarkConanPublishObject(ctx, session.ID, "conanfile.py", "native/conan/search/a"); err != nil {
-		t.Fatal(err)
-	}
-	if err = store.CommitConanPublishSession(ctx, session.ID); err != nil {
-		t.Fatal(err)
-	}
-	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: authenticator})
 	browserToken := authenticator.IssueToken("conan-browser")
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/repositories/"+conanRepo.ID+"/conan/references?q=pkg%2F&pageSize=1", nil)
 	authorize(request, browserToken)

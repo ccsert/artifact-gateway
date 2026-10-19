@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -15,9 +16,10 @@ type NativeConanMaintenance struct {
 		repository.NativeConanStore
 		repository.LifecycleJobStore
 	}
-	Objects ObjectStore
-	Now     func() time.Time
-	Metrics repository.BackgroundOperationMetrics
+	Collections repository.ConanObjectCollectionStore
+	Objects     ObjectStore
+	Now         func() time.Time
+	Metrics     repository.BackgroundOperationMetrics
 }
 type conanReclaimPayload struct {
 	Format    repository.Format `json:"format"`
@@ -25,6 +27,9 @@ type conanReclaimPayload struct {
 }
 
 func (m NativeConanMaintenance) Collect(ctx context.Context) error {
+	if nilDependency(m.Collections) || nilDependency(m.Objects) {
+		return repository.ErrDisabled
+	}
 	now := time.Now
 	if m.Now != nil {
 		now = m.Now
@@ -41,13 +46,36 @@ func (m NativeConanMaintenance) EnqueueReclaimJobs(ctx context.Context, before t
 	}
 	for _, object := range objects {
 		payload, _ := json.Marshal(conanReclaimPayload{Format: repository.FormatConan, ObjectKey: object.ObjectKey})
-		if _, _, err = m.Store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: object.RepositoryID, Kind: repository.LifecycleJobReclaim, IdempotencyKey: "conan-object:" + object.ObjectKey, Payload: payload}); err != nil {
+		if err = m.enqueueReclaimJob(ctx, object, payload); err != nil {
 			return err
 		}
 	}
 	return nil
 }
+
+func (m NativeConanMaintenance) enqueueReclaimJob(ctx context.Context, object repository.ConanObjectIntent, payload []byte) error {
+	key := "conan-object:" + object.ObjectKey
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		job, replayed, err := m.Store.EnqueueLifecycleJob(ctx, repository.LifecycleJob{ID: uuid.NewString(), RepositoryID: object.RepositoryID, Kind: repository.LifecycleJobReclaim, IdempotencyKey: key, Payload: payload})
+		if err != nil {
+			return err
+		}
+		if !replayed || job.State != repository.LifecycleJobCompleted {
+			return nil
+		}
+		// A completed attempt may have skipped deletion because a reference
+		// won. A later tombstone needs another attempt. Deterministic successors
+		// let concurrent schedulers converge without changing job retry policy.
+		key = "conan-object:" + object.ObjectKey + ":after:" + job.ID
+	}
+}
 func (m NativeConanMaintenance) RunReclaimJobs(ctx context.Context, limit int) error {
+	if nilDependency(m.Collections) || nilDependency(m.Objects) {
+		return repository.ErrDisabled
+	}
 	jobs, err := m.Store.ClaimLifecycleJobsByKindAndFormat(ctx, repository.LifecycleJobReclaim, repository.FormatConan, limit)
 	if err != nil {
 		return err
@@ -61,15 +89,18 @@ func (m NativeConanMaintenance) RunReclaimJobs(ctx context.Context, limit int) e
 			m.end("failed")
 			continue
 		}
-		referenced, err := m.Store.ConanObjectHasVisibleReference(ctx, payload.ObjectKey)
+		collect, err := m.Collections.BeginConanObjectCollection(ctx, payload.ObjectKey)
+		if errors.Is(err, repository.ErrNotFound) {
+			collect, err = false, nil
+		}
 		if err != nil {
 			m.end("failed")
-			if jobErr := m.fail(ctx, job, "Conan object reference lookup failed"); firstErr == nil {
+			if jobErr := m.fail(ctx, job, "claim Conan object collection failed"); firstErr == nil {
 				firstErr = jobErr
 			}
 			continue
 		}
-		if referenced {
+		if !collect {
 			if err = m.Store.CompleteLifecycleJob(ctx, job.ID, job.LeaseToken); err != nil {
 				m.end("failed")
 				if firstErr == nil {
@@ -87,7 +118,7 @@ func (m NativeConanMaintenance) RunReclaimJobs(ctx context.Context, limit int) e
 			}
 			continue
 		}
-		if err = m.Store.MarkConanObjectCollected(ctx, payload.ObjectKey); err != nil && err != repository.ErrNotFound {
+		if err = m.Collections.CompleteConanObjectCollection(ctx, payload.ObjectKey); err != nil && !errors.Is(err, repository.ErrNotFound) {
 			m.end("failed")
 			if jobErr := m.fail(ctx, job, "mark Conan object collected failed"); firstErr == nil {
 				firstErr = jobErr

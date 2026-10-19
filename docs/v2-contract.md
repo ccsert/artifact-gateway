@@ -16,7 +16,7 @@ and executable tests. Those sources supersede stale route statements here.
 | Proxy | Member fetching one explicitly allowed external upstream. |
 | Group | Ordered read-only virtual repository over members of one format. |
 
-Names are lowercase DNS labels separated by `-`; names are unique within a format. Reserved routes are `/v2/<group>/...` (OCI), `/maven/<group>/...`, `/raw/<group>/<path>`, and `/conan/v2/<group>/...`. Static routes are matched before all format routes: `/api/v1`, `/metrics`, `/livez`, `/readyz`, and `/api/v1/operations` remain management or operational endpoints. Format prefixes are disjoint, so there is no cross-format Group fallback. The names `api`, `metrics`, `livez`, `readyz`, `operations`, `v2`, `maven`, `raw`, and `conan` are reserved and rejected as Group names. Within a format, a Group route wins over no other format and member resolution begins only after the complete prefix and Group name match.
+Names are lowercase DNS labels separated by `-`; names are unique within a format. Reserved routes are `/v2/<group>/...` (OCI), `/maven/<group>/...`, `/raw/<group>/<path>`, and `/conan/<group>/v2/...`. Static routes are matched before all format routes: `/api/v1`, `/metrics`, `/livez`, `/readyz`, and `/api/v1/operations` remain management or operational endpoints. Format prefixes are disjoint, so there is no cross-format Group fallback. The names `api`, `metrics`, `livez`, `readyz`, `operations`, `v2`, `maven`, `raw`, and `conan` are reserved and rejected as Group names. Within a format, a Group route wins over no other format and member resolution begins only after the complete prefix and Group name match.
 
 A Group contains only members of its own format. All Hosted members are considered in ascending position before Proxy members; equal positions are rejected. The first successful Hosted response wins. Cache keys include format, group, canonical repository/path, member, endpoint, and requested representation. Resolution visits each Hosted member's positive or negative cache, then its upstream, before visiting any Proxy member's positive or negative cache or upstream. A negative cache entry is a member-local `not_found` result: it permits the next Hosted member and, only after every Hosted member is exhausted, Proxy resolution. A Proxy negative entry can never hide a Hosted response. Cache keys are invalidated when a member endpoint changes.
 
@@ -92,10 +92,23 @@ records `storage_error`, and increments a bounded spool-rejection counter.
 V2 supports Conan 2 resolution for a Conan 2.x client using v2 REST, including
 native Hosted metadata and files. Conan 1, remote-to-remote copying, upstream
 index aggregation, and server-side recipe generation are out of scope. Hosted
-publication uses the versioned publish-session management API; immutable
-revision deletion and restore remain in the existing `/conan/v2` family.
+publication supports native file PUT and the versioned publish-session management API; immutable
+revision deletion and restore use the canonical `/conan/<repository>/v2` family.
 
-Conan routes use `/conan/v2/<group>/conans/...`; the remote URL MUST include the group. The sole protocol exception is the Conan 2 Basic-login handshake `GET /conan/<group>/v2/users/authenticate`; it follows the same resource policy and is not a general user API. Conan 1 authentication and non-GET authentication methods return `404`. The client gets the normal protocol challenge when anonymous access is disabled; credentials are never forwarded to a Proxy.
+Register `/conan/<repository>` as the only remote root for Hosted, Proxy and Group.
+The official client appends `/v1/ping` and `/v2/users/authenticate`,
+`/v2/users/check_credentials`, or `/v2/conans/...`. The old version-before-name
+layout has no alias and returns 404. Native Hosted publication follows
+[the manifest-last contract](conan-native-publication.md), including an independent
+protocol signing secret and credential-bound tokens. Group/Proxy remain read-only;
+client credentials are never forwarded to an upstream.
+
+Both publication entry points require lowercase 32-hex RREV/PREV and a 40-hex
+package ID derived from the official manifest/conaninfo identities. They
+validate the complete supported asset set through one shared validator and
+commit the revision, session state and actual caller's audit atomically,
+guarded by immutable staging keys and a session version fence. The management
+HTTP shapes remain unchanged; incomplete legacy declarations are rejected.
 
 `CONTRACT: conan-coordinate`
 
@@ -109,12 +122,12 @@ alias.
 
 `CONTRACT: conan2-read-endpoints`
 
-The Gateway supports only these Conan 2 read endpoints, all `GET` or `HEAD` under `/conan/v2/<group>/conans`:
+The Gateway supports only these Conan 2 read endpoints, all `GET` or `HEAD` under `/conan/<group>/v2/conans`:
 
 | Endpoint suffix | Response contract |
 | --- | --- |
 | `/{name}/{version}/{user}/{channel}/revisions` | JSON object with `revisions`, an array of objects containing string `revision` and numeric or RFC3339-string `time`. |
-| `/{name}/{version}/{user}/{channel}/revisions/{rrev}/search` | JSON object with a `packages` object; required only for the Conan 2 download handshake. |
+| `/{name}/{version}/{user}/{channel}/revisions/{rrev}/search` | Direct JSON map keyed by exact package ID; each entry includes the original `conaninfo.txt` as `content`. Required for the Conan 2 download handshake. |
 | `/{name}/{version}/{user}/{channel}/revisions/{rrev}/files` | JSON object with `files`, a map from filename to an object containing lowercase-hex `sha256` and non-negative numeric `size`. |
 | `/{name}/{version}/{user}/{channel}/revisions/{rrev}/files/{filename}` | Raw recipe file; verify against the corresponding files metadata entry before caching. |
 | `/{name}/{version}/{user}/{channel}/revisions/{rrev}/packages/{package_id}/revisions` | JSON object with `revisions`, using the same revision shape. |
@@ -132,7 +145,7 @@ Conan artifact bodies have a default 15 minute TTL; recipe/package/revision meta
 
 `CONTRACT: conan-proxy-allowlist`
 
-Conan Proxy endpoints use the same HTTPS, host allowlist, redirect, and address restrictions as Raw Proxy endpoints. The allowlist is separate from OCI and Maven and is per repository.
+Conan Proxy endpoints identify the upstream remote root, without an API version; outbound reads append `/v2/conans/...`, as the official client does. Conan Proxy endpoints use the same HTTPS, host allowlist, redirect, and address restrictions as Raw Proxy endpoints. The allowlist is separate from OCI and Maven and is per repository.
 
 ## Configuration, migration, and operations
 

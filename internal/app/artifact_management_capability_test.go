@@ -42,7 +42,8 @@ func TestArtifactManagementMissingCapabilitiesAreBoundedAndAuthorized(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	conanSession, err := store.CreateConanPublishSession(ctx, repository.ConanPublishSession{ID: uuid.NewString(), RepositoryID: repos[repository.FormatConan].ID, Kind: "recipe", Reference: "pkg/1.0@user/channel", RecipeRevision: "r1", State: "open", ExpiresAt: time.Now().Add(time.Hour)})
+	conanDeclaration, _ := conanRecipePublicationFixture("pkg/1.0/user/channel", []byte("recipe"))
+	conanSession, err := store.CreateConanPublishSession(ctx, repository.ConanPublishSession{ID: uuid.NewString(), RepositoryID: repos[repository.FormatConan].ID, Kind: conanDeclaration.Kind, Reference: conanDeclaration.Reference, RecipeRevision: conanDeclaration.RecipeRevision, Objects: conanDeclaration.Objects, State: "open", ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +248,8 @@ func TestArtifactManagementSessionLookupsAreSeparateFromPublishers(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := store.CreateConanPublishSession(ctx, repository.ConanPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Reference: "pkg/1.0/user/channel", RecipeRevision: "r1", Kind: "recipe", State: "open", ExpiresAt: time.Now().Add(time.Hour)})
+	declaration, _ := conanRecipePublicationFixture("pkg/1.0/user/channel", []byte("recipe"))
+	session, err := store.CreateConanPublishSession(ctx, repository.ConanPublishSession{ID: uuid.NewString(), RepositoryID: repo.ID, Reference: declaration.Reference, RecipeRevision: declaration.RecipeRevision, Kind: declaration.Kind, Objects: declaration.Objects, State: "open", ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}

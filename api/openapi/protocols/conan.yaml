@@ -1,8 +1,302 @@
 ---
-description: Conan 2 supports Group/Proxy read-through and native Hosted resolution
-  under the existing /conan/v2 route family. Hosted publication uses the repository
-  management publish-session contract; lifecycle operations use the native Hosted
-  revision routes, while indexed reference browse/search is exposed through the
-  versioned management API.
-officialSpecification: https://docs.conan.io/2/reference/commands/remote.html
-gatewayOverlay: docs/protocol-compatibility.md#conan
+x-gateway-protocol-overlay:
+  description: >
+    Official Conan 2.21.0 hash-revision upload and read workflow. Register
+    /conan/{repository} as the remote root; the client appends /v1 or /v2.
+    Hosted PUTs reuse durable publication sessions and immutable object intents.
+    Only a complete validated manifest commits a recipe or package revision.
+    Management publication uses the same validator, snapshot fence and atomic
+    revision/session/audit commit; it cannot publish partial revisions.
+    Group and Proxy remotes are read-only. The retired /conan/v2/{repository}
+    layout is not an alias. Conan 1, SCM revisions and optional metadata uploads
+    are unsupported. See docs/conan-native-publication.md for bounds and evidence.
+  officialSpecification: https://docs.conan.io/2/reference/commands/upload.html
+  gatewayOverlay: docs/conan-native-publication.md
+conan_ping:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  get:
+    operationId: pingConanRemote
+    description: Advertises the revisions capability for an active remote.
+    security:
+    - protocolBasicAuth: []
+    - conanBearerAuth: []
+    - {}
+    responses:
+      '200':
+        description: Protocol handshake succeeded
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Repository permission denied
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+conan_authenticate:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  get:
+    operationId: authenticateConanRemote
+    description: Exchanges a local resolver or service-account credential for a five-minute repository-bound token. Requires independent GATEWAY_CONAN_TOKEN_SECRET; missing configuration returns 501. Tokens revalidate the source credential on every request.
+    security:
+    - protocolBasicAuth: []
+    - conanBearerAuth: []
+    responses:
+      '200':
+        description: Plain text scoped protocol token, never the source credential
+        content:
+          text/plain:
+            schema: {type: string}
+      '501':
+        "$ref": "../components/responses.yaml#/Problem"
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Repository permission denied
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+conan_check_credentials:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  get:
+    operationId: checkConanCredentials
+    description: Validates the local credential or scoped protocol token without granting artifact access.
+    security:
+    - protocolBasicAuth: []
+    - conanBearerAuth: []
+    responses:
+      '200':
+        description: Protocol handshake succeeded
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Repository permission denied
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+conan_read:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  - name: path
+    in: path
+    required: true
+    allowReserved: true
+    description: >
+      Validated catch-all n/v/u/c followed by /revisions, /latest,
+      /revisions/RREV/search, /revisions/RREV/files[/asset],
+      /revisions/RREV/packages/PID/revisions or /latest, or
+      /revisions/RREV/packages/PID/revisions/PREV/files[/asset].
+      Metadata identifies exact revisions, file size and SHA-256; invisible
+      or policy-blocked revisions are hidden. No remote-wide index federation.
+    schema: {type: string, minLength: 1}
+  get:
+    operationId: readConanRepresentation
+    security:
+    - protocolBasicAuth: []
+    - conanBearerAuth: []
+    - {}
+    responses:
+      '200':
+        description: Visible Conan metadata or immutable asset
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Repository permission denied
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+  head:
+    operationId: headConanRepresentation
+    security:
+    - protocolBasicAuth: []
+    - conanBearerAuth: []
+    - {}
+    responses:
+      '200':
+        description: Visible Conan metadata or immutable asset headers without a body
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Repository permission denied
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+  x-gateway-catchAll: path
+conan_recipe_file:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  - name: name
+    in: path
+    required: true
+    schema: {type: string, minLength: 1, maxLength: 255}
+  - name: version
+    in: path
+    required: true
+    schema: {type: string, minLength: 1, maxLength: 255}
+  - name: user
+    in: path
+    required: true
+    schema: {type: string, minLength: 1, maxLength: 255}
+  - name: channel
+    in: path
+    required: true
+    schema: {type: string, minLength: 1, maxLength: 255}
+  - name: recipeRevision
+    in: path
+    required: true
+    schema: {type: string, pattern: "^[a-f0-9]{32}$"}
+  - name: file
+    in: path
+    required: true
+    schema: {type: string, enum: [conanfile.py, conan_export.tgz, conan_sources.tgz, conanmanifest.txt]}
+  put:
+    operationId: uploadConanRecipeFile
+    description: >
+      Stages one immutable verified object in the publisher's one-hour session.
+      conanmanifest.txt is the visibility signal: validates every declared MD5
+      tree entry, hash revision and package identity, then atomically commits
+      revision metadata, session state and a publish audit for the actual
+      commit caller, using the same validator and commit boundary as management
+      publication. The session version fences concurrent staged-pointer changes. Repeating
+      identical bytes preserves the visible identity; changed bytes conflict.
+      Limits are 1 GiB per object and expanded tree including tar framing,
+      1 MiB manifest/conaninfo and 4096 manifest/archive entries. Sessions do not
+      expose partial revisions. Applies existing quota, scan and quarantine.
+    security:
+    - protocolBasicAuth: []
+    - conanBearerAuth: []
+    parameters:
+    - name: X-Checksum-Sha1
+      in: header
+      required: true
+      schema: {type: string, pattern: "^[A-Fa-f0-9]{40}$"}
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema: {type: string, contentEncoding: binary}
+    responses:
+      '201':
+        description: File staged, or complete validated revision committed
+        headers:
+          X-Artifact-Gateway-Publish-Session:
+            schema: {type: string, format: uuid}
+          X-Artifact-Gateway-Publish-State:
+            schema: {type: string, enum: [open, committed]}
+      '400':
+        description: Invalid route, checksum assertion, incomplete or oversized body
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Repository permission denied
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+      '405':
+        description: Group or Proxy remote is read-only
+      '409':
+        description: Immutable revision, snapshot, tombstone or quarantine conflict
+      '422':
+        description: Wrong checksum, manifest tree, revision or package identity
+      '500':
+        description: Publication storage failed
+      '501':
+        description: Native publication capability is not configured
+      '507':
+        description: Repository capacity quota exceeded
+conan_package_file:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  - name: name
+    in: path
+    required: true
+    schema: {type: string, minLength: 1, maxLength: 255}
+  - name: version
+    in: path
+    required: true
+    schema: {type: string, minLength: 1, maxLength: 255}
+  - name: user
+    in: path
+    required: true
+    schema: {type: string, minLength: 1, maxLength: 255}
+  - name: channel
+    in: path
+    required: true
+    schema: {type: string, minLength: 1, maxLength: 255}
+  - name: recipeRevision
+    in: path
+    required: true
+    schema: {type: string, pattern: "^[a-f0-9]{32}$"}
+  - name: packageId
+    in: path
+    required: true
+    schema: {type: string, pattern: "^[a-f0-9]{40}$"}
+  - name: packageRevision
+    in: path
+    required: true
+    schema: {type: string, pattern: "^[a-f0-9]{32}$"}
+  - name: file
+    in: path
+    required: true
+    schema: {type: string, enum: [conaninfo.txt, conan_package.tgz, conanmanifest.txt]}
+  put:
+    operationId: uploadConanPackageFile
+    description: >
+      Stages one immutable verified object in the publisher's one-hour session.
+      conanmanifest.txt is the visibility signal: validates every declared MD5
+      tree entry, hash revision and package identity, then atomically commits
+      revision metadata, session state and a publish audit for the actual
+      commit caller, using the same validator and commit boundary as management
+      publication. The session version fences concurrent staged-pointer changes. Repeating
+      identical bytes preserves the visible identity; changed bytes conflict.
+      Limits are 1 GiB per object and expanded tree including tar framing,
+      1 MiB manifest/conaninfo and 4096 manifest/archive entries. Sessions do not
+      expose partial revisions. Applies existing quota, scan and quarantine.
+    security:
+    - protocolBasicAuth: []
+    - conanBearerAuth: []
+    parameters:
+    - name: X-Checksum-Sha1
+      in: header
+      required: true
+      schema: {type: string, pattern: "^[A-Fa-f0-9]{40}$"}
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema: {type: string, contentEncoding: binary}
+    responses:
+      '201':
+        description: File staged, or complete validated revision committed
+        headers:
+          X-Artifact-Gateway-Publish-Session:
+            schema: {type: string, format: uuid}
+          X-Artifact-Gateway-Publish-State:
+            schema: {type: string, enum: [open, committed]}
+      '400':
+        description: Invalid route, checksum assertion, incomplete or oversized body
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Repository permission denied
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+      '405':
+        description: Group or Proxy remote is read-only
+      '409':
+        description: Immutable revision, snapshot, tombstone or quarantine conflict
+      '422':
+        description: Wrong checksum, manifest tree, revision or package identity
+      '500':
+        description: Publication storage failed
+      '501':
+        description: Native publication capability is not configured
+      '507':
+        description: Repository capacity quota exceeded

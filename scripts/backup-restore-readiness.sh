@@ -36,6 +36,7 @@ grant_headers=$(mktemp)
 grant_response=$(mktemp)
 oci_headers=$(mktemp)
 go_workspace=$(mktemp -d)
+conan_workspace=$(mktemp -d)
 cargo_workspace=$(mktemp -d)
 mkdir -p "$repo_root/.artifacts"
 backup_dir=$(mktemp -d "$repo_root/.artifacts/backup-readiness.XXXXXX")
@@ -55,6 +56,7 @@ cleanup() {
   rm -f "$oci_headers"
   chmod -R u+w "$go_workspace" >/dev/null 2>&1 || true
   rm -rf "$go_workspace"
+  rm -rf "$conan_workspace"
   chmod -R u+w "$cargo_workspace" >/dev/null 2>&1 || true
   rm -rf "$cargo_workspace"
   rm -rf "$backup_dir"
@@ -310,18 +312,36 @@ status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}
 
 conan_source_id=$(create_hosted_repository conan "$conan_source_repository" "conan-source-${run_id}")
 conan_reference='restore/1.0/user/stable'
-conan_revision='rrev'
-conan_name='conanfile.py'
-conan_body='backup restore conan artifact'
-conan_object_digest="sha256:$(printf '%s' "$conan_body" | shasum -a 256 | awk '{print $1}')"
-conan_digest=$(python3 -c 'import hashlib, sys; name, digest = sys.argv[1:]; print("sha256:" + hashlib.sha256((name + "\0" + digest + "\0").encode()).hexdigest())' "$conan_name" "$conan_object_digest")
+python3 - "$conan_workspace" "$conan_reference" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+directory, reference = Path(sys.argv[1]), sys.argv[2]
+recipe = b'from conan import ConanFile\nclass RestoreFixture(ConanFile):\n    name = "restore"\n    version = "1.0"\n'
+entries = f"conanfile.py: {hashlib.md5(recipe).hexdigest()}\n".encode()
+revision = hashlib.md5(entries).hexdigest()
+bodies = {"conanfile.py": recipe, "conanmanifest.txt": b"1700000000\n" + entries}
+objects = [{"name": name, "digest": "sha256:" + hashlib.sha256(body).hexdigest(), "size": len(body)} for name, body in sorted(bodies.items())]
+declaration = {"kind": "recipe", "reference": reference, "recipeRevision": revision, "objects": objects}
+digest = "sha256:" + hashlib.sha256("".join(obj["name"] + "\0" + obj["digest"] + "\0" for obj in objects).encode()).hexdigest()
+for name, body in bodies.items():
+    (directory / name).write_bytes(body)
+(directory / "declaration.json").write_text(json.dumps(declaration))
+(directory / "identity.json").write_text(json.dumps({"revision": revision, "digest": digest}))
+PY
+conan_revision=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' "$conan_workspace/identity.json")
+conan_digest=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["digest"])' "$conan_workspace/identity.json")
 conan_session=$(curl --silent --show-error --fail -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  --data "$(printf '{\"kind\":\"recipe\",\"reference\":\"%s\",\"recipeRevision\":\"%s\",\"objects\":[{\"name\":\"%s\",\"digest\":\"%s\",\"size\":%s}]}' "$conan_reference" "$conan_revision" "$conan_name" "$conan_object_digest" "${#conan_body}")" "$gateway_url/api/v2/repositories/$conan_source_id/conan-publish-sessions")
+  --data-binary "@$conan_workspace/declaration.json" "$gateway_url/api/v2/repositories/$conan_source_id/conan-publish-sessions")
 conan_session_id=$(python3 -c 'import json, sys; data=json.load(sys.stdin); print(data.get("ID", data.get("id", "")))' <<<"$conan_session")
 [[ -n "$conan_session_id" ]] || { printf '%s\n' 'Creating Conan publish session returned no ID.' >&2; exit 1; }
-status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-  -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" --request PUT --data-binary "$conan_body" "$gateway_url/api/v2/conan-publish-sessions/$conan_session_id/objects/$conan_name")
-[[ "$status" == 204 ]] || { printf 'Uploading Conan object returned HTTP %s.\n' "$status" >&2; exit 1; }
+for conan_name in conanfile.py conanmanifest.txt; do
+  status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" --request PUT --data-binary "@$conan_workspace/$conan_name" "$gateway_url/api/v2/conan-publish-sessions/$conan_session_id/objects/$conan_name")
+  [[ "$status" == 204 ]] || { printf 'Uploading Conan object %s returned HTTP %s.\n' "$conan_name" "$status" >&2; exit 1; }
+done
 status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   -H "Authorization: Bearer $GATEWAY_ADMIN_TOKEN" --request POST "$gateway_url/api/v2/conan-publish-sessions/$conan_session_id:commit")
 [[ "$status" == 200 ]] || { printf 'Committing Conan publication returned HTTP %s.\n' "$status" >&2; exit 1; }
@@ -456,7 +476,7 @@ status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}
   --data "$conan_payload" "$gateway_url/api/v1/conan/groups")
 [[ "$status" == 201 ]] || { printf 'Creating recovery Conan Group returned HTTP %s.\n' "$status" >&2; exit 1; }
 status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-  "$gateway_url/conan/v2/$conan_group/conans/pkg/1.0/user/stable/revisions")
+  "$gateway_url/conan/$conan_group/v2/conans/pkg/1.0/user/stable/revisions")
 [[ "$status" == 502 ]] || { printf 'Recovery Conan audit request returned HTTP %s.\n' "$status" >&2; exit 1; }
 
 for replication in \

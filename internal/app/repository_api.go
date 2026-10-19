@@ -271,7 +271,7 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 	mavenProxyOperations := mavenProxyOperationsHandler{store: store, authenticator: authenticator, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, client: mavenClient, cache: mavenCache, maintenance: maintenance}
 	proxyCacheBrowse := proxyCacheBrowseHandler{store: store, entriesStore: store, audit: store, maintenance: maintenance, authenticator: authenticator, authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}}
 	nativeConanObjects := options.Storage[repository.FormatConan]
-	nativeConanPublish := newNativeConanPublishHandler(store, nativeConanObjects, authenticator).withPublicationScanner(publicationScanner)
+	nativeConanPublish := newNativeConanPublishHandler(store, options.ConanPublications, nativeConanObjects, authenticator).withPublicationScanner(publicationScanner)
 	nativeNPMObjects := options.Storage[repository.FormatNPM]
 	nativeNPM := newNativeNPMHandler(store, options.NPMMetadata, nativeNPMObjects, authenticator).withMetrics(metrics).withProxy(npmClient).withPublicationScanner(publicationScanner)
 	if dependencies.NPMMetadataTTL > 0 {
@@ -395,11 +395,11 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 		next:       nativeAPT}
 	mux.Handle("/apt/", aptGroupRouter)
 	conan := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache, NativeObjects: nativeConanObjects, ReadPolicies: store, Quarantine: store}
+	conan.Publications, conan.PublicationScanner = options.ConanPublications, &publicationScanner
 	conanGroupRouter := v2GroupRouter{format: repository.FormatConan, groups: store, repos: store, audit: store, auth: authenticator,
 		conan: &v2GroupConanHandler{conan: &conan, auth: authenticator},
 		next:  conan}
-	mux.Handle("/conan/v2/", conanGroupRouter)
-	mux.Handle("/conan/", conan)
+	mux.Handle("/conan/", conanGroupRouter)
 	mux.Handle("/repository/maven/", nativeMaven)
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	mux.HandleFunc("POST /auth/login", userLoginHandler(store, store, authenticator))

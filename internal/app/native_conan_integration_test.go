@@ -342,7 +342,7 @@ func TestPostgresAndRustFSConanReclaimRetriesAndPreventsRestore(t *testing.T) {
 	if _, err = store.TombstoneConanRecipeRevision(ctx, repo.ID, revision.Reference, revision.Revision); err != nil {
 		t.Fatal(err)
 	}
-	maintenance := NativeConanMaintenance{Store: repositoryScopedConanReclaimStore{PostgresStore: store, repositoryID: repo.ID}, Objects: &failOnceConanReclaimStore{ObjectStore: objects, fail: true}, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}
+	maintenance := NativeConanMaintenance{Store: repositoryScopedConanReclaimStore{PostgresStore: store, repositoryID: repo.ID}, Collections: store, Objects: &failOnceConanReclaimStore{ObjectStore: objects, fail: true}, Now: func() time.Time { return time.Now().Add(25 * time.Hour) }}
 	if err = maintenance.Collect(ctx); err == nil {
 		t.Fatal("first reclaim must fail")
 	}

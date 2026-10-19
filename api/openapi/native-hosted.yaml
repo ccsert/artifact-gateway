@@ -9,6 +9,18 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/conan/{repository}/v1/ping":
+    "$ref": "./protocols/conan.yaml#/conan_ping"
+  "/conan/{repository}/v2/users/authenticate":
+    "$ref": "./protocols/conan.yaml#/conan_authenticate"
+  "/conan/{repository}/v2/users/check_credentials":
+    "$ref": "./protocols/conan.yaml#/conan_check_credentials"
+  "/conan/{repository}/v2/conans/{path}":
+    "$ref": "./protocols/conan.yaml#/conan_read"
+  "/conan/{repository}/v2/conans/{name}/{version}/{user}/{channel}/revisions/{recipeRevision}/files/{file}":
+    "$ref": "./protocols/conan.yaml#/conan_recipe_file"
+  "/conan/{repository}/v2/conans/{name}/{version}/{user}/{channel}/revisions/{recipeRevision}/packages/{packageId}/revisions/{packageRevision}/files/{file}":
+    "$ref": "./protocols/conan.yaml#/conan_package_file"
   "/migrations/nexus/capabilities":
     "$ref": "./management/nexus-batches.yaml#/capabilities"
   "/migrations/nexus/batches":
@@ -362,6 +374,8 @@ components:
       "$ref": "./components/security-schemes.yaml#/bearerAuth"
     protocolBasicAuth:
       "$ref": "./components/security-schemes.yaml#/protocolBasicAuth"
+    conanBearerAuth:
+      "$ref": "./components/security-schemes.yaml#/conanBearerAuth"
     protocolBearerAuth:
       "$ref": "./components/security-schemes.yaml#/protocolBearerAuth"
     ociBearerAuth:
@@ -374,4 +388,4 @@ x-gateway-protocol-overlays:
   maven:
     officialSpecification: https://maven.apache.org/repositories/index.html
   conan:
-    "$ref": "./protocols/conan.yaml"
+    "$ref": "./protocols/conan.yaml#/x-gateway-protocol-overlay"

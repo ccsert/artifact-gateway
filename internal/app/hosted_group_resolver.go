@@ -99,11 +99,7 @@ func v2GroupName(format repository.Format, path string) string {
 	case repository.FormatAPT:
 		prefix = "/apt/"
 	case repository.FormatConan:
-		rest := strings.TrimPrefix(path, "/conan/v2/")
-		if rest == path || rest == "" {
-			return ""
-		}
-		return strings.SplitN(rest, "/", 2)[0]
+		return conanRemoteName(path)
 	default:
 		return ""
 	}

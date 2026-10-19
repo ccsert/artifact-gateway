@@ -295,7 +295,7 @@ func TestNativeConanProxyRepositoryPullsThroughUpstream(t *testing.T) {
 		Authenticator: testAuthenticator(), Client: client,
 		Cache: NewConanCache(objectstore.NewMemoryStore()), NativeObjects: objectstore.NewMemoryStore(), Metrics: &Metrics{},
 	}
-	req := httptest.NewRequest(http.MethodGet, "/conan/v2/conan-proxy/conans/"+reference+"/revisions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/conan/conan-proxy/v2/conans/"+reference+"/revisions", nil)
 	authorize(req, "resolver-secret")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)

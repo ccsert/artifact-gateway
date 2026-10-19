@@ -672,4 +672,4 @@ x-gateway-protocol-overlays:
   maven:
     officialSpecification: https://maven.apache.org/repositories/index.html
   conan:
-    "$ref": "./protocols/conan.yaml"
+    "$ref": "./protocols/conan.yaml#/x-gateway-protocol-overlay"

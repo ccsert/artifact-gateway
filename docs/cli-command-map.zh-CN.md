@@ -261,17 +261,17 @@ server base）。计划命令省略前导 `agctl`。
 | `POST /repositories/{repositoryId}/cache/negative:clear`<br>`clearProxyNegativeCache` | `cache clear-negative --repo <id>` | #137 | M2 | RA | W |
 | `POST /repositories/{repositoryId}/cache/refresh`<br>`refreshProxyCache` | `cache refresh --repo <id>` | #137 | M2 | RA | W |
 | `GET /repositories/{repositoryId}/proxy/health`<br>`getProxyHealth` | `proxy health --repo <id>` | #137 | M2 | R | Q |
-| `POST /repositories/{repositoryId}/conan-publish-sessions`<br>`createConanPublishSession` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生 Conan 发布由 #312 跟踪 | #132 / #312 | N/A | W | N |
-| `GET /conan-publish-sessions/{sessionId}`<br>`getConanPublishSession` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生 Conan 发布由 #312 跟踪 | #132 / #312 | N/A | R | N |
-| `PUT /conan-publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadConanPublishObject` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生 Conan 发布由 #312 跟踪 | #132 / #312 | N/A | W | N |
-| `POST /conan-publish-sessions/{sessionId}:commit`<br>`commitConanPublishSession` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生 Conan 发布由 #312 跟踪 | #132 / #312 | N/A | W | N |
+| `POST /repositories/{repositoryId}/conan-publish-sessions`<br>`createConanPublishSession` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生发布由官方 Conan 2 upload 完成 | #132 / #312 | N/A | W | N |
+| `GET /conan-publish-sessions/{sessionId}`<br>`getConanPublishSession` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生发布由官方 Conan 2 upload 完成 | #132 / #312 | N/A | R | N |
+| `PUT /conan-publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadConanPublishObject` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生发布由官方 Conan 2 upload 完成 | #132 / #312 | N/A | W | N |
+| `POST /conan-publish-sessions/{sessionId}:commit`<br>`commitConanPublishSession` | 不提供：Conan 会话编排不属于 CLI M1 范围；原生发布由官方 Conan 2 upload 完成 | #132 / #312 | N/A | W | N |
 | `GET /publish-sessions/{sessionId}`<br>`getPublishSession` | `publish status <session>` | #132 | M1 implemented | R | U |
 | `PUT /publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadPublishObject` | `publish upload <session>` | #132 | M1 implemented | W | U |
 | `POST /publish-sessions/{sessionId}:commit`<br>`commitPublishSession` | `publish commit <session>` | #132 | M1 implemented | W | U |
 
 ## 原生 bundle 中的附加协议操作
 
-管理操作在 native bundle 中重复出现时沿用上表，不重复实现。以下 36 个附加
+管理操作在 native bundle 中重复出现时沿用上表，不重复实现。以下 43 个附加
 操作逐项分类；原生 URL 按各 protocol 的 server 覆盖和真实路由使用，不能一律
 拼 `/api/v2`。已退役的 Nexus Repository 别名不属于此契约。
 
@@ -286,6 +286,13 @@ server base）。计划命令省略前导 `agctl`。
 | `HEAD /npm/{repository}/-/package/{package}/dist-tags`<br>`headNPMDistTags` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
 | `PUT /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`setNPMDistTag` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
 | `DELETE /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`deleteNPMDistTag` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
+| `GET /conan/{repository}/v1/ping`<br>`pingConanRemote` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
+| `GET /conan/{repository}/v2/users/authenticate`<br>`authenticateConanRemote` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
+| `GET /conan/{repository}/v2/users/check_credentials`<br>`checkConanCredentials` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
+| `GET /conan/{repository}/v2/conans/{path}`<br>`readConanRepresentation` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
+| `HEAD /conan/{repository}/v2/conans/{path}`<br>`headConanRepresentation` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
+| `PUT /conan/{repository}/v2/conans/{name}/{version}/{user}/{channel}/revisions/{recipeRevision}/files/{file}`<br>`uploadConanRecipeFile` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
+| `PUT /conan/{repository}/v2/conans/{name}/{version}/{user}/{channel}/revisions/{recipeRevision}/packages/{packageId}/revisions/{packageRevision}/files/{file}`<br>`uploadConanPackageFile` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
 | `GET /raw/{repository}/{path}`<br>`readRawContent` | `publish raw --resumable` (upload status) | #132 | M2 implemented | R / W | U: 核对目标、uploadId 与 offset；完整文件下载仍用原生客户端 |
 | `HEAD /raw/{repository}/{path}`<br>`headRawContent` | `publish raw` | #132 | M1 implemented | R | U: 回读摘要与大小，不下载对象字节 |
 | `PUT /raw/{repository}/{path}`<br>`putRawHostedContent` | `publish raw` | #132 | M1 implemented | W | U：大小/摘要与冲突/回读 |

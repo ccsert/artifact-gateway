@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"time"
 )
 
 func (s *MemoryStore) CreateConanPublishSession(_ context.Context, session ConanPublishSession) (ConanPublishSession, error) {
@@ -14,9 +13,10 @@ func (s *MemoryStore) CreateConanPublishSession(_ context.Context, session Conan
 	if session.State == "" {
 		session.State = "open"
 	}
-	s.conanSessions[session.ID] = session
+	session.Native, session.Version = false, 1
+	s.conanSessions[session.ID] = cloneConanSession(session)
 	s.conanUploads[session.ID] = map[string]string{}
-	return session, nil
+	return cloneConanSession(session), nil
 }
 
 func (s *MemoryStore) GetConanPublishSession(_ context.Context, id string) (ConanPublishSession, error) {
@@ -26,26 +26,7 @@ func (s *MemoryStore) GetConanPublishSession(_ context.Context, id string) (Cona
 	if !ok {
 		return ConanPublishSession{}, ErrNotFound
 	}
-	return session, nil
-}
-
-func (s *MemoryStore) MarkConanPublishObject(_ context.Context, sessionID, name, objectKey string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	session, ok := s.conanSessions[sessionID]
-	if !ok {
-		return ErrNotFound
-	}
-	if session.State != "open" || time.Now().After(session.ExpiresAt) {
-		return ErrDisabled
-	}
-	for _, object := range session.Objects {
-		if object.Name == name {
-			s.conanUploads[sessionID][name] = objectKey
-			return nil
-		}
-	}
-	return ErrNotFound
+	return cloneConanSession(session), nil
 }
 
 func (s *MemoryStore) ListConanPublishUploads(_ context.Context, sessionID string) (map[string]string, error) {
@@ -60,22 +41,4 @@ func (s *MemoryStore) ListConanPublishUploads(_ context.Context, sessionID strin
 		out[name] = key
 	}
 	return out, nil
-}
-
-func (s *MemoryStore) CommitConanPublishSession(_ context.Context, sessionID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	session, ok := s.conanSessions[sessionID]
-	if !ok {
-		return ErrNotFound
-	}
-	if session.State != "open" || time.Now().After(session.ExpiresAt) {
-		return ErrDisabled
-	}
-	if len(s.conanUploads[sessionID]) != len(session.Objects) {
-		return ErrDisabled
-	}
-	session.State = "committed"
-	s.conanSessions[sessionID] = session
-	return nil
 }

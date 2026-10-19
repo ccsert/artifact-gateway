@@ -38,7 +38,7 @@ func TestConan2ClientListsRevisionThroughGateway(t *testing.T) {
 	home := t.TempDir()
 	run := func(args ...string) {
 		command := exec.Command(conan, args...)
-		command.Env = append(os.Environ(), "CONAN_HOME="+home)
+		command.Env = conanFixtureEnvironment(home)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("conan %v: %v\n%s", args, err, output)
 		}
@@ -66,7 +66,7 @@ func TestConan2ClientDownloadsRevisionedRecipeThroughGateway(t *testing.T) {
 	home := t.TempDir()
 	run := func(args ...string) {
 		command := exec.Command(conan, args...)
-		command.Env = append(os.Environ(), "CONAN_HOME="+home)
+		command.Env = conanFixtureEnvironment(home)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("conan %v: %v\n%s\ngateway=%v upstream=%v", args, err, output, gatewayPaths, client.paths)
 		}
@@ -88,7 +88,7 @@ func TestConan2ClientDownloadsRevisionedPackageThroughGateway(t *testing.T) {
 	defer server.Close()
 	home := t.TempDir()
 	command := exec.Command(conan, "download", "pkg/1.0@user/stable#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:package-id#bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "-r=gateway")
-	command.Env = append(os.Environ(), "CONAN_HOME="+home)
+	command.Env = conanFixtureEnvironment(home)
 	add := exec.Command(conan, "remote", "add", "--force", "gateway", server.URL+"/conan/central")
 	add.Env = command.Env
 	if output, err := add.CombinedOutput(); err != nil {
@@ -118,7 +118,7 @@ func TestConan2ClientGatewayResolutionAndCacheMatrix(t *testing.T) {
 	home := t.TempDir()
 	run := func(args ...string) {
 		command := exec.Command(conan, args...)
-		command.Env = append(os.Environ(), "CONAN_HOME="+home)
+		command.Env = conanFixtureEnvironment(home)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("conan %v: %v\n%s\nupstream=%v", args, err, output, client.paths())
 		}
@@ -157,7 +157,7 @@ func TestConan2ClientGatewayResolutionAndCacheMatrix(t *testing.T) {
 	if secondFailure.failureHostedCalls <= firstFailure.failureHostedCalls || secondFailure.failureProxyCalls <= firstFailure.failureProxyCalls {
 		t.Fatalf("upstream failure was cached: first=%+v second=%+v", firstFailure, secondFailure)
 	}
-	failureResponse, err := http.Get(server.URL + "/conan/v2/central/conans/failure/1.0/user/stable/revisions")
+	failureResponse, err := http.Get(server.URL + "/conan/central/v2/conans/failure/1.0/user/stable/revisions")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestConan2ClientGatewayResolutionAndCacheMatrix(t *testing.T) {
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "private", Members: []repository.Member{{Name: "private-hosted", Type: repository.MemberHosted}}})
 	run("remote", "add", "--force", "private", server.URL+"/conan/private")
 	run("list", "pkg/1.0@user/stable#*", "-r=private", "-cc", "core:non_interactive=True")
-	privateResponse, err := http.Get(server.URL + "/conan/v2/private/conans/pkg/1.0/user/stable/revisions")
+	privateResponse, err := http.Get(server.URL + "/conan/private/v2/conans/pkg/1.0/user/stable/revisions")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestConan2ClientGatewayResolutionAndCacheMatrix(t *testing.T) {
 	run("remote", "add", "--force", "denied-proxy", server.URL+"/conan/denied-proxy")
 	beforeDeniedProxy := client.counts()
 	run("list", "pkg/1.0@user/stable#*", "-r=denied-proxy", "-cc", "core:non_interactive=True")
-	deniedProxyResponse, err := http.Get(server.URL + "/conan/v2/denied-proxy/conans/pkg/1.0/user/stable/revisions")
+	deniedProxyResponse, err := http.Get(server.URL + "/conan/denied-proxy/v2/conans/pkg/1.0/user/stable/revisions")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestConan2ClientRejectsChecksumMismatch(t *testing.T) {
 	defer server.Close()
 	home := t.TempDir()
 	add := exec.Command(conan, "remote", "add", "--force", "gateway", server.URL+"/conan/central")
-	add.Env = append(os.Environ(), "CONAN_HOME="+home)
+	add.Env = conanFixtureEnvironment(home)
 	if output, err := add.CombinedOutput(); err != nil {
 		t.Fatalf("add remote: %v\n%s", err, output)
 	}
@@ -267,7 +267,7 @@ func TestConan2ClientAuthenticationAndAnonymousPolicyMatrix(t *testing.T) {
 	home := t.TempDir()
 	run := func(env []string, args ...string) {
 		command := exec.Command(conan, args...)
-		command.Env = append(append(os.Environ(), "CONAN_HOME="+home), env...)
+		command.Env = append(conanFixtureEnvironment(home), env...)
 		if output, err := command.CombinedOutput(); err != nil {
 			requestMu.Lock()
 			seen := append([]string(nil), requests...)
@@ -277,7 +277,7 @@ func TestConan2ClientAuthenticationAndAnonymousPolicyMatrix(t *testing.T) {
 	}
 	runFails := func(args ...string) {
 		command := exec.Command(conan, args...)
-		command.Env = append(os.Environ(), "CONAN_HOME="+home)
+		command.Env = conanFixtureEnvironment(home)
 		if output, err := command.CombinedOutput(); err == nil {
 			t.Fatalf("conan %v unexpectedly succeeded\n%s", args, output)
 		}
@@ -311,7 +311,7 @@ func TestConan2ClientUsesAllowlistedHTTPSProxy(t *testing.T) {
 	var upstreamCalls atomic.Int32
 	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upstreamCalls.Add(1)
-		if r.URL.Path != "/conans/pkg/1.0/user/stable/revisions" {
+		if r.URL.Path != "/v2/conans/pkg/1.0/user/stable/revisions" {
 			http.NotFound(w, r)
 			return
 		}
@@ -340,14 +340,14 @@ func TestConan2ClientUsesAllowlistedHTTPSProxy(t *testing.T) {
 	home := t.TempDir()
 	run := func(args ...string) {
 		command := exec.Command(conan, args...)
-		command.Env = append(os.Environ(), "CONAN_HOME="+home)
+		command.Env = conanFixtureEnvironment(home)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("conan %v: %v\n%s", args, err, output)
 		}
 	}
 	runFails := func(args ...string) {
 		command := exec.Command(conan, args...)
-		command.Env = append(os.Environ(), "CONAN_HOME="+home)
+		command.Env = conanFixtureEnvironment(home)
 		if output, err := command.CombinedOutput(); err == nil {
 			t.Fatalf("conan %v unexpectedly succeeded\n%s", args, output)
 		}
@@ -355,7 +355,7 @@ func TestConan2ClientUsesAllowlistedHTTPSProxy(t *testing.T) {
 	run("remote", "add", "--force", "allowed", server.URL+"/conan/allowed")
 	run("list", "pkg/1.0@user/stable#*", "-r=allowed")
 	if got := upstreamCalls.Load(); got != 1 {
-		t.Fatalf("allowlisted Proxy calls=%d", got)
+		t.Fatalf("allowlisted Proxy calls=%d audits=%+v", got, store.Audits)
 	}
 	run("remote", "add", "--force", "denied", server.URL+"/conan/denied")
 	runFails("download", "pkg/1.0@user/stable", "-r=denied")
@@ -390,7 +390,7 @@ func (c *conanMatrixClient) FetchConan(_ context.Context, _ string, member repos
 			recipeFiles := map[string][]byte{"conanfile.py": []byte("from conan import ConanFile\nclass Hosted(ConanFile): pass\n"), "conanmanifest.txt": []byte("manifest\n")}
 			packageFiles := map[string][]byte{"conan_package.tgz": conanPackageArchive(), "conaninfo.txt": []byte("[settings]\n"), "conanmanifest.txt": []byte("manifest\n")}
 			if strings.HasSuffix(path, "/search") {
-				return conanJSON(`{"packages":{}}`), nil
+				return conanJSON(`{}`), nil
 			}
 			if strings.HasSuffix(path, "/latest") {
 				return conanJSON(`{"revision":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","time":"2024-01-01T00:00:00Z"}`), nil
@@ -531,7 +531,7 @@ func (c *conanDownloadClient) FetchConan(_ context.Context, _ string, _ reposito
 		}
 	}
 	if strings.HasSuffix(path, "/search") {
-		return conanJSON(`{"packages":{}}`), nil
+		return conanJSON(`{}`), nil
 	}
 	if strings.HasSuffix(path, "/revisions") {
 		return conanJSON(`{"revisions":[{"revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","time":"2024-01-01T00:00:00Z"}]}`), nil

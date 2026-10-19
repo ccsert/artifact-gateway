@@ -264,16 +264,13 @@ func TestConanPublicationEnqueuesRecipeAndPackageScans(t *testing.T) {
 			return scanning.Report{}, nil
 		}),
 		ArtifactScannerFormats: []repository.Format{repository.FormatConan},
-	}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objects}},
+	}, Store: store, ConanPublications: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objects}},
 	)
 
-	publishConanForScan(t, handler, repo.ID, map[string]any{
-		"kind": "recipe", "reference": "pkg/1.0/user/stable", "recipeRevision": "rrev",
-	}, "conanfile.py", []byte("recipe"))
-	publishConanForScan(t, handler, repo.ID, map[string]any{
-		"kind": "package", "reference": "pkg/1.0/user/stable", "recipeRevision": "rrev",
-		"packageId": "package-id", "packageRevision": "prev",
-	}, "package.tgz", []byte("package"))
+	recipe, recipeBodies := conanRecipePublicationFixture("pkg/1.0/user/stable", []byte("recipe"))
+	publishConanPublicationFixture(t, handler, repo.ID, "admin-secret", recipe, recipeBodies)
+	pkg, packageBodies := conanPackagePublicationFixture(t, recipe.Reference, recipe.RecipeRevision)
+	publishConanPublicationFixture(t, handler, repo.ID, "admin-secret", pkg, packageBodies)
 
 	jobs, err := store.ListLifecycleJobs(ctx, repo.ID, 100)
 	if err != nil {
@@ -294,8 +291,8 @@ func TestConanPublicationEnqueuesRecipeAndPackageScans(t *testing.T) {
 		coordinates[payload.Coordinate] = true
 	}
 	for _, coordinate := range []string{
-		"pkg/1.0/user/stable#rrev",
-		"pkg/1.0/user/stable#rrev/package-id#prev",
+		recipe.Reference + "#" + recipe.RecipeRevision,
+		pkg.Reference + "#" + pkg.RecipeRevision + "/" + pkg.PackageID + "#" + pkg.PackageRevision,
 	} {
 		if !coordinates[coordinate] {
 			t.Fatalf("missing scan coordinate %q in %#v", coordinate, coordinates)
@@ -303,36 +300,31 @@ func TestConanPublicationEnqueuesRecipeAndPackageScans(t *testing.T) {
 	}
 }
 
-func publishConanForScan(t *testing.T, handler http.Handler, repositoryID string, fields map[string]any, objectName string, body []byte) {
+func publishConanPublicationFixture(t *testing.T, handler http.Handler, repositoryID, token string, declaration nativeConanPublishRequest, bodies map[string][]byte) {
 	t.Helper()
-	digest := testScanDigest(string(body))
-	fields["objects"] = []map[string]any{{"name": objectName, "digest": digest, "size": len(body)}}
-	requestBody, err := json.Marshal(fields)
+	requestBody, err := json.Marshal(declaration)
 	if err != nil {
 		t.Fatal(err)
 	}
 	create := httptest.NewRequest(http.MethodPost, "/api/v2/repositories/"+repositoryID+"/conan-publish-sessions", bytes.NewReader(requestBody))
-	authorize(create, "admin-secret")
+	authorize(create, token)
 	created := httptest.NewRecorder()
 	handler.ServeHTTP(created, create)
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create Conan publish session = %d body=%s", created.Code, created.Body.String())
 	}
-	var session struct {
-		ID string `json:"id"`
+	sessionID := requirePublishSessionContractKeys(t, created.Body.Bytes(), len(declaration.Objects))
+	for name, body := range bodies {
+		upload := httptest.NewRequest(http.MethodPut, "/api/v2/conan-publish-sessions/"+sessionID+"/objects/"+name, bytes.NewReader(body))
+		authorize(upload, token)
+		uploaded := httptest.NewRecorder()
+		handler.ServeHTTP(uploaded, upload)
+		if uploaded.Code != http.StatusNoContent {
+			t.Fatalf("upload Conan object %s = %d body=%s", name, uploaded.Code, uploaded.Body.String())
+		}
 	}
-	if err = json.Unmarshal(created.Body.Bytes(), &session); err != nil {
-		t.Fatal(err)
-	}
-	upload := httptest.NewRequest(http.MethodPut, "/api/v2/conan-publish-sessions/"+session.ID+"/objects/"+objectName, bytes.NewReader(body))
-	authorize(upload, "admin-secret")
-	uploaded := httptest.NewRecorder()
-	handler.ServeHTTP(uploaded, upload)
-	if uploaded.Code != http.StatusNoContent {
-		t.Fatalf("upload Conan object = %d body=%s", uploaded.Code, uploaded.Body.String())
-	}
-	commit := httptest.NewRequest(http.MethodPost, "/api/v2/conan-publish-sessions/"+session.ID+":commit", nil)
-	authorize(commit, "admin-secret")
+	commit := httptest.NewRequest(http.MethodPost, "/api/v2/conan-publish-sessions/"+sessionID+":commit", nil)
+	authorize(commit, token)
 	committed := httptest.NewRecorder()
 	handler.ServeHTTP(committed, commit)
 	if committed.Code != http.StatusOK {

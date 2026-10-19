@@ -1230,7 +1230,7 @@ func TestNativeMavenPublishSessionResponsesMatchContractKeys(t *testing.T) {
 	}
 }
 
-func requirePublishSessionContractKeys(t *testing.T, body []byte) string {
+func requirePublishSessionContractKeys(t *testing.T, body []byte, expectedCount ...int) string {
 	t.Helper()
 	var session map[string]json.RawMessage
 	if err := json.Unmarshal(body, &session); err != nil {
@@ -1240,11 +1240,17 @@ func requirePublishSessionContractKeys(t *testing.T, body []byte) string {
 		t.Fatalf("session keys=%v, want %v; body=%s", got, want, body)
 	}
 	var objects []map[string]json.RawMessage
-	if err := json.Unmarshal(session["objects"], &objects); err != nil || len(objects) != 1 {
+	count := 1
+	if len(expectedCount) == 1 {
+		count = expectedCount[0]
+	}
+	if err := json.Unmarshal(session["objects"], &objects); err != nil || len(objects) != count {
 		t.Fatalf("objects=%s err=%v", session["objects"], err)
 	}
-	if got, want := sortedJSONKeys(objects[0]), []string{"digest", "name", "size"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("object keys=%v, want %v; body=%s", got, want, body)
+	for _, object := range objects {
+		if got, want := sortedJSONKeys(object), []string{"digest", "name", "size"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("object keys=%v, want %v; body=%s", got, want, body)
+		}
 	}
 	var id string
 	if err := json.Unmarshal(session["id"], &id); err != nil || id == "" {

@@ -10,13 +10,15 @@
 
 **Repository** 是恰好一个格式的持久策略、授权和保留 namespace。**Group** 是同格式 Repository 的有序只读视图，不拥有字节。**Member** 是 Group 与 Repository 的成员关系，position 唯一。**Artifact coordinate** 是格式定义的身份；Raw 使用 path 与 digest 快照，OCI 使用 `repository@sha256:<digest>`，Maven 使用 GAVCE。Raw path 与 OCI tag 是可变引用，不单独构成不可变身份。
 
-Hosted 写契约按格式区分。Raw 使用标准 `PUT /raw/{repository}/{path}`，对象引用提交后可见。OCI 直接使用 Registry V2 upload/blob/manifest/tag。Maven 默认成功 PUT 直接发布；严格模式下服务端创建 staging session，并由 `POST .../coordinates/{coordinate}:commit` 显式切换可见性。Conan 使用当前兼容基线定义的管理发布契约。
+Hosted 写契约按格式区分。Raw 使用标准 `PUT /raw/{repository}/{path}`，对象引用提交后可见。OCI 直接使用 Registry V2 upload/blob/manifest/tag。Maven 默认成功 PUT 直接发布；严格模式下服务端创建 staging session，并由 `POST .../coordinates/{coordinate}:commit` 显式切换可见性。Conan 管理与原生发布均遵循完整修订发布契约。
 
 Maven session 在 committed/aborted/expired 后不可复用。`Idempotency-Key` 对认证 actor 和目标保持 24 小时；同 key 不同 payload 返回 `409 idempotency_conflict`。
 
 Group 成员只由 Group 管理。`/groups/{groupId}/members` 替换必须提供完整有序列表与 `If-Match`；成员必须存在、格式一致、不重复且 position 从 0 连续。成员边与 Group version 在一个 PostgreSQL 事务更新，Repository 不提供 member write endpoint。
 
 以下细则主要覆盖原始 Raw、OCI、Maven；Conan、npm、PyPI、Go、APT 由当前兼容基线及测试拥有。Group/Proxy 服从当前 overlay，不服从过期的 V2 清单陈述。
+
+Conan 2 官方客户端以 `/conan/{repository}` 注册远程仓库，原生文件 PUT 复用持久会话；完整 `conanmanifest.txt` 校验后自动提交，客户端无需调用管理 commit。显式管理会话 API 在提交前共用完整 manifest、hash 身份与资产校验。两个入口使用不可变暂存 key 和版本 fence，在同一事务持久化 revision、committed Session 与真实提交调用者的发布审计；不完整声明不得通过任一入口变为可见。见 [Conan 原生发布](conan-native-publication.zh-CN.md)。
 
 ## 元数据、对象生命周期与事务
 

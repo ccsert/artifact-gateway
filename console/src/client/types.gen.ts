@@ -917,7 +917,8 @@ export type ConanPackageIdList = {
 };
 
 /**
- * A recipe session declares recipeRevision only; a package session also declares packageId and packageRevision. The session coordinate is reference#recipeRevision, extended with /packageId#packageRevision for package sessions.
+ * A one-hour Hosted publication using Conan 2 hash identities and the same complete-manifest validation as native upload. A recipe session declares recipeRevision only; a package session also requires packageId and packageRevision. The session coordinate is reference#recipeRevision, extended with /packageId#packageRevision for package sessions. Objects remain invisible until commit verifies their full bytes, manifest tree, revision and package identity. Incomplete legacy declarations are rejected.
+ *
  */
 export type CreateConanPublishSession = {
   kind: "recipe" | "package";
@@ -925,15 +926,22 @@ export type CreateConanPublishSession = {
    * Conan reference in path form, name/version/user/channel.
    */
   reference: string;
+  /**
+   * Lowercase Conan 2 hash revision derived from the recipe manifest.
+   */
   recipeRevision: string;
   /**
-   * Required for package sessions; absent or empty for recipe sessions.
+   * Required lowercase 40-hex package identity derived from conaninfo.txt for package sessions; absent or empty for recipe sessions.
    */
   packageId?: string;
   /**
-   * Required for package sessions; absent or empty for recipe sessions.
+   * Required lowercase 32-hex package manifest revision for package sessions; absent or empty for recipe sessions.
    */
   packageRevision?: string;
+  /**
+   * Distinct filenames with exact byte size and SHA-256. Recipes require conanmanifest.txt and conanfile.py or conan_export.tgz, may include both, and may include conan_sources.tgz. Packages require exactly conanmanifest.txt, conaninfo.txt and conan_package.tgz. Other names are rejected. Each object is bounded to 1 GiB; manifest and conaninfo.txt are bounded to 1 MiB. Commit applies the native expanded-tree bounds and rejects missing, extra or mismatched manifest entries.
+   *
+   */
   objects: Array<DeclaredObject>;
 };
 

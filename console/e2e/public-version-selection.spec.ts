@@ -299,6 +299,8 @@ test("OCI tag selection remains stable after manifest metadata finishes loading"
 test("Conan package versions are grouped, searchable, and collapsible", async ({
   page,
 }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   await mockCatalog(page, {
     id: ids.conan,
     name: "conan-public",
@@ -354,6 +356,29 @@ test("Conan package versions are grouped, searchable, and collapsible", async ({
   await expect(
     page.getByText("revision-one", { exact: true }).first(),
   ).toBeVisible();
+  for (const viewport of [
+    { width: 1280, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const snippet = page
+      .locator("aside")
+      .getByText(
+        `conan remote add conan-public ${new URL(page.url()).origin}/conan/conan-public`,
+        { exact: true },
+      );
+    await expect(snippet).toBeVisible();
+    const bounds = await page.evaluate(() => ({
+      width: window.innerWidth,
+      scroll: document.documentElement.scrollWidth,
+    }));
+    expect(bounds.scroll).toBeLessThanOrEqual(bounds.width);
+    await page.screenshot({
+      path: test.info().outputPath(`conan-${viewport.width}.png`),
+      fullPage: true,
+    });
+  }
+  expect(pageErrors).toEqual([]);
   await page.getByRole("button", { name: "收起" }).click();
   await expect(page.getByRole("combobox")).toHaveCount(0);
 });

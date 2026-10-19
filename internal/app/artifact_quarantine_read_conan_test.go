@@ -55,7 +55,7 @@ func TestConanQuarantineReadPolicyBlocksRecipeAndPackageClosureAndHidesRevision(
 	quarantineReadIdentity(t, store, repo, reference+"#"+rrev, recipe.Digest)
 	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objects}})
 
-	base := "/conan/v2/" + repo.Name + "/conans/" + reference + "/revisions"
+	base := "/conan/" + repo.Name + "/v2/conans/" + reference + "/revisions"
 	for _, path := range []string{base + "/" + rrev + "/files/conanfile.py", base + "/" + rrev + "/packages/package-id/revisions/prev/files/conan_package.tgz"} {
 		for _, method := range []string{http.MethodGet, http.MethodHead} {
 			request := httptest.NewRequest(method, path, nil)
@@ -99,7 +99,7 @@ func TestConanGroupDoesNotFallThroughPastQuarantinedRecipeRevision(t *testing.T)
 		repository.GroupMember{RepositoryID: second.ID, Position: 1},
 	)
 	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objects}})
-	base := "/conan/v2/conan-read-group/conans/" + reference + "/revisions"
+	base := "/conan/conan-read-group/v2/conans/" + reference + "/revisions"
 
 	listRequest := httptest.NewRequest(http.MethodGet, base, nil)
 	authorize(listRequest, "resolver-secret")

@@ -242,7 +242,7 @@ raw-e2e:
 	@./scripts/raw-e2e.sh
 
 conan-e2e:
-	@docker run --rm -v "$(CURDIR):/src" -v artifact-gateway-go-mod:/go/pkg/mod -w /src $(GO_IMAGE) sh -ec 'apk add --no-cache py3-pip >/dev/null && pip install --break-system-packages --no-cache-dir conan==2.21.0 >/dev/null && CONAN_BINARY="$$(command -v conan)" go test -v -count=1 -run "^TestConan2Client" ./internal/app'
+	@./scripts/native-conan-e2e.sh
 
 native-maven-e2e:
 	@./scripts/native-maven-e2e.sh

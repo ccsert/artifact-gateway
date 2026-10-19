@@ -43,10 +43,7 @@ describe("public repository usage", () => {
   });
 
   it.each([
-    [
-      "conan",
-      "conan remote add releases https://gateway.test/conan/v2/releases",
-    ],
+    ["conan", "conan remote add releases https://gateway.test/conan/releases"],
     ["npm", "https://gateway.test/npm/releases/"],
     ["pypi", "https://gateway.test/pypi/releases/simple/"],
     ["go", "go env -w GOPROXY=https://gateway.test/go/releases"],

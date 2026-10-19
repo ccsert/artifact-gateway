@@ -313,7 +313,19 @@ func (h generatedRepositoryAPIAdapter) rejectQuarantinedDistribution(w http.Resp
 
 func validConanReplicationCoordinate(value string) bool {
 	reference, revision, found := strings.Cut(value, "#")
-	return found && reference != "" && revision != "" && !strings.Contains(revision, "/") && validConanPublishRequest(nativeConanPublishRequest{Kind: "recipe", Reference: reference, RecipeRevision: revision, Objects: []repository.MavenDeclaredObject{{Name: "object", Digest: "sha256:" + strings.Repeat("0", 64), Size: 1}}})
+	if !found || !validConanSegment(revision) {
+		return false
+	}
+	parts := strings.Split(reference, "/")
+	if len(parts) != 4 {
+		return false
+	}
+	for _, part := range parts {
+		if !validConanSegment(part) {
+			return false
+		}
+	}
+	return true
 }
 
 func (h generatedRepositoryAPIAdapter) ListRepositoryReplications(w http.ResponseWriter, r *http.Request, repositoryID adminopenapi.RepositoryId) {

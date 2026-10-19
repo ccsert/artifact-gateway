@@ -2504,7 +2504,8 @@ export const deleteConanPackageRevision = <ThrowOnError extends boolean = false>
 });
 
 /**
- * Opens a one-hour Conan publish session for a recipe revision or a package revision of a Hosted Conan repository. Declared objects are uploaded and verified individually, and the revision becomes visible only on commit.
+ * Opens a one-hour Hosted Conan recipe or package publication under exact repository resource write permission. Requires official lowercase 32-hex RREV/PREV, a 40-hex package ID for packages, and the complete supported manifest asset set. Uses the same content and identity validation as native publication; no revision or file is visible before commit.
+ *
  */
 export const createConanPublishSession = <ThrowOnError extends boolean = false>(options: Options<CreateConanPublishSessionData, ThrowOnError>): RequestResult<CreateConanPublishSessionResponses, CreateConanPublishSessionErrors, ThrowOnError> => (options.client ?? client).post<CreateConanPublishSessionResponses, CreateConanPublishSessionErrors, ThrowOnError>({
     security: [{
@@ -2630,6 +2631,10 @@ export const getConanPublishSession = <ThrowOnError extends boolean = false>(opt
     ...options
 });
 
+/**
+ * Verifies the declared size and SHA-256, writes a fresh immutable staging key and atomically advances the open session's versioned object pointer. This does not make the file visible. Only declared supported filenames are accepted; the management endpoint cannot modify a native session.
+ *
+ */
 export const uploadConanPublishObject = <ThrowOnError extends boolean = false>(options: Options<UploadConanPublishObjectData, ThrowOnError>): RequestResult<UploadConanPublishObjectResponses, UploadConanPublishObjectErrors, ThrowOnError> => (options.client ?? client).put<UploadConanPublishObjectResponses, UploadConanPublishObjectErrors, ThrowOnError>({
     bodySerializer: null,
     security: [{
@@ -2645,6 +2650,10 @@ export const uploadConanPublishObject = <ThrowOnError extends boolean = false>(o
     }
 });
 
+/**
+ * Reads back the complete staged snapshot and applies the same bounded asset, manifest MD5 tree, RREV/PREV and package-ID validation as native publication. A session version fence rejects concurrent pointer changes. One transaction makes the immutable revision visible, marks the session committed and writes a publish audit for the actual commit caller. Validation, quota or storage failure leaves the revision invisible; incomplete legacy declarations cannot bypass this boundary. This endpoint cannot commit a native session.
+ *
+ */
 export const commitConanPublishSession = <ThrowOnError extends boolean = false>(options: Options<CommitConanPublishSessionData, ThrowOnError>): RequestResult<CommitConanPublishSessionResponses, CommitConanPublishSessionErrors, ThrowOnError> => (options.client ?? client).post<CommitConanPublishSessionResponses, CommitConanPublishSessionErrors, ThrowOnError>({
     security: [{
             key: 'bearerAuth',

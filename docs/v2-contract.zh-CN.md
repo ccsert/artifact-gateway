@@ -13,7 +13,7 @@
 | Proxy | 从一个明确允许的外部上游获取的 member |
 | Group | 同格式成员的有序只读虚拟仓库 |
 
-名称使用小写 DNS label 与 `-`，在格式内唯一。OCI `/v2/<group>/...`、Maven `/maven/<group>/...`、Raw `/raw/<group>/<path>`、Conan `/conan/v2/<group>/...` 彼此不交叉。
+名称使用小写 DNS label 与 `-`，在格式内唯一。OCI `/v2/<group>/...`、Maven `/maven/<group>/...`、Raw `/raw/<group>/<path>`、Conan `/conan/<group>/v2/...` 彼此不交叉。
 
 `/api/v1`、`/metrics`、`/livez`、`/readyz`、`/api/v1/operations` 等静态路由优先。`api`、`metrics`、`livez`、`readyz`、`operations`、`v2`、`maven`、`raw`、`conan` 为保留名称。
 
@@ -41,7 +41,11 @@ Raw/OCI resumable upload 把每个 offset range 保存为不可变 chunk，PATCH
 
 `CONTRACT: conan2-only`：仅支持 Conan 2.x v2 REST resolution，包括原生 Hosted metadata/file。Conan 1、remote-to-remote copy、上游索引聚合和服务端 recipe 生成不在范围。
 
-Remote URL 必须包含 Group：`/conan/v2/<group>/conans/...`。唯一例外是 Basic login handshake `GET /conan/<group>/v2/users/authenticate`，它服从同一资源策略且不是通用 User API。Conan 1 auth 和非 GET auth 返回 `404`；Proxy 不接收客户端凭证。
+Hosted、Proxy、Group 均以 `/conan/<repository>` 注册远程仓库；官方客户端自动附加 `/v1/ping` 或 `/v2/users/authenticate`、`/v2/users/check_credentials`、`/v2/conans/...`。旧版号在名称之前的布局直接返回 404，无兼容别名。原生 Hosted 上传遵循[完整 manifest 自动提交](conan-native-publication.zh-CN.md)契约，使用独立协议签名密钥及绑定源凭据的短期令牌。Group/Proxy 只读，客户端凭据不会转发上游。
+
+管理与原生发布都要求从官方 manifest/conaninfo 身份派生的小写 32 位十六进制 RREV/PREV 和
+40 位 Package ID，共用完整受支持资产集合校验，并以不可变暂存 key 和 Session 版本 fence
+保护 revision、会话状态及真实调用者审计的原子提交。管理 HTTP 形状不变，旧不完整声明不再接受。
 
 Recipe 坐标为 `name/version/user/channel#rrev`，package revision 增加 `/package_id#prev`。每段独立存储，只严格 decode 一次；revision 一旦观察即不可变。省略 rrev/prev 只在 metadata TTL 内缓存选择结果，不创建永久 alias。
 
@@ -49,7 +53,7 @@ Recipe 坐标为 `name/version/user/channel#rrev`，package revision 增加 `/pa
 
 Recipe/package manifest 与文件必须按 Conan metadata checksum 验证后才能缓存；不匹配返回 `502`、审计 `upstream_error` 且不缓存。Hosted-first 解析，metadata 默认 TTL 1 分钟、body 15 分钟、terminal 404 负缓存 1 分钟；其他错误不负缓存。Key 包含完整坐标、representation、member 和 endpoint，quota 计入 Group。
 
-Conan Proxy 使用与 Raw 相同的 HTTPS、allowlist、redirect 与地址限制，但 allowlist 按 Repository 且独立于 OCI/Maven。
+Conan Proxy Endpoint 配置上游 remote root，不包含 API 版本；请求与官方客户端一样附加 `/v2/conans/...`。Conan Proxy 使用与 Raw 相同的 HTTPS、allowlist、redirect 与地址限制，但 allowlist 按 Repository 且独立于 OCI/Maven。
 
 ## 配置、迁移与运维
 
