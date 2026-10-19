@@ -787,7 +787,8 @@ command, flag, or argument count the client does not have.
 
 ## Verification
 
-- `go test ./internal/agctl/...` runs offline against in-process fakes:
+- `make cli-test` runs the command entry point and `internal/agctl` tests
+  offline against in-process fakes (also run by CI and `ci-local`):
   command parsing, exit codes, redaction, and the JSON envelopes. Golden
   envelopes live in `internal/agctl/testdata/golden/`; after an intended
   output change, rewrite them with `go test ./internal/agctl/ -update` and
@@ -823,7 +824,12 @@ command, flag, or argument count the client does not have.
   dry-run, 202, timed-out wait) and waits for `deleted`. The CI playbook runs
   as well: a service account gets a credential only into a 0600 file, reads
   the repository with it, rotates it (the old secret answers 401), and loses
-  access with its grant; an API key is created and revoked; a pending user
+  access with its grant. With only read/write on a separate Maven repository,
+  the new credential creates/replays a session, uploads and commits its POM/JAR,
+  searches the coordinate and reads both files byte-for-byte through the native
+  endpoint; the read-back is found by actor/operation in the audit. Revoking its
+  grant refuses a new session with 403 while the committed artifact remains.
+  An API key is created and revoked; a pending user
   becomes a member without repository access until granted, its session is
   ended and rejected, its password reset from a file, and the user deleted;
   each of those changes (create, role update, session list and revokes,

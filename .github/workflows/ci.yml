@@ -54,6 +54,8 @@ jobs:
         run: make openapi-check
       - name: Validate agctl command map against the API contracts
         run: make cli-contract-check
+      - name: Validate agctl parsing, schemas and agent recipes
+        run: make cli-test
       - name: Run tests
         run: make test
       - name: Validate Cargo C0 with the pinned official client
