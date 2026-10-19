@@ -237,7 +237,8 @@ func TestEmailDeliveryWaitAndReplay(t *testing.T) {
 		return 200, deliveryJSON("accepted", "3")
 	})
 	code, stdout, _ := runCLI(t, "email", "delivery", "wait", deliveryID, "--json")
-	if code != ExitOK || !strings.Contains(stdout, `"state": "accepted"`) {
+	accepted := decodeEnvelope(t, stdout)
+	if code != ExitOK || !accepted.OK || accepted.Error != nil || !strings.Contains(stdout, `"state": "accepted"`) {
 		t.Fatalf("exit = %d, stdout = %s", code, stdout)
 	}
 	api.on("GET", path, 200, deliveryJSON("retrying", "2"))
@@ -245,6 +246,10 @@ func TestEmailDeliveryWaitAndReplay(t *testing.T) {
 	envelope := decodeEnvelope(t, stdout)
 	if code != ExitConnection || envelope.Error.Code != "wait_timeout" || !strings.Contains(envelope.Error.Hint, "no cancel") {
 		t.Fatalf("exit = %d, stdout = %s", code, stdout)
+	}
+	var last struct{ ID, State string }
+	if err := json.Unmarshal(envelope.Data, &last); err != nil || envelope.OK || last.ID != deliveryID || last.State != "retrying" {
+		t.Fatalf("timeout must retain the requested delivery and its last state: %s", stdout)
 	}
 
 	if code, _, _ = runCLI(t, "email", "delivery", "replay", deliveryID); code != ExitUsage {
