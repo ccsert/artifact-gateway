@@ -83,7 +83,17 @@ test("a scheduled task is created, paused, run, and deleted", async ({
 
   // A manual run is recorded in the task's dispatch history.
   await row.getByRole("button", { name: "投递历史" }).click();
-  await row.getByRole("button", { name: "立即执行" }).click();
+  const runButton = row.getByRole("button", { name: "立即执行" });
+  await expect(runButton).not.toHaveClass(/ant-btn-loading/);
+  const dispatch = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      /\/api\/v2\/scheduled-tasks\/[^/]+\/run$/.test(
+        new URL(response.url()).pathname,
+      ),
+  );
+  await runButton.click();
+  expect((await dispatch).ok()).toBeTruthy();
   await expect(page.getByText("手动", { exact: true }).first()).toBeVisible();
 
   await row.getByRole("button", { name: `${name} 的更多操作` }).click();
