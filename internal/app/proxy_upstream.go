@@ -284,6 +284,14 @@ func doProxyHTTP(client *http.Client, request *http.Request) (*http.Response, er
 	request = request.Clone(ctx)
 	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(request.Header))
 	response, err := client.Do(request)
+	// Timer delivery can lag behind the fixed deadline. Decide whether the
+	// response is admissible before ending its span so tracing records the
+	// same failure as the caller, including synthesized deadline errors.
+	if contextErr := ctx.Err(); contextErr != nil {
+		err = contextErr
+	} else if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) {
+		err = context.DeadlineExceeded
+	}
 	if err != nil {
 		span.RecordError(proxyUpstreamError(ctx, "proxy upstream unavailable", err))
 		span.SetStatus(codes.Error, "proxy upstream unavailable")

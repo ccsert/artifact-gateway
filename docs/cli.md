@@ -804,7 +804,9 @@ command, flag, or argument count the client does not have.
   Gateway's configured OIDC issuer, with surrounding whitespace and trailing
   slashes normalized) adds the identity link checks; isolated
   Compose mode configures a synthetic issuer itself, and CI configures one on
-  the shared Gateway. The scenario creates a repository, replays the
+  the shared Gateway. Agent recipes first inspect the same real Gateway through
+  `commands --json` and `info --json`, retaining schema/capability and identity
+  checks. The scenario creates a repository, replays the
   create, updates it (dry-run, real update, stale `If-Match`), and finds it in
   the list; builds a Group over it and a second repository (dry-run, replay,
   unknown member, members, resolution order, rename with a stale `If-Match`,
@@ -852,6 +854,15 @@ command, flag, or argument count the client does not have.
   committed session refused and a repeated commit answering 409); a user signs
   in with `auth login --secret-output` and uses the token. It also checks the exit codes for a wrong token (5), a missing
   repository (4), invalid input (2), and conflicts (7).
+- `make cli-runtime-e2e` always creates its own Gateway, PostgreSQL and RustFS
+  with synthetic credentials and ephemeral loopback ports. It restarts that
+  Gateway and checks the changed log session and bounded `scope_changed` result
+  from the old cursor; stops only its PostgreSQL to verify unhealthy status and
+  not-ready info, restores it, and disables only its log buffer to verify
+  `503/log_buffer_unavailable` rather than a successful empty list. A member,
+  a pending user and a user required to change their password remain refused;
+  unread member diagnostics are unknown and fail `status --strict`. CI and
+  `ci-local` run the same target; no existing development stack is reused.
 - `make email-compose-check` runs the email commands against an isolated
   Gateway with owned TLS SMTP: a target from a private recipient file, a
   rename that keeps it enabled, a preview and a plan that queue nothing, a
