@@ -64,6 +64,8 @@ jobs:
         run: make kubernetes-local-check
       - name: Verify opt-in Compose email roles with owned TLS SMTP
         run: make email-compose-check
+      - name: Verify agctl runtime restart and dependency failure contracts
+        run: make cli-runtime-e2e
       - name: Run Native OCI E2E
         run: make native-oci-e2e
       - name: Run Native Raw E2E
