@@ -164,7 +164,7 @@ export function RepositoryArtifactsTab({
       return <ProxyMavenCacheDetail repoName={repo.name} meta={r} />;
     }
     if (!FormatDetail) return null;
-    return (
+    const detail = (
       <FormatDetail
         repositoryId={repo.id}
         repositoryName={repo.name}
@@ -180,6 +180,13 @@ export function RepositoryArtifactsTab({
         onDeleted={() => void load(q)}
         onVersionChange={(version) => onVersionChange?.(r.coordinate, version)}
       />
+    );
+    // Expanded rows share the table's scroll width. Keep npm's reading pane
+    // within the visible table container, minus its two 16px cell gutters.
+    return format === "npm" ? (
+      <div style={{ maxWidth: "calc(100cqi - 32px)" }}>{detail}</div>
+    ) : (
+      detail
     );
   };
 
@@ -345,6 +352,9 @@ export function RepositoryArtifactsTab({
           )}
           <ConsoleTable<ArtifactRow>
             rowKey="key"
+            style={
+              format === "npm" ? { containerType: "inline-size" } : undefined
+            }
             dataSource={rows}
             columns={columns}
             pagination={false}

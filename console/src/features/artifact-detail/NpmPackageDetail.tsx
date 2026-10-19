@@ -92,9 +92,13 @@ export function NpmPackageDetail({
   const snippets = npmUsage(repoName, packageName, selectedVersion);
   const artifactMetadata = manifest?._artifactGateway;
   const metadataOnly = artifactMetadata?.cacheStatus === "metadata";
+  const versionTags = Object.entries(packument["dist-tags"])
+    .filter(([tag, version]) => tag !== "latest" && version === selectedVersion)
+    .map(([tag]) => tag)
+    .sort();
 
   return (
-    <div className="grid gap-5 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 px-2 py-1 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
       {packumentQuery.isError && (
         <div className="xl:col-span-2">
           <ErrorBanner
@@ -153,7 +157,7 @@ export function NpmPackageDetail({
       </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-xs text-fg-strong">
+          <span className="min-w-0 font-mono text-xs break-all text-fg-strong">
             {packageName}@{selectedVersion}
           </span>
           {packument["dist-tags"].latest === selectedVersion ? (
@@ -161,6 +165,18 @@ export function NpmPackageDetail({
               latest
             </span>
           ) : null}
+          {versionTags.map((tag) => (
+            <Tag
+              key={tag}
+              style={{
+                maxWidth: "100%",
+                whiteSpace: "normal",
+                overflowWrap: "anywhere",
+              }}
+            >
+              {tag}
+            </Tag>
+          ))}
           {artifactMetadata?.source === "proxy" ? (
             <Badge tone="visualization-5">Proxy</Badge>
           ) : null}

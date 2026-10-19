@@ -76,6 +76,7 @@ describe("NpmPackageDetail", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("next-bot")).toBeInTheDocument();
     expect(screen.getByText("2.0 KiB")).toBeInTheDocument();
+    expect(screen.getByText("next", { exact: true })).toBeVisible();
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("combobox"));
@@ -83,6 +84,7 @@ describe("NpmPackageDetail", () => {
 
     await waitFor(() => expect(onVersionChange).toHaveBeenCalledWith("1.2.3"));
     expect(screen.getByText("@scope/widget@1.2.3")).toBeInTheDocument();
+    expect(screen.queryByText("next", { exact: true })).not.toBeInTheDocument();
     expect(
       fetchMock.mock.calls.filter(([url]) => url !== "/auth/session"),
     ).toHaveLength(1);

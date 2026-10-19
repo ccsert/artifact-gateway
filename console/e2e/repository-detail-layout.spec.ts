@@ -522,6 +522,68 @@ test("npm detail keeps version selection and package content aligned when intell
   expect(Math.abs((detailBox?.y ?? 0) - (versionBox?.y ?? 0))).toBeLessThan(2);
 });
 
+for (const width of [1440, 390]) {
+  for (const theme of ["dark", "light"]) {
+    test(`npm current-version tags remain readable at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript((value) => {
+        localStorage.setItem("ag.console.theme", value);
+      }, theme);
+      await mockRepositoryDetail(page, { format: "npm" });
+      const packageName = "pipeone-npm-frontend-validation-v2-beta";
+      const longTag = `canary-${"a".repeat(96)}`;
+      await page.route(`**/npm/npm-hosted/${packageName}`, (route) =>
+        route.fulfill({
+          json: {
+            name: packageName,
+            "dist-tags": {
+              latest: "0.1.3",
+              next: "0.2.0",
+              [longTag]: "0.2.0",
+            },
+            versions: {
+              "0.1.3": { name: packageName, version: "0.1.3" },
+              "0.2.0": { name: packageName, version: "0.2.0" },
+            },
+          },
+        }),
+      );
+      await page.goto(
+        `/repositories/${repositoryId}?artifact=${packageName}&version=0.2.0`,
+      );
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      await expect(page.getByText("next", { exact: true })).toBeVisible();
+      const tag = page.getByText(longTag, { exact: true });
+      await expect(tag).toBeVisible();
+      const bounds = await tag.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.width).toBeGreaterThan(0);
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+      expect(
+        await page
+          .locator("html")
+          .evaluate((element) => element.scrollWidth - element.clientWidth),
+      ).toBeLessThanOrEqual(0);
+      await page.screenshot({
+        path: testInfo.outputPath(`npm-dist-tags-${theme}-${width}.png`),
+        fullPage: true,
+      });
+      await page.goto(
+        `/repositories/${repositoryId}?artifact=${packageName}&version=0.1.3`,
+      );
+      await expect(page.getByText("latest", { exact: true })).toBeVisible();
+      await expect(page.getByText("next", { exact: true })).toHaveCount(0);
+      await expect(page.getByText(longTag, { exact: true })).toHaveCount(0);
+      expect(errors).toEqual([]);
+    });
+  }
+}
+
 test("repository detail keeps the whole content region stable when security becomes scrollable", async ({
   page,
 }, testInfo) => {
