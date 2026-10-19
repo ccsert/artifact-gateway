@@ -61,6 +61,8 @@ func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWri
 	}
 	members = anonymousHostedGroupMembers(group, members)
 	byIdentity := make(map[artifactIdentity]adminopenapi.ArtifactSummary)
+	higherPriority := make([]repository.HostedRepository, 0, len(members))
+	npmAuthority := make(map[string]repository.NPMPackage)
 	for _, member := range members {
 		repo, err := h.store.GetHostedRepository(r.Context(), member.RepositoryID)
 		if err != nil {
@@ -72,6 +74,16 @@ func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWri
 			return
 		}
 		for _, item := range items {
+			if group.Format == repository.FormatNPM {
+				hidden, lookupErr := h.npmGroupSearchTombstoned(r, higherPriority, item, npmAuthority)
+				if lookupErr != nil {
+					writeArtifactQueryFailure(w, lookupErr, "read npm Group authority failed")
+					return
+				}
+				if hidden {
+					continue
+				}
+			}
 			identity := artifactIdentity{Coordinate: item.Coordinate}
 			if item.BuildNumber != nil {
 				identity.BuildNumber = *item.BuildNumber
@@ -80,6 +92,7 @@ func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWri
 				byIdentity[identity] = item
 			}
 		}
+		higherPriority = append(higherPriority, repo)
 	}
 
 	items := make([]adminopenapi.ArtifactSummary, 0, len(byIdentity))
@@ -111,6 +124,33 @@ func (h artifactManagementHandler) searchHostedGroupArtifacts(w http.ResponseWri
 		next = &token
 	}
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.ArtifactSummaryPage{Items: items, NextPageToken: next})
+}
+
+func (h artifactManagementHandler) npmGroupSearchTombstoned(r *http.Request, higher []repository.HostedRepository, item adminopenapi.ArtifactSummary, cache map[string]repository.NPMPackage) (bool, error) {
+	if item.Version == nil {
+		return false, nil
+	}
+	if h.npm == nil {
+		return false, errArtifactCapabilityUnavailable
+	}
+	for _, repo := range higher {
+		key := repo.ID + "\x00" + item.Coordinate
+		pkg, loaded := cache[key]
+		if !loaded {
+			var err error
+			pkg, err = h.npm.GetNPMPackage(r.Context(), repo.ID, item.Coordinate)
+			if err != nil && !errors.Is(err, repository.ErrNotFound) {
+				return false, err
+			}
+			cache[key] = pkg
+		}
+		for _, hidden := range pkg.TombstonedVersions {
+			if hidden.Version == *item.Version {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func (h artifactManagementHandler) searchGroupMemberArtifactsByQuery(r *http.Request, repo repository.HostedRepository, query repository.ArtifactSearchQuery, limit int, after artifactSearchPosition) ([]adminopenapi.ArtifactSummary, error) {

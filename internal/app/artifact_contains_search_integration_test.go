@@ -132,7 +132,7 @@ func TestPostgresContainsGlobalSearchProbeBudget(t *testing.T) {
 	}
 	counted := &countedSearchStore{GatewayStore: store}
 	auth := testAuthenticator()
-	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: counted, Adapter: TestAdapter{}, Authenticator: auth})
+	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: counted, NPMMetadata: store, NPMRestore: store, Adapter: TestAdapter{}, Authenticator: auth})
 	for _, q := range []string{"needle", "artifact", "absent-keyword", "x", "ph", "/", "a:b", "1.0"} {
 		for _, size := range []string{"1", "50", "200"} {
 			counted.probes = 0

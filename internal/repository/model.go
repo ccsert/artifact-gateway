@@ -360,18 +360,22 @@ type RawUpload struct {
 // NPMPackage is the registry packument identity projected from immutable
 // versions and mutable distribution tags.
 type NPMPackage struct {
-	RepositoryID      string
-	Name              string
-	DistTags          map[string]string
-	Versions          []NPMVersion
-	SourceEndpoint    string
-	UpstreamETag      string
-	UpstreamModified  string
-	MetadataExpiresAt time.Time
-	NegativeExpiresAt time.Time
-	Negative          bool
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	RepositoryID string
+	Name         string
+	Revision     int64
+	DistTags     map[string]string
+	Versions     []NPMVersion
+	// TombstonedVersions are authority barriers for Group resolution. They
+	// never appear in a registry response or permit a tarball read.
+	TombstonedVersions []NPMVersion
+	SourceEndpoint     string
+	UpstreamETag       string
+	UpstreamModified   string
+	MetadataExpiresAt  time.Time
+	NegativeExpiresAt  time.Time
+	Negative           bool
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 // NPMVersion is one immutable package publication. Manifest retains the
@@ -389,10 +393,12 @@ type NPMVersion struct {
 	ObjectKey       string
 	Size            int64
 	Manifest        []byte
+	Deprecated      string
 	Publisher       string
 	State           string
 	CachedAt        time.Time
 	DeletedAt       time.Time
+	CollectingAt    time.Time
 	CollectedAt     time.Time
 	CreatedAt       time.Time
 }
@@ -459,6 +465,9 @@ type PyPIFile struct {
 	DeletedAt      time.Time
 	CollectedAt    time.Time
 	CreatedAt      time.Time
+	Yanked         bool
+	YankReason     string
+	YankRevision   int64
 }
 
 type PyPIProjectSummary struct {

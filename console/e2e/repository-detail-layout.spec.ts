@@ -1671,3 +1671,104 @@ for (const delayedMotion of [false, true]) {
     expect(consoleErrors).toEqual([]);
   });
 }
+
+for (const width of [1440, 390]) {
+  for (const theme of ["dark", "light"] as const) {
+    test(`npm deprecation and governance remain bounded at ${width}px in ${theme}`, async ({
+      page,
+    }, info) => {
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      page.on("console", (message) => {
+        if (message.type() === "error") errors.push(message.text());
+      });
+      await page.setViewportSize({ width, height: 1000 });
+      await page.addInitScript(
+        (value) => localStorage.setItem("ag.console.theme", value),
+        theme,
+      );
+      await mockRepositoryDetail(page, { format: "npm" });
+      const name = "pipeone-npm-frontend-validation-v2-beta";
+      const warning = `Use a supported release. <script>literal</script> ${"long-message-".repeat(60)}`;
+      let message = warning;
+      let revision = 7;
+      const writes: unknown[] = [];
+      await page.route(`**/npm/npm-hosted/${name}`, async (route) => {
+        if (route.request().method() === "PUT") {
+          const document = route.request().postDataJSON();
+          writes.push(document);
+          expect(document._rev).toBe(String(revision));
+          expect(document.versions["0.1.3"].dist.integrity).toBe(
+            "sha512-stable",
+          );
+          message = document.versions["0.1.3"].deprecated;
+          revision++;
+          await route.fulfill({ json: { ok: true, rev: String(revision) } });
+          return;
+        }
+        await route.fulfill({
+          json: {
+            _id: name,
+            _rev: String(revision),
+            name,
+            "dist-tags": { latest: "0.1.3" },
+            versions: {
+              "0.1.3": {
+                name,
+                version: "0.1.3",
+                deprecated: message,
+                dist: { integrity: "sha512-stable" },
+              },
+            },
+          },
+        });
+      });
+      await page.goto(
+        `/repositories/${repositoryId}?artifact=${name}&version=0.1.3`,
+      );
+      const panel = page.getByTestId("npm-version-governance");
+      await expect(panel.getByText(warning, { exact: true })).toBeVisible();
+      await expect(
+        panel.getByRole("button", { name: "编辑弃用提示" }),
+      ).toBeVisible();
+      const geometry = await panel.evaluate((node) => {
+        const box = node.getBoundingClientRect();
+        const alert = node.querySelector(".ant-alert")!.getBoundingClientRect();
+        const actions = node
+          .querySelector(".ant-space")!
+          .getBoundingClientRect();
+        return {
+          x: box.x,
+          right: box.right,
+          gap: actions.top - alert.bottom,
+          overlap: actions.top < alert.bottom,
+          overflow:
+            document.documentElement.scrollWidth -
+            document.documentElement.clientWidth,
+        };
+      });
+      expect(geometry.x).toBeGreaterThanOrEqual(0);
+      expect(geometry.right).toBeLessThanOrEqual(width);
+      expect(geometry.gap).toBeGreaterThanOrEqual(16);
+      expect(geometry.gap).toBeLessThanOrEqual(18);
+      expect(geometry.overlap).toBe(false);
+      expect(geometry.overflow).toBeLessThanOrEqual(0);
+      await panel.getByRole("button", { name: "编辑弃用提示" }).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      const bounds = await dialog.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+      await dialog.getByRole("textbox").fill("Use 0.2.0");
+      await dialog.getByRole("button", { name: "保存提示" }).click();
+      await expect(dialog).not.toBeVisible();
+      await expect(panel.getByText("Use 0.2.0", { exact: true })).toBeVisible();
+      expect(writes).toHaveLength(1);
+      await page.screenshot({
+        path: info.outputPath(`npm-governance-${theme}-${width}.png`),
+        fullPage: true,
+      });
+      expect(errors).toEqual([]);
+    });
+  }
+}

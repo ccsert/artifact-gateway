@@ -1,6 +1,41 @@
 import type { ArtifactDetailMessageKey } from "./artifact-detail.zh-CN";
 
 export const artifactDetailEnUS: Record<ArtifactDetailMessageKey, string> = {
+  "artifactDetail.yankState": "Yank state",
+  "artifactDetail.yanked": "Yanked",
+  "artifactDetail.notYanked": "Available for selection",
+  "artifactDetail.yankManage": "Manage yanking",
+  "artifactDetail.yankSummary": "{yanked} / {total} files yanked",
+  "artifactDetail.yankTarget": "Scope",
+  "artifactDetail.yankAllFiles": "All {total} files in this version",
+  "artifactDetail.yankAction": "Action",
+  "artifactDetail.yankFiles": "Yank files",
+  "artifactDetail.unyankFiles": "Restore files",
+  "artifactDetail.yankReason": "Yank reason (optional)",
+  "artifactDetail.yankReasonLimit":
+    "At most 1024 bytes without control characters. Restoring clears the reason.",
+  "artifactDetail.yankExplanation":
+    "Yanking affects pip version selection; an exact version pin can still download the file. File bytes, quarantine and tombstones remain separate.",
+  "artifactDetail.yankConfirm": "Confirm yank",
+  "artifactDetail.unyankConfirm": "Confirm restore",
+  "artifactDetail.yankRefresh": "Refresh and confirm again",
+  "artifactDetail.yankMissingResponse":
+    "The yank response is incomplete. Refresh to verify the outcome.",
+  "artifactDetail.yankFailed": "Failed to load yank state",
+  "artifactDetail.npmSaveDeprecation": "Save message",
+  "artifactDetail.npmDeprecated": "This version is deprecated",
+  "artifactDetail.npmEditDeprecation": "Edit deprecation",
+  "artifactDetail.npmUnpublishVersion": "Unpublish version {version}?",
+  "artifactDetail.npmUnpublishExplanation":
+    "The version and tags pointing to it become invisible to native clients. Retention controls byte reclamation; restore from the repository’s Tombstones page before reclamation.",
+  "artifactDetail.npmUnpublish": "Unpublish",
+  "artifactDetail.npmGovernanceFailed":
+    "Update failed (HTTP {status}). Read the current package state before deciding whether to submit again.",
+  "artifactDetail.npmGovernanceUnknown":
+    "The update outcome is unknown. Read the package state before deciding whether to submit again.",
+  "artifactDetail.npmDeprecationMessage": "Message for version {version}",
+  "artifactDetail.npmDeprecationExplanation":
+    "The message does not change package bytes. Maximum 4096 bytes. Save an empty message to clear it.",
   "artifactDetail.severity": "Severity",
   "artifactDetail.vulnerability": "Vulnerability",
   "artifactDetail.affectedComponent": "Affected component",

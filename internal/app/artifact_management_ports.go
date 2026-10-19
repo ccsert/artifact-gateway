@@ -47,6 +47,7 @@ type artifactRawReader interface {
 
 type artifactNPMReader interface {
 	SearchNPMPackages(context.Context, string, string, int, string, ...repository.ArtifactSearchMatch) ([]repository.NPMPackageSummary, error)
+	GetNPMPackage(context.Context, string, string) (repository.NPMPackage, error)
 }
 
 type artifactPyPIReader interface {

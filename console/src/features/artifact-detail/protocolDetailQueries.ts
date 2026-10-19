@@ -52,6 +52,7 @@ export interface NpmVersionManifest {
   name: string;
   version: string;
   description?: string;
+  deprecated?: string;
   license?: string | { type?: string };
   dependencies?: Record<string, string>;
   dist?: {
@@ -70,6 +71,8 @@ export interface NpmVersionManifest {
 }
 
 export interface NpmPackument {
+  _id?: string;
+  _rev?: string;
   name: string;
   "dist-tags": Record<string, string>;
   versions: Record<string, NpmVersionManifest>;
@@ -100,6 +103,7 @@ export interface PyPIFile {
   filename: string;
   url: string;
   hashes: { sha256?: string };
+  yanked?: boolean | string;
   "requires-python"?: string;
   "_artifact-gateway"?: {
     version?: string;

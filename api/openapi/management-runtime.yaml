@@ -237,6 +237,8 @@ paths:
     "$ref": "./management/intelligence.yaml#/repositories_repositoryId_artifact_intelligence"
   "/repositories/{repositoryId}/artifact-quarantine":
     "$ref": "./management/quarantine.yaml#/repositories_repositoryId_artifact_quarantine"
+  "/repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank":
+    "$ref": "./management/pypi.yaml#/repositories_repositoryId_pypi_projects_project_versions_version_yank"
   "/repositories/{repositoryId}/oci/images":
     "$ref": "./management/oci.yaml#/repositories_repositoryId_oci_images"
   "/repositories/{repositoryId}/oci/manifests":
@@ -670,4 +672,4 @@ x-gateway-protocol-overlays:
   maven:
     officialSpecification: https://maven.apache.org/repositories/index.html
   conan:
-    "$ref": "./protocols/conan.yaml"
+    "$ref": "./protocols/conan.yaml#/x-gateway-protocol-overlay"

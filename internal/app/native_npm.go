@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +33,7 @@ const (
 
 type nativeNPMHandler struct {
 	store              repository.NativeNPMStore
+	metadata           repository.NPMMetadataStore
 	repos              repository.HostedRepositoryStore
 	readPolicies       repository.RepositoryQuarantineReadPolicyStore
 	quarantine         repository.ArtifactQuarantineStore
@@ -50,6 +52,7 @@ type nativeNPMHandler struct {
 type npmPublishDocument struct {
 	ID          string                          `json:"_id"`
 	Name        string                          `json:"name"`
+	Revision    string                          `json:"_rev"`
 	DistTags    map[string]string               `json:"dist-tags"`
 	Versions    map[string]json.RawMessage      `json:"versions"`
 	Attachments map[string]npmPublishAttachment `json:"_attachments"`
@@ -104,11 +107,14 @@ type npmAuditTarget struct {
 	MemberName string
 }
 
-func newNativeNPMHandler(store GatewayStore, objects ObjectStore, auth Authenticator) nativeNPMHandler {
+func newNativeNPMHandler(store GatewayStore, metadata repository.NPMMetadataStore, objects ObjectStore, auth Authenticator) nativeNPMHandler {
 	return nativeNPMHandler{
-		store: store, repos: store, readPolicies: store, quarantine: store, objects: objects, auth: auth, audit: store,
+		store: store, metadata: metadata, repos: store, readPolicies: store, quarantine: store, objects: objects, auth: auth, audit: store,
 		proxy: UpstreamClient{}, protection: newNPMProxyProtection(nil, 0), metadataTTL: npmMetadataTTL, negativeTTL: 10 * time.Minute,
-		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth, LegacyFallback: func(Principal, repository.HostedRepository, RepositoryOperation) AuthorizationDecision {
+		authorizer: RepositoryAuthorizer{Grants: store, Legacy: auth, LegacyFallback: func(_ Principal, _ repository.HostedRepository, operation RepositoryOperation) AuthorizationDecision {
+			if operation == RepositoryAdmin {
+				return AuthorizationDecision{Source: "repository_grants", Reason: "scope_not_granted"}
+			}
 			return AuthorizationDecision{Allowed: true, Source: "legacy_protocol", Reason: "authenticated"}
 		}},
 	}
@@ -169,6 +175,9 @@ func (h nativeNPMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 	if isNPMWriteMethod(r.Method) || route.Kind == npmprotocol.RoutePing && r.URL.Query().Get("write") == "true" {
 		operation = RepositoryWrite
 	}
+	if route.Kind == npmprotocol.RoutePackageRevision || route.Kind == npmprotocol.RouteTarballRevision {
+		operation = RepositoryAdmin
+	}
 	principal, authenticated := h.protocolPrincipal(r)
 	if !authenticated {
 		anonymousMethod := r.Method
@@ -180,6 +189,7 @@ func (h nativeNPMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		if operation == RepositoryRead && anonymousHostedRepositoryReadAllowed(r.Context(), h.store, repo, anonymousMethod) {
 			principal = anonymousPrincipal()
 		} else {
+			h.recordNPMWriteDenial(r, repo, route, anonymousPrincipal(), "authentication", "authentication_required", http.StatusUnauthorized)
 			h.challenge(w, http.StatusUnauthorized, "authentication required")
 			return true
 		}
@@ -187,6 +197,7 @@ func (h nativeNPMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 	if !isAnonymous(principal) {
 		decision := h.authorizer.AuthorizeResource(r.Context(), principal, repo, operation, route.Package)
 		if !decision.Allowed {
+			h.recordNPMWriteDenial(r, repo, route, principal, decision.Source, decision.Reason, http.StatusForbidden)
 			if h.metrics != nil {
 				h.metrics.recordRepositoryAuthorizationDenied("npm", decision.Source, decision.Reason)
 				h.metrics.recordNPMAudit(repository.AuditAccessDenied, 0, false)
@@ -250,6 +261,8 @@ func (h nativeNPMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) bool
 		}
 	case npmprotocol.RouteDistTags:
 		h.serveDistTags(w, r, repo, route, principal.Actor)
+	case npmprotocol.RoutePackageRevision, npmprotocol.RouteTarballRevision:
+		h.serveNPMRevision(w, r, repo, route, principal.Actor)
 	}
 	return true
 }
@@ -322,6 +335,10 @@ func (h nativeNPMHandler) publish(w http.ResponseWriter, r *http.Request, repo r
 		h.writeError(w, http.StatusBadRequest, "invalid npm publication document")
 		return
 	}
+	if len(document.Attachments) == 0 {
+		h.updateNPMMetadata(w, r, repo, packageName, document, false, publisher)
+		return
+	}
 	if (document.Name != "" && document.Name != packageName) || (document.ID != "" && document.ID != packageName) || len(document.Versions) != 1 || len(document.Attachments) != 1 {
 		h.writeError(w, http.StatusBadRequest, "publication must contain one matching package version and tarball")
 		return
@@ -337,6 +354,13 @@ func (h nativeNPMHandler) publish(w http.ResponseWriter, r *http.Request, repo r
 	var identity npmVersionIdentity
 	if json.Unmarshal(manifest, &identity) != nil || identity.Name != packageName || identity.Version != version {
 		h.writeError(w, http.StatusBadRequest, "version manifest identity does not match the request")
+		return
+	}
+	var initialMetadata struct {
+		Deprecated string `json:"deprecated"`
+	}
+	if json.Unmarshal(manifest, &initialMetadata) != nil || !repository.ValidNPMDeprecation(initialMetadata.Deprecated) {
+		h.writeError(w, http.StatusBadRequest, "invalid npm deprecation message")
 		return
 	}
 	var attachmentName string
@@ -395,6 +419,7 @@ func (h nativeNPMHandler) publish(w http.ResponseWriter, r *http.Request, repo r
 		RepositoryID: repo.ID, PackageName: packageName, Version: version, Digest: digest,
 		Integrity: integrity, Shasum: shasum, TarballName: tarballName, ObjectKey: objectKey,
 		Size: int64(len(body)), Manifest: append([]byte(nil), manifest...), Publisher: publisher,
+		Deprecated: initialMetadata.Deprecated,
 	}, document.DistTags)
 	if errors.Is(err, repository.ErrNameExists) {
 		h.writeError(w, http.StatusConflict, "package version already exists")
@@ -791,6 +816,9 @@ func (h nativeNPMHandler) writePackument(w http.ResponseWriter, r *http.Request,
 		"_id": packageName, "name": packageName, "dist-tags": pkg.DistTags,
 		"versions": versions, "time": times,
 	}
+	if pkg.Revision > 0 && repo.Type == repository.RepositoryTypeHosted && pkg.SourceEndpoint == "" {
+		payload["_rev"] = strconv.FormatInt(pkg.Revision, 10)
+	}
 	h.writeNPMMetadataJSON(w, r, repo, packageName, actor, disposition, npmAuditTarget{GroupName: repo.Name, Repository: repo.Name}, payload)
 }
 
@@ -841,6 +869,12 @@ func (h nativeNPMHandler) npmVersionDocument(r *http.Request, registryName strin
 	}
 	document["name"] = version.PackageName
 	document["version"] = version.Version
+	if version.UpstreamTarball == "" {
+		delete(document, "deprecated")
+		if version.Deprecated != "" {
+			document["deprecated"] = version.Deprecated
+		}
+	}
 	dist, ok := document["dist"].(map[string]any)
 	if !ok {
 		dist = make(map[string]any)

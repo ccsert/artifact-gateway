@@ -223,7 +223,7 @@ func TestRepositoryPyPIPromotionAndReplication(t *testing.T) {
 	}
 	body := []byte("replicated PyPI artifact")
 	sum := sha256.Sum256(body)
-	file := repository.PyPIFile{RepositoryID: source.ID, Project: "widget", Version: "3.0.0", Filename: "widget-3.0.0.tar.gz", Digest: "sha256:" + hex.EncodeToString(sum[:]), ObjectKey: "native/pypi/source", Size: int64(len(body)), Publisher: "publisher"}
+	file := repository.PyPIFile{RepositoryID: source.ID, Project: "widget", Version: "3.0.0", Filename: "widget-3.0.0.tar.gz", Digest: "sha256:" + hex.EncodeToString(sum[:]), ObjectKey: "native/pypi/source", Size: int64(len(body)), Publisher: "publisher", Yanked: true, YankReason: "selection warning"}
 	if err = objects.Put(ctx, file.ObjectKey, body); err != nil {
 		t.Fatal(err)
 	}
@@ -251,6 +251,9 @@ func TestRepositoryPyPIPromotionAndReplication(t *testing.T) {
 	if err != nil || len(promoted) != 1 || promoted[0].ObjectKey != file.ObjectKey {
 		t.Fatalf("promoted=%#v err=%v", promoted, err)
 	}
+	if !promoted[0].Yanked || promoted[0].YankReason != file.YankReason || promoted[0].Digest != file.Digest || promoted[0].Size != file.Size {
+		t.Fatalf("promotion erased yank/byte identity=%+v", promoted)
+	}
 	replication := post("/api/v2/repositories/"+source.ID+"/replications", "pypi-replicate", `{"targetRepositoryId":"`+replicationTarget.ID+`","coordinate":"`+coordinate+`","digest":"`+file.Digest+`"}`)
 	if replication.Code != http.StatusAccepted {
 		t.Fatalf("replication=%d body=%s", replication.Code, replication.Body.String())
@@ -261,6 +264,9 @@ func TestRepositoryPyPIPromotionAndReplication(t *testing.T) {
 	replicated, err := store.ListPyPIProjectFiles(ctx, replicationTarget.ID, file.Project)
 	if err != nil || len(replicated) != 1 || replicated[0].ObjectKey == file.ObjectKey {
 		t.Fatalf("replicated=%#v err=%v", replicated, err)
+	}
+	if !replicated[0].Yanked || replicated[0].YankReason != file.YankReason || replicated[0].Digest != file.Digest || replicated[0].Size != file.Size {
+		t.Fatalf("replication erased yank/byte identity=%+v", replicated)
 	}
 	stored, err := objects.Get(ctx, replicated[0].ObjectKey)
 	if err != nil || !bytes.Equal(stored, body) {

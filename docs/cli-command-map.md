@@ -280,6 +280,8 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `PUT /repositories/{repositoryId}/artifact-intelligence`<br>`replaceArtifactIntelligence` | `artifact intelligence set --repo <id>` | #138 | M2 | RI | C |
 | `GET /repositories/{repositoryId}/artifact-quarantine`<br>`getArtifactQuarantine` | `artifact quarantine show --repo <id>` | #131 | M1 implemented | R | Q |
 | `PUT /repositories/{repositoryId}/artifact-quarantine`<br>`replaceArtifactQuarantine` | `artifact quarantine set --repo <id>` | #138 | M2 | RA | C |
+| `GET /repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank`<br>`getPyPIYankState` | `pypi yank show --repo <id>` | #311 | M2 planned | R* | Q |
+| `PATCH /repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank`<br>`updatePyPIYankState` | `pypi yank set --repo <id>` | #311 | M2 planned | W | C |
 | `GET /repositories/{repositoryId}/oci/images`<br>`listOCIImages` | `oci images --repo <id>` | #131 | M1 implemented | R* | Q |
 | `GET /repositories/{repositoryId}/oci/manifests`<br>`listOCIManifests` | `oci manifests --repo <id>` | #131 | M1 implemented | R* | Q |
 | `GET /repositories/{repositoryId}/maven/coordinates`<br>`listMavenCoordinates` | `maven coordinates --repo <id>` | #131 | M1 implemented | R* | Q |
@@ -321,6 +323,11 @@ real routes and must not be joined to `/api/v2` blindly. Retired Nexus repositor
 
 | Protocol API / operationId | Planned command / handling | Owning issue | Phase | Permission | Acceptance |
 | --- | --- | --- | --- | --- | --- |
+| `GET /npm/{repository}/{package}`<br>`getNPMRegistryPackage` | Native npm metadata and governance; no duplicate agctl registry client | #309 / #310 | N/A | R | N: official npm owns the protocol operation |
+| `PUT /npm/{repository}/{package}`<br>`putNPMRegistryPackage` | Native npm metadata and governance; no duplicate agctl registry client | #309 | N/A | W | N: official npm owns the protocol operation |
+| `PUT /npm/{repository}/{package}/-rev/{revision}`<br>`unpublishNPMRegistryVersions` | Native npm metadata and governance; no duplicate agctl registry client | #310 | N/A | RA | N: official npm owns the protocol operation |
+| `DELETE /npm/{repository}/{package}/-rev/{revision}`<br>`unpublishNPMRegistryPackage` | Native npm metadata and governance; no duplicate agctl registry client | #310 | N/A | RA | N: official npm owns the protocol operation |
+| `DELETE /npm/{repository}/{package}/-/{tarball}/-rev/{revision}`<br>`acknowledgeNPMUnpublishTarball` | Native npm metadata and governance; no duplicate agctl registry client | #310 | N/A | RA | N: official npm owns the protocol operation |
 | `GET /npm/{repository}/-/package/{package}/dist-tags`<br>`listNPMDistTags` | native npm client manages dist-tags; agctl does not orchestrate this protocol action | #308 | N/A | native-format authorization | N: npm dist-tag owns this action; no separate agctl command |
 | `HEAD /npm/{repository}/-/package/{package}/dist-tags`<br>`headNPMDistTags` | native npm client manages dist-tags; agctl does not orchestrate this protocol action | #308 | N/A | native-format authorization | N: npm dist-tag owns this action; no separate agctl command |
 | `PUT /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`setNPMDistTag` | native npm client manages dist-tags; agctl does not orchestrate this protocol action | #308 | N/A | native-format authorization | N: npm dist-tag owns this action; no separate agctl command |
@@ -332,11 +339,11 @@ real routes and must not be joined to `/api/v2` blindly. Retired Nexus repositor
 | `HEAD /conan/{repository}/v2/conans/{path}`<br>`headConanRepresentation` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
 | `PUT /conan/{repository}/v2/conans/{name}/{version}/{user}/{channel}/revisions/{recipeRevision}/files/{file}`<br>`uploadConanRecipeFile` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
 | `PUT /conan/{repository}/v2/conans/{name}/{version}/{user}/{channel}/revisions/{recipeRevision}/packages/{packageId}/revisions/{packageRevision}/files/{file}`<br>`uploadConanPackageFile` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
-| `GET /raw/{repository}/{path}`<br>`readRawContent` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
-| `HEAD /raw/{repository}/{path}`<br>`headRawContent` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
+| `GET /raw/{repository}/{path}`<br>`readRawContent` | `publish raw --resumable` (upload status) | #132 | M2 implemented | R / W | U: verified target, uploadId and offset; native content download remains a native-client operation |
+| `HEAD /raw/{repository}/{path}`<br>`headRawContent` | `publish raw` | #132 | M1 implemented | R | U: digest/size read-back without object bytes |
 | `PUT /raw/{repository}/{path}`<br>`putRawHostedContent` | `publish raw` | #132 | M1 implemented | W | U: size/digest plus conflict and read-back |
-| `POST /raw/{repository}/{path}`<br>`startRawHostedResumableUpload` | `publish raw resumable` adapter | #132 | M2 | W | U: offset/digest and interrupted replay |
-| `PATCH /raw/{repository}/{path}`<br>`appendRawHostedResumableUpload` | `publish raw resumable` adapter | #132 | M2 | W | U: offset/digest and interrupted replay |
+| `POST /raw/{repository}/{path}`<br>`startRawHostedResumableUpload` | `publish raw --resumable` | #132 | M2 implemented | W | U: offset/digest and interrupted replay |
+| `PATCH /raw/{repository}/{path}`<br>`appendRawHostedResumableUpload` | `publish raw --resumable` | #132 | M2 implemented | W | U: offset/digest and interrupted replay |
 | `DELETE /raw/{repository}/{path}`<br>`deleteRawHostedContent` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `GET /raw/{repository}/`<br>`listRawRootDirectory` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `GET /apt/{repository}/{path}`<br>`getAptAsset` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |

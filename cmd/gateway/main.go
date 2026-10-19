@@ -299,6 +299,8 @@ func runConfiguredGateway(cfg config.Config, runtimeSessionID string, logBuffer 
 			Dependencies:      dependencies,
 			Store:             store,
 			ConanPublications: store,
+			NPMMetadata:       store,
+			NPMRestore:        store,
 			Storage:           app.SharedObjectStores(objectStore),
 			Adapter:           app.TestAdapter{},
 			Authenticator: app.Authenticator{

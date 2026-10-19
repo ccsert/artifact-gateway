@@ -322,7 +322,6 @@
     "internal/repository.NativeNPMStore.MarkNPMObjectCollected func(context.Context, string) error",
     "internal/repository.NativeNPMStore.NPMObjectHasVisibleReference func(context.Context, string) (bool, error)",
     "internal/repository.NativeNPMStore.PublishNPMVersion func(context.Context, NPMVersion, map[string]string) (NPMVersion, error)",
-    "internal/repository.NativeNPMStore.RestoreNPMVersion func(context.Context, string, string, string) (NPMVersion, error)",
     "internal/repository.NativeNPMStore.SearchNPMPackages func(context.Context, string, string, int, string, ...ArtifactSearchMatch) ([]NPMPackageSummary, error)",
     "internal/repository.NativeNPMStore.SetNPMDistTag func(context.Context, NPMDistTagMutation) (NPMDistTagChange, error)",
     "internal/repository.NativeNPMStore.StoreNPMProxyNegative func(context.Context, NPMPackage) error",

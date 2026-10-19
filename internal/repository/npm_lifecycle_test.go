@@ -29,14 +29,14 @@ func TestNPMVersionTombstoneHidesAndRestoresArtifact(t *testing.T) {
 	if err != nil || deleted.State != "deleted" {
 		t.Fatalf("tombstone=%#v err=%v", deleted, err)
 	}
-	if _, err = store.GetNPMPackage(ctx, repo.ID, version.PackageName); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("tombstoned package remained visible: %v", err)
+	if hidden, getErr := store.GetNPMPackage(ctx, repo.ID, version.PackageName); getErr != nil || len(hidden.Versions) != 0 || len(hidden.TombstonedVersions) != 1 {
+		t.Fatalf("tombstoned package lost its authority barrier: %#v %v", hidden, getErr)
 	}
 	tombstone, err := store.GetArtifactTombstone(ctx, repo.ID, FormatNPM, coordinate)
 	if err != nil || tombstone.Digest != version.Digest {
 		t.Fatalf("artifact tombstone=%#v err=%v", tombstone, err)
 	}
-	restored, err := store.RestoreNPMVersion(ctx, repo.ID, version.PackageName, version.Version)
+	restored, err := store.RestoreNPMVersion(ctx, NPMRestoreRequest{RepositoryID: repo.ID, PackageName: version.PackageName, Version: version.Version})
 	if err != nil || restored.State != "visible" {
 		t.Fatalf("restore=%#v err=%v", restored, err)
 	}

@@ -235,6 +235,8 @@ server base）。计划命令省略前导 `agctl`。
 | `PUT /repositories/{repositoryId}/artifact-intelligence`<br>`replaceArtifactIntelligence` | `artifact intelligence set --repo <id>` | #138 | M2 | RI | C |
 | `GET /repositories/{repositoryId}/artifact-quarantine`<br>`getArtifactQuarantine` | `artifact quarantine show --repo <id>` | #131 | M1 implemented | R | Q |
 | `PUT /repositories/{repositoryId}/artifact-quarantine`<br>`replaceArtifactQuarantine` | `artifact quarantine set --repo <id>` | #138 | M2 | RA | C |
+| `GET /repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank`<br>`getPyPIYankState` | `pypi yank show --repo <id>` | #311 | M2 planned | R* | Q |
+| `PATCH /repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank`<br>`updatePyPIYankState` | `pypi yank set --repo <id>` | #311 | M2 planned | W | C |
 | `GET /repositories/{repositoryId}/oci/images`<br>`listOCIImages` | `oci images --repo <id>` | #131 | M1 implemented | R* | Q |
 | `GET /repositories/{repositoryId}/oci/manifests`<br>`listOCIManifests` | `oci manifests --repo <id>` | #131 | M1 implemented | R* | Q |
 | `GET /repositories/{repositoryId}/maven/coordinates`<br>`listMavenCoordinates` | `maven coordinates --repo <id>` | #131 | M1 implemented | R* | Q |
@@ -275,6 +277,11 @@ server base）。计划命令省略前导 `agctl`。
 
 | 协议 API / operationId | 计划命令/处理 | 承接 | 阶段 | 权限 | 验收 |
 | --- | --- | --- | --- | --- | --- |
+| `GET /npm/{repository}/{package}`<br>`getNPMRegistryPackage` | 原生 npm 元数据与版本治理；agctl 不另建 Registry 客户端 | #309 / #310 | N/A | R | N：由官方 npm 执行该协议操作 |
+| `PUT /npm/{repository}/{package}`<br>`putNPMRegistryPackage` | 原生 npm 元数据与版本治理；agctl 不另建 Registry 客户端 | #309 | N/A | W | N：由官方 npm 执行该协议操作 |
+| `PUT /npm/{repository}/{package}/-rev/{revision}`<br>`unpublishNPMRegistryVersions` | 原生 npm 元数据与版本治理；agctl 不另建 Registry 客户端 | #310 | N/A | RA | N：由官方 npm 执行该协议操作 |
+| `DELETE /npm/{repository}/{package}/-rev/{revision}`<br>`unpublishNPMRegistryPackage` | 原生 npm 元数据与版本治理；agctl 不另建 Registry 客户端 | #310 | N/A | RA | N：由官方 npm 执行该协议操作 |
+| `DELETE /npm/{repository}/{package}/-/{tarball}/-rev/{revision}`<br>`acknowledgeNPMUnpublishTarball` | 原生 npm 元数据与版本治理；agctl 不另建 Registry 客户端 | #310 | N/A | RA | N：由官方 npm 执行该协议操作 |
 | `GET /npm/{repository}/-/package/{package}/dist-tags`<br>`listNPMDistTags` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
 | `HEAD /npm/{repository}/-/package/{package}/dist-tags`<br>`headNPMDistTags` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
 | `PUT /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`setNPMDistTag` | 由原生 npm 客户端管理 dist-tag；agctl 不另行编排此协议动作 | #308 | N/A | 原生格式授权 | N：npm dist-tag 承接此动作，不另建 agctl 命令 |
@@ -286,11 +293,11 @@ server base）。计划命令省略前导 `agctl`。
 | `HEAD /conan/{repository}/v2/conans/{path}`<br>`headConanRepresentation` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
 | `PUT /conan/{repository}/v2/conans/{name}/{version}/{user}/{channel}/revisions/{recipeRevision}/files/{file}`<br>`uploadConanRecipeFile` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
 | `PUT /conan/{repository}/v2/conans/{name}/{version}/{user}/{channel}/revisions/{recipeRevision}/packages/{packageId}/revisions/{packageRevision}/files/{file}`<br>`uploadConanPackageFile` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
-| `GET /raw/{repository}/{path}`<br>`readRawContent` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
-| `HEAD /raw/{repository}/{path}`<br>`headRawContent` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
+| `GET /raw/{repository}/{path}`<br>`readRawContent` | `publish raw --resumable` (upload status) | #132 | M2 implemented | R / W | U: 核对目标、uploadId 与 offset；完整文件下载仍用原生客户端 |
+| `HEAD /raw/{repository}/{path}`<br>`headRawContent` | `publish raw` | #132 | M1 implemented | R | U: 回读摘要与大小，不下载对象字节 |
 | `PUT /raw/{repository}/{path}`<br>`putRawHostedContent` | `publish raw` | #132 | M1 implemented | W | U：大小/摘要与冲突/回读 |
-| `POST /raw/{repository}/{path}`<br>`startRawHostedResumableUpload` | publish raw resumable 适配 | #132 | M2 | W | U：offset/摘要/中断重放 |
-| `PATCH /raw/{repository}/{path}`<br>`appendRawHostedResumableUpload` | publish raw resumable 适配 | #132 | M2 | W | U：offset/摘要/中断重放 |
+| `POST /raw/{repository}/{path}`<br>`startRawHostedResumableUpload` | publish raw resumable 适配 | #132 | M2 implemented | W | U：offset/摘要/中断重放 |
+| `PATCH /raw/{repository}/{path}`<br>`appendRawHostedResumableUpload` | publish raw resumable 适配 | #132 | M2 implemented | W | U：offset/摘要/中断重放 |
 | `DELETE /raw/{repository}/{path}`<br>`deleteRawHostedContent` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `GET /raw/{repository}/`<br>`listRawRootDirectory` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |
 | `GET /apt/{repository}/{path}`<br>`getAptAsset` | 不另建 CLI 协议客户端；原生客户端/接入配置 | #130 | N/A | 原生格式授权 | N：CLI 不另行注册/发送该协议动作 |

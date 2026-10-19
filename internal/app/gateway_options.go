@@ -45,10 +45,12 @@ type GatewayCaches struct {
 type GatewayOptions struct {
 	Dependencies      Dependencies
 	Store             GatewayStore
+	ConanPublications repository.ConanNativePublicationStore
+	NPMMetadata       repository.NPMMetadataStore
+	NPMRestore        repository.NPMRestoreStore
 	Storage           ObjectStores
 	Adapter           Adapter
 	Authenticator     Authenticator
-	ConanPublications repository.ConanNativePublicationStore
 	Caches            GatewayCaches
 	// Upstream defaults to the standard HTTP transport. If it also implements
 	// another format's client port, that implementation is used for that format.
@@ -60,6 +62,12 @@ func (o GatewayOptions) validate() error {
 	var failures []error
 	if nilDependency(o.Store) {
 		failures = append(failures, errors.New("metadata store is required"))
+	}
+	if nilDependency(o.NPMMetadata) {
+		failures = append(failures, errors.New("npm metadata mutation store is required"))
+	}
+	if nilDependency(o.NPMRestore) {
+		failures = append(failures, errors.New("npm restore store is required"))
 	}
 	if nilDependency(o.Adapter) {
 		failures = append(failures, errors.New("repository availability adapter is required"))

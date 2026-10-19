@@ -27,7 +27,7 @@ func (s *MemoryStore) PublishNPMVersion(_ context.Context, version NPMVersion, d
 		if target == version.Version {
 			continue
 		}
-		if _, exists := s.npmVersions[npmVersionKey(version.RepositoryID, version.PackageName, target)]; !exists {
+		if item, exists := s.npmVersions[npmVersionKey(version.RepositoryID, version.PackageName, target)]; !exists || item.State == "deleted" {
 			return NPMVersion{}, ErrNotFound
 		}
 	}
@@ -53,6 +53,7 @@ func (s *MemoryStore) PublishNPMVersion(_ context.Context, version NPMVersion, d
 		pkg.DistTags[tag] = target
 	}
 	pkg.UpdatedAt = now
+	pkg.Revision++
 	s.npmPackages[packageKey] = pkg
 	return cloneNPMVersion(version), nil
 }
@@ -77,6 +78,7 @@ func (s *MemoryStore) SetNPMDistTag(ctx context.Context, mutation NPMDistTagMuta
 	if change.Changed {
 		pkg.DistTags[mutation.Tag] = mutation.Version
 		pkg.UpdatedAt = time.Now().UTC()
+		pkg.Revision++
 		s.npmPackages[packageKey] = pkg
 	}
 	change.DistTags = cloneStringMap(pkg.DistTags)
@@ -98,6 +100,7 @@ func (s *MemoryStore) DeleteNPMDistTag(ctx context.Context, mutation NPMDistTagM
 	}
 	delete(pkg.DistTags, mutation.Tag)
 	pkg.UpdatedAt = time.Now().UTC()
+	pkg.Revision++
 	s.npmPackages[packageKey] = pkg
 	change := NPMDistTagChange{DistTags: cloneStringMap(pkg.DistTags), Previous: previous, Changed: true}
 	s.appendAuditLocked(withRequestContextAudit(ctx, mutation.AuditRecord(change, "")))
@@ -253,12 +256,13 @@ func (s *MemoryStore) GetNPMPackage(_ context.Context, repositoryID, name string
 	}
 	pkg = cloneNPMPackage(pkg)
 	for _, version := range s.npmVersions {
-		if version.RepositoryID == repositoryID && version.PackageName == name && version.State != "deleted" {
-			pkg.Versions = append(pkg.Versions, cloneNPMVersion(version))
+		if version.RepositoryID == repositoryID && version.PackageName == name {
+			if version.State == "deleted" {
+				pkg.TombstonedVersions = append(pkg.TombstonedVersions, cloneNPMVersion(version))
+			} else {
+				pkg.Versions = append(pkg.Versions, cloneNPMVersion(version))
+			}
 		}
-	}
-	if len(pkg.Versions) == 0 && !pkg.Negative {
-		return NPMPackage{}, ErrNotFound
 	}
 	sort.Slice(pkg.Versions, func(i, j int) bool {
 		if !pkg.Versions[i].CreatedAt.Equal(pkg.Versions[j].CreatedAt) {
@@ -300,6 +304,10 @@ func (s *MemoryStore) GetNPMVersion(_ context.Context, repositoryID, name, versi
 func (s *MemoryStore) TombstoneNPMVersion(_ context.Context, repositoryID, name, version string) (NPMVersion, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.tombstoneNPMVersionLocked(repositoryID, name, version)
+}
+
+func (s *MemoryStore) tombstoneNPMVersionLocked(repositoryID, name, version string) (NPMVersion, error) {
 	key := npmVersionKey(repositoryID, name, version)
 	item, ok := s.npmVersions[key]
 	if !ok || item.State == "deleted" {
@@ -316,13 +324,15 @@ func (s *MemoryStore) TombstoneNPMVersion(_ context.Context, repositoryID, name,
 		}
 	}
 	pkg.UpdatedAt = now
+	pkg.Revision++
 	s.npmPackages[packageKey] = pkg
 	coordinate := name + "@" + version
 	s.artifactTombstones[repositoryID+"\x00"+string(FormatNPM)+"\x00"+coordinate] = ArtifactTombstone{RepositoryID: repositoryID, Format: FormatNPM, Coordinate: coordinate, Digest: item.Digest, TombstonedAt: now}
 	return cloneNPMVersion(item), nil
 }
 
-func (s *MemoryStore) RestoreNPMVersion(ctx context.Context, repositoryID, name, version string) (NPMVersion, error) {
+func (s *MemoryStore) RestoreNPMVersion(ctx context.Context, request NPMRestoreRequest) (NPMVersion, error) {
+	repositoryID, name, version := request.RepositoryID, request.PackageName, request.Version
 	key := npmVersionKey(repositoryID, name, version)
 	s.mu.RLock()
 	item, ok := s.npmVersions[key]
@@ -338,11 +348,14 @@ func (s *MemoryStore) RestoreNPMVersion(ctx context.Context, repositoryID, name,
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return NPMVersion{}, err
+	}
 	item, ok = s.npmVersions[key]
 	if !ok || item.State != "deleted" {
 		return NPMVersion{}, ErrNotFound
 	}
-	if !item.CollectedAt.IsZero() {
+	if !item.CollectedAt.IsZero() || !item.CollectingAt.IsZero() {
 		return NPMVersion{}, ErrDisabled
 	}
 	item.State, item.DeletedAt = "visible", time.Time{}
@@ -356,8 +369,10 @@ func (s *MemoryStore) RestoreNPMVersion(ctx context.Context, repositoryID, name,
 		pkg.DistTags["latest"] = version
 	}
 	pkg.UpdatedAt = time.Now().UTC()
+	pkg.Revision++
 	s.npmPackages[packageKey] = pkg
 	delete(s.artifactTombstones, repositoryID+"\x00"+string(FormatNPM)+"\x00"+name+"@"+version)
+	s.appendAuditLocked(withRequestContextAudit(ctx, request.auditRecord(item)))
 	return cloneNPMVersion(item), nil
 }
 
@@ -394,6 +409,33 @@ func (s *MemoryStore) NPMObjectHasVisibleReference(_ context.Context, objectKey 
 	return false, nil
 }
 
+// MarkNPMObjectCollecting persists the irreversible boundary before S3 delete.
+// The collector holds the same object lease as publish/restore. A retry can
+// finish the collection after a crash, but restore must remain unavailable.
+func (s *MemoryStore) MarkNPMObjectCollecting(_ context.Context, objectKey string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, version := range s.npmVersions {
+		if version.ObjectKey == objectKey && version.State != "deleted" {
+			return ErrNotFound
+		}
+	}
+	found := false
+	for key, version := range s.npmVersions {
+		if version.ObjectKey == objectKey && version.State == "deleted" && version.CollectedAt.IsZero() {
+			if version.CollectingAt.IsZero() {
+				version.CollectingAt = time.Now().UTC()
+				s.npmVersions[key] = version
+			}
+			found = true
+		}
+	}
+	if !found {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *MemoryStore) MarkNPMObjectCollected(_ context.Context, objectKey string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -407,6 +449,7 @@ func (s *MemoryStore) MarkNPMObjectCollected(_ context.Context, objectKey string
 	for key, version := range s.npmVersions {
 		if version.ObjectKey == objectKey && version.State == "deleted" && version.CollectedAt.IsZero() {
 			version.CollectedAt = now
+			version.CollectingAt = time.Time{}
 			s.npmVersions[key] = version
 			updated = true
 		}
@@ -476,6 +519,7 @@ func cloneNPMVersion(version NPMVersion) NPMVersion {
 func cloneNPMPackage(pkg NPMPackage) NPMPackage {
 	pkg.DistTags = cloneStringMap(pkg.DistTags)
 	pkg.Versions = nil
+	pkg.TombstonedVersions = nil
 	return pkg
 }
 

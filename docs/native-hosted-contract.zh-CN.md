@@ -50,6 +50,9 @@ Scope 继承为 admin→write→read，admin 还包含 intelligence；独立 int
 
 Collection 使用不透明 URL-safe `pageToken` 和 `pageSize`（默认 50、最大 200），按不可变 ID 排序。Token 保存位置而非数据库 offset，15 分钟过期或跨 endpoint 使用返回 `400 invalid_page_token`。
 
+npm 原生提示、基于修订号的撤包、原子审计、Group 墓碑权威与恢复/回收栅栏见
+[npm 版本治理](npm-version-governance.zh-CN.md)，复用既有不可变发布和生命周期记录。
+
 ## Native 格式与协议契约
 
 协议路由独立于管理 API。Raw/OCI 只读 committed reference；Maven 默认直接发布验证后的 PUT，strict 模式下 commit 前不可读。不存在、staged、expired、aborted、deleted 均返回 `404`。

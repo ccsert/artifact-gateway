@@ -132,14 +132,29 @@ func TestPostgresRustFSNPMPublicationIsVisibleAcrossGatewayInstances(t *testing.
 	if _, err = storeA.TombstoneNPMVersion(ctx, repo.ID, packageName, version); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = storeB.GetNPMPackage(ctx, repo.ID, packageName); !errors.Is(err, repository.ErrNotFound) {
-		t.Fatalf("cross-instance tombstone remained visible: %v", err)
+	if tombstoned, readErr := storeB.GetNPMPackage(ctx, repo.ID, packageName); readErr != nil || len(tombstoned.Versions) != 0 || len(tombstoned.TombstonedVersions) != 1 {
+		t.Fatalf("cross-instance tombstone barrier=%#v err=%v", tombstoned, readErr)
+	}
+	for _, path := range []string{"@scope%2Fpostgres-widget", "@scope/postgres-widget/-/postgres-widget-1.2.3.tgz"} {
+		request, requestErr := http.NewRequest(http.MethodGet, serverB.URL+"/npm/"+repo.Name+"/"+path, nil)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		request.Header.Set("Authorization", "Bearer resolver-secret")
+		response, requestErr := serverB.Client().Do(request)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusNotFound {
+			t.Fatalf("cross-instance tombstone exposed %s: %d", path, response.StatusCode)
+		}
 	}
 	projection, err = storeB.SearchArtifactProjection(ctx, repo.ID, repository.FormatNPM, repository.ArtifactSearchQuery{Mode: repository.ArtifactSearchByCoordinate, Value: packageName}, 10, repository.ArtifactSearchPosition{})
 	if err != nil || len(projection) != 0 {
 		t.Fatalf("tombstoned projection=%#v err=%v", projection, err)
 	}
-	if _, err = storeB.RestoreNPMVersion(ctx, repo.ID, packageName, version); err != nil {
+	if _, err = storeB.RestoreNPMVersion(ctx, repository.NPMRestoreRequest{RepositoryID: repo.ID, PackageName: packageName, Version: version}); err != nil {
 		t.Fatal(err)
 	}
 	if restored, restoreErr := storeA.GetNPMVersion(ctx, repo.ID, packageName, version); restoreErr != nil || restored.Digest == "" {
@@ -171,7 +186,7 @@ func TestPostgresRustFSNPMPublicationIsVisibleAcrossGatewayInstances(t *testing.
 	}
 	restoreResult := make(chan error, 1)
 	go func() {
-		_, restoreErr := storeB.RestoreNPMVersion(ctx, repo.ID, packageName, version)
+		_, restoreErr := storeB.RestoreNPMVersion(ctx, repository.NPMRestoreRequest{RepositoryID: repo.ID, PackageName: packageName, Version: version})
 		restoreResult <- restoreErr
 	}()
 	select {

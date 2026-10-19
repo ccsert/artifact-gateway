@@ -51,7 +51,7 @@ func TestPostgresMigrationUnsupportedReportCannotCollideWithRawIdentity(t *testi
 			if supportedIdentity != strings.Join(segments, "/") || strings.HasPrefix(supportedIdentity, "/") {
 				t.Fatalf("legitimate identity was renamed: %q", supportedIdentity)
 			}
-			h, err := app.NewGatewayHandler(app.GatewayOptions{Store: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: "owned-admin"}})
+			h, err := app.NewGatewayHandler(app.GatewayOptions{Store: f.native, NPMMetadata: f.native, NPMRestore: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: "owned-admin"}})
 			if err != nil {
 				t.Fatal(err)
 			}

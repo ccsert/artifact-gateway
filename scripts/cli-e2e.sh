@@ -1090,6 +1090,41 @@ PY2
 expect 2 "$out" -- publish raw "$tree/one.txt" --repo "$publish_id" --to ../escape --json
 expect 2 "$out" -- publish raw "$tree" --repo "$maven_id" --json
 
+# Native offset-addressed uploads (#132 M2) use this same real Gateway,
+# PostgreSQL and object store. Resume a partially uploaded immutable file.
+resume_file="$workdir/resumable.bin"
+python3 - "$resume_file" <<'PY2'
+import pathlib, sys
+pathlib.Path(sys.argv[1]).write_bytes(bytes(range(256)) * 12288)
+PY2
+expect 0 "$out" -- publish raw "$resume_file" --repo "$publish_id" --to releases/resumable.bin --resumable --chunk-size 262144 --json
+require "$(field "$out" data.items.0.status)" uploaded "resumable publish"
+require "$(field "$out" data.items.0.uploadOffset)" 3145728 "confirmed complete offset"
+resume_target="$server/raw/$publish_repo/releases/resumed.bin"
+curl --silent --show-error --fail --dump-header "$workdir/resume.headers" --output /dev/null -H "Authorization: Bearer $admin_token" -X POST "$resume_target?resumable=1"
+upload_id=$(tr -d '\r' <"$workdir/resume.headers" | sed -n 's/^[Ll]ocation: .*uploadId=//p')
+test -n "$upload_id"
+head -c 262144 "$resume_file" >"$workdir/first-chunk"
+curl --silent --show-error --fail --output /dev/null -H "Authorization: Bearer $admin_token" -H 'Upload-Offset: 0' -X PATCH --data-binary "@$workdir/first-chunk" "$resume_target?uploadId=$upload_id"
+expect 0 "$out" -- publish raw "$resume_file" --repo "$publish_id" --to releases/resumed.bin --upload-id "$upload_id" --chunk-size 262144 --json
+require "$(field "$out" data.items.0.uploadId)" "$upload_id" "resume original upload identity"
+require "$(field "$out" data.items.0.uploadOffset)" 3145728 "resumed full offset"
+require "$(field "$out" data.items.0.status)" uploaded "resumed publish"
+curl --silent --show-error --fail --output "$workdir/resumed-readback" -H "Authorization: Bearer $admin_token" "$resume_target"
+python3 - "$resume_file" "$workdir/resumed-readback" "$out" <<'PY2'
+import hashlib, json, pathlib, sys
+source, actual = (pathlib.Path(p).read_bytes() for p in sys.argv[1:3])
+result = json.loads(pathlib.Path(sys.argv[3]).read_text())["data"]["items"][0]
+assert actual == source
+assert result["size"] == len(source) == 3145728
+assert result["digest"] == 'sha256:' + hashlib.sha256(source).hexdigest()
+assert hashlib.sha256(actual).digest() == hashlib.sha256(source).digest()
+PY2
+expect 0 "$out" -- publish raw "$resume_file" --repo "$publish_id" --to releases/resumed.bin --upload-id "$upload_id" --json
+require "$(field "$out" data.items.0.status)" skipped "completed resume replay"
+expect 0 "$out" -- artifact search --repo "$publish_id" --q releases/resumed.bin --json
+require "$(field "$out" data.items.0.coordinate)" releases/resumed.bin "resumed publication visibility"
+
 maven_publish="cli-e2e-maven-publish-${suffix}"
 expect 0 "$out" -- repo create "$maven_publish" --format maven --json
 maven_publish_id=$(field "$out" data.id)

@@ -161,6 +161,8 @@ paths:
     "$ref": "./management/search.yaml#/repositories_repositoryId_artifact_identities"
   "/repositories/{repositoryId}/artifacts/{artifactId}":
     "$ref": "./management/artifacts.yaml#/repositories_repositoryId_artifacts_artifactId"
+  "/repositories/{repositoryId}/pypi/projects/{project}/versions/{version}/yank":
+    "$ref": "./management/pypi.yaml#/repositories_repositoryId_pypi_projects_project_versions_version_yank"
   "/repositories/{repositoryId}/oci/images":
     "$ref": "./management/oci.yaml#/repositories_repositoryId_oci_images"
   "/repositories/{repositoryId}/oci/manifests":
@@ -197,6 +199,12 @@ paths:
     "$ref": "./protocols/npm.yaml#/npm_repository_package_dist_tags"
   "/npm/{repository}/-/package/{package}/dist-tags/{tag}":
     "$ref": "./protocols/npm.yaml#/npm_repository_package_dist_tag"
+  "/npm/{repository}/{package}":
+    "$ref": "./protocols/npm.yaml#/npm_repository_package"
+  "/npm/{repository}/{package}/-rev/{revision}":
+    "$ref": "./protocols/npm.yaml#/npm_repository_package_revision"
+  "/npm/{repository}/{package}/-/{tarball}/-rev/{revision}":
+    "$ref": "./protocols/npm.yaml#/npm_repository_tarball_revision"
 components:
   schemas:
     Format:

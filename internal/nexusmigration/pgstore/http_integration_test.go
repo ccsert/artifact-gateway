@@ -20,7 +20,7 @@ import (
 
 func TestPostgresMigrationPublicHTTPContractCASIdempotencyPauseResumeCancel(t *testing.T) {
 	f := newFixture(t, "raw", map[string][]byte{"http.bin": []byte("http-content")})
-	h, err := app.NewGatewayHandler(app.GatewayOptions{Dependencies: app.Dependencies{MigrationService: f.service, SourceService: f.source}, Store: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: "owned-admin", AdminActor: "synthetic-admin", ResolverToken: "owned-resolver"}})
+	h, err := app.NewGatewayHandler(app.GatewayOptions{Dependencies: app.Dependencies{MigrationService: f.service, SourceService: f.source}, Store: f.native, NPMMetadata: f.native, NPMRestore: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: "owned-admin", AdminActor: "synthetic-admin", ResolverToken: "owned-resolver"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +210,7 @@ func TestPostgresMigrationRawCanonicalPathsAreReadableAndCompleteMetadataAvoidsE
 	if b.SourceVerificationBytes != 0 || b.TransferredBytes != int64(len(body)) || b.VerifiedBytes != int64(len(body)) {
 		t.Fatalf("extra read/counters=%+v", b)
 	}
-	h, err := app.NewGatewayHandler(app.GatewayOptions{Dependencies: app.Dependencies{}, Store: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: "owned-admin", AdminActor: "synthetic-admin"}})
+	h, err := app.NewGatewayHandler(app.GatewayOptions{Dependencies: app.Dependencies{}, Store: f.native, NPMMetadata: f.native, NPMRestore: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: "owned-admin", AdminActor: "synthetic-admin"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,7 +313,7 @@ func TestPostgresMigrationScanFailuresStayTraceableWithoutExecutablePartialManif
 			if test.name != "metadata" && (b.LastScanFailure.SourceRepository != "source" || b.LastScanFailure.SourcePath != assetPath || b.LastScanFailure.Identity == "") {
 				t.Fatalf("asset failure lost identity: %+v", b.LastScanFailure)
 			}
-			h, err := app.NewGatewayHandler(app.GatewayOptions{Dependencies: app.Dependencies{MigrationService: f.newService(m.Options{}), SourceService: f.source}, Store: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: "owned-admin", AdminActor: "owned-admin"}})
+			h, err := app.NewGatewayHandler(app.GatewayOptions{Dependencies: app.Dependencies{MigrationService: f.newService(m.Options{}), SourceService: f.source}, Store: f.native, NPMMetadata: f.native, NPMRestore: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: "owned-admin", AdminActor: "owned-admin"}})
 			if err != nil {
 				t.Fatal(err)
 			}

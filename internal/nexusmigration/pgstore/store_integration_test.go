@@ -510,7 +510,7 @@ func TestPostgresMigrationMavenGAVIsAtomicAndNativeColdReadsMatchManifest(t *tes
 	if b.VisibleIdentities != 1 {
 		t.Fatalf("GAV counted per file: %+v", b)
 	}
-	handler, err := app.NewGatewayHandler(app.GatewayOptions{Dependencies: app.Dependencies{MigrationService: f.service, SourceService: f.source}, Store: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: "owned-admin", ResolverToken: "owned-reader", RepositoryReaders: map[string][]string{"maven": {f.repo.Name}}}})
+	handler, err := app.NewGatewayHandler(app.GatewayOptions{Dependencies: app.Dependencies{MigrationService: f.service, SourceService: f.source}, Store: f.native, NPMMetadata: f.native, NPMRestore: f.native, Storage: app.SharedObjectStores(f.objects), Adapter: app.TestAdapter{}, Authenticator: app.Authenticator{AdminToken: "owned-admin", ResolverToken: "owned-reader", RepositoryReaders: map[string][]string{"maven": {f.repo.Name}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

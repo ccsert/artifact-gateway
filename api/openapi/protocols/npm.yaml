@@ -2,10 +2,9 @@
 x-gateway-protocol-overlay:
   officialSpecification: https://docs.npmjs.com/cli/commands/npm-dist-tag
   gatewayDecision: >
-    This overlay documents the npm registry dist-tag endpoints used by
-    `npm dist-tag ls/add/rm`. The packument, version, tarball, and publish
-    routes keep the npm registry protocol and are not restated here. Hosted
-    repositories accept tag changes; Proxy and Group repositories only list
+    This overlay documents native npm dist-tags, package metadata,
+    deprecation and revision-based unpublish. Hosted repositories accept
+    metadata changes; Proxy and Group repositories only read metadata and list
     tags. A tag may name only a visible, committed, non-tombstoned version the
     quarantine read policy does not block. Each change commits atomically with
     its audit record and never alters a tarball, digest, or version identity.
@@ -150,3 +149,228 @@ npm_repository_package_dist_tag:
         description: Dist-tag storage is unavailable
   x-gateway-visibility: visible_committed_versions_only
   x-gateway-mutation: single_store_transaction_with_audit
+
+npm_repository_package:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  - "$ref": "../components/parameters.yaml#/NPMPackageName"
+  get:
+    operationId: getNPMRegistryPackage
+    description: >
+      Native packument, including per-version deprecated warnings. Hosted
+      answers include _rev from a consistent package/version snapshot. npm
+      11.6.2 uses ?write=true before deprecate and unpublish. Hosted tombstones
+      suppress the same version in lower-priority Group members. Proxy
+      deprecated fields follow the normal metadata revalidation/cache contract.
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    - {}
+    responses:
+      '200':
+        description: Visible npm package metadata
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/NPMRegistryMetadata"
+      '304':
+        description: ETag still matches
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Repository read permission or account state denies access
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+      '503':
+        description: Package metadata is unavailable
+  put:
+    operationId: putNPMRegistryPackage
+    description: >
+      npm publish with one tarball attachment, or npm deprecate/undeprecate
+      with a full packument and no attachments. Both require Repository write
+      permission. Metadata changes require current _rev and preserve every
+      visible version, dist-tag and immutable manifest field except deprecated.
+      npm's own SemVer range selection is honored as the exact changed-version
+      set, not reinterpreted as another range language. Messages are plain text,
+      at most 4096 UTF-8 bytes; empty clears. At most 1000 versions per metadata
+      document. One invalid/unknown target rejects the whole mutation. Changes
+      and their actor/version/reason audit commit together. A lost response or
+      stale retry must be resolved by reading current state; old revisions get
+      409 and never overwrite later publications, tags, deletes or restores.
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: Native npm publication or full packument with _rev; no alternate management publication model.
+            additionalProperties: true
+    responses:
+      '200':
+        description: Metadata committed; bytes, digest, publisher and publication time are unchanged
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/NPMMetadataResult"
+      '201':
+        description: Immutable version publication committed
+      '400':
+        description: Invalid document, message, selection or attempted immutable-field/tag change
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Repository write permission or account state denies access
+      '404':
+        description: Package or selected version is unavailable
+      '405':
+        description: Proxy and Group repositories are read-only
+      '409':
+        description: Stale revision or immutable version already published
+      '422':
+        description: Tarball identity or integrity does not match the publication
+      '507':
+        description: Publication exceeds capacity quota
+      '503':
+        description: Metadata storage is unavailable
+  x-gateway-mutation: single_store_transaction_with_audit
+npm_repository_package_revision:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  - "$ref": "../components/parameters.yaml#/NPMPackageName"
+  - name: revision
+    in: path
+    required: true
+    schema:
+      type: string
+      pattern: '^[1-9][0-9]*$'
+  put:
+    operationId: unpublishNPMRegistryVersions
+    description: >
+      npm 11.6.2 single-version unpublish. Requires Repository admin permission,
+      current path/body _rev, and a full packument retaining unchanged version
+      documents. Removed versions become existing lifecycle tombstones; tags
+      are updated in the same transaction. Invalid retained targets reject the
+      complete change. Tarballs remain under retention, object leases,
+      reference-safe reclaim and the existing management restore operation.
+      No Proxy/Group mutation or upstream delete is performed.
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "../components/schemas.yaml#/NPMRegistryMetadata"
+    responses:
+      '200':
+        description: Selected versions, tags, tombstones and audit committed together
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/NPMMetadataResult"
+      '400':
+        description: Invalid selection, tags or changed immutable fields
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Repository admin permission or account state denies deletion
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+      '405':
+        description: Only Hosted repositories accept unpublish
+      '409':
+        description: Revision changed; re-read before deciding whether to retry
+      '503':
+        description: Metadata storage is unavailable
+  delete:
+    operationId: unpublishNPMRegistryPackage
+    description: >
+      npm whole-package unpublish or removal of its only remaining version.
+      Requires Repository admin permission and current revision. At most 1000
+      visible versions are atomically tombstoned with tags and audit; no bytes
+      are physically deleted. Identity reservations prevent republishing even
+      after reclaim. Restore individual versions through the existing
+      /repositories/{repositoryId}/restore management operation before reclaim;
+      restore preserves deprecation and immutable bytes, creates latest only
+      if absent, and does not recreate all removed custom tags.
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    responses:
+      '200':
+        description: Whole package tombstoned with its audit
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/NPMMetadataResult"
+      '400':
+        description: Package exceeds the bounded mutation selection
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Repository admin permission or account state denies deletion
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+      '405':
+        description: Only Hosted repositories accept unpublish
+      '409':
+        description: Revision changed; no mutation committed
+      '503':
+        description: Metadata storage is unavailable
+  x-gateway-mutation: single_store_transaction_with_audit
+npm_repository_tarball_revision:
+  servers:
+  - url: https://gateway.example.com
+  parameters:
+  - "$ref": "../components/parameters.yaml#/RepositoryName"
+  - "$ref": "../components/parameters.yaml#/NPMPackageName"
+  - name: tarball
+    in: path
+    required: true
+    schema:
+      type: string
+      maxLength: 255
+  - name: revision
+    in: path
+    required: true
+    schema:
+      type: string
+      pattern: '^[1-9][0-9]*$'
+  delete:
+    operationId: acknowledgeNPMUnpublishTarball
+    description: >
+      npm's follow-up cleanup acknowledgement. Requires Repository admin,
+      current package revision and an already-tombstoned tarball identity.
+      Repeating acknowledgement is safe. This never deletes bytes; retention
+      and reference-safe reclaim own physical deletion. A still-visible
+      version must first be unpublished atomically through its packument.
+    security:
+    - protocolBasicAuth: []
+    - protocolBearerAuth: []
+    responses:
+      '200':
+        description: Tombstone acknowledged; bytes retained
+        content:
+          application/json:
+            schema:
+              "$ref": "../components/schemas.yaml#/NPMMetadataResult"
+      '401':
+        "$ref": "../components/responses.yaml#/BasicUnauthorized"
+      '403':
+        description: Repository admin permission or account state denies deletion
+      '404':
+        "$ref": "../components/responses.yaml#/ProtocolNotFound"
+      '405':
+        description: Only Hosted repositories accept unpublish
+      '409':
+        description: Stale revision or tarball version has not been tombstoned
+      '503':
+        description: Metadata storage is unavailable

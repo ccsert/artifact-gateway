@@ -2,6 +2,17 @@ package repository
 
 import "testing"
 
+func TestPyPIYankCapabilityBelongsToHosted(t *testing.T) {
+	if !FormatSupportsOperation(FormatPyPI, RepositoryTypeHosted, RepositoryOperationYank) || FormatSupportsOperation(FormatPyPI, RepositoryTypeProxy, RepositoryOperationYank) {
+		t.Fatal("PyPI yank mutation capability does not match repository types")
+	}
+	for _, format := range []Format{FormatRaw, FormatMaven, FormatNPM, FormatGo, FormatOCI, FormatAPT, FormatConan} {
+		if FormatSupportsOperation(format, RepositoryTypeHosted, RepositoryOperationYank) {
+			t.Fatalf("yank leaked into %s", format)
+		}
+	}
+}
+
 func TestSupportedFormatProfilesAreCompleteAndUnique(t *testing.T) {
 	profiles := SupportedFormatProfiles()
 	if len(profiles) != 9 {

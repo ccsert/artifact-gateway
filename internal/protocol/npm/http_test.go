@@ -53,6 +53,32 @@ func TestParsePathSupportsPackageVersionMetadata(t *testing.T) {
 	}
 }
 
+func TestParsePathSupportsUnpublishRevisions(t *testing.T) {
+	for _, tc := range []struct {
+		path, name, tarball string
+		kind                RouteKind
+	}{
+		{"/npm/releases/widget/-rev/12", "widget", "", RoutePackageRevision},
+		{"/npm/releases/@scope%2fwidget/-rev/12", "@scope/widget", "", RoutePackageRevision},
+		{"/npm/releases/@scope/widget/-/widget-1.0.0.tgz/-rev/12", "@scope/widget", "widget-1.0.0.tgz", RouteTarballRevision},
+	} {
+		route, ok := ParsePath(tc.path)
+		if !ok || route.Repository != "releases" || route.Kind != tc.kind || route.Package != tc.name || route.Tarball != tc.tarball || route.Revision != "12" {
+			t.Errorf("%s route=%#v ok=%t", tc.path, route, ok)
+		}
+	}
+	for _, revision := range []string{"", "0", "01", "-1", "+1", " 1", "1 ", "1.0", "1/2", "9223372036854775808", "%31"} {
+		if ValidRevision(revision) {
+			t.Errorf("invalid revision %q accepted", revision)
+		}
+	}
+	for _, path := range []string{"/npm/releases/widget/-rev/0", "/npm/releases/widget/-rev/01", "/npm/releases/widget/-rev/1/extra", "/npm/releases/@scope/../-/a.tgz/-rev/1"} {
+		if route, ok := ParsePath(path); ok {
+			t.Errorf("invalid revision path %s accepted as %#v", path, route)
+		}
+	}
+}
+
 func TestValidVersionUsesStrictSemVer(t *testing.T) {
 	for _, version := range []string{"0.0.0", "1.2.3", "1.2.3-beta.1", "1.2.3+build.7", "1.2.3-rc.1+linux"} {
 		if !ValidVersion(version) {

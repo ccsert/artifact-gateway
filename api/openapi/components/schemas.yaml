@@ -23,6 +23,8 @@ RepositoryOperation:
   - reclaim
   - promote
   - replicate
+  - yank
+  - deprecate
 FormatProfile:
   type: object
   required:
@@ -3392,6 +3394,54 @@ WebhookDelivery:
 WebhookDeliveryList:
   type: array
   items: {"$ref": "#/WebhookDelivery"}
+PyPIYankUpdate:
+  type: object
+  additionalProperties: false
+  required: [yanked]
+  properties:
+    yanked:
+      type: boolean
+    reason:
+      type: string
+      maxLength: 1024
+      description: Optional UTF-8 reason, at most 1024 bytes without control characters. Cleared when unyanking.
+    filename:
+      type: string
+      minLength: 1
+      maxLength: 512
+      description: Exact filename; omit to update all visible files atomically.
+PyPIYankFile:
+  type: object
+  required: [filename, yanked, reason, digest, size]
+  properties:
+    filename:
+      type: string
+    yanked:
+      type: boolean
+    reason:
+      type: string
+    digest:
+      type: string
+    size:
+      type: integer
+      format: int64
+PyPIYankState:
+  type: object
+  required: [repositoryId, project, version, revision, files]
+  properties:
+    repositoryId:
+      type: string
+      format: uuid
+    project:
+      type: string
+    version:
+      type: string
+    revision:
+      type: string
+    files:
+      type: array
+      items:
+        "$ref": "#/PyPIYankFile"
 Problem:
   type: object
   required:
@@ -3420,6 +3470,7 @@ Problem:
       - name_exists
       - access_denied
       - password_change_required
+      - authorization_pending
       - log_buffer_unavailable
       - log_source_identity_unavailable
       - remote_log_query_unavailable
@@ -3981,6 +4032,42 @@ NPMDistTags:
   example:
     latest: 1.0.0
     next: 1.1.0
+NPMMetadataResult:
+  type: object
+  required: [ok, rev]
+  properties:
+    ok:
+      type: boolean
+      const: true
+    id:
+      type: string
+    rev:
+      type: string
+      pattern: '^[1-9][0-9]*$'
+NPMRegistryMetadata:
+  type: object
+  required: [name, versions, dist-tags]
+  additionalProperties: true
+  properties:
+    _id:
+      type: string
+    _rev:
+      type: string
+      description: Hosted package revision, required for metadata changes; never a tarball digest.
+      pattern: '^[1-9][0-9]*$'
+    name:
+      type: string
+    versions:
+      type: object
+      additionalProperties:
+        type: object
+        additionalProperties: true
+        properties:
+          deprecated:
+            type: string
+            description: Plain-text install warning, at most 4096 UTF-8 bytes; an empty string clears the warning.
+    dist-tags:
+      "$ref": "#/NPMDistTags"
 NPMDistTagResult:
   type: object
   required:
