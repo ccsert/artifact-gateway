@@ -14,7 +14,7 @@
 <repositories>
   <repository>
     <id>maven-hosted</id>
-    <url>http://gateway.test/gw/maven/maven-hosted/</url>
+    <url>http://gateway.test/gw/repository/maven/maven-hosted/</url>
   </repository>
 </repositories>
 
@@ -22,6 +22,6 @@
 <distributionManagement>
   <repository>
     <id>maven-hosted</id>
-    <url>http://gateway.test/gw/maven/maven-hosted/</url>
+    <url>http://gateway.test/gw/repository/maven/maven-hosted/</url>
   </repository>
 </distributionManagement>

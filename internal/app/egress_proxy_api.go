@@ -89,7 +89,7 @@ type egressProxyTestResult struct {
 // TestEgressProxy probes the repository's egress path to its upstream with the
 // stored configuration. It belongs to the repository's administrators; nothing
 // is persisted.
-func (h generatedRepositoryAPIAdapter) TestEgressProxy(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
+func (h repositoryManagementHandler) TestEgressProxy(w http.ResponseWriter, r *http.Request, id adminopenapi.RepositoryId) {
 	h.withRepositoryScope(w, r, id.String(), RepositoryAdmin, func(_ Principal, repo repository.HostedRepository) {
 		if repo.Type != repository.RepositoryTypeProxy {
 			writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "egress proxy tests only apply to proxy repositories")

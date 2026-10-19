@@ -94,7 +94,7 @@ func repositoryBrowseParentKey(parent repository.ArtifactBrowseParent) string {
 	return strings.Join([]string{string(parent.Kind), parent.Namespace, parent.Component, parent.Version, strconv.Itoa(parent.BuildNumber), parent.Path}, "\x1f")
 }
 
-func (h hostedRepositoryAPIHandler) decodeRepositoryBrowseParent(token string, repo repository.HostedRepository, principal string) (repository.ArtifactBrowseParent, string, error) {
+func (h managementScope) decodeRepositoryBrowseParent(token string, repo repository.HostedRepository, principal string) (repository.ArtifactBrowseParent, string, error) {
 	if token == "" {
 		parent := repository.ArtifactBrowseParent{}
 		return parent, repositoryBrowseParentKey(parent), nil
@@ -135,7 +135,7 @@ func validRepositoryBrowseParent(format repository.Format, parent repository.Art
 	return false
 }
 
-func (h hostedRepositoryAPIHandler) decodeRepositoryBrowsePageToken(token string, repo repository.HostedRepository, principal, parent string) (string, error) {
+func (h managementScope) decodeRepositoryBrowsePageToken(token string, repo repository.HostedRepository, principal, parent string) (string, error) {
 	if token == "" {
 		return "", nil
 	}
@@ -146,11 +146,11 @@ func (h hostedRepositoryAPIHandler) decodeRepositoryBrowsePageToken(token string
 	return cursor.After, nil
 }
 
-func (h hostedRepositoryAPIHandler) encodeRepositoryBrowsePageToken(repo repository.HostedRepository, principal, parent, after string) string {
+func (h managementScope) encodeRepositoryBrowsePageToken(repo repository.HostedRepository, principal, parent, after string) string {
 	return encodeSignedCursor(h.authenticator.AdminToken, repositoryBrowsePageCursor{Endpoint: "repository-browse-page", RepositoryID: repo.ID, Format: string(repo.Format), Principal: principal, Parent: parent, After: after, Revision: repositoryBrowseRevision(repo), ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
-func (h hostedRepositoryAPIHandler) repositoryBrowseNodeResponse(repo repository.HostedRepository, principal string, node repository.ArtifactBrowseNode) adminopenapi.BrowseNode {
+func (h managementScope) repositoryBrowseNodeResponse(repo repository.HostedRepository, principal string, node repository.ArtifactBrowseNode) adminopenapi.BrowseNode {
 	cursor := repositoryBrowseNodeCursor{
 		Endpoint: "repository-browse-node", RepositoryID: repo.ID, Format: string(repo.Format), Principal: principal,
 		Revision: repositoryBrowseRevision(repo), Kind: string(node.Kind), Namespace: node.Namespace, Component: node.Component, Version: node.Coordinate, BuildNumber: node.BuildNumber, Path: node.Path,

@@ -120,6 +120,7 @@ run_contract() {
   printf '\n== contract-and-test ==\n'
   run "npm lockfile sources" node scripts/npm-lockfile-check.mjs
   run "openapi generated artifacts fresh" check_openapi_fresh
+  run "agctl parsing, schemas and agent recipes" make cli-test
   run "unit and integration scripts" make test
   run "cargo C0 contract" make cargo-contract
   run "kubernetes manifests" make kubernetes-local-check

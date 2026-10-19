@@ -119,6 +119,9 @@ func connectSnippets(target connectTarget, name string, format adminopenapi.Form
 		}
 	case adminopenapi.FormatMaven:
 		repository := base + "/maven/" + name + "/"
+		if hosted {
+			repository = base + "/repository/maven/" + name + "/"
+		}
 		snippets = append(snippets,
 			connectSnippet{Label: "Maven credentials", File: "settings.xml", Content: fmt.Sprintf(
 				"<servers>\n  <server>\n    <id>%s</id>\n    <username>%s</username>\n    <password>${env.ARTIFACT_GATEWAY_TOKEN}</password>\n  </server>\n</servers>", name, clientUser)},

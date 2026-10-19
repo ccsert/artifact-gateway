@@ -414,7 +414,9 @@ profile 运行验收。
   `.pypirc`、Maven `settings.xml` 与 `pom.xml`、`GOPROXY` 与 `.netrc`、
   `docker login`、Raw `curl`、Conan remote、APT `sources.list` 与 `auth.conf`、
   Cargo `config.toml`），Hosted 仓库附带发布片段。凭据一律是占位符
-  `${ARTIFACT_GATEWAY_TOKEN}`，已配置的 token 绝不写进片段。URL 取 CLI 所连
+  `${ARTIFACT_GATEWAY_TOKEN}`，已配置的 token 绝不写进片段。Maven Hosted 的
+  读取与发布使用 `/repository/maven/<repository>/`，Proxy 指引使用
+  `/maven/<repository>/`。URL 取 CLI 所连
   服务端，去掉凭据、查询参数和片段。PyPI `.netrc` 使用 pip 匹配的纯主机名，
   索引 URL 仍保留显式端口。
 
@@ -645,7 +647,8 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
 
 ## 验证
 
-- `go test ./internal/agctl/...` 离线运行，使用进程内的假服务端：覆盖命令
+- `make cli-test` 离线运行命令入口与 `internal/agctl` 测试，CI 和 `ci-local`
+  也调用相同目标；使用进程内的假服务端，覆盖命令
   解析、退出码、脱敏和 JSON 信封。golden 信封位于
   `internal/agctl/testdata/golden/`；有意修改输出后，用
   `go test ./internal/agctl/ -update` 重写并审阅差异。
@@ -658,7 +661,8 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   隔离 Compose 模式自行配置合成 issuer，CI 在共享 Gateway 上配置一个。剧本创建仓库、
   重放创建、更新（dry-run、真实更新、过期 `If-Match`）并在列表中找到它；
   用它和第二个仓库建 Group（dry-run、重放、未知成员、成员、解析顺序、带过期
-  `If-Match` 的改名、重排、保留成员的删除）；通过原生协议发布一个 Raw 文件和
+  `If-Match` 的改名、重排、保留成员的删除）；创建和更新合成上游的 Maven Proxy
+  （不读取上游）、验证能力与只读接入指引、拒绝过期版本并受理删除；通过原生协议发布一个 Raw 文件和
   一个 Maven POM，并检索、浏览、列出、查看和删除它们；检查无权限凭据被拒绝
   （6）、全局检索为空，且该拒绝能按报告的请求 ID 在审计日志中找到；为模拟的
   成员主体写入、检查、按前缀收窄并删除授权（被拒时 access check 退出码 6），在
@@ -669,7 +673,10 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   没有变更类审计，以及撤销后隐藏仓库。读取 status、诊断、运行节点、概览和生命周期任务；再删除仓库（确认、dry-run、
   202、等待超时）并等待 `deleted`。还会运行 CI 剧本：服务账号只把凭据签发到
   0600 文件，用它读取仓库，轮换后旧秘密返回 401，撤销授权后失去访问；创建并吊销
-  API key；待授权用户升为 member 后在授权前仍无仓库权限，其会话被结束后被拒，
+  API key。新凭据只获得另一个 Maven 仓库的 read/write，创建并重放会话、上传和
+  提交 POM/JAR、检索坐标，并通过原生端点逐字节回读两份文件；回读可按 actor/operation
+  在审计中查到。撤销授权后新建会话返回 403，已提交制品仍保留。待授权用户升为
+  member 后在授权前仍无仓库权限，其会话被结束后被拒，
   从文件重置密码，最后删除用户，上述每次变更（创建、角色更新、会话列出与吊销、
   重置密码、删除）都以管理员为 actor 记录在审计日志的 `users/<id>` 下；该用户
   为 member 时，其会话管理账号与身份均被拒绝（6）。为该用户链接一个 OIDC 身份（先 dry-run）并列出；同一 subject 链接到

@@ -426,11 +426,11 @@ func validPyPIVersionCoordinate(value string) bool {
 	return ok
 }
 
-func (h hostedRepositoryAPIHandler) encodeOCIImageCursor(repositoryID, prefix, name string) string {
+func (h managementScope) encodeOCIImageCursor(repositoryID, prefix, name string) string {
 	return encodeSignedCursor(h.authenticator.AdminToken, ociImagePageCursor{Endpoint: "oci-images", RepositoryID: repositoryID, Prefix: prefix, Name: name, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
-func (h hostedRepositoryAPIHandler) decodeOCIImageCursor(token, repositoryID, prefix string) (string, error) {
+func (h managementScope) decodeOCIImageCursor(token, repositoryID, prefix string) (string, error) {
 	if token == "" {
 		return "", nil
 	}
@@ -441,11 +441,11 @@ func (h hostedRepositoryAPIHandler) decodeOCIImageCursor(token, repositoryID, pr
 	return cursor.Name, nil
 }
 
-func (h hostedRepositoryAPIHandler) encodeOCIManifestCursor(repositoryID, name, digest string) string {
+func (h managementScope) encodeOCIManifestCursor(repositoryID, name, digest string) string {
 	return encodeSignedCursor(h.authenticator.AdminToken, ociManifestPageCursor{Endpoint: "oci-manifests", RepositoryID: repositoryID, Name: name, Digest: digest, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
-func (h hostedRepositoryAPIHandler) decodeOCIManifestCursor(token, repositoryID, name string) (string, error) {
+func (h managementScope) decodeOCIManifestCursor(token, repositoryID, name string) (string, error) {
 	if token == "" {
 		return "", nil
 	}
@@ -456,11 +456,11 @@ func (h hostedRepositoryAPIHandler) decodeOCIManifestCursor(token, repositoryID,
 	return cursor.Digest, nil
 }
 
-func (h hostedRepositoryAPIHandler) encodeMavenCoordinateCursor(repositoryID, prefix, coordinate string, buildNumber int) string {
+func (h managementScope) encodeMavenCoordinateCursor(repositoryID, prefix, coordinate string, buildNumber int) string {
 	return encodeSignedCursor(h.authenticator.AdminToken, mavenCoordinatePageCursor{Endpoint: "maven-coordinates", RepositoryID: repositoryID, Prefix: prefix, Coordinate: coordinate, BuildNumber: buildNumber, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
-func (h hostedRepositoryAPIHandler) decodeMavenCoordinateCursor(token, repositoryID, prefix string) (repository.MavenArtifactCursor, error) {
+func (h managementScope) decodeMavenCoordinateCursor(token, repositoryID, prefix string) (repository.MavenArtifactCursor, error) {
 	if token == "" {
 		return repository.MavenArtifactCursor{}, nil
 	}
@@ -471,11 +471,11 @@ func (h hostedRepositoryAPIHandler) decodeMavenCoordinateCursor(token, repositor
 	return repository.MavenArtifactCursor{Coordinate: cursor.Coordinate, BuildNumber: cursor.BuildNumber}, nil
 }
 
-func (h hostedRepositoryAPIHandler) encodeConanReferenceCursor(repositoryID, prefix, reference string) string {
+func (h managementScope) encodeConanReferenceCursor(repositoryID, prefix, reference string) string {
 	return encodeSignedCursor(h.authenticator.AdminToken, conanReferencePageCursor{Endpoint: "conan-references", RepositoryID: repositoryID, Prefix: prefix, Reference: reference, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
-func (h hostedRepositoryAPIHandler) decodeConanReferenceCursor(token, repositoryID, prefix string) (string, error) {
+func (h managementScope) decodeConanReferenceCursor(token, repositoryID, prefix string) (string, error) {
 	if token == "" {
 		return "", nil
 	}
@@ -486,11 +486,11 @@ func (h hostedRepositoryAPIHandler) decodeConanReferenceCursor(token, repository
 	return cursor.Reference, nil
 }
 
-func (h hostedRepositoryAPIHandler) encodeConanRevisionCursor(repositoryID, reference, query, revision string) string {
+func (h managementScope) encodeConanRevisionCursor(repositoryID, reference, query, revision string) string {
 	return encodeSignedCursor(h.authenticator.AdminToken, conanRevisionPageCursor{Endpoint: "conan-revisions", RepositoryID: repositoryID, Reference: reference, Query: query, Revision: revision, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
-func (h hostedRepositoryAPIHandler) decodeConanRevisionCursor(token, repositoryID, reference, query string) (string, error) {
+func (h managementScope) decodeConanRevisionCursor(token, repositoryID, reference, query string) (string, error) {
 	if token == "" {
 		return "", nil
 	}
@@ -501,7 +501,7 @@ func (h hostedRepositoryAPIHandler) decodeConanRevisionCursor(token, repositoryI
 	return cursor.Revision, nil
 }
 
-func (h hostedRepositoryAPIHandler) encodeArtifactSearchCursor(repositoryID string, format repository.Format, query, coordinate string, buildNumber int, match ...repository.ArtifactSearchMatch) string {
+func (h managementScope) encodeArtifactSearchCursor(repositoryID string, format repository.Format, query, coordinate string, buildNumber int, match ...repository.ArtifactSearchMatch) string {
 	matching := ""
 	if len(match) > 0 {
 		matching = string(match[0])
@@ -509,7 +509,7 @@ func (h hostedRepositoryAPIHandler) encodeArtifactSearchCursor(repositoryID stri
 	return encodeSignedCursor(h.authenticator.AdminToken, artifactSearchPageCursor{Match: matching, Endpoint: "artifact-search", RepositoryID: repositoryID, Format: string(format), Query: query, Coordinate: coordinate, BuildNumber: buildNumber, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
-func (h hostedRepositoryAPIHandler) decodeArtifactSearchCursor(token, repositoryID string, format repository.Format, query string, match ...repository.ArtifactSearchMatch) (artifactSearchPosition, error) {
+func (h managementScope) decodeArtifactSearchCursor(token, repositoryID string, format repository.Format, query string, match ...repository.ArtifactSearchMatch) (artifactSearchPosition, error) {
 	matching := ""
 	if len(match) > 0 {
 		matching = string(match[0])
@@ -524,11 +524,11 @@ func (h hostedRepositoryAPIHandler) decodeArtifactSearchCursor(token, repository
 	return artifactSearchPosition{Coordinate: cursor.Coordinate, BuildNumber: cursor.BuildNumber}, nil
 }
 
-func (h hostedRepositoryAPIHandler) encodeRetentionDryRunCursor(repositoryID, policyVersion, coordinate, artifactID string) string {
+func (h managementScope) encodeRetentionDryRunCursor(repositoryID, policyVersion, coordinate, artifactID string) string {
 	return encodeSignedCursor(h.authenticator.AdminToken, retentionDryRunPageCursor{Endpoint: "retention-dry-run", RepositoryID: repositoryID, PolicyVersion: policyVersion, Coordinate: coordinate, ArtifactID: artifactID, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
-func (h hostedRepositoryAPIHandler) decodeRetentionDryRunCursor(token, repositoryID, policyVersion string) (string, string, error) {
+func (h managementScope) decodeRetentionDryRunCursor(token, repositoryID, policyVersion string) (string, string, error) {
 	if token == "" {
 		return "", "", nil
 	}
@@ -539,11 +539,11 @@ func (h hostedRepositoryAPIHandler) decodeRetentionDryRunCursor(token, repositor
 	return cursor.Coordinate, cursor.ArtifactID, nil
 }
 
-func (h hostedRepositoryAPIHandler) encodeTombstoneCursor(repositoryID string, format repository.Format, prefix, coordinate string) string {
+func (h managementScope) encodeTombstoneCursor(repositoryID string, format repository.Format, prefix, coordinate string) string {
 	return encodeSignedCursor(h.authenticator.AdminToken, tombstonePageCursor{Endpoint: "tombstones", RepositoryID: repositoryID, Format: string(format), Prefix: prefix, Coordinate: coordinate, ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Unix()})
 }
 
-func (h hostedRepositoryAPIHandler) decodeTombstoneCursor(token, repositoryID string, format repository.Format, prefix string) (string, error) {
+func (h managementScope) decodeTombstoneCursor(token, repositoryID string, format repository.Format, prefix string) (string, error) {
 	if token == "" {
 		return "", nil
 	}
