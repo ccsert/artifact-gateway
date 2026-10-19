@@ -658,7 +658,8 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   正在运行的 Gateway，CI 在 Console E2E 之后就是这样运行的；设置
   `CLI_E2E_RESOLVER_TOKEN` 会加入需要无仓库权限凭据的检查；设置
   `CLI_E2E_OIDC_ISSUER`（Gateway 已配置的 OIDC issuer，会规范化首尾空白和末尾斜杠）会加入身份绑定检查，
-  隔离 Compose 模式自行配置合成 issuer，CI 在共享 Gateway 上配置一个。剧本创建仓库、
+  隔离 Compose 模式自行配置合成 issuer，CI 在共享 Gateway 上配置一个。Agent 菜谱
+  先用 `commands --json` 和 `info --json` 在同一真实 Gateway 核对 schema、能力与身份，再创建仓库、
   重放创建、更新（dry-run、真实更新、过期 `If-Match`）并在列表中找到它；
   用它和第二个仓库建 Group（dry-run、重放、未知成员、成员、解析顺序、带过期
   `If-Match` 的改名、重排、保留成员的删除）；创建和更新合成上游的 Maven Proxy
@@ -687,6 +688,13 @@ AGCTL_TOKEN="$SERVICE_ACCOUNT_TOKEN" agctl access check --repo "$REPO_ID" \
   规范坐标），并通过会话发布两个 Maven 坐标（一步完成与分步执行，已提交会话被拒，
   重复提交返回 409）；用户用 `auth login --secret-output` 登录并使用该 token。同时检查错误
   token（5）、仓库不存在（4）、非法输入（2）和冲突（7）的退出码。
+- `make cli-runtime-e2e` 始终新建自有 Gateway、PostgreSQL 与 RustFS，使用合成凭据
+  和临时回环端口。重启该 Gateway 后核对日志会话变化，以及旧游标的有界
+  `scope_changed` 结果；只停止自有 PostgreSQL，核对 unhealthy 状态与 not-ready
+  info，恢复后重验就绪；只停用自有日志缓冲，确认返回 `503/log_buffer_unavailable`，
+  不把不可用伪装成成功空列表。member、待审批和强制改密用户仍被拒绝；member
+  读不到的诊断保留 unknown，`status --strict` 返回失败。CI 和 `ci-local` 调用
+  同一目标，不复用已有开发栈。
 - `make email-compose-check` 在带自有 TLS SMTP 的隔离 Gateway 上运行邮件命令：
   从私有收件人文件建目标、改名后仍保持启用、预览和计划不入队、带 key 的测试只送达
   一次、重放被拒，以及配额规则的生命周期；收件人不出现在任何 agctl 输出中。
