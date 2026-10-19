@@ -1,0 +1,84 @@
+package nexussource
+
+import (
+	"context"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+)
+
+// AssetRequest contains a fixed manifest identity, never a caller-selected URL.
+type AssetRequest struct {
+	Path      string
+	Size      int64
+	Validator string
+}
+type Content struct {
+	Body      io.ReadCloser
+	Validator string
+}
+type contentBody struct {
+	io.Reader
+	io.Closer
+	done context.CancelFunc
+}
+
+func (b *contentBody) Close() error { err := b.Closer.Close(); b.done(); return err }
+
+// OpenAsset uses exactly the same encrypted source, HTTPS, pinned egress and
+// redirect boundary as discovery. Each request is bounded by size and time.
+func (s *Service) OpenAsset(ctx context.Context, id, version, repository string, in AssetRequest) (*Content, error) {
+	if !sourceName.MatchString(repository) || !validAssetPath(in.Path) || in.Size < 0 || in.Size > 1<<30 {
+		return nil, fail("invalid_request")
+	}
+	remote, source, done, err := s.connect(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	bad := func(code string) (*Content, error) { done(); return nil, fail(code) }
+	if source.Version != version {
+		return bad("source_version_changed")
+	}
+	u := url.URL{Scheme: remote.base.Scheme, Host: remote.base.Host, Path: remote.base.Path + "/repository/" + repository + "/" + in.Path}
+	req, err := http.NewRequestWithContext(remote.ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return bad("source_invalid_response")
+	}
+	if strings.HasPrefix(in.Validator, "etag:") {
+		req.Header.Set("If-Match", strings.TrimPrefix(in.Validator, "etag:"))
+	}
+	if remote.credential.Username != "" {
+		req.SetBasicAuth(remote.credential.Username, remote.credential.Password)
+	}
+	resp, err := remote.client.Do(req)
+	if err != nil {
+		return bad("source_unreachable")
+	}
+	if resp.StatusCode != http.StatusOK {
+		_ = resp.Body.Close()
+		switch resp.StatusCode {
+		case 404:
+			return bad("source_missing")
+		case 412:
+			return bad("source_changed")
+		case 401, 403:
+			return bad("source_unauthorized")
+		}
+		return bad("source_download_failed")
+	}
+	if resp.ContentLength >= 0 && resp.ContentLength != in.Size {
+		_ = resp.Body.Close()
+		return bad("source_changed")
+	}
+	validator := ""
+	etag := resp.Header.Get("ETag")
+	if strings.HasPrefix(etag, "\"") && strings.HasSuffix(etag, "\"") && len(etag) <= 512 && !strings.ContainsAny(etag, "\r\n\x00") {
+		validator = "etag:" + etag
+	}
+	if strings.HasPrefix(in.Validator, "etag:") && validator != in.Validator {
+		_ = resp.Body.Close()
+		return bad("source_changed")
+	}
+	return &Content{Body: &contentBody{Reader: io.LimitReader(resp.Body, in.Size+1), Closer: resp.Body, done: done}, Validator: validator}, nil
+}

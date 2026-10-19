@@ -9,6 +9,22 @@ security:
 - bearerAuth: []
 openapi: 3.1.0
 paths:
+  "/migrations/nexus/capabilities":
+    "$ref": "./management/nexus-batches.yaml#/capabilities"
+  "/migrations/nexus/batches":
+    "$ref": "./management/nexus-batches.yaml#/batches"
+  "/migrations/nexus/batches/{batchId}":
+    "$ref": "./management/nexus-batches.yaml#/batch"
+  "/migrations/nexus/batches/{batchId}/entries":
+    "$ref": "./management/nexus-batches.yaml#/entries"
+  "/migrations/nexus/batches/{batchId}/pause":
+    "$ref": "./management/nexus-batches.yaml#/pause"
+  "/migrations/nexus/batches/{batchId}/resume":
+    "$ref": "./management/nexus-batches.yaml#/resume"
+  "/migrations/nexus/batches/{batchId}/retry":
+    "$ref": "./management/nexus-batches.yaml#/retry"
+  "/migrations/nexus/batches/{batchId}/cancel":
+    "$ref": "./management/nexus-batches.yaml#/cancel"
   "/migration-sources":
     "$ref": "./management/nexus-sources.yaml#/migration_sources"
   "/migration-sources/{sourceId}":

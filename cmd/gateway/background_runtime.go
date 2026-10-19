@@ -9,6 +9,7 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/config"
 	"github.com/ccsert/artifact-gateway/internal/emailnotification"
 	rawmaintenance "github.com/ccsert/artifact-gateway/internal/maintenance/raw"
+	"github.com/ccsert/artifact-gateway/internal/nexusmigration"
 	conanprotocol "github.com/ccsert/artifact-gateway/internal/protocol/conan"
 	npmprotocol "github.com/ccsert/artifact-gateway/internal/protocol/npm"
 	rawprotocol "github.com/ccsert/artifact-gateway/internal/protocol/raw"
@@ -17,6 +18,7 @@ import (
 )
 
 type backgroundRuntime struct {
+	migration       *nexusmigration.Service
 	store           *repository.PostgresStore
 	objects         app.ObjectStore
 	taskQueue       *app.PostgresCacheTaskQueue
@@ -57,6 +59,9 @@ func (r backgroundRuntime) startSchedulers(ctx context.Context, cfg config.Confi
 }
 
 func (r backgroundRuntime) startWorkers(ctx context.Context, cfg config.Config, retention app.NativeRepositoryRetention) {
+	if r.migration != nil && cfg.WorkerKindEnabled("migration") {
+		r.migration.StartWorker(ctx, 5*time.Second, migrationWorkerFormats(cfg))
+	}
 	if cfg.WorkerKindEnabled("recovery") {
 		app.LifecycleJobRecovery{Store: r.store}.Start(ctx, time.Minute)
 	}
@@ -227,4 +232,14 @@ func (r backgroundRuntime) startConanWorkers(ctx context.Context, cfg config.Con
 	if cfg.WorkerKindEnabled("replication") {
 		app.ConanReplication{Store: r.store, Source: r.objects, Destination: r.objects, Metrics: r.metrics}.Start(ctx, time.Minute)
 	}
+}
+
+func migrationWorkerFormats(cfg config.Config) []string {
+	formats := []string{}
+	for _, format := range []string{"maven", "raw"} {
+		if cfg.WorkerFormatEnabled(format) {
+			formats = append(formats, format)
+		}
+	}
+	return formats
 }
