@@ -393,11 +393,11 @@ func NewGatewayHandler(options GatewayOptions) (http.Handler, error) {
 		next:       nativeAPT}
 	mux.Handle("/apt/", aptGroupRouter)
 	conan := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: authenticator}, Authenticator: authenticator, Client: conanClient, Metrics: metrics, Cache: conanCache, NativeObjects: nativeConanObjects, ReadPolicies: store, Quarantine: store}
+	conan.Publications, conan.PublicationScanner = options.ConanPublications, &publicationScanner
 	conanGroupRouter := v2GroupRouter{format: repository.FormatConan, groups: store, repos: store, audit: store, auth: authenticator,
 		conan: &v2GroupConanHandler{conan: &conan, auth: authenticator},
 		next:  conan}
-	mux.Handle("/conan/v2/", conanGroupRouter)
-	mux.Handle("/conan/", conan)
+	mux.Handle("/conan/", conanGroupRouter)
 	mux.Handle("/repository/maven/", nativeMaven)
 	mux.HandleFunc("GET /auth/token", oci.Token)
 	mux.HandleFunc("POST /auth/login", userLoginHandler(store, store, authenticator))

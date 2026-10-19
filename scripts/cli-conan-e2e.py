@@ -74,7 +74,7 @@ def publish(repo, reference, recipe_revision, package_id="", package_revision=""
     committed = json.loads(request("POST", f"/api/v2/conan-publish-sessions/{session_id}:commit", status=200))
     assert committed == {"state": "visible", "revision": recipe_revision}
     expected_digest = digest((name + "\0" + digest(payload) + "\0").encode())
-    native = f"/conan/v2/{repo_name}/conans/{reference}/revisions/{recipe_revision}"
+    native = f"/conan/{repo_name}/v2/conans/{reference}/revisions/{recipe_revision}"
     if package_id:
         native += f"/packages/{package_id}/revisions/{package_revision}"
     native += "/files/" + name

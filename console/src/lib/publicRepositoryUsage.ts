@@ -46,7 +46,7 @@ export function publicRepositoryUsage({
     return [
       {
         label: t("lib.conanRemoteAddress"),
-        code: `conan remote add ${repositoryName} ${origin}/conan/v2/${repositoryName}`,
+        code: `conan remote add ${repositoryName} ${origin}/conan/${repositoryName}`,
       },
     ];
   }

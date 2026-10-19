@@ -55,7 +55,7 @@ func (h conanCacheInvalidationHandler) ServeHTTP(w http.ResponseWriter, r *http.
 		writeError(w, http.StatusBadRequest, "invalid_request", "group, path, member and endpoint are required")
 		return
 	}
-	if _, _, _, _, valid := parseConanPath(http.MethodGet, "/conan/v2/"+request.Group+"/conans/"+request.Path); !valid {
+	if _, _, _, _, valid := parseConanPath(http.MethodGet, "/conan/"+request.Group+"/v2/conans/"+request.Path); !valid {
 		writeError(w, http.StatusBadRequest, "invalid_path", "path must be a supported Conan read endpoint")
 		return
 	}

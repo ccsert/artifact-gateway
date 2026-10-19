@@ -1227,6 +1227,8 @@ type ConanPublishSession struct {
 	State                             string
 	Objects                           []MavenDeclaredObject
 	ExpiresAt                         time.Time
+	Native                            bool
+	Version                           int64
 }
 
 type MemberType string

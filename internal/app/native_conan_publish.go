@@ -215,7 +215,13 @@ func (h nativeConanPublishHandler) withSession(w http.ResponseWriter, r *http.Re
 		writeHostedProblem(w, 500, "internal_error", "load Conan publish session failed")
 		return
 	}
-	h.withRepositoryResource(w, r, session.RepositoryID, operation, conanSessionResource(session), func(Principal, repository.HostedRepository) { next(session) })
+	h.withRepositoryResource(w, r, session.RepositoryID, operation, conanSessionResource(session), func(Principal, repository.HostedRepository) {
+		if operation == RepositoryWrite && session.Native {
+			writeHostedProblem(w, http.StatusConflict, "session_closed", "native Conan sessions are written and committed only by the manifest-last protocol")
+			return
+		}
+		next(session)
+	})
 }
 
 func (h nativeConanPublishHandler) withRepositoryResource(w http.ResponseWriter, r *http.Request, id string, operation RepositoryOperation, resource string, next func(Principal, repository.HostedRepository)) {

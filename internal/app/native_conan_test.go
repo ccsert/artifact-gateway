@@ -50,9 +50,9 @@ func TestNativeConanHostedReadsRecipeRevisionWithoutGroup(t *testing.T) {
 		path string
 		want string
 	}{
-		{"/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions", `"revision":"rrev"`},
-		{"/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions/rrev/files", `"conanfile.py"`},
-		{"/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py", "recipe"},
+		{"/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions", `"revision":"rrev"`},
+		{"/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions/rrev/files", `"conanfile.py"`},
+		{"/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py", "recipe"},
 	} {
 		recorder := httptest.NewRecorder()
 		request := conanRequest(test.path)
@@ -62,7 +62,7 @@ func TestNativeConanHostedReadsRecipeRevisionWithoutGroup(t *testing.T) {
 		}
 	}
 	denied := httptest.NewRecorder()
-	deniedRequest := conanRequest("/conan/v2/conan-hosted/conans/other/1.0/user/stable/revisions/rrev/files/conanfile.py")
+	deniedRequest := conanRequest("/conan/conan-hosted/v2/conans/other/1.0/user/stable/revisions/rrev/files/conanfile.py")
 	handler.ServeHTTP(denied, deniedRequest)
 	if denied.Code != http.StatusForbidden {
 		t.Fatalf("denied status=%d body=%s", denied.Code, denied.Body.String())
@@ -96,7 +96,7 @@ func TestNativeConanHostedDeletesRecipeRevisionWithWriteGrant(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := ConanHandler{Store: store, NativeStore: store, Repositories: store, Authorizer: RepositoryAuthorizer{Grants: store, Legacy: testAuthenticator()}, Authenticator: testAuthenticator(), NativeObjects: objects, Client: &conanAnonymousClient{}}
-	request := httptest.NewRequest(http.MethodDelete, "/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions/rrev", nil)
+	request := httptest.NewRequest(http.MethodDelete, "/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions/rrev", nil)
 	request.Header.Set("Authorization", "Bearer resolver-secret")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
@@ -107,14 +107,14 @@ func TestNativeConanHostedDeletesRecipeRevisionWithWriteGrant(t *testing.T) {
 		t.Fatalf("tombstone: %v", err)
 	}
 	read := httptest.NewRecorder()
-	readRequest := conanRequest("/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py")
+	readRequest := conanRequest("/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py")
 	readRequest.Header.Set("Authorization", "Bearer resolver-secret")
 	handler.ServeHTTP(read, readRequest)
 	if read.Code != http.StatusNotFound {
 		t.Fatalf("read after delete status=%d body=%s", read.Code, read.Body.String())
 	}
 	restore := httptest.NewRecorder()
-	restoreRequest := httptest.NewRequest(http.MethodPost, "/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions/rrev:restore", nil)
+	restoreRequest := httptest.NewRequest(http.MethodPost, "/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions/rrev:restore", nil)
 	restoreRequest.Header.Set("Authorization", "Bearer resolver-secret")
 	handler.ServeHTTP(restore, restoreRequest)
 	if restore.Code != http.StatusNoContent {

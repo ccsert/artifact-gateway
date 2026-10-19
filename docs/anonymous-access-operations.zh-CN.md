@@ -55,7 +55,7 @@ oras manifest fetch gateway.example.com/public/widget:1.0
 Conan 2 remote 的 URL 必须保留 Group。不要将匿名访问用于 Gateway 正常 revision 读取之外的端点。
 
 ```sh
-conan remote add public https://gateway.example.com/conan/v2/public
+conan remote add public https://gateway.example.com/conan/public
 conan install --requires=widget/1.0@team/stable
 ```
 

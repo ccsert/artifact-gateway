@@ -60,8 +60,10 @@ type OIDCValidatorSource interface {
 type Authenticator struct {
 	AdminToken    string
 	ResolverToken string
-	AdminActor    string
-	ResolverActor string
+	// ConanTokenSecret signs only Conan protocol tokens; it is never a login credential.
+	ConanTokenSecret string
+	AdminActor       string
+	ResolverActor    string
 	// LocalAuthMaxAttempts and LocalAuthLockout control temporary lockout for
 	// local password authentication. Zero values use conservative defaults.
 	LocalAuthMaxAttempts int

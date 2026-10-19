@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   aptRepositoryURL,
   aptUsage,
+  conanUsage,
   goProxyURL,
   goUsage,
   npmRegistryURL,
@@ -100,6 +101,18 @@ describe("PyPI usage", () => {
     ).toContain("gateway-widget==1.0.0");
     expect(pypiIndexURL("python-all")).toBe(
       `${window.location.origin}/pypi/python-all/simple/`,
+    );
+  });
+});
+
+describe("Conan usage", () => {
+  it("registers the canonical remote root before Conan appends its API version", () => {
+    const snippets = conanUsage(t, "conan-releases", "widget/1.0@team/stable");
+    expect(snippets[0].code).toBe(
+      `conan remote add conan-releases ${window.location.origin}/conan/conan-releases`,
+    );
+    expect(snippets[1].code).toBe(
+      "conan install --requires=widget/1.0@team/stable -r conan-releases",
     );
   });
 });

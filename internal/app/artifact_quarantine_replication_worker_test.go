@@ -151,6 +151,11 @@ func TestNPMReplicationWorkerParksArtifactQuarantinedAfterPlanCreation(t *testin
 func TestConanReplicationWorkerParksRecipeClosureQuarantinedAfterPlanCreation(t *testing.T) {
 	ctx := context.Background()
 	store, objects := repository.NewMemoryStore(), objectstore.NewMemoryStore()
+	for _, id := range []string{"source", "target"} {
+		if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: id, Name: id, Format: repository.FormatConan}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	reference, revision := "quarantined/1.0/user/stable", "rrev"
 	recipeBody, packageBody := []byte("quarantined recipe"), []byte("quarantined package")
 	recipeDigest, packageDigest := quarantineReplicationDigest(recipeBody), quarantineReplicationDigest(packageBody)

@@ -40,7 +40,7 @@ func TestNativeConanPublishSessionMakesRevisionVisibleOnlyOnCommit(t *testing.T)
 	}
 	sessionID := requirePublishSessionContractKeys(t, created.Body.Bytes())
 	before := httptest.NewRecorder()
-	beforeRequest := httptest.NewRequest(http.MethodGet, "/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py", nil)
+	beforeRequest := httptest.NewRequest(http.MethodGet, "/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py", nil)
 	beforeRequest.Header.Set("Authorization", "Bearer resolver-secret")
 	handler.ServeHTTP(before, beforeRequest)
 	if before.Code != http.StatusNotFound {
@@ -61,7 +61,7 @@ func TestNativeConanPublishSessionMakesRevisionVisibleOnlyOnCommit(t *testing.T)
 		t.Fatalf("commit=%d body=%s", committed.Code, committed.Body.String())
 	}
 	after := httptest.NewRecorder()
-	afterRequest := httptest.NewRequest(http.MethodGet, "/conan/v2/conan-hosted/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py", nil)
+	afterRequest := httptest.NewRequest(http.MethodGet, "/conan/conan-hosted/v2/conans/pkg/1.0/user/stable/revisions/rrev/files/conanfile.py", nil)
 	afterRequest.Header.Set("Authorization", "Bearer resolver-secret")
 	handler.ServeHTTP(after, afterRequest)
 	if after.Code != http.StatusOK || after.Body.String() != string(body) {

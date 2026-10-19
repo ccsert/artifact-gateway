@@ -151,7 +151,7 @@ export function conanUsage(
   return [
     {
       label: t("lib.addRemote"),
-      code: `conan remote add ${repoName} ${base}/conan/v2/${repoName}`,
+      code: `conan remote add ${repoName} ${base}/conan/${repoName}`,
     },
     {
       label: t("lib.installPackage"),

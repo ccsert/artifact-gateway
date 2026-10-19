@@ -835,3 +835,24 @@ func TestLoadSupportsDefaultOffDedicatedEmailWorker(t *testing.T) {
 		t.Fatal("unsafe email config failure")
 	}
 }
+
+func TestConanTokenSecretIsOptionalAndSeparateFromLoginCredentials(t *testing.T) {
+	t.Setenv("GATEWAY_DATABASE_URL", "postgres://gateway:password@db:5432/gateway")
+	t.Setenv("GATEWAY_RUSTFS_ENDPOINT", "http://rustfs:9000")
+	t.Setenv("GATEWAY_RUSTFS_BUCKET", "gateway-cache")
+	t.Setenv("GATEWAY_RUSTFS_ACCESS_KEY", "rustfs-user")
+	t.Setenv("GATEWAY_RUSTFS_SECRET_KEY", "rustfs-secret")
+	t.Setenv("GATEWAY_ADMIN_TOKEN", strings.Repeat("a", 32))
+	t.Setenv("GATEWAY_RESOLVER_TOKEN", strings.Repeat("r", 32))
+	for _, secret := range []string{"", strings.Repeat("c", 32), "short", strings.Repeat("a", 32), strings.Repeat("r", 32)} {
+		t.Setenv("GATEWAY_CONAN_TOKEN_SECRET", secret)
+		cfg, err := Load()
+		valid := secret == "" || secret == strings.Repeat("c", 32)
+		if valid && (err != nil || cfg.ConanTokenSecret != secret) {
+			t.Fatalf("optional/separate secret rejected: %v", err)
+		}
+		if !valid && (err == nil || strings.Contains(err.Error(), secret)) {
+			t.Fatal("invalid secret accepted or leaked")
+		}
+	}
+}

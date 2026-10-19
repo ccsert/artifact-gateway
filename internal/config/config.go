@@ -127,6 +127,7 @@ type Config struct {
 	ConanCacheTTL                   time.Duration
 	AdminToken                      string
 	ResolverToken                   string
+	ConanTokenSecret                string
 	AdminActor                      string
 	ResolverActor                   string
 	LocalAuthMaxFailedAttempts      int
@@ -208,6 +209,7 @@ func Load() (Config, error) {
 		ConanCacheTTL:                   15 * time.Minute,
 		AdminToken:                      os.Getenv("GATEWAY_ADMIN_TOKEN"),
 		ResolverToken:                   os.Getenv("GATEWAY_RESOLVER_TOKEN"),
+		ConanTokenSecret:                os.Getenv("GATEWAY_CONAN_TOKEN_SECRET"),
 		AdminActor:                      value("GATEWAY_ADMIN_ACTOR", "gateway-admin"),
 		ResolverActor:                   value("GATEWAY_RESOLVER_ACTOR", "gateway-resolver"),
 		LocalAuthMaxFailedAttempts:      5,
@@ -265,6 +267,9 @@ func Load() (Config, error) {
 	}
 	if err := configureOTLPLogs(&cfg); err != nil {
 		return Config{}, err
+	}
+	if cfg.ConanTokenSecret != "" && (len(cfg.ConanTokenSecret) < 32 || cfg.ConanTokenSecret == cfg.ResolverToken || cfg.ConanTokenSecret == cfg.AdminToken) {
+		return Config{}, fmt.Errorf("GATEWAY_CONAN_TOKEN_SECRET requires at least 32 bytes and must differ from login credentials")
 	}
 	if cfg.DatabaseURL == "" || cfg.RustFSEndpoint == "" || cfg.RustFSBucket == "" || cfg.RustFSAccessKey == "" || cfg.RustFSSecretKey == "" || cfg.AdminToken == "" || cfg.ResolverToken == "" {
 		return Config{}, fmt.Errorf("GATEWAY_DATABASE_URL, GATEWAY_RUSTFS_ENDPOINT, GATEWAY_RUSTFS_BUCKET, GATEWAY_RUSTFS_ACCESS_KEY, GATEWAY_RUSTFS_SECRET_KEY, GATEWAY_ADMIN_TOKEN, and GATEWAY_RESOLVER_TOKEN are required")

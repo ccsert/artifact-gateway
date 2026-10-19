@@ -43,12 +43,13 @@ type GatewayCaches struct {
 // supplies PostgreSQL metadata and verified S3/RustFS storage before invoking
 // NewGatewayHandler. Tests and client fixtures explicitly supply test stores.
 type GatewayOptions struct {
-	Dependencies  Dependencies
-	Store         GatewayStore
-	Storage       ObjectStores
-	Adapter       Adapter
-	Authenticator Authenticator
-	Caches        GatewayCaches
+	Dependencies      Dependencies
+	Store             GatewayStore
+	Storage           ObjectStores
+	Adapter           Adapter
+	Authenticator     Authenticator
+	ConanPublications repository.ConanNativePublicationStore
+	Caches            GatewayCaches
 	// Upstream defaults to the standard HTTP transport. If it also implements
 	// another format's client port, that implementation is used for that format.
 	Upstream OCIClient
@@ -75,6 +76,9 @@ func (o GatewayOptions) validate() error {
 	}
 	if o.Upstream != nil && nilDependency(o.Upstream) {
 		failures = append(failures, errors.New("upstream client is nil"))
+	}
+	if o.ConanPublications != nil && nilDependency(o.ConanPublications) {
+		failures = append(failures, errors.New("conan publication capability is nil"))
 	}
 	for _, configured := range []struct {
 		name  string

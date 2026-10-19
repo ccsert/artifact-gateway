@@ -304,10 +304,10 @@ the contract's server base. Planned commands omit the leading `agctl`.
 | `POST /repositories/{repositoryId}/cache/negative:clear`<br>`clearProxyNegativeCache` | `cache clear-negative --repo <id>` | #137 | M2 | RA | W |
 | `POST /repositories/{repositoryId}/cache/refresh`<br>`refreshProxyCache` | `cache refresh --repo <id>` | #137 | M2 | RA | W |
 | `GET /repositories/{repositoryId}/proxy/health`<br>`getProxyHealth` | `proxy health --repo <id>` | #137 | M2 | R | Q |
-| `POST /repositories/{repositoryId}/conan-publish-sessions`<br>`createConanPublishSession` | not exposed: Conan session orchestration is outside the CLI M1 scope; native Conan publication is tracked by #312 | #132 / #312 | N/A | W | N |
-| `GET /conan-publish-sessions/{sessionId}`<br>`getConanPublishSession` | not exposed: Conan session orchestration is outside the CLI M1 scope; native Conan publication is tracked by #312 | #132 / #312 | N/A | R | N |
-| `PUT /conan-publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadConanPublishObject` | not exposed: Conan session orchestration is outside the CLI M1 scope; native Conan publication is tracked by #312 | #132 / #312 | N/A | W | N |
-| `POST /conan-publish-sessions/{sessionId}:commit`<br>`commitConanPublishSession` | not exposed: Conan session orchestration is outside the CLI M1 scope; native Conan publication is tracked by #312 | #132 / #312 | N/A | W | N |
+| `POST /repositories/{repositoryId}/conan-publish-sessions`<br>`createConanPublishSession` | not exposed: Conan session orchestration is outside the CLI M1 scope; official Conan 2 upload owns native publication | #132 / #312 | N/A | W | N |
+| `GET /conan-publish-sessions/{sessionId}`<br>`getConanPublishSession` | not exposed: Conan session orchestration is outside the CLI M1 scope; official Conan 2 upload owns native publication | #132 / #312 | N/A | R | N |
+| `PUT /conan-publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadConanPublishObject` | not exposed: Conan session orchestration is outside the CLI M1 scope; official Conan 2 upload owns native publication | #132 / #312 | N/A | W | N |
+| `POST /conan-publish-sessions/{sessionId}:commit`<br>`commitConanPublishSession` | not exposed: Conan session orchestration is outside the CLI M1 scope; official Conan 2 upload owns native publication | #132 / #312 | N/A | W | N |
 | `GET /publish-sessions/{sessionId}`<br>`getPublishSession` | `publish status <session>` | #132 | M1 implemented | R | U |
 | `PUT /publish-sessions/{sessionId}/objects/{objectName}`<br>`uploadPublishObject` | `publish upload <session>` | #132 | M1 implemented | W | U |
 | `POST /publish-sessions/{sessionId}:commit`<br>`commitPublishSession` | `publish commit <session>` | #132 | M1 implemented | W | U |
@@ -315,7 +315,7 @@ the contract's server base. Planned commands omit the leading `agctl`.
 ## Additional protocol operations in the native bundle
 
 Management operations repeat in the native bundle and reuse the table above;
-they are not implemented twice. The 36 additional operations below are
+they are not implemented twice. The 43 additional operations below are
 classified one by one. Native URLs follow each protocol's server override and
 real routes and must not be joined to `/api/v2` blindly. Retired Nexus repository aliases are not part of this contract.
 
@@ -325,6 +325,13 @@ real routes and must not be joined to `/api/v2` blindly. Retired Nexus repositor
 | `HEAD /npm/{repository}/-/package/{package}/dist-tags`<br>`headNPMDistTags` | native npm client manages dist-tags; agctl does not orchestrate this protocol action | #308 | N/A | native-format authorization | N: npm dist-tag owns this action; no separate agctl command |
 | `PUT /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`setNPMDistTag` | native npm client manages dist-tags; agctl does not orchestrate this protocol action | #308 | N/A | native-format authorization | N: npm dist-tag owns this action; no separate agctl command |
 | `DELETE /npm/{repository}/-/package/{package}/dist-tags/{tag}`<br>`deleteNPMDistTag` | native npm client manages dist-tags; agctl does not orchestrate this protocol action | #308 | N/A | native-format authorization | N: npm dist-tag owns this action; no separate agctl command |
+| `GET /conan/{repository}/v1/ping`<br>`pingConanRemote` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
+| `GET /conan/{repository}/v2/users/authenticate`<br>`authenticateConanRemote` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
+| `GET /conan/{repository}/v2/users/check_credentials`<br>`checkConanCredentials` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
+| `GET /conan/{repository}/v2/conans/{path}`<br>`readConanRepresentation` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
+| `HEAD /conan/{repository}/v2/conans/{path}`<br>`headConanRepresentation` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
+| `PUT /conan/{repository}/v2/conans/{name}/{version}/{user}/{channel}/revisions/{recipeRevision}/files/{file}`<br>`uploadConanRecipeFile` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
+| `PUT /conan/{repository}/v2/conans/{name}/{version}/{user}/{channel}/revisions/{recipeRevision}/packages/{packageId}/revisions/{packageRevision}/files/{file}`<br>`uploadConanPackageFile` | native Conan 2 client; `repo connect` onboarding | #312 | N/A | native-format authorization | N: official Conan client owns the wire workflow |
 | `GET /raw/{repository}/{path}`<br>`readRawContent` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `HEAD /raw/{repository}/{path}`<br>`headRawContent` | no separate CLI protocol client; native client and onboarding configuration | #130 | N/A | native-format authorization | N: the CLI neither registers nor sends this protocol action |
 | `PUT /raw/{repository}/{path}`<br>`putRawHostedContent` | `publish raw` | #132 | M1 implemented | W | U: size/digest plus conflict and read-back |

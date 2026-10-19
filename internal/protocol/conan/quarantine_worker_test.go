@@ -12,6 +12,11 @@ import (
 func TestNativePromotionWorkerBlocksRecipeAndPackageQuarantinedAfterEnqueue(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
+	for _, id := range []string{"source", "target"} {
+		if _, err := store.CreateHostedRepository(ctx, repository.HostedRepository{ID: id, Name: id, Format: repository.FormatConan}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	reference, revision := "quarantined/1.0/user/stable", "rrev"
 	recipeDigest := "sha256:" + strings.Repeat("a", 64)
 	packageDigest := "sha256:" + strings.Repeat("b", 64)

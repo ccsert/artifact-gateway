@@ -146,6 +146,12 @@ func TestNativeArtifactScanResolverResolvesGoModuleAssets(t *testing.T) {
 func TestNativeArtifactScanResolverResolvesVisibleConanRevisions(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
+	for _, id := range []string{"conan"} {
+		if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: id, Name: id, Format: repository.FormatConan}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	objects := objectstore.NewMemoryStore()
 	reference, recipeRevision := "widget/1.2.3@team/stable", "rrev"
 	recipeDigest := testScanDigest("recipe revision")

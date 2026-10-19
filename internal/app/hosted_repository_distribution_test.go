@@ -482,7 +482,7 @@ func TestRepositoryConanPromotionHTTPPublishesTargetRevision(t *testing.T) {
 	if err = (conanprotocol.NativePromotion{Store: store}).RunJobs(ctx, 10); err != nil {
 		t.Fatal(err)
 	}
-	read := httptest.NewRequest(http.MethodGet, "/conan/v2/"+target.Name+"/conans/"+reference+"/revisions/"+revision+"/files/conanfile.py", nil)
+	read := httptest.NewRequest(http.MethodGet, "/conan/"+target.Name+"/v2/conans/"+reference+"/revisions/"+revision+"/files/conanfile.py", nil)
 	read.Header.Set("Authorization", "Bearer "+authenticator.IssueToken("promoter"))
 	resolved := httptest.NewRecorder()
 	handler.ServeHTTP(resolved, read)

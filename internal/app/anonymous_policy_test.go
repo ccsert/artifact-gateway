@@ -96,7 +96,7 @@ func TestAnonymousPolicyDenialsAreAuditedBeforeProtocolResponses(t *testing.T) {
 		{oci, http.MethodPost, "/v2/private/app/manifests/latest", http.StatusMethodNotAllowed, "oci"},
 		{maven, http.MethodGet, "/maven/private/com/example/app.pom", http.StatusUnauthorized, "maven"},
 		{maven, http.MethodPost, "/maven/private/com/example/app.pom", http.StatusMethodNotAllowed, "maven"},
-		{conan, http.MethodPost, "/conan/v2/private/conans/pkg/1.0/u/c/revisions", http.StatusNotFound, "conan"},
+		{conan, http.MethodPost, "/conan/private/v2/conans/pkg/1.0/u/c/revisions", http.StatusNotFound, "conan"},
 	}
 	for _, tc := range requests {
 		response := httptest.NewRecorder()
@@ -134,8 +134,8 @@ func TestAnonymousConanPolicyNeverAllowsWrites(t *testing.T) {
 	}
 	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Cache: NewConanCache(objectstore.NewMemoryStore())}
 	for _, request := range []*http.Request{
-		httptest.NewRequest(http.MethodDelete, "/conan/v2/public/conans/pkg/1.0/u/c/revisions/rev", nil),
-		httptest.NewRequest(http.MethodPost, "/conan/v2/public/conans/pkg/1.0/u/c/revisions/rev:restore", nil),
+		httptest.NewRequest(http.MethodDelete, "/conan/public/v2/conans/pkg/1.0/u/c/revisions/rev", nil),
+		httptest.NewRequest(http.MethodPost, "/conan/public/v2/conans/pkg/1.0/u/c/revisions/rev:restore", nil),
 	} {
 		response := httptest.NewRecorder()
 		h.ServeHTTP(response, request)

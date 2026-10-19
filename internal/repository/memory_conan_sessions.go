@@ -14,9 +14,9 @@ func (s *MemoryStore) CreateConanPublishSession(_ context.Context, session Conan
 	if session.State == "" {
 		session.State = "open"
 	}
-	s.conanSessions[session.ID] = session
+	s.conanSessions[session.ID] = cloneConanSession(session)
 	s.conanUploads[session.ID] = map[string]string{}
-	return session, nil
+	return cloneConanSession(session), nil
 }
 
 func (s *MemoryStore) GetConanPublishSession(_ context.Context, id string) (ConanPublishSession, error) {
@@ -26,7 +26,7 @@ func (s *MemoryStore) GetConanPublishSession(_ context.Context, id string) (Cona
 	if !ok {
 		return ConanPublishSession{}, ErrNotFound
 	}
-	return session, nil
+	return cloneConanSession(session), nil
 }
 
 func (s *MemoryStore) MarkConanPublishObject(_ context.Context, sessionID, name, objectKey string) error {
@@ -36,7 +36,7 @@ func (s *MemoryStore) MarkConanPublishObject(_ context.Context, sessionID, name,
 	if !ok {
 		return ErrNotFound
 	}
-	if session.State != "open" || time.Now().After(session.ExpiresAt) {
+	if session.Native || session.State != "open" || time.Now().After(session.ExpiresAt) {
 		return ErrDisabled
 	}
 	for _, object := range session.Objects {
@@ -69,7 +69,7 @@ func (s *MemoryStore) CommitConanPublishSession(_ context.Context, sessionID str
 	if !ok {
 		return ErrNotFound
 	}
-	if session.State != "open" || time.Now().After(session.ExpiresAt) {
+	if session.Native || session.State != "open" || time.Now().After(session.ExpiresAt) {
 		return ErrDisabled
 	}
 	if len(s.conanUploads[sessionID]) != len(session.Objects) {

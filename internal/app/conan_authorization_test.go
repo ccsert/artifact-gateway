@@ -37,7 +37,7 @@ func TestConanAnonymousReadRequiresPublicGroupAndMember(t *testing.T) {
 	}
 	client := &conanAnonymousClient{}
 	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(objectstore.NewMemoryStore()), Metrics: &Metrics{}}
-	path := "/conan/v2/%s/conans/pkg/1.0/user/stable/revisions"
+	path := "/conan/%s/v2/conans/pkg/1.0/user/stable/revisions"
 	for _, group := range []string{"private", "partial"} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, fmt.Sprintf(path, group), nil))
@@ -65,7 +65,7 @@ func TestConanAnonymousReadDoesNotUsePrivateMemberCache(t *testing.T) {
 	}
 	h := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: &conanAnonymousClient{}, Cache: cache, Metrics: &Metrics{}}
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/conan/v2/central/conans/"+path, nil))
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/conan/central/v2/conans/"+path, nil))
 	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "private") {
 		t.Fatalf("response=%d body=%q", w.Code, w.Body.String())
 	}
@@ -83,7 +83,7 @@ func TestConanAuthenticatedReadChecksMemberAuthorizationBeforeCache(t *testing.T
 	}
 	auth := Authenticator{ResolverToken: "resolver-secret", RepositoryReaders: map[string][]string{"build-agent": {"central", "public"}}}
 	w := httptest.NewRecorder()
-	ConanHandler{Store: store, Authenticator: auth, Client: &conanAnonymousClient{}, Cache: cache}.ServeHTTP(w, conanRequest("/conan/v2/central/conans/"+path))
+	ConanHandler{Store: store, Authenticator: auth, Client: &conanAnonymousClient{}, Cache: cache}.ServeHTTP(w, conanRequest("/conan/central/v2/conans/"+path))
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}
@@ -123,7 +123,7 @@ func TestConanUsesManagedRepositoryGrantsForBoundMembers(t *testing.T) {
 		Cache:         NewConanCache(objectstore.NewMemoryStore()),
 		Metrics:       metrics,
 	}
-	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
+	path := "/conan/central/v2/conans/pkg/1.0/user/stable/revisions"
 	readerRequest := httptest.NewRequest(http.MethodGet, path, nil)
 	readerRequest.SetBasicAuth("reader", "resolver-secret")
 	readerResponse := httptest.NewRecorder()
@@ -158,7 +158,7 @@ func TestConanBasicAuthenticationRespectsGroupAndMemberPermissions(t *testing.T)
 	store := repository.NewMemoryStore()
 	member := repository.Member{Name: "hosted", Type: repository.MemberHosted, Endpoint: "https://hosted.example"}
 	_, _ = store.CreateConanGroup(context.Background(), repository.Group{Name: "central", Members: []repository.Member{member}})
-	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
+	path := "/conan/central/v2/conans/pkg/1.0/user/stable/revisions"
 
 	for name, readers := range map[string][]string{
 		"allowed": {"central", "hosted"},

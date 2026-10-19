@@ -8,6 +8,12 @@ import (
 
 func TestMemoryConanPublishSessionRequiresEveryDeclaredObject(t *testing.T) {
 	store := NewMemoryStore()
+	for _, id := range []string{"repo"} {
+		if _, err := store.CreateHostedRepository(context.Background(), HostedRepository{ID: id, Name: id, Format: FormatConan}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	session, err := store.CreateConanPublishSession(context.Background(), ConanPublishSession{
 		ID: "session", RepositoryID: "repo", Publisher: "publisher", Kind: "recipe",
 		Reference: "pkg/1.0/user/stable", RecipeRevision: "rrev", State: "open", ExpiresAt: time.Now().Add(time.Hour),
@@ -36,6 +42,12 @@ func TestMemoryConanPublishSessionRequiresEveryDeclaredObject(t *testing.T) {
 
 func TestTombstoneConanRecipeAlsoHidesPackages(t *testing.T) {
 	store := NewMemoryStore()
+	for _, id := range []string{"repo"} {
+		if _, err := store.CreateHostedRepository(context.Background(), HostedRepository{ID: id, Name: id, Format: FormatConan}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	ctx := context.Background()
 	if err := store.StageConanObject(ctx, ConanObjectIntent{RepositoryID: "repo", ObjectKey: "recipe", Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Size: 1}); err != nil {
 		t.Fatal(err)

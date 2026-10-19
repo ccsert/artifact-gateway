@@ -15,6 +15,12 @@ import (
 func TestConanReplicationCopiesRecipeAndPackageToTargetOwnedKeys(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
+	for _, id := range []string{"source", "target"} {
+		if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: id, Name: id, Format: repository.FormatConan}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	objects := objectstore.NewMemoryStore()
 	reference, revision := "widget/1.0/user/stable", "rrev"
 	recipeBody, packageBody := []byte("recipe"), []byte("package")
@@ -64,6 +70,12 @@ func TestConanReplicationCopiesRecipeAndPackageToTargetOwnedKeys(t *testing.T) {
 func TestConanReplicationRejectsTombstonedSource(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
+	for _, id := range []string{"source", "target"} {
+		if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: id, Name: id, Format: repository.FormatConan}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	objects := objectstore.NewMemoryStore()
 	body := []byte("source visibility")
 	digest := conanReplicationDigest(body)
@@ -92,6 +104,12 @@ func TestConanReplicationRejectsTombstonedSource(t *testing.T) {
 func TestConanReplicationDoesNotPublishRecipeWhenAnyTargetObjectIsUnavailable(t *testing.T) {
 	ctx := context.Background()
 	store := repository.NewMemoryStore()
+	for _, id := range []string{"source", "target"} {
+		if _, err := store.CreateHostedRepository(context.Background(), repository.HostedRepository{ID: id, Name: id, Format: repository.FormatConan}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	objects := objectstore.NewMemoryStore()
 	reference, revision := "widget/1.0/user/stable", "rrev"
 	recipeBody, packageBody := []byte("recipe"), []byte("package")

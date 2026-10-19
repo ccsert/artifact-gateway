@@ -456,7 +456,7 @@ status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}
   --data "$conan_payload" "$gateway_url/api/v1/conan/groups")
 [[ "$status" == 201 ]] || { printf 'Creating recovery Conan Group returned HTTP %s.\n' "$status" >&2; exit 1; }
 status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-  "$gateway_url/conan/v2/$conan_group/conans/pkg/1.0/user/stable/revisions")
+  "$gateway_url/conan/$conan_group/v2/conans/pkg/1.0/user/stable/revisions")
 [[ "$status" == 502 ]] || { printf 'Recovery Conan audit request returned HTTP %s.\n' "$status" >&2; exit 1; }
 
 for replication in \

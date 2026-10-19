@@ -18,7 +18,7 @@ func TestConanProxyTLSE2EPinsVerifiedAddressAndUsesPersistentCache(t *testing.T)
 	var calls, lookups, dials atomic.Int32
 	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		if r.URL.Path != "/conans/pkg/1.0/user/stable/revisions" {
+		if r.URL.Path != "/v2/conans/pkg/1.0/user/stable/revisions" {
 			http.NotFound(w, r)
 			return
 		}
@@ -48,7 +48,7 @@ func TestConanProxyTLSE2EPinsVerifiedAddressAndUsesPersistentCache(t *testing.T)
 	objects := objectstore.NewMemoryStore()
 	first := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Cache: NewDefaultConanCache(objects, []string{"example.com"})}
 	second := ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: UpstreamClient{HTTPClient: upstream.Client()}, Cache: NewDefaultConanCache(objects, []string{"example.com"})}
-	path := "/conan/v2/central/conans/pkg/1.0/user/stable/revisions"
+	path := "/conan/central/v2/conans/pkg/1.0/user/stable/revisions"
 	for _, handler := range []ConanHandler{first, second} {
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, conanRequest(path))
@@ -125,7 +125,7 @@ func TestConanProxyAllowlistIsolatedPerMember(t *testing.T) {
 	client := &conanAnonymousClient{}
 	for group, want := range map[string]int{"allowed-group": http.StatusOK, "denied-group": http.StatusForbidden} {
 		w := httptest.NewRecorder()
-		ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(objectstore.NewMemoryStore())}.ServeHTTP(w, conanRequest("/conan/v2/"+group+"/conans/pkg/1.0/user/stable/revisions"))
+		ConanHandler{Store: store, Authenticator: testAuthenticator(), Client: client, Cache: NewConanCache(objectstore.NewMemoryStore())}.ServeHTTP(w, conanRequest("/conan/"+group+"/v2/conans/pkg/1.0/user/stable/revisions"))
 		if w.Code != want {
 			t.Fatalf("%s status=%d", group, w.Code)
 		}

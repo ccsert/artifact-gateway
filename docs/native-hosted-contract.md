@@ -31,8 +31,11 @@ object reference is committed. OCI uses the Registry V2 upload, blob, manifest,
 and tag routes directly. Maven standard `PUT` traffic creates an implicit
 server-side staging session under a derived coordinate. It is finalized by
 `POST /repository/maven/{repository}/coordinates/{coordinate}:commit`; this
-POST is the explicit visibility signal. Conan uses a separate management publication
-contract described by the current compatibility baseline. Maven sessions
+POST is the explicit visibility signal. Conan 2 uploads at `/conan/{repository}/v2/conans/.../files/{file}`
+reuse the durable recipe/package sessions. A complete validated
+`conanmanifest.txt` commits the revision; clients do not call management commit.
+The explicit management publication API remains available. See
+[Conan native publication](conan-native-publication.md). Maven sessions
 expire and cannot be reused after `committed`, `aborted`, or `expired`.
 `Idempotency-Key` scopes Maven
 session creation or coordinate commit to its authenticated actor and request

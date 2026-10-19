@@ -385,7 +385,7 @@ func (h repositoryManagementHandler) writeGroupMutation(w http.ResponseWriter, g
 
 func (h repositoryManagementHandler) validHostedGroup(r *http.Request, group repository.HostedGroup) bool {
 	profile, supported := repository.FormatProfileFor(group.Format)
-	if !hostedRepositoryName.MatchString(group.Name) || !supported || !profile.GroupSupported || len(group.Members) == 0 {
+	if !hostedRepositoryName.MatchString(group.Name) || group.Format == repository.FormatConan && group.Name == "v2" || !supported || !profile.GroupSupported || len(group.Members) == 0 {
 		return false
 	}
 	seen := map[string]bool{}

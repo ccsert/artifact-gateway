@@ -1180,7 +1180,7 @@ func TestV2GroupConanHostedPreferredOverProxy(t *testing.T) {
 	client := &conanFixtureClient{proxyURL: upstream.URL}
 	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: nil, Raw: nil, Conan: NewConanCache(objectstore.NewMemoryStore()), Maintenance: nil}, Upstream: conanGatewayClient{client}})
 
-	req := httptest.NewRequest(http.MethodGet, "/conan/v2/conan-group/conans/"+reference+"/revisions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/conan/conan-group/v2/conans/"+reference+"/revisions", nil)
 	authorize(req, "resolver-secret")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -1220,7 +1220,7 @@ func TestV2GroupConanFallsBackToProxy(t *testing.T) {
 	client := &conanFixtureClient{proxyURL: upstream.URL}
 	handler := newTestGateway(t, GatewayOptions{Dependencies: Dependencies{}, Store: store, Adapter: TestAdapter{}, Authenticator: testAuthenticator(), Storage: ObjectStores{repository.FormatConan: objects}, Caches: GatewayCaches{OCI: NewDefaultOCICache(objectstore.NewMemoryStore(), nil), Maven: nil, Raw: nil, Conan: NewConanCache(objectstore.NewMemoryStore()), Maintenance: nil}, Upstream: conanGatewayClient{client}})
 
-	req := httptest.NewRequest(http.MethodGet, "/conan/v2/conan-group/conans/pkg/1.0/user/stable/revisions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/conan/conan-group/v2/conans/pkg/1.0/user/stable/revisions", nil)
 	authorize(req, "resolver-secret")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)

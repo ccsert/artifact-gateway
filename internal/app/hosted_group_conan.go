@@ -23,6 +23,11 @@ func (h v2GroupConanHandler) serve(w http.ResponseWriter, r *http.Request, resol
 		http.NotFound(w, r)
 		return
 	}
+	principal, authenticated := h.authenticate(r, group.ID)
+	if conanHandshakeKind(r) != "" {
+		h.conan.serveConanHandshake(w, r, conanHandshakeScope{ID: group.ID, Name: group.Name, AnonymousRead: group.AnonymousRead && anonymousAccessAllowed(r.Context(), resolver.groups)}, principal, authenticated)
+		return
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -32,9 +37,8 @@ func (h v2GroupConanHandler) serve(w http.ResponseWriter, r *http.Request, resol
 		http.NotFound(w, r)
 		return
 	}
-	principal, authenticated := h.conan.authenticate(r)
 	if !authenticated {
-		if group.AnonymousRead && anonymousReadMethod(r.Method) && anonymousAccessAllowed(r.Context(), resolver.groups) {
+		if r.Header.Get("Authorization") == "" && group.AnonymousRead && anonymousReadMethod(r.Method) && anonymousAccessAllowed(r.Context(), resolver.groups) {
 			principal = anonymousPrincipal()
 		} else {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Artifact Gateway Conan"`)
@@ -90,6 +94,13 @@ func (h v2GroupConanHandler) serve(w http.ResponseWriter, r *http.Request, resol
 	http.NotFound(w, r)
 }
 
+func (h v2GroupConanHandler) authenticate(r *http.Request, id string) (Principal, bool) {
+	if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer conan2.") {
+		return h.auth.AuthenticateConanToken(r.Context(), r.Header.Get("Authorization"), id)
+	}
+	return h.conan.authenticate(r)
+}
+
 // serveHostedRead attempts a read against a native hosted Conan repository
 // without writing a response when the content is absent, so the caller can
 // fall through to the next group member. It reports whether the request was
@@ -141,7 +152,8 @@ func conanContentIsEmptyListing(path, file string, content conanCacheEntry) bool
 	case strings.HasSuffix(path, "/files"):
 		return len(listing.Files) == 0
 	case strings.HasSuffix(path, "/search"):
-		return len(listing.Packages) == 0
+		var packages map[string]json.RawMessage
+		return json.Unmarshal(content.body, &packages) == nil && len(packages) == 0
 	}
 	return false
 }

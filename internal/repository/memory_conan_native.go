@@ -23,9 +23,13 @@ func (s *MemoryStore) StageConanObject(_ context.Context, object ConanObjectInte
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if existing, ok := s.conanObjects[object.ObjectKey]; ok {
-		if existing.ClaimedAt.IsZero() {
-			return nil
+		if existing.Digest != object.Digest || existing.Size != object.Size {
+			return ErrNameExists
 		}
+		if !existing.CollectedAt.IsZero() {
+			return ErrDisabled
+		}
+		return nil
 	}
 	object.CreatedAt = time.Now().UTC()
 	s.conanObjects[object.ObjectKey] = object
@@ -37,10 +41,10 @@ func (s *MemoryStore) ListReclaimableConanObjects(_ context.Context, before time
 	defer s.mu.RUnlock()
 	out := []ConanObjectIntent{}
 	for _, object := range s.conanObjects {
-		if len(out) == limit || !object.CollectedAt.IsZero() || s.conanObjectVisibleLocked(object.ObjectKey) {
+		if len(out) == limit || !object.CollectedAt.IsZero() || s.conanObjectVisibleLocked(object.ObjectKey) || s.conanObjectInOpenSessionLocked(object.ObjectKey) {
 			continue
 		}
-		eligible := false
+		eligible := object.ClaimedAt.IsZero() && !object.CreatedAt.After(before)
 		for _, asset := range s.conanAssets {
 			if asset.ObjectKey != object.ObjectKey {
 				continue
@@ -54,6 +58,21 @@ func (s *MemoryStore) ListReclaimableConanObjects(_ context.Context, before time
 		}
 	}
 	return out, nil
+}
+
+func (s *MemoryStore) conanObjectInOpenSessionLocked(key string) bool {
+	for id, uploads := range s.conanUploads {
+		session := s.conanSessions[id]
+		if session.State != "open" || !session.ExpiresAt.After(time.Now()) {
+			continue
+		}
+		for _, staged := range uploads {
+			if staged == key {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *MemoryStore) ConanObjectHasVisibleReference(_ context.Context, key string) (bool, error) {
@@ -93,19 +112,21 @@ func (s *MemoryStore) MarkConanObjectCollected(_ context.Context, key string) er
 func (s *MemoryStore) PutConanRecipeRevision(_ context.Context, revision ConanRecipeRevision, assets []ConanAsset) (ConanRecipeRevision, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.putConanRecipeRevisionLocked(revision, assets)
+}
+
+func (s *MemoryStore) putConanRecipeRevisionLocked(revision ConanRecipeRevision, assets []ConanAsset) (ConanRecipeRevision, error) {
 	key := conanRecipeKey(revision.RepositoryID, revision.Reference, revision.Revision)
 	if existing, ok := s.conanRecipes[key]; ok {
+		if existing.Digest != revision.Digest || existing.State != "visible" {
+			return ConanRecipeRevision{}, ErrNameExists
+		}
 		return existing, nil
 	}
-	for _, asset := range assets {
-		object := s.conanObjects[asset.ObjectKey]
-		if object.ObjectKey == "" || !object.ClaimedAt.IsZero() {
-			return ConanRecipeRevision{}, ErrDisabled
-		}
-		object.ClaimedAt = time.Now().UTC()
-		s.conanObjects[asset.ObjectKey] = object
-		s.conanAssets[conanAssetKey(asset)] = asset
+	if err := s.prepareConanAssetsLocked(revision.RepositoryID, assets); err != nil {
+		return ConanRecipeRevision{}, err
 	}
+	s.claimConanAssetsLocked(assets)
 	revision.State, revision.CreatedAt = "visible", time.Now().UTC()
 	s.conanRecipes[key] = revision
 	return revision, nil
@@ -114,25 +135,55 @@ func (s *MemoryStore) PutConanRecipeRevision(_ context.Context, revision ConanRe
 func (s *MemoryStore) PutConanPackageRevision(_ context.Context, revision ConanPackageRevision, assets []ConanAsset) (ConanPackageRevision, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.putConanPackageRevisionLocked(revision, assets)
+}
+
+func (s *MemoryStore) putConanPackageRevisionLocked(revision ConanPackageRevision, assets []ConanAsset) (ConanPackageRevision, error) {
 	if recipe, ok := s.conanRecipes[conanRecipeKey(revision.RepositoryID, revision.Reference, revision.RecipeRevision)]; !ok || recipe.State != "visible" {
 		return ConanPackageRevision{}, ErrNotFound
 	}
 	key := conanPackageKey(revision.RepositoryID, revision.Reference, revision.RecipeRevision, revision.PackageID, revision.Revision)
 	if existing, ok := s.conanPackages[key]; ok {
+		if existing.Digest != revision.Digest || existing.State != "visible" {
+			return ConanPackageRevision{}, ErrNameExists
+		}
 		return existing, nil
 	}
+	if err := s.prepareConanAssetsLocked(revision.RepositoryID, assets); err != nil {
+		return ConanPackageRevision{}, err
+	}
+	s.claimConanAssetsLocked(assets)
+	revision.State, revision.CreatedAt = "visible", time.Now().UTC()
+	s.conanPackages[key] = revision
+	return revision, nil
+}
+
+func (s *MemoryStore) prepareConanAssetsLocked(repositoryID string, assets []ConanAsset) error {
+	var additional int64
+	for _, asset := range assets {
+		object, ok := s.conanObjects[asset.ObjectKey]
+		if !ok || asset.RepositoryID != repositoryID || object.Digest != asset.Digest || object.Size != asset.Size || !object.ClaimedAt.IsZero() || !object.CollectedAt.IsZero() {
+			return ErrDisabled
+		}
+		additional += asset.Size
+	}
+	capacity, err := s.repositoryCapacityLocked(repositoryID)
+	if err != nil {
+		return err
+	}
+	if capacity.QuotaBytes > 0 && additional > capacity.QuotaBytes-capacity.UsedBytes {
+		return ErrQuotaExceeded
+	}
+	return nil
+}
+
+func (s *MemoryStore) claimConanAssetsLocked(assets []ConanAsset) {
 	for _, asset := range assets {
 		object := s.conanObjects[asset.ObjectKey]
-		if object.ObjectKey == "" || !object.ClaimedAt.IsZero() {
-			return ConanPackageRevision{}, ErrDisabled
-		}
 		object.ClaimedAt = time.Now().UTC()
 		s.conanObjects[asset.ObjectKey] = object
 		s.conanAssets[conanAssetKey(asset)] = asset
 	}
-	revision.State, revision.CreatedAt = "visible", time.Now().UTC()
-	s.conanPackages[key] = revision
-	return revision, nil
 }
 
 func (s *MemoryStore) PublishReplicatedConanRevision(_ context.Context, publication ConanReplicationPublication) (ConanRecipeRevision, error) {

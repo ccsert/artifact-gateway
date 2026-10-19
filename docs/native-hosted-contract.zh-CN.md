@@ -18,6 +18,8 @@ Group 成员只由 Group 管理。`/groups/{groupId}/members` 替换必须提供
 
 以下细则主要覆盖原始 Raw、OCI、Maven；Conan、npm、PyPI、Go、APT 由当前兼容基线及测试拥有。Group/Proxy 服从当前 overlay，不服从过期的 V2 清单陈述。
 
+Conan 2 官方客户端以 `/conan/{repository}` 注册远程仓库，原生文件 PUT 复用持久会话；完整 `conanmanifest.txt` 校验后自动提交，客户端无需调用管理 commit。显式管理会话 API 继续可用，见 [Conan 原生发布](conan-native-publication.zh-CN.md)。
+
 ## 元数据、对象生命周期与事务
 
 PostgreSQL 是 Repository、Group、member、Grant、Retention Policy、Maven session、coordinate、object reference 和 audit 的权威。S3 兼容存储只保存不可变字节，key 由服务端按 digest 派生，绝不接受客户端 object key。

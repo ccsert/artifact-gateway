@@ -11,6 +11,8 @@ their meaning.
 
 ## Unreleased
 
+- Official Conan 2.21.0 uploads now publish complete recipe/package revisions through the existing durable sessions (#312). The canonical remote root is `/conan/<repository>`; the former version-before-name layout returns 404. Manifest, package identity and every asset are verified before atomic visibility, correlated audit and scan scheduling. Interrupted uploads resume after PostgreSQL/object-store restart; scoped tokens use independent `GATEWAY_CONAN_TOKEN_SECRET` and revalidate machine credentials. Group/Proxy writes are rejected. See [publication limits and verification](docs/conan-native-publication.md).
+
 - `agctl email delivery wait` now fails with exit 1 and `delivery_failed` when the delivery is `dead` (#406). Its failure envelope retains the complete delivery record; accepted still exits 0, and timeout still exits 8 without replaying or canceling the queued work.
 
 - Maven / OCI Proxy rejects responses received after the complete request deadline or after cancellation, even when the runtime has not delivered the deadline notification yet (#403). Rejected response bodies are closed and their transport resources released, and their upstream trace records a safe error; timely bodies remain readable until the caller closes them.

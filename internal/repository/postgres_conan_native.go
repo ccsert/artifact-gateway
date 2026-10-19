@@ -8,7 +8,7 @@ import (
 )
 
 func (s *PostgresStore) ListReclaimableConanObjects(ctx context.Context, before time.Time, limit int) ([]ConanObjectIntent, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT i.repository_id::text,i.object_key,i.digest,i.size,i.created_at,i.claimed_at,i.collected_at FROM native_conan_object_intents i WHERE i.collected_at IS NULL AND EXISTS (SELECT 1 FROM native_conan_assets a JOIN artifact_tombstones t ON t.repository_id=a.repository_id AND t.format='conan' AND t.coordinate=a.reference || '#' || a.recipe_revision WHERE a.object_key=i.object_key AND t.tombstoned_at <= $1) AND NOT EXISTS (SELECT 1 FROM native_conan_assets a JOIN native_conan_recipe_revisions r ON r.repository_id=a.repository_id AND r.reference=a.reference AND r.revision=a.recipe_revision LEFT JOIN native_conan_package_revisions p ON p.repository_id=a.repository_id AND p.reference=a.reference AND p.recipe_revision=a.recipe_revision AND p.package_id=a.package_id AND p.revision=a.package_revision WHERE a.object_key=i.object_key AND r.state='visible' AND (a.package_id='' OR p.state='visible')) ORDER BY i.created_at LIMIT $2`, before, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT i.repository_id::text,i.object_key,i.digest,i.size,i.created_at,i.claimed_at,i.collected_at FROM native_conan_object_intents i WHERE i.collected_at IS NULL AND ((i.claimed_at IS NULL AND i.created_at <= $1) OR EXISTS (SELECT 1 FROM native_conan_assets a JOIN artifact_tombstones t ON t.repository_id=a.repository_id AND t.format='conan' AND t.coordinate=a.reference || '#' || a.recipe_revision WHERE a.object_key=i.object_key AND t.tombstoned_at <= $1)) AND NOT EXISTS (SELECT 1 FROM native_conan_publish_uploads u JOIN native_conan_publish_sessions s ON s.id=u.session_id WHERE u.object_key=i.object_key AND s.state='open' AND s.expires_at > now()) AND NOT EXISTS (SELECT 1 FROM native_conan_assets a JOIN native_conan_recipe_revisions r ON r.repository_id=a.repository_id AND r.reference=a.reference AND r.revision=a.recipe_revision LEFT JOIN native_conan_package_revisions p ON p.repository_id=a.repository_id AND p.reference=a.reference AND p.recipe_revision=a.recipe_revision AND p.package_id=a.package_id AND p.revision=a.package_revision WHERE a.object_key=i.object_key AND r.state='visible' AND (a.package_id='' OR p.state='visible')) ORDER BY i.created_at LIMIT $2`, before, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -47,8 +47,16 @@ func (s *PostgresStore) MarkConanObjectCollected(ctx context.Context, key string
 }
 
 func (s *PostgresStore) StageConanObject(ctx context.Context, object ConanObjectIntent) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO native_conan_object_intents (object_key,repository_id,digest,size) VALUES ($1,$2,$3,$4) ON CONFLICT (object_key) DO NOTHING`, object.ObjectKey, object.RepositoryID, object.Digest, object.Size)
-	return err
+	result, err := s.db.ExecContext(ctx, `INSERT INTO native_conan_object_intents (object_key,repository_id,digest,size) VALUES ($1,$2,$3,$4) ON CONFLICT (object_key) DO UPDATE SET object_key=EXCLUDED.object_key WHERE native_conan_object_intents.repository_id=EXCLUDED.repository_id AND native_conan_object_intents.digest=EXCLUDED.digest AND native_conan_object_intents.size=EXCLUDED.size AND native_conan_object_intents.collected_at IS NULL`, object.ObjectKey, object.RepositoryID, object.Digest, object.Size)
+	if err != nil {
+		return err
+	}
+	if n, err := result.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return ErrNameExists
+	}
+	return nil
 }
 
 func (s *PostgresStore) PutConanRecipeRevision(ctx context.Context, revision ConanRecipeRevision, assets []ConanAsset) (ConanRecipeRevision, error) {
@@ -57,10 +65,25 @@ func (s *PostgresStore) PutConanRecipeRevision(ctx context.Context, revision Con
 		return ConanRecipeRevision{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = lockConanRepositoriesTx(ctx, tx, revision.RepositoryID); err != nil {
+		return ConanRecipeRevision{}, err
+	}
+	result, err := putConanRecipeRevisionTx(ctx, tx, revision, assets)
+	if err != nil {
+		return ConanRecipeRevision{}, err
+	}
+	return result, tx.Commit()
+}
+
+func putConanRecipeRevisionTx(ctx context.Context, tx *sql.Tx, revision ConanRecipeRevision, assets []ConanAsset) (ConanRecipeRevision, error) {
+	var err error
 	var existing ConanRecipeRevision
 	err = scanConanRecipeRevision(tx.QueryRowContext(ctx, `SELECT repository_id::text,reference,revision,digest,state,created_at FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND revision=$3 FOR SHARE`, revision.RepositoryID, revision.Reference, revision.Revision), &existing)
 	if err == nil {
-		return existing, tx.Commit()
+		if existing.Digest != revision.Digest || existing.State != "visible" {
+			return ConanRecipeRevision{}, ErrNameExists
+		}
+		return existing, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return ConanRecipeRevision{}, err
@@ -79,7 +102,7 @@ func (s *PostgresStore) PutConanRecipeRevision(ctx context.Context, revision Con
 	if err = scanConanRecipeRevision(tx.QueryRowContext(ctx, `SELECT repository_id::text,reference,revision,digest,state,created_at FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND revision=$3`, revision.RepositoryID, revision.Reference, revision.Revision), &revision); err != nil {
 		return ConanRecipeRevision{}, err
 	}
-	return revision, tx.Commit()
+	return revision, nil
 }
 
 func (s *PostgresStore) PutConanPackageRevision(ctx context.Context, revision ConanPackageRevision, assets []ConanAsset) (ConanPackageRevision, error) {
@@ -88,6 +111,18 @@ func (s *PostgresStore) PutConanPackageRevision(ctx context.Context, revision Co
 		return ConanPackageRevision{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = lockConanRepositoriesTx(ctx, tx, revision.RepositoryID); err != nil {
+		return ConanPackageRevision{}, err
+	}
+	result, err := putConanPackageRevisionTx(ctx, tx, revision, assets)
+	if err != nil {
+		return ConanPackageRevision{}, err
+	}
+	return result, tx.Commit()
+}
+
+func putConanPackageRevisionTx(ctx context.Context, tx *sql.Tx, revision ConanPackageRevision, assets []ConanAsset) (ConanPackageRevision, error) {
+	var err error
 	var recipeState string
 	if err = tx.QueryRowContext(ctx, `SELECT state FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND revision=$3 FOR SHARE`, revision.RepositoryID, revision.Reference, revision.RecipeRevision).Scan(&recipeState); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -101,7 +136,10 @@ func (s *PostgresStore) PutConanPackageRevision(ctx context.Context, revision Co
 	var existing ConanPackageRevision
 	err = scanConanPackageRevision(tx.QueryRowContext(ctx, `SELECT repository_id::text,reference,recipe_revision,package_id,revision,digest,state,created_at FROM native_conan_package_revisions WHERE repository_id::text=$1 AND reference=$2 AND recipe_revision=$3 AND package_id=$4 AND revision=$5 FOR SHARE`, revision.RepositoryID, revision.Reference, revision.RecipeRevision, revision.PackageID, revision.Revision), &existing)
 	if err == nil {
-		return existing, tx.Commit()
+		if existing.Digest != revision.Digest || existing.State != "visible" {
+			return ConanPackageRevision{}, ErrNameExists
+		}
+		return existing, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return ConanPackageRevision{}, err
@@ -120,7 +158,7 @@ func (s *PostgresStore) PutConanPackageRevision(ctx context.Context, revision Co
 	if err = scanConanPackageRevision(tx.QueryRowContext(ctx, `SELECT repository_id::text,reference,recipe_revision,package_id,revision,digest,state,created_at FROM native_conan_package_revisions WHERE repository_id::text=$1 AND reference=$2 AND recipe_revision=$3 AND package_id=$4 AND revision=$5`, revision.RepositoryID, revision.Reference, revision.RecipeRevision, revision.PackageID, revision.Revision), &revision); err != nil {
 		return ConanPackageRevision{}, err
 	}
-	return revision, tx.Commit()
+	return revision, nil
 }
 
 func (s *PostgresStore) PublishReplicatedConanRevision(ctx context.Context, publication ConanReplicationPublication) (ConanRecipeRevision, error) {
@@ -129,6 +167,9 @@ func (s *PostgresStore) PublishReplicatedConanRevision(ctx context.Context, publ
 		return ConanRecipeRevision{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = lockConanRepositoriesTx(ctx, tx, publication.Recipe.RepositoryID, publication.SourceRepositoryID); err != nil {
+		return ConanRecipeRevision{}, err
+	}
 	var source ConanRecipeRevision
 	err = scanConanRecipeRevision(tx.QueryRowContext(ctx, `SELECT repository_id::text,reference,revision,digest,state,created_at FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND revision=$3 AND digest=$4 AND state='visible' FOR SHARE`, publication.SourceRepositoryID, publication.Recipe.Reference, publication.Recipe.Revision, publication.Recipe.Digest), &source)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -201,7 +242,7 @@ func (s *PostgresStore) PublishReplicatedConanRevision(ctx context.Context, publ
 }
 
 func claimConanObject(ctx context.Context, tx *sql.Tx, objectKey string) error {
-	result, err := tx.ExecContext(ctx, `UPDATE native_conan_object_intents SET claimed_at=now() WHERE object_key=$1 AND claimed_at IS NULL`, objectKey)
+	result, err := tx.ExecContext(ctx, `UPDATE native_conan_object_intents SET claimed_at=now() WHERE object_key=$1 AND claimed_at IS NULL AND collected_at IS NULL`, objectKey)
 	if err != nil {
 		return err
 	}
@@ -217,6 +258,9 @@ func (s *PostgresStore) PromoteConanRecipeRevision(ctx context.Context, p ConanP
 		return ConanRecipeRevision{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = lockConanRepositoriesTx(ctx, tx, p.TargetRepositoryID, p.SourceRepositoryID); err != nil {
+		return ConanRecipeRevision{}, err
+	}
 	var out ConanRecipeRevision
 	err = scanConanRecipeRevision(tx.QueryRowContext(ctx, `SELECT repository_id::text,reference,revision,digest,state,created_at FROM native_conan_recipe_revisions WHERE repository_id::text=$1 AND reference=$2 AND revision=$3 AND digest=$4 AND state='visible' FOR SHARE`, p.SourceRepositoryID, p.Reference, p.Revision, p.Digest), &out)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -399,6 +443,9 @@ func (s *PostgresStore) TombstoneConanRecipeRevision(ctx context.Context, reposi
 		return item, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = lockConanRepositoriesTx(ctx, tx, repositoryID); err != nil {
+		return item, err
+	}
 	err = scanConanRecipeRevision(tx.QueryRowContext(ctx, `UPDATE native_conan_recipe_revisions SET state='deleted' WHERE repository_id::text=$1 AND reference=$2 AND revision=$3 RETURNING repository_id::text,reference,revision,digest,state,created_at`, repositoryID, reference, revision), &item)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ConanRecipeRevision{}, ErrNotFound
@@ -423,6 +470,9 @@ func (s *PostgresStore) TombstoneConanPackageRevision(ctx context.Context, repos
 		return item, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = lockConanRepositoriesTx(ctx, tx, repositoryID); err != nil {
+		return item, err
+	}
 	err = scanConanPackageRevision(tx.QueryRowContext(ctx, `UPDATE native_conan_package_revisions SET state='deleted' WHERE repository_id::text=$1 AND reference=$2 AND recipe_revision=$3 AND package_id=$4 AND revision=$5 RETURNING repository_id::text,reference,recipe_revision,package_id,revision,digest,state,created_at`, repositoryID, reference, recipeRevision, packageID, revision), &item)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ConanPackageRevision{}, ErrNotFound
@@ -444,6 +494,9 @@ func (s *PostgresStore) RestoreConanRecipeRevision(ctx context.Context, reposito
 		return item, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = lockConanRepositoriesTx(ctx, tx, repositoryID); err != nil {
+		return item, err
+	}
 	err = scanConanRecipeRevision(tx.QueryRowContext(ctx, `UPDATE native_conan_recipe_revisions r SET state='visible' WHERE r.repository_id::text=$1 AND r.reference=$2 AND r.revision=$3 AND r.state='deleted' AND NOT EXISTS (SELECT 1 FROM native_conan_assets a JOIN native_conan_object_intents i ON i.object_key=a.object_key WHERE a.repository_id=r.repository_id AND a.reference=r.reference AND a.recipe_revision=r.revision AND a.package_id='' AND i.collected_at IS NOT NULL) RETURNING repository_id::text,reference,revision,digest,state,created_at`, repositoryID, reference, revision), &item)
 	if errors.Is(err, sql.ErrNoRows) {
 		return item, ErrNotFound
@@ -477,6 +530,9 @@ func (s *PostgresStore) RestoreConanPackageRevision(ctx context.Context, reposit
 		return item, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err = lockConanRepositoriesTx(ctx, tx, repositoryID); err != nil {
+		return item, err
+	}
 	err = scanConanPackageRevision(tx.QueryRowContext(ctx, `UPDATE native_conan_package_revisions p SET state='visible' WHERE p.repository_id::text=$1 AND p.reference=$2 AND p.recipe_revision=$3 AND p.package_id=$4 AND p.revision=$5 AND p.state='deleted' AND EXISTS (SELECT 1 FROM native_conan_recipe_revisions r WHERE r.repository_id=p.repository_id AND r.reference=p.reference AND r.revision=p.recipe_revision AND r.state='visible') AND NOT EXISTS (SELECT 1 FROM native_conan_assets a JOIN native_conan_object_intents i ON i.object_key=a.object_key WHERE a.repository_id=p.repository_id AND a.reference=p.reference AND a.recipe_revision=p.recipe_revision AND a.package_id=p.package_id AND a.package_revision=p.revision AND i.collected_at IS NOT NULL) RETURNING repository_id::text,reference,recipe_revision,package_id,revision,digest,state,created_at`, repositoryID, reference, recipeRevision, packageID, revision), &item)
 	if errors.Is(err, sql.ErrNoRows) {
 		return item, ErrNotFound
