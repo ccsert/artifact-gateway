@@ -50,6 +50,35 @@ func exerciseConanNativeClient(t *testing.T, backend conanClientBackend, reopen 
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() {
+		// This fixture proves automatic scan enqueueing without running a
+		// worker. Do not leave its pending jobs for later global-claim tests.
+		// A function defer runs before the reopened backend's t.Cleanup closes
+		// its pools, and reads the current store after either service restart.
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		jobs, cleanupErr := store.ListLifecycleJobs(cleanupCtx, repo.ID, 100)
+		if cleanupErr != nil {
+			t.Errorf("list owned Conan fixture jobs for cleanup: %v", cleanupErr)
+			return
+		}
+		for _, job := range jobs {
+			if job.RepositoryID != repo.ID || job.Kind != repository.LifecycleJobScan {
+				t.Errorf("unexpected job in owned Conan fixture: %+v", job)
+				continue
+			}
+			switch job.State {
+			case repository.LifecycleJobPending, repository.LifecycleJobRetrying:
+				cancelled, cancelErr := store.CancelLifecycleJob(cleanupCtx, repo.ID, job.ID)
+				if cancelErr != nil || cancelled.ID != job.ID || cancelled.RepositoryID != repo.ID || cancelled.State != repository.LifecycleJobCancelled {
+					t.Errorf("cancel owned Conan fixture job %s: %+v %v", job.ID, cancelled, cancelErr)
+				}
+			case repository.LifecycleJobCompleted, repository.LifecycleJobFailed, repository.LifecycleJobCancelled:
+			default:
+				t.Errorf("owned Conan fixture job was unexpectedly claimed: %+v", job)
+			}
+		}
+	}()
 	group, _, err := store.CreateHostedGroupIdempotently(ctx, repository.HostedGroup{ID: uuid.NewString(), Name: "conan-read-" + uuid.NewString()[:8], Format: repository.FormatConan, Members: []repository.GroupMember{{RepositoryID: repo.ID}}}, "fixture", uuid.NewString(), "native-conan-group")
 	if err != nil {
 		t.Fatal(err)
