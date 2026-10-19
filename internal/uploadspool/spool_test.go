@@ -1,4 +1,4 @@
-package app
+package uploadspool
 
 import (
 	"bytes"
@@ -6,16 +6,17 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 )
 
 func TestUploadSpoolComputesDigestAndRewinds(t *testing.T) {
 	body := strings.Repeat("streamed-upload-", 1<<16)
-	spool, err := spoolUpload(strings.NewReader(body), int64(len(body)))
+	spool, err := Read(strings.NewReader(body), int64(len(body)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +42,7 @@ func TestUploadSpoolComputesDigestAndRewinds(t *testing.T) {
 
 func TestUploadSpoolRejectsOversizedBody(t *testing.T) {
 	t.Setenv("TMPDIR", t.TempDir())
-	if spool, err := spoolUpload(strings.NewReader("12345"), 4); !errors.Is(err, errUploadTooLarge) || spool != nil {
+	if spool, err := Read(strings.NewReader("12345"), 4); !errors.Is(err, ErrTooLarge) || spool != nil {
 		t.Fatalf("spool=%v err=%v", spool, err)
 	}
 	entries, err := os.ReadDir(os.TempDir())
@@ -54,7 +55,7 @@ func TestUploadSpoolRejectsOversizedBody(t *testing.T) {
 }
 
 func TestUploadSpoolAppendsWithoutHoldingCombinedBody(t *testing.T) {
-	spool, err := newUploadSpool()
+	spool, err := New()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,8 +80,8 @@ func TestSpoolObjectAppendStagesOnlyNewChunk(t *testing.T) {
 	if err := base.Put(context.Background(), "upload", []byte("first")); err != nil {
 		t.Fatal(err)
 	}
-	objects := &observedOpenObjectStore{ObjectStore: base}
-	spool, chunkSize, err := spoolObjectAppend(context.Background(), objects, "upload", 5, strings.NewReader("second"), 6)
+	objects := &observedOpenObjectStore{Store: base}
+	spool, chunkSize, err := AppendObject(context.Background(), objects, "upload", 5, strings.NewReader("second"), 6)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,14 +93,14 @@ func TestSpoolObjectAppendStagesOnlyNewChunk(t *testing.T) {
 }
 
 type observedOpenObjectStore struct {
-	ObjectStore
+	objectstore.Store
 	opens      int
 	sizeOffset int64
 }
 
 func (s *observedOpenObjectStore) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	s.opens++
-	reader, size, err := s.ObjectStore.Open(ctx, key)
+	reader, size, err := s.Store.Open(ctx, key)
 	return reader, size + s.sizeOffset, err
 }
 
@@ -108,8 +109,8 @@ func TestSpoolStoredObjectReadsOnceAndReusesDigest(t *testing.T) {
 	if err := base.Put(context.Background(), "upload", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
-	objects := &observedOpenObjectStore{ObjectStore: base}
-	spool, err := spoolStoredObject(context.Background(), objects, "upload")
+	objects := &observedOpenObjectStore{Store: base}
+	spool, err := ReadObject(context.Background(), objects, "upload")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,13 +124,13 @@ func TestSpoolStoredObjectReadsOnceAndReusesDigest(t *testing.T) {
 func TestSpoolStoredUploadAssemblesImmutableChunksOnce(t *testing.T) {
 	objects := objectstore.NewMemoryStore()
 	key := "native/raw/uploads/one"
-	if err := objects.Put(context.Background(), uploadPartKey(key, 0), []byte("first")); err != nil {
+	if err := objects.Put(context.Background(), PartKey(key, 0), []byte("first")); err != nil {
 		t.Fatal(err)
 	}
-	if err := objects.Put(context.Background(), uploadPartKey(key, 5), []byte("second")); err != nil {
+	if err := objects.Put(context.Background(), PartKey(key, 5), []byte("second")); err != nil {
 		t.Fatal(err)
 	}
-	spool, err := spoolStoredUpload(context.Background(), objects, key, 11)
+	spool, err := ReadUpload(context.Background(), objects, key, 11)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,10 +144,10 @@ func TestSpoolStoredUploadAssemblesImmutableChunksOnce(t *testing.T) {
 func TestSpoolStoredUploadRejectsChunkGap(t *testing.T) {
 	objects := objectstore.NewMemoryStore()
 	key := "native/raw/uploads/gap"
-	if err := objects.Put(context.Background(), uploadPartKey(key, 1), []byte("content")); err != nil {
+	if err := objects.Put(context.Background(), PartKey(key, 1), []byte("content")); err != nil {
 		t.Fatal(err)
 	}
-	if spool, err := spoolStoredUpload(context.Background(), objects, key, 7); err == nil || spool != nil {
+	if spool, err := ReadUpload(context.Background(), objects, key, 7); err == nil || spool != nil {
 		t.Fatalf("spool=%v err=%v", spool, err)
 	}
 }
@@ -156,8 +157,8 @@ func TestSpoolStoredObjectRejectsChangedSize(t *testing.T) {
 	if err := base.Put(context.Background(), "upload", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
-	objects := &observedOpenObjectStore{ObjectStore: base, sizeOffset: 1}
-	if spool, err := spoolStoredObject(context.Background(), objects, "upload"); err == nil || spool != nil {
+	objects := &observedOpenObjectStore{Store: base, sizeOffset: 1}
+	if spool, err := ReadObject(context.Background(), objects, "upload"); err == nil || spool != nil {
 		t.Fatalf("spool=%v err=%v", spool, err)
 	}
 }

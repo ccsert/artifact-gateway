@@ -4,8 +4,10 @@ import (
 	"context"
 	"net/http"
 	"time"
-	"unicode/utf8"
 
+	"github.com/ccsert/artifact-gateway/internal/artifactquery"
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
@@ -25,22 +27,13 @@ func pypiSearchKeyword(value string, match repository.ArtifactSearchMatch) strin
 }
 
 func validArtifactKeyword(format repository.Format, value string, match repository.ArtifactSearchMatch) bool {
+	if capability, ok := formatmodule.Capability[formatmodule.Browse](rawFormatRegistry(rawformat.Options{}), format); ok {
+		return capability.ValidKeyword(value, match)
+	}
 	if match != repository.ArtifactSearchContains {
 		return validArtifactSearchQuery(format, value)
 	}
-	limit := 255
-	if format == repository.FormatRaw {
-		limit = 4096
-	}
-	if !utf8.ValidString(value) || utf8.RuneCountInString(value) > limit {
-		return false
-	}
-	for _, character := range value {
-		if invalidRawSearchRune(character) {
-			return false
-		}
-	}
-	return repository.IsSupportedFormat(format)
+	return repository.IsSupportedFormat(format) && artifactquery.ValidKeyword(value, 255)
 }
 
 // Bound even short/low-selectivity contains queries across all repositories.

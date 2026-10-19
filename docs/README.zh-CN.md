@@ -43,6 +43,7 @@ Artifact Gateway 是轻量级、协议原生的制品库。控制面只依赖 Po
 - [ADR 0008：Go 模块路径与源码仓库一致](adr/0008-go-module-path.zh-CN.md)
 - [ADR 0009：原生管理架构](adr/0009-native-architecture.zh-CN.md)
 - [ADR 0010：Memory 存储契约](adr/0010-memory-store-contracts.zh-CN.md)
+- [ADR 0011：显式格式模块与 Raw 纵向切片](adr/0011-format-modules.zh-CN.md)
 
 ## 协议与仓库格式
 

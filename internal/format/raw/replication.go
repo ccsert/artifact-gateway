@@ -1,4 +1,4 @@
-package app
+package raw
 
 import (
 	"context"
@@ -6,29 +6,30 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/replication"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
 
-// RawReplication turns verified generic checkpoints into immutable Raw asset
+// Replication turns verified generic checkpoints into immutable Raw asset
 // references. Object bytes remain content-addressed and are never rewritten by
 // the publication step.
-type RawReplication struct {
+type Replication struct {
 	Store interface {
 		repository.NativeRawStore
 		repository.ReplicationStore
 	}
-	Source      ObjectStore
-	Destination ObjectStore
+	Source      objectstore.Store
+	Destination objectstore.Store
 	ChunkBytes  int64
 	Metrics     repository.BackgroundOperationMetrics
 }
 
-func (r RawReplication) RunJobs(ctx context.Context, limit int) error {
+func (r Replication) RunJobs(ctx context.Context, limit int) error {
 	return (replication.Worker{Store: r.Store, Source: r.Source, Destination: r.Destination, ChunkBytes: r.ChunkBytes, Format: repository.FormatRaw, Publish: r.publish, Metrics: r.Metrics}).Run(ctx, limit)
 }
 
-func (r RawReplication) Start(ctx context.Context, interval time.Duration) {
+func (r Replication) Start(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		return
 	}
@@ -50,7 +51,7 @@ func (r RawReplication) Start(ctx context.Context, interval time.Duration) {
 	}()
 }
 
-func (r RawReplication) publish(ctx context.Context, plan repository.ReplicationPlan, checkpoints []repository.ReplicationCheckpoint) error {
+func (r Replication) publish(ctx context.Context, plan repository.ReplicationPlan, checkpoints []repository.ReplicationCheckpoint) error {
 	if plan.Format != repository.FormatRaw || len(checkpoints) != 1 {
 		return fmt.Errorf("unsupported replication plan")
 	}
@@ -80,7 +81,7 @@ func (r RawReplication) publish(ctx context.Context, plan repository.Replication
 	return err
 }
 
-func (r RawReplication) sourceAssets(ctx context.Context, repositoryID string, checkpoint repository.ReplicationCheckpoint) ([]repository.RawAsset, error) {
+func (r Replication) sourceAssets(ctx context.Context, repositoryID string, checkpoint repository.ReplicationCheckpoint) ([]repository.RawAsset, error) {
 	assets := []repository.RawAsset{}
 	after := ""
 	for {
@@ -98,4 +99,13 @@ func (r RawReplication) sourceAssets(ctx context.Context, repositoryID string, c
 		}
 		after = page[len(page)-1].Path
 	}
+}
+
+func notificationWake(ctx context.Context, store any, channel string) <-chan struct{} {
+	if source, ok := store.(interface {
+		Listen(context.Context, string) <-chan struct{}
+	}); ok {
+		return source.Listen(ctx, channel)
+	}
+	return nil
 }

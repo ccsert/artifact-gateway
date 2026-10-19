@@ -5,12 +5,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -110,6 +111,9 @@ func (h hostedRepositoryAPIHandler) decodeRepositoryBrowseParent(token string, r
 }
 
 func validRepositoryBrowseParent(format repository.Format, parent repository.ArtifactBrowseParent) bool {
+	if capability, ok := formatmodule.Capability[formatmodule.Browse](rawFormatRegistry(rawformat.Options{}), format); ok {
+		return capability.ValidBrowseParent(parent)
+	}
 	switch format {
 	case repository.FormatMaven:
 		switch parent.Kind {
@@ -120,8 +124,6 @@ func validRepositoryBrowseParent(format repository.Format, parent repository.Art
 		case repository.BrowseNodeVersion:
 			return parent.Namespace != "" && parent.Component != "" && parent.Version != ""
 		}
-	case repository.FormatRaw:
-		return parent.Kind == repository.BrowseNodeDirectory && parent.Path != "" && !strings.HasPrefix(parent.Path, "/")
 	case repository.FormatCargo:
 		switch parent.Kind {
 		case repository.BrowseNodeComponent:
@@ -158,10 +160,8 @@ func (h hostedRepositoryAPIHandler) repositoryBrowseNodeResponse(repo repository
 		cursor.Version = ""
 	}
 	name := node.Name
-	if repo.Format == repository.FormatRaw {
-		if decoded, err := url.PathUnescape(name); err == nil {
-			name = decoded
-		}
+	if capability, ok := formatmodule.Capability[formatmodule.Browse](rawFormatRegistry(rawformat.Options{}), repo.Format); ok {
+		name = capability.BrowseName(name)
 	}
 	response := adminopenapi.BrowseNode{Id: encodeSignedCursor(h.authenticator.AdminToken, cursor), Kind: adminopenapi.BrowseNodeKind(node.Kind), Name: name, HasChildren: node.HasChildren}
 	response.SourceTimestamp = optionalString(node.SourceTimestamp)

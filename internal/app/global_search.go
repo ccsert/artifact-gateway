@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	adminopenapi "github.com/ccsert/artifact-gateway/internal/admin/openapi"
+	"github.com/ccsert/artifact-gateway/internal/artifactquery"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
 )
@@ -47,7 +48,7 @@ func (h generatedRepositoryAPIAdapter) SearchArtifacts(w http.ResponseWriter, r 
 	searchQuery.Match = match
 	if match == repository.ArtifactSearchContains {
 		for _, character := range params.Q {
-			if invalidRawSearchRune(character) {
+			if artifactquery.InvalidRune(character) {
 				writeHostedProblem(w, http.StatusBadRequest, "invalid_request", "q must not contain control characters")
 				return
 			}

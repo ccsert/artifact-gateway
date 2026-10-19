@@ -19,6 +19,8 @@ import (
 	"github.com/ccsert/artifact-gateway/internal/aptpublication"
 	"github.com/ccsert/artifact-gateway/internal/consoletheme"
 	"github.com/ccsert/artifact-gateway/internal/egress"
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/operationalog"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/ccsert/artifact-gateway/internal/scanning"
@@ -443,7 +445,11 @@ func (h generatedRepositoryAPIAdapter) ListFormatProfiles(w http.ResponseWriter,
 	}
 	profiles := repository.SupportedFormatProfiles()
 	items := make([]adminopenapi.FormatProfile, 0, len(profiles))
+	modules := rawFormatRegistry(rawformat.Options{})
 	for _, profile := range profiles {
+		if capability, ok := formatmodule.Capability[formatmodule.Profile](modules, profile.Format); ok {
+			profile = capability.Profile()
+		}
 		items = append(items, formatProfileResponse(profile))
 	}
 	writeNativeMavenJSON(w, http.StatusOK, adminopenapi.FormatProfileList{Items: items})

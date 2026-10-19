@@ -9,6 +9,8 @@ import (
 	"sort"
 	"time"
 
+	formatmodule "github.com/ccsert/artifact-gateway/internal/format"
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	mavenprotocol "github.com/ccsert/artifact-gateway/internal/protocol/maven"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 	"github.com/google/uuid"
@@ -56,7 +58,7 @@ type RepositoryRetentionCandidate struct {
 	ociName          string
 	conanRef         string
 	conanRevision    string
-	rawPath          string
+	usagePath        string
 	npmPackage       string
 	npmVersion       string
 	pypiProject      string
@@ -218,6 +220,9 @@ func (m NativeRepositoryRetention) runJob(ctx context.Context, job repository.Li
 }
 
 func (m NativeRepositoryRetention) tombstone(ctx context.Context, repositoryID string, candidate RepositoryRetentionCandidate, policyVersion string) error {
+	if capability, ok := formatmodule.Capability[formatmodule.Retention](rawFormatRegistry(rawformat.Options{Store: m.Store}), candidate.Format); ok {
+		return capability.Tombstone(ctx, repositoryID, candidate.Coordinate)
+	}
 	switch candidate.Format {
 	case repository.FormatMaven:
 		_, err := m.Store.TombstoneMavenArtifactForRetention(ctx, repositoryID, candidate.mavenID, policyVersion)
@@ -227,8 +232,6 @@ func (m NativeRepositoryRetention) tombstone(ctx context.Context, repositoryID s
 	case repository.FormatConan:
 		_, err := m.Store.TombstoneConanRecipeRevision(ctx, repositoryID, candidate.conanRef, candidate.conanRevision)
 		return err
-	case repository.FormatRaw:
-		return m.Store.DeleteRawAsset(ctx, repositoryID, candidate.rawPath)
 	case repository.FormatNPM:
 		_, err := m.Store.TombstoneNPMVersion(ctx, repositoryID, candidate.npmPackage, candidate.npmVersion)
 		return err
@@ -270,25 +273,31 @@ func (m NativeRepositoryRetention) PlanRepositoryDetailed(ctx context.Context, r
 		return nil, fmt.Errorf("compile retention protected patterns: %w", err)
 	}
 	var candidates []RepositoryRetentionCandidate
-	switch format {
-	case repository.FormatMaven:
-		candidates, err = m.planMaven(ctx, repositoryID)
-	case repository.FormatOCI:
-		candidates, err = m.planOCI(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
-	case repository.FormatConan:
-		candidates, err = m.planConan(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
-	case repository.FormatRaw:
-		candidates, err = m.planRaw(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
-	case repository.FormatNPM:
-		candidates, err = m.planNPM(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
-	case repository.FormatPyPI:
-		candidates, err = m.planPyPI(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
-	case repository.FormatGo:
-		candidates, err = m.planGo(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
-	case repository.FormatCargo:
-		candidates, err = m.planCargo(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
-	default:
-		return nil, repository.ErrDisabled
+	if capability, ok := formatmodule.Capability[formatmodule.Retention](rawFormatRegistry(rawformat.Options{Store: m.Store}), format); ok {
+		planned, planErr := capability.PlanRetention(ctx, repositoryID, policy, m.now())
+		err = planErr
+		for _, candidate := range planned {
+			candidates = append(candidates, RepositoryRetentionCandidate{Format: format, Coordinate: candidate.Coordinate, Digest: candidate.Digest, CreatedAt: candidate.CreatedAt, Reasons: candidate.Reasons, AgeDays: candidate.AgeDays, VersionType: candidate.VersionType, CursorID: candidate.CursorID, usagePath: candidate.Coordinate})
+		}
+	} else {
+		switch format {
+		case repository.FormatMaven:
+			candidates, err = m.planMaven(ctx, repositoryID)
+		case repository.FormatOCI:
+			candidates, err = m.planOCI(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
+		case repository.FormatConan:
+			candidates, err = m.planConan(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
+		case repository.FormatNPM:
+			candidates, err = m.planNPM(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
+		case repository.FormatPyPI:
+			candidates, err = m.planPyPI(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
+		case repository.FormatGo:
+			candidates, err = m.planGo(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
+		case repository.FormatCargo:
+			candidates, err = m.planCargo(ctx, repositoryID, policy, coordinatePatterns, protectedPatterns)
+		default:
+			return nil, repository.ErrDisabled
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -565,31 +574,6 @@ func (m NativeRepositoryRetention) planConan(ctx context.Context, repositoryID s
 			return candidates, nil
 		}
 		after = references[len(references)-1].Reference
-	}
-}
-
-func (m NativeRepositoryRetention) planRaw(ctx context.Context, repositoryID string, policy repository.RepositoryRetentionPolicy, coordinatePatterns, protectedPatterns []*regexp.Regexp) ([]RepositoryRetentionCandidate, error) {
-	var candidates []RepositoryRetentionCandidate
-	after := ""
-	for {
-		assets, err := m.Store.ListRawAssets(ctx, repositoryID, "", 200, after)
-		if err != nil {
-			return nil, err
-		}
-		for _, asset := range assets {
-			if !matchesRepositoryRetentionPatterns(coordinatePatterns, []string{asset.Path}, true) || matchesRepositoryRetentionPatterns(protectedPatterns, []string{asset.Path}, false) {
-				continue
-			}
-			createdAt := m.retentionTime(asset.UpdatedAt)
-			if !createdAt.Before(m.now().AddDate(0, 0, -policy.KeepDays)) {
-				continue
-			}
-			candidates = append(candidates, RepositoryRetentionCandidate{Format: repository.FormatRaw, Coordinate: asset.Path, Digest: asset.Digest, CreatedAt: createdAt, Reasons: []string{"age"}, AgeDays: m.ageDays(createdAt), VersionType: "asset", CursorID: asset.Path, rawPath: asset.Path})
-		}
-		if len(assets) < 200 {
-			return candidates, nil
-		}
-		after = assets[len(assets)-1].Path
 	}
 }
 

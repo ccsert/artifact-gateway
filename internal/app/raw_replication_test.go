@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	rawformat "github.com/ccsert/artifact-gateway/internal/format/raw"
 	"github.com/ccsert/artifact-gateway/internal/objectstore"
 	"github.com/ccsert/artifact-gateway/internal/repository"
 )
@@ -31,7 +32,7 @@ func TestRawReplicationPublishesVerifiedTargetAsset(t *testing.T) {
 	if _, _, err := store.CreateReplicationPlan(ctx, plan, []repository.ReplicationCheckpoint{{ObjectKey: key, Digest: digest, Size: int64(len(body))}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := (RawReplication{Store: store, Source: objects, Destination: objects, ChunkBytes: 3}).RunJobs(ctx, 1); err != nil {
+	if err := (rawformat.Replication{Store: store, Source: objects, Destination: objects, ChunkBytes: 3}).RunJobs(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
 	target, err := store.GetRawAsset(ctx, "target", asset.Path)
@@ -51,7 +52,7 @@ func TestReplicationStartsQueuedPlansImmediately(t *testing.T) {
 		start  func(context.Context, *repository.MemoryStore, *objectstore.MemoryStore)
 	}{
 		{name: "Raw", format: repository.FormatRaw, start: func(ctx context.Context, store *repository.MemoryStore, objects *objectstore.MemoryStore) {
-			RawReplication{Store: store, Source: objects, Destination: objects}.Start(ctx, time.Hour)
+			rawformat.Replication{Store: store, Source: objects, Destination: objects}.Start(ctx, time.Hour)
 		}},
 		{name: "Maven", format: repository.FormatMaven, start: func(ctx context.Context, store *repository.MemoryStore, objects *objectstore.MemoryStore) {
 			MavenReplication{Store: store, Source: objects, Destination: objects}.Start(ctx, time.Hour)
