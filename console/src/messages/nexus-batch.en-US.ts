@@ -166,6 +166,19 @@ export const nexusBatchEnUS: Record<NexusBatchMessageKey, string> = {
     "The current server state does not allow this action. Read the latest batch.",
   "nexusBatch.sourceFailure":
     "Source reads, hashes or membership changed. Inspect the source before proceeding; target conflicts were preserved.",
+  "nexusBatch.scanFailure": "Most recent durable scan failure",
+  "nexusBatch.scanStageLabel": "Failure stage",
+  "nexusBatch.scanCode": "Bounded diagnostic code",
+  "nexusBatch.scanScope": "Selected repository scan scope",
+  "nexusBatch.scanOccurred": "Failure observed at",
+  "nexusBatch.scanMetadata": "Source metadata discovery",
+  "nexusBatch.scanManifest": "Manifest planning",
+  "nexusBatch.scanOpen": "Open source verification stream",
+  "nexusBatch.scanRead": "Read source verification stream",
+  "nexusBatch.scanDigest": "Check source asset digest",
+  "nexusBatch.scanVersion": "Revalidate source connection version",
+  "nexusBatch.scanInterrupted":
+    "The scan was interrupted and never sealed. Fresh capacity evidence allows a full rescan of the same batch.",
   "nexusBatch.pageFailure":
     "Inventory pagination is incomplete or repeated. Refresh and read again; it will not be exported as complete inventory.",
   "nexusBatch.targetConflict":

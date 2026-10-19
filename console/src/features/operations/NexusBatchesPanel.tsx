@@ -146,6 +146,7 @@ export function NexusBatchesPanel({
       </Card>
       {start && binding?.executionEnabled && (
         <NexusBatchStart
+          key={`${binding.targetId}:${binding.poolId}`}
           draft={start.draft}
           binding={binding}
           onClose={() => {

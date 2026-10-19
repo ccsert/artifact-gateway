@@ -2,6 +2,7 @@ import type {
   NexusMigrationBatch,
   NexusMigrationCapabilities,
   NexusMigrationEntry,
+  NexusMigrationScanFailure,
   Repository,
 } from "../client";
 import { migrationSource } from "./migrationFixtures";
@@ -13,6 +14,15 @@ export const nexusCapabilities: NexusMigrationCapabilities = {
   capacityEvidenceSource: "operator-reported",
   policyVersion: "release-raw-v1",
   maxAttempts: 3,
+};
+export const nexusScanFailure: NexusMigrationScanFailure = {
+  stage: "source_verification_open",
+  sourceRepositories: ["releases", "raw-source"],
+  sourceRepository: "releases",
+  sourcePath: "org/example/ui-widget/1.0+build/ui-widget-1.0+build.jar",
+  identity: "org.example:ui-widget:1.0+build",
+  code: "source_not_found",
+  occurredAt: "2026-10-19T00:01:00Z",
 };
 export const nexusTargets: Repository[] = [
   {

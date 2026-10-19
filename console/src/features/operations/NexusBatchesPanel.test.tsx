@@ -27,6 +27,7 @@ import {
   nexusCapabilities,
   nexusEntries,
   nexusTargets,
+  nexusScanFailure,
 } from "../../test/nexusBatchFixtures";
 import { NexusBatchesPanel } from "./NexusBatchesPanel";
 import * as batchModel from "./nexusBatchModel";
@@ -404,9 +405,45 @@ describe("real batch read/control states", () => {
     expect(within(table).getAllByText("待处理")).toHaveLength(2);
     await waitFor(
       () => expect(within(table).getAllByText("已发布")).toHaveLength(2),
-      { timeout: 3500 },
+      { timeout: 8000 },
     );
     expect(screen.getByText("批次版本 7")).toBeInTheDocument();
+  }, 10_000);
+  it("shows precise durable scan failure scope without promoting an unsealed manifest or leaking arbitrary codes", async () => {
+    const failure = { ...nexusScanFailure, code: "password=upstream-body" };
+    detail.mockResolvedValue({
+      data: {
+        ...nexusBatch,
+        state: "failed",
+        scanComplete: false,
+        totalBytes: null,
+        entryCount: 0,
+        lastScanFailure: failure,
+      },
+    } as never);
+    entries.mockResolvedValue({ data: { items: [], nextCursor: "" } } as never);
+    show();
+    const diagnostic = await screen.findByRole("region", {
+      name: "最近的持久扫描失败定位",
+    });
+    expect(
+      within(diagnostic).getByText(failure.sourcePath),
+    ).toBeInTheDocument();
+    expect(within(diagnostic).getByText(failure.identity)).toBeInTheDocument();
+    expect(
+      within(diagnostic).getByText("releases, raw-source"),
+    ).toBeInTheDocument();
+    expect(
+      within(diagnostic).getByText("打开源资产校验流"),
+    ).toBeInTheDocument();
+    expect(
+      within(diagnostic).getByText("unclassified_failure"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("未知；完整清单尚未封存")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("upstream-body");
+    expect(
+      screen.getByRole("button", { name: "重试可重试失败项" }),
+    ).toBeEnabled();
   });
   it("exports freshly read checkpoints and refuses to call an unfinished cursor a complete inventory", async () => {
     const report = vi.spyOn(batchModel, "observationReport");

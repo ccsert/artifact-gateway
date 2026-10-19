@@ -4,9 +4,11 @@ import type {
   NexusMigrationCapabilities,
   NexusMigrationEntry,
   NexusMigrationMapping,
+  NexusMigrationScanFailure,
 } from "../../client";
 import { LocalizedError, type Translator } from "../../messages/translate";
 import type { NexusBatchMessageKey } from "../../messages/nexus-batch.zh-CN";
+import type { MigrationMessageKey } from "../../messages/migration.zh-CN";
 
 export type BatchDraft = {
   sourceId: string;
@@ -91,7 +93,26 @@ export function capacityEvidence(
   };
 }
 
-const codes: Record<string, NexusBatchMessageKey> = {
+const codes: Record<string, NexusBatchMessageKey | MigrationMessageKey> = {
+  scan_interrupted: "nexusBatch.scanInterrupted",
+  source_timeout: "nexusBatch.sourceFailure",
+  source_not_found: "nexusBatch.sourceFailure",
+  source_http_error: "nexusBatch.sourceFailure",
+  source_read_failed: "nexusBatch.sourceFailure",
+  source_unauthorized: "nexusBatch.sourceFailure",
+  source_access_denied: "nexusBatch.sourceFailure",
+  source_forbidden: "nexusBatch.sourceFailure",
+  source_limit_exceeded: "nexusBatch.sourceFailure",
+  source_pagination_invalid: "nexusBatch.sourceFailure",
+  source_pagination_cycle: "nexusBatch.sourceFailure",
+  unsupported_format: "nexusBatch.unsupportedReason",
+  invalid_maven_manifest: "nexusBatch.unsupportedReason",
+  maven_path_unsupported: "nexusBatch.unsupportedReason",
+  raw_path_unsupported: "nexusBatch.unsupportedReason",
+  maven_pom_missing: "nexusBatch.unsupportedReason",
+  maven_release_closure_unsupported: "nexusBatch.unsupportedReason",
+  native_checksum_or_metadata_regenerated: "migration.reasonMetadata",
+  maven_mixed_metadata_requires_regeneration: "migration.reasonMetadata",
   version_conflict: "nexusBatch.versionConflict",
   idempotency_conflict: "nexusBatch.idempotencyConflict",
   capacity_unknown: "nexusBatch.capacityUnknown",
@@ -115,8 +136,27 @@ const codes: Record<string, NexusBatchMessageKey> = {
 };
 export function batchReason(code: string, t: Translator): string {
   return t(
-    Object.hasOwn(codes, code) ? codes[code] : "nexusBatch.unsupportedReason",
+    Object.hasOwn(codes, code) ? codes[code] : "nexusBatch.requestFailed",
   );
+}
+export function batchDiagnosticCode(code: string) {
+  return Object.hasOwn(codes, code) ? code : "unclassified_failure";
+}
+export function scanStage(
+  stage: NexusMigrationScanFailure["stage"],
+): NexusBatchMessageKey {
+  const stages: Record<
+    NexusMigrationScanFailure["stage"],
+    NexusBatchMessageKey
+  > = {
+    metadata_discovery: "nexusBatch.scanMetadata",
+    manifest_planning: "nexusBatch.scanManifest",
+    source_verification_open: "nexusBatch.scanOpen",
+    source_verification_read: "nexusBatch.scanRead",
+    source_verification_digest: "nexusBatch.scanDigest",
+    source_version_validation: "nexusBatch.scanVersion",
+  };
+  return stages[stage];
 }
 /** Upstream messages can contain URLs/credentials; only bounded codes enter the view/cache. */
 export function batchError(error: unknown, writing = false): LocalizedError {
@@ -242,6 +282,19 @@ export function observationReport(
     verifiedBytes: batch.verifiedBytes,
     visibleIdentities: batch.visibleIdentities,
     counts: batch.counts,
+    ...(batch.lastScanFailure
+      ? {
+          lastScanFailure: {
+            stage: batch.lastScanFailure.stage,
+            sourceRepositories: batch.lastScanFailure.sourceRepositories,
+            sourceRepository: batch.lastScanFailure.sourceRepository,
+            sourcePath: batch.lastScanFailure.sourcePath,
+            identity: batch.lastScanFailure.identity,
+            occurredAt: batch.lastScanFailure.occurredAt,
+            code: batchDiagnosticCode(batch.lastScanFailure.code),
+          },
+        }
+      : {}),
     entries: entries.map((entry) => ({
       id: entry.id,
       sourceRepository: entry.sourceRepository,

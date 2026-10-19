@@ -162,6 +162,27 @@ describe("explicit start", () => {
     ).toBeDisabled();
     expect(startNexusMigrationBatch).not.toHaveBeenCalled();
   });
+  it("coalesces repeated clicks while a real start command is in flight", async () => {
+    let complete: () => void = () => undefined;
+    vi.mocked(startNexusMigrationBatch).mockImplementation(
+      () =>
+        new Promise<never>((resolve) => {
+          complete = () => resolve({ data: nexusBatch } as never);
+        }),
+    );
+    const accepted = show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "运行预检" }),
+    );
+    await screen.findByRole("combobox", { name: "releases 的目标仓库" });
+    await fillCapacity();
+    await userEvent.dblClick(
+      screen.getByRole("button", { name: "应用映射并创建批次" }),
+    );
+    expect(startNexusMigrationBatch).toHaveBeenCalledTimes(1);
+    complete();
+    await waitFor(() => expect(accepted).toHaveBeenCalledTimes(1));
+  });
   it("rejects a mismatched source-version observation and does not submit from stale preview facts", async () => {
     vi.mocked(preflightMigrationSource).mockResolvedValue({
       data: { ...migrationPreflight, sourceVersion: "2" },

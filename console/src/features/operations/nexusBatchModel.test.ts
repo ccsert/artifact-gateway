@@ -3,6 +3,7 @@ import {
   nexusBatch,
   nexusCapabilities,
   nexusEntries,
+  nexusScanFailure,
 } from "../../test/nexusBatchFixtures";
 import {
   batchError,
@@ -129,6 +130,20 @@ describe("batch truth and safe reports", () => {
     });
     expect(report.entries[0].assets[0].sha256).toHaveLength(64);
     expect(JSON.stringify(report)).not.toMatch(/secret|validator/);
+    const failed = observationReport(
+      {
+        ...batch,
+        lastScanFailure: { ...nexusScanFailure, code: "password=secret" },
+      },
+      [],
+      false,
+      [],
+    );
+    expect(failed.lastScanFailure).toMatchObject({
+      sourcePath: nexusScanFailure.sourcePath,
+      code: "unclassified_failure",
+    });
+    expect(JSON.stringify(failed)).not.toContain("secret");
   });
   it("gates controls by server state and retryable counts rather than optimistic progress", () => {
     expect(canPause({ ...nexusBatch, state: "running" })).toBe(true);

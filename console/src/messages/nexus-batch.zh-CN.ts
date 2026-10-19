@@ -154,6 +154,19 @@ export const nexusBatchZhCN = {
   "nexusBatch.invalidState": "当前服务端状态不允许这项操作，请读取最新批次。",
   "nexusBatch.sourceFailure":
     "源读取、摘要或成员集合发生变化；需核实源后再处理，未覆盖目标冲突。",
+  "nexusBatch.scanFailure": "最近的持久扫描失败定位",
+  "nexusBatch.scanStageLabel": "失败阶段",
+  "nexusBatch.scanCode": "有限诊断码",
+  "nexusBatch.scanScope": "扫描所选仓库范围",
+  "nexusBatch.scanOccurred": "失败观察时间",
+  "nexusBatch.scanMetadata": "源元数据发现",
+  "nexusBatch.scanManifest": "清单规划",
+  "nexusBatch.scanOpen": "打开源资产校验流",
+  "nexusBatch.scanRead": "读取源资产校验流",
+  "nexusBatch.scanDigest": "核对源资产摘要",
+  "nexusBatch.scanVersion": "重新验证源连接版本",
+  "nexusBatch.scanInterrupted":
+    "扫描中断且未封存；可凭新容量证据在原批次完整重扫。",
   "nexusBatch.pageFailure":
     "库存分页不完整或重复；请刷新后重新读取，不会导出为完整库存。",
   "nexusBatch.targetConflict": "目标已有不同身份或字节，保持原目标并报告冲突。",

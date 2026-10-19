@@ -20,10 +20,12 @@ import { LocalizedError } from "../../messages/translate";
 import {
   batchReason,
   batchReadDenied,
+  batchDiagnosticCode,
   batchActive,
   entryState,
   hasExceptions,
   inventoryComplete,
+  scanStage,
 } from "./nexusBatchModel";
 import { batchOptions, useEntryPages } from "./nexusBatchQueries";
 import { NexusBatchControls } from "./NexusBatchControls";
@@ -52,7 +54,6 @@ export function NexusBatchDetail({
   const complete =
     entries !== null &&
     !pages.error &&
-    !pages.isFetching &&
     inventoryComplete(batch, entries, Boolean(lastCursor));
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState<unknown>(null);
@@ -203,6 +204,7 @@ export function NexusBatchDetail({
             ))}
           </ul>
           <NexusBatchControls
+            key={`${binding?.targetId ?? ""}:${binding?.poolId ?? ""}`}
             batch={batch}
             binding={binding}
             onRescan={onRescan}
@@ -243,6 +245,57 @@ export function NexusBatchDetail({
               }}
             />
           </div>
+        )}
+        {batch.lastScanFailure && (
+          <section
+            className="ag-migration-form"
+            aria-label={t("nexusBatch.scanFailure")}
+          >
+            <h3>{t("nexusBatch.scanFailure")}</h3>
+            <p className="text-sm text-fg-secondary">
+              {batchReason(batch.lastScanFailure.code, t)}
+            </p>
+            <dl className="ag-nexus-observations">
+              <div>
+                <dt>{t("nexusBatch.scanStageLabel")}</dt>
+                <dd>{t(scanStage(batch.lastScanFailure.stage))}</dd>
+              </div>
+              <div>
+                <dt>{t("nexusBatch.scanCode")}</dt>
+                <dd className="ag-migration-technical">
+                  {batchDiagnosticCode(batch.lastScanFailure.code)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("nexusBatch.scanScope")}</dt>
+                <dd className="ag-migration-technical">
+                  {batch.lastScanFailure.sourceRepositories.join(", ")}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("migration.sourceRepository")}</dt>
+                <dd className="ag-migration-technical">
+                  {batch.lastScanFailure.sourceRepository || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("nexusBatch.sourcePath")}</dt>
+                <dd className="ag-migration-technical">
+                  {batch.lastScanFailure.sourcePath || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("nexusBatch.entry")}</dt>
+                <dd className="ag-migration-technical">
+                  {batch.lastScanFailure.identity || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("nexusBatch.scanOccurred")}</dt>
+                <dd>{formatDate(batch.lastScanFailure.occurredAt, locale)}</dd>
+              </div>
+            </dl>
+          </section>
         )}
         {entries === null ? (
           !pages.error && <Loading />
