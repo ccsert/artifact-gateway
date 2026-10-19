@@ -159,6 +159,7 @@ type Publication interface {
 // Store is dedicated to migration. It never extends repository.GatewayStore.
 type Store interface {
 	ReplayStart(context.Context, string, string, string) (Batch, bool, error)
+	ReplayControl(context.Context, string, string, string, string, string) (Batch, bool, error)
 	Create(context.Context, Batch, string, string) (Batch, error)
 	Get(context.Context, string) (Batch, error)
 	List(context.Context, int, string) ([]Batch, string, error)

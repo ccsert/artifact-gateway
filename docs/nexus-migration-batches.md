@@ -104,8 +104,16 @@ fail before reaching that size. Downloads use immediately unlinked private
 temporary files; recovery retries whole files, with no promised range/multipart
 resume. Large inventories fail explicitly and require a later paging extension.
 
-The required integration command includes the domain PG package and exercises
+`make integration-test` includes the domain PG package and exercises
 real PostgreSQL/RustFS crash windows, competing/expired workers, pause/cancel,
-capacity, changed source and native protocol readback. The separate fixed official
-Maven/Raw client gate disables the source and uses an empty artifact cache and
-target-only resolution. Passing either gate is not production migration approval.
+capacity, changed source and native protocol readback. The separate
+`make nexus-migration-client-e2e` gate disables the source and uses an empty
+artifact cache and target-only resolution. It fixes official Maven 3.9.16
+(archive SHA-512
+`831a8591fe20c8243b1dbe7d71e3244f31d1665b0804b2e825e38cbbe5ce0cafb8338851f90780735568773e0a6cd07bbec107cda0b896b008b861075358b6f6`)
+and builds official curl 8.14.1 from source (SHA-256
+`6766ada7101d292b42b8b15681120acd68effa4a9660935853cf6d61f0d984d4`)
+in a private temporary directory. Both clients verify the complete expected
+inventory, size and SHA-256 through Gateway alone. This loopback HTTP evidence
+does not prove production TLS or authorize a cutover. Passing either gate is not
+production migration approval.
