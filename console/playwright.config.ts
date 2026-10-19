@@ -8,6 +8,7 @@ export default defineConfig({
   // Visual baselines run fully mocked through playwright.visual.config.ts.
   testIgnore: "visual/**",
   timeout: 30_000,
+  reporter: process.env.CI ? [["dot"], ["html", { open: "never" }]] : undefined,
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     browserName: "chromium",
