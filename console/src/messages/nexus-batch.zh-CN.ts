@@ -36,7 +36,7 @@ export const nexusBatchZhCN = {
     "需配置真实对象存储池并启用迁移 worker。连接、库存观察和已有报告仍可读取；未知容量不能启动任务。",
   "nexusBatch.binding": "目标 {target} · 存储池 {pool}",
   "nexusBatch.capacityHint":
-    "填写对这个真实存储池核实的外部容量证据，全部字节字段必须已知（明确为零可填 0）。这不是 Gateway 对对象存储的测量或容量预留。不要用日志/临时目录空间代替。",
+    "填写对这个真实存储池核实的外部容量证据，全部字节字段必须已知（明确为零可填 0）。下载峰值至少覆盖最大源资产的完整暂存大小。这不是 Gateway 对对象存储的测量或容量预留，不要用日志/临时目录空间代替。",
   "nexusBatch.observedAt": "容量观察时间（含时区）",
   "nexusBatch.validUntil": "证据有效截止时间（含时区）",
   "nexusBatch.timeHint":
@@ -59,7 +59,7 @@ export const nexusBatchZhCN = {
   "nexusBatch.resume": "恢复批次",
   "nexusBatch.retry": "重试可重试失败项",
   "nexusBatch.retryHint":
-    "仅重新排入未达到 {attempts} 次上限的失败/源缺失条目；冲突和未支持项不会被覆盖。",
+    "扫描未封存时会在原批次完整重扫；封存后只重新排入未达到 {attempts} 次上限的失败/源缺失条目。冲突和未支持项不会被覆盖。",
   "nexusBatch.cancel": "取消批次",
   "nexusBatch.cancelTitle": "取消这个迁移批次？",
   "nexusBatch.cancelHint":
@@ -140,7 +140,7 @@ export const nexusBatchZhCN = {
   "nexusBatch.unknownOutcome":
     "提交结果尚未确认。先刷新批次核实；保持相同输入重试会复用同一请求，避免重复创建或控制。",
   "nexusBatch.versionConflict":
-    "批次已被后台或其他管理员更新。先读取最新批次，再决定下一步；不会自动重放旧版本操作。",
+    "批次已被后台或其他管理员更新，已尝试重新读取服务端状态。请重新选择操作并核实新版本；不会自动重发写请求。",
   "nexusBatch.idempotencyConflict":
     "此请求标识已用于不同内容。请读取服务端事实后重新操作。",
   "nexusBatch.capacityUnknown":

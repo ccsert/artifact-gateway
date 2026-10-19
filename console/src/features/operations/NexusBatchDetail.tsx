@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button, Tag } from "antd";
 import type {
   NexusMigrationBatch,
@@ -19,11 +20,12 @@ import { LocalizedError } from "../../messages/translate";
 import {
   batchReason,
   batchReadDenied,
+  batchActive,
   entryState,
   hasExceptions,
   inventoryComplete,
 } from "./nexusBatchModel";
-import { useEntryPages } from "./nexusBatchQueries";
+import { batchOptions, useEntryPages } from "./nexusBatchQueries";
 import { NexusBatchControls } from "./NexusBatchControls";
 import { NexusBatchReport } from "./NexusBatchReport";
 
@@ -41,7 +43,8 @@ export function NexusBatchDetail({
   onRescan: () => void;
 }) {
   const { t, locale } = usePreferences();
-  const pages = useEntryPages(batch.id, batch.version);
+  const client = useQueryClient();
+  const pages = useEntryPages(batch.id, batch.version, batchActive(batch));
   const entries = batchReadDenied(pages.error)
     ? null
     : (pages.data?.pages.flatMap((page) => page.items) ?? null);
@@ -145,7 +148,13 @@ export function NexusBatchDetail({
               })}
             </p>
           </div>
-          <Button loading={refreshing} onClick={onRefresh}>
+          <Button
+            loading={refreshing || pages.isRefetching}
+            onClick={() => {
+              onRefresh();
+              void pages.refetch();
+            }}
+          >
             {t("nexusBatch.refresh")}
           </Button>
         </div>
@@ -343,8 +352,30 @@ export function NexusBatchDetail({
       </Card>
       <NexusBatchReport
         batch={batch}
-        entries={entries ?? []}
         complete={complete}
+        onRead={async () => {
+          const [current, inventory] = await Promise.all([
+            client.fetchQuery(batchOptions(batch.id)),
+            pages.refetch(),
+          ]);
+          if (inventory.error) throw inventory.error;
+          const entries =
+            inventory.data?.pages.flatMap((page) => page.items) ?? [];
+          return {
+            batch: current,
+            entries,
+            complete: inventoryComplete(
+              current,
+              entries,
+              Boolean(inventory.data?.pages.at(-1)?.nextCursor),
+            ),
+            batchObservedAt: new Date(
+              client.getQueryState(batchOptions(batch.id).queryKey)
+                ?.dataUpdatedAt ?? Date.now(),
+            ).toISOString(),
+            entriesObservedAt: new Date(inventory.dataUpdatedAt).toISOString(),
+          };
+        }}
       />
     </div>
   );

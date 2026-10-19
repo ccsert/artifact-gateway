@@ -1,22 +1,39 @@
 import { Button } from "antd";
+import { useEffect, useRef, useState } from "react";
 import type { NexusMigrationBatch, NexusMigrationEntry } from "../../client";
 import { ErrorBanner, Loading, Notice } from "../../components/ui/Feedback";
 import { Card } from "../../components/ui/Layout";
 import { usePreferences } from "../../lib/preferences";
 import { publicRepositoryUsage } from "../../lib/publicRepositoryUsage";
-import { observationReport } from "./nexusBatchModel";
+import { batchError, observationReport } from "./nexusBatchModel";
 import { useBatchTargets } from "./nexusBatchQueries";
 
 export function NexusBatchReport({
   batch,
-  entries,
   complete,
+  onRead,
 }: {
   batch: NexusMigrationBatch;
-  entries: NexusMigrationEntry[];
   complete: boolean;
+  onRead: () => Promise<{
+    batch: NexusMigrationBatch;
+    entries: NexusMigrationEntry[];
+    complete: boolean;
+    batchObservedAt: string;
+    entriesObservedAt: string;
+  }>;
 }) {
   const { t } = usePreferences();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const alive = useRef(true);
+  const pending = useRef(false);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   const queries = useBatchTargets(
     batch.mappings.map((item) => item.targetRepositoryId),
   );
@@ -25,36 +42,79 @@ export function NexusBatchReport({
       ? [query.data]
       : [],
   );
-  const endpoints = targets.map((target) => ({
-    repositoryId: target.id,
-    name: target.name,
-    format: target.format,
-    url: publicRepositoryUsage({
-      format: target.format === "maven" ? "maven" : "raw",
-      repositoryName: target.name,
-      origin: window.location.origin,
-      host: window.location.host,
-      t,
-    })[0].code,
-  }));
-  const download = () => {
-    const report = observationReport(batch, entries, complete, endpoints);
-    const url = URL.createObjectURL(
-      new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `nexus-migration-${batch.id}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const download = async () => {
+    if (pending.current) return;
+    pending.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      // Export is a fresh read, not a serialization of an old checkpoint cache.
+      const [current, refreshed] = await Promise.all([
+        onRead(),
+        Promise.all(queries.map((query) => query.refetch())),
+      ]);
+      for (const query of refreshed) if (query.error) throw query.error;
+      const endpoints = refreshed.flatMap((query) =>
+        query.data && ["maven", "raw"].includes(query.data.format)
+          ? [
+              {
+                repositoryId: query.data.id,
+                name: query.data.name,
+                format: query.data.format,
+                url: publicRepositoryUsage({
+                  format: query.data.format === "maven" ? "maven" : "raw",
+                  repositoryName: query.data.name,
+                  origin: window.location.origin,
+                  host: window.location.host,
+                  t,
+                })[0].code,
+              },
+            ]
+          : [],
+      );
+      if (!alive.current) return;
+      const report = observationReport(
+        current.batch,
+        current.entries,
+        current.complete,
+        endpoints,
+        {
+          batchObservedAt: current.batchObservedAt,
+          entriesObservedAt: current.entriesObservedAt,
+        },
+      );
+      const url = URL.createObjectURL(
+        new Blob([JSON.stringify(report, null, 2)], {
+          type: "application/json",
+        }),
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `nexus-migration-${batch.id}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (failure) {
+      if (alive.current) setError(batchError(failure));
+    } finally {
+      pending.current = false;
+      if (alive.current) setBusy(false);
+    }
   };
   return (
     <Card className="ag-nexus-report">
       <div className="ag-migration-header">
         <h2>{t("nexusBatch.report")}</h2>
-        <Button onClick={download}>{t("nexusBatch.export")}</Button>
+        <Button
+          loading={busy}
+          onClick={() => {
+            void download();
+          }}
+        >
+          {t("nexusBatch.export")}
+        </Button>
       </div>
       <div className="ag-migration-content">
+        {error !== null && <ErrorBanner error={error} />}
         <p className="text-sm text-fg-secondary">
           {t("nexusBatch.reportHint")}
         </p>

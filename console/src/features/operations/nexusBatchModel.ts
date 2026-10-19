@@ -164,7 +164,8 @@ export const canResume = (batch: NexusMigrationBatch) =>
   ["paused", "blocked"].includes(batch.state);
 export const canRetry = (batch: NexusMigrationBatch) =>
   ["failed", "completed", "blocked"].includes(batch.state) &&
-  batch.counts.failed + batch.counts.sourceMissing > 0;
+  ((!batch.scanComplete && batch.state === "failed") ||
+    batch.counts.failed + batch.counts.sourceMissing > 0);
 export const canCancel = (batch: NexusMigrationBatch) =>
   !["completed", "cancelled"].includes(batch.state);
 export const hasExceptions = (batch: NexusMigrationBatch) =>
@@ -215,10 +216,12 @@ export function observationReport(
     format: string;
     url: string;
   }[],
+  observations?: { batchObservedAt: string; entriesObservedAt: string },
 ) {
   return {
     reportKind: "nexus-migration-observation",
     observedAt: new Date().toISOString(),
+    ...observations,
     batchId: batch.id,
     batchVersion: batch.version,
     sourceId: batch.sourceId,

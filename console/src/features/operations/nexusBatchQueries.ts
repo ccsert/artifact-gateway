@@ -39,6 +39,7 @@ export function batchOptions(id: string) {
       batchRequest(getNexusMigrationBatch({ path: { batchId: id }, signal })),
     refetchInterval: (query) =>
       query.state.data && batchActive(query.state.data) ? 2_000 : false,
+    refetchOnWindowFocus: "always",
   });
 }
 export function useBatch(id: string) {
@@ -61,15 +62,19 @@ export function useBatchPages() {
         ? page.nextCursor
         : undefined,
     refetchInterval: 5_000,
+    refetchOnWindowFocus: "always",
   });
 }
-export function useEntryPages(id: string, version: string) {
+export function useEntryPages(id: string, version: string, active: boolean) {
   const queryClient = useQueryClient();
   const query = useInfiniteQuery({
     queryKey: batchKeys.entries(id),
     enabled: Boolean(id),
     staleTime: 0,
     initialPageParam: "",
+    // Byte and publication checkpoints do not change the batch's CAS version.
+    refetchInterval: active ? 2_000 : false,
+    refetchOnWindowFocus: "always",
     queryFn: ({ signal, pageParam }) =>
       batchRequest(
         listNexusMigrationEntries({
@@ -116,6 +121,7 @@ export function useBatchCommand() {
     signature: unknown,
     send: (key: string) => Promise<T>,
     accept: (value: T) => Promise<void> | void,
+    reconcile?: () => Promise<void>,
   ) => {
     if (pending.current) return;
     const json = JSON.stringify(signature);
@@ -128,7 +134,22 @@ export function useBatchCommand() {
       const value = await send(request.current.key);
       if (alive.current) await accept(value);
     } catch (failure) {
-      if (alive.current) setError(batchError(failure, true));
+      if (alive.current) {
+        const error = batchError(failure, true);
+        setError(error);
+        if (
+          reconcile &&
+          (error.status === 412 || error.key === "nexusBatch.unknownOutcome")
+        ) {
+          // Reconciliation is read-only. A failed GET preserves the original
+          // write error and the query's own error; it never replays the POST.
+          try {
+            await reconcile();
+          } catch {
+            /* Query also reports its read failure. */
+          }
+        }
+      }
     } finally {
       pending.current = false;
       if (alive.current) setBusy(false);

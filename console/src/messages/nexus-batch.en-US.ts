@@ -37,7 +37,7 @@ export const nexusBatchEnUS: Record<NexusBatchMessageKey, string> = {
     "Configure a real object-storage pool and enable a migration worker. Connections, inventory observations and existing reports remain readable; unknown capacity cannot start work.",
   "nexusBatch.binding": "Target {target} · Storage pool {pool}",
   "nexusBatch.capacityHint":
-    "Enter external evidence verified for this real storage pool. Every byte field must be known (enter 0 only for an explicit zero). This is neither a Gateway measurement of object storage nor a reservation. Do not substitute log or temporary-mount capacity.",
+    "Enter external evidence verified for this real storage pool. Every byte field must be known (enter 0 only for an explicit zero). Download peak must cover at least the largest full source-asset spool. This is neither a Gateway measurement nor a reservation. Do not substitute log or temporary-mount capacity.",
   "nexusBatch.observedAt": "Capacity observation time (with time zone)",
   "nexusBatch.validUntil": "Evidence expiry time (with time zone)",
   "nexusBatch.timeHint":
@@ -64,7 +64,7 @@ export const nexusBatchEnUS: Record<NexusBatchMessageKey, string> = {
   "nexusBatch.resume": "Resume batch",
   "nexusBatch.retry": "Retry eligible failed entries",
   "nexusBatch.retryHint":
-    "Only failed/source-missing entries below the {attempts}-attempt limit are requeued. Conflicts and unsupported entries are never overwritten.",
+    "An unsealed scan restarts full scanning in the same batch. Once sealed, only failed/source-missing entries below the {attempts}-attempt limit are requeued. Conflicts and unsupported entries are never overwritten.",
   "nexusBatch.cancel": "Cancel batch",
   "nexusBatch.cancelTitle": "Cancel this migration batch?",
   "nexusBatch.cancelHint":
@@ -151,7 +151,7 @@ export const nexusBatchEnUS: Record<NexusBatchMessageKey, string> = {
   "nexusBatch.unknownOutcome":
     "The submission outcome is unconfirmed. Refresh batches first. Retrying unchanged inputs reuses the same request to avoid duplicate creation or control.",
   "nexusBatch.versionConflict":
-    "A worker or another administrator updated the batch. Read the latest state before continuing; old-version actions are not automatically replayed.",
+    "A worker or another administrator updated the batch. A server read was attempted; select the operation again and check the new version. Writes are never automatically resent.",
   "nexusBatch.idempotencyConflict":
     "This request identifier was used with different content. Read server facts before starting another operation.",
   "nexusBatch.capacityUnknown":

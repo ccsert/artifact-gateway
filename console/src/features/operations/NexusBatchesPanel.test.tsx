@@ -29,6 +29,7 @@ import {
   nexusTargets,
 } from "../../test/nexusBatchFixtures";
 import { NexusBatchesPanel } from "./NexusBatchesPanel";
+import * as batchModel from "./nexusBatchModel";
 
 vi.mock("../../client", () => ({
   getNexusMigrationCapabilities: vi.fn(),
@@ -84,6 +85,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 describe("real batch read/control states", () => {
   it("shows exactly one initial error branch and sanitizes unknown transport text", async () => {
@@ -189,9 +192,12 @@ describe("real batch read/control states", () => {
     detail.mockResolvedValue({
       data: { ...nexusBatch, state: "paused" },
     } as never);
-    vi.mocked(resumeNexusMigrationBatch).mockResolvedValue({
-      error: { status: 412 },
-    } as never);
+    vi.mocked(resumeNexusMigrationBatch).mockImplementation(async () => {
+      detail.mockResolvedValue({
+        data: { ...nexusBatch, state: "paused", version: "9" },
+      } as never);
+      return { error: { status: 412 } } as never;
+    });
     show();
     await userEvent.click(
       await screen.findByRole("button", { name: "恢复批次" }),
@@ -224,7 +230,12 @@ describe("real batch read/control states", () => {
       new Date(Date.now() + 600_000).toISOString(),
     );
     await userEvent.click(submit);
-    await within(dialog).findByText(/批次已被后台或其他管理员更新/);
+    await screen.findByText(/批次已被后台或其他管理员更新/);
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("批次版本 9")).toBeInTheDocument();
+    expect(resumeNexusMigrationBatch).toHaveBeenCalledTimes(1);
     expect(resumeNexusMigrationBatch).toHaveBeenCalledWith(
       expect.objectContaining({
         headers: { "If-Match": "7", "Idempotency-Key": expect.any(String) },
@@ -267,5 +278,195 @@ describe("real batch read/control states", () => {
     rendered.unmount();
     expect(resumeNexusMigrationBatch).not.toHaveBeenCalled();
     expect(pauseNexusMigrationBatch).not.toHaveBeenCalled();
+  });
+  it("refreshes entry facts when progress changes without a CAS version change", async () => {
+    const running = {
+      ...nexusBatch,
+      state: "running" as const,
+      counts: { ...nexusBatch.counts, pending: 2, committed: 0 },
+      visibleIdentities: 0,
+    };
+    detail.mockResolvedValue({ data: running } as never);
+    entries.mockResolvedValue({
+      data: {
+        items: nexusEntries.map((entry) => ({ ...entry, state: "pending" })),
+        nextCursor: "",
+      },
+    } as never);
+    show();
+    const table = await screen.findByRole("table");
+    expect(within(table).getAllByText("待处理")).toHaveLength(2);
+    const before = entries.mock.calls.length;
+    detail.mockResolvedValue({
+      data: {
+        ...running,
+        visibleIdentities: 1,
+        counts: { ...running.counts, pending: 1, committed: 1 },
+      },
+    } as never);
+    entries.mockResolvedValue({
+      data: {
+        items: [nexusEntries[0], { ...nexusEntries[1], state: "pending" }],
+        nextCursor: "",
+      },
+    } as never);
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "刷新批次" })[1],
+    );
+    await waitFor(() =>
+      expect(within(table).getByText("已发布")).toBeInTheDocument(),
+    );
+    expect(entries.mock.calls.length).toBeGreaterThan(before);
+    expect(screen.getByText("批次版本 7")).toBeInTheDocument();
+  });
+  it("retries a failed unsealed scan in the same batch with fresh evidence rather than pretending it was ready", async () => {
+    const failed = {
+      ...nexusBatch,
+      state: "failed" as const,
+      scanComplete: false,
+      entryCount: 0,
+      totalBytes: null,
+      metadataDiscovered: 0,
+      visibleIdentities: 0,
+      counts: { ...nexusBatch.counts, committed: 0 },
+      lastError: "scan_interrupted",
+    };
+    detail.mockResolvedValue({ data: failed } as never);
+    entries.mockResolvedValue({ data: { items: [], nextCursor: "" } } as never);
+    vi.mocked(retryNexusMigrationBatch).mockImplementation(async () => {
+      const scanning = {
+        ...failed,
+        version: "8",
+        state: "scanning" as const,
+        lastError: "",
+      };
+      detail.mockResolvedValue({ data: scanning } as never);
+      return { data: scanning } as never;
+    });
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "重试可重试失败项" }),
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByText(/扫描未封存时会在原批次完整重扫/),
+    ).toBeInTheDocument();
+    const submit = within(dialog).getByRole("button", {
+      name: "重试可重试失败项",
+    });
+    expect(submit).toBeDisabled();
+    for (const label of [
+      "存储池可用字节",
+      "下载峰值字节",
+      "上传峰值字节",
+      "备份峰值字节",
+      "恢复峰值字节",
+      "保留余量字节",
+    ])
+      await userEvent.type(
+        within(dialog).getByRole("textbox", { name: label }),
+        label === "存储池可用字节" ? "1000000" : "0",
+      );
+    await userEvent.type(
+      within(dialog).getByRole("textbox", { name: "容量观察时间（含时区）" }),
+      new Date(Date.now() - 1000).toISOString(),
+    );
+    await userEvent.type(
+      within(dialog).getByRole("textbox", {
+        name: "证据有效截止时间（含时区）",
+      }),
+      new Date(Date.now() + 600000).toISOString(),
+    );
+    await userEvent.click(submit);
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(retryNexusMigrationBatch).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(retryNexusMigrationBatch).mock.calls[0][0]).toMatchObject({
+      path: { batchId: failed.id },
+      headers: { "If-Match": "7", "Idempotency-Key": expect.any(String) },
+    });
+    expect(screen.getByText("未知；完整清单尚未封存")).toBeInTheDocument();
+    expect(screen.getByText("批次版本 8")).toBeInTheDocument();
+  });
+  it("polls active entries independently from the immutable CAS version", async () => {
+    detail.mockResolvedValue({
+      data: { ...nexusBatch, state: "running" },
+    } as never);
+    entries.mockResolvedValueOnce({
+      data: {
+        items: nexusEntries.map((entry) => ({ ...entry, state: "pending" })),
+        nextCursor: "",
+      },
+    } as never);
+    show();
+    const table = await screen.findByRole("table");
+    expect(within(table).getAllByText("待处理")).toHaveLength(2);
+    await waitFor(
+      () => expect(within(table).getAllByText("已发布")).toHaveLength(2),
+      { timeout: 3500 },
+    );
+    expect(screen.getByText("批次版本 7")).toBeInTheDocument();
+  });
+  it("exports freshly read checkpoints and refuses to call an unfinished cursor a complete inventory", async () => {
+    const report = vi.spyOn(batchModel, "observationReport");
+    vi.stubGlobal(
+      "URL",
+      class extends URL {
+        static createObjectURL() {
+          return "blob:observation";
+        }
+        static revokeObjectURL() {}
+      },
+    );
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+      () => undefined,
+    );
+    entries.mockResolvedValueOnce({
+      data: {
+        items: nexusEntries.map((entry) => ({
+          ...entry,
+          state: "pending",
+          assets: entry.assets.map((asset) => ({ ...asset, verified: false })),
+        })),
+        nextCursor: "",
+      },
+    } as never);
+    show();
+    await screen.findByRole("table");
+    const before = entries.mock.calls.length;
+    detail.mockResolvedValue({
+      data: { ...nexusBatch, visibleIdentities: 1 },
+    } as never);
+    entries.mockResolvedValue({
+      data: { items: [nexusEntries[0]], nextCursor: "still-more" },
+    } as never);
+    await userEvent.click(
+      screen.getByRole("button", { name: "导出当前观察报告" }),
+    );
+    await waitFor(() => expect(report).toHaveBeenCalled());
+    const [batch, inventory, complete, , times] = report.mock.calls[0];
+    expect(batch.version).toBe("7");
+    expect(batch.visibleIdentities).toBe(1);
+    expect(inventory[0].state).toBe("committed");
+    expect(inventory[0].assets[0].verified).toBe(true);
+    expect(complete).toBe(false);
+    expect(times?.entriesObservedAt).toMatch(/Z$/);
+    expect(entries.mock.calls.length).toBeGreaterThan(before);
+  });
+  it("hides protected detail facts after authorization is revoked rather than retaining a stale report", async () => {
+    show();
+    await screen.findByRole("heading", { name: nexusBatch.id });
+    detail.mockResolvedValue({ error: { status: 403 } } as never);
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "刷新批次" })[1],
+    );
+    await screen.findByText(/请使用平台管理员身份/);
+    expect(
+      screen.queryByRole("heading", { name: nexusBatch.id }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "导出当前观察报告" }),
+    ).not.toBeInTheDocument();
   });
 });

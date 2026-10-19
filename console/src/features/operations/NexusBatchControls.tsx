@@ -94,6 +94,20 @@ export function NexusBatchControls({
         setControl(null);
         setCapacity(emptyCapacity());
       },
+      async () => {
+        try {
+          await client.fetchQuery(batchOptions(snapshot.id));
+          await client.invalidateQueries({ queryKey: batchKeys.list });
+          await client.invalidateQueries({
+            queryKey: batchKeys.entries(snapshot.id),
+          });
+        } finally {
+          // The captured CAS version cannot be reused after a refusal/unknown
+          // result. Leave its error visible beside the freshly read controls.
+          setControl(null);
+          setCapacity(emptyCapacity());
+        }
+      },
     );
   };
   const close = () => {

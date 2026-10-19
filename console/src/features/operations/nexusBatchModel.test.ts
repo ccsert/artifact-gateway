@@ -138,6 +138,15 @@ describe("batch truth and safe reports", () => {
       canRetry({ ...nexusBatch, counts: { ...nexusBatch.counts, failed: 1 } }),
     ).toBe(true);
     expect(canCancel(nexusBatch)).toBe(false);
+    expect(
+      canRetry({
+        ...nexusBatch,
+        state: "failed",
+        scanComplete: false,
+        entryCount: 0,
+        counts: { ...nexusBatch.counts, committed: 0 },
+      }),
+    ).toBe(true);
   });
   it("sanitizes SDK/body/network errors and marks uncertain writes as unknown", async () => {
     expect(batchError({ status: 412, message: "password=hidden" }).key).toBe(
