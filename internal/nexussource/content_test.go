@@ -79,7 +79,19 @@ func TestSourceContentSlowBodyHonorsBoundedDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = content.Body.Close() }()
-	if _, err = io.ReadAll(content.Body); err == nil {
-		t.Fatal("slow body exceeded source request deadline")
-	}
+	_, err = io.ReadAll(content.Body)
+	requireCode(t, err, "source_timeout")
+}
+
+func TestSourceContentDelayedHeadersReturnBoundedTimeout(t *testing.T) {
+	service, id, _ := fixtureService(t, func(_ http.ResponseWriter, r *http.Request) bool {
+		if !strings.HasPrefix(r.URL.Path, "/repository/raw-a/") {
+			return false
+		}
+		<-r.Context().Done()
+		return true
+	})
+	service.options.OperationTimeout = 25 * time.Millisecond
+	_, err := service.OpenAsset(context.Background(), id, "1", "raw-a", AssetRequest{Path: "slow.bin", Size: 4})
+	requireCode(t, err, "source_timeout")
 }
